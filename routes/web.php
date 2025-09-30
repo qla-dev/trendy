@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\LanguageController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AppsController;
+use App\Http\Controllers\PawsController;
 use App\Http\Controllers\UserInterfaceController;
 use App\Http\Controllers\CardsController;
 use App\Http\Controllers\ComponentsController;
@@ -46,11 +47,14 @@ Route::group(['prefix' => 'app'], function () {
     Route::get('todo', [AppsController::class, 'todoApp'])->name('app-todo');
     Route::get('calendar', [AppsController::class, 'calendarApp'])->name('app-calendar');
     Route::get('kanban', [AppsController::class, 'kanbanApp'])->name('app-kanban');
-    Route::get('invoice/list', [AppsController::class, 'invoice_list'])->name('app-invoice-list');
-    Route::get('invoice/preview', [AppsController::class, 'invoice_preview'])->name('app-invoice-preview');
-    Route::get('invoice/edit', [AppsController::class, 'invoice_edit'])->name('app-invoice-edit');
-    Route::get('invoice/add', [AppsController::class, 'invoice_add'])->name('app-invoice-add');
-    Route::get('invoice/print', [AppsController::class, 'invoice_print'])->name('app-invoice-print');
+    Route::get('invoice/list', [PawsController::class, 'radniNaloziList'])->name('app-invoice-list');
+    Route::get('invoice/preview', [PawsController::class, 'radniNalogDetails'])->name('app-invoice-preview');
+    Route::get('invoice/edit', [PawsController::class, 'radniNalogDetails'])->name('app-invoice-edit');
+    Route::get('invoice/add', [PawsController::class, 'radniNaloziList'])->name('app-invoice-add');
+    Route::get('invoice/print', [PawsController::class, 'radniNalogDetails'])->name('app-invoice-print');
+    
+    // Test route for PAWS API debugging
+    Route::get('test-paws', [PawsController::class, 'testPawsConnection'])->name('test-paws');
     Route::get('ecommerce/shop', [AppsController::class, 'ecommerce_shop'])->name('app-ecommerce-shop');
     Route::get('ecommerce/details', [AppsController::class, 'ecommerce_details'])->name('app-ecommerce-details');
     Route::get('ecommerce/wishlist', [AppsController::class, 'ecommerce_wishlist'])->name('app-ecommerce-wishlist');
