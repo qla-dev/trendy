@@ -19,8 +19,10 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
+        'role',
     ];
 
     /**
@@ -41,4 +43,44 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+
+    /**
+     * Get the user's role
+     */
+    public function getRole()
+    {
+        return $this->role ?? 'user';
+    }
+
+    /**
+     * Check if user has specific role
+     */
+    public function hasRole($role)
+    {
+        return $this->getRole() === $role;
+    }
+
+    /**
+     * Check if user is admin
+     */
+    public function isAdmin()
+    {
+        return $this->hasRole('admin');
+    }
+
+    /**
+     * Check if user is manager
+     */
+    public function isManager()
+    {
+        return $this->hasRole('manager');
+    }
+
+    /**
+     * Check if user is employee
+     */
+    public function isEmployee()
+    {
+        return $this->hasRole('employee');
+    }
 }

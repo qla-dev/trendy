@@ -11,8 +11,8 @@ $(function () {
   ('use strict');
 
   var dtUserTable = $('.user-list-table'),
-    newUserSidebar = $('.new-user-modal'),
-    newUserForm = $('.add-new-user'),
+    newUserSidebar = $('#addUserModal'),
+    newUserForm = $('#addUserForm'),
     select = $('.select2'),
     dtContact = $('.dt-contact'),
     statusObj = {
@@ -26,7 +26,7 @@ $(function () {
 
   if ($('body').attr('data-framework') === 'laravel') {
     assetPath = $('body').attr('data-asset-path');
-    userView = assetPath + 'app/user/view/account';
+    userView = '/app/user/view/account';
   }
 
   select.each(function () {
@@ -43,17 +43,18 @@ $(function () {
 
   // Users List datatable
   if (dtUserTable.length) {
+    console.log('Initializing DataTable with Bosnian language...');
     dtUserTable.DataTable({
-      ajax: assetPath + 'data/user-list.json', // JSON file to add data
+      data: window.usersData || [],
       columns: [
-        // columns according to JSON
-        { data: '' },
-        { data: 'full_name' },
-        { data: 'role' },
-        { data: 'current_plan' },
-        { data: 'billing' },
-        { data: 'status' },
-        { data: '' }
+        // columns according to server-side data
+        { data: 0 },
+        { data: 1 },
+        { data: 2 },
+        { data: 3 },
+        { data: 4 },
+        { data: 5 },
+        { data: 6 }
       ],
       columnDefs: [
         {
@@ -71,24 +72,13 @@ $(function () {
           targets: 1,
           responsivePriority: 4,
           render: function (data, type, full, meta) {
-            var $name = full['full_name'],
-              $email = full['email'],
-              $image = full['avatar'];
-            if ($image) {
-              // For Avatar image
-              var $output =
-                '<img src="' + assetPath + 'images/avatars/' + $image + '" alt="Avatar" height="32" width="32">';
-            } else {
-              // For Avatar badge
-              var stateNum = Math.floor(Math.random() * 6) + 1;
-              var states = ['success', 'danger', 'warning', 'info', 'dark', 'primary', 'secondary'];
-              var $state = states[stateNum],
-                $name = full['full_name'],
-                $initials = $name.match(/\b\w/g) || [];
-              $initials = (($initials.shift() || '') + ($initials.pop() || '')).toUpperCase();
-              $output = '<span class="avatar-content">' + $initials + '</span>';
-            }
-            var colorClass = $image === '' ? ' bg-light-' + $state + ' ' : '';
+            var $name = full[1],
+              $email = full[3];
+            // For Avatar badge
+            var $initials = $name.match(/\b\w/g) || [];
+            $initials = (($initials.shift() || '') + ($initials.pop() || '')).toUpperCase();
+            var $output = '<span class="avatar-content">' + $initials + '</span>';
+            var colorClass = ' bg-light-primary ';
             // Creates full output for row
             var $row_output =
               '<div class="d-flex justify-content-left align-items-center">' +
@@ -114,41 +104,38 @@ $(function () {
           }
         },
         {
-          // User Role
+          // Username
           targets: 2,
           render: function (data, type, full, meta) {
-            var $role = full['role'];
-            var roleBadgeObj = {
-              Subscriber: feather.icons['user'].toSvg({ class: 'font-medium-3 text-primary me-50' }),
-              Author: feather.icons['settings'].toSvg({ class: 'font-medium-3 text-warning me-50' }),
-              Maintainer: feather.icons['database'].toSvg({ class: 'font-medium-3 text-success me-50' }),
-              Editor: feather.icons['edit-2'].toSvg({ class: 'font-medium-3 text-info me-50' }),
-              Admin: feather.icons['slack'].toSvg({ class: 'font-medium-3 text-danger me-50' })
-            };
-            return "<span class='text-truncate align-middle'>" + roleBadgeObj[$role] + $role + '</span>';
+            return "<span class='text-truncate align-middle'>" + full[2] + '</span>';
           }
         },
         {
+          // Email
+          targets: 3,
+          render: function (data, type, full, meta) {
+            return "<span class='text-truncate align-middle'>" + full[3] + '</span>';
+          }
+        },
+        {
+          // User Role
           targets: 4,
           render: function (data, type, full, meta) {
-            var $billing = full['billing'];
-
-            return '<span class="text-nowrap">' + $billing + '</span>';
+            var $role = full[4];
+            var roleBadgeObj = {
+              admin: feather.icons['slack'].toSvg({ class: 'font-medium-3 text-danger me-50' }),
+              user: feather.icons['user'].toSvg({ class: 'font-medium-3 text-primary me-50' })
+            };
+            var roleText = $role === 'admin' ? 'Admin' : 'Korisnik';
+            return "<span class='text-truncate align-middle'>" + roleBadgeObj[$role] + roleText + '</span>';
           }
         },
         {
-          // User Status
+          // Created Date
           targets: 5,
           render: function (data, type, full, meta) {
-            var $status = full['status'];
-
-            return (
-              '<span class="badge rounded-pill ' +
-              statusObj[$status].class +
-              '" text-capitalized>' +
-              statusObj[$status].title +
-              '</span>'
-            );
+            var $date = full[5];
+            return '<span class="text-nowrap">' + $date + '</span>';
           }
         },
         {
@@ -163,14 +150,12 @@ $(function () {
               feather.icons['more-vertical'].toSvg({ class: 'font-small-4' }) +
               '</a>' +
               '<div class="dropdown-menu dropdown-menu-end">' +
-              '<a href="' +
-              userView +
-              '" class="dropdown-item">' +
+              '<a href="' + userView + '/' + full[6] + '" class="dropdown-item">' +
               feather.icons['file-text'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Details</a>' +
-              '<a href="javascript:;" class="dropdown-item delete-record">' +
+              'Pregled</a>' +
+              '<a href="javascript:;" class="dropdown-item delete-record" onclick="deleteUser(' + full[6] + ')">' +
               feather.icons['trash-2'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Delete</a></div>' +
+              'Obriši</a></div>' +
               '</div>' +
               '</div>'
             );
@@ -187,27 +172,47 @@ $(function () {
         '<"col-sm-12 col-md-6"i>' +
         '<"col-sm-12 col-md-6"p>' +
         '>',
-      language: {
-        sLengthMenu: 'Show _MENU_',
-        search: 'Search',
-        searchPlaceholder: 'Search..'
+      oLanguage: {
+        "sDecimal": "",
+        "sEmptyTable": "Nema podataka u tabeli",
+        "sInfo": "Prikazuje _START_ do _END_ od _TOTAL_ stavki",
+        "sInfoEmpty": "Prikazuje 0 do 0 od 0 stavki",
+        "sInfoFiltered": "(filtrirano od _MAX_ ukupno stavki)",
+        "sInfoPostFix": "",
+        "sThousands": ",",
+        "sLengthMenu": "Prikaži _MENU_ stavki",
+        "sLoadingRecords": "Učitavanje...",
+        "sProcessing": "Obrađuje se...",
+        "sSearch": "Pretraži:",
+        "sSearchPlaceholder": "Pojam za pretragu..",
+        "sZeroRecords": "Nisu pronađeni odgovarajući zapisi",
+        "oPaginate": {
+          "sFirst": "Prva",
+          "sLast": "Poslednja",
+          "sNext": "Sljedeća",
+          "sPrevious": "Prethodna"
+        },
+        "oAria": {
+          "sSortAscending": ": aktiviraj za rastuće sortiranje kolone",
+          "sSortDescending": ": aktiviraj za opadajuće sortiranje kolone"
+        }
       },
       // Buttons with Dropdown
       buttons: [
         {
           extend: 'collection',
           className: 'btn btn-outline-secondary dropdown-toggle me-2',
-          text: feather.icons['external-link'].toSvg({ class: 'font-small-4 me-50' }) + 'Export',
+          text: feather.icons['external-link'].toSvg({ class: 'font-small-4 me-50' }) + 'Izvoz',
           buttons: [
             {
               extend: 'print',
-              text: feather.icons['printer'].toSvg({ class: 'font-small-4 me-50' }) + 'Print',
+              text: feather.icons['printer'].toSvg({ class: 'font-small-4 me-50' }) + 'Štampaj',
               className: 'dropdown-item',
               exportOptions: { columns: [1, 2, 3, 4, 5] }
             },
             {
               extend: 'csv',
-              text: feather.icons['file-text'].toSvg({ class: 'font-small-4 me-50' }) + 'Csv',
+              text: feather.icons['file-text'].toSvg({ class: 'font-small-4 me-50' }) + 'CSV',
               className: 'dropdown-item',
               exportOptions: { columns: [1, 2, 3, 4, 5] }
             },
@@ -219,13 +224,13 @@ $(function () {
             },
             {
               extend: 'pdf',
-              text: feather.icons['clipboard'].toSvg({ class: 'font-small-4 me-50' }) + 'Pdf',
+              text: feather.icons['clipboard'].toSvg({ class: 'font-small-4 me-50' }) + 'PDF',
               className: 'dropdown-item',
               exportOptions: { columns: [1, 2, 3, 4, 5] }
             },
             {
               extend: 'copy',
-              text: feather.icons['copy'].toSvg({ class: 'font-small-4 me-50' }) + 'Copy',
+              text: feather.icons['copy'].toSvg({ class: 'font-small-4 me-50' }) + 'Kopiraj',
               className: 'dropdown-item',
               exportOptions: { columns: [1, 2, 3, 4, 5] }
             }
@@ -238,17 +243,6 @@ $(function () {
             }, 50);
           }
         },
-        {
-          text: 'Add New User',
-          className: 'add-new btn btn-primary',
-          attr: {
-            'data-bs-toggle': 'modal',
-            'data-bs-target': '#modals-slide-in'
-          },
-          init: function (api, node, config) {
-            $(node).removeClass('btn-secondary');
-          }
-        }
       ],
       // For responsive popup
       responsive: {
@@ -256,7 +250,7 @@ $(function () {
           display: $.fn.dataTable.Responsive.display.modal({
             header: function (row) {
               var data = row.data();
-              return 'Details of ' + data['full_name'];
+              return 'Detalji o ' + data['name'];
             }
           }),
           type: 'column',
@@ -292,12 +286,12 @@ $(function () {
       initComplete: function () {
         // Adding role filter once table initialized
         this.api()
-          .columns(2)
+          .columns(4)
           .every(function () {
             var column = this;
-            var label = $('<label class="form-label" for="UserRole">Role</label>').appendTo('.user_role');
+            var label = $('<label class="form-label" for="UserRole">Uloga</label>').appendTo('.user_role');
             var select = $(
-              '<select id="UserRole" class="form-select text-capitalize mb-md-0 mb-2"><option value=""> Select Role </option></select>'
+              '<select id="UserRole" class="form-select text-capitalize mb-md-0 mb-2"><option value=""> Odaberite Ulogu </option></select>'
             )
               .appendTo('.user_role')
               .on('change', function () {
@@ -313,58 +307,6 @@ $(function () {
                 select.append('<option value="' + d + '" class="text-capitalize">' + d + '</option>');
               });
           });
-        // Adding plan filter once table initialized
-        this.api()
-          .columns(3)
-          .every(function () {
-            var column = this;
-            var label = $('<label class="form-label" for="UserPlan">Plan</label>').appendTo('.user_plan');
-            var select = $(
-              '<select id="UserPlan" class="form-select text-capitalize mb-md-0 mb-2"><option value=""> Select Plan </option></select>'
-            )
-              .appendTo('.user_plan')
-              .on('change', function () {
-                var val = $.fn.dataTable.util.escapeRegex($(this).val());
-                column.search(val ? '^' + val + '$' : '', true, false).draw();
-              });
-
-            column
-              .data()
-              .unique()
-              .sort()
-              .each(function (d, j) {
-                select.append('<option value="' + d + '" class="text-capitalize">' + d + '</option>');
-              });
-          });
-        // Adding status filter once table initialized
-        this.api()
-          .columns(5)
-          .every(function () {
-            var column = this;
-            var label = $('<label class="form-label" for="FilterTransaction">Status</label>').appendTo('.user_status');
-            var select = $(
-              '<select id="FilterTransaction" class="form-select text-capitalize mb-md-0 mb-2xx"><option value=""> Select Status </option></select>'
-            )
-              .appendTo('.user_status')
-              .on('change', function () {
-                var val = $.fn.dataTable.util.escapeRegex($(this).val());
-                column.search(val ? '^' + val + '$' : '', true, false).draw();
-              });
-
-            column
-              .data()
-              .unique()
-              .sort()
-              .each(function (d, j) {
-                select.append(
-                  '<option value="' +
-                    statusObj[d].title +
-                    '" class="text-capitalize">' +
-                    statusObj[d].title +
-                    '</option>'
-                );
-              });
-          });
       }
     });
   }
@@ -374,13 +316,13 @@ $(function () {
     newUserForm.validate({
       errorClass: 'error',
       rules: {
-        'user-fullname': {
+        'name': {
           required: true
         },
-        'user-name': {
+        'username': {
           required: true
         },
-        'user-email': {
+        'email': {
           required: true
         }
       }
@@ -388,10 +330,11 @@ $(function () {
 
     newUserForm.on('submit', function (e) {
       var isValid = newUserForm.valid();
-      e.preventDefault();
       if (isValid) {
-        newUserSidebar.modal('hide');
+        // Form will submit normally to the server
+        return true;
       }
+      e.preventDefault();
     });
   }
 

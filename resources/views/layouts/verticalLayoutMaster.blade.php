@@ -57,6 +57,35 @@ data-asset-path="{{ asset('/')}}">
   <div class="sidenav-overlay"></div>
   <div class="drag-target"></div>
 
+  <!-- Success and Error Messages -->
+  @if(session('success'))
+    <div class="alert alert-success alert-dismissible fade show" role="alert" style="width: 100%; margin: 1rem 1rem; position: fixed; bottom: 0; left: 0; z-index: 9999; height: 30px; opacity: 1; display: flex; align-items: center;">
+      <i data-feather="check-circle" class="me-25"></i>
+      {{ session('success') }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  @endif
+
+  @if(session('error'))
+    <div class="alert alert-danger alert-dismissible fade show" role="alert" style="width: 100%; margin: 1rem 1rem; position: fixed; bottom: 0; left: 0; z-index: 9999; height: 30px; opacity: 1; display: flex; align-items: center;">
+      <i data-feather="alert-circle" class="me-25"></i>
+      {{ session('error') }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  @endif
+
+  @if($errors->any())
+    <div class="alert alert-danger alert-dismissible fade show" role="alert" style="width: 100%; margin: 1rem 1rem; position: fixed; bottom: 0; left: 0; z-index: 9999; height: 30px; opacity: 1; display: flex; align-items: center;">
+      <i data-feather="alert-circle" class="me-25"></i>
+      <ul class="mb-0">
+        @foreach($errors->all() as $error)
+          <li>{{ $error }}</li>
+        @endforeach
+      </ul>
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  @endif
+
   {{-- include footer --}}
   @include('panels/footer')
 
@@ -71,6 +100,15 @@ data-asset-path="{{ asset('/')}}">
         });
       }
     })
+
+    // Auto-hide alerts after 5 seconds
+    setTimeout(function() {
+      const alerts = document.querySelectorAll('.alert');
+      alerts.forEach(function(alert) {
+        const bsAlert = new bootstrap.Alert(alert);
+        bsAlert.close();
+      });
+    }, 5000);
   </script>
 </body>
 </html>

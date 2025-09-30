@@ -63,8 +63,8 @@ $configData = Helper::applClasses();
         <form class="auth-login-form mt-2" action="{{ route('auth.login') }}" method="POST">
           @csrf
           <div class="mb-1">
-            <label class="form-label" for="email">Email</label>
-            <input class="form-control @error('email') is-invalid @enderror" id="email" type="email" name="email" value="{{ old('email') }}" placeholder="korisnik@primjer.com" aria-describedby="email" autofocus="" tabindex="1" required />
+            <label class="form-label" for="email">Email ili username</label>
+            <input class="form-control @error('email') is-invalid @enderror" id="email" type="text" name="email" value="{{ old('email') }}" placeholder="korisnik@primjer.com ili username" aria-describedby="email" autofocus="" tabindex="1" required />
             @error('email')
               <div class="invalid-feedback">{{ $message }}</div>
             @enderror

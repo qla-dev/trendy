@@ -28,7 +28,7 @@ class AuthenticationController extends Controller
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
+            'email' => 'required',
             'password' => 'required|min:6',
         ]);
 
@@ -38,8 +38,17 @@ class AuthenticationController extends Controller
                 ->withInput($request->except('password'));
         }
 
-        $credentials = $request->only('email', 'password');
+        $loginField = $request->input('email');
+        $password = $request->input('password');
         $remember = $request->has('remember');
+
+        // Determine if login field is email or username
+        $fieldType = filter_var($loginField, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+        
+        $credentials = [
+            $fieldType => $loginField,
+            'password' => $password
+        ];
 
         if (Auth::attempt($credentials, $remember)) {
             $request->session()->regenerate();
@@ -48,7 +57,7 @@ class AuthenticationController extends Controller
         }
 
         return redirect()->back()
-            ->withErrors(['email' => 'Email i/ili lozinka su neispravni.'])
+            ->withErrors(['email' => 'Uneseni podaci se ne poklapaju sa našim zapisima.'])
             ->withInput($request->except('password'));
     }
 

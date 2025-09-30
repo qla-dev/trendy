@@ -1,6 +1,6 @@
 @extends('layouts/contentLayoutMaster')
 
-@section('title', 'User View - Account')
+@section('title', 'Uredi Korisnika - Račun')
 
 @section('vendor-style')
   {{-- Page Css files --}}
@@ -37,8 +37,8 @@
                 alt="User avatar"
               />
               <div class="user-info text-center">
-                <h4>Gertrude Barton</h4>
-                <span class="badge bg-light-secondary">Author</span>
+                <h4>{{ $user->name }}</h4>
+                <span class="badge bg-light-{{ $user->role === 'admin' ? 'danger' : 'primary' }}">{{ ucfirst($user->role) }}</span>
               </div>
             </div>
           </div>
@@ -49,7 +49,7 @@
               </span>
               <div class="ms-75">
                 <h4 class="mb-0">1.23k</h4>
-                <small>Tasks Done</small>
+                <small>Završeni Zadaci</small>
               </div>
             </div>
             <div class="d-flex align-items-start">
@@ -58,53 +58,66 @@
               </span>
               <div class="ms-75">
                 <h4 class="mb-0">568</h4>
-                <small>Projects Done</small>
+                <small>Završeni Projekti</small>
               </div>
             </div>
           </div>
-          <h4 class="fw-bolder border-bottom pb-50 mb-1">Details</h4>
-          <div class="info-container">
-            <ul class="list-unstyled">
-              <li class="mb-75">
-                <span class="fw-bolder me-25">Username:</span>
-                <span>violet.dev</span>
-              </li>
-              <li class="mb-75">
-                <span class="fw-bolder me-25">Billing Email:</span>
-                <span>vafgot@vultukir.org</span>
-              </li>
-              <li class="mb-75">
-                <span class="fw-bolder me-25">Status:</span>
-                <span class="badge bg-light-success">Active</span>
-              </li>
-              <li class="mb-75">
-                <span class="fw-bolder me-25">Role:</span>
-                <span>Author</span>
-              </li>
-              <li class="mb-75">
-                <span class="fw-bolder me-25">Tax ID:</span>
-                <span>Tax-8965</span>
-              </li>
-              <li class="mb-75">
-                <span class="fw-bolder me-25">Contact:</span>
-                <span>+1 (609) 933-44-22</span>
-              </li>
-              <li class="mb-75">
-                <span class="fw-bolder me-25">Language:</span>
-                <span>English</span>
-              </li>
-              <li class="mb-75">
-                <span class="fw-bolder me-25">Country:</span>
-                <span>Wake Island</span>
-              </li>
-            </ul>
-            <div class="d-flex justify-content-center pt-2">
-              <a href="javascript:;" class="btn btn-primary me-1" data-bs-target="#editUser" data-bs-toggle="modal">
-                Edit
-              </a>
-              <a href="javascript:;" class="btn btn-outline-danger suspend-user">Suspended</a>
+          <h4 class="fw-bolder border-bottom pb-50 mb-1">Detalji</h4>
+          <form action="{{ route('app-user-update', $user->id) }}" method="POST">
+            @csrf
+            @method('PUT')
+            <div class="info-container">
+              <div class="mb-3">
+                <label class="form-label fw-bolder">Ime i Prezime:</label>
+                <input type="text" class="form-control" name="name" value="{{ old('name', $user->name) }}" required>
+                @error('name')
+                  <div class="text-danger small">{{ $message }}</div>
+                @enderror
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-bolder">Korisničko Ime:</label>
+                <input type="text" class="form-control" name="username" value="{{ old('username', $user->username) }}" required>
+                @error('username')
+                  <div class="text-danger small">{{ $message }}</div>
+                @enderror
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-bolder">Email:</label>
+                <input type="email" class="form-control" name="email" value="{{ old('email', $user->email) }}" required>
+                @error('email')
+                  <div class="text-danger small">{{ $message }}</div>
+                @enderror
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-bolder">Uloga:</label>
+                <select class="form-select" name="role" required>
+                  <option value="admin" {{ old('role', $user->role) === 'admin' ? 'selected' : '' }}>Admin</option>
+                  <option value="user" {{ old('role', $user->role) === 'user' ? 'selected' : '' }}>Korisnik</option>
+                </select>
+                @error('role')
+                  <div class="text-danger small">{{ $message }}</div>
+                @enderror
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-bolder">Status:</label>
+                <span class="badge bg-light-success">Aktivan</span>
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-bolder">Datum Kreiranja:</label>
+                <span>{{ $user->created_at->format('d.m.Y H:i') }}</span>
+              </div>
             </div>
-          </div>
+            <div class="d-flex justify-content-center pt-2">
+              <button type="submit" class="btn btn-primary me-1">
+                <i data-feather="save" class="me-25"></i>
+                Sačuvaj Promjene
+              </button>
+              <a href="{{ route('app-user-list') }}" class="btn btn-outline-secondary">
+                <i data-feather="arrow-left" class="me-25"></i>
+                Nazad na Listu
+              </a>
+            </div>
+          </form>
         </div>
       </div>
       <!-- /User Card -->
@@ -112,21 +125,21 @@
       <div class="card border-primary">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-start">
-            <span class="badge bg-light-primary">Standard</span>
+            <span class="badge bg-light-primary">Standardni</span>
             <div class="d-flex justify-content-center">
               <sup class="h5 pricing-currency text-primary mt-1 mb-0">$</sup>
               <span class="fw-bolder display-5 mb-0 text-primary">99</span>
-              <sub class="pricing-duration font-small-4 ms-25 mt-auto mb-2">/month</sub>
+              <sub class="pricing-duration font-small-4 ms-25 mt-auto mb-2">/mjesec</sub>
             </div>
           </div>
           <ul class="ps-1 mb-2">
-            <li class="mb-50">10 Users</li>
-            <li class="mb-50">Up to 10 GB storage</li>
-            <li>Basic Support</li>
+            <li class="mb-50">10 Korisnika</li>
+            <li class="mb-50">Do 10 GB prostora</li>
+            <li>Osnovna Podrška</li>
           </ul>
           <div class="d-flex justify-content-between align-items-center fw-bolder mb-50">
-            <span>Days</span>
-            <span>4 of 30 Days</span>
+            <span>Dani</span>
+            <span>4 od 30 Dana</span>
           </div>
           <div class="progress mb-50" style="height: 8px">
             <div
@@ -138,10 +151,10 @@
               aria-valuemin="80"
             ></div>
           </div>
-          <span>4 days remaining</span>
+          <span>4 dana preostalo</span>
           <div class="d-grid w-100 mt-2">
             <button class="btn btn-primary" data-bs-target="#upgradePlanModal" data-bs-toggle="modal">
-              Upgrade Plan
+              Nadogradi Plan
             </button>
           </div>
         </div>
@@ -157,29 +170,29 @@
         <li class="nav-item">
           <a class="nav-link active" href="{{asset('app/user/view/account')}}">
             <i data-feather="user" class="font-medium-3 me-50"></i>
-            <span class="fw-bold">Account</span></a
+            <span class="fw-bold">Račun</span></a
           >
         </li>
         <li class="nav-item">
           <a class="nav-link" href="{{asset('app/user/view/security')}}">
             <i data-feather="lock" class="font-medium-3 me-50"></i>
-            <span class="fw-bold">Security</span>
+            <span class="fw-bold">Sigurnost</span>
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="{{asset('app/user/view/billing')}}">
             <i data-feather="bookmark" class="font-medium-3 me-50"></i>
-            <span class="fw-bold">Billing & Plans</span>
+            <span class="fw-bold">Naplata i Planovi</span>
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="{{asset('app/user/view/notifications')}}">
-            <i data-feather="bell" class="font-medium-3 me-50"></i><span class="fw-bold">Notifications</span>
+            <i data-feather="bell" class="font-medium-3 me-50"></i><span class="fw-bold">Obavještenja</span>
           </a>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="{{asset('app/user/view/connections')}}">
-            <i data-feather="link" class="font-medium-3 me-50"></i><span class="fw-bold">Connections</span>
+            <i data-feather="link" class="font-medium-3 me-50"></i><span class="fw-bold">Konekcije</span>
           </a>
         </li>
       </ul>
@@ -187,16 +200,16 @@
 
       <!-- Project table -->
       <div class="card">
-        <h4 class="card-header">User's Projects List</h4>
+        <h4 class="card-header">Lista Projekata Korisnika</h4>
         <div class="table-responsive">
           <table class="table datatable-project">
             <thead>
               <tr>
                 <th></th>
-                <th>Project</th>
-                <th class="text-nowrap">Total Task</th>
-                <th>Progress</th>
-                <th>Hours</th>
+                <th>Projekat</th>
+                <th class="text-nowrap">Ukupno Zadataka</th>
+                <th>Napredak</th>
+                <th>Sati</th>
               </tr>
             </thead>
           </table>
@@ -206,27 +219,27 @@
 
       <!-- Activity Timeline -->
       <div class="card">
-        <h4 class="card-header">User Activity Timeline</h4>
+        <h4 class="card-header">Timeline Aktivnosti Korisnika</h4>
         <div class="card-body pt-1">
           <ul class="timeline ms-50">
             <li class="timeline-item">
               <span class="timeline-point timeline-point-indicator"></span>
               <div class="timeline-event">
                 <div class="d-flex justify-content-between flex-sm-row flex-column mb-sm-0 mb-1">
-                  <h6>User login</h6>
-                  <span class="timeline-event-time me-1">12 min ago</span>
+                  <h6>Prijava korisnika</h6>
+                  <span class="timeline-event-time me-1">prije 12 min</span>
                 </div>
-                <p>User login at 2:12pm</p>
+                <p>Korisnik se prijavio u 14:12</p>
               </div>
             </li>
             <li class="timeline-item">
               <span class="timeline-point timeline-point-warning timeline-point-indicator"></span>
               <div class="timeline-event">
                 <div class="d-flex justify-content-between flex-sm-row flex-column mb-sm-0 mb-1">
-                  <h6>Meeting with john</h6>
-                  <span class="timeline-event-time me-1">45 min ago</span>
+                  <h6>Sastanak sa John-om</h6>
+                  <span class="timeline-event-time me-1">prije 45 min</span>
                 </div>
-                <p>React Project meeting with john @10:15am</p>
+                <p>React Project sastanak sa John-om @10:15</p>
                 <div class="d-flex flex-row align-items-center mb-50">
                   <div class="avatar me-50">
                     <img
@@ -237,8 +250,8 @@
                     />
                   </div>
                   <div class="user-info">
-                    <h6 class="mb-0">Leona Watkins (Client)</h6>
-                    <p class="mb-0">CEO of pixinvent</p>
+                    <h6 class="mb-0">Leona Watkins (Klijent)</h6>
+                    <p class="mb-0">CEO pixinvent-a</p>
                   </div>
                 </div>
               </div>
@@ -247,23 +260,23 @@
               <span class="timeline-point timeline-point-info timeline-point-indicator"></span>
               <div class="timeline-event">
                 <div class="d-flex justify-content-between flex-sm-row flex-column mb-sm-0 mb-1">
-                  <h6>Create a new react project for client</h6>
-                  <span class="timeline-event-time me-1">2 day ago</span>
+                  <h6>Kreiranje novog React projekta za klijenta</h6>
+                  <span class="timeline-event-time me-1">prije 2 dana</span>
                 </div>
-                <p>Add files to new design folder</p>
+                <p>Dodavanje fajlova u novi design folder</p>
               </div>
             </li>
             <li class="timeline-item">
               <span class="timeline-point timeline-point-danger timeline-point-indicator"></span>
               <div class="timeline-event">
                 <div class="d-flex justify-content-between flex-sm-row flex-column mb-sm-0 mb-1">
-                  <h6>Create Invoices for client</h6>
-                  <span class="timeline-event-time me-1">12 min ago</span>
+                  <h6>Kreiranje računa za klijenta</h6>
+                  <span class="timeline-event-time me-1">prije 12 min</span>
                 </div>
-                <p class="mb-0">Create new Invoices and send to Leona Watkins</p>
+                <p class="mb-0">Kreiranje novih računa i slanje Leoni Watkins</p>
                 <div class="d-flex flex-row align-items-center mt-50">
                   <img class="me-1" src="{{asset('images/icons/pdf.png')}}" alt="data.json" height="25" />
-                  <h6 class="mb-0">Invoices.pdf</h6>
+                  <h6 class="mb-0">Računi.pdf</h6>
                 </div>
               </div>
             </li>
@@ -280,9 +293,9 @@
               <th></th>
               <th>#ID</th>
               <th><i data-feather="trending-up"></i></th>
-              <th>TOTAL Paid</th>
-              <th class="text-truncate">Issued Date</th>
-              <th class="cell-fit">Actions</th>
+              <th>UKUPNO Plaćeno</th>
+              <th class="text-truncate">Datum Izdavanja</th>
+              <th class="cell-fit">Akcije</th>
             </tr>
           </thead>
         </table>
@@ -325,4 +338,15 @@
   <script src="{{ asset(mix('js/scripts/pages/modal-edit-user.js')) }}"></script>
   <script src="{{ asset(mix('js/scripts/pages/app-user-view-account.js')) }}"></script>
   <script src="{{ asset(mix('js/scripts/pages/app-user-view.js')) }}"></script>
+  <script>
+    // Auto-scroll to form if there are validation errors
+    @if($errors->any())
+      $(document).ready(function() {
+        // Scroll to the form section if there are errors
+        $('html, body').animate({
+          scrollTop: $('form').offset().top - 100
+        }, 500);
+      });
+    @endif
+  </script>
 @endsection

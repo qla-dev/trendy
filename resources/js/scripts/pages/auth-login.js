@@ -28,8 +28,7 @@ $(function () {
       }, */
       rules: {
         'email': {
-          required: true,
-          email: true
+          required: true
         },
         'password': {
           required: true
@@ -37,8 +36,7 @@ $(function () {
       },
       messages: {
         'email': {
-          required: 'Email je obavezan',
-          email: 'Molimo unesite valjanu email adresu'
+          required: 'Email ili korisničko ime je obavezno'
         },
         'password': {
           required: 'Lozinka je obavezna'

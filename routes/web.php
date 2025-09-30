@@ -15,6 +15,7 @@ use App\Http\Controllers\PagesController;
 use App\Http\Controllers\MiscellaneousController;
 use App\Http\Controllers\AuthenticationController;
 use App\Http\Controllers\ChartsController;
+use App\Http\Controllers\UserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -57,8 +58,14 @@ Route::group(['prefix' => 'app'], function () {
     Route::get('file-manager', [AppsController::class, 'file_manager'])->name('app-file-manager');
     Route::get('access-roles', [AppsController::class, 'access_roles'])->name('app-access-roles');
     Route::get('access-permission', [AppsController::class, 'access_permission'])->name('app-access-permission');
-    Route::get('user/list', [AppsController::class, 'user_list'])->name('app-user-list');
-    Route::get('user/view/account', [AppsController::class, 'user_view_account'])->name('app-user-view-account');
+    Route::get('user/list', [UserController::class, 'index'])->name('app-user-list');
+    Route::get('user/create', [UserController::class, 'create'])->name('app-user-create');
+    Route::post('user/store', [UserController::class, 'store'])->name('app-user-store');
+    Route::get('user/{id}', [UserController::class, 'show'])->name('app-user-show');
+    Route::get('user/{id}/edit', [UserController::class, 'edit'])->name('app-user-edit');
+    Route::put('user/{id}', [UserController::class, 'update'])->name('app-user-update');
+    Route::delete('user/{id}', [UserController::class, 'destroy'])->name('app-user-destroy');
+    Route::get('user/view/account/{id}', [UserController::class, 'viewAccount'])->name('app-user-view-account');
     Route::get('user/view/security', [AppsController::class, 'user_view_security'])->name('app-user-view-security');
     Route::get('user/view/billing', [AppsController::class, 'user_view_billing'])->name('app-user-view-billing');
     Route::get('user/view/notifications', [AppsController::class, 'user_view_notifications'])->name('app-user-view-notifications');

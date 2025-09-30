@@ -160,8 +160,9 @@ return [
 
     'attributes' => [
         'email' => 'email',
+        'username' => 'korisničko ime',
         'password' => 'lozinka',
-        'name' => 'ime',
+        'name' => 'ime i prezime',
         'remember' => 'zapamti me',
     ],
 
