@@ -248,15 +248,4 @@ Route::get('/maps/leaflet', [ChartsController::class, 'maps_leaflet'])->name('ma
 // locale Route
 Route::get('lang/{locale}', [LanguageController::class, 'swap']);
 
-// Test route for translations
-Route::get('/test-locale', function () {
-    return response()->json([
-        'locale' => app()->getLocale(),
-        'dashboards' => __('locale.Dashboards'),
-        'analytics' => __('locale.Analytics'),
-        'ecommerce' => __('locale.eCommerce'),
-        'apps' => __('locale.Apps'),
-        'email' => __('locale.Email'),
-    ]);
-});
 

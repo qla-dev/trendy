@@ -1434,6 +1434,7 @@
     "/data/jstree-data.json": "/data/jstree-data.json",
     "/data/kanban.json": "/data/kanban.json",
     "/data/menu-data/horizontalMenu.json": "/data/menu-data/horizontalMenu.json",
+    "/data/menu-data/mainMenu.json": "/data/menu-data/mainMenu.json",
     "/data/menu-data/verticalMenu.json": "/data/menu-data/verticalMenu.json",
     "/data/permissions-list.json": "/data/permissions-list.json",
     "/data/projects-list.json": "/data/projects-list.json",

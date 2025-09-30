@@ -964,7 +964,7 @@ window.colors = {
   $('.nav-link-style').on('click', function () {
     var currentLayout = getCurrentLayout(),
       switchToLayout = '',
-      prevLayout = localStorage.getItem(dataLayout + '-prev-skin', currentLayout);
+      prevLayout = localStorage.getItem('light-layout-prev-skin', currentLayout);
 
     // If currentLayout is not dark layout
     if (currentLayout !== 'dark-layout') {
@@ -980,9 +980,9 @@ window.colors = {
       }
     }
     // Set Previous skin in local db
-    localStorage.setItem(dataLayout + '-prev-skin', currentLayout);
+    localStorage.setItem('light-layout-prev-skin', currentLayout);
     // Set Current skin in local db
-    localStorage.setItem(dataLayout + '-current-skin', switchToLayout);
+    localStorage.setItem('light-layout-current-skin', switchToLayout);
 
     // Call set layout
     setLayout(switchToLayout);
@@ -996,11 +996,20 @@ window.colors = {
   });
 
   // Get current local storage layout
-  var currentLocalStorageLayout = localStorage.getItem(dataLayout + '-current-skin');
+  // Always look for the theme under the standard key used by the persistence script
+  var currentLocalStorageLayout = localStorage.getItem('light-layout-current-skin');
 
   // Set layout on screen load
   //? Comment it if you don't want to sync layout with local db
-  // setLayout(currentLocalStorageLayout);
+  // Note: Theme is already applied by inline script in head to prevent flash
+  // Only apply if not already set by inline script
+  
+  // Check if theme is already applied by checking for any layout class
+  var hasAnyLayoutClass = $html.hasClass('dark-layout') || $html.hasClass('light-layout') || $html.hasClass('bordered-layout') || $html.hasClass('semi-dark-layout');
+  
+  if (currentLocalStorageLayout && !hasAnyLayoutClass) {
+    setLayout(currentLocalStorageLayout);
+  }
 
   function setLayout(currentLocalStorageLayout) {
     var navLinkStyle = $('.nav-link-style'),
