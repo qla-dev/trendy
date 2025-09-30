@@ -55,36 +55,77 @@
   <!-- End: Content-->
 
   <!-- Success Messages -->
-  @if(session('success'))
-    <div class="alert alert-success alert-dismissible fade show" role="alert" style="width: 100%; margin: 1rem 1rem; position: fixed; bottom: 0; left: 0; z-index: 9999; height: 30px; opacity: 1; display: flex; align-items: center;">
-      <i data-feather="check-circle" class="me-25"></i>
-      {{ session('success') }}
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-  @endif
+   @if(session('success'))
+     <div class="alert alert-success alert-dismissible fade show text-white" role="alert" style="width: 100%; margin: 1rem 1rem; position: fixed; bottom: 0; left: 0; z-index: 9999; height: 30px; opacity: 1; display: flex; align-items: center;">
+       <i data-feather="check-circle" class="ms-2 me-2"></i>
+       {{ session('success') }}
+       <button type="button" class="btn-close text-white" data-bs-dismiss="alert" aria-label="Close"></button>
+     </div>
+   @endif
 
   @if(session('error'))
-    <div class="alert alert-danger alert-dismissible fade show" role="alert" style="width: 100%; margin: 1rem 1rem; position: fixed; bottom: 0; left: 0; z-index: 9999; height: 30px; opacity: 1; display: flex; align-items: center;">
-      <i data-feather="alert-circle" class="me-25"></i>
+    <div class="alert alert-danger alert-dismissible fade show text-white" role="alert" style="width: 100%; margin: 1rem 1rem; position: fixed; bottom: 0; left: 0; z-index: 9999; height: 30px; opacity: 1; display: flex; align-items: center;">
+      <i data-feather="alert-circle" class="ms-2 me-2"></i>
       {{ session('error') }}
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      <button type="button" class="btn-close text-white" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
   @endif
 
   @if($errors->any())
-    <div class="alert alert-danger alert-dismissible fade show" role="alert" style="width: 100%; margin: 1rem 1rem; position: fixed; bottom: 0; left: 0; z-index: 9999; height: 30px; opacity: 1; display: flex; align-items: center;">
-      <i data-feather="alert-circle" class="me-25"></i>
+    <div class="alert alert-danger alert-dismissible fade show text-white" role="alert" style="width: 100%; margin: 1rem 1rem; position: fixed; bottom: 0; left: 0; z-index: 9999; height: 30px; opacity: 1; display: flex; align-items: center;">
+      <i data-feather="alert-circle" class="me-25 ms-2"></i>
       <ul class="mb-0">
         @foreach($errors->all() as $error)
           <li>{{ $error }}</li>
         @endforeach
       </ul>
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      <button type="button" class="btn-close text-white" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
   @endif
 
-  {{-- include default scripts --}}
-  @include('panels/scripts')
+   {{-- include default scripts --}}
+   @include('panels/scripts')
+   
+   {{-- Custom Alert Styles --}}
+   <style>
+     .alert-danger {
+       background-color: #dc3545 !important;
+       color: white !important;
+       opacity: 1 !important;
+       border: none !important;
+       margin-left: calc(1.2rem) !important;
+       margin-right: calc(1.2rem) !important;
+       width: calc(100% - 2.4rem + 0vw) !important;
+     }
+     
+     .alert-success {
+       background-color: #198754 !important;
+       color: white !important;
+       opacity: 1 !important;
+       border: none !important;
+       margin-left: calc(1.2rem) !important;
+       margin-right: calc(1.2rem) !important;
+       width: calc(100% - 2.4rem + 0vw) !important;
+     }
+     
+     .alert .btn-close {
+       padding: 0.7rem !important;
+       color: white !important;
+       background-color: transparent !important;
+       opacity: 1 !important;
+       filter: none !important;
+     }
+     
+     .alert .btn-close::before {
+       color: white !important;
+       opacity: 1 !important;
+       filter: none !important;
+     }
+     
+     .alert * {
+       color: white !important;
+     }
+   </style>
 
   <script type="text/javascript">
     $(window).on('load', function() {

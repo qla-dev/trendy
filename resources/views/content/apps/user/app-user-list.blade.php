@@ -121,20 +121,20 @@
         <h5 class="modal-title" id="addUserModalLabel">Dodaj Novog Korisnika</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <form id="addUserForm" action="{{ route('app-user-store') }}" method="POST">
+      <form id="addUserForm" action="{{ route('app-user-store') }}" method="POST" autocomplete="off">
         @csrf
         <div class="modal-body">
           <div class="row">
             <div class="col-md-6 mb-1">
               <label class="form-label" for="name">Ime i Prezime</label>
-              <input type="text" class="form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name') }}" required>
+              <input type="text" class="form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name') }}" autocomplete="off" required>
               @error('name')
                 <div class="invalid-feedback">{{ $message }}</div>
               @enderror
             </div>
             <div class="col-md-6 mb-1">
               <label class="form-label" for="username">Korisničko Ime</label>
-              <input type="text" class="form-control @error('username') is-invalid @enderror" id="username" name="username" value="{{ old('username') }}" required>
+              <input type="text" class="form-control @error('username') is-invalid @enderror" id="username" name="username" value="{{ old('username') }}" autocomplete="off" required>
               @error('username')
                 <div class="invalid-feedback">{{ $message }}</div>
               @enderror
@@ -143,7 +143,7 @@
           <div class="row">
             <div class="col-md-12 mb-1">
               <label class="form-label" for="email">Email</label>
-              <input type="email" class="form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email') }}" required>
+              <input type="email" class="form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email') }}" autocomplete="off" required>
               @error('email')
                 <div class="invalid-feedback">{{ $message }}</div>
               @enderror
@@ -152,14 +152,14 @@
           <div class="row">
             <div class="col-md-6 mb-1">
               <label class="form-label" for="password">Lozinka</label>
-              <input type="password" class="form-control @error('password') is-invalid @enderror" id="password" name="password" required>
+              <input type="password" class="form-control @error('password') is-invalid @enderror" id="password" name="password" autocomplete="new-password" required>
               @error('password')
                 <div class="invalid-feedback">{{ $message }}</div>
               @enderror
             </div>
             <div class="col-md-6 mb-1">
               <label class="form-label" for="password_confirmation">Potvrdi Lozinku</label>
-              <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" required>
+              <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" autocomplete="new-password" required>
             </div>
           </div>
           <div class="row">
