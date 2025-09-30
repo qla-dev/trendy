@@ -3,7 +3,7 @@ $configData = Helper::applClasses();
 @endphp
 @extends('layouts/fullLayoutMaster')
 
-@section('title', 'Login Page')
+@section('title', 'Prijava')
 
 @section('page-style')
   {{-- Page Css files --}}
@@ -39,7 +39,7 @@ $configData = Helper::applClasses();
           </g>
         </g>
       </svg>
-      <h2 class="brand-text text-primary ms-1">Vuexy</h2>
+      <h2 class="brand-text text-primary ms-1">Trendy.app</h2>
     </a>
     <!-- /Brand logo-->
 
@@ -58,46 +58,40 @@ $configData = Helper::applClasses();
     <!-- Login-->
     <div class="d-flex col-lg-4 align-items-center auth-bg px-2 p-lg-5">
       <div class="col-12 col-sm-8 col-md-6 col-lg-12 px-xl-2 mx-auto">
-        <h2 class="card-title fw-bold mb-1">Welcome to Vuexy! 👋</h2>
-        <p class="card-text mb-2">Please sign-in to your account and start the adventure</p>
-        <form class="auth-login-form mt-2" action="/" method="GET">
+        <h2 class="card-title fw-bold mb-1">Dobrodošli u Trendy.app! 👋</h2>
+        <p class="card-text mb-2">Prijavite se da biste pristupili Trendy.app sistemu za upravljanje radnim nalozima i skladištem</p>
+        <form class="auth-login-form mt-2" action="{{ route('auth.login') }}" method="POST">
+          @csrf
           <div class="mb-1">
-            <label class="form-label" for="login-email">Email</label>
-            <input class="form-control" id="login-email" type="text" name="login-email" placeholder="john@example.com" aria-describedby="login-email" autofocus="" tabindex="1" />
+            <label class="form-label" for="email">Email</label>
+            <input class="form-control @error('email') is-invalid @enderror" id="email" type="email" name="email" value="{{ old('email') }}" placeholder="korisnik@primjer.com" aria-describedby="email" autofocus="" tabindex="1" required />
+            @error('email')
+              <div class="invalid-feedback">{{ $message }}</div>
+            @enderror
           </div>
           <div class="mb-1">
             <div class="d-flex justify-content-between">
-              <label class="form-label" for="login-password">Password</label>
-              <a href="{{url("auth/forgot-password-cover")}}">
-                <small>Forgot Password?</small>
-              </a>
+            <label class="form-label" for="password">Lozinka</label>
+            <a href="{{url("auth/forgot-password-cover")}}">
+              <small>Zaboravili ste lozinku?</small>
+            </a>
             </div>
             <div class="input-group input-group-merge form-password-toggle">
-              <input class="form-control form-control-merge" id="login-password" type="password" name="login-password" placeholder="············" aria-describedby="login-password" tabindex="2" />
+              <input class="form-control form-control-merge @error('password') is-invalid @enderror" id="password" type="password" name="password" placeholder="············" aria-describedby="password" tabindex="2" required />
               <span class="input-group-text cursor-pointer"><i data-feather="eye"></i></span>
             </div>
+            @error('password')
+              <div class="invalid-feedback">{{ $message }}</div>
+            @enderror
           </div>
           <div class="mb-1">
             <div class="form-check">
-              <input class="form-check-input" id="remember-me" type="checkbox" tabindex="3" />
-              <label class="form-check-label" for="remember-me"> Remember Me</label>
+              <input class="form-check-input" id="remember" type="checkbox" name="remember" tabindex="3" />
+              <label class="form-check-label" for="remember"> Zapamti me</label>
             </div>
           </div>
-          <button class="btn btn-primary w-100" tabindex="4">Sign in</button>
+          <button class="btn btn-primary w-100" type="submit" tabindex="4">Prijavi se</button>
         </form>
-        <p class="text-center mt-2">
-          <span>New on our platform?</span>
-          <a href="{{url('auth/register-cover')}}"><span>&nbsp;Create an account</span></a>
-        </p>
-        <div class="divider my-2">
-          <div class="divider-text">or</div>
-        </div>
-        <div class="auth-footer-btn d-flex justify-content-center">
-          <a class="btn btn-facebook" href="#"><i data-feather="facebook"></i></a>
-          <a class="btn btn-twitter white" href="#"><i data-feather="twitter"></i></a>
-          <a class="btn btn-google" href="#"><i data-feather="mail"></i></a>
-          <a class="btn btn-github" href="#"><i data-feather="github"></i></a>
-        </div>
       </div>
     </div>
     <!-- /Login-->

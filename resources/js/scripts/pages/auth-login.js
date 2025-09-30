@@ -27,12 +27,21 @@ $(function () {
         $(element).valid();
       }, */
       rules: {
-        'login-email': {
+        'email': {
           required: true,
           email: true
         },
-        'login-password': {
+        'password': {
           required: true
+        }
+      },
+      messages: {
+        'email': {
+          required: 'Email je obavezan',
+          email: 'Molimo unesite valjanu email adresu'
+        },
+        'password': {
+          required: 'Lozinka je obavezna'
         }
       }
     });

@@ -28,11 +28,11 @@ use App\Http\Controllers\ChartsController;
 */
 
 // Main Page Route
-Route::get('/', [DashboardController::class, 'dashboardEcommerce'])->name('dashboard-ecommerce');
+Route::get('/', [DashboardController::class, 'dashboardEcommerce'])->name('dashboard-ecommerce')->middleware('auth');
 
 
 /* Route Dashboards */
-Route::group(['prefix' => 'dashboard'], function () {
+Route::group(['prefix' => 'dashboard', 'middleware' => 'auth'], function () {
     Route::get('analytics', [DashboardController::class, 'dashboardAnalytics'])->name('dashboard-analytics');
     Route::get('ecommerce', [DashboardController::class, 'dashboardEcommerce'])->name('dashboard-ecommerce');
 });
@@ -210,6 +210,8 @@ Route::get('/error', [MiscellaneousController::class, 'error'])->name('error');
 Route::group(['prefix' => 'auth'], function () {
     Route::get('login-basic', [AuthenticationController::class, 'login_basic'])->name('auth-login-basic');
     Route::get('login-cover', [AuthenticationController::class, 'login_cover'])->name('auth-login-cover');
+    Route::post('login', [AuthenticationController::class, 'login'])->name('auth.login');
+    Route::post('logout', [AuthenticationController::class, 'logout'])->name('auth.logout');
     Route::get('register-basic', [AuthenticationController::class, 'register_basic'])->name('auth-register-basic');
     Route::get('register-cover', [AuthenticationController::class, 'register_cover'])->name('auth-register-cover');
     Route::get('forgot-password-basic', [AuthenticationController::class, 'forgot_password_basic'])->name('auth-forgot-password-basic');

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
 
 class AuthenticationController extends Controller
 {
@@ -20,6 +22,45 @@ class AuthenticationController extends Controller
         $pageConfigs = ['blankPage' => true];
 
         return view('/content/authentication/auth-login-cover', ['pageConfigs' => $pageConfigs]);
+    }
+
+    // Handle Login
+    public function login(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'password' => 'required|min:6',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput($request->except('password'));
+        }
+
+        $credentials = $request->only('email', 'password');
+        $remember = $request->has('remember');
+
+        if (Auth::attempt($credentials, $remember)) {
+            $request->session()->regenerate();
+            
+            return redirect()->intended(route('dashboard-ecommerce'));
+        }
+
+        return redirect()->back()
+            ->withErrors(['email' => 'Email i/ili lozinka su neispravni.'])
+            ->withInput($request->except('password'));
+    }
+
+    // Handle Logout
+    public function logout(Request $request)
+    {
+        Auth::logout();
+        
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+        
+        return redirect()->route('auth-login-cover');
     }
 
     // Register basic
