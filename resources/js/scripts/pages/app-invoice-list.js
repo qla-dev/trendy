@@ -27,18 +27,18 @@ $(function () {
   // datatable
   if (dtInvoiceTable.length) {
     var dtInvoice = dtInvoiceTable.DataTable({
-      ajax: assetPath + 'data/invoice-list.json', // JSON file to add data
+      data: window.radniNaloziData || [], // Use data from PawsController
       autoWidth: false,
       columns: [
-        // columns according to JSON
+        // columns according to PAWS data structure
         { data: 'responsive_id' },
-        { data: 'invoice_id' },
-        { data: 'invoice_status' },
-        { data: 'issued_date' },
-        { data: 'client_name' },
-        { data: 'total' },
-        { data: 'balance' },
-        { data: 'invoice_status' },
+        { data: 'id' }, // PAWS acKey
+        { data: 'status' }, // PAWS status
+        { data: 'datum_kreiranja' }, // PAWS date
+        { data: 'klijent' }, // PAWS client
+        { data: 'vrednost' }, // PAWS value
+        { data: 'status' }, // PAWS status again
+        { data: 'prioritet' }, // PAWS priority
         { data: '' }
       ],
       columnDefs: [
@@ -49,45 +49,47 @@ $(function () {
           targets: 0
         },
         {
-          // Invoice ID
+          // Radni Nalog ID
           targets: 1,
           width: '46px',
           render: function (data, type, full, meta) {
-            var $invoiceId = full['invoice_id'];
+            var $nalogId = full['id'] || full['broj_naloga'];
             // Creates full output for row
-            var $rowOutput = '<a class="fw-bold" href="' + invoicePreview + '"> #' + $invoiceId + '</a>';
+            var $rowOutput = '<a class="fw-bold" href="' + invoicePreview + '/' + full['id'] + '"> #' + $nalogId + '</a>';
             return $rowOutput;
           }
         },
         {
-          // Invoice status
+          // Radni Nalog Status
           targets: 2,
           width: '42px',
           render: function (data, type, full, meta) {
-            var $invoiceStatus = full['invoice_status'],
-              $dueDate = full['due_date'],
-              $balance = full['balance'],
+            var $status = full['status'],
+              $datumZavrsetka = full['datum_zavrsetka'],
+              $vrednost = full['vrednost'],
               roleObj = {
-                Sent: { class: 'bg-light-secondary', icon: 'send' },
-                Paid: { class: 'bg-light-success', icon: 'check-circle' },
-                Draft: { class: 'bg-light-primary', icon: 'save' },
-                Downloaded: { class: 'bg-light-info', icon: 'arrow-down-circle' },
-                'Past Due': { class: 'bg-light-danger', icon: 'info' },
-                'Partial Payment': { class: 'bg-light-warning', icon: 'pie-chart' }
+                'Završeno': { class: 'bg-light-success', icon: 'check-circle' },
+                'U toku': { class: 'bg-light-warning', icon: 'clock' },
+                'Novo': { class: 'bg-light-primary', icon: 'plus-circle' },
+                'Otkažano': { class: 'bg-light-danger', icon: 'x-circle' },
+                'Draft': { class: 'bg-light-info', icon: 'edit' }
               };
+            
+            var statusConfig = roleObj[$status] || { class: 'bg-light-secondary', icon: 'help-circle' };
+            
             return (
               "<span data-bs-toggle='tooltip' data-bs-html='true' title='<span>" +
-              $invoiceStatus +
-              '<br> <span class="fw-bold">Balance:</span> ' +
-              $balance +
-              '<br> <span class="fw-bold">Due Date:</span> ' +
-              $dueDate +
+              $status +
+              '<br> <span class="fw-bold">Vrednost:</span> ' +
+              $vrednost + ' ' + (full['valuta'] || 'RSD') +
+              '<br> <span class="fw-bold">Datum završetka:</span> ' +
+              ($datumZavrsetka || 'N/A') +
               "</span>'>" +
               '<div class="avatar avatar-status ' +
-              roleObj[$invoiceStatus].class +
+              statusConfig.class +
               '">' +
               '<span class="avatar-content">' +
-              feather.icons[roleObj[$invoiceStatus].icon].toSvg({ class: 'avatar-icon' }) +
+              feather.icons[statusConfig.icon].toSvg({ class: 'avatar-icon' }) +
               '</span>' +
               '</div>' +
               '</span>'
@@ -100,25 +102,18 @@ $(function () {
           responsivePriority: 4,
           width: '270px',
           render: function (data, type, full, meta) {
-            var $name = full['client_name'],
-              $email = full['email'],
-              $image = full['avatar'],
+            var $name = full['klijent'],
+              $dodeljenKorisnik = full['dodeljen_korisnik'],
+              $magacin = full['magacin'],
               stateNum = Math.floor(Math.random() * 6),
               states = ['success', 'danger', 'warning', 'info', 'primary', 'secondary'],
               $state = states[stateNum],
-              $name = full['client_name'],
               $initials = $name.match(/\b\w/g) || [];
             $initials = (($initials.shift() || '') + ($initials.pop() || '')).toUpperCase();
-            if ($image) {
-              // For Avatar image
-              var $output =
-                '<img  src="' + assetPath + 'images/avatars/' + $image + '" alt="Avatar" width="32" height="32">';
-            } else {
-              // For Avatar badge
-              $output = '<div class="avatar-content">' + $initials + '</div>';
-            }
-            // Creates full output for row
-            var colorClass = $image === '' ? ' bg-light-' + $state + ' ' : ' ';
+            
+            // For Avatar badge
+            var $output = '<div class="avatar-content">' + $initials + '</div>';
+            var colorClass = ' bg-light-' + $state + ' ';
 
             var $rowOutput =
               '<div class="d-flex justify-content-left align-items-center">' +
@@ -134,7 +129,7 @@ $(function () {
               $name +
               '</h6>' +
               '<small class="text-truncate text-muted">' +
-              $email +
+              $dodeljenKorisnik +
               '</small>' +
               '</div>' +
               '</div>';
@@ -142,47 +137,69 @@ $(function () {
           }
         },
         {
-          // Total Invoice Amount
+          // Total Amount
           targets: 4,
           width: '73px',
           render: function (data, type, full, meta) {
-            var $total = full['total'];
-            return '<span class="d-none">' + $total + '</span>$' + $total;
+            var $total = full['vrednost'];
+            var $currency = full['valuta'] || 'RSD';
+            return '<span class="d-none">' + $total + '</span>' + $currency + ' ' + $total;
           }
         },
         {
-          // Due Date
+          // Created Date
           targets: 5,
           width: '130px',
           render: function (data, type, full, meta) {
-            var $dueDate = new Date(full['due_date']);
+            var $createdDate = new Date(full['datum_kreiranja']);
             // Creates full output for row
             var $rowOutput =
               '<span class="d-none">' +
-              moment($dueDate).format('YYYYMMDD') +
+              moment($createdDate).format('YYYYMMDD') +
               '</span>' +
-              moment($dueDate).format('DD MMM YYYY');
-            $dueDate;
+              moment($createdDate).format('DD MMM YYYY');
             return $rowOutput;
           }
         },
         {
-          // Client Balance/Status
+          // Status Badge
           targets: 6,
           width: '98px',
           render: function (data, type, full, meta) {
-            var $balance = full['balance'];
-            if ($balance === 0) {
-              var $badge_class = 'badge-light-success';
-              return '<span class="badge rounded-pill ' + $badge_class + '" text-capitalized> Paid </span>';
-            } else {
-              return '<span class="d-none">' + $balance + '</span>' + $balance;
+            var $status = full['status'];
+            var $badge_class = 'badge-light-secondary';
+            
+            if ($status === 'Završeno') {
+              $badge_class = 'badge-light-success';
+            } else if ($status === 'U toku') {
+              $badge_class = 'badge-light-warning';
+            } else if ($status === 'Novo') {
+              $badge_class = 'badge-light-primary';
+            } else if ($status === 'Otkažano') {
+              $badge_class = 'badge-light-danger';
             }
+            
+            return '<span class="badge rounded-pill ' + $badge_class + '" text-capitalized> ' + $status + ' </span>';
           }
         },
         {
+          // Priority
           targets: 7,
-          visible: false
+          width: '80px',
+          render: function (data, type, full, meta) {
+            var $priority = full['prioritet'];
+            var $badge_class = 'badge-light-secondary';
+            
+            if ($priority === 'Visok') {
+              $badge_class = 'badge-light-danger';
+            } else if ($priority === 'Srednji') {
+              $badge_class = 'badge-light-warning';
+            } else if ($priority === 'Nizak') {
+              $badge_class = 'badge-light-info';
+            }
+            
+            return '<span class="badge rounded-pill ' + $badge_class + '" text-capitalized> ' + $priority + ' </span>';
+          }
         },
         {
           // Actions

@@ -15,6 +15,11 @@
 @section('content')
 <section class="invoice-list-wrapper">
   <div class="card">
+    @if(isset($error))
+      <div class="alert alert-danger">
+        {{ $error }}
+      </div>
+    @endif
     <div class="card-datatable table-responsive">
       <table class="invoice-list-table table">
         <thead>
@@ -23,10 +28,10 @@
             <th>#</th>
             <th><i data-feather="trending-up"></i></th>
             <th>Client</th>
-            <th>Total</th>
+            <th>Totala</th>
             <th class="text-truncate">Issued Date</th>
-            <th>Balance</th>
-            <th>Invoice Status</th>
+            <th>Status</th>
+            <th>Prioritet</th>
             <th class="cell-fit">Actions</th>
           </tr>
         </thead>
@@ -34,6 +39,11 @@
     </div>
   </div>
 </section>
+
+<!-- Pass data to JavaScript -->
+<script>
+  window.radniNaloziData = @json($radniNalozi ?? []);
+</script>
 @endsection
 
 @section('vendor-script')

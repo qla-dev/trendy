@@ -13,6 +13,54 @@ class PawsController extends Controller
     private $password = 'C+4WY5j?6w';
 
     /**
+     * Check for recent data in PAWS (2025)
+     */
+    public function checkRecentData()
+    {
+        Log::info('=== CHECKING FOR RECENT PAWS DATA ===');
+        
+        try {
+            // Check for 2025 data
+            $payload2025 = [
+                "start" => 0,
+                "length" => 10,
+                "fieldsToReturn" => "acKey,adDate,acStatus,acConsignee",
+                "tableFKs" => [],
+                "customConditions" => [
+                    "condition" => "adDate >= '2025-01-01'",
+                    "params" => []
+                ],
+                "sortColumn" => "",
+                "sortOrder" => "",
+                "withSubSelects" => 0
+            ];
+            
+            Log::info('2025 Data Request: ' . json_encode($payload2025));
+            
+            $response = Http::withBasicAuth($this->username, $this->password)
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json'
+                ])
+                ->timeout(30)
+                ->post($this->pawsUrl . '/api/Order/retrieve', $payload2025);
+            
+            Log::info('2025 Response Status: ' . $response->status());
+            Log::info('2025 Response: ' . $response->body());
+            
+            return response()->json([
+                'status' => $response->status(),
+                'has_2025_data' => $response->successful() && !empty($response->json()),
+                'data' => $response->json()
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('2025 Data Check Error: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Test PAWS API connection and log detailed information
      */
     public function testPawsConnection()
@@ -101,11 +149,11 @@ class PawsController extends Controller
             // Prepare the API request payload for PAWS Order/retrieve endpoint
             $payload = [
                 "start" => 0,
-                "length" => 50, // Limit to 50 records for initial load
+                "length" => 100, // Get more records to see recent data
                 "fieldsToReturn" => "*", // Get all fields
                 "tableFKs" => [],
                 "customConditions" => [
-                    "condition" => "1=1", // Get all records, can be customized
+                    "condition" => "adDate >= '2023-01-01'", // Get records from 2023 onwards to show more recent data
                     "params" => []
                 ],
                 "sortColumn" => "", // Remove sorting to avoid column name issues
@@ -168,20 +216,40 @@ class PawsController extends Controller
         
         foreach ($orders as $order) {
             $transformedData[] = [
-                'id' => $order['acKey'] ?? $order['id'] ?? $order['order_id'] ?? null,
-                'broj_naloga' => $order['acDocType'] ?? $order['order_number'] ?? $order['broj_naloga'] ?? 'N/A',
-                'naziv' => $order['acTitle'] ?? $order['title'] ?? $order['naziv'] ?? $order['description'] ?? 'N/A',
-                'opis' => $order['acDescription'] ?? $order['description'] ?? $order['opis'] ?? $order['details'] ?? 'N/A',
-                'status' => $order['acStatus'] ?? $order['status'] ?? $order['order_status'] ?? 'N/A',
-                'prioritet' => $order['acPriority'] ?? $order['priority'] ?? $order['prioritet'] ?? 'Srednji',
-                'datum_kreiranja' => $order['acCreatedDate'] ?? $order['created_date'] ?? $order['datum_kreiranja'] ?? date('Y-m-d'),
-                'datum_zavrsetka' => $order['acCompletedDate'] ?? $order['completed_date'] ?? $order['datum_zavrsetka'] ?? null,
-                'dodeljen_korisnik' => $order['acAssignedTo'] ?? $order['assigned_to'] ?? $order['dodeljen_korisnik'] ?? 'N/A',
-                'klijent' => $order['acClient'] ?? $order['client'] ?? $order['klijent'] ?? $order['customer'] ?? 'N/A'
+                'responsive_id' => '', // Required by DataTables for responsive functionality
+                'id' => $order['acKey'] ?? null,
+                'broj_naloga' => $order['acRefNo1'] ?? $order['acKey'] ?? 'N/A',
+                'naziv' => $order['acDocType'] ?? 'Radni nalog',
+                'opis' => $order['acNote'] ?? $order['acStatement'] ?? 'N/A',
+                'status' => $this->mapStatus($order['acStatus'] ?? 'N/A'),
+                'prioritet' => $order['acWayOfSale'] ?? 'Srednji',
+                'datum_kreiranja' => $order['adDate'] ? date('Y-m-d', strtotime($order['adDate'])) : 'N/A',
+                'datum_zavrsetka' => $order['adDeliveryDeadline'] ? date('Y-m-d', strtotime($order['adDeliveryDeadline'])) : null,
+                'dodeljen_korisnik' => 'Korisnik ' . ($order['anClerk'] ?? 'N/A'),
+                'klijent' => $order['acConsignee'] ?? $order['acReceiver'] ?? 'N/A',
+                'vrednost' => $order['anValue'] ?? 0,
+                'valuta' => $order['acCurrency'] ?? 'RSD',
+                'magacin' => $order['acWarehouse'] ?? 'N/A'
             ];
         }
         
         return $transformedData;
+    }
+
+    /**
+     * Map PAWS status codes to readable text
+     */
+    private function mapStatus($statusCode)
+    {
+        $statusMap = [
+            'F' => 'Završeno',
+            'P' => 'U toku', 
+            'N' => 'Novo',
+            'C' => 'Otkažano',
+            'D' => 'Draft'
+        ];
+        
+        return $statusMap[$statusCode] ?? $statusCode;
     }
 
     /**
@@ -191,40 +259,52 @@ class PawsController extends Controller
     {
         return [
             [
+                'responsive_id' => '',
                 'id' => 1,
                 'broj_naloga' => 'RN-2024-001',
                 'naziv' => 'Popravka servera',
                 'opis' => 'Popravka glavnog servera u data centru',
                 'status' => 'U toku',
                 'prioritet' => 'Visok',
-                'datum_kreiranja' => '2024-01-15',
+                'datum_kreiranja' => '2024-12-15',
                 'datum_zavrsetka' => null,
                 'dodeljen_korisnik' => 'Marko Petrović',
-                'klijent' => 'Datalab d.o.o.'
+                'klijent' => 'Datalab d.o.o.',
+                'vrednost' => 15000,
+                'valuta' => 'RSD',
+                'magacin' => 'Glavni magacin'
             ],
             [
+                'responsive_id' => '',
                 'id' => 2,
                 'broj_naloga' => 'RN-2024-002',
                 'naziv' => 'Instalacija softvera',
                 'opis' => 'Instalacija novog softvera na radne stanice',
                 'status' => 'Završeno',
                 'prioritet' => 'Srednji',
-                'datum_kreiranja' => '2024-01-10',
+                'datum_kreiranja' => '2024-11-10',
                 'datum_zavrsetka' => '2024-01-12',
                 'dodeljen_korisnik' => 'Ana Nikolić',
-                'klijent' => 'Tech Solutions'
+                'klijent' => 'Tech Solutions',
+                'vrednost' => 8500,
+                'valuta' => 'RSD',
+                'magacin' => 'IT magacin'
             ],
             [
+                'responsive_id' => '',
                 'id' => 3,
                 'broj_naloga' => 'RN-2024-003',
                 'naziv' => 'Mrežna konfiguracija',
                 'opis' => 'Konfiguracija mrežne opreme za novi office',
                 'status' => 'Novo',
                 'prioritet' => 'Nizak',
-                'datum_kreiranja' => '2024-01-20',
+                'datum_kreiranja' => '2024-12-20',
                 'datum_zavrsetka' => null,
                 'dodeljen_korisnik' => 'Petar Jovanović',
-                'klijent' => 'Startup Company'
+                'klijent' => 'Startup Company',
+                'vrednost' => 12000,
+                'valuta' => 'RSD',
+                'magacin' => 'Mrežni magacin'
             ]
         ];
     }

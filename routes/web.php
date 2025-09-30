@@ -55,6 +55,7 @@ Route::group(['prefix' => 'app'], function () {
     
     // Test route for PAWS API debugging
     Route::get('test-paws', [PawsController::class, 'testPawsConnection'])->name('test-paws');
+Route::get('check-recent-data', [PawsController::class, 'checkRecentData'])->name('check-recent-data');
     Route::get('ecommerce/shop', [AppsController::class, 'ecommerce_shop'])->name('app-ecommerce-shop');
     Route::get('ecommerce/details', [AppsController::class, 'ecommerce_details'])->name('app-ecommerce-details');
     Route::get('ecommerce/wishlist', [AppsController::class, 'ecommerce_wishlist'])->name('app-ecommerce-wishlist');
