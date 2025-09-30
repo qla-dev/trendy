@@ -39,7 +39,7 @@ $configData = Helper::applClasses();
           </g>
         </g>
       </svg>
-      <h2 class="brand-text text-primary ms-1">Trendy.app</h2>
+      <h2 class="brand-text text-primary ms-1">TRENDY.app</h2>
     </a>
     <!-- /Brand logo-->
 
@@ -58,8 +58,8 @@ $configData = Helper::applClasses();
     <!-- Login-->
     <div class="d-flex col-lg-4 align-items-center auth-bg px-2 p-lg-5">
       <div class="col-12 col-sm-8 col-md-6 col-lg-12 px-xl-2 mx-auto">
-        <h2 class="card-title fw-bold mb-1">Dobrodošli u Trendy.app! 👋</h2>
-        <p class="card-text mb-2">Prijavite se da biste pristupili Trendy.app sistemu za upravljanje radnim nalozima i skladištem</p>
+        <h2 class="card-title fw-bold mb-1">Dobrodošli u TRENDY.app! 👋</h2>
+        <p class="card-text mb-2">Prijavite se da biste pristupili TRENDY.app sistemu za upravljanje radnim nalozima i skladištem</p>
         <form class="auth-login-form mt-2" action="{{ route('auth.login') }}" method="POST">
           @csrf
           <div class="mb-1">

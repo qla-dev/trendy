@@ -1,0 +1,95 @@
+{
+  "menu": [
+    {
+      "name": "Dashboards",
+      "url": "/",
+      "icon": "home",
+          "slug": "dashboard-ecommerce"
+    },
+    {
+      "navheader": "Apps & Pages",
+      "slug": ""
+    },
+    {
+      "name": "Korisnici",
+      "icon": "user",
+      "slug": "",
+      "submenu": [
+        {
+          "url": "app/user/list",
+          "name": "Upravljaj",
+          "icon": "list",
+          "slug": "app-user-list"
+        },
+        {
+          "name": "View",
+          "icon": "eye",
+          "slug": "",
+          "submenu": [
+            {
+              "url": "app/user/view/account",
+              "name": "Account",
+              "icon": "user",
+              "slug": "app-user-view-account"
+            },
+            {
+              "url": "app/user/view/security",
+              "name": "Security",
+              "icon": "shield",
+              "slug": "app-user-view-security"
+            },
+            {
+              "url": "app/user/view/billing",
+              "name": "Billing & Plans",
+              "icon": "credit-card",
+              "slug": "app-user-view-billing"
+            },
+            {
+              "url": "app/user/view/notifications",
+              "name": "Notifications",
+              "icon": "bell",
+              "slug": "app-user-view-notifications"
+            },
+            {
+              "url": "app/user/view/connections",
+              "name": "Connections",
+              "icon": "link",
+              "slug": "app-user-view-connections"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Radni nalozi",
+      "icon": "file-text",
+      "slug": "",
+      "submenu": [
+        {
+          "url": "app/invoice/list",
+          "name": "Upravljaj",
+          "icon": "list",
+          "slug": "app-invoice-list"
+        },
+        {
+          "url": "app/invoice/preview",
+          "name": "Preview",
+      "icon": "eye",
+          "slug": "app-invoice-preview"
+        },
+        {
+          "url": "app/invoice/edit",
+          "name": "Edit",
+          "icon": "edit",
+          "slug": "app-invoice-edit"
+        },
+        {
+          "url": "app/invoice/add",
+          "name": "Add",
+          "icon": "plus",
+          "slug": "app-invoice-add"
+        }
+      ]
+    }
+  ]
+}
