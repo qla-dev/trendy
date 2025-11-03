@@ -14,6 +14,13 @@
 @section('page-style')
   {{-- Page Css files --}}
   <link rel="stylesheet" href="{{ asset(mix('css/base/plugins/forms/form-validation.css')) }}">
+  <style>
+      .content-header {
+    margin-top: -6px;
+    margin-bottom: 4px;
+  }
+  .content-header-title {margin-top: 5px;}
+  </style>
 @endsection
 
 @section('content')

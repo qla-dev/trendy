@@ -10,17 +10,32 @@
 
 @section('page-style')
 <link rel="stylesheet" href="{{asset('css/base/pages/app-invoice-list.css')}}">
+<style>
+  .content-header {
+    margin-top: -6px;
+    margin-bottom: 4px;
+  }
+  .content-header-title {margin-top: 5px;}
+</style>
 @endsection
 
 @section('content')
 <section class="invoice-list-wrapper">
   <!-- Main Title -->
-  <div class="row mb-2">
-    <div class="col-12 d-flex justify-content-between align-items-center">
-      <h3 class="mb-0">Radni nalozi</h3>
-      <button type="button" class="btn btn-primary" id="btn-add-radni-nalog">
-        <i data-feather="plus" class="me-50"></i> + Dodaj radni nalog
-      </button>
+  <div class="content-header row">
+    <div class="content-header-left col-md-9 col-12 mb-2">
+      <div class="row breadcrumbs-top">
+        <div class="col-12">
+          <h2 class="content-header-title float-start mb-0">Radni nalozi</h2>
+        </div>
+      </div>
+    </div>
+    <div class="content-header-right text-md-end col-md-3 col-12 d-md-block d-none">
+      <div class="mb-1 breadcrumb-right">
+        <button type="button" class="btn btn-primary" id="btn-add-radni-nalog">
+          <i data-feather="plus" class="me-50"></i> Dodaj radni nalog
+        </button>
+      </div>
     </div>
   </div>
 
@@ -390,6 +405,18 @@
   .input-group-text {
     background: #f8f8f8;
     border-right: none;
+  }
+
+  .content-header-right {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+  }
+
+  .content-header-right .breadcrumb-right {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
   }
 
   div.dataTables_wrapper div.dataTables_filter {

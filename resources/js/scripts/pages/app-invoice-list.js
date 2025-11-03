@@ -197,16 +197,20 @@ $(function () {
           render: function (data, type, full, meta) {
             var $priority = full['prioritet'];
             var $badge_class = 'badge-light-secondary';
+            var $text_color = '';
             
-            if ($priority === 'Visok') {
+            if ($priority === 'Visok' || $priority === 'z' || $priority === 'Z') {
               $badge_class = 'badge-light-danger';
+              $text_color = 'text-danger';
             } else if ($priority === 'Srednji') {
               $badge_class = 'badge-light-warning';
-            } else if ($priority === 'Nizak') {
+              $text_color = 'text-warning';
+            } else if ($priority === 'Nizak' || $priority === 'd' || $priority === 'D') {
               $badge_class = 'badge-light-info';
+              $text_color = 'text-info';
             }
             
-            return '<span class="badge rounded-pill ' + $badge_class + '" text-capitalized> ' + $priority + ' </span>';
+            return '<span class="badge rounded-pill ' + $badge_class + ' ' + $text_color + '" text-capitalized> ' + $priority + ' </span>';
           }
         },
         {
@@ -266,6 +270,9 @@ $(function () {
         sLengthMenu: 'Prikaži _MENU_',
         search: 'Brza pretraga',
         searchPlaceholder: 'Pretraži...',
+        info: 'Prikazano _START_ do _END_ od _TOTAL_ unosa',
+        infoEmpty: 'Prikazano 0 do 0 od 0 unosa',
+        infoFiltered: '(filtrirano od _MAX_ ukupnih unosa)',
         paginate: {
           // remove previous & next text from pagination
           previous: '&nbsp;',
