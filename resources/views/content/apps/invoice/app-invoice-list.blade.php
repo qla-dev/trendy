@@ -187,11 +187,13 @@
             <input type="text" class="form-control filter-input" id="filter-vezni-dok" placeholder="Vezni dok.">
           </div>
         </div>
-      </div>
-      <div class="d-flex justify-content-end mt-3">
-        <button type="button" class="btn btn-primary" id="btn-filter">
-          <i data-feather="filter" class="me-50"></i> Filter
-        </button>
+        <div class="col-md-3">
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button type="button" class="btn btn-primary w-100" id="btn-filter">
+            <i data-feather="filter" class="me-50"></i> Filter
+          </button>
+        </div>
       </div>
     </div>
   </div>
