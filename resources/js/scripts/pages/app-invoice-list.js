@@ -72,7 +72,7 @@ $(function () {
                 'U toku': { class: 'bg-light-warning', icon: 'clock' },
                 'Novo': { class: 'bg-light-primary', icon: 'plus-circle' },
                 'Otkažano': { class: 'bg-light-danger', icon: 'x-circle' },
-                'Draft': { class: 'bg-light-info', icon: 'edit' }
+                'Nacrt': { class: 'bg-light-info', icon: 'edit' }
               };
             
             var statusConfig = roleObj[$status] || { class: 'bg-light-secondary', icon: 'help-circle' };
@@ -80,10 +80,10 @@ $(function () {
             return (
               "<span data-bs-toggle='tooltip' data-bs-html='true' title='<span>" +
               $status +
-              '<br> <span class="fw-bold">Vrednost:</span> ' +
+              '<br> <span class="fw-bold">Vrijednost:</span> ' +
               $vrednost + ' ' + (full['valuta'] || 'RSD') +
               '<br> <span class="fw-bold">Datum završetka:</span> ' +
-              ($datumZavrsetka || 'N/A') +
+              ($datumZavrsetka || 'Nije dostupno') +
               "</span>'>" +
               '<div class="avatar avatar-status ' +
               statusConfig.class +
@@ -168,18 +168,26 @@ $(function () {
           render: function (data, type, full, meta) {
             var $status = full['status'];
             var $badge_class = 'badge-light-secondary';
+            var $text_color = '';
             
             if ($status === 'Završeno') {
               $badge_class = 'badge-light-success';
+              $text_color = 'text-success';
             } else if ($status === 'U toku') {
               $badge_class = 'badge-light-warning';
+              $text_color = 'text-warning';
             } else if ($status === 'Novo') {
               $badge_class = 'badge-light-primary';
+              $text_color = 'text-primary';
             } else if ($status === 'Otkažano') {
               $badge_class = 'badge-light-danger';
+              $text_color = 'text-danger';
+            } else if ($status === 'Nacrt') {
+              $badge_class = 'badge-light-info';
+              $text_color = 'text-info';
             }
             
-            return '<span class="badge rounded-pill ' + $badge_class + '" text-capitalized> ' + $status + ' </span>';
+            return '<span class="badge rounded-pill ' + $badge_class + ' ' + $text_color + '" text-capitalized> ' + $status + ' </span>';
           }
         },
         {
@@ -204,18 +212,18 @@ $(function () {
         {
           // Actions
           targets: -1,
-          title: 'Actions',
+          title: 'Akcije',
           width: '80px',
           orderable: false,
           render: function (data, type, full, meta) {
             return (
               '<div class="d-flex align-items-center col-actions">' +
-              '<a class="me-1" href="#" data-bs-toggle="tooltip" data-bs-placement="top" title="Send Mail">' +
+              '<a class="me-1" href="#" data-bs-toggle="tooltip" data-bs-placement="top" title="Pošalji Email">' +
               feather.icons['send'].toSvg({ class: 'font-medium-2 text-body' }) +
               '</a>' +
               '<a class="me-25" href="' +
               invoicePreview +
-              '" data-bs-toggle="tooltip" data-bs-placement="top" title="Preview Invoice">' +
+              '" data-bs-toggle="tooltip" data-bs-placement="top" title="Pregled Radnog Naloga">' +
               feather.icons['eye'].toSvg({ class: 'font-medium-2 text-body' }) +
               '</a>' +
               '<div class="dropdown">' +
@@ -225,18 +233,18 @@ $(function () {
               '<div class="dropdown-menu dropdown-menu-end">' +
               '<a href="#" class="dropdown-item">' +
               feather.icons['download'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Download</a>' +
+              'Preuzmi</a>' +
               '<a href="' +
               invoiceEdit +
               '" class="dropdown-item">' +
               feather.icons['edit'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Edit</a>' +
+              'Uredi</a>' +
               '<a href="#" class="dropdown-item">' +
               feather.icons['trash'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Delete</a>' +
+              'Obriši</a>' +
               '<a href="#" class="dropdown-item">' +
               feather.icons['copy'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Duplicate</a>' +
+              'Dupliciraj</a>' +
               '</div>' +
               '</div>' +
               '</div>'
@@ -248,16 +256,16 @@ $(function () {
       dom:
         '<"row d-flex justify-content-between align-items-center m-1"' +
         '<"col-lg-6 d-flex align-items-center"l<"dt-action-buttons text-xl-end text-lg-start text-lg-end text-start "B>>' +
-        '<"col-lg-6 d-flex align-items-center justify-content-lg-end flex-lg-nowrap flex-wrap pe-lg-1 p-0"f<"invoice_status ms-sm-2">>' +
+        '<"col-lg-6 d-flex align-items-center justify-content-lg-end flex-lg-nowrap flex-wrap pe-lg-1 p-0"f>' +
         '>t' +
         '<"d-flex justify-content-between mx-2 row"' +
         '<"col-sm-12 col-md-6"i>' +
         '<"col-sm-12 col-md-6"p>' +
         '>',
       language: {
-        sLengthMenu: 'Show _MENU_',
-        search: 'Search',
-        searchPlaceholder: 'Search Invoice',
+        sLengthMenu: 'Prikaži _MENU_',
+        search: 'Brza pretraga',
+        searchPlaceholder: 'Pretraži...',
         paginate: {
           // remove previous & next text from pagination
           previous: '&nbsp;',
@@ -265,22 +273,14 @@ $(function () {
         }
       },
       // Buttons with Dropdown
-      buttons: [
-        {
-          text: 'Add Record',
-          className: 'btn btn-primary btn-add-record ms-2',
-          action: function (e, dt, button, config) {
-            window.location = invoiceAdd;
-          }
-        }
-      ],
+      buttons: [],
       // For responsive popup
       responsive: {
         details: {
           display: $.fn.dataTable.Responsive.display.modal({
             header: function (row) {
               var data = row.data();
-              return 'Details of ' + data['client_name'];
+              return 'Detalji od ' + data['klijent'];
             }
           }),
           type: 'column',
@@ -308,31 +308,221 @@ $(function () {
       },
       initComplete: function () {
         $(document).find('[data-bs-toggle="tooltip"]').tooltip();
-        // Adding role filter once table initialized
-        this.api()
-          .columns(7)
-          .every(function () {
-            var column = this;
-            var select = $(
-              '<select id="UserRole" class="form-select ms-50 text-capitalize"><option value=""> Select Status </option></select>'
-            )
-              .appendTo('.invoice_status')
-              .on('change', function () {
-                var val = $.fn.dataTable.util.escapeRegex($(this).val());
-                column.search(val ? '^' + val + '$' : '', true, false).draw();
-              });
-
-            column
-              .data()
-              .unique()
-              .sort()
-              .each(function (d, j) {
-                select.append('<option value="' + d + '" class="text-capitalize">' + d + '</option>');
-              });
-          });
+        // Initialize feather icons
+        if (typeof feather !== 'undefined') {
+          feather.replace();
+        }
       },
       drawCallback: function () {
         $(document).find('[data-bs-toggle="tooltip"]').tooltip();
+        // Initialize feather icons
+        if (typeof feather !== 'undefined') {
+          feather.replace();
+        }
+      }
+    });
+
+    // Handle "Dodaj radni nalog" button click
+    $('#btn-add-radni-nalog').on('click', function() {
+      window.location = invoiceAdd;
+    });
+
+    // Filtering functionality
+    var currentStatusFilter = null;
+    
+    // Status card click handler
+    $('.status-card').on('click', function() {
+      $('.status-card').removeClass('status-card-active');
+      $(this).addClass('status-card-active');
+      
+      var status = $(this).data('status');
+      currentStatusFilter = status;
+      
+      applyFilters();
+    });
+
+    // Store the custom filter function reference
+    var customFilterFunction = null;
+
+    // Apply filters function
+    function applyFilters() {
+      // Remove previous custom filter if it exists
+      if (customFilterFunction !== null) {
+        var idx = $.fn.dataTable.ext.search.indexOf(customFilterFunction);
+        if (idx !== -1) {
+          $.fn.dataTable.ext.search.splice(idx, 1);
+        }
+      }
+
+      var filters = {
+        kupac: $('#filter-kupac').val(),
+        primatelj: $('#filter-primatelj').val(),
+        proizvod: $('#filter-proizvod').val(),
+        planPocetakOd: $('#filter-plan-pocetak-od').val(),
+        planPocetakDo: $('#filter-plan-pocetak-do').val(),
+        planKrajOd: $('#filter-plan-kraj-od').val(),
+        planKrajDo: $('#filter-plan-kraj-do').val(),
+        datumOd: $('#filter-datum-od').val(),
+        datumDo: $('#filter-datum-do').val(),
+        vezniDok: $('#filter-vezni-dok').val()
+      };
+
+      // Custom filtering function
+      customFilterFunction = function(settings, data, dataIndex) {
+          var row = dtInvoice.row(dataIndex).data();
+          if (!row) return false;
+
+          // Status filter
+          if (currentStatusFilter && currentStatusFilter !== 'svi') {
+            var rowStatus = (row['status'] || '').toLowerCase();
+            var statusMatch = false;
+            
+            switch(currentStatusFilter) {
+              case 'planiran':
+                statusMatch = rowStatus.includes('planiran') || rowStatus.includes('novo');
+                break;
+              case 'otvoren':
+                statusMatch = rowStatus.includes('otvoren') || rowStatus.includes('novo');
+                break;
+              case 'rezerviran':
+                statusMatch = rowStatus.includes('rezerviran');
+                break;
+              case 'raspisan':
+                statusMatch = rowStatus.includes('raspisan');
+                break;
+              case 'u_radu':
+                statusMatch = rowStatus.includes('u toku') || rowStatus.includes('u radu');
+                break;
+              case 'djelimicno_zakljucen':
+                statusMatch = rowStatus.includes('djelimično') || rowStatus.includes('djelimicno');
+                break;
+              case 'zakljucen':
+                statusMatch = rowStatus.includes('završeno') || rowStatus.includes('zaključen') || rowStatus.includes('zakljucen');
+                break;
+            }
+            
+            if (!statusMatch) return false;
+          }
+
+          // Text filters
+          if (filters.kupac) {
+            var klijent = (row['klijent'] || '').toLowerCase();
+            if (!klijent.includes(filters.kupac.toLowerCase())) return false;
+          }
+
+          if (filters.primatelj) {
+            var primatelj = (row['klijent'] || row['dodeljen_korisnik'] || '').toLowerCase();
+            if (!primatelj.includes(filters.primatelj.toLowerCase())) return false;
+          }
+
+          if (filters.proizvod) {
+            var proizvod = (row['opis'] || '').toLowerCase();
+            if (!proizvod.includes(filters.proizvod.toLowerCase())) return false;
+          }
+
+          if (filters.vezniDok) {
+            var vezniDok = (row['broj_naloga'] || '').toLowerCase();
+            if (!vezniDok.includes(filters.vezniDok.toLowerCase())) return false;
+          }
+
+          // Date filters
+          if (filters.datumOd) {
+            var datumKreiranja = row['datum_kreiranja'] || '';
+            if (datumKreiranja && datumKreiranja < filters.datumOd) return false;
+          }
+
+          if (filters.datumDo) {
+            var datumKreiranja = row['datum_kreiranja'] || '';
+            if (datumKreiranja && datumKreiranja > filters.datumDo) return false;
+          }
+
+          return true;
+        };
+
+      // Push the new filter function
+      $.fn.dataTable.ext.search.push(customFilterFunction);
+
+      dtInvoice.draw();
+    }
+
+    // Filter button click
+    $('#btn-filter').on('click', function() {
+      applyFilters();
+    });
+
+    // Add filter button (placeholder - can be extended)
+    $('#btn-add-filter').on('click', function() {
+      // Can add dynamic filter rows here in the future
+      alert('Funkcionalnost "Dodaj filter" će biti implementirana.');
+    });
+
+    // Clear filters button
+    $('#btn-delete-filter').on('click', function() {
+      $('.filter-input').val('');
+      currentStatusFilter = null;
+      $('.status-card').removeClass('status-card-active');
+      
+      // Remove custom filter
+      if (customFilterFunction !== null) {
+        var idx = $.fn.dataTable.ext.search.indexOf(customFilterFunction);
+        if (idx !== -1) {
+          $.fn.dataTable.ext.search.splice(idx, 1);
+        }
+        customFilterFunction = null;
+      }
+      
+      dtInvoice.draw();
+    });
+
+    // Save filter (placeholder - can be extended to save to localStorage)
+    $('#btn-save-filter').on('click', function() {
+      var filters = {
+        kupac: $('#filter-kupac').val(),
+        primatelj: $('#filter-primatelj').val(),
+        proizvod: $('#filter-proizvod').val(),
+        planPocetakOd: $('#filter-plan-pocetak-od').val(),
+        planPocetakDo: $('#filter-plan-pocetak-do').val(),
+        planKrajOd: $('#filter-plan-kraj-od').val(),
+        planKrajDo: $('#filter-plan-kraj-do').val(),
+        datumOd: $('#filter-datum-od').val(),
+        datumDo: $('#filter-datum-do').val(),
+        vezniDok: $('#filter-vezni-dok').val(),
+        status: currentStatusFilter
+      };
+      
+      localStorage.setItem('radniNaloziFilters', JSON.stringify(filters));
+      alert('Filteri su sačuvani!');
+    });
+
+    // Load saved filters (on page load)
+    var savedFilters = localStorage.getItem('radniNaloziFilters');
+    if (savedFilters) {
+      try {
+        var filters = JSON.parse(savedFilters);
+        $('#filter-kupac').val(filters.kupac || '');
+        $('#filter-primatelj').val(filters.primatelj || '');
+        $('#filter-proizvod').val(filters.proizvod || '');
+        $('#filter-plan-pocetak-od').val(filters.planPocetakOd || '');
+        $('#filter-plan-pocetak-do').val(filters.planPocetakDo || '');
+        $('#filter-plan-kraj-od').val(filters.planKrajOd || '');
+        $('#filter-plan-kraj-do').val(filters.planKrajDo || '');
+        $('#filter-datum-od').val(filters.datumOd || '');
+        $('#filter-datum-do').val(filters.datumDo || '');
+        $('#filter-vezni-dok').val(filters.vezniDok || '');
+        
+        if (filters.status) {
+          currentStatusFilter = filters.status;
+          $('.status-card[data-status="' + filters.status + '"]').addClass('status-card-active');
+        }
+      } catch(e) {
+        console.error('Error loading saved filters:', e);
+      }
+    }
+
+    // Enter key to apply filter
+    $('.filter-input').on('keypress', function(e) {
+      if (e.which === 13) {
+        $('#btn-filter').click();
       }
     });
   }

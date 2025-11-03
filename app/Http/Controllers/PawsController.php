@@ -124,9 +124,13 @@ class PawsController extends Controller
             // Fetch radni nalozi from PAWS system
             $radniNalozi = $this->fetchRadniNalozi();
             
+            // Calculate status statistics
+            $statusStats = $this->calculateStatusStats($radniNalozi);
+            
         return view('/content/apps/invoice/app-invoice-list', [
             'pageConfigs' => $pageConfigs,
-            'radniNalozi' => $radniNalozi
+            'radniNalozi' => $radniNalozi,
+            'statusStats' => $statusStats
         ]);
             
         } catch (\Exception $e) {
@@ -135,6 +139,16 @@ class PawsController extends Controller
             return view('/content/apps/invoice/app-invoice-list', [
                 'pageConfigs' => $pageConfigs,
                 'radniNalozi' => [],
+                'statusStats' => [
+                    'svi' => 0,
+                    'planiran' => 0,
+                    'otvoren' => 0,
+                    'rezerviran' => 0,
+                    'raspisan' => 0,
+                    'u_radu' => 0,
+                    'djelimicno_zakljucen' => 0,
+                    'zakljucen' => 0
+                ],
                 'error' => 'Greška pri učitavanju radnih naloga iz PAWS sistema.'
             ]);
         }
@@ -237,6 +251,45 @@ class PawsController extends Controller
     }
 
     /**
+     * Calculate status statistics from radni nalozi data
+     */
+    private function calculateStatusStats($radniNalozi)
+    {
+        $stats = [
+            'svi' => count($radniNalozi),
+            'planiran' => 0,
+            'otvoren' => 0,
+            'rezerviran' => 0,
+            'raspisan' => 0,
+            'u_radu' => 0,
+            'djelimicno_zakljucen' => 0,
+            'zakljucen' => 0
+        ];
+        
+        foreach ($radniNalozi as $nalog) {
+            $status = strtolower($nalog['status'] ?? '');
+            
+            if (strpos($status, 'planiran') !== false || strpos($status, 'novo') !== false) {
+                $stats['planiran']++;
+            } elseif (strpos($status, 'otvoren') !== false || strpos($status, 'novo') !== false) {
+                $stats['otvoren']++;
+            } elseif (strpos($status, 'rezerviran') !== false) {
+                $stats['rezerviran']++;
+            } elseif (strpos($status, 'raspisan') !== false) {
+                $stats['raspisan']++;
+            } elseif (strpos($status, 'u toku') !== false || strpos($status, 'u radu') !== false || strpos($status, 'u_radu') !== false) {
+                $stats['u_radu']++;
+            } elseif (strpos($status, 'djelimično') !== false || strpos($status, 'djelimicno') !== false) {
+                $stats['djelimicno_zakljucen']++;
+            } elseif (strpos($status, 'završeno') !== false || strpos($status, 'zaključen') !== false || strpos($status, 'zakljucen') !== false) {
+                $stats['zakljucen']++;
+            }
+        }
+        
+        return $stats;
+    }
+
+    /**
      * Map PAWS status codes to readable text
      */
     private function mapStatus($statusCode)
@@ -246,7 +299,7 @@ class PawsController extends Controller
             'P' => 'U toku', 
             'N' => 'Novo',
             'C' => 'Otkažano',
-            'D' => 'Draft'
+            'D' => 'Nacrt'
         ];
         
         return $statusMap[$statusCode] ?? $statusCode;
