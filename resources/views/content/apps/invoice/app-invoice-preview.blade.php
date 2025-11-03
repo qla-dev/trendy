@@ -1,6 +1,6 @@
 @extends('layouts/contentLayoutMaster')
 
-@section('title', 'Pregled fakture')
+@section('title', 'Pregled radnog naloga')
 
 @section('vendor-style')
 <link rel="stylesheet" href="{{asset('vendors/css/pickers/flatpickr/flatpickr.min.css')}}">
@@ -631,4 +631,5 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 {{-- Include QR Scanner Modals --}}
 @include('content.new-components.nalog-scan')
 @include('content.new-components.sirovina-scan')
+@include('content.new-components.confirm-weight')
 @endsection
