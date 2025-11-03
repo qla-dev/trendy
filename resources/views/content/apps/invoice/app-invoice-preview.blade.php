@@ -132,17 +132,17 @@
         <!-- Address and Contact starts -->
         <div class="card-body invoice-padding pt-0">
           <div class="row invoice-spacing">
-            <div class="col-xl-8 p-0">
+            <div class="col-xl-8 col-md-6 p-0">
               <h6 class="mb-2">Naručitelj:</h6>
               <h6 class="mb-25">Metro d.o.o.</h6>
-              <p class="card-text mb-25">Titova 45, 71000 Sarajevo, Bosna i Hercegovina</p>
+              <p class="card-text mb-25">Titova 45, 71000 Sarajevo, B&H</p>
               <p class="card-text mb-25">+387 33 123 456</p>
               <p class="card-text mb-0">info@metro.ba</p>
             </div>
-            <div class="col-xl-4 p-0 mt-xl-0 mt-2">
+            <div class="col-xl-4 col-md-6 p-0 mt-xl-0 mt-md-0 mt-2 ">
               <h6 class="mb-2">Primatelj:</h6>
               <h6 class="mb-25">Bingo d.o.o.</h6>
-              <p class="card-text mb-25">Zmaja od Bosne 12, 71000 Sarajevo, Bosna i Hercegovina</p>
+              <p class="card-text mb-25">Grbavička 12, 71000 Sarajevo, B&H</p>
               <p class="card-text mb-25">+387 33 789 012</p>
               <p class="card-text mb-0">info@bingo.ba</p>
             </div>
@@ -254,7 +254,7 @@
           <button class="btn btn-primary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#qr-scanner-modal">
             <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog
           </button>
-          <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center">
+          <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#sirovina-scanner-modal">
             <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Dodaj sirovinu
           </button>
           <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#send-invoice-sidebar">
@@ -628,6 +628,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
   });
 </script>
 
-{{-- Include QR Scanner Modal --}}
+{{-- Include QR Scanner Modals --}}
 @include('content.new-components.nalog-scan')
+@include('content.new-components.sirovina-scan')
 @endsection
