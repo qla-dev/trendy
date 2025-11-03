@@ -1,4 +1,7 @@
 <!-- BEGIN: Vendor CSS-->
+<!-- Font Awesome CDN -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
 @if ($configData['direction'] === 'rtl' && isset($configData['direction']))
   <link rel="stylesheet" href="{{ asset(mix('vendors/css/vendors-rtl.min.css')) }}" />
 @else

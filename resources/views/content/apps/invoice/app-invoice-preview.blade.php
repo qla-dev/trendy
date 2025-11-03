@@ -8,6 +8,15 @@
 @section('page-style')
 <link rel="stylesheet" href="{{asset('css/base/plugins/forms/pickers/form-flat-pickr.css')}}">
 <link rel="stylesheet" href="{{asset('css/base/pages/app-invoice.css')}}">
+<style>
+  .nav-tabs {
+    margin-bottom: 0 !important;
+  }
+  .image-placeholder:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+</style>
 @endsection
 
 @section('content')
@@ -78,14 +87,14 @@
                 </svg>
                 <h3 class="text-primary invoice-logo">eNalog.app</h3>
               </div>
-              <p class="card-text mb-25">Office 149, 450 South Brand Brooklyn</p>
-              <p class="card-text mb-25">San Diego County, CA 91905, USA</p>
-              <p class="card-text mb-0">+1 (123) 456 7891, +44 (876) 543 2198</p>
+              <p class="card-text mb-25">Trendy d.o.o.</p>
+              <p class="card-text mb-25">Bratstvo 11, 72290, NOVI TRAVNIK, BiH</p>
+              <p class="card-text mb-0">+387 30 525 252</p>
             </div>
             <div class="mt-md-0 mt-2">
               <h4 class="invoice-title">
-                Faktura
-                <span class="invoice-number">#3492</span>
+                RN
+                <span class="invoice-number">#2401000000005</span>
               </h4>
               <div class="invoice-date-wrapper">
                 <p class="invoice-date-title">Datum izdavanja:</p>
@@ -106,39 +115,18 @@
         <div class="card-body invoice-padding pt-0">
           <div class="row invoice-spacing">
             <div class="col-xl-8 p-0">
-              <h6 class="mb-2">Faktura za:</h6>
-              <h6 class="mb-25">Thomas shelby</h6>
-              <p class="card-text mb-25">Shelby Company Limited</p>
-              <p class="card-text mb-25">Small Heath, B10 0HF, UK</p>
-              <p class="card-text mb-25">718-986-6062</p>
-              <p class="card-text mb-0">peakyFBlinders@gmail.com</p>
+              <h6 class="mb-2">Naručitelj:</h6>
+              <h6 class="mb-25">Metro d.o.o.</h6>
+              <p class="card-text mb-25">Titova 45, 71000 Sarajevo, Bosna i Hercegovina</p>
+              <p class="card-text mb-25">+387 33 123 456</p>
+              <p class="card-text mb-0">info@metro.ba</p>
             </div>
             <div class="col-xl-4 p-0 mt-xl-0 mt-2">
-              <h6 class="mb-2">Detalji plaćanja:</h6>
-              <table>
-                <tbody>
-                  <tr>
-                    <td class="pe-1">Ukupno za plaćanje:</td>
-                    <td><span class="fw-bold">$12,110.55</span></td>
-                  </tr>
-                  <tr>
-                    <td class="pe-1">Naziv banke:</td>
-                    <td>American Bank</td>
-                  </tr>
-                  <tr>
-                    <td class="pe-1">Država:</td>
-                    <td>United States</td>
-                  </tr>
-                  <tr>
-                    <td class="pe-1">IBAN:</td>
-                    <td>ETD95476213874685</td>
-                  </tr>
-                  <tr>
-                    <td class="pe-1">SWIFT kod:</td>
-                    <td>BR91905</td>
-                  </tr>
-                </tbody>
-              </table>
+              <h6 class="mb-2">Primatelj:</h6>
+              <h6 class="mb-25">Bingo d.o.o.</h6>
+              <p class="card-text mb-25">Zmaja od Bosne 12, 71000 Sarajevo, Bosna i Hercegovina</p>
+              <p class="card-text mb-25">+387 33 789 012</p>
+              <p class="card-text mb-0">info@bingo.ba</p>
             </div>
           </div>
         </div>
@@ -149,17 +137,17 @@
           <ul class="nav nav-tabs" role="tablist">
             <li class="nav-item">
               <button type="button" class="nav-link active" role="tab" data-bs-toggle="tab" data-bs-target="#tab-sastavnica" aria-controls="tab-sastavnica" aria-selected="true">
-                Sastavnica
+                <i class="fa fa-list me-50"></i> Sastavnica
               </button>
             </li>
             <li class="nav-item">
               <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#tab-materijali" aria-controls="tab-materijali" aria-selected="false">
-                Materijali
+                <i class="fa fa-cube me-50"></i> Materijali
               </button>
             </li>
             <li class="nav-item">
               <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#tab-operacija" aria-controls="tab-operacija" aria-selected="false">
-                Operacija
+                <i class="fa fa-cog me-50"></i> Operacija
               </button>
             </li>
           </ul>
@@ -170,21 +158,21 @@
                 <table class="table" id="sastavnica-table">
                   <thead>
                     <tr>
-                      <th class="py-1">Alternat...</th>
-                      <th class="py-1">Pozicija</th>
-                      <th class="py-1">Artikal</th>
-                      <th class="py-1">Opis</th>
-                      <th class="py-1">Slika</th>
-                      <th class="py-1">Napo...</th>
-                      <th class="py-1">Količina</th>
-                      <th class="py-1">MJ</th>
-                      <th class="py-1">Serija</th>
-                      <th class="py-1">Normativna osnova</th>
-                      <th class="py-1">Aktivno</th>
-                      <th class="py-1">Završ...</th>
-                      <th class="py-1">VA</th>
-                      <th class="py-1">Prim.klas</th>
-                      <th class="py-1">Sek.klas</th>
+                      <th class="py-1 text-center">Alternat...</th>
+                      <th class="py-1 text-center">Pozicija</th>
+                      <th class="py-1 text-center">Artikal</th>
+                      <th class="py-1 text-center">Opis</th>
+                      <th class="py-1 text-center">Slika</th>
+                      <th class="py-1 text-center">Napo...</th>
+                      <th class="py-1 text-center">Količina</th>
+                      <th class="py-1 text-center">MJ</th>
+                      <th class="py-1 text-center">Serija</th>
+                      <th class="py-1 text-center">nor.os.</th>
+                      <th class="py-1 text-center">Aktivno</th>
+                      <th class="py-1 text-center">Završ...</th>
+                      <th class="py-1 text-center">VA</th>
+                      <th class="py-1 text-center">Prim.klas</th>
+                      <th class="py-1 text-center">Sek.klas</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -198,11 +186,11 @@
                 <table class="table" id="materijali-table">
                   <thead>
                     <tr>
-                      <th class="py-1">Pozicija</th>
-                      <th class="py-1">Materijal</th>
-                      <th class="py-1">Naziv</th>
-                      <th class="py-1">Količina</th>
-                      <th class="py-1">Napomena</th>
+                      <th class="py-1 text-center">Pozicija</th>
+                      <th class="py-1 text-center">Materijal</th>
+                      <th class="py-1 text-center">Naziv</th>
+                      <th class="py-1 text-center">Količina</th>
+                      <th class="py-1 text-center">Napomena</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -216,17 +204,17 @@
                 <table class="table" id="operacija-table">
                   <thead>
                     <tr>
-                      <th class="py-1">Alternativa</th>
-                      <th class="py-1">Pozicija</th>
-                      <th class="py-1">Operacija</th>
-                      <th class="py-1">Naziv</th>
-                      <th class="py-1">Napo...</th>
-                      <th class="py-1">MJ</th>
-                      <th class="py-1">MJ/vrij.</th>
-                      <th class="py-1">Normativna osnova</th>
-                      <th class="py-1">VA</th>
-                      <th class="py-1">Prim.klas.</th>
-                      <th class="py-1">Sek.klas.</th>
+                      <th class="py-1 text-center">Alternativa</th>
+                      <th class="py-1 text-center">Pozicija</th>
+                      <th class="py-1 text-center">Operacija</th>
+                      <th class="py-1 text-center">Naziv</th>
+                      <th class="py-1 text-center">Napo...</th>
+                      <th class="py-1 text-center">MJ</th>
+                      <th class="py-1 text-center">MJ/vrij.</th>
+                      <th class="py-1 text-center">nor.os.</th>
+                      <th class="py-1 text-center">VA</th>
+                      <th class="py-1 text-center">Prim.klas.</th>
+                      <th class="py-1 text-center">Sek.klas.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -248,11 +236,11 @@
               <div class="invoice-total-wrapper">
                 <div class="invoice-total-item">
                   <p class="invoice-total-title">Međuzbir:</p>
-                  <p class="invoice-total-amount">$1800</p>
+                  <p class="invoice-total-amount">1800 KM</p>
                 </div>
                 <div class="invoice-total-item">
                   <p class="invoice-total-title">Popust:</p>
-                  <p class="invoice-total-amount">$28</p>
+                  <p class="invoice-total-amount">28 KM</p>
                 </div>
                 <div class="invoice-total-item">
                   <p class="invoice-total-title">Porez:</p>
@@ -261,7 +249,7 @@
                 <hr class="my-50" />
                 <div class="invoice-total-item">
                   <p class="invoice-total-title">Ukupno:</p>
-                  <p class="invoice-total-amount">$1690</p>
+                  <p class="invoice-total-amount">1690 KM</p>
                 </div>
               </div>
             </div>
@@ -291,15 +279,18 @@
     <div class="col-xl-3 col-md-4 col-12 invoice-actions mt-md-0 mt-2">
       <div class="card">
         <div class="card-body">
-          <button class="btn btn-primary w-100 mb-75" data-bs-toggle="modal" data-bs-target="#send-invoice-sidebar">
-            Pošalji fakturu
+          <button class="btn btn-primary w-100 mb-75">
+            <i class="fa fa-qrcode me-50"></i> Skeniraj radni nalog
           </button>
-          <button class="btn btn-outline-secondary w-100 btn-download-invoice mb-75">Preuzmi</button>
-          <a class="btn btn-outline-secondary w-100 mb-75" href="{{url('app/invoice/print')}}" target="_blank"> Štampaj </a>
-          <a class="btn btn-outline-secondary w-100 mb-75" href="{{url('app/invoice/edit')}}"> Uredi </a>
-          <button class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#add-payment-sidebar">
-            Dodaj plaćanje
+          <button class="btn btn-success w-100 mb-75">
+            <i class="fa fa-qrcode me-50"></i> Skeniraj sirovinu
           </button>
+          <button class="btn btn-outline-secondary w-100 mb-75" data-bs-toggle="modal" data-bs-target="#send-invoice-sidebar">
+            <i class="fa fa-paper-plane me-50"></i> Pošalji
+          </button>
+          <a class="btn btn-outline-secondary w-100 mb-75" href="{{url('app/invoice/print')}}" target="_blank">
+            <i class="fa fa-print me-50"></i> Isprintaj
+          </a>
         </div>
       </div>
     </div>
@@ -363,7 +354,7 @@ Poštovani,
 
 Hvala vam na poslovanju, uvijek je zadovoljstvo raditi sa vama!
 
-Generirali smo novu fakturu u iznosu od $95.59
+Generirali smo novu fakturu u iznosu od 95.59 KM
 
 Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
             >
@@ -398,11 +389,11 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       <div class="modal-body flex-grow-1">
         <form>
           <div class="mb-1">
-            <input id="balance" class="form-control" type="text" value="Stanje fakture: 5000.00" disabled />
+            <input id="balance" class="form-control" type="text" value="Stanje fakture: 5000.00 KM" disabled />
           </div>
           <div class="mb-1">
             <label class="form-label" for="amount">Iznos plaćanja</label>
-            <input id="amount" class="form-control" type="number" placeholder="$1000" />
+            <input id="amount" class="form-control" type="number" placeholder="1000 KM" />
           </div>
           <div class="mb-1">
             <label class="form-label" for="payment-date">Datum plaćanja</label>
@@ -593,16 +584,23 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
   // Function to populate tables
   function populateTables() {
+    // Simple grayish gradient for all image placeholders
+    const gradient = 'linear-gradient(135deg, #e0e0e0 0%, #b0b0b0 100%)';
+    
     // Populate Sastavnica table
     const sastavnicaTbody = document.querySelector('#sastavnica-table tbody');
-    sastavnicaData.forEach(item => {
+    sastavnicaData.forEach((item) => {
       const row = document.createElement('tr');
       row.innerHTML = `
         <td class="py-1">${item.alternativa}</td>
         <td class="py-1">${item.pozicija}</td>
         <td class="py-1">${item.artikal}</td>
         <td class="py-1">${item.opis}</td>
-        <td class="py-1">${item.slika || ''}</td>
+        <td class="py-1">
+          <div class="image-placeholder" style="width: 60px; height: 60px; background: ${gradient}; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <i class="fa fa-image" style="font-size: 24px; color: #666; opacity: 0.9;"></i>
+          </div>
+        </td>
         <td class="py-1">${item.napomena}</td>
         <td class="py-1">${item.kolicina}</td>
         <td class="py-1">${item.mj}</td>
