@@ -16,6 +16,15 @@
     transform: scale(1.08);
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   }
+  .invoice-preview .invoice-title, .invoice-edit .invoice-title, .invoice-add .invoice-title {
+    margin-bottom: 5px !important;
+  }
+  .invoice-preview .invoice-date-wrapper, .invoice-edit .invoice-date-wrapper, .invoice-add .invoice-date-wrapper {
+    justify-content: flex-end;
+  }
+  .invoice-preview .invoice-date-wrapper .invoice-date-title, .invoice-edit .invoice-date-wrapper .invoice-date-title, .invoice-add .invoice-date-wrapper .invoice-date-title {
+    width: unset;
+  }
 </style>
 @endsection
 
@@ -91,19 +100,21 @@
               <p class="card-text mb-25">Bratstvo 11, 72290, NOVI TRAVNIK, BiH</p>
               <p class="card-text mb-0">+387 30 525 252</p>
             </div>
-            <div class="mt-md-0 mt-2">
-              <h4 class="invoice-title">
-                RN
-                <span class="invoice-number">#2401000000005</span>
-              </h4>
-              <div class="invoice-date-wrapper">
-                <p class="invoice-date-title">Datum izdavanja:</p>
-                <p class="invoice-date">25/08/2020</p>
+            <div class="mt-md-0 mt-2 d-flex align-items-center justify-content-end">
+              <div class="me-3">
+                <h4 class="invoice-title mb-2">
+                  <span>RN <span class="invoice-number">#2401000000005</span></span>
+                </h4>
+                <div class="invoice-date-wrapper">
+                  <p class="invoice-date-title">Datum izdavanja:</p>
+                  <p class="invoice-date">25/08/2020</p>
+                </div>
+                <div class="invoice-date-wrapper">
+                  <p class="invoice-date-title">Datum dospijeća:</p>
+                  <p class="invoice-date">29/08/2020</p>
+                </div>
               </div>
-              <div class="invoice-date-wrapper">
-                <p class="invoice-date-title">Datum dospijeća:</p>
-                <p class="invoice-date">29/08/2020</p>
-              </div>
+              <img src="https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg" alt="QR Code" style="width: 120px; height: 120px; border: 1px solid #dee2e6; border-radius: 4px; padding: 8px; background: white;">
             </div>
           </div>
           <!-- Header ends -->
