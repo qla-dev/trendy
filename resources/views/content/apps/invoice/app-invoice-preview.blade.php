@@ -251,7 +251,7 @@
     <div class="col-xl-3 col-md-4 col-12 invoice-actions mt-md-0 mt-2">
       <div class="card">
         <div class="card-body">
-          <button class="btn btn-primary w-100 mb-75 d-flex justify-content-center align-items-center">
+          <button class="btn btn-primary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#qr-scanner-modal">
             <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog
           </button>
           <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center">
@@ -627,4 +627,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     populateTables();
   });
 </script>
+
+{{-- Include QR Scanner Modal --}}
+@include('content.new-components.nalog-scan')
 @endsection
