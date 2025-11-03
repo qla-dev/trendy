@@ -48,10 +48,10 @@ Route::group(['prefix' => 'app'], function () {
     Route::get('calendar', [AppsController::class, 'calendarApp'])->name('app-calendar');
     Route::get('kanban', [AppsController::class, 'kanbanApp'])->name('app-kanban');
     Route::get('invoice/list', [PawsController::class, 'radniNaloziList'])->name('app-invoice-list');
-    Route::get('invoice/preview', [AppsController::class, 'radniNalogDetails'])->name('app-invoice-preview');
-    Route::get('invoice/edit', [AppsController::class, 'radniNalogDetails'])->name('app-invoice-edit');
-    Route::get('invoice/add', [AppsController::class, 'radniNaloziList'])->name('app-invoice-add');
-    Route::get('invoice/print', [AppsController::class, 'radniNalogDetails'])->name('app-invoice-print');
+    Route::get('invoice/preview', [AppsController::class, 'invoice_preview'])->name('app-invoice-preview');
+    Route::get('invoice/edit', [AppsController::class, 'invoice_edit'])->name('app-invoice-edit');
+    Route::get('invoice/add', [AppsController::class, 'invoice_add'])->name('app-invoice-add');
+    Route::get('invoice/print', [AppsController::class, 'invoice_print'])->name('app-invoice-print');
     
     // Test route for PAWS API debugging
     Route::get('test-paws', [PawsController::class, 'testPawsConnection'])->name('test-paws');

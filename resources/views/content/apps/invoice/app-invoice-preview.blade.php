@@ -1,6 +1,6 @@
 @extends('layouts/contentLayoutMaster')
 
-@section('title', 'Invoice Preview')
+@section('title', 'Pregled fakture')
 
 @section('vendor-style')
 <link rel="stylesheet" href="{{asset('vendors/css/pickers/flatpickr/flatpickr.min.css')}}">
@@ -76,7 +76,7 @@
                     </g>
                   </g>
                 </svg>
-                <h3 class="text-primary invoice-logo">Vuexy</h3>
+                <h3 class="text-primary invoice-logo">eNalog.app</h3>
               </div>
               <p class="card-text mb-25">Office 149, 450 South Brand Brooklyn</p>
               <p class="card-text mb-25">San Diego County, CA 91905, USA</p>
@@ -84,15 +84,15 @@
             </div>
             <div class="mt-md-0 mt-2">
               <h4 class="invoice-title">
-                Invoice
+                Faktura
                 <span class="invoice-number">#3492</span>
               </h4>
               <div class="invoice-date-wrapper">
-                <p class="invoice-date-title">Date Issued:</p>
+                <p class="invoice-date-title">Datum izdavanja:</p>
                 <p class="invoice-date">25/08/2020</p>
               </div>
               <div class="invoice-date-wrapper">
-                <p class="invoice-date-title">Due Date:</p>
+                <p class="invoice-date-title">Datum dospijeća:</p>
                 <p class="invoice-date">29/08/2020</p>
               </div>
             </div>
@@ -106,7 +106,7 @@
         <div class="card-body invoice-padding pt-0">
           <div class="row invoice-spacing">
             <div class="col-xl-8 p-0">
-              <h6 class="mb-2">Invoice To:</h6>
+              <h6 class="mb-2">Faktura za:</h6>
               <h6 class="mb-25">Thomas shelby</h6>
               <p class="card-text mb-25">Shelby Company Limited</p>
               <p class="card-text mb-25">Small Heath, B10 0HF, UK</p>
@@ -114,19 +114,19 @@
               <p class="card-text mb-0">peakyFBlinders@gmail.com</p>
             </div>
             <div class="col-xl-4 p-0 mt-xl-0 mt-2">
-              <h6 class="mb-2">Payment Details:</h6>
+              <h6 class="mb-2">Detalji plaćanja:</h6>
               <table>
                 <tbody>
                   <tr>
-                    <td class="pe-1">Total Due:</td>
+                    <td class="pe-1">Ukupno za plaćanje:</td>
                     <td><span class="fw-bold">$12,110.55</span></td>
                   </tr>
                   <tr>
-                    <td class="pe-1">Bank name:</td>
+                    <td class="pe-1">Naziv banke:</td>
                     <td>American Bank</td>
                   </tr>
                   <tr>
-                    <td class="pe-1">Country:</td>
+                    <td class="pe-1">Država:</td>
                     <td>United States</td>
                   </tr>
                   <tr>
@@ -134,7 +134,7 @@
                     <td>ETD95476213874685</td>
                   </tr>
                   <tr>
-                    <td class="pe-1">SWIFT code:</td>
+                    <td class="pe-1">SWIFT kod:</td>
                     <td>BR91905</td>
                   </tr>
                 </tbody>
@@ -145,77 +145,122 @@
         <!-- Address and Contact ends -->
 
         <!-- Invoice Description starts -->
-        <div class="table-responsive">
-          <table class="table">
-            <thead>
-              <tr>
-                <th class="py-1">Task description</th>
-                <th class="py-1">Rate</th>
-                <th class="py-1">Hours</th>
-                <th class="py-1">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="py-1">
-                  <p class="card-text fw-bold mb-25">Native App Development</p>
-                  <p class="card-text text-nowrap">
-                    Developed a full stack native app using React Native, Bootstrap & Python
-                  </p>
-                </td>
-                <td class="py-1">
-                  <span class="fw-bold">$60.00</span>
-                </td>
-                <td class="py-1">
-                  <span class="fw-bold">30</span>
-                </td>
-                <td class="py-1">
-                  <span class="fw-bold">$1,800.00</span>
-                </td>
-              </tr>
-              <tr class="border-bottom">
-                <td class="py-1">
-                  <p class="card-text fw-bold mb-25">Ui Kit Design</p>
-                  <p class="card-text text-nowrap">Designed a UI kit for native app using Sketch, Figma & Adobe XD</p>
-                </td>
-                <td class="py-1">
-                  <span class="fw-bold">$60.00</span>
-                </td>
-                <td class="py-1">
-                  <span class="fw-bold">20</span>
-                </td>
-                <td class="py-1">
-                  <span class="fw-bold">$1200.00</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="nav-align-top">
+          <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item">
+              <button type="button" class="nav-link active" role="tab" data-bs-toggle="tab" data-bs-target="#tab-sastavnica" aria-controls="tab-sastavnica" aria-selected="true">
+                Sastavnica
+              </button>
+            </li>
+            <li class="nav-item">
+              <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#tab-materijali" aria-controls="tab-materijali" aria-selected="false">
+                Materijali
+              </button>
+            </li>
+            <li class="nav-item">
+              <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#tab-operacija" aria-controls="tab-operacija" aria-selected="false">
+                Operacija
+              </button>
+            </li>
+          </ul>
+          <div class="tab-content">
+            <!-- Sastavnica Tab -->
+            <div class="tab-pane fade show active" id="tab-sastavnica" role="tabpanel">
+              <div class="table-responsive">
+                <table class="table" id="sastavnica-table">
+                  <thead>
+                    <tr>
+                      <th class="py-1">Alternat...</th>
+                      <th class="py-1">Pozicija</th>
+                      <th class="py-1">Artikal</th>
+                      <th class="py-1">Opis</th>
+                      <th class="py-1">Slika</th>
+                      <th class="py-1">Napo...</th>
+                      <th class="py-1">Količina</th>
+                      <th class="py-1">MJ</th>
+                      <th class="py-1">Serija</th>
+                      <th class="py-1">Normativna osnova</th>
+                      <th class="py-1">Aktivno</th>
+                      <th class="py-1">Završ...</th>
+                      <th class="py-1">VA</th>
+                      <th class="py-1">Prim.klas</th>
+                      <th class="py-1">Sek.klas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <!-- Materijali Tab -->
+            <div class="tab-pane fade" id="tab-materijali" role="tabpanel">
+              <div class="table-responsive">
+                <table class="table" id="materijali-table">
+                  <thead>
+                    <tr>
+                      <th class="py-1">Pozicija</th>
+                      <th class="py-1">Materijal</th>
+                      <th class="py-1">Naziv</th>
+                      <th class="py-1">Količina</th>
+                      <th class="py-1">Napomena</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <!-- Operacija Tab -->
+            <div class="tab-pane fade" id="tab-operacija" role="tabpanel">
+              <div class="table-responsive">
+                <table class="table" id="operacija-table">
+                  <thead>
+                    <tr>
+                      <th class="py-1">Alternativa</th>
+                      <th class="py-1">Pozicija</th>
+                      <th class="py-1">Operacija</th>
+                      <th class="py-1">Naziv</th>
+                      <th class="py-1">Napo...</th>
+                      <th class="py-1">MJ</th>
+                      <th class="py-1">MJ/vrij.</th>
+                      <th class="py-1">Normativna osnova</th>
+                      <th class="py-1">VA</th>
+                      <th class="py-1">Prim.klas.</th>
+                      <th class="py-1">Sek.klas.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="card-body invoice-padding pb-0">
           <div class="row invoice-sales-total-wrapper">
             <div class="col-md-6 order-md-1 order-2 mt-md-0 mt-3">
               <p class="card-text mb-0">
-                <span class="fw-bold">Salesperson:</span> <span class="ms-75">Alfie Solomons</span>
+                <span class="fw-bold">Prodavač:</span> <span class="ms-75">Alfie Solomons</span>
               </p>
             </div>
             <div class="col-md-6 d-flex justify-content-end order-md-2 order-1">
               <div class="invoice-total-wrapper">
                 <div class="invoice-total-item">
-                  <p class="invoice-total-title">Subtotal:</p>
+                  <p class="invoice-total-title">Međuzbir:</p>
                   <p class="invoice-total-amount">$1800</p>
                 </div>
                 <div class="invoice-total-item">
-                  <p class="invoice-total-title">Discount:</p>
+                  <p class="invoice-total-title">Popust:</p>
                   <p class="invoice-total-amount">$28</p>
                 </div>
                 <div class="invoice-total-item">
-                  <p class="invoice-total-title">Tax:</p>
+                  <p class="invoice-total-title">Porez:</p>
                   <p class="invoice-total-amount">21%</p>
                 </div>
                 <hr class="my-50" />
                 <div class="invoice-total-item">
-                  <p class="invoice-total-title">Total:</p>
+                  <p class="invoice-total-title">Ukupno:</p>
                   <p class="invoice-total-amount">$1690</p>
                 </div>
               </div>
@@ -230,10 +275,9 @@
         <div class="card-body invoice-padding pt-0">
           <div class="row">
             <div class="col-12">
-              <span class="fw-bold">Note:</span>
+              <span class="fw-bold">Napomena:</span>
               <span
-                >It was a pleasure working with you and your team. We hope you will keep us in mind for future freelance
-                projects. Thank You!</span
+                >Bilo nam je zadovoljstvo raditi sa vama i vašim timom. Nadamo se da ćete nas imati na umu za buduće projekte. Hvala vam!</span
               >
             </div>
           </div>
@@ -248,13 +292,13 @@
       <div class="card">
         <div class="card-body">
           <button class="btn btn-primary w-100 mb-75" data-bs-toggle="modal" data-bs-target="#send-invoice-sidebar">
-            Send Invoice
+            Pošalji fakturu
           </button>
-          <button class="btn btn-outline-secondary w-100 btn-download-invoice mb-75">Download</button>
-          <a class="btn btn-outline-secondary w-100 mb-75" href="{{url('app/invoice/print')}}" target="_blank"> Print </a>
-          <a class="btn btn-outline-secondary w-100 mb-75" href="{{url('app/invoice/edit')}}"> Edit </a>
+          <button class="btn btn-outline-secondary w-100 btn-download-invoice mb-75">Preuzmi</button>
+          <a class="btn btn-outline-secondary w-100 mb-75" href="{{url('app/invoice/print')}}" target="_blank"> Štampaj </a>
+          <a class="btn btn-outline-secondary w-100 mb-75" href="{{url('app/invoice/edit')}}"> Uredi </a>
           <button class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#add-payment-sidebar">
-            Add Payment
+            Dodaj plaćanje
           </button>
         </div>
       </div>
@@ -267,16 +311,16 @@
 <div class="modal modal-slide-in fade" id="send-invoice-sidebar" aria-hidden="true">
   <div class="modal-dialog sidebar-lg">
     <div class="modal-content p-0">
-      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">×</button>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori">×</button>
       <div class="modal-header mb-1">
         <h5 class="modal-title">
-          <span class="align-middle">Send Invoice</span>
+          <span class="align-middle">Pošalji fakturu</span>
         </h5>
       </div>
       <div class="modal-body flex-grow-1">
         <form>
           <div class="mb-1">
-            <label for="invoice-from" class="form-label">From</label>
+            <label for="invoice-from" class="form-label">Od</label>
             <input
               type="text"
               class="form-control"
@@ -286,7 +330,7 @@
             />
           </div>
           <div class="mb-1">
-            <label for="invoice-to" class="form-label">To</label>
+            <label for="invoice-to" class="form-label">Za</label>
             <input
               type="text"
               class="form-control"
@@ -296,43 +340,43 @@
             />
           </div>
           <div class="mb-1">
-            <label for="invoice-subject" class="form-label">Subject</label>
+            <label for="invoice-subject" class="form-label">Predmet</label>
             <input
               type="text"
               class="form-control"
               id="invoice-subject"
-              value="Invoice of purchased Admin Templates"
-              placeholder="Invoice regarding goods"
+              value="Faktura za kupljene Admin Template"
+              placeholder="Faktura u vezi robe"
             />
           </div>
           <div class="mb-1">
-            <label for="invoice-message" class="form-label">Message</label>
+            <label for="invoice-message" class="form-label">Poruka</label>
             <textarea
               class="form-control"
               name="invoice-message"
               id="invoice-message"
               cols="3"
               rows="11"
-              placeholder="Message..."
+              placeholder="Poruka..."
             >
-Dear Queen Consolidated,
+Poštovani,
 
-Thank you for your business, always a pleasure to work with you!
+Hvala vam na poslovanju, uvijek je zadovoljstvo raditi sa vama!
 
-We have generated a new invoice in the amount of $95.59
+Generirali smo novu fakturu u iznosu od $95.59
 
-We would appreciate payment of this invoice by 05/11/2019</textarea
+Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
             >
           </div>
           <div class="mb-1">
             <span class="badge badge-light-primary">
               <i data-feather="link" class="me-25"></i>
-              <span class="align-middle">Invoice Attached</span>
+              <span class="align-middle">Faktura priložena</span>
             </span>
           </div>
           <div class="mb-1 d-flex flex-wrap mt-2">
-            <button type="button" class="btn btn-primary me-1" data-bs-dismiss="modal">Send</button>
-            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary me-1" data-bs-dismiss="modal">Pošalji</button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Otkaži</button>
           </div>
         </form>
       </div>
@@ -345,43 +389,43 @@ We would appreciate payment of this invoice by 05/11/2019</textarea
 <div class="modal modal-slide-in fade" id="add-payment-sidebar" aria-hidden="true">
   <div class="modal-dialog sidebar-lg">
     <div class="modal-content p-0">
-      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">×</button>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori">×</button>
       <div class="modal-header mb-1">
         <h5 class="modal-title">
-          <span class="align-middle">Add Payment</span>
+          <span class="align-middle">Dodaj plaćanje</span>
         </h5>
       </div>
       <div class="modal-body flex-grow-1">
         <form>
           <div class="mb-1">
-            <input id="balance" class="form-control" type="text" value="Invoice Balance: 5000.00" disabled />
+            <input id="balance" class="form-control" type="text" value="Stanje fakture: 5000.00" disabled />
           </div>
           <div class="mb-1">
-            <label class="form-label" for="amount">Payment Amount</label>
+            <label class="form-label" for="amount">Iznos plaćanja</label>
             <input id="amount" class="form-control" type="number" placeholder="$1000" />
           </div>
           <div class="mb-1">
-            <label class="form-label" for="payment-date">Payment Date</label>
+            <label class="form-label" for="payment-date">Datum plaćanja</label>
             <input id="payment-date" class="form-control date-picker" type="text" />
           </div>
           <div class="mb-1">
-            <label class="form-label" for="payment-method">Payment Method</label>
+            <label class="form-label" for="payment-method">Način plaćanja</label>
             <select class="form-select" id="payment-method">
-              <option value="" selected disabled>Select payment method</option>
-              <option value="Cash">Cash</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Debit">Debit</option>
-              <option value="Credit">Credit</option>
+              <option value="" selected disabled>Odaberi način plaćanja</option>
+              <option value="Cash">Gotovina</option>
+              <option value="Bank Transfer">Bankovni transfer</option>
+              <option value="Debit">Debitna kartica</option>
+              <option value="Credit">Kreditna kartica</option>
               <option value="Paypal">Paypal</option>
             </select>
           </div>
           <div class="mb-1">
-            <label class="form-label" for="payment-note">Internal Payment Note</label>
-            <textarea class="form-control" id="payment-note" rows="5" placeholder="Internal Payment Note"></textarea>
+            <label class="form-label" for="payment-note">Interna napomena o plaćanju</label>
+            <textarea class="form-control" id="payment-note" rows="5" placeholder="Interna napomena o plaćanju"></textarea>
           </div>
           <div class="d-flex flex-wrap mb-0">
-            <button type="button" class="btn btn-primary me-1" data-bs-dismiss="modal">Send</button>
-            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary me-1" data-bs-dismiss="modal">Pošalji</button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Otkaži</button>
           </div>
         </form>
       </div>
@@ -398,4 +442,219 @@ We would appreciate payment of this invoice by 05/11/2019</textarea
 
 @section('page-script')
 <script src="{{asset('js/scripts/pages/app-invoice.js')}}"></script>
+<script>
+  // Dummy data arrays
+  const sastavnicaData = [
+    {
+      alternativa: '0',
+      pozicija: '10',
+      artikal: 'ALPL2017',
+      opis: 'Alu pločevina 2017',
+      slika: '',
+      napomena: 'Osnovni materijal',
+      kolicina: '2,0500',
+      mj: 'KG',
+      serija: '1,00',
+      normativnaOsnova: '1 jedinica',
+      aktivno: 'Da',
+      zavrseno: 'Ne',
+      va: 'VA1',
+      primKlas: 'PK1',
+      sekKlas: 'SK1'
+    },
+    {
+      alternativa: '0',
+      pozicija: '20',
+      artikal: 'STL2024',
+      opis: 'Čelična ploča 2024',
+      slika: '',
+      napomena: 'Sekundarni materijal',
+      kolicina: '1,5000',
+      mj: 'KG',
+      serija: '2,00',
+      normativnaOsnova: '1 jedinica',
+      aktivno: 'Da',
+      zavrseno: 'Ne',
+      va: 'VA2',
+      primKlas: 'PK2',
+      sekKlas: 'SK2'
+    },
+    {
+      alternativa: '1',
+      pozicija: '30',
+      artikal: 'PLST2023',
+      opis: 'Plastična komponenta 2023',
+      slika: '',
+      napomena: 'Alternativni materijal',
+      kolicina: '3,2500',
+      mj: 'KG',
+      serija: '1,50',
+      normativnaOsnova: '1 jedinica',
+      aktivno: 'Ne',
+      zavrseno: 'Da',
+      va: 'VA3',
+      primKlas: 'PK3',
+      sekKlas: 'SK3'
+    }
+  ];
+
+  const materijaliData = [
+    {
+      pozicija: '10',
+      materijal: 'ALPL2017',
+      naziv: 'Alu pločevina 2017',
+      kolicina: '2,0500',
+      napomena: ''
+    },
+    {
+      pozicija: '20',
+      materijal: 'STL2024',
+      naziv: 'Čelična ploča 2024',
+      kolicina: '1,5000',
+      napomena: 'Visokokvalitetni čelik'
+    },
+    {
+      pozicija: '30',
+      materijal: 'PLST2023',
+      naziv: 'Plastična komponenta 2023',
+      kolicina: '3,2500',
+      napomena: ''
+    },
+    {
+      pozicija: '40',
+      materijal: 'ELK2025',
+      naziv: 'Električna komponenta 2025',
+      kolicina: '0,5000',
+      napomena: 'Za montažu'
+    },
+    {
+      pozicija: '50',
+      materijal: 'GLASS2024',
+      naziv: 'Staklena komponenta 2024',
+      kolicina: '1,0000',
+      napomena: 'Ostalo'
+    }
+  ];
+
+  const operacijaData = [
+    {
+      alternativa: '0',
+      pozicija: '10',
+      operacija: 'OP001',
+      naziv: 'Rezanje',
+      napomena: 'Rezanje po dimenzijama',
+      mj: 'KOM',
+      mjVrij: '0,5',
+      normativnaOsnova: 'Normativ 1',
+      va: 'VA1',
+      primKlas: 'PK1',
+      sekKlas: 'SK1'
+    },
+    {
+      alternativa: '0',
+      pozicija: '20',
+      operacija: 'OP002',
+      naziv: 'Svaranje',
+      napomena: 'Svaranje šavova',
+      mj: 'KOM',
+      mjVrij: '1,2',
+      normativnaOsnova: 'Normativ 2',
+      va: 'VA2',
+      primKlas: 'PK2',
+      sekKlas: 'SK2'
+    },
+    {
+      alternativa: '0',
+      pozicija: '30',
+      operacija: 'OP003',
+      naziv: 'Poliranje',
+      napomena: 'Finalno poliranje',
+      mj: 'KOM',
+      mjVrij: '0,8',
+      normativnaOsnova: 'Normativ 3',
+      va: 'VA3',
+      primKlas: 'PK3',
+      sekKlas: 'SK3'
+    },
+    {
+      alternativa: '1',
+      pozicija: '40',
+      operacija: 'OP004',
+      naziv: 'Montaža',
+      napomena: 'Montaža komponenti',
+      mj: 'KOM',
+      mjVrij: '2,0',
+      normativnaOsnova: 'Normativ 4',
+      va: 'VA4',
+      primKlas: 'PK4',
+      sekKlas: 'SK4'
+    }
+  ];
+
+  // Function to populate tables
+  function populateTables() {
+    // Populate Sastavnica table
+    const sastavnicaTbody = document.querySelector('#sastavnica-table tbody');
+    sastavnicaData.forEach(item => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="py-1">${item.alternativa}</td>
+        <td class="py-1">${item.pozicija}</td>
+        <td class="py-1">${item.artikal}</td>
+        <td class="py-1">${item.opis}</td>
+        <td class="py-1">${item.slika || ''}</td>
+        <td class="py-1">${item.napomena}</td>
+        <td class="py-1">${item.kolicina}</td>
+        <td class="py-1">${item.mj}</td>
+        <td class="py-1">${item.serija}</td>
+        <td class="py-1">${item.normativnaOsnova}</td>
+        <td class="py-1">${item.aktivno}</td>
+        <td class="py-1">${item.zavrseno}</td>
+        <td class="py-1">${item.va}</td>
+        <td class="py-1">${item.primKlas}</td>
+        <td class="py-1">${item.sekKlas}</td>
+      `;
+      sastavnicaTbody.appendChild(row);
+    });
+
+    // Populate Materijali table
+    const materijaliTbody = document.querySelector('#materijali-table tbody');
+    materijaliData.forEach(item => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="py-1">${item.pozicija}</td>
+        <td class="py-1">${item.materijal}</td>
+        <td class="py-1">${item.naziv}</td>
+        <td class="py-1">${item.kolicina}</td>
+        <td class="py-1">${item.napomena || ''}</td>
+      `;
+      materijaliTbody.appendChild(row);
+    });
+
+    // Populate Operacija table
+    const operacijaTbody = document.querySelector('#operacija-table tbody');
+    operacijaData.forEach(item => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="py-1">${item.alternativa}</td>
+        <td class="py-1">${item.pozicija}</td>
+        <td class="py-1">${item.operacija}</td>
+        <td class="py-1">${item.naziv}</td>
+        <td class="py-1">${item.napomena}</td>
+        <td class="py-1">${item.mj}</td>
+        <td class="py-1">${item.mjVrij}</td>
+        <td class="py-1">${item.normativnaOsnova}</td>
+        <td class="py-1">${item.va}</td>
+        <td class="py-1">${item.primKlas}</td>
+        <td class="py-1">${item.sekKlas}</td>
+      `;
+      operacijaTbody.appendChild(row);
+    });
+  }
+
+  // Initialize on page load
+  document.addEventListener('DOMContentLoaded', function() {
+    populateTables();
+  });
+</script>
 @endsection

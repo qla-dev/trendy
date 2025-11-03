@@ -104,24 +104,24 @@
         </span>
       </a>
       <div class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdown-user">
-        <h6 class="dropdown-header">Manage Profile</h6>
+        <h6 class="dropdown-header">Upravljanje profilom</h6>
         <div class="dropdown-divider"></div>
         <a class="dropdown-item"
           href="{{ Route::has('profile.show') ? route('profile.show') : 'javascript:void(0)' }}">
-          <i class="me-50" data-feather="user"></i> Profile
+          <i class="me-50" data-feather="user"></i> Profil
         </a>
 
         @if (Auth::check())
           <a class="dropdown-item" href="{{ route('auth.logout') }}"
             onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
-            <i class="me-50" data-feather="power"></i> Logout
+            <i class="me-50" data-feather="power"></i> Odjavi se
           </a>
           <form method="POST" id="logout-form" action="{{ route('auth.logout') }}">
             @csrf
           </form>
         @else
           <a class="dropdown-item" href="{{ route('auth-login-cover') }}">
-            <i class="me-50" data-feather="log-in"></i> Login
+            <i class="me-50" data-feather="log-in"></i> Prijavi se
           </a>
         @endif
       </div>
