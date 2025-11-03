@@ -279,16 +279,16 @@
     <div class="col-xl-3 col-md-4 col-12 invoice-actions mt-md-0 mt-2">
       <div class="card">
         <div class="card-body">
-          <button class="btn btn-primary w-100 mb-75">
-            <i class="fa fa-qrcode me-50"></i> Skeniraj radni nalog
+          <button class="btn btn-primary w-100 mb-75 d-flex justify-content-center align-items-center">
+            <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog
           </button>
-          <button class="btn btn-success w-100 mb-75">
-            <i class="fa fa-qrcode me-50"></i> Skeniraj sirovinu
+          <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center">
+            <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Dodaj sirovinu
           </button>
-          <button class="btn btn-outline-secondary w-100 mb-75" data-bs-toggle="modal" data-bs-target="#send-invoice-sidebar">
+          <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#send-invoice-sidebar">
             <i class="fa fa-paper-plane me-50"></i> Pošalji
           </button>
-          <a class="btn btn-outline-secondary w-100 mb-75" href="{{url('app/invoice/print')}}" target="_blank">
+          <a class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" href="{{url('app/invoice/print')}}" target="_blank">
             <i class="fa fa-print me-50"></i> Isprintaj
           </a>
         </div>
