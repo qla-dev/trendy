@@ -17,10 +17,17 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   }
   .invoice-preview .invoice-title, .invoice-edit .invoice-title, .invoice-add .invoice-title {
-    margin-bottom: 5px !important;
+    margin-bottom: 0.5rem !important;
+  }
+  .invoice-preview .invoice-title .invoice-number {
+    margin-left: 0.5rem;
   }
   .invoice-preview .invoice-date-wrapper, .invoice-edit .invoice-date-wrapper, .invoice-add .invoice-date-wrapper {
     justify-content: flex-end;
+    margin-bottom: 0.5rem !important;
+  }
+  .invoice-preview .invoice-date-wrapper:last-child {
+    margin-bottom: 0 !important;
   }
   .invoice-preview .invoice-date-wrapper .invoice-date-title, .invoice-edit .invoice-date-wrapper .invoice-date-title, .invoice-add .invoice-date-wrapper .invoice-date-title {
     width: unset;
@@ -102,8 +109,8 @@
             </div>
             <div class="mt-md-0 mt-2 d-flex align-items-center justify-content-end">
               <div class="me-3">
-                <h4 class="invoice-title mb-2">
-                  <span>RN <span class="invoice-number">#2401000000005</span></span>
+                <h4 class="invoice-title">
+                  <span>RN<span class="invoice-number">#2401000000005</span></span>
                 </h4>
                 <div class="invoice-date-wrapper">
                   <p class="invoice-date-title">Datum izdavanja:</p>
@@ -235,53 +242,7 @@
             </div>
           </div>
         </div>
-
-        <div class="card-body invoice-padding pb-0">
-          <div class="row invoice-sales-total-wrapper">
-            <div class="col-md-6 order-md-1 order-2 mt-md-0 mt-3">
-              <p class="card-text mb-0">
-                <span class="fw-bold">Prodavač:</span> <span class="ms-75">Alfie Solomons</span>
-              </p>
-            </div>
-            <div class="col-md-6 d-flex justify-content-end order-md-2 order-1">
-              <div class="invoice-total-wrapper">
-                <div class="invoice-total-item">
-                  <p class="invoice-total-title">Međuzbir:</p>
-                  <p class="invoice-total-amount">1800 KM</p>
-                </div>
-                <div class="invoice-total-item">
-                  <p class="invoice-total-title">Popust:</p>
-                  <p class="invoice-total-amount">28 KM</p>
-                </div>
-                <div class="invoice-total-item">
-                  <p class="invoice-total-title">Porez:</p>
-                  <p class="invoice-total-amount">21%</p>
-                </div>
-                <hr class="my-50" />
-                <div class="invoice-total-item">
-                  <p class="invoice-total-title">Ukupno:</p>
-                  <p class="invoice-total-amount">1690 KM</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
         <!-- Invoice Description ends -->
-
-        <hr class="invoice-spacing" />
-
-        <!-- Invoice Note starts -->
-        <div class="card-body invoice-padding pt-0">
-          <div class="row">
-            <div class="col-12">
-              <span class="fw-bold">Napomena:</span>
-              <span
-                >Bilo nam je zadovoljstvo raditi sa vama i vašim timom. Nadamo se da ćete nas imati na umu za buduće projekte. Hvala vam!</span
-              >
-            </div>
-          </div>
-        </div>
-        <!-- Invoice Note ends -->
       </div>
     </div>
     <!-- /Invoice -->
@@ -299,7 +260,7 @@
           <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#send-invoice-sidebar">
             <i class="fa fa-paper-plane me-50"></i> Pošalji
           </button>
-          <a class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" href="{{url('app/invoice/print')}}" target="_blank">
+          <a class="btn btn-outline-secondary w-100 d-flex justify-content-center align-items-center" href="{{url('app/invoice/print')}}" target="_blank">
             <i class="fa fa-print me-50"></i> Isprintaj
           </a>
         </div>
