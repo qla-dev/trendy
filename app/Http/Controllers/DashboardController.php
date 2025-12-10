@@ -19,7 +19,9 @@ class DashboardController extends Controller
   public function home()
   {
     if (Auth::check() && Auth::user()->hasRole('user')) {
-      return redirect()->route('app-invoice-preview');
+      $pageConfigs = ['pageHeader' => false];
+
+      return view('/content/apps/invoice/app-invoice-preview', ['pageConfigs' => $pageConfigs]);
     }
 
     return $this->dashboardEcommerce();
