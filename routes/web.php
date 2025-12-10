@@ -30,7 +30,7 @@ use App\Http\Controllers\UserController;
 */
 
 // Main Page Route
-Route::get('/', [DashboardController::class, 'dashboardEcommerce'])->name('dashboard-ecommerce')->middleware('auth');
+Route::get('/', [DashboardController::class, 'home'])->name('dashboard-ecommerce')->middleware('auth');
 
 Route::view('inventory/soon', 'content.miscellaneous.soon', [
     'soonTitle' => 'Skladišni alati stižu',

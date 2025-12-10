@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Auth;
 
 class MenuServiceProvider extends ServiceProvider
 {
@@ -33,8 +34,14 @@ class MenuServiceProvider extends ServiceProvider
         $verticalMenuData = $this->translateMenuItems($verticalMenuData);
         $horizontalMenuData = $this->translateMenuItems($horizontalMenuData);
 
-         // Share all menuData to all the views
-        \View::share('menuData',[$verticalMenuData, $horizontalMenuData]);
+        $self = $this;
+        \View::composer('*', function ($view) use ($verticalMenuData, $horizontalMenuData, $self) {
+            $verticalMenuCopy = json_decode(json_encode($verticalMenuData));
+            if (Auth::check() && Auth::user()->hasRole('user')) {
+                $verticalMenuCopy = $self->filterMenuForUserRole($verticalMenuCopy);
+            }
+            $view->with('menuData', [$verticalMenuCopy, $horizontalMenuData]);
+        });
     }
 
     /**
@@ -55,6 +62,24 @@ class MenuServiceProvider extends ServiceProvider
                 }
             }
         }
+        return $menuData;
+    }
+
+    private function filterMenuForUserRole($menuData)
+    {
+        if (!isset($menuData->menu) || empty($menuData->menu)) {
+            return $menuData;
+        }
+
+        $filteredMenu = [];
+        foreach ($menuData->menu as $menu) {
+            if (isset($menu->name) && $menu->name === 'Radni nalozi') {
+                $filteredMenu[] = $menu;
+                break;
+            }
+        }
+
+        $menuData->menu = $filteredMenu;
         return $menuData;
     }
 }
