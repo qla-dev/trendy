@@ -1,7 +1,7 @@
 
 @extends('layouts/contentLayoutMaster')
 
-@section('title', 'Dashboard Ecommerce')
+@section('title', 'Kontrolna ploča')
 
 @section('vendor-style')
   {{-- vendor css files --}}
@@ -29,12 +29,12 @@
         <div class="card-body">
           <div class="meetup-header d-flex align-items-center">
             <div class="meetup-day">
-              <h6 class="mb-0">THU</h6>
+              <h6 class="mb-0">CET</h6>
               <h3 class="mb-0">24</h3>
             </div>
             <div class="my-auto">
-              <h4 class="card-title mb-25">Developer Meetup</h4>
-              <p class="card-text mb-0">Meet world popular developers</p>
+              <h4 class="card-title mb-25">Sastanak programera</h4>
+              <p class="card-text mb-0">Upoznaj popularne programere iz svijeta</p>
             </div>
           </div>
           <div class="mt-0">
@@ -44,8 +44,8 @@
               </div>
             </div>
             <div class="more-info">
-              <h6 class="mb-0">Sat, May 25, 2020</h6>
-              <small>10:AM to 6:PM</small>
+              <h6 class="mb-0">Sub, maj 25, 2020</h6>
+              <small>10:00 do 18:00</small>
             </div>
           </div>
           <div class="mt-2">
@@ -126,12 +126,7 @@
     <!-- Statistics Card -->
     <div class="col-xl-8 col-md-6 col-12">
       <div class="card card-statistics">
-        <div class="card-header">
-          <h4 class="card-title">Statistics</h4>
-          <div class="d-flex align-items-center">
-            <p class="card-text font-small-2 me-25 mb-0">Updated 1 month ago</p>
-          </div>
-        </div>
+     
         <div class="card-body statistics-body">
           <div class="row">
             <div class="col-xl-3 col-sm-6 col-12 mb-2 mb-xl-0">
@@ -143,7 +138,7 @@
                 </div>
                 <div class="my-auto">
                   <h4 class="fw-bolder mb-0">230k</h4>
-                  <p class="card-text font-small-3 mb-0">Sales</p>
+                  <p class="card-text font-small-3 mb-0">Prodaja</p>
                 </div>
               </div>
             </div>
@@ -156,7 +151,7 @@
                 </div>
                 <div class="my-auto">
                   <h4 class="fw-bolder mb-0">8.549k</h4>
-                  <p class="card-text font-small-3 mb-0">Customers</p>
+                  <p class="card-text font-small-3 mb-0">Kupci</p>
                 </div>
               </div>
             </div>
@@ -169,7 +164,7 @@
                 </div>
                 <div class="my-auto">
                   <h4 class="fw-bolder mb-0">1.423k</h4>
-                  <p class="card-text font-small-3 mb-0">Products</p>
+                  <p class="card-text font-small-3 mb-0">Proizvodi</p>
                 </div>
               </div>
             </div>
@@ -182,83 +177,28 @@
                 </div>
                 <div class="my-auto">
                   <h4 class="fw-bolder mb-0">$9745</h4>
-                  <p class="card-text font-small-3 mb-0">Revenue</p>
+                  <p class="card-text font-small-3 mb-0">Prihodi</p>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-    <!--/ Statistics Card -->
-  </div>
+          <!-- Revenue Report Card -->
 
-  <div class="row match-height">
-    <div class="col-lg-4 col-12">
-      <div class="row match-height">
-        <!-- Bar Chart - Orders -->
-        <div class="col-lg-6 col-md-3 col-6">
-          <div class="card">
-            <div class="card-body pb-50">
-              <h6>Orders</h6>
-              <h2 class="fw-bolder mb-1">2,76k</h2>
-              <div id="statistics-order-chart"></div>
-            </div>
-          </div>
-        </div>
-        <!--/ Bar Chart - Orders -->
-
-        <!-- Line Chart - Profit -->
-        <div class="col-lg-6 col-md-3 col-6">
-          <div class="card card-tiny-line-stats">
-            <div class="card-body pb-50">
-              <h6>Profit</h6>
-              <h2 class="fw-bolder mb-1">6,24k</h2>
-              <div id="statistics-profit-chart"></div>
-            </div>
-          </div>
-        </div>
-        <!--/ Line Chart - Profit -->
-
-        <!-- Earnings Card -->
-        <div class="col-lg-12 col-md-6 col-12">
-          <div class="card earnings-card">
-            <div class="card-body">
-              <div class="row">
-                <div class="col-6">
-                  <h4 class="card-title mb-1">Earnings</h4>
-                  <div class="font-small-2">This Month</div>
-                  <h5 class="mb-1">$4055.56</h5>
-                  <p class="card-text text-muted font-small-2">
-                    <span class="fw-bolder">68.2%</span><span> more earnings than last month.</span>
-                  </p>
-                </div>
-                <div class="col-6">
-                  <div id="earnings-chart"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!--/ Earnings Card -->
-      </div>
-    </div>
-
-    <!-- Revenue Report Card -->
-    <div class="col-lg-8 col-12">
       <div class="card card-revenue-budget">
         <div class="row mx-0">
           <div class="col-md-8 col-12 revenue-report-wrapper">
             <div class="d-sm-flex justify-content-between align-items-center mb-3">
-              <h4 class="card-title mb-50 mb-sm-0">Revenue Report</h4>
+              <h4 class="card-title mb-50 mb-sm-0">Izvjestaj o prihodima</h4>
               <div class="d-flex align-items-center">
                 <div class="d-flex align-items-center me-2">
                   <span class="bullet bullet-primary font-small-3 me-50 cursor-pointer"></span>
-                  <span>Earning</span>
+                  <span>Zarada</span>
                 </div>
                 <div class="d-flex align-items-center ms-75">
                   <span class="bullet bullet-warning font-small-3 me-50 cursor-pointer"></span>
-                  <span>Expense</span>
+                  <span>Troskovi</span>
                 </div>
               </div>
             </div>
@@ -283,32 +223,82 @@
             </div>
             <h2 class="mb-25">$25,852</h2>
             <div class="d-flex justify-content-center">
-              <span class="fw-bolder me-25">Budget:</span>
+              <span class="fw-bolder me-25">Budzet:</span>
               <span>56,800</span>
             </div>
             <div id="budget-chart"></div>
-            <button type="button" class="btn btn-primary">Increase Budget</button>
+            <button type="button" class="btn btn-primary">Povecaj budzet</button>
           </div>
         </div>
       </div>
+   
     </div>
-    <!--/ Revenue Report Card -->
+    <!--/ Statistics Card -->
   </div>
 
   <div class="row match-height">
-    <!-- Company Table Card -->
-    <div class="col-lg-8 col-12">
+    <div class="col-lg-4 col-12">
+      <div class="row match-height">
+        <!-- Bar Chart - Orders -->
+        <div class="col-lg-6 col-md-3 col-6">
+          <div class="card">
+            <div class="card-body pb-50">
+              <h6>Narudzbe</h6>
+              <h2 class="fw-bolder mb-1">2,76k</h2>
+              <div id="statistics-order-chart"></div>
+            </div>
+          </div>
+        </div>
+        <!--/ Bar Chart - Orders -->
+
+        <!-- Line Chart - Profit -->
+        <div class="col-lg-6 col-md-3 col-6">
+          <div class="card card-tiny-line-stats">
+            <div class="card-body pb-50">
+              <h6>Dobit</h6>
+              <h2 class="fw-bolder mb-1">6,24k</h2>
+              <div id="statistics-profit-chart"></div>
+            </div>
+          </div>
+        </div>
+        <!--/ Line Chart - Profit -->
+
+        <!-- Earnings Card -->
+        <div class="col-lg-12 col-md-6 col-12">
+          <div class="card earnings-card">
+            <div class="card-body">
+              <div class="row">
+                <div class="col-6">
+                  <h4 class="card-title mb-1">Zarada</h4>
+                  <div class="font-small-2">Ovaj mjesec</div>
+                  <h5 class="mb-1">$4055.56</h5>
+                  <p class="card-text text-muted font-small-2">
+                    <span class="fw-bolder">68.2%</span><span> vise zarade nego proslog mjeseca.</span>
+                  </p>
+                </div>
+                <div class="col-6">
+                  <div id="earnings-chart"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!--/ Earnings Card -->
+      </div>
+    </div>
+
+  <div class="col-lg-8 col-12">
       <div class="card card-company-table">
         <div class="card-body p-0">
           <div class="table-responsive">
             <table class="table">
               <thead>
                 <tr>
-                  <th>Company</th>
-                  <th>Category</th>
-                  <th>Views</th>
-                  <th>Revenue</th>
-                  <th>Sales</th>
+                  <th>Kompanija</th>
+                  <th>Kategorija</th>
+                  <th>Pregledi</th>
+                  <th>Prihodi</th>
+                  <th>Prodaja</th>
                 </tr>
               </thead>
               <tbody>
@@ -339,7 +329,7 @@
                   <td class="text-nowrap">
                     <div class="d-flex flex-column">
                       <span class="fw-bolder mb-25">23.4k</span>
-                      <span class="font-small-2 text-muted">in 24 hours</span>
+                      <span class="font-small-2 text-muted">u 24 sata</span>
                     </div>
                   </td>
                   <td>$891.2</td>
@@ -377,7 +367,7 @@
                   <td class="text-nowrap">
                     <div class="d-flex flex-column">
                       <span class="fw-bolder mb-25">78k</span>
-                      <span class="font-small-2 text-muted">in 2 days</span>
+                      <span class="font-small-2 text-muted">u 2 dana</span>
                     </div>
                   </td>
                   <td>$668.51</td>
@@ -415,7 +405,7 @@
                   <td class="text-nowrap">
                     <div class="d-flex flex-column">
                       <span class="fw-bolder mb-25">162</span>
-                      <span class="font-small-2 text-muted">in 5 days</span>
+                      <span class="font-small-2 text-muted">u 5 dana</span>
                     </div>
                   </td>
                   <td>$522.29</td>
@@ -453,7 +443,7 @@
                   <td class="text-nowrap">
                     <div class="d-flex flex-column">
                       <span class="fw-bolder mb-25">214</span>
-                      <span class="font-small-2 text-muted">in 24 hours</span>
+                      <span class="font-small-2 text-muted">u 24 sata</span>
                     </div>
                   </td>
                   <td>$291.01</td>
@@ -491,7 +481,7 @@
                   <td class="text-nowrap">
                     <div class="d-flex flex-column">
                       <span class="fw-bolder mb-25">208</span>
-                      <span class="font-small-2 text-muted">in 1 week</span>
+                      <span class="font-small-2 text-muted">u 1 sedmicu</span>
                     </div>
                   </td>
                   <td>$783.93</td>
@@ -529,7 +519,7 @@
                   <td class="text-nowrap">
                     <div class="d-flex flex-column">
                       <span class="fw-bolder mb-25">990</span>
-                      <span class="font-small-2 text-muted">in 1 month</span>
+                      <span class="font-small-2 text-muted">u 1 mjesec</span>
                     </div>
                   </td>
                   <td>$780.05</td>
@@ -567,7 +557,7 @@
                   <td class="text-nowrap">
                     <div class="d-flex flex-column">
                       <span class="fw-bolder mb-25">12.9k</span>
-                      <span class="font-small-2 text-muted">in 12 hours</span>
+                      <span class="font-small-2 text-muted">u 12 sati</span>
                     </div>
                   </td>
                   <td>$531.49</td>
@@ -584,39 +574,10 @@
         </div>
       </div>
     </div>
-    <!--/ Company Table Card -->
-
- 
-
- 
-
-    <!-- Goal Overview Card -->
-    <div class="col-lg-4 col-md-6 col-12">
-      <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h4 class="card-title">Goal Overview</h4>
-          <i data-feather="help-circle" class="font-medium-3 text-muted cursor-pointer"></i>
-        </div>
-        <div class="card-body p-0">
-          <div id="goal-overview-radial-bar-chart" class="my-2"></div>
-          <div class="row border-top text-center mx-0">
-            <div class="col-6 border-end py-1">
-              <p class="card-text text-muted mb-0">Completed</p>
-              <h3 class="fw-bolder mb-0">786,617</h3>
-            </div>
-            <div class="col-6 py-1">
-              <p class="card-text text-muted mb-0">In Progress</p>
-              <h3 class="fw-bolder mb-0">13,561</h3>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <!--/ Goal Overview Card -->
-
-
-    <!--/ Transaction Card -->
+    <!--/ Revenue Report Card -->
   </div>
+
+
 </section>
 <!-- Dashboard Ecommerce ends -->
 @endsection

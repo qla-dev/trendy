@@ -3,7 +3,7 @@
 return [
     "Apps & Pages" => "Aplikacije i Stranice",
     "User Interface" => "Korisničko Sučelje",
-    "Dashboards" => "Kontrolne Ploče",
+    "Dashboards" => "Kontrolna ploča",
     "Analytics" => "Analitika",
     "eCommerce" => "eCommerce",
     "Apps" => "Aplikacije",
