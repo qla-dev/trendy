@@ -268,13 +268,13 @@
   }
 
   .status-card-active {
-    border-color: #7367f0;
+    border-color: #495B73;
     background-color: #fff;
     box-shadow: 0 4px 24px 0 rgba(34, 41, 47, 0.1);
   }
 
   .status-card-active:hover {
-    border-color: #7367f0;
+    border-color: #495B73;
     background-color: #f8f8f8;
     box-shadow: 0 4px 24px 0 rgba(34, 41, 47, 0.15);
   }
@@ -313,11 +313,11 @@
   }
 
   .status-card[data-status="raspisan"] {
-    border-color: #7367f0;
+    border-color: #495B73;
   }
 
   .status-card[data-status="raspisan"]:hover {
-    border-color: #7367f0;
+    border-color: #495B73;
   }
 
   .status-card[data-status="u_radu"] {
@@ -374,7 +374,7 @@
   }
 
   .status-card[data-status="raspisan"] .status-label {
-    color: #7367f0;
+    color: #495B73;
   }
 
   .status-card[data-status="u_radu"] .status-label {

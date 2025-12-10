@@ -8,13 +8,13 @@
           <!-- QR Scanner Frame -->
           <div class="qr-scanner-frame position-relative" style="width: 100%; padding-top: 100%; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 12px; overflow: hidden;">
             <!-- Corner indicators -->
-            <div class="qr-corner qr-corner-top-left" style="position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-top: 3px solid var(--bs-primary, #7367f0); border-left: 3px solid var(--bs-primary, #7367f0);"></div>
-            <div class="qr-corner qr-corner-top-right" style="position: absolute; top: 0; right: 0; width: 40px; height: 40px; border-top: 3px solid var(--bs-primary, #7367f0); border-right: 3px solid var(--bs-primary, #7367f0);"></div>
-            <div class="qr-corner qr-corner-bottom-left" style="position: absolute; bottom: 0; left: 0; width: 40px; height: 40px; border-bottom: 3px solid var(--bs-primary, #7367f0); border-left: 3px solid var(--bs-primary, #7367f0);"></div>
-            <div class="qr-corner qr-corner-bottom-right" style="position: absolute; bottom: 0; right: 0; width: 40px; height: 40px; border-bottom: 3px solid var(--bs-primary, #7367f0); border-right: 3px solid var(--bs-primary, #7367f0);"></div>
+            <div class="qr-corner qr-corner-top-left" style="position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-top: 3px solid var(--bs-primary, #495B73); border-left: 3px solid var(--bs-primary, #495B73);"></div>
+            <div class="qr-corner qr-corner-top-right" style="position: absolute; top: 0; right: 0; width: 40px; height: 40px; border-top: 3px solid var(--bs-primary, #495B73); border-right: 3px solid var(--bs-primary, #495B73);"></div>
+            <div class="qr-corner qr-corner-bottom-left" style="position: absolute; bottom: 0; left: 0; width: 40px; height: 40px; border-bottom: 3px solid var(--bs-primary, #495B73); border-left: 3px solid var(--bs-primary, #495B73);"></div>
+            <div class="qr-corner qr-corner-bottom-right" style="position: absolute; bottom: 0; right: 0; width: 40px; height: 40px; border-bottom: 3px solid var(--bs-primary, #495B73); border-right: 3px solid var(--bs-primary, #495B73);"></div>
             
             <!-- Scanning line animation -->
-            <div class="qr-scan-line" style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--bs-primary, #7367f0), transparent); animation: scanLine 2s linear infinite;"></div>
+            <div class="qr-scan-line" style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--bs-primary, #495B73), transparent); animation: scanLine 2s linear infinite;"></div>
             
             <!-- Grid pattern overlay -->
             <div class="qr-grid" style="position: absolute; inset: 0; background-image: 
