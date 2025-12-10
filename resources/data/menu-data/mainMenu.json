@@ -1,10 +1,14 @@
 {
   "menu": [
     {
+      "navheader": "Glavna navigacija",
+      "slug": ""
+    },
+    {
       "name": "Dashboards",
       "url": "/",
       "icon": "home",
-          "slug": "dashboard-ecommerce"
+      "slug": "dashboard-ecommerce"
     },
     {
       "navheader": "Apps & Pages",
@@ -24,7 +28,7 @@
         {
           "url": "app/invoice/preview",
           "name": "Preview",
-      "icon": "eye",
+          "icon": "eye",
           "slug": "app-invoice-preview"
         },
         {
@@ -40,6 +44,10 @@
           "slug": "app-invoice-add"
         }
       ]
+    },
+    {
+      "navheader": "Administracija",
+      "slug": ""
     },
     {
       "name": "Korisnici",
@@ -58,9 +66,99 @@
           "icon": "plus",
           "slug": "app-user-add"
         }
-          ]
-      
+      ]
+    },
+    {
+      "navheader": "Skladišni alati",
+      "slug": ""
+    },
+    {
+      "name": "Pregled zaliha",
+      "icon": "layers",
+      "url": "inventory/soon",
+      "slug": ""
+    },
+    {
+      "name": "Kreiranje rezervi",
+      "icon": "shield",
+      "url": "inventory/soon",
+      "slug": ""
+    },
+    {
+      "name": "Mapa skladišta",
+      "icon": "map",
+      "url": "inventory/soon",
+      "slug": ""
+    },
+    {
+      "name": "Praćenje serija",
+      "icon": "hash",
+      "url": "inventory/soon",
+      "slug": ""
+    },
+    {
+      "name": "Plan isporuka",
+      "icon": "airplay",
+      "url": "inventory/soon",
+      "slug": ""
+    },
+    {
+      "name": "Upravljanje lokacijama",
+      "icon": "globe",
+      "url": "inventory/soon",
+      "slug": ""
+    },
+    {
+      "name": "Kontrola ulaza",
+      "icon": "log-in",
+      "url": "inventory/soon",
+      "slug": ""
+    },
+    {
+      "name": "Kontrola izlaza",
+      "icon": "log-out",
+      "url": "inventory/soon",
+      "slug": ""
+    },
+    {
+      "name": "Analitika paketa",
+      "icon": "bar-chart-2",
+      "url": "inventory/soon",
+      "slug": ""
+    },
+    {
+      "name": "Učitavanje dokumenata",
+      "icon": "upload-cloud",
+      "url": "inventory/soon",
+      "slug": ""
+    },
+    {
+      "name": "Panel etiketiranja",
+      "icon": "tag",
+      "url": "inventory/soon",
+      "slug": ""
+    },
+    {
+      "navheader": "TRENDY DRIVE",
+      "slug": ""
+    },
+    {
+      "name": "Cloud dokumentacija",
+      "icon": "cloud",
+      "url": "drive/cloud-docs",
+      "slug": ""
+    },
+    {
+      "name": "Deljenje fajlova",
+      "icon": "share-2",
+      "url": "drive/cloud-docs",
+      "slug": ""
+    },
+    {
+      "name": "Verzije dokumenata",
+      "icon": "git-branch",
+      "url": "drive/cloud-docs",
+      "slug": ""
     }
-    
   ]
 }

@@ -32,6 +32,16 @@ use App\Http\Controllers\UserController;
 // Main Page Route
 Route::get('/', [DashboardController::class, 'dashboardEcommerce'])->name('dashboard-ecommerce')->middleware('auth');
 
+Route::view('inventory/soon', 'content.miscellaneous.soon', [
+    'soonTitle' => 'Skladišni alati stižu',
+    'soonText' => 'Trenutno radimo na alatu koji će objediniti sve vaše zalihe, lokacije i pakete.'
+])->name('inventory-soon')->middleware('auth');
+
+Route::view('drive/cloud-docs', 'content.miscellaneous.soon', [
+    'soonTitle' => 'Cloud dokumentacija',
+    'soonText' => 'TRENDY DRIVE čuva i dijeli dokumente u oblaku. Ova funkcionalnost stiže uskoro.'
+])->name('cloud-docs')->middleware('auth');
+
 
 /* Route Dashboards */
 Route::group(['prefix' => 'dashboard', 'middleware' => 'auth'], function () {
