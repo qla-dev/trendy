@@ -31,21 +31,21 @@
           <i data-feather="grid"></i>
         </button>
         <div class="dropdown-menu dropdown-menu-end">
-          <a class="dropdown-item" href="{{url('app/todo')}}">
+          <a class="dropdown-item" href="{{url('/inventory/soon')}}">
             <i class="me-1" data-feather="check-square"></i>
             <span class="align-middle">Todo</span>
           </a>
-          <a class="dropdown-item" href="{{url('app/chat')}}">
+          <a class="dropdown-item" href="{{url('/inventory/soon')}}">
             <i class="me-1" data-feather="message-square"></i>
             <span class="align-middle">Chat</span>
           </a>
-          <a class="dropdown-item" href="{{url('app/email')}}">
+          <a class="dropdown-item" href="{{url('/inventory/soon')}}">
             <i class="me-1" data-feather="mail"></i>
             <span class="align-middle">Email</span>
           </a>
           <a class="dropdown-item" href="{{url('app/calendar')}}">
             <i class="me-1" data-feather="calendar"></i>
-            <span class="align-middle">Calendar</span>
+            <span class="align-middle">Kalendar</span>
           </a>
         </div>
       </div>

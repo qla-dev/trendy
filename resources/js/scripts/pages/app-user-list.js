@@ -141,7 +141,7 @@ $(function () {
         {
           // Actions
           targets: -1,
-          title: 'Actions',
+          title: 'Akcije',
           orderable: false,
           render: function (data, type, full, meta) {
             return (
@@ -150,9 +150,9 @@ $(function () {
               feather.icons['more-vertical'].toSvg({ class: 'font-small-4' }) +
               '</a>' +
               '<div class="dropdown-menu dropdown-menu-end">' +
-              '<a href="' + userView + '/' + full[6] + '" class="dropdown-item">' +
-              feather.icons['file-text'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Pregled</a>' +
+              // '<a href="' + userView + '/' + full[6] + '" class="dropdown-item">' +
+              // feather.icons['file-text'].toSvg({ class: 'font-small-4 me-50' }) +
+              // 'Pregled</a>' +
               '<a href="javascript:;" class="dropdown-item delete-record" onclick="deleteUser(' + full[6] + ')">' +
               feather.icons['trash-2'].toSvg({ class: 'font-small-4 me-50' }) +
               'Obriši</a></div>' +
