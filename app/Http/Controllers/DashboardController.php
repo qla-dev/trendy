@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Models\WorkOrder;
 
 class DashboardController extends Controller
 {
@@ -31,7 +32,11 @@ class DashboardController extends Controller
   public function dashboardEcommerce()
   {
     $pageConfigs = ['pageHeader' => false];
+    $latestOrders = WorkOrder::orderByDesc('id')->take(5)->get();
 
-    return view('/content/dashboard/dashboard-ecommerce', ['pageConfigs' => $pageConfigs]);
+    return view('/content/dashboard/dashboard-ecommerce', [
+      'pageConfigs' => $pageConfigs,
+      'latestOrders' => $latestOrders
+    ]);
   }
 }

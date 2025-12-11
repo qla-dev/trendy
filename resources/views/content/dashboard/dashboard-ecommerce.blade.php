@@ -35,10 +35,10 @@
         </div>
         <div class="my-auto">
           <h4 class="card-title mb-25">
-            Uvodni sastanak sa GROB-WERKE 
+            GROB-WERKE 
           </h4>
           <p class="card-text mb-0">
-            Dogovor o saradnji vezanoj za CNC obradu metala – kapaciteti, cijene, rokovi isporuke i kvalitet.
+            Sastanak o saradnji vezanoj za CNC obradu metala – kapaciteti i rokovi.
           </p>
         </div>
       </div>
@@ -67,7 +67,7 @@
           <h6 class="mb-0">Online sastanak (Teams / Zoom)</h6>
           <small>
             Predstavljanje mašina (CNC glodanje i tokarenje), tipičnih serija, tolerancija,
-            površinske obrade, rokova isporuke i načina slanja tehničkih crteža.
+            površinske obrade.
           </small>
         </div>
       </div>
@@ -230,7 +230,7 @@
         <div class="col-lg-6 col-md-3 col-6">
           <div class="card">
             <div class="card-body pb-50">
-              <h6>Narudzbe</h6>
+              <h6>Narudžbe</h6>
               <h2 class="fw-bolder mb-1">2,76k</h2>
               <div id="statistics-order-chart"></div>
             </div>
@@ -258,9 +258,9 @@
                 <div class="col-6">
                   <h4 class="card-title mb-1">Zarada</h4>
                   <div class="font-small-2">Ovaj mjesec</div>
-                  <h5 class="mb-1">$4055.56</h5>
+                  <h5 class="mb-1">4055,56 KM</h5>
                   <p class="card-text text-muted font-small-2">
-                    <span class="fw-bolder">68.2%</span><span> vise zarade nego proslog mjeseca.</span>
+                    <span class="fw-bolder">68.2%</span><span> više zarade nego prošlog mjeseca.</span>
                   </p>
                 </div>
                 <div class="col-6">
@@ -274,287 +274,46 @@
       </div>
     </div>
 
-  <div class="col-lg-8 col-12">
+    <div class="col-lg-8 col-12">
       <div class="card card-company-table">
         <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table">
+            <table class="table table-hover borderless mb-0">
               <thead>
                 <tr>
-                  <th>Kompanija</th>
-                  <th>Kategorija</th>
-                  <th>Pregledi</th>
-                  <th>Prihodi</th>
-                  <th>Prodaja</th>
+                  <th>Radni Nalog</th>
+                  <th>Klijent</th>
+                  <th>Početak</th>
+                  <th>Status</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar rounded">
-                        <div class="avatar-content">
-                          <img src="{{asset('images/icons/toolbox.svg')}}" alt="Toolbar svg" />
-                        </div>
-                      </div>
-                      <div>
-                        <div class="fw-bolder">Dixons</div>
-                        <div class="font-small-2 text-muted">meguc@ruj.io</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar bg-light-primary me-1">
-                        <div class="avatar-content">
-                          <i data-feather="monitor" class="font-medium-3"></i>
-                        </div>
-                      </div>
-                      <span>Technology</span>
-                    </div>
-                  </td>
-                  <td class="text-nowrap">
-                    <div class="d-flex flex-column">
-                      <span class="fw-bolder mb-25">23.4k</span>
-                      <span class="font-small-2 text-muted">u 24 sata</span>
-                    </div>
-                  </td>
-                  <td>$891.2</td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <span class="fw-bolder me-1">68%</span>
-                      <i data-feather="trending-down" class="text-danger font-medium-1"></i>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar rounded">
-                        <div class="avatar-content">
-                          <img src="{{asset('images/icons/parachute.svg')}}" alt="Parachute svg" />
-                        </div>
-                      </div>
-                      <div>
-                        <div class="fw-bolder">Motels</div>
-                        <div class="font-small-2 text-muted">vecav@hodzi.co.uk</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar bg-light-success me-1">
-                        <div class="avatar-content">
-                          <i data-feather="coffee" class="font-medium-3"></i>
-                        </div>
-                      </div>
-                      <span>Grocery</span>
-                    </div>
-                  </td>
-                  <td class="text-nowrap">
-                    <div class="d-flex flex-column">
-                      <span class="fw-bolder mb-25">78k</span>
-                      <span class="font-small-2 text-muted">u 2 dana</span>
-                    </div>
-                  </td>
-                  <td>$668.51</td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <span class="fw-bolder me-1">97%</span>
-                      <i data-feather="trending-up" class="text-success font-medium-1"></i>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar rounded">
-                        <div class="avatar-content">
-                          <img src="{{asset('images/icons/brush.svg')}}" alt="Brush svg" />
-                        </div>
-                      </div>
-                      <div>
-                        <div class="fw-bolder">Zipcar</div>
-                        <div class="font-small-2 text-muted">davcilse@is.gov</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar bg-light-warning me-1">
-                        <div class="avatar-content">
-                          <i data-feather="watch" class="font-medium-3"></i>
-                        </div>
-                      </div>
-                      <span>Fashion</span>
-                    </div>
-                  </td>
-                  <td class="text-nowrap">
-                    <div class="d-flex flex-column">
-                      <span class="fw-bolder mb-25">162</span>
-                      <span class="font-small-2 text-muted">u 5 dana</span>
-                    </div>
-                  </td>
-                  <td>$522.29</td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <span class="fw-bolder me-1">62%</span>
-                      <i data-feather="trending-up" class="text-success font-medium-1"></i>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar rounded">
-                        <div class="avatar-content">
-                          <img src="{{asset('images/icons/star.svg')}}" alt="Star svg" />
-                        </div>
-                      </div>
-                      <div>
-                        <div class="fw-bolder">Owning</div>
-                        <div class="font-small-2 text-muted">us@cuhil.gov</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar bg-light-primary me-1">
-                        <div class="avatar-content">
-                          <i data-feather="monitor" class="font-medium-3"></i>
-                        </div>
-                      </div>
-                      <span>Technology</span>
-                    </div>
-                  </td>
-                  <td class="text-nowrap">
-                    <div class="d-flex flex-column">
-                      <span class="fw-bolder mb-25">214</span>
-                      <span class="font-small-2 text-muted">u 24 sata</span>
-                    </div>
-                  </td>
-                  <td>$291.01</td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <span class="fw-bolder me-1">88%</span>
-                      <i data-feather="trending-up" class="text-success font-medium-1"></i>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar rounded">
-                        <div class="avatar-content">
-                          <img src="{{asset('images/icons/book.svg')}}" alt="Book svg" />
-                        </div>
-                      </div>
-                      <div>
-                        <div class="fw-bolder">Cafés</div>
-                        <div class="font-small-2 text-muted">pudais@jife.com</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar bg-light-success me-1">
-                        <div class="avatar-content">
-                          <i data-feather="coffee" class="font-medium-3"></i>
-                        </div>
-                      </div>
-                      <span>Grocery</span>
-                    </div>
-                  </td>
-                  <td class="text-nowrap">
-                    <div class="d-flex flex-column">
-                      <span class="fw-bolder mb-25">208</span>
-                      <span class="font-small-2 text-muted">u 1 sedmicu</span>
-                    </div>
-                  </td>
-                  <td>$783.93</td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <span class="fw-bolder me-1">16%</span>
-                      <i data-feather="trending-down" class="text-danger font-medium-1"></i>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar rounded">
-                        <div class="avatar-content">
-                          <img src="{{asset('images/icons/rocket.svg')}}" alt="Rocket svg" />
-                        </div>
-                      </div>
-                      <div>
-                        <div class="fw-bolder">Kmart</div>
-                        <div class="font-small-2 text-muted">bipri@cawiw.com</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar bg-light-warning me-1">
-                        <div class="avatar-content">
-                          <i data-feather="watch" class="font-medium-3"></i>
-                        </div>
-                      </div>
-                      <span>Fashion</span>
-                    </div>
-                  </td>
-                  <td class="text-nowrap">
-                    <div class="d-flex flex-column">
-                      <span class="fw-bolder mb-25">990</span>
-                      <span class="font-small-2 text-muted">u 1 mjesec</span>
-                    </div>
-                  </td>
-                  <td>$780.05</td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <span class="fw-bolder me-1">78%</span>
-                      <i data-feather="trending-up" class="text-success font-medium-1"></i>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar rounded">
-                        <div class="avatar-content">
-                          <img src="{{asset('images/icons/speaker.svg')}}" alt="Speaker svg" />
-                        </div>
-                      </div>
-                      <div>
-                        <div class="fw-bolder">Payers</div>
-                        <div class="font-small-2 text-muted">luk@izug.io</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <div class="avatar bg-light-warning me-1">
-                        <div class="avatar-content">
-                          <i data-feather="watch" class="font-medium-3"></i>
-                        </div>
-                      </div>
-                      <span>Fashion</span>
-                    </div>
-                  </td>
-                  <td class="text-nowrap">
-                    <div class="d-flex flex-column">
-                      <span class="fw-bolder mb-25">12.9k</span>
-                      <span class="font-small-2 text-muted">u 12 sati</span>
-                    </div>
-                  </td>
-                  <td>$531.49</td>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <span class="fw-bolder me-1">42%</span>
-                      <i data-feather="trending-up" class="text-success font-medium-1"></i>
-                    </div>
-                  </td>
-                </tr>
+                @foreach ($latestOrders as $order)
+                  <tr>
+                    <td class="text-nowrap">
+                      <div class="fw-bolder mb-0">{{ $order->work_order_number }}</div>
+                      <small class="text-muted">{{ $order->linked_document }}</small>
+                    </td>
+                    <td>{{ $order->client_name }}</td>
+                    <td>{{ optional($order->planned_start)->format('d.m.Y') ?? 'N/A' }}</td>
+                    <td>
+                      <span class="badge rounded-pill bg-light-primary text-primary">
+                        {{ $order->status ?? 'N/A' }}
+                      </span>
+                    </td>
+                    <td class="text-nowrap">
+                      <a href="{{ url('app/invoice/preview/' . $order->id) }}" class="btn btn-sm btn-icon btn-outline-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="Pregled radnog naloga">
+                        <i data-feather="eye"></i>
+                      </a>
+                    </td>
+                  </tr>
+                @endforeach
+                @if ($latestOrders->isEmpty())
+                  <tr>
+                    <td colspan="6" class="text-center text-muted">Nema dostupnih naloga.</td>
+                  </tr>
+                @endif
               </tbody>
             </table>
           </div>

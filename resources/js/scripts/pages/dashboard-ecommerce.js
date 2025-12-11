@@ -242,7 +242,7 @@ $(window).on('load', function () {
     series: [53, 16, 31],
     legend: { show: false },
     comparedResult: [2, -3, 8],
-    labels: ['App', 'Service', 'Product'],
+    labels: ['Proizvodnja', 'Usluge', 'Mašine'],
     stroke: { width: 0 },
     colors: [$earningsStrokeColor2, $earningsStrokeColor3, window.colors.solid.success],
     grid: {
@@ -270,7 +270,7 @@ $(window).on('load', function () {
             total: {
               show: true,
               offsetY: 15,
-              label: 'App',
+              label: 'Proizvodnja',
               formatter: function (w) {
                 return '53%';
               }
