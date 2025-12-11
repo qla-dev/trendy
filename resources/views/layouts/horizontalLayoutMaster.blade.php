@@ -20,7 +20,7 @@ data-asset-path="{{ asset('/')}}">
     <div class="header-navbar-shadow"></div>
 
     @if(($configData['contentLayout']!=='default') && isset($configData['contentLayout']))
-    <div class="content-area-wrapper {{ $configData['layoutWidth'] === 'boxed' ? 'container-xxl p-0' : '' }}">
+    <div class="content-area-wrapper {{ $configData['layoutWidth'] === 'boxed' ? 'container-xxxl p-0' : '' }}">
       <div class="{{ $configData['sidebarPositionClass'] }}">
         <div class="sidebar">
           {{-- Include Sidebar Content --}}
@@ -37,7 +37,7 @@ data-asset-path="{{ asset('/')}}">
       </div>
     </div>
     @else
-    <div class="content-wrapper {{ $configData['layoutWidth'] === 'boxed' ? 'container-xxl p-0' : '' }}">
+    <div class="content-wrapper {{ $configData['layoutWidth'] === 'boxed' ? 'container-xxxl p-0' : '' }}">
       {{-- Include Breadcrumb --}}
       @if($configData['pageHeader'] == true)
       @include('panels.breadcrumb')

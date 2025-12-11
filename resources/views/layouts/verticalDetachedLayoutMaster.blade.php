@@ -19,7 +19,7 @@ data-asset-path="{{ asset('/')}}">
     <div class="content-overlay"></div>
     <div class="header-navbar-shadow"></div>
 
-    <div class="content-wrapper {{ $configData['layoutWidth'] === 'boxed' ? 'container-xxl p-0' : '' }}">
+    <div class="content-wrapper {{ $configData['layoutWidth'] === 'boxed' ? 'container-xxxl p-0' : '' }}">
       {{-- Include Breadcrumb --}}
       @if($configData['pageHeader'] == true) @include('panels.breadcrumb') @endif
 

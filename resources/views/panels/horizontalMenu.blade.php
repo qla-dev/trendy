@@ -7,7 +7,7 @@ $configData = Helper::applClasses();
   {{$configData['horizontalMenuClass']}}
   {{($configData['theme'] === 'dark') ? 'navbar-dark' : 'navbar-light' }}
   navbar-shadow menu-border
-  {{ ($configData['layoutWidth'] === 'boxed' && $configData['horizontalMenuType']  === 'navbar-floating') ? 'container-xxl' : '' }}"
+  {{ ($configData['layoutWidth'] === 'boxed' && $configData['horizontalMenuType']  === 'navbar-floating') ? 'container-xxxl' : '' }}"
   role="navigation"
   data-menu="menu-wrapper"
   data-menu-type="floating-nav">
