@@ -231,13 +231,13 @@ Route::get('/error', [MiscellaneousController::class, 'error'])->name('error');
 /* Route Authentication Pages */
 Route::group(['prefix' => 'auth'], function () {
     Route::get('login-basic', [AuthenticationController::class, 'login_basic'])->name('auth-login-basic');
-    Route::get('login-cover', [AuthenticationController::class, 'login_cover'])->name('auth-login-cover');
+    Route::get('login', [AuthenticationController::class, 'login_cover'])->name('auth-login-cover');
     Route::post('login', [AuthenticationController::class, 'login'])->name('auth.login');
     Route::post('logout', [AuthenticationController::class, 'logout'])->name('auth.logout');
     Route::get('register-basic', [AuthenticationController::class, 'register_basic'])->name('auth-register-basic');
     Route::get('register-cover', [AuthenticationController::class, 'register_cover'])->name('auth-register-cover');
     Route::get('forgot-password-basic', [AuthenticationController::class, 'forgot_password_basic'])->name('auth-forgot-password-basic');
-    Route::get('forgot-password-cover', [AuthenticationController::class, 'forgot_password_cover'])->name('auth-forgot-password-cover');
+    Route::get('forgot-password', [AuthenticationController::class, 'forgot_password_cover'])->name('auth-forgot-password-cover');
     Route::get('reset-password-basic', [AuthenticationController::class, 'reset_password_basic'])->name('auth-reset-password-basic');
     Route::get('reset-password-cover', [AuthenticationController::class, 'reset_password_cover'])->name('auth-reset-password-cover');
     Route::get('verify-email-basic', [AuthenticationController::class, 'verify_email_basic'])->name('auth-verify-email-basic');

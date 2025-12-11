@@ -50,7 +50,7 @@ $configData = Helper::applClasses();
           <div class="mb-1">
             <div class="d-flex justify-content-between">
             <label class="form-label" for="password">Lozinka</label>
-            <a href="{{url("auth/forgot-password-cover")}}">
+            <a href="{{url("auth/forgot-password")}}">
               <small>Zaboravili ste lozinku?</small>
             </a>
             </div>
