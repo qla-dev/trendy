@@ -471,6 +471,21 @@ window.colors = {
     appContent = $('.app-content'),
     bookmarkSearchList = $('.bookmark-input .search-list');
 
+  var ensureAbsoluteUrl = function (url) {
+    if ($('body').attr('data-framework') === 'laravel' && !/^https?:\/\//i.test(url)) {
+      return assetPath + url;
+    }
+    return url;
+  };
+
+  var fetchSearchData = function (callback) {
+    if (Array.isArray(window.sidebarSearchPages) && window.sidebarSearchPages.length) {
+      callback({ listItems: window.sidebarSearchPages });
+      return;
+    }
+    $.getJSON(assetPath + 'data/' + $filename + '.json', callback);
+  };
+
   // Bookmark icon click
   bookmarkStar.on('click', function (e) {
     e.stopPropagation();
@@ -619,13 +634,11 @@ window.colors = {
           a = 0;
 
         // getting json data from file for search results
-        $.getJSON(assetPath + 'data/' + $filename + '.json', function (data) {
+        fetchSearchData(function (data) {
           for (var i = 0; i < data.listItems.length; i++) {
             // if current is bookmark then give class to star icon
             // for laravel
-            if ($('body').attr('data-framework') === 'laravel') {
-              data.listItems[i].url = assetPath + data.listItems[i].url;
-            }
+            data.listItems[i].url = ensureAbsoluteUrl(data.listItems[i].url);
 
             if (bookmark === true) {
               activeClass = ''; // resetting active bookmark class
@@ -691,6 +704,7 @@ window.colors = {
               data.listItems[i].name.toLowerCase().indexOf(value) > -1 &&
               a < 5
             ) {
+              data.listItems[i].url = ensureAbsoluteUrl(data.listItems[i].url);
               if (a === 0) {
                 $activeItemClass = 'current_item';
               } else {

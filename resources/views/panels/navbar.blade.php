@@ -130,6 +130,33 @@
 </div>
 </nav>
 
+@php
+if (!function_exists('flatten_sidebar_menu_items')) {
+    function flatten_sidebar_menu_items($items)
+    {
+        $pages = [];
+        foreach ($items as $item) {
+            $url = $item->url ?? null;
+            if ($url && $url !== '#') {
+                $pages[] = [
+                    'name' => $item->name ?? '',
+                    'url' => url($url),
+                    'icon' => $item->icon ?? 'circle',
+                ];
+            }
+            if (isset($item->submenu) && is_array($item->submenu)) {
+                $pages = array_merge($pages, flatten_sidebar_menu_items($item->submenu));
+            }
+        }
+        return $pages;
+    }
+}
+$sidebarPages = isset($menuData[0]) ? flatten_sidebar_menu_items($menuData[0]->menu ?? []) : [];
+@endphp
+<script>
+  window.sidebarSearchPages = {!! json_encode($sidebarPages) !!};
+</script>
+
 {{-- Search Start Here --}}
 <ul class="main-search-list-defaultlist d-none">
   <li class="d-flex align-items-center">
