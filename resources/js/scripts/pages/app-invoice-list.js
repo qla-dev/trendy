@@ -52,10 +52,15 @@ $(function () {
           // Radni Nalog ID
           targets: 1,
           width: '46px',
+          type: 'num',
           render: function (data, type, full, meta) {
             var $nalogId = full['id'] || full['broj_naloga'];
-            // Creates full output for row
-            var $rowOutput = '<a class="fw-bold" href="' + invoicePreview + '/' + full['id'] + '"> #' + $nalogId + '</a>';
+            var numericSort = Number($nalogId);
+            var sortValue = Number.isFinite(numericSort) ? numericSort : $nalogId;
+            // Creates full output for row, include hidden sort helper
+            var $rowOutput =
+              '<span class="d-none">' + sortValue + '</span>' +
+              '<a class="fw-bold" href="' + invoicePreview + '/' + full['id'] + '"> #' + $nalogId + '</a>';
             return $rowOutput;
           }
         },
@@ -256,7 +261,7 @@ $(function () {
           }
         }
       ],
-      order: [[1, 'desc']],
+      order: [[1, 'asc']],
       dom:
         '<"row d-flex justify-content-between align-items-center m-1"' +
         '<"col-lg-6 d-flex align-items-center"l<"dt-action-buttons text-xl-end text-lg-start text-lg-end text-start "B>>' +

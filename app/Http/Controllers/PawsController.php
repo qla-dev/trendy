@@ -378,7 +378,7 @@ class PawsController extends Controller
     private function fetchWorkOrdersFromDb()
     {
         $orders = WorkOrder::with(['compositions', 'materials', 'operations'])
-            ->orderByDesc('created_at')
+            ->orderBy('id')
             ->get();
 
         if ($orders->isEmpty()) {

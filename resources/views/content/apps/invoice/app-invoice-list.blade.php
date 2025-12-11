@@ -42,7 +42,7 @@
   <!-- Status Cards Section -->
   <div class="row mb-2">
     <div class="col-12">
-      <div class="d-flex flex-wrap gap-2 status-cards-wrapper">
+      <div class="d-flex flex-wrap gap-1 status-cards-wrapper">
         <div class="status-card" data-status="svi">
           <div class="status-card-body">
             <div class="status-label">Svi</div>
@@ -65,12 +65,6 @@
           <div class="status-card-body">
             <div class="status-label">Rezerviran</div>
             <div class="status-count">{{ $statusStats['rezerviran'] ?? 0 }}</div>
-          </div>
-        </div>
-        <div class="status-card" data-status="raspisan">
-          <div class="status-card-body">
-            <div class="status-label">Raspisan</div>
-            <div class="status-count">{{ $statusStats['raspisan'] ?? 0 }}</div>
           </div>
         </div>
         <div class="status-card" data-status="u_radu">
