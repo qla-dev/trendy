@@ -33,21 +33,9 @@
     {
       "name": "Korisnici",
       "icon": "user",
-      "slug": "",
-      "submenu": [
-        {
-          "url": "app/user/list",
-          "name": "Upravljaj",
-          "icon": "list",
-          "slug": "app-user-list"
-        },
-        {
-          "url": "app/user/add",
-          "name": "Add",
-          "icon": "plus",
-          "slug": "app-user-add"
-        }
-      ]
+      "slug": "app-user-list",
+      "url": "app/user/list"
+ 
     },
     {
       "navheader": "Skladišni alati",
