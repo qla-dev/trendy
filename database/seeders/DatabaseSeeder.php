@@ -3,6 +3,9 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Database\Seeders\CompositionSeeder;
+use Database\Seeders\MaterialSeeder;
+use Database\Seeders\OperationSeeder;
 use Database\Seeders\WorkOrderSeeder;
 
 class DatabaseSeeder extends Seeder
@@ -19,6 +22,9 @@ class DatabaseSeeder extends Seeder
         $this->call([
             AdminUserSeeder::class,
             WorkOrderSeeder::class,
+            CompositionSeeder::class,
+            MaterialSeeder::class,
+            OperationSeeder::class,
         ]);
 
     }
