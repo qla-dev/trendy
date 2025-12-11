@@ -159,13 +159,13 @@ $sidebarPages = isset($menuData[0]) ? flatten_sidebar_menu_items($menuData[0]->m
 
 {{-- Search Start Here --}}
 <ul class="main-search-list-defaultlist d-none">
-  <li class="d-flex align-items-center">
-    <a href="javascript:void(0);">
-      <h6 class="section-label mt-75 mb-0">Files</h6>
-    </a>
-  </li>
+      <li class="d-flex align-items-center">
+        <a href="javascript:void(0);">
+          <h6 class="section-label mt-75 mb-0">Moji dokumenti</h6>
+        </a>
+      </li>
   <li class="auto-suggestion">
-    <a class="d-flex align-items-center justify-content-between w-100" href="{{ url('app/file-manager') }}">
+    <a class="d-flex align-items-center justify-content-between w-100" href="{{ url('drive/cloud-docs') }}">
       <div class="d-flex">
         <div class="me-75">
           <img src="{{ asset('images/icons/xls.png') }}" alt="png" height="32">
@@ -179,7 +179,7 @@ $sidebarPages = isset($menuData[0]) ? flatten_sidebar_menu_items($menuData[0]->m
     </a>
   </li>
   <li class="auto-suggestion">
-    <a class="d-flex align-items-center justify-content-between w-100" href="{{ url('app/file-manager') }}">
+    <a class="d-flex align-items-center justify-content-between w-100" href="{{ url('drive/cloud-docs') }}">
       <div class="d-flex">
         <div class="me-75">
           <img src="{{ asset('images/icons/jpg.png') }}" alt="png" height="32">
@@ -193,7 +193,7 @@ $sidebarPages = isset($menuData[0]) ? flatten_sidebar_menu_items($menuData[0]->m
     </a>
   </li>
   <li class="auto-suggestion">
-    <a class="d-flex align-items-center justify-content-between w-100" href="{{ url('app/file-manager') }}">
+    <a class="d-flex align-items-center justify-content-between w-100" href="{{ url('drive/cloud-docs') }}">
       <div class="d-flex">
         <div class="me-75">
           <img src="{{ asset('images/icons/pdf.png') }}" alt="png" height="32">
@@ -207,7 +207,7 @@ $sidebarPages = isset($menuData[0]) ? flatten_sidebar_menu_items($menuData[0]->m
     </a>
   </li>
   <li class="auto-suggestion">
-    <a class="d-flex align-items-center justify-content-between w-100" href="{{ url('app/file-manager') }}">
+    <a class="d-flex align-items-center justify-content-between w-100" href="{{ url('drive/cloud-docs') }}">
       <div class="d-flex">
         <div class="me-75">
           <img src="{{ asset('images/icons/doc.png') }}" alt="png" height="32">
@@ -220,63 +220,6 @@ $sidebarPages = isset($menuData[0]) ? flatten_sidebar_menu_items($menuData[0]->m
       <small class="search-data-size me-50 text-muted">&apos;256kb</small>
     </a>
   </li>
-  <li class="d-flex align-items-center">
-    <a href="javascript:void(0);">
-      <h6 class="section-label mt-75 mb-0">Members</h6>
-    </a>
-  </li>
-  <li class="auto-suggestion">
-    <a class="d-flex align-items-center justify-content-between py-50 w-100" href="{{ url('app/user/view') }}">
-      <div class="d-flex align-items-center">
-        <div class="avatar me-75">
-          <img src="{{ asset('images/portrait/small/avatar-s-8.jpg') }}" alt="png" height="32">
-        </div>
-        <div class="search-data">
-          <p class="search-data-title mb-0">John Doe</p>
-          <small class="text-muted">UI designer</small>
-        </div>
-      </div>
-    </a>
-  </li>
-  <li class="auto-suggestion">
-    <a class="d-flex align-items-center justify-content-between py-50 w-100" href="{{ url('app/user/view') }}">
-      <div class="d-flex align-items-center">
-        <div class="avatar me-75">
-          <img src="{{ asset('images/portrait/small/avatar-s-1.jpg') }}" alt="png" height="32">
-        </div>
-        <div class="search-data">
-          <p class="search-data-title mb-0">Michal Clark</p>
-          <small class="text-muted">FontEnd Developer</small>
-        </div>
-      </div>
-    </a>
-  </li>
-  <li class="auto-suggestion">
-    <a class="d-flex align-items-center justify-content-between py-50 w-100" href="{{ url('app/user/view') }}">
-      <div class="d-flex align-items-center">
-        <div class="avatar me-75">
-          <img src="{{ asset('images/portrait/small/avatar-s-14.jpg') }}" alt="png" height="32">
-        </div>
-        <div class="search-data">
-          <p class="search-data-title mb-0">Milena Gibson</p>
-          <small class="text-muted">Digital Marketing Manager</small>
-        </div>
-      </div>
-    </a>
-  </li>
-  <li class="auto-suggestion">
-    <a class="d-flex align-items-center justify-content-between py-50 w-100" href="{{ url('app/user/view') }}">
-      <div class="d-flex align-items-center">
-        <div class="avatar me-75">
-          <img src="{{ asset('images/portrait/small/avatar-s-6.jpg') }}" alt="png" height="32">
-        </div>
-        <div class="search-data">
-          <p class="search-data-title mb-0">Anna Strong</p>
-          <small class="text-muted">Web Designer</small>
-        </div>
-      </div>
-    </a>
-  </li>
 </ul>
 
 {{-- if main search not found! --}}
@@ -285,7 +228,7 @@ $sidebarPages = isset($menuData[0]) ? flatten_sidebar_menu_items($menuData[0]->m
     <a class="d-flex align-items-center justify-content-between w-100 py-50">
       <div class="d-flex justify-content-start">
         <span class="me-75" data-feather="alert-circle"></span>
-        <span>No results found.</span>
+        <span>Nema rezultata.</span>
       </div>
     </a>
   </li>

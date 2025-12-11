@@ -60,7 +60,7 @@ $(window).on('load', function () {
   // On load Toast
   setTimeout(function () {
     toastr['success'](
-      'Uspješno ste prijavljeni na eNalog.app!',
+      'Uspješna prijava na eNalog.app!',
       '👋 Dobrodošli!',
       {
         closeButton: true,
