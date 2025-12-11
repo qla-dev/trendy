@@ -1,7 +1,7 @@
 <?php
 
 return [
-    "Apps & Pages" => "Aplikacije i Stranice",
+    "Apps & Pages" => "Radni nalozi",
     "User Interface" => "Korisničko Sučelje",
     "Dashboards" => "Kontrolna ploča",
     "Analytics" => "Analitika",
@@ -154,6 +154,8 @@ return [
     "List" => "Lista",
     "Upravljaj" => "Upravljaj",
     "Radni nalozi" => "Radni nalozi",
+    "Upravljanje nalozima" => "Upravljanje nalozima",
+    "Skeniraj radni nalog" => "Skeniraj nalog",
     "View" => "Pregled",
     "Edit" => "Uredi",
     "Account Settings" => "Postavke Računa",

@@ -15,35 +15,16 @@
       "slug": ""
     },
     {
-      "name": "Radni nalozi",
+      "name": "Upravljanje nalozima",
       "icon": "file-text",
-      "slug": "",
-      "submenu": [
-        {
-          "url": "app/invoice/list",
-          "name": "Upravljaj",
-          "icon": "list",
-          "slug": "app-invoice-list"
-        },
-        {
-          "url": "app/invoice/preview",
-          "name": "Preview",
-          "icon": "eye",
-          "slug": "app-invoice-preview"
-        },
-        {
-          "url": "app/invoice/edit",
-          "name": "Edit",
-          "icon": "edit",
-          "slug": "app-invoice-edit"
-        },
-        {
-          "url": "app/invoice/add",
-          "name": "Add",
-          "icon": "plus",
-          "slug": "app-invoice-add"
-        }
-      ]
+      "url": "app/invoice/list",
+      "slug": "app-invoice-list"
+    },
+    {
+      "name": "Skeniraj radni nalog",
+      "icon": "camera",
+      "url": "app/invoice/preview",
+      "slug": "app-invoice-preview"
     },
     {
       "navheader": "Administracija",
