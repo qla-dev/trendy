@@ -35,7 +35,18 @@
       "icon": "user",
       "slug": "app-user-list",
       "url": "app/user/list"
- 
+    },
+    {
+      "name": "Pošiljatelji",
+      "icon": "send",
+      "url": "inventory/soon",
+      "slug": ""
+    },
+    {
+      "name": "Primatelji",
+      "icon": "mail",
+      "url": "inventory/soon",
+      "slug": ""
     },
     {
       "navheader": "Skladišni alati",

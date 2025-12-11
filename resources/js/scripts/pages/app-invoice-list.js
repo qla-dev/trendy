@@ -227,12 +227,11 @@ $(function () {
           render: function (data, type, full, meta) {
             return (
               '<div class="d-flex align-items-center col-actions">' +
-              '<a class="me-1" href="#" data-bs-toggle="tooltip" data-bs-placement="top" title="Pošalji Email">' +
-              feather.icons['send'].toSvg({ class: 'font-medium-2 text-body' }) +
-              '</a>' +
               '<a class="me-25" href="' +
               invoicePreview +
-              '" data-bs-toggle="tooltip" data-bs-placement="top" title="Pregled Radnog Naloga">' +
+              '/' +
+              full['id'] +
+              '" data-bs-toggle="tooltip" data-bs-placement="top" title="Pregled radnog naloga">' +
               feather.icons['eye'].toSvg({ class: 'font-medium-2 text-body' }) +
               '</a>' +
               '<div class="dropdown">' +

@@ -21,105 +21,92 @@
   <div class="row match-height">
     <!-- Medal Card -->
       <!-- Developer Meetup Card -->
-    <div class="col-lg-4 col-md-6 col-12">
-      <div class="card card-developer-meetup">
-        <div class="meetup-img-wrapper rounded-top text-center">
-          <img src="{{asset('images/illustration/email.svg')}}" alt="Meeting Pic" height="170" />
+  <div class="col-lg-4 col-md-6 col-12">
+  <div class="card card-developer-meetup">
+    <div class="meetup-img-wrapper rounded-top text-center">
+      <img src="{{ asset('images/illustration/email.svg') }}" alt="CNC proizvodnja" height="170" />
+    </div>
+
+    <div class="card-body">
+      <div class="meetup-header d-flex align-items-center">
+        <div class="meetup-day">
+          <h6 class="mb-0">ČET</h6>
+          <h3 class="mb-0">24</h3>
         </div>
-        <div class="card-body">
-          <div class="meetup-header d-flex align-items-center">
-            <div class="meetup-day">
-              <h6 class="mb-0">CET</h6>
-              <h3 class="mb-0">24</h3>
-            </div>
-            <div class="my-auto">
-              <h4 class="card-title mb-25">Sastanak programera</h4>
-              <p class="card-text mb-0">Upoznaj popularne programere iz svijeta</p>
-            </div>
-          </div>
-          <div class="mt-0">
-            <div class="avatar float-start bg-light-primary rounded me-1">
-              <div class="avatar-content">
-                <i data-feather="calendar" class="avatar-icon font-medium-3"></i>
-              </div>
-            </div>
-            <div class="more-info">
-              <h6 class="mb-0">Sub, maj 25, 2020</h6>
-              <small>10:00 do 18:00</small>
-            </div>
-          </div>
-          <div class="mt-2">
-            <div class="avatar float-start bg-light-primary rounded me-1">
-              <div class="avatar-content">
-                <i data-feather="map-pin" class="avatar-icon font-medium-3"></i>
-              </div>
-            </div>
-            <div class="more-info">
-              <h6 class="mb-0">Central Park</h6>
-              <small>Manhattan, New york City</small>
-            </div>
-          </div>
-          <div class="avatar-group">
-            <div
-              data-bs-toggle="tooltip"
-              data-popup="tooltip-custom"
-              data-bs-placement="bottom"
-              title="Billy Hopkins"
-              class="avatar pull-up"
-            >
-              <img src="{{asset('images/portrait/small/avatar-s-9.jpg')}}" alt="Avatar" width="33" height="33" />
-            </div>
-            <div
-              data-bs-toggle="tooltip"
-              data-popup="tooltip-custom"
-              data-bs-placement="bottom"
-              title="Amy Carson"
-              class="avatar pull-up"
-            >
-              <img src="{{asset('images/portrait/small/avatar-s-6.jpg')}}" alt="Avatar" width="33" height="33" />
-            </div>
-            <div
-              data-bs-toggle="tooltip"
-              data-popup="tooltip-custom"
-              data-bs-placement="bottom"
-              title="Brandon Miles"
-              class="avatar pull-up"
-            >
-              <img src="{{asset('images/portrait/small/avatar-s-8.jpg')}}" alt="Avatar" width="33" height="33" />
-            </div>
-            <div
-              data-bs-toggle="tooltip"
-              data-popup="tooltip-custom"
-              data-bs-placement="bottom"
-              title="Daisy Weber"
-              class="avatar pull-up"
-            >
-              <img
-                src="{{asset('images/portrait/small/avatar-s-20.jpg')}}"
-                alt="Avatar"
-                width="33"
-                height="33"
-              />
-            </div>
-            <div
-              data-bs-toggle="tooltip"
-              data-popup="tooltip-custom"
-              data-bs-placement="bottom"
-              title="Jenny Looper"
-              class="avatar pull-up"
-            >
-              <img
-                src="{{asset('images/portrait/small/avatar-s-20.jpg')}}"
-                alt="Avatar"
-                width="33"
-                height="33"
-              />
-            </div>
-            <h6 class="align-self-center cursor-pointer ms-50 mb-0">+42</h6>
-          </div>
+        <div class="my-auto">
+          <h4 class="card-title mb-25">
+            Uvodni sastanak sa GROB-WERKE 
+          </h4>
+          <p class="card-text mb-0">
+            Dogovor o saradnji vezanoj za CNC obradu metala – kapaciteti, cijene, rokovi isporuke i kvalitet.
+          </p>
         </div>
       </div>
+
+      <!-- Datum i vrijeme -->
+      <div class="mt-0">
+        <div class="avatar float-start bg-light-primary rounded me-1">
+          <div class="avatar-content">
+            <i data-feather="calendar" class="avatar-icon font-medium-3"></i>
+          </div>
+        </div>
+        <div class="more-info">
+          <h6 class="mb-0">Četvrtak, 24. decembar 2025.</h6>
+          <small>09:00 – 10:30</small>
+        </div>
+      </div>
+
+      <!-- Lokacija + šta mogu očekivati -->
+      <div class="mt-2">
+        <div class="avatar float-start bg-light-primary rounded me-1">
+          <div class="avatar-content">
+            <i data-feather="map-pin" class="avatar-icon font-medium-3"></i>
+          </div>
+        </div>
+        <div class="more-info">
+          <h6 class="mb-0">Online sastanak (Teams / Zoom)</h6>
+          <small>
+            Predstavljanje mašina (CNC glodanje i tokarenje), tipičnih serija, tolerancija,
+            površinske obrade, rokova isporuke i načina slanja tehničkih crteža.
+          </small>
+        </div>
+      </div>
+
+      <!-- Učesnici: s kim imaju sastanak -->
+      <div class="avatar-group mt-1">
+        <div
+          data-bs-toggle="tooltip"
+          data-popup="tooltip-custom"
+          data-bs-placement="bottom"
+          title="Direktor proizvodnje – Trendy d.o.o."
+          class="avatar pull-up"
+        >
+          <img src="{{ asset('images/portrait/small/avatar-s-9.jpg') }}" alt="Avatar" width="33" height="33" />
+        </div>
+        <div
+          data-bs-toggle="tooltip"
+          data-popup="tooltip-custom"
+          data-bs-placement="bottom"
+          title="Tehnički inženjer – Trendy d.o.o."
+          class="avatar pull-up"
+        >
+          <img src="{{ asset('images/portrait/small/avatar-s-6.jpg') }}" alt="Avatar" width="33" height="33" />
+        </div>
+        <div
+          data-bs-toggle="tooltip"
+          data-popup="tooltip-custom"
+          data-bs-placement="bottom"
+          title="Predstavnik nabavke vašeg preduzeća"
+          class="avatar pull-up"
+        >
+          <img src="{{ asset('images/portrait/small/avatar-s-8.jpg') }}" alt="Avatar" width="33" height="33" />
+        </div>
+        <h6 class="align-self-center cursor-pointer ms-50 mb-0">+ još učesnika po potrebi</h6>
+      </div>
     </div>
+  </div>
+</div>
+
     <!--/ Developer Meetup Card -->
     <!--/ Medal Card -->
 
@@ -176,7 +163,7 @@
                   </div>
                 </div>
                 <div class="my-auto">
-                  <h4 class="fw-bolder mb-0">$9745</h4>
+                  <h4 class="fw-bolder mb-0">9745 KM</h4>
                   <p class="card-text font-small-3 mb-0">Prihodi</p>
                 </div>
               </div>
@@ -190,7 +177,7 @@
         <div class="row mx-0">
           <div class="col-md-8 col-12 revenue-report-wrapper">
             <div class="d-sm-flex justify-content-between align-items-center mb-3">
-              <h4 class="card-title mb-50 mb-sm-0">Izvjestaj o prihodima</h4>
+              <h4 class="card-title mb-50 mb-sm-0">Izvještaj o prihodima</h4>
               <div class="d-flex align-items-center">
                 <div class="d-flex align-items-center me-2">
                   <span class="bullet bullet-primary font-small-3 me-50 cursor-pointer"></span>
@@ -198,7 +185,7 @@
                 </div>
                 <div class="d-flex align-items-center ms-75">
                   <span class="bullet bullet-warning font-small-3 me-50 cursor-pointer"></span>
-                  <span>Troskovi</span>
+                  <span>Troškovi</span>
                 </div>
               </div>
             </div>
@@ -221,13 +208,13 @@
                 <a class="dropdown-item" href="#">2018</a>
               </div>
             </div>
-            <h2 class="mb-25">$25,852</h2>
+            <h2 class="mb-25">25.852 KM</h2>
             <div class="d-flex justify-content-center">
-              <span class="fw-bolder me-25">Budzet:</span>
-              <span>56,800</span>
+              <span class="fw-bolder me-25">Budžet:</span>
+              <span>56.800 KM</span>
             </div>
             <div id="budget-chart"></div>
-            <button type="button" class="btn btn-primary">Povecaj budzet</button>
+            <button type="button" class="btn btn-primary">Povećaj budžet</button>
           </div>
         </div>
       </div>

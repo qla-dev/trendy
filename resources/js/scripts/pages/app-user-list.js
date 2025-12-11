@@ -153,6 +153,12 @@ $(function () {
               // '<a href="' + userView + '/' + full[6] + '" class="dropdown-item">' +
               // feather.icons['file-text'].toSvg({ class: 'font-small-4 me-50' }) +
               // 'Pregled</a>' +
+              '<a href="javascript:;" class="dropdown-item">' +
+              feather.icons['lock'].toSvg({ class: 'font-small-4 me-50' }) +
+              'Promijeni lozinku</a>' +
+              '<a href="javascript:;" class="dropdown-item">' +
+              feather.icons['edit'].toSvg({ class: 'font-small-4 me-50' }) +
+              'Uredi informacije</a>' +
               '<a href="javascript:;" class="dropdown-item delete-record" onclick="deleteUser(' + full[6] + ')">' +
               feather.icons['trash-2'].toSvg({ class: 'font-small-4 me-50' }) +
               'Obriši</a></div>' +

@@ -151,6 +151,8 @@ return [
     "User Settings" => "Korisničke Postavke",
     "User" => "Korisnik",
     "Korisnici" => "Korisnici",
+    "Pošiljatelji" => "Pošiljatelji",
+    "Primatelji" => "Primatelji",
     "List" => "Lista",
     "Upravljaj" => "Upravljaj",
     "Radni nalozi" => "Radni nalozi",
