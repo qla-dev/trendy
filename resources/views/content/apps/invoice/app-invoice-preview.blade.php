@@ -35,6 +35,14 @@
 </style>
 @endsection
 
+@php
+  $invoiceNumber = $invoiceNumber ?? '';
+  $issueDate = $issueDate ?? '';
+  $dueDate = $dueDate ?? '';
+  $sender = $sender ?? ['name' => '', 'address' => '', 'phone' => '', 'email' => ''];
+  $recipient = $recipient ?? ['name' => '', 'address' => '', 'phone' => '', 'email' => ''];
+@endphp
+
 @section('content')
 <section class="invoice-preview-wrapper">
   <div class="row invoice-preview">
