@@ -38,7 +38,7 @@
                   </g>
                 </g>
               </svg></span>
-            <h2 class="brand-text mb-0">eNalog.app</h2>
+            <h2 class="brand-text mb-0 {{ in_array($configData['theme'] ?? 'light', ['dark', 'semi-dark']) ? 'text-white' : '' }}">eNalog.app</h2>
           </a>
         </li>
       </ul>
