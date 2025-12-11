@@ -46,79 +46,26 @@
           <div class="d-flex justify-content-between flex-md-row flex-column invoice-spacing mt-0">
             <div>
               <div class="logo-wrapper">
-                <svg
-                  viewBox="0 0 139 95"
-                  version="1.1"
-                  xmlns="http://www.w3.org/2000/svg"
-                  xmlns:xlink="http://www.w3.org/1999/xlink"
-                  height="24"
-                >
-                  <defs>
-                    <linearGradient id="invoice-linearGradient-1" x1="100%" y1="10.5120544%" x2="50%" y2="89.4879456%">
-                      <stop stop-color="#000000" offset="0%"></stop>
-                      <stop stop-color="#FFFFFF" offset="100%"></stop>
-                    </linearGradient>
-                    <linearGradient
-                      id="invoice-linearGradient-2"
-                      x1="64.0437835%"
-                      y1="46.3276743%"
-                      x2="37.373316%"
-                      y2="100%"
-                    >
-                      <stop stop-color="#EEEEEE" stop-opacity="0" offset="0%"></stop>
-                      <stop stop-color="#FFFFFF" offset="100%"></stop>
-                    </linearGradient>
-                  </defs>
-                  <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-                    <g transform="translate(-400.000000, -178.000000)">
-                      <g transform="translate(400.000000, 178.000000)">
-                        <path
-                          class="text-primary"
-                          d="M-5.68434189e-14,2.84217094e-14 L39.1816085,2.84217094e-14 L69.3453773,32.2519224 L101.428699,2.84217094e-14 L138.784583,2.84217094e-14 L138.784199,29.8015838 C137.958931,37.3510206 135.784352,42.5567762 132.260463,45.4188507 C128.736573,48.2809251 112.33867,64.5239941 83.0667527,94.1480575 L56.2750821,94.1480575 L6.71554594,44.4188507 C2.46876683,39.9813776 0.345377275,35.1089553 0.345377275,29.8015838 C0.345377275,24.4942122 0.230251516,14.560351 -5.68434189e-14,2.84217094e-14 Z"
-                          style="fill: currentColor"
-                        ></path>
-                        <path
-                          d="M69.3453773,32.2519224 L101.428699,1.42108547e-14 L138.784583,1.42108547e-14 L138.784199,29.8015838 C137.958931,37.3510206 135.784352,42.5567762 132.260463,45.4188507 C128.736573,48.2809251 112.33867,64.5239941 83.0667527,94.1480575 L56.2750821,94.1480575 L32.8435758,70.5039241 L69.3453773,32.2519224 Z"
-                          fill="url(#invoice-linearGradient-1)"
-                          opacity="0.2"
-                        ></path>
-                        <polygon
-                          fill="#000000"
-                          opacity="0.049999997"
-                          points="69.3922914 32.4202615 32.8435758 70.5039241 54.0490008 16.1851325"
-                        ></polygon>
-                        <polygon
-                          fill="#000000"
-                          opacity="0.099999994"
-                          points="69.3922914 32.4202615 32.8435758 70.5039241 58.3683556 20.7402338"
-                        ></polygon>
-                        <polygon
-                          fill="url(#invoice-linearGradient-2)"
-                          opacity="0.099999994"
-                          points="101.428699 0 83.0667527 94.1480575 130.378721 47.0740288"
-                        ></polygon>
-                      </g>
-                    </g>
-                  </g>
-                </svg>
+                <img src="{{ asset('/images/logo/TrendyCNC.png') }}" alt="Trendy d.o.o." width="50" height="auto">
                 <h3 class="text-primary invoice-logo">eNalog.app</h3>
               </div>
               <p class="card-text mb-25">Trendy d.o.o.</p>
-              <p class="card-text mb-25">Bratstvo 11, 72290, NOVI TRAVNIK, BiH</p>
+              <p class="card-text mb-25">Bratstvo 11, 72290, Novi Travnik, BiH</p>
               <p class="card-text mb-0">+387 30 525 252</p>
+              <p class="card-text mb-0">info@trendy.ba</p>
             </div>
             <div class="mt-md-0 mt-2 d-flex align-items-center justify-content-end">
               <div class="me-3">
                 <h4 class="invoice-title">
-                  <span>RN<span class="invoice-number">#2401000000005</span></span>
+                  <span>RN<span class="invoice-number">{{ $invoiceNumber }}</span></span>
                 </h4>
                 <div class="invoice-date-wrapper">
                   <p class="invoice-date-title">Datum izdavanja:</p>
-                  <p class="invoice-date">25/08/2020</p>
+                  <p class="invoice-date">{{ $issueDate }}</p>
                 </div>
                 <div class="invoice-date-wrapper">
                   <p class="invoice-date-title">Datum dospijeća:</p>
-                  <p class="invoice-date">29/08/2020</p>
+                  <p class="invoice-date">{{ $dueDate }}</p>
                 </div>
               </div>
               <img src="https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg" alt="QR Code" style="width: 120px; height: 120px; border: 1px solid #dee2e6; border-radius: 4px; padding: 8px; background: white;">
@@ -132,19 +79,36 @@
         <!-- Address and Contact starts -->
         <div class="card-body invoice-padding pt-0">
           <div class="row invoice-spacing">
-            <div class="col-xl-8 col-md-6 p-0">
-              <h6 class="mb-2">Naručitelj:</h6>
-              <h6 class="mb-25">Metro d.o.o.</h6>
-              <p class="card-text mb-25">Titova 45, 71000 Sarajevo, B&H</p>
-              <p class="card-text mb-25">+387 33 123 456</p>
-              <p class="card-text mb-0">info@metro.ba</p>
+            <div class="col-xl-4 col-md-6 p-0">
+              <h6 class="mb-2">Pošiljatelj:</h6>
+              @if($sender['name'])
+                <h6 class="mb-25">{{ $sender['name'] }}</h6>
+              @endif
+              @if($sender['address'])
+                <p class="card-text mb-25">{{ $sender['address'] }}</p>
+              @endif
+              @if($sender['phone'])
+                <p class="card-text mb-25">{{ $sender['phone'] }}</p>
+              @endif
+              @if($sender['email'])
+                <p class="card-text mb-0">{{ $sender['email'] }}</p>
+              @endif
             </div>
-            <div class="col-xl-4 col-md-6 p-0 mt-xl-0 mt-md-0 mt-2 ">
+            <div class="col-xl-4 d-none d-xl-block"></div>
+            <div class="col-xl-4 col-md-6 p-0">
               <h6 class="mb-2">Primatelj:</h6>
-              <h6 class="mb-25">Bingo d.o.o.</h6>
-              <p class="card-text mb-25">Grbavička 12, 71000 Sarajevo, B&H</p>
-              <p class="card-text mb-25">+387 33 789 012</p>
-              <p class="card-text mb-0">info@bingo.ba</p>
+              @if($recipient['name'])
+                <h6 class="mb-25">{{ $recipient['name'] }}</h6>
+              @endif
+              @if($recipient['address'])
+                <p class="card-text mb-25">{{ $recipient['address'] }}</p>
+              @endif
+              @if($recipient['phone'])
+                <p class="card-text mb-25">{{ $recipient['phone'] }}</p>
+              @endif
+              @if($recipient['email'])
+                <p class="card-text mb-0">{{ $recipient['email'] }}</p>
+              @endif
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\WorkOrder;
 
 class AppsController extends Controller
 {
@@ -15,11 +16,55 @@ class AppsController extends Controller
     }
 
     // invoice preview App
-    public function invoice_preview()
+    public function invoice_preview(Request $request, $id = null)
     {
         $pageConfigs = ['pageHeader' => false];
+        $invoiceId = $id ?? $request->query('id');
+        $workOrder = $invoiceId
+            ? WorkOrder::with(['compositions', 'materials', 'operations'])->find($invoiceId)
+            : null;
 
-        return view('/content/apps/invoice/app-invoice-preview', ['pageConfigs' => $pageConfigs]);
+        $sender = [
+            'name' => '',
+            'address' => '',
+            'phone' => '',
+            'email' => ''
+        ];
+        $recipient = [
+            'name' => '',
+            'address' => '',
+            'phone' => '',
+            'email' => ''
+        ];
+
+        if ($workOrder) {
+            $sender = [
+                'name' => $workOrder->client_name ?? '',
+                'address' => $workOrder->client_address ?? '',
+                'phone' => $workOrder->client_phone ?? '',
+                'email' => $workOrder->client_email ?? '',
+            ];
+            $recipient = [
+                'name' => $workOrder->recipient_name ?? '',
+                'address' => $workOrder->recipient_address ?? '',
+                'phone' => $workOrder->recipient_phone ?? '',
+                'email' => $workOrder->recipient_email ?? '',
+            ];
+        }
+
+        $invoiceNumber = $workOrder->work_order_number ?? '';
+        $issueDate = $workOrder && $workOrder->planned_start ? optional($workOrder->planned_start)->format('d.m.Y') : '';
+        $dueDate = $workOrder && $workOrder->created_at ? optional($workOrder->created_at)->format('d.m.Y') : '';
+
+        return view('/content/apps/invoice/app-invoice-preview', [
+            'pageConfigs' => $pageConfigs,
+            'workOrder' => $workOrder,
+            'sender' => $sender,
+            'recipient' => $recipient,
+            'invoiceNumber' => $invoiceNumber,
+            'issueDate' => $issueDate,
+            'dueDate' => $dueDate
+        ]);
     }
 
     // invoice edit App

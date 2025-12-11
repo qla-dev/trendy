@@ -34,6 +34,13 @@ class WorkOrder extends Model
         'notes',
     ];
 
+    protected $casts = [
+        'planned_start' => 'datetime',
+        'planned_end' => 'datetime',
+        'actual_start' => 'datetime',
+        'actual_end' => 'datetime',
+    ];
+
     public function compositions()
     {
         return $this->hasMany(Composition::class);
