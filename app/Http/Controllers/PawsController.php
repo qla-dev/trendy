@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\WorkOrder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -119,6 +120,15 @@ class PawsController extends Controller
     public function radniNaloziList()
     {
         $pageConfigs = ['pageHeader' => false];
+        $localData = $this->fetchWorkOrdersFromDb();
+        if (!empty($localData)) {
+            return view('/content/apps/invoice/app-invoice-list', [
+                'pageConfigs' => $pageConfigs,
+                'radniNalozi' => $localData,
+                'statusStats' => $this->calculateStatusStats($localData),
+                'data_source' => 'local'
+            ]);
+        }
         
         try {
             // Fetch radni nalozi from PAWS system
@@ -360,6 +370,83 @@ class PawsController extends Controller
                 'magacin' => 'Mrežni magacin'
             ]
         ];
+    }
+
+    /**
+     * Fetch work orders stored locally in our database
+     */
+    private function fetchWorkOrdersFromDb()
+    {
+        $orders = WorkOrder::with(['compositions', 'materials', 'operations'])
+            ->orderByDesc('created_at')
+            ->get();
+
+        if ($orders->isEmpty()) {
+            return [];
+        }
+
+        return $orders->map(function (WorkOrder $order) {
+            return [
+                'responsive_id' => '',
+                'id' => $order->id,
+                'broj_naloga' => $order->work_order_number,
+                'naziv' => $order->title,
+                'opis' => $order->description,
+                'status' => $order->status,
+                'prioritet' => $order->priority,
+                'datum_kreiranja' => optional($order->created_at)->format('Y-m-d'),
+                'datum_zavrsetka' => optional($order->actual_end)->format('Y-m-d'),
+                'dodeljen_korisnik' => $order->created_by,
+                'klijent' => $order->client_name,
+                'vrednost' => $order->total,
+                'valuta' => $order->currency,
+                'magacin' => $order->linked_document,
+                'compositions' => $order->compositions->map(function ($item) {
+                    return [
+                        'alternative' => (bool) $item->alternative,
+                        'position' => $item->position,
+                        'article_code' => $item->article_code,
+                        'description' => $item->description,
+                        'image_url' => $item->image_url,
+                        'note' => $item->note,
+                        'quantity' => $item->quantity,
+                        'unit' => $item->unit,
+                        'series' => $item->series,
+                        'normative' => $item->normative,
+                        'active' => (bool) $item->active,
+                        'final' => (bool) $item->final,
+                        'va' => $item->va,
+                        'primary_class' => $item->primary_class,
+                        'secondary_class' => $item->secondary_class,
+                    ];
+                })->toArray(),
+                'materials' => $order->materials->map(function ($item) {
+                    return [
+                        'position' => $item->position,
+                        'material_code' => $item->material_code,
+                        'name' => $item->name,
+                        'quantity' => $item->quantity,
+                        'unit' => $item->unit,
+                        'note' => $item->note,
+                    ];
+                })->toArray(),
+                'operations' => $order->operations->map(function ($item) {
+                    return [
+                        'alternative' => (bool) $item->alternative,
+                        'position' => $item->position,
+                        'operation_code' => $item->operation_code,
+                        'name' => $item->name,
+                        'note' => $item->note,
+                        'unit' => $item->unit,
+                        'unit_value' => $item->unit_value,
+                        'normative' => $item->normative,
+                        'va' => $item->va,
+                        'primary_class' => $item->primary_class,
+                        'secondary_class' => $item->secondary_class,
+                    ];
+                })->toArray(),
+            ];
+        })->toArray();
     }
 
     /**

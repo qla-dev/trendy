@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Database\Seeders\WorkOrderSeeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -17,17 +18,8 @@ class DatabaseSeeder extends Seeder
 
         $this->call([
             AdminUserSeeder::class,
+            WorkOrderSeeder::class,
         ]);
 
-        // Create a test user for login testing
-        \App\Models\User::firstOrCreate(
-            ['email' => 'test@example.com'],
-            [
-                'name' => 'Test User',
-                'username' => 'test-user',
-                'password' => bcrypt('password123'),
-                'role' => 'admin',
-            ]
-        );
     }
 }

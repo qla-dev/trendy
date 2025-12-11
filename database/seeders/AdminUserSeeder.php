@@ -15,17 +15,24 @@ class AdminUserSeeder extends Seeder
      */
     public function run()
     {
-        $admin = User::firstOrNew(['username' => 'admin']);
+        $demoAdmin = User::updateOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'name' => 'Demo Admin',
+                'username' => 'admin',
+                'role' => 'admin',
+                'password' => Hash::make('password123'),
+            ]
+        );
 
-        $admin->name = 'Administrator';
-        $admin->email = 'admin@trendy.local';
-        $admin->role = 'admin';
-        $admin->username = 'admin';
-
-        if (! $admin->exists) {
-            $admin->password = Hash::make('password1234');
-        }
-
-        $admin->save();
+        User::updateOrCreate(
+            ['email' => 'user@example.com'],
+            [
+                'name' => 'Demo User',
+                'username' => 'user',
+                'role' => 'user',
+                'password' => Hash::make('password123'),
+            ]
+        );
     }
 }
