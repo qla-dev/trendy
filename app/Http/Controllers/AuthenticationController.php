@@ -52,7 +52,11 @@ class AuthenticationController extends Controller
 
         if (Auth::attempt($credentials, $remember)) {
             $request->session()->regenerate();
-            
+
+            if (Auth::user() && Auth::user()->hasRole('user')) {
+                return redirect()->intended(route('app-invoice-preview'));
+            }
+
             return redirect()->intended(route('dashboard-ecommerce'));
         }
 

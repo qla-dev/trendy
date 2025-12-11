@@ -72,18 +72,14 @@ class MenuServiceProvider extends ServiceProvider
         }
 
         $filteredMenu = [];
-        foreach ($menuData->menu as $menu) {
-            if (isset($menu->name) && $menu->name === 'Radni nalozi') {
-                if (isset($menu->submenu) && is_array($menu->submenu)) {
-                    $menu->submenu = array_values(
-                        array_filter($menu->submenu, function ($item) {
-                            return !isset($item->slug) || $item->slug !== 'app-invoice-list';
-                        })
-                    );
-                }
+        $filteredMenu[] = (object)[
+            'navheader' => 'RADNI NALOZI',
+            'slug' => ''
+        ];
 
+        foreach ($menuData->menu as $menu) {
+            if (isset($menu->slug) && $menu->slug === 'app-invoice-preview') {
                 $filteredMenu[] = $menu;
-                break;
             }
         }
 
