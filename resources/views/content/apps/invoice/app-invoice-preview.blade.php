@@ -32,6 +32,12 @@
   .invoice-preview .invoice-date-wrapper .invoice-date-title, .invoice-edit .invoice-date-wrapper .invoice-date-title, .invoice-add .invoice-date-wrapper .invoice-date-title {
     width: unset;
   }
+  .invoice-actions .btn {
+    color: #5e5873;
+  }
+  .invoice-actions .btn i {
+    color: inherit;
+  }
 </style>
 @endsection
 
@@ -229,6 +235,12 @@
           <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#sirovina-scanner-modal">
             <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Dodaj sirovinu
           </button>
+          <button class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" onclick="alert('Uskoro')">
+            <i class="fa fa-cubes me-50" style="font-size: 20px;"></i> Dodaj materijal
+          </button>
+          <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" onclick="alert('Uskoro')">
+            <i class="fa fa-cogs me-50" style="font-size: 20px;"></i> Dodaj operaciju
+          </button>
           <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#send-invoice-sidebar">
             <i class="fa fa-paper-plane me-50"></i> Pošalji
           </button>
@@ -280,7 +292,7 @@
               type="text"
               class="form-control"
               id="invoice-subject"
-              value="Faktura za kupljene Admin Template"
+              value="Faktura za Trendy d.o.o."
               placeholder="Faktura u vezi robe"
             />
           </div>

@@ -32,7 +32,7 @@
     </div>
     <div class="content-header-right text-md-end col-md-3 col-12 d-md-block d-none">
       <div class="mb-1 breadcrumb-right">
-        <button type="button" class="btn btn-primary" id="btn-add-radni-nalog">
+        <button type="button" class="btn btn-primary" id="btn-add">
           <i data-feather="plus" class="me-50"></i> Dodaj radni nalog
         </button>
       </div>
