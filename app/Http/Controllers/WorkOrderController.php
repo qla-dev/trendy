@@ -26,7 +26,7 @@ class WorkOrderController extends Controller
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order list query failed.', [
-                'connection' => $this->connectionName(),
+                'connection' => config('database.default'),
                 'table' => $this->qualifiedTableName(),
                 'message' => $exception->getMessage(),
             ]);
@@ -86,7 +86,7 @@ class WorkOrderController extends Controller
         } catch (Throwable $exception) {
             Log::error('Work order preview query failed.', [
                 'id' => $workOrderId,
-                'connection' => $this->connectionName(),
+                'connection' => config('database.default'),
                 'table' => $this->qualifiedTableName(),
                 'message' => $exception->getMessage(),
             ]);
@@ -108,13 +108,13 @@ class WorkOrderController extends Controller
                 'meta' => [
                     'count' => count($orders),
                     'limit' => $this->resolveLimit($requestedLimit),
-                    'connection' => $this->connectionName(),
+                    'connection' => config('database.default'),
                     'table' => $this->qualifiedTableName(),
                 ],
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order API list query failed.', [
-                'connection' => $this->connectionName(),
+                'connection' => config('database.default'),
                 'table' => $this->qualifiedTableName(),
                 'message' => $exception->getMessage(),
             ]);
@@ -142,7 +142,7 @@ class WorkOrderController extends Controller
         } catch (Throwable $exception) {
             Log::error('Work order API show query failed.', [
                 'id' => $id,
-                'connection' => $this->connectionName(),
+                'connection' => config('database.default'),
                 'table' => $this->qualifiedTableName(),
                 'message' => $exception->getMessage(),
             ]);
@@ -393,8 +393,7 @@ class WorkOrderController extends Controller
 
     private function tableColumns(): array
     {
-        return DB::connection($this->connectionName())
-            ->table('INFORMATION_SCHEMA.COLUMNS')
+        return DB::table('INFORMATION_SCHEMA.COLUMNS')
             ->where('TABLE_SCHEMA', $this->tableSchema())
             ->where('TABLE_NAME', $this->tableName())
             ->pluck('COLUMN_NAME')
@@ -475,7 +474,7 @@ class WorkOrderController extends Controller
 
     private function newTableQuery(): Builder
     {
-        return DB::connection($this->connectionName())->table($this->qualifiedTableName());
+        return DB::table($this->qualifiedTableName());
     }
 
     private function resolveLimit(?int $requestedLimit = null): int
@@ -489,11 +488,6 @@ class WorkOrderController extends Controller
         }
 
         return min($limit, $maxLimit);
-    }
-
-    private function connectionName(): string
-    {
-        return (string) config('workorders.connection', 'workorders_sqlsrv');
     }
 
     private function tableSchema(): string
