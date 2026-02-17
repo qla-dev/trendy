@@ -91,6 +91,19 @@ return [
             'prefix_indexes' => true,
         ],
 
+        'workorders_sqlsrv' => [
+            'driver' => 'sqlsrv',
+            'url' => env('WORK_ORDERS_DB_URL'),
+            'host' => env('WORK_ORDERS_DB_HOST', 'localhost'),
+            'port' => env('WORK_ORDERS_DB_PORT', '1433'),
+            'database' => env('WORK_ORDERS_DB_DATABASE', 'forge'),
+            'username' => env('WORK_ORDERS_DB_USERNAME', 'forge'),
+            'password' => env('WORK_ORDERS_DB_PASSWORD', ''),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+        ],
+
     ],
 
     /*

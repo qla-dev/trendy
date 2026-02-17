@@ -27,7 +27,7 @@ $(function () {
   // datatable
   if (dtInvoiceTable.length) {
     var dtInvoice = dtInvoiceTable.DataTable({
-      data: window.radniNaloziData || [], // Use data from PawsController
+      data: window.radniNaloziData || [],
       autoWidth: false,
       columns: [
         // columns according to PAWS data structure
@@ -71,16 +71,25 @@ $(function () {
           render: function (data, type, full, meta) {
             var $status = full['status'],
               $datumZavrsetka = full['datum_zavrsetka'],
-              $vrednost = full['vrednost'],
-              roleObj = {
-                'Završeno': { class: 'bg-light-success', icon: 'check-circle' },
-                'U toku': { class: 'bg-light-warning', icon: 'clock' },
-                'Novo': { class: 'bg-light-primary', icon: 'plus-circle' },
-                'Otkažano': { class: 'bg-light-danger', icon: 'x-circle' },
-                'Nacrt': { class: 'bg-light-info', icon: 'edit' }
-              };
-            
-            var statusConfig = roleObj[$status] || { class: 'bg-light-secondary', icon: 'help-circle' };
+              $vrednost = full['vrednost'];
+            var normalizedStatus = ($status || '').toString().toLowerCase();
+            var statusConfig = { class: 'bg-light-secondary', icon: 'help-circle' };
+
+            if (normalizedStatus.includes('zavr') || normalizedStatus.includes('zaklj')) {
+              statusConfig = { class: 'bg-light-success', icon: 'check-circle' };
+            } else if (normalizedStatus.includes('u toku') || normalizedStatus.includes('u radu')) {
+              statusConfig = { class: 'bg-light-warning', icon: 'clock' };
+            } else if (
+              normalizedStatus.includes('novo') ||
+              normalizedStatus.includes('planiran') ||
+              normalizedStatus.includes('otvoren')
+            ) {
+              statusConfig = { class: 'bg-light-primary', icon: 'plus-circle' };
+            } else if (normalizedStatus.includes('otkaz')) {
+              statusConfig = { class: 'bg-light-danger', icon: 'x-circle' };
+            } else if (normalizedStatus.includes('nacrt')) {
+              statusConfig = { class: 'bg-light-info', icon: 'edit' };
+            }
             
             return (
               "<span data-bs-toggle='tooltip' data-bs-html='true' title='<span>" +
@@ -174,24 +183,29 @@ $(function () {
             var $status = full['status'];
             var $badge_class = 'badge-light-secondary';
             var $text_color = '';
-            
-            if ($status === 'Završeno') {
+            var normalizedStatus = ($status || '').toString().toLowerCase();
+
+            if (normalizedStatus.includes('zavr') || normalizedStatus.includes('zaklj')) {
               $badge_class = 'badge-light-success';
               $text_color = 'text-success';
-            } else if ($status === 'U toku') {
+            } else if (normalizedStatus.includes('u toku') || normalizedStatus.includes('u radu')) {
               $badge_class = 'badge-light-warning';
               $text_color = 'text-warning';
-            } else if ($status === 'Novo') {
+            } else if (
+              normalizedStatus.includes('novo') ||
+              normalizedStatus.includes('planiran') ||
+              normalizedStatus.includes('otvoren')
+            ) {
               $badge_class = 'badge-light-primary';
               $text_color = 'text-primary';
-            } else if ($status === 'Otkažano') {
+            } else if (normalizedStatus.includes('otkaz')) {
               $badge_class = 'badge-light-danger';
               $text_color = 'text-danger';
-            } else if ($status === 'Nacrt') {
+            } else if (normalizedStatus.includes('nacrt')) {
               $badge_class = 'badge-light-info';
               $text_color = 'text-info';
             }
-            
+
             return '<span class="badge rounded-pill ' + $badge_class + ' ' + $text_color + '" text-capitalized> ' + $status + ' </span>';
           }
         },
@@ -203,14 +217,15 @@ $(function () {
             var $priority = full['prioritet'];
             var $badge_class = 'badge-light-secondary';
             var $text_color = '';
-            
-            if ($priority === 'Visok' || $priority === 'z' || $priority === 'Z') {
+            var normalizedPriority = ($priority || '').toString().toLowerCase();
+
+            if (normalizedPriority === 'visok' || normalizedPriority === 'z' || normalizedPriority === 'high') {
               $badge_class = 'badge-light-danger';
               $text_color = 'text-danger';
-            } else if ($priority === 'Srednji') {
+            } else if (normalizedPriority === 'srednji' || normalizedPriority === 's' || normalizedPriority === 'medium') {
               $badge_class = 'badge-light-warning';
               $text_color = 'text-warning';
-            } else if ($priority === 'Nizak' || $priority === 'd' || $priority === 'D') {
+            } else if (normalizedPriority === 'nizak' || normalizedPriority === 'd' || normalizedPriority === 'low') {
               $badge_class = 'badge-light-info';
               $text_color = 'text-info';
             }
@@ -334,7 +349,7 @@ $(function () {
     });
 
     // Handle "Dodaj radni nalog" button click
-    $('#btn-add-radni-nalog').on('click', function() {
+    $('#btn-add').on('click', function() {
       window.location = invoiceAdd;
     });
 
@@ -405,10 +420,10 @@ $(function () {
                 statusMatch = rowStatus.includes('u toku') || rowStatus.includes('u radu');
                 break;
               case 'djelimicno_zakljucen':
-                statusMatch = rowStatus.includes('djelimično') || rowStatus.includes('djelimicno');
+                statusMatch = rowStatus.includes('djelimicno') || rowStatus.includes('djelomicno');
                 break;
               case 'zakljucen':
-                statusMatch = rowStatus.includes('završeno') || rowStatus.includes('zaključen') || rowStatus.includes('zakljucen');
+                statusMatch = rowStatus.includes('zavr') || rowStatus.includes('zaklj');
                 break;
             }
             

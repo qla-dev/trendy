@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\WorkOrderController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -17,3 +18,6 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+Route::get('/work-orders', [WorkOrderController::class, 'index'])->name('api.work-orders.index');
+Route::get('/work-orders/{id}', [WorkOrderController::class, 'show'])->name('api.work-orders.show');
