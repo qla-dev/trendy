@@ -871,6 +871,13 @@ class WorkOrderController extends Controller
 
         $statusString = trim((string) $status);
         $normalizedStatus = strtoupper($statusString);
+        $normalizedStatus = strtr($normalizedStatus, [
+            'Š' => 'S',
+            'Đ' => 'DJ',
+            'Č' => 'C',
+            'Ć' => 'C',
+            'Ž' => 'Z',
+        ]);
 
         $statusMap = [
             'F' => 'Zavrseno',
@@ -880,20 +887,19 @@ class WorkOrderController extends Controller
             'C' => 'Otkazano',
             'D' => 'Raspisan',
             'O' => 'Otvoren',
-            'R' => 'Djelimično zaključen',
+            'R' => 'Djelimicno zakljucen',
             'S' => 'Raspisan',
             'E' => 'U radu',
             'Z' => 'Zakljucen',
             'PLANIRAN' => 'Planiran',
             'OTVOREN' => 'Otvoren',
-            'REZERVIRAN' => 'Djelimično zaključen',
-            'DJELIMICNO ZAKLJUCEN' => 'Rezerviran',
-            'DJELOMICNO ZAKLJUCEN' => 'Rezerviran',
+            'REZERVIRAN' => 'Rezerviran',
+            'DJELIMICNO ZAKLJUCEN' => 'Djelimično zaključen',
             'RASPISAN' => 'Raspisan',
             'U TOKU' => 'U toku',
             'U RADU' => 'U toku',
-            'ZAVRSENO' => 'Zakljucen',
-            'ZAKLJUCEN' => 'Zakljucen',
+            'ZAVRSENO' => 'Zaključen',
+            'ZAKLJUCEN' => 'Zaključen',
         ];
 
         return $statusMap[$normalizedStatus] ?? $statusString;

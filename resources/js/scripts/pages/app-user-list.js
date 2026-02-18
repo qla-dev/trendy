@@ -156,9 +156,6 @@ $(function () {
               '<a href="javascript:;" class="dropdown-item">' +
               feather.icons['lock'].toSvg({ class: 'font-small-4 me-50' }) +
               'Promijeni lozinku</a>' +
-              '<a href="javascript:;" class="dropdown-item">' +
-              feather.icons['edit'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Uredi informacije</a>' +
               '<a href="javascript:;" class="dropdown-item delete-record" onclick="deleteUser(' + full[6] + ')">' +
               feather.icons['trash-2'].toSvg({ class: 'font-small-4 me-50' }) +
               'Obriši</a></div>' +
@@ -172,9 +169,9 @@ $(function () {
       dom:
         '<"d-flex justify-content-between align-items-center header-actions mx-2 row mt-75"' +
         '<"col-sm-12 col-lg-4 d-flex justify-content-center justify-content-lg-start" l>' +
-        '<"col-sm-12 col-lg-8 ps-xl-75 ps-0"<"dt-action-buttons d-flex align-items-center justify-content-center justify-content-lg-end flex-lg-nowrap flex-wrap"<"me-1"f>B>>' +
+        '<"col-sm-12 col-lg-8 ps-xl-75 ps-0"<"dt-action-buttons d-flex align-items-center justify-content-center justify-content-lg-end flex-lg-nowrap flex-wrap"<"me-1"f>>>' +
         '>t' +
-        '<"d-flex justify-content-between mx-2 row mb-1"' +
+        '<"d-flex justify-content-between mx-2 row"' +
         '<"col-sm-12 col-md-6"i>' +
         '<"col-sm-12 col-md-6"p>' +
         '>',
@@ -203,53 +200,6 @@ $(function () {
           "sSortDescending": ": aktiviraj za opadajuće sortiranje kolone"
         }
       },
-      // Buttons with Dropdown
-      buttons: [
-        {
-          extend: 'collection',
-          className: 'btn btn-outline-secondary dropdown-toggle me-2',
-          text: feather.icons['external-link'].toSvg({ class: 'font-small-4 me-50' }) + 'Izvoz',
-          buttons: [
-            {
-              extend: 'print',
-              text: feather.icons['printer'].toSvg({ class: 'font-small-4 me-50' }) + 'Štampaj',
-              className: 'dropdown-item',
-              exportOptions: { columns: [1, 2, 3, 4, 5] }
-            },
-            {
-              extend: 'csv',
-              text: feather.icons['file-text'].toSvg({ class: 'font-small-4 me-50' }) + 'CSV',
-              className: 'dropdown-item',
-              exportOptions: { columns: [1, 2, 3, 4, 5] }
-            },
-            {
-              extend: 'excel',
-              text: feather.icons['file'].toSvg({ class: 'font-small-4 me-50' }) + 'Excel',
-              className: 'dropdown-item',
-              exportOptions: { columns: [1, 2, 3, 4, 5] }
-            },
-            {
-              extend: 'pdf',
-              text: feather.icons['clipboard'].toSvg({ class: 'font-small-4 me-50' }) + 'PDF',
-              className: 'dropdown-item',
-              exportOptions: { columns: [1, 2, 3, 4, 5] }
-            },
-            {
-              extend: 'copy',
-              text: feather.icons['copy'].toSvg({ class: 'font-small-4 me-50' }) + 'Kopiraj',
-              className: 'dropdown-item',
-              exportOptions: { columns: [1, 2, 3, 4, 5] }
-            }
-          ],
-          init: function (api, node, config) {
-            $(node).removeClass('btn-secondary');
-            $(node).parent().removeClass('btn-group');
-            setTimeout(function () {
-              $(node).closest('.dt-buttons').removeClass('btn-group').addClass('d-inline-flex mt-50');
-            }, 50);
-          }
-        },
-      ],
       // For responsive popup
       responsive: {
         details: {

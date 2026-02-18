@@ -31,6 +31,13 @@
 
 <!-- laravel style -->
 <link rel="stylesheet" href="{{ asset(mix('css/overrides.css')) }}" />
+<style>
+  html .content .content-wrapper .content-header-title {
+    border-right: 0 !important;
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+  }
+</style>
 
 <!-- BEGIN: Custom CSS-->
 

@@ -324,17 +324,20 @@ $(function () {
         },
         {
           targets: 5,
+          className: 'text-center align-middle',
           width: '98px',
           render: function (data, type, full) {
             var status = full['status'];
             var statusConfig = resolveStatusAppearance(status);
 
             return (
+              '<div class="d-flex justify-content-center">' +
               '<span class="badge rounded-pill status-badge ' +
               statusConfig.badgeClass +
               '" text-capitalized> ' +
               status +
-              ' </span>'
+              ' </span>' +
+              '</div>'
             );
           }
         },
@@ -391,6 +394,7 @@ $(function () {
         },
         {
           targets: -1,
+          className: 'text-center align-middle',
           title: 'Akcije',
           width: '48px',
           orderable: false,
@@ -423,9 +427,9 @@ $(function () {
         sLengthMenu: 'Prikaži _MENU_',
         search: 'Brza pretraga',
         searchPlaceholder: 'Pretraži...',
-        info: 'Prikazano _START_ do _END_ od _TOTAL_ unosa',
-        infoEmpty: 'Prikazano 0 do 0 od 0 unosa',
-        infoFiltered: '(filtrirano od _MAX_ ukupnih unosa)',
+        info: 'Prikazano _START_ do _END_ od _TOTAL_ naloga',
+        infoEmpty: 'Prikazano 0 do 0 od 0 naloga',
+        infoFiltered: '(filtrirano od _MAX_ ukupnih naloga)',
         paginate: {
           previous: '&nbsp;',
           next: '&nbsp;'

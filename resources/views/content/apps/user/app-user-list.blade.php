@@ -23,6 +23,12 @@
   </style>
 @endsection
 
+@section('content_header_right')
+  <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
+    <i data-feather="plus" class="me-50"></i> Dodaj Korisnika
+  </button>
+@endsection
+
 @section('content')
 <!-- users list start -->
 <section class="app-user-list">
@@ -92,10 +98,6 @@
   <div class="card">
     <div class="card-header border-bottom">
       <h4 class="card-title">Lista Korisnika</h4>
-      <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
-        <i data-feather="plus" class="me-25"></i>
-        <span>Dodaj Korisnika</span>
-      </button>
     </div>
     <div class="card-datatable table-responsive pt-0">
       <table class="user-list-table table">

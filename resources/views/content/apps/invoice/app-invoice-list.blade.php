@@ -15,7 +15,9 @@
     margin-top: -6px;
     margin-bottom: 4px;
   }
-  .content-header-title {margin-top: 5px;}
+  .content-header-title {
+    margin-top: 5px;
+  }
 </style>
 @endsection
 
@@ -513,6 +515,29 @@
 
   div.dataTables_wrapper div.dataTables_filter input {
     text-align: left;
+  }
+
+  div.dataTables_wrapper div.dataTables_length select,
+  div.dataTables_wrapper .dataTables_length .form-select {
+    cursor: pointer;
+  }
+
+  .dark-layout .status-card .status-count {
+    color: #fff;
+  }
+
+  .dark-layout .invoice-list-table tbody td:nth-child(2) a,
+  .dark-layout .invoice-list-table tbody td:nth-child(2) a:visited,
+  .dark-layout .invoice-list-table tbody td:nth-child(2) a:hover,
+  .dark-layout .invoice-list-table tbody td:nth-child(2) a:focus {
+    color: #fff !important;
+  }
+
+  .dark-layout #btn-toggle-filters,
+  .dark-layout #btn-toggle-filters:hover,
+  .dark-layout #btn-toggle-filters:focus {
+    color: #fff !important;
+    border-color: #fff !important;
   }
 </style>
 @endsection
