@@ -172,6 +172,29 @@
                     </tr>
                   </thead>
                   <tbody>
+                    @forelse(($workOrderItems ?? []) as $item)
+                      <tr>
+                        <td class="py-1">{{ $item['alternativa'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['pozicija'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['artikal'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['opis'] ?? '' }}</td>
+                        <td class="py-1 text-center"><span class="text-muted">-</span></td>
+                        <td class="py-1">{{ $item['napomena'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['kolicina'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['mj'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['serija'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['normativna_osnova'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['aktivno'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['zavrseno'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['va'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['prim_klas'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['sek_klas'] ?? '' }}</td>
+                      </tr>
+                    @empty
+                      <tr>
+                        <td colspan="15" class="text-center text-muted py-2">Nema stavki za ovaj radni nalog.</td>
+                      </tr>
+                    @endforelse
                   </tbody>
                 </table>
               </div>
@@ -190,6 +213,19 @@
                     </tr>
                   </thead>
                   <tbody>
+                    @forelse(($workOrderItems ?? []) as $item)
+                      <tr>
+                        <td class="py-1">{{ $item['pozicija'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['artikal'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['opis'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['kolicina'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['napomena'] ?? '' }}</td>
+                      </tr>
+                    @empty
+                      <tr>
+                        <td colspan="5" class="text-center text-muted py-2">Nema stavki za ovaj radni nalog.</td>
+                      </tr>
+                    @endforelse
                   </tbody>
                 </table>
               </div>
@@ -389,231 +425,9 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
 @section('page-script')
 <script src="{{asset('js/scripts/pages/app-invoice.js')}}"></script>
-<script>
-  // Dummy data arrays
-  const sastavnicaData = [
-    {
-      alternativa: '0',
-      pozicija: '10',
-      artikal: 'ALPL2017',
-      opis: 'Alu pločevina 2017',
-      slika: '',
-      napomena: 'Osnovni materijal',
-      kolicina: '2,0500',
-      mj: 'KG',
-      serija: '1,00',
-      normativnaOsnova: '1 jedinica',
-      aktivno: 'Da',
-      zavrseno: 'Ne',
-      va: 'VA1',
-      primKlas: 'PK1',
-      sekKlas: 'SK1'
-    },
-    {
-      alternativa: '0',
-      pozicija: '20',
-      artikal: 'STL2024',
-      opis: 'Čelična ploča 2024',
-      slika: '',
-      napomena: 'Sekundarni materijal',
-      kolicina: '1,5000',
-      mj: 'KG',
-      serija: '2,00',
-      normativnaOsnova: '1 jedinica',
-      aktivno: 'Da',
-      zavrseno: 'Ne',
-      va: 'VA2',
-      primKlas: 'PK2',
-      sekKlas: 'SK2'
-    },
-    {
-      alternativa: '1',
-      pozicija: '30',
-      artikal: 'PLST2023',
-      opis: 'Plastična komponenta 2023',
-      slika: '',
-      napomena: 'Alternativni materijal',
-      kolicina: '3,2500',
-      mj: 'KG',
-      serija: '1,50',
-      normativnaOsnova: '1 jedinica',
-      aktivno: 'Ne',
-      zavrseno: 'Da',
-      va: 'VA3',
-      primKlas: 'PK3',
-      sekKlas: 'SK3'
-    }
-  ];
-
-  const materijaliData = [
-    {
-      pozicija: '10',
-      materijal: 'ALPL2017',
-      naziv: 'Alu pločevina 2017',
-      kolicina: '2,0500',
-      napomena: ''
-    },
-    {
-      pozicija: '20',
-      materijal: 'STL2024',
-      naziv: 'Čelična ploča 2024',
-      kolicina: '1,5000',
-      napomena: 'Visokokvalitetni čelik'
-    },
-    {
-      pozicija: '30',
-      materijal: 'PLST2023',
-      naziv: 'Plastična komponenta 2023',
-      kolicina: '3,2500',
-      napomena: ''
-    },
-    {
-      pozicija: '40',
-      materijal: 'ELK2025',
-      naziv: 'Električna komponenta 2025',
-      kolicina: '0,5000',
-      napomena: 'Za montažu'
-    },
-    {
-      pozicija: '50',
-      materijal: 'GLASS2024',
-      naziv: 'Staklena komponenta 2024',
-      kolicina: '1,0000',
-      napomena: 'Ostalo'
-    }
-  ];
-
-  const operacijaData = [
-    {
-      alternativa: '0',
-      pozicija: '10',
-      operacija: 'OP001',
-      naziv: 'Rezanje',
-      napomena: 'Rezanje po dimenzijama',
-      mj: 'KOM',
-      mjVrij: '0,5',
-      normativnaOsnova: 'Normativ 1',
-      va: 'VA1',
-      primKlas: 'PK1',
-      sekKlas: 'SK1'
-    },
-    {
-      alternativa: '0',
-      pozicija: '20',
-      operacija: 'OP002',
-      naziv: 'Svaranje',
-      napomena: 'Svaranje šavova',
-      mj: 'KOM',
-      mjVrij: '1,2',
-      normativnaOsnova: 'Normativ 2',
-      va: 'VA2',
-      primKlas: 'PK2',
-      sekKlas: 'SK2'
-    },
-    {
-      alternativa: '0',
-      pozicija: '30',
-      operacija: 'OP003',
-      naziv: 'Poliranje',
-      napomena: 'Finalno poliranje',
-      mj: 'KOM',
-      mjVrij: '0,8',
-      normativnaOsnova: 'Normativ 3',
-      va: 'VA3',
-      primKlas: 'PK3',
-      sekKlas: 'SK3'
-    },
-    {
-      alternativa: '1',
-      pozicija: '40',
-      operacija: 'OP004',
-      naziv: 'Montaža',
-      napomena: 'Montaža komponenti',
-      mj: 'KOM',
-      mjVrij: '2,0',
-      normativnaOsnova: 'Normativ 4',
-      va: 'VA4',
-      primKlas: 'PK4',
-      sekKlas: 'SK4'
-    }
-  ];
-
-  // Function to populate tables
-  function populateTables() {
-    // Simple grayish gradient for all image placeholders
-    const gradient = 'linear-gradient(135deg, #e0e0e0 0%, #b0b0b0 100%)';
-    
-    // Populate Sastavnica table
-    const sastavnicaTbody = document.querySelector('#sastavnica-table tbody');
-    sastavnicaData.forEach((item) => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td class="py-1">${item.alternativa}</td>
-        <td class="py-1">${item.pozicija}</td>
-        <td class="py-1">${item.artikal}</td>
-        <td class="py-1">${item.opis}</td>
-        <td class="py-1">
-          <div class="image-placeholder" style="width: 60px; height: 60px; background: ${gradient}; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <i class="fa fa-image" style="font-size: 24px; color: #666; opacity: 0.9;"></i>
-          </div>
-        </td>
-        <td class="py-1">${item.napomena}</td>
-        <td class="py-1">${item.kolicina}</td>
-        <td class="py-1">${item.mj}</td>
-        <td class="py-1">${item.serija}</td>
-        <td class="py-1">${item.normativnaOsnova}</td>
-        <td class="py-1">${item.aktivno}</td>
-        <td class="py-1">${item.zavrseno}</td>
-        <td class="py-1">${item.va}</td>
-        <td class="py-1">${item.primKlas}</td>
-        <td class="py-1">${item.sekKlas}</td>
-      `;
-      sastavnicaTbody.appendChild(row);
-    });
-
-    // Populate Materijali table
-    const materijaliTbody = document.querySelector('#materijali-table tbody');
-    materijaliData.forEach(item => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td class="py-1">${item.pozicija}</td>
-        <td class="py-1">${item.materijal}</td>
-        <td class="py-1">${item.naziv}</td>
-        <td class="py-1">${item.kolicina}</td>
-        <td class="py-1">${item.napomena || ''}</td>
-      `;
-      materijaliTbody.appendChild(row);
-    });
-
-    // Populate Operacija table
-    const operacijaTbody = document.querySelector('#operacija-table tbody');
-    operacijaData.forEach(item => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td class="py-1">${item.alternativa}</td>
-        <td class="py-1">${item.pozicija}</td>
-        <td class="py-1">${item.operacija}</td>
-        <td class="py-1">${item.naziv}</td>
-        <td class="py-1">${item.napomena}</td>
-        <td class="py-1">${item.mj}</td>
-        <td class="py-1">${item.mjVrij}</td>
-        <td class="py-1">${item.normativnaOsnova}</td>
-        <td class="py-1">${item.va}</td>
-        <td class="py-1">${item.primKlas}</td>
-        <td class="py-1">${item.sekKlas}</td>
-      `;
-      operacijaTbody.appendChild(row);
-    });
-  }
-
-  // Initialize on page load
-  document.addEventListener('DOMContentLoaded', function() {
-    populateTables();
-  });
-</script>
-
 {{-- Include QR Scanner Modals --}}
 @include('content.new-components.nalog-scan')
 @include('content.new-components.sirovina-scan')
 @include('content.new-components.confirm-weight')
 @endsection
+

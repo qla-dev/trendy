@@ -56,6 +56,7 @@ class WorkOrderController extends Controller
             }
 
             $raw = $workOrder['raw'] ?? [];
+            $workOrderItems = $this->fetchMappedWorkOrderItems($raw);
             unset($workOrder['raw']);
 
             $sender = [
@@ -75,6 +76,7 @@ class WorkOrderController extends Controller
             return view('/content/apps/invoice/app-invoice-preview', [
                 'pageConfigs' => $pageConfigs,
                 'workOrder' => $workOrder,
+                'workOrderItems' => $workOrderItems,
                 'sender' => $sender,
                 'recipient' => $recipient,
                 'invoiceNumber' => (string) ($workOrder['broj_naloga'] ?? ''),
@@ -86,6 +88,7 @@ class WorkOrderController extends Controller
                 'id' => $workOrderId,
                 'connection' => config('database.default'),
                 'table' => $this->qualifiedTableName(),
+                'items_table' => $this->qualifiedItemTableName(),
                 'message' => $exception->getMessage(),
             ]);
 
@@ -142,13 +145,17 @@ class WorkOrderController extends Controller
     public function show(string $id): JsonResponse
     {
         try {
-            $workOrder = $this->findMappedWorkOrder($id);
+            $workOrder = $this->findMappedWorkOrder($id, true);
 
             if (!$workOrder) {
                 return response()->json([
                     'message' => 'Work order not found.',
                 ], 404);
             }
+
+            $raw = $workOrder['raw'] ?? [];
+            $workOrder['items'] = $this->fetchMappedWorkOrderItems($raw);
+            unset($workOrder['raw']);
 
             return response()->json([
                 'data' => $workOrder,
@@ -158,6 +165,7 @@ class WorkOrderController extends Controller
                 'id' => $id,
                 'connection' => config('database.default'),
                 'table' => $this->qualifiedTableName(),
+                'items_table' => $this->qualifiedItemTableName(),
                 'message' => $exception->getMessage(),
             ]);
 
@@ -200,6 +208,37 @@ class WorkOrderController extends Controller
                 'last_page' => $resolvedLimit > 0 ? (int) ceil($filteredTotal / $resolvedLimit) : 1,
             ],
         ];
+    }
+
+    private function fetchMappedWorkOrderItems(array $workOrderRow): array
+    {
+        $columns = $this->itemTableColumns();
+
+        if (!in_array('acKey', $columns, true)) {
+            return [];
+        }
+
+        $workOrderKey = trim((string) $this->value($workOrderRow, ['acKey'], ''));
+
+        if ($workOrderKey === '') {
+            return [];
+        }
+
+        $query = $this->newItemTableQuery()->where('acKey', $workOrderKey);
+
+        foreach (['anNo', 'anVariant', 'adTimeIns'] as $column) {
+            if (in_array($column, $columns, true)) {
+                $query->orderBy($column);
+            }
+        }
+
+        return $query
+            ->get()
+            ->map(function ($row) {
+                return $this->mapItemRow((array) $row);
+            })
+            ->values()
+            ->all();
     }
 
     private function findMappedWorkOrder(string $id, bool $includeRaw = false): ?array
@@ -296,6 +335,31 @@ class WorkOrderController extends Controller
         }
 
         return $mapped;
+    }
+
+    private function mapItemRow(array $row): array
+    {
+        $taskState = strtoupper(trim((string) $this->value($row, ['acTaskState'], '')));
+        $isFinished = in_array($taskState, ['F', 'Z', 'C', 'D'], true);
+
+        return [
+            'id' => $this->value($row, ['anQId', 'anNo'], null),
+            'ac_key' => trim((string) $this->value($row, ['acKey'], '')),
+            'alternativa' => (string) $this->value($row, ['anVariant'], ''),
+            'pozicija' => (string) $this->value($row, ['anNo'], ''),
+            'artikal' => (string) $this->value($row, ['acIdent'], ''),
+            'opis' => (string) $this->value($row, ['acDescr'], ''),
+            'napomena' => (string) $this->value($row, ['acNote'], ''),
+            'kolicina' => $this->normalizeNumber($this->value($row, ['anQty', 'anPlanQty'], 0)),
+            'mj' => (string) $this->value($row, ['acUM'], ''),
+            'serija' => $this->normalizeNumber($this->value($row, ['anQtySE', 'anBatch'], 0)),
+            'normativna_osnova' => $this->normalizeNumber($this->value($row, ['anQtyBase', 'anQtyBase3'], 0)),
+            'aktivno' => ((int) $this->value($row, ['anActive'], 0)) === 1 ? 'Da' : 'Ne',
+            'zavrseno' => $isFinished ? 'Da' : 'Ne',
+            'va' => (string) $this->value($row, ['acFieldSA', 'acFieldSE'], ''),
+            'prim_klas' => (string) $this->value($row, ['acFieldSB'], ''),
+            'sek_klas' => (string) $this->value($row, ['acFieldSC'], ''),
+        ];
     }
 
     private function fetchStatusStats(array $filters = []): array
@@ -666,6 +730,19 @@ class WorkOrderController extends Controller
             ->all();
     }
 
+    private function itemTableColumns(): array
+    {
+        return DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->where('TABLE_SCHEMA', $this->tableSchema())
+            ->where('TABLE_NAME', $this->itemTableName())
+            ->pluck('COLUMN_NAME')
+            ->map(function ($columnName) {
+                return (string) $columnName;
+            })
+            ->values()
+            ->all();
+    }
+
     private function existingColumns(array $columns, array $candidates): array
     {
         return array_values(array_filter($candidates, function ($candidate) use ($columns) {
@@ -772,6 +849,11 @@ class WorkOrderController extends Controller
         return DB::table($this->qualifiedTableName());
     }
 
+    private function newItemTableQuery(): Builder
+    {
+        return DB::table($this->qualifiedItemTableName());
+    }
+
     private function resolveLimit(?int $requestedLimit = null): int
     {
         $maxLimit = max(1, (int) config('workorders.max_limit', 100));
@@ -795,8 +877,18 @@ class WorkOrderController extends Controller
         return (string) config('workorders.table', 'tHF_WOEx');
     }
 
+    private function itemTableName(): string
+    {
+        return (string) config('workorders.items_table', 'tHF_WOExItem');
+    }
+
     private function qualifiedTableName(): string
     {
         return $this->tableSchema() . '.' . $this->tableName();
+    }
+
+    private function qualifiedItemTableName(): string
+    {
+        return $this->tableSchema() . '.' . $this->itemTableName();
     }
 }
