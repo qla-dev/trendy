@@ -213,11 +213,11 @@
                     </tr>
                   </thead>
                   <tbody>
-                    @forelse(($workOrderItems ?? []) as $item)
+                    @forelse(($workOrderItemResources ?? []) as $item)
                       <tr>
                         <td class="py-1">{{ $item['pozicija'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['artikal'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['opis'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['materijal'] ?? '' }}</td>
+                        <td class="py-1">{{ $item['naziv'] ?? '' }}</td>
                         <td class="py-1">{{ $item['kolicina'] ?? '' }}</td>
                         <td class="py-1">{{ $item['napomena'] ?? '' }}</td>
                       </tr>
@@ -250,6 +250,25 @@
                     </tr>
                   </thead>
                   <tbody>
+                    @forelse(($workOrderRegOperations ?? []) as $operation)
+                      <tr>
+                        <td class="py-1">{{ $operation['alternativa'] ?? '' }}</td>
+                        <td class="py-1">{{ $operation['pozicija'] ?? '' }}</td>
+                        <td class="py-1">{{ $operation['operacija'] ?? '' }}</td>
+                        <td class="py-1">{{ $operation['naziv'] ?? '' }}</td>
+                        <td class="py-1">{{ $operation['napomena'] ?? '' }}</td>
+                        <td class="py-1">{{ $operation['mj'] ?? '' }}</td>
+                        <td class="py-1">{{ $operation['mj_vrij'] ?? '' }}</td>
+                        <td class="py-1">{{ $operation['normativna_osnova'] ?? '' }}</td>
+                        <td class="py-1">{{ $operation['va'] ?? '' }}</td>
+                        <td class="py-1">{{ $operation['prim_klas'] ?? '' }}</td>
+                        <td class="py-1">{{ $operation['sek_klas'] ?? '' }}</td>
+                      </tr>
+                    @empty
+                      <tr>
+                        <td colspan="11" class="text-center text-muted py-2">Nema operacija za ovaj radni nalog.</td>
+                      </tr>
+                    @endforelse
                   </tbody>
                 </table>
               </div>

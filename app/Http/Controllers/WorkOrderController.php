@@ -57,6 +57,8 @@ class WorkOrderController extends Controller
 
             $raw = $workOrder['raw'] ?? [];
             $workOrderItems = $this->fetchMappedWorkOrderItems($raw);
+            $workOrderItemResources = $this->fetchMappedWorkOrderItemResources($raw);
+            $workOrderRegOperations = $this->fetchMappedWorkOrderRegOperations($raw);
             unset($workOrder['raw']);
 
             $sender = [
@@ -77,6 +79,8 @@ class WorkOrderController extends Controller
                 'pageConfigs' => $pageConfigs,
                 'workOrder' => $workOrder,
                 'workOrderItems' => $workOrderItems,
+                'workOrderItemResources' => $workOrderItemResources,
+                'workOrderRegOperations' => $workOrderRegOperations,
                 'sender' => $sender,
                 'recipient' => $recipient,
                 'invoiceNumber' => (string) ($workOrder['broj_naloga'] ?? ''),
@@ -89,6 +93,8 @@ class WorkOrderController extends Controller
                 'connection' => config('database.default'),
                 'table' => $this->qualifiedTableName(),
                 'items_table' => $this->qualifiedItemTableName(),
+                'item_resources_table' => $this->qualifiedItemResourcesTableName(),
+                'reg_operations_table' => $this->qualifiedRegOperationsTableName(),
                 'message' => $exception->getMessage(),
             ]);
 
@@ -155,6 +161,8 @@ class WorkOrderController extends Controller
 
             $raw = $workOrder['raw'] ?? [];
             $workOrder['items'] = $this->fetchMappedWorkOrderItems($raw);
+            $workOrder['item_resources'] = $this->fetchMappedWorkOrderItemResources($raw);
+            $workOrder['reg_operations'] = $this->fetchMappedWorkOrderRegOperations($raw);
             unset($workOrder['raw']);
 
             return response()->json([
@@ -166,6 +174,8 @@ class WorkOrderController extends Controller
                 'connection' => config('database.default'),
                 'table' => $this->qualifiedTableName(),
                 'items_table' => $this->qualifiedItemTableName(),
+                'item_resources_table' => $this->qualifiedItemResourcesTableName(),
+                'reg_operations_table' => $this->qualifiedRegOperationsTableName(),
                 'message' => $exception->getMessage(),
             ]);
 
@@ -236,6 +246,104 @@ class WorkOrderController extends Controller
             ->get()
             ->map(function ($row) {
                 return $this->mapItemRow((array) $row);
+            })
+            ->values()
+            ->all();
+    }
+
+    private function fetchMappedWorkOrderItemResources(array $workOrderRow): array
+    {
+        $columns = $this->itemResourcesTableColumns();
+        $workOrderKey = trim((string) $this->value($workOrderRow, ['acKey'], ''));
+
+        if ($workOrderKey === '') {
+            return [];
+        }
+
+        $itemQIdColumn = $this->firstExistingColumn($columns, ['anWOExItemQId', 'anItemQId', 'anQIdItem']);
+        $query = DB::table($this->qualifiedItemResourcesTableName() . ' as r')
+            ->select('r.*');
+
+        if ($itemQIdColumn !== null) {
+            $itemQIdField = 'r.' . $itemQIdColumn;
+            $itemQIds = $this->newItemTableQuery()
+                ->where('acKey', $workOrderKey)
+                ->pluck('anQId')
+                ->map(function ($id) {
+                    return is_numeric((string) $id) ? (int) $id : null;
+                })
+                ->filter(function ($id) {
+                    return $id !== null;
+                })
+                ->values()
+                ->all();
+
+            if (empty($itemQIds)) {
+                return [];
+            }
+
+            $query->whereIn($itemQIdField, $itemQIds)
+                ->leftJoin($this->qualifiedItemTableName() . ' as i', 'i.anQId', '=', $itemQIdField)
+                ->addSelect([
+                    'i.anNo as __item_no',
+                    'i.acIdent as __item_ident',
+                    'i.acDescr as __item_descr',
+                    'i.acUM as __item_um',
+                    'i.anQty as __item_qty',
+                    'i.anPlanQty as __item_plan_qty',
+                ]);
+        } else {
+            $linkColumn = $this->firstExistingColumn($columns, ['acKey', 'acWOKey', 'acDocKey', 'acLnkKey']);
+
+            if ($linkColumn === null) {
+                return [];
+            }
+
+            $query->where('r.' . $linkColumn, $workOrderKey);
+        }
+
+        foreach (['anWOExItemQId', 'anNo', 'anLineNo', 'anResNo', 'anVariant', 'adTimeIns'] as $column) {
+            if (in_array($column, $columns, true)) {
+                $query->orderBy('r.' . $column);
+            }
+        }
+
+        return $query
+            ->get()
+            ->map(function ($row) {
+                return $this->mapItemResourceRow((array) $row);
+            })
+            ->values()
+            ->all();
+    }
+
+    private function fetchMappedWorkOrderRegOperations(array $workOrderRow): array
+    {
+        $columns = $this->regOperationsTableColumns();
+        $linkColumn = $this->firstExistingColumn($columns, ['acKey', 'acWOKey', 'acDocKey', 'acLnkKey']);
+
+        if ($linkColumn === null) {
+            return [];
+        }
+
+        $workOrderKey = trim((string) $this->value($workOrderRow, ['acKey'], ''));
+
+        if ($workOrderKey === '') {
+            return [];
+        }
+
+        $query = $this->newRegOperationsTableQuery()->where($linkColumn, $workOrderKey);
+
+        foreach (['anNo', 'anVariant', 'adDate', 'adTimeIns'] as $column) {
+            if (in_array($column, $columns, true)) {
+                $query->orderBy($column);
+            }
+        }
+
+        return $query
+            ->get()
+            ->map(function ($row) {
+                return $this->mapRegOperationRow((array) $row);
             })
             ->values()
             ->all();
@@ -357,6 +465,38 @@ class WorkOrderController extends Controller
             'aktivno' => ((int) $this->value($row, ['anActive'], 0)) === 1 ? 'Da' : 'Ne',
             'zavrseno' => $isFinished ? 'Da' : 'Ne',
             'va' => (string) $this->value($row, ['acFieldSA', 'acFieldSE'], ''),
+            'prim_klas' => (string) $this->value($row, ['acFieldSB'], ''),
+            'sek_klas' => (string) $this->value($row, ['acFieldSC'], ''),
+        ];
+    }
+
+    private function mapItemResourceRow(array $row): array
+    {
+        return [
+            'id' => $this->value($row, ['anQId', 'anNo', 'anLineNo'], null),
+            'item_qid' => $this->value($row, ['anWOExItemQId'], null),
+            'pozicija' => (string) $this->valueTrimmed($row, ['anNo', 'anLineNo', 'anResNo', '__item_no'], ''),
+            'materijal' => (string) $this->valueTrimmed($row, ['acResursID', 'acIdent', 'acResIdent', 'acResource', 'acCode', '__item_ident'], ''),
+            'naziv' => (string) $this->valueTrimmed($row, ['acResType', 'acDescr', 'acName', 'acResDescr', '__item_descr', '__item_ident'], ''),
+            'kolicina' => $this->normalizeNumber($this->valueTrimmed($row, ['anQty', 'anPlanQty', 'anNormQty', '__item_qty', '__item_plan_qty'], 0)),
+            'mj' => (string) $this->valueTrimmed($row, ['acUM', 'acUMRes', '__item_um'], ''),
+            'napomena' => (string) $this->valueTrimmed($row, ['acNote'], ''),
+        ];
+    }
+
+    private function mapRegOperationRow(array $row): array
+    {
+        return [
+            'id' => $this->value($row, ['anQId', 'anNo', 'anRegNo'], null),
+            'alternativa' => (string) $this->value($row, ['anVariant', 'anVariantSubLvl'], ''),
+            'pozicija' => (string) $this->value($row, ['anNo', 'anItemNo', 'anRegNo'], ''),
+            'operacija' => (string) $this->value($row, ['acOperation', 'acOper', 'acOperationType', 'acIdent'], ''),
+            'naziv' => (string) $this->value($row, ['acName', 'acDescr', 'acOperationName'], ''),
+            'napomena' => (string) $this->value($row, ['acNote'], ''),
+            'mj' => (string) $this->value($row, ['acUM', 'acUMTime'], ''),
+            'mj_vrij' => $this->normalizeNumber($this->value($row, ['anQty', 'anWorkTime', 'anTime', 'anDuration'], 0)),
+            'normativna_osnova' => $this->normalizeNumber($this->value($row, ['anNormQty', 'anQtyBase', 'anPlanQty'], 0)),
+            'va' => (string) $this->value($row, ['acFieldSA', 'acVA'], ''),
             'prim_klas' => (string) $this->value($row, ['acFieldSB'], ''),
             'sek_klas' => (string) $this->value($row, ['acFieldSC'], ''),
         ];
@@ -743,6 +883,32 @@ class WorkOrderController extends Controller
             ->all();
     }
 
+    private function itemResourcesTableColumns(): array
+    {
+        return DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->where('TABLE_SCHEMA', $this->tableSchema())
+            ->where('TABLE_NAME', $this->itemResourcesTableName())
+            ->pluck('COLUMN_NAME')
+            ->map(function ($columnName) {
+                return (string) $columnName;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function regOperationsTableColumns(): array
+    {
+        return DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->where('TABLE_SCHEMA', $this->tableSchema())
+            ->where('TABLE_NAME', $this->regOperationsTableName())
+            ->pluck('COLUMN_NAME')
+            ->map(function ($columnName) {
+                return (string) $columnName;
+            })
+            ->values()
+            ->all();
+    }
+
     private function existingColumns(array $columns, array $candidates): array
     {
         return array_values(array_filter($candidates, function ($candidate) use ($columns) {
@@ -772,6 +938,35 @@ class WorkOrderController extends Controller
 
             if ($value === null || $value === '') {
                 continue;
+            }
+
+            return $value;
+        }
+
+        return $default;
+    }
+
+    private function valueTrimmed(array $row, array $keys, mixed $default = null): mixed
+    {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $row)) {
+                continue;
+            }
+
+            $value = $row[$key];
+
+            if ($value === null) {
+                continue;
+            }
+
+            if (is_string($value)) {
+                $value = trim($value);
+
+                if ($value === '') {
+                    continue;
+                }
+
+                return $value;
             }
 
             return $value;
@@ -854,6 +1049,16 @@ class WorkOrderController extends Controller
         return DB::table($this->qualifiedItemTableName());
     }
 
+    private function newItemResourcesTableQuery(): Builder
+    {
+        return DB::table($this->qualifiedItemResourcesTableName());
+    }
+
+    private function newRegOperationsTableQuery(): Builder
+    {
+        return DB::table($this->qualifiedRegOperationsTableName());
+    }
+
     private function resolveLimit(?int $requestedLimit = null): int
     {
         $maxLimit = max(1, (int) config('workorders.max_limit', 100));
@@ -882,6 +1087,16 @@ class WorkOrderController extends Controller
         return (string) config('workorders.items_table', 'tHF_WOExItem');
     }
 
+    private function itemResourcesTableName(): string
+    {
+        return (string) config('workorders.item_resources_table', 'tHF_WOExItemResources');
+    }
+
+    private function regOperationsTableName(): string
+    {
+        return (string) config('workorders.reg_operations_table', 'tHF_WOExRegOper');
+    }
+
     private function qualifiedTableName(): string
     {
         return $this->tableSchema() . '.' . $this->tableName();
@@ -890,5 +1105,15 @@ class WorkOrderController extends Controller
     private function qualifiedItemTableName(): string
     {
         return $this->tableSchema() . '.' . $this->itemTableName();
+    }
+
+    private function qualifiedItemResourcesTableName(): string
+    {
+        return $this->tableSchema() . '.' . $this->itemResourcesTableName();
+    }
+
+    private function qualifiedRegOperationsTableName(): string
+    {
+        return $this->tableSchema() . '.' . $this->regOperationsTableName();
     }
 }
