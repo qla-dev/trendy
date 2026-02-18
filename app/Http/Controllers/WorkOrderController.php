@@ -459,7 +459,7 @@ class WorkOrderController extends Controller
             $id = $this->value($row, ['anNo', 'id'], $brojNaloga);
         }
 
-        $status = $this->mapStatus($this->value($row, ['acStatusMF', 'acStatus', 'status'], 'N/A'));
+        $status = $this->mapStatus($this->value($row, ['acStatusMF'], 'N/A'));
         $priority = $this->mapPriority($this->value($row, ['anPriority', 'acPriority', 'acWayOfSale', 'priority'], 5));
         $createdDate = $this->normalizeDate($this->value($row, ['adDate', 'adDateIns', 'created_at']));
         $endDate = $this->normalizeDate($this->value($row, ['adDeliveryDeadline', 'adDateOut', 'actual_end']));
@@ -578,7 +578,7 @@ class WorkOrderController extends Controller
     {
         $stats = $this->emptyStatusStats();
         $columns = $this->tableColumns();
-        $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF', 'acStatus', 'status']);
+        $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF']);
 
         if ($statusColumn === null) {
             return $stats;
@@ -597,8 +597,8 @@ class WorkOrderController extends Controller
             ->get();
 
         foreach ($rows as $row) {
-            $mappedStatus = $this->mapStatus($row->{$statusColumn} ?? null);
-            $bucket = $this->statusBucket($mappedStatus);
+            $resolvedStatus = $this->resolveStatus($row->{$statusColumn} ?? null);
+            $bucket = $resolvedStatus['bucket'] ?? null;
 
             if ($bucket !== null && array_key_exists($bucket, $stats)) {
                 $stats[$bucket] += (int) $row->total;
@@ -634,7 +634,7 @@ class WorkOrderController extends Controller
 
     private function applyFilters(Builder $query, array $columns, array $filters): void
     {
-        $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF', 'acStatus', 'status']);
+        $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF']);
 
         if ($statusColumn !== null && !empty($filters['status'])) {
             $this->applyStatusFilter($query, $statusColumn, (string) $filters['status']);
@@ -700,59 +700,22 @@ class WorkOrderController extends Controller
     private function applyStatusFilter(Builder $query, string $column, string $statusFilter): void
     {
         $normalized = strtolower(trim($statusFilter));
-        $allowedStatuses = [
-            'planiran',
-            'otvoren',
-            'rezerviran',
-            'raspisan',
-            'u_radu',
-            'djelimicno_zakljucen',
-            'zakljucen',
-        ];
+        $allowedStatuses = array_filter(array_keys($this->emptyStatusStats()), function ($status) {
+            return $status !== 'svi';
+        });
 
         if ($normalized === '' || $normalized === 'svi' || !in_array($normalized, $allowedStatuses, true)) {
             return;
         }
 
-        $query->where(function (Builder $statusQuery) use ($column, $normalized) {
-            if ($normalized === 'planiran') {
-                $statusQuery->whereIn($column, ['N', 'PLANIRAN', 'NOVO']);
-                return;
-            }
+        $statusAliases = $this->statusAliasesByBucket($normalized);
 
-            if ($normalized === 'otvoren') {
-                $statusQuery->whereIn($column, ['O', 'OTVOREN']);
-                return;
-            }
+        if (empty($statusAliases)) {
+            return;
+        }
 
-            if ($normalized === 'rezerviran') {
-                $statusQuery->whereIn($column, ['REZERVIRAN'])
-                    ->orWhere($column, 'like', '%REZERV%');
-                return;
-            }
-
-            if ($normalized === 'raspisan') {
-                $statusQuery->whereIn($column, ['S', 'D', 'RASPISAN']);
-                return;
-            }
-
-            if ($normalized === 'u_radu') {
-                $statusQuery->whereIn($column, ['E', 'P', 'I', 'U TOKU', 'U RADU']);
-                return;
-            }
-
-            if ($normalized === 'djelimicno_zakljucen') {
-                $statusQuery->whereIn($column, ['R', 'DJELIMICNO ZAKLJUCEN', 'DJELOMICNO ZAKLJUCEN'])
-                    ->orWhere($column, 'like', '%DJELIM%')
-                    ->orWhere($column, 'like', '%DJELOM%');
-                return;
-            }
-
-            if ($normalized === 'zakljucen') {
-                $statusQuery->whereIn($column, ['F', 'Z', 'ZAKLJUCEN', 'ZAVRSENO'])
-                    ->orWhere($column, 'like', '%ZAKLJ%')
-                    ->orWhere($column, 'like', '%ZAVRS%');
-            }
+        $query->where(function (Builder $statusQuery) use ($column, $statusAliases) {
+            $statusQuery->whereIn($column, $statusAliases);
         });
     }
 
@@ -824,39 +787,65 @@ class WorkOrderController extends Controller
         ];
     }
 
+    private function statusCodeMap(): array
+    {
+        return [
+            'F' => ['label' => "Zavr\u{0161}eno", 'bucket' => 'zakljucen'],
+            'P' => ['label' => 'U toku', 'bucket' => 'u_radu'],
+            'I' => ['label' => "Zavr\u{0161}eno", 'bucket' => 'zakljucen'],
+            'N' => ['label' => 'Novo', 'bucket' => 'planiran'],
+            'C' => ['label' => 'Otkazano', 'bucket' => null],
+            'D' => ['label' => 'Raspisan', 'bucket' => 'raspisan'],
+            'O' => ['label' => 'Otvoren', 'bucket' => 'otvoren'],
+            'R' => ['label' => "Djelimi\u{010D}no zavr\u{0161}eno", 'bucket' => 'djelimicno_zakljucen'],
+            'S' => ['label' => 'Raspisan', 'bucket' => 'raspisan'],
+            'E' => ['label' => 'U radu', 'bucket' => 'u_radu'],
+            'Z' => ['label' => "Zavr\u{0161}eno", 'bucket' => 'zakljucen'],
+        ];
+    }
+
     private function statusBucket(string $status): ?string
     {
-        $normalized = strtolower(trim($status));
+        $statusString = trim($status);
 
-        if ($normalized === '' || $normalized === 'n/a') {
+        if ($statusString === '' || strtolower($statusString) === 'n/a') {
             return null;
         }
 
-        if (str_contains($normalized, 'planiran') || str_contains($normalized, 'novo')) {
+        $statusCode = strtoupper($statusString);
+        $statusMeta = $this->statusCodeMap()[$statusCode] ?? null;
+
+        if ($statusMeta !== null) {
+            return $statusMeta['bucket'] ?? null;
+        }
+
+        $normalized = strtolower($statusString);
+
+        if ($normalized === 'planiran' || $normalized === 'novo') {
             return 'planiran';
         }
 
-        if (str_contains($normalized, 'otvoren')) {
+        if ($normalized === 'otvoren') {
             return 'otvoren';
         }
 
-        if (str_contains($normalized, 'rezerviran')) {
+        if ($normalized === 'rezerviran') {
             return 'rezerviran';
         }
 
-        if (str_contains($normalized, 'raspisan')) {
+        if ($normalized === 'raspisan') {
             return 'raspisan';
         }
 
-        if (str_contains($normalized, 'u toku') || str_contains($normalized, 'u radu')) {
+        if ($normalized === 'u toku' || $normalized === 'u radu') {
             return 'u_radu';
         }
 
-        if (str_contains($normalized, 'djelimicno') || str_contains($normalized, 'djelomicno')) {
+        if ($normalized === "djelimi\u{010D}no zavr\u{0161}eno" || $normalized === 'djelimicno zavrseno') {
             return 'djelimicno_zakljucen';
         }
 
-        if (str_contains($normalized, 'zavrseno') || str_contains($normalized, 'zakljucen')) {
+        if ($normalized === "zavr\u{0161}eno" || $normalized === 'zavrseno') {
             return 'zakljucen';
         }
 
@@ -870,39 +859,49 @@ class WorkOrderController extends Controller
         }
 
         $statusString = trim((string) $status);
-        $normalizedStatus = strtoupper($statusString);
-        $normalizedStatus = strtr($normalizedStatus, [
-            'Š' => 'S',
-            'Đ' => 'DJ',
-            'Č' => 'C',
-            'Ć' => 'C',
-            'Ž' => 'Z',
-        ]);
+        $statusCode = strtoupper($statusString);
+        $statusMeta = $this->statusCodeMap()[$statusCode] ?? null;
 
-        $statusMap = [
-            'F' => 'Zavrseno',
-            'P' => 'U toku',
-            'I' => 'Zakljucen',
-            'N' => 'Novo',
-            'C' => 'Otkazano',
-            'D' => 'Raspisan',
-            'O' => 'Otvoren',
-            'R' => 'Djelimicno zakljucen',
-            'S' => 'Raspisan',
-            'E' => 'U radu',
-            'Z' => 'Zakljucen',
-            'PLANIRAN' => 'Planiran',
-            'OTVOREN' => 'Otvoren',
-            'REZERVIRAN' => 'Rezerviran',
-            'DJELIMICNO ZAKLJUCEN' => 'Djelimično zaključen',
-            'RASPISAN' => 'Raspisan',
-            'U TOKU' => 'U toku',
-            'U RADU' => 'U toku',
-            'ZAVRSENO' => 'Zaključen',
-            'ZAKLJUCEN' => 'Zaključen',
+        if ($statusMeta === null) {
+            return $statusString;
+        }
+
+        return (string) ($statusMeta['label'] ?? $statusString);
+    }
+
+    private function resolveStatus(mixed $status): array
+    {
+        if ($status === null || $status === '') {
+            return [
+                'label' => 'N/A',
+                'bucket' => null,
+            ];
+        }
+
+        $statusString = trim((string) $status);
+        $statusCode = strtoupper($statusString);
+        $statusMeta = $this->statusCodeMap()[$statusCode] ?? null;
+
+        if ($statusMeta !== null) {
+            return [
+                'label' => (string) ($statusMeta['label'] ?? $statusString),
+                'bucket' => $statusMeta['bucket'] ?? null,
+            ];
+        }
+
+        $label = $this->mapStatus($statusString);
+
+        return [
+            'label' => $label,
+            'bucket' => $this->statusBucket($label),
         ];
+    }
 
-        return $statusMap[$normalizedStatus] ?? $statusString;
+    private function statusAliasesByBucket(string $bucket): array
+    {
+        return array_values(array_keys(array_filter($this->statusCodeMap(), function ($statusMeta) use ($bucket) {
+            return ($statusMeta['bucket'] ?? null) === $bucket;
+        })));
     }
 
     private function mapPriority(mixed $priority): string
