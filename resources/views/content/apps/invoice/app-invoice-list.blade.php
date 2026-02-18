@@ -94,18 +94,15 @@
     <div class="card-header d-flex justify-content-between align-items-center">
       <h4 class="mb-0">Filter radnih naloga</h4>
       <div class="d-flex gap-2">
-        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-filter">
-          <i data-feather="plus" class="me-50"></i> Dodaj filter
+        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-toggle-filters" aria-expanded="true">
+          <i data-feather="filter" class="me-50"></i> Sakrij filtere
         </button>
         <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete-filter">
           <i data-feather="trash-2" class="me-50"></i> Obriši filter
         </button>
-        <button type="button" class="btn btn-outline-success btn-sm" id="btn-save-filter">
-          <i data-feather="save" class="me-50"></i> Sačuvaj
-        </button>
       </div>
     </div>
-    <div class="card-body">
+    <div class="card-body" id="filters-body">
       <div class="row g-2 mb-2">
         <div class="col-md-3">
           <label class="form-label">Kupac</label>

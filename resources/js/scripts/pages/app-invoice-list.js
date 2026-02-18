@@ -425,6 +425,32 @@ $(function () {
       dtInvoice.ajax.reload();
     }
 
+    var filtersBody = $('#filters-body');
+    var toggleFiltersBtn = $('#btn-toggle-filters');
+
+    function setFiltersBodyVisibility(isVisible) {
+      filtersBody.toggleClass('d-none', !isVisible);
+      toggleFiltersBtn.html(
+        '<i data-feather="filter" class="me-50"></i> ' + (isVisible ? 'Sakrij filtere' : 'Pokaži filtere')
+      );
+      toggleFiltersBtn.attr('aria-expanded', isVisible ? 'true' : 'false');
+      localStorage.setItem('radniNaloziFiltersBodyVisible', isVisible ? '1' : '0');
+      if (typeof feather !== 'undefined') {
+        feather.replace();
+      }
+    }
+
+    var savedFiltersBodyVisibility = localStorage.getItem('radniNaloziFiltersBodyVisible');
+    if (savedFiltersBodyVisibility === null) {
+      setFiltersBodyVisibility(true);
+    } else {
+      setFiltersBodyVisibility(savedFiltersBodyVisibility === '1');
+    }
+
+    toggleFiltersBtn.on('click', function () {
+      setFiltersBodyVisibility(filtersBody.hasClass('d-none'));
+    });
+
     $('#btn-add').on('click', function () {
       window.location = invoiceAdd;
     });
@@ -442,61 +468,12 @@ $(function () {
       applyFilters();
     });
 
-    $('#btn-add-filter').on('click', function () {
-      alert('Funkcionalnost "Dodaj filter" ce biti implementirana.');
-    });
-
     $('#btn-delete-filter').on('click', function () {
       $('.filter-input').val('');
       currentStatusFilter = null;
       $('.status-card').removeClass('status-card-active');
       applyFilters();
     });
-
-    $('#btn-save-filter').on('click', function () {
-      var filters = {
-        kupac: $('#filter-kupac').val(),
-        primatelj: $('#filter-primatelj').val(),
-        proizvod: $('#filter-proizvod').val(),
-        planPocetakOd: $('#filter-plan-pocetak-od').val(),
-        planPocetakDo: $('#filter-plan-pocetak-do').val(),
-        planKrajOd: $('#filter-plan-kraj-od').val(),
-        planKrajDo: $('#filter-plan-kraj-do').val(),
-        datumOd: $('#filter-datum-od').val(),
-        datumDo: $('#filter-datum-do').val(),
-        vezniDok: $('#filter-vezni-dok').val(),
-        status: currentStatusFilter
-      };
-
-      localStorage.setItem('radniNaloziFilters', JSON.stringify(filters));
-      alert('Filteri su sacuvani!');
-    });
-
-    var savedFilters = localStorage.getItem('radniNaloziFilters');
-    if (savedFilters) {
-      try {
-        var filters = JSON.parse(savedFilters);
-        $('#filter-kupac').val(filters.kupac || '');
-        $('#filter-primatelj').val(filters.primatelj || '');
-        $('#filter-proizvod').val(filters.proizvod || '');
-        $('#filter-plan-pocetak-od').val(filters.planPocetakOd || '');
-        $('#filter-plan-pocetak-do').val(filters.planPocetakDo || '');
-        $('#filter-plan-kraj-od').val(filters.planKrajOd || '');
-        $('#filter-plan-kraj-do').val(filters.planKrajDo || '');
-        $('#filter-datum-od').val(filters.datumOd || '');
-        $('#filter-datum-do').val(filters.datumDo || '');
-        $('#filter-vezni-dok').val(filters.vezniDok || '');
-
-        if (filters.status) {
-          currentStatusFilter = filters.status;
-          $('.status-card[data-status="' + filters.status + '"]').addClass('status-card-active');
-        }
-
-        applyFilters();
-      } catch (e) {
-        console.error('Error loading saved filters:', e);
-      }
-    }
 
     $('.filter-input').on('keypress', function (e) {
       if (e.which === 13) {
