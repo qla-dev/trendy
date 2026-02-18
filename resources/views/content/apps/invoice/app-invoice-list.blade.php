@@ -79,7 +79,7 @@
             <div class="status-count">{{ $statusStats['djelimicno_zakljucen'] ?? 0 }}</div>
           </div>
         </div>
-        <div class="status-card status-card-active" data-status="zakljucen">
+        <div class="status-card" data-status="zakljucen">
           <div class="status-card-body">
             <div class="status-label">Zaključen</div>
             <div class="status-count">{{ $statusStats['zakljucen'] ?? 0 }}</div>

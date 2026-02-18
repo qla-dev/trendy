@@ -15,64 +15,134 @@ $(function () {
     assetPath = '../../../app-assets/',
     invoicePreview = 'app-invoice-preview.html',
     invoiceAdd = 'app-invoice-add.html',
-    invoiceEdit = 'app-invoice-edit.html';
+    invoiceEdit = 'app-invoice-edit.html',
+    workOrdersApi = 'api/work-orders';
 
   if ($('body').attr('data-framework') === 'laravel') {
     assetPath = $('body').attr('data-asset-path');
     invoicePreview = assetPath + 'app/invoice/preview';
     invoiceAdd = assetPath + 'app/invoice/add';
     invoiceEdit = assetPath + 'app/invoice/edit';
+    workOrdersApi = assetPath + 'api/work-orders';
+  }
+
+  function getFilters(currentStatusFilter) {
+    return {
+      status: currentStatusFilter || '',
+      kupac: $('#filter-kupac').val() || '',
+      primatelj: $('#filter-primatelj').val() || '',
+      proizvod: $('#filter-proizvod').val() || '',
+      plan_pocetak_od: $('#filter-plan-pocetak-od').val() || '',
+      plan_pocetak_do: $('#filter-plan-pocetak-do').val() || '',
+      plan_kraj_od: $('#filter-plan-kraj-od').val() || '',
+      plan_kraj_do: $('#filter-plan-kraj-do').val() || '',
+      datum_od: $('#filter-datum-od').val() || '',
+      datum_do: $('#filter-datum-do').val() || '',
+      vezni_dok: $('#filter-vezni-dok').val() || ''
+    };
+  }
+
+  function updateStatusCards(statusStats) {
+    Object.keys(statusStats || {}).forEach(function (key) {
+      $('.status-card[data-status="' + key + '"] .status-count').text(statusStats[key] || 0);
+    });
   }
 
   // datatable
   if (dtInvoiceTable.length) {
+    var currentStatusFilter = null;
+    updateStatusCards(window.statusStats || {});
+
     var dtInvoice = dtInvoiceTable.DataTable({
-      data: window.radniNaloziData || [],
+      processing: true,
+      serverSide: true,
+      pageLength: 10,
+      lengthMenu: [10, 25, 50],
       autoWidth: false,
+      ajax: function (requestData, callback) {
+        var page = Math.floor(requestData.start / requestData.length) + 1;
+        var params = getFilters(currentStatusFilter);
+
+        params.page = page;
+        params.limit = requestData.length || 10;
+        params.draw = requestData.draw;
+        params.search = requestData.search && requestData.search.value ? requestData.search.value : '';
+
+        $.ajax({
+          url: workOrdersApi,
+          method: 'GET',
+          dataType: 'json',
+          data: params,
+          success: function (response) {
+            updateStatusCards(response.statusStats || {});
+
+            callback({
+              draw: requestData.draw,
+              recordsTotal: response.meta && response.meta.total ? response.meta.total : 0,
+              recordsFiltered: response.meta && response.meta.filtered_total ? response.meta.filtered_total : 0,
+              data: response.data || []
+            });
+          },
+          error: function () {
+            callback({
+              draw: requestData.draw,
+              recordsTotal: 0,
+              recordsFiltered: 0,
+              data: []
+            });
+          }
+        });
+      },
       columns: [
-        // columns according to PAWS data structure
         { data: 'responsive_id' },
-        { data: 'id' }, // PAWS acKey
-        { data: 'status' }, // PAWS status
-        { data: 'datum_kreiranja' }, // PAWS date
-        { data: 'klijent' }, // PAWS client
-        { data: 'vrednost' }, // PAWS value
-        { data: 'status' }, // PAWS status again
-        { data: 'prioritet' }, // PAWS priority
+        { data: 'id' },
+        { data: 'status' },
+        { data: 'datum_kreiranja' },
+        { data: 'klijent' },
+        { data: 'vrednost' },
+        { data: 'status' },
+        { data: 'prioritet' },
         { data: '' }
       ],
       columnDefs: [
         {
-          // For Responsive
           className: 'control',
           responsivePriority: 2,
-          targets: 0
+          targets: 0,
+          orderable: false
         },
         {
-          // Radni Nalog ID
           targets: 1,
           width: '46px',
           type: 'num',
-          render: function (data, type, full, meta) {
-            var $nalogId = full['id'] || full['broj_naloga'];
-            var numericSort = Number($nalogId);
-            var sortValue = Number.isFinite(numericSort) ? numericSort : $nalogId;
-            // Creates full output for row, include hidden sort helper
-            var $rowOutput =
-              '<span class="d-none">' + sortValue + '</span>' +
-              '<a class="fw-bold" href="' + invoicePreview + '/' + full['id'] + '"> #' + $nalogId + '</a>';
-            return $rowOutput;
+          render: function (data, type, full) {
+            var nalogId = full['id'] || full['broj_naloga'];
+            var numericSort = Number(nalogId);
+            var sortValue = Number.isFinite(numericSort) ? numericSort : nalogId;
+
+            return (
+              '<span class="d-none">' +
+              sortValue +
+              '</span>' +
+              '<a class="fw-bold" href="' +
+              invoicePreview +
+              '/' +
+              full['id'] +
+              '"> #' +
+              nalogId +
+              '</a>'
+            );
           }
         },
         {
-          // Radni Nalog Status
           targets: 2,
           width: '42px',
-          render: function (data, type, full, meta) {
-            var $status = full['status'],
-              $datumZavrsetka = full['datum_zavrsetka'],
-              $vrednost = full['vrednost'];
-            var normalizedStatus = ($status || '').toString().toLowerCase();
+          orderable: false,
+          render: function (data, type, full) {
+            var status = full['status'],
+              datumZavrsetka = full['datum_zavrsetka'],
+              vrednost = full['vrednost'];
+            var normalizedStatus = (status || '').toString().toLowerCase();
             var statusConfig = { class: 'bg-light-secondary', icon: 'help-circle' };
 
             if (normalizedStatus.includes('zavr') || normalizedStatus.includes('zaklj')) {
@@ -90,14 +160,16 @@ $(function () {
             } else if (normalizedStatus.includes('nacrt')) {
               statusConfig = { class: 'bg-light-info', icon: 'edit' };
             }
-            
+
             return (
               "<span data-bs-toggle='tooltip' data-bs-html='true' title='<span>" +
-              $status +
+              status +
               '<br> <span class="fw-bold">Vrijednost:</span> ' +
-              $vrednost + ' ' + (full['valuta'] || 'RSD') +
-              '<br> <span class="fw-bold">Datum završetka:</span> ' +
-              ($datumZavrsetka || 'Nije dostupno') +
+              vrednost +
+              ' ' +
+              (full['valuta'] || 'RSD') +
+              '<br> <span class="fw-bold">Datum zavrsetka:</span> ' +
+              (datumZavrsetka || 'Nije dostupno') +
               "</span>'>" +
               '<div class="avatar avatar-status ' +
               statusConfig.class +
@@ -111,135 +183,142 @@ $(function () {
           }
         },
         {
-          // Client name and Service
           targets: 3,
           responsivePriority: 4,
           width: '270px',
-          render: function (data, type, full, meta) {
-            var $name = full['klijent'],
-              $dodeljenKorisnik = full['dodeljen_korisnik'],
-              $magacin = full['magacin'],
-              stateNum = Math.floor(Math.random() * 6),
+          render: function (data, type, full) {
+            var name = full['klijent'] || 'N/A',
+              dodeljenKorisnik = full['dodeljen_korisnik'] || '';
+            var stateNum = Math.floor(Math.random() * 6),
               states = ['success', 'danger', 'warning', 'info', 'primary', 'secondary'],
-              $state = states[stateNum],
-              $initials = $name.match(/\b\w/g) || [];
-            $initials = (($initials.shift() || '') + ($initials.pop() || '')).toUpperCase();
-            
-            // For Avatar badge
-            var $output = '<div class="avatar-content">' + $initials + '</div>';
-            var colorClass = ' bg-light-' + $state + ' ';
+              state = states[stateNum],
+              initials = name.match(/\b\w/g) || [];
+            initials = ((initials.shift() || '') + (initials.pop() || '')).toUpperCase();
 
-            var $rowOutput =
+            var output = '<div class="avatar-content">' + initials + '</div>';
+            var colorClass = ' bg-light-' + state + ' ';
+
+            return (
               '<div class="d-flex justify-content-left align-items-center">' +
               '<div class="avatar-wrapper">' +
               '<div class="avatar' +
               colorClass +
               'me-50">' +
-              $output +
+              output +
               '</div>' +
               '</div>' +
               '<div class="d-flex flex-column">' +
               '<h6 class="user-name text-truncate mb-0">' +
-              $name +
+              name +
               '</h6>' +
               '<small class="text-truncate text-muted">' +
-              $dodeljenKorisnik +
+              dodeljenKorisnik +
               '</small>' +
               '</div>' +
-              '</div>';
-            return $rowOutput;
+              '</div>'
+            );
           }
         },
         {
-          // Total Amount
           targets: 4,
           width: '73px',
-          render: function (data, type, full, meta) {
-            var $total = full['vrednost'];
-            var $currency = full['valuta'] || 'RSD';
-            return '<span class="d-none">' + $total + '</span>' + $currency + ' ' + $total;
+          render: function (data, type, full) {
+            var total = full['vrednost'];
+            var currency = full['valuta'] || 'RSD';
+            return '<span class="d-none">' + total + '</span>' + currency + ' ' + total;
           }
         },
         {
-          // Created Date
           targets: 5,
           width: '130px',
-          render: function (data, type, full, meta) {
-            var $createdDate = new Date(full['datum_kreiranja']);
-            // Creates full output for row
-            var $rowOutput =
+          render: function (data, type, full) {
+            var createdDate = new Date(full['datum_kreiranja']);
+            return (
               '<span class="d-none">' +
-              moment($createdDate).format('YYYYMMDD') +
+              moment(createdDate).format('YYYYMMDD') +
               '</span>' +
-              moment($createdDate).format('DD MMM YYYY');
-            return $rowOutput;
+              moment(createdDate).format('DD MMM YYYY')
+            );
           }
         },
         {
-          // Status Badge
           targets: 6,
           width: '98px',
-          render: function (data, type, full, meta) {
-            var $status = full['status'];
-            var $badge_class = 'badge-light-secondary';
-            var $text_color = '';
-            var normalizedStatus = ($status || '').toString().toLowerCase();
+          render: function (data, type, full) {
+            var status = full['status'];
+            var badgeClass = 'badge-light-secondary';
+            var textColor = '';
+            var normalizedStatus = (status || '').toString().toLowerCase();
 
             if (normalizedStatus.includes('zavr') || normalizedStatus.includes('zaklj')) {
-              $badge_class = 'badge-light-success';
-              $text_color = 'text-success';
+              badgeClass = 'badge-light-success';
+              textColor = 'text-success';
             } else if (normalizedStatus.includes('u toku') || normalizedStatus.includes('u radu')) {
-              $badge_class = 'badge-light-warning';
-              $text_color = 'text-warning';
+              badgeClass = 'badge-light-warning';
+              textColor = 'text-warning';
             } else if (
               normalizedStatus.includes('novo') ||
               normalizedStatus.includes('planiran') ||
               normalizedStatus.includes('otvoren')
             ) {
-              $badge_class = 'badge-light-primary';
-              $text_color = 'text-primary';
+              badgeClass = 'badge-light-primary';
+              textColor = 'text-primary';
             } else if (normalizedStatus.includes('otkaz')) {
-              $badge_class = 'badge-light-danger';
-              $text_color = 'text-danger';
+              badgeClass = 'badge-light-danger';
+              textColor = 'text-danger';
             } else if (normalizedStatus.includes('nacrt')) {
-              $badge_class = 'badge-light-info';
-              $text_color = 'text-info';
+              badgeClass = 'badge-light-info';
+              textColor = 'text-info';
             }
 
-            return '<span class="badge rounded-pill ' + $badge_class + ' ' + $text_color + '" text-capitalized> ' + $status + ' </span>';
+            return (
+              '<span class="badge rounded-pill ' +
+              badgeClass +
+              ' ' +
+              textColor +
+              '" text-capitalized> ' +
+              status +
+              ' </span>'
+            );
           }
         },
         {
-          // Priority
           targets: 7,
           width: '80px',
-          render: function (data, type, full, meta) {
-            var $priority = full['prioritet'];
-            var $badge_class = 'badge-light-secondary';
-            var $text_color = '';
-            var normalizedPriority = ($priority || '').toString().toLowerCase();
+          render: function (data, type, full) {
+            var priority = full['prioritet'];
+            var badgeClass = 'badge-light-secondary';
+            var textColor = '';
+            var normalizedPriority = (priority || '').toString().toLowerCase();
 
             if (normalizedPriority === 'visok' || normalizedPriority === 'z' || normalizedPriority === 'high') {
-              $badge_class = 'badge-light-danger';
-              $text_color = 'text-danger';
+              badgeClass = 'badge-light-danger';
+              textColor = 'text-danger';
             } else if (normalizedPriority === 'srednji' || normalizedPriority === 's' || normalizedPriority === 'medium') {
-              $badge_class = 'badge-light-warning';
-              $text_color = 'text-warning';
+              badgeClass = 'badge-light-warning';
+              textColor = 'text-warning';
             } else if (normalizedPriority === 'nizak' || normalizedPriority === 'd' || normalizedPriority === 'low') {
-              $badge_class = 'badge-light-info';
-              $text_color = 'text-info';
+              badgeClass = 'badge-light-info';
+              textColor = 'text-info';
             }
-            
-            return '<span class="badge rounded-pill ' + $badge_class + ' ' + $text_color + '" text-capitalized> ' + $priority + ' </span>';
+
+            return (
+              '<span class="badge rounded-pill ' +
+              badgeClass +
+              ' ' +
+              textColor +
+              '" text-capitalized> ' +
+              priority +
+              ' </span>'
+            );
           }
         },
         {
-          // Actions
           targets: -1,
           title: 'Akcije',
           width: '80px',
           orderable: false,
-          render: function (data, type, full, meta) {
+          render: function (data, type, full) {
             return (
               '<div class="d-flex align-items-center col-actions">' +
               '<a class="me-25" href="' +
@@ -264,7 +343,7 @@ $(function () {
               'Uredi</a>' +
               '<a href="#" class="dropdown-item">' +
               feather.icons['trash'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Obriši</a>' +
+              'Obrisi</a>' +
               '<a href="#" class="dropdown-item">' +
               feather.icons['copy'].toSvg({ class: 'font-small-4 me-50' }) +
               'Dupliciraj</a>' +
@@ -275,7 +354,7 @@ $(function () {
           }
         }
       ],
-      order: [[1, 'asc']],
+      ordering: false,
       dom:
         '<"row d-flex justify-content-between align-items-center m-1"' +
         '<"col-lg-6 d-flex align-items-center"l<"dt-action-buttons text-xl-end text-lg-start text-lg-end text-start "B>>' +
@@ -286,21 +365,18 @@ $(function () {
         '<"col-sm-12 col-md-6"p>' +
         '>',
       language: {
-        sLengthMenu: 'Prikaži _MENU_',
+        sLengthMenu: 'Prikazi _MENU_',
         search: 'Brza pretraga',
-        searchPlaceholder: 'Pretraži...',
+        searchPlaceholder: 'Pretrazi...',
         info: 'Prikazano _START_ do _END_ od _TOTAL_ unosa',
         infoEmpty: 'Prikazano 0 do 0 od 0 unosa',
         infoFiltered: '(filtrirano od _MAX_ ukupnih unosa)',
         paginate: {
-          // remove previous & next text from pagination
           previous: '&nbsp;',
           next: '&nbsp;'
         }
       },
-      // Buttons with Dropdown
       buttons: [],
-      // For responsive popup
       responsive: {
         details: {
           display: $.fn.dataTable.Responsive.display.modal({
@@ -311,8 +387,8 @@ $(function () {
           }),
           type: 'column',
           renderer: function (api, rowIdx, columns) {
-            var data = $.map(columns, function (col, i) {
-              return col.columnIndex !== 2 // ? Do not show row in modal popup if title is blank (for check box)
+            var data = $.map(columns, function (col) {
+              return col.columnIndex !== 2
                 ? '<tr data-dt-row="' +
                     col.rowIdx +
                     '" data-dt-column="' +
@@ -320,8 +396,7 @@ $(function () {
                     '">' +
                     '<td>' +
                     col.title +
-                    ':' +
-                    '</td> ' +
+                    ':</td> ' +
                     '<td>' +
                     col.data +
                     '</td>' +
@@ -334,174 +409,51 @@ $(function () {
       },
       initComplete: function () {
         $(document).find('[data-bs-toggle="tooltip"]').tooltip();
-        // Initialize feather icons
         if (typeof feather !== 'undefined') {
           feather.replace();
         }
       },
       drawCallback: function () {
         $(document).find('[data-bs-toggle="tooltip"]').tooltip();
-        // Initialize feather icons
         if (typeof feather !== 'undefined') {
           feather.replace();
         }
       }
     });
 
-    // Handle "Dodaj radni nalog" button click
-    $('#btn-add').on('click', function() {
+    function applyFilters() {
+      dtInvoice.ajax.reload();
+    }
+
+    $('#btn-add').on('click', function () {
       window.location = invoiceAdd;
     });
 
-    // Filtering functionality
-    var currentStatusFilter = null;
-    
-    // Status card click handler
-    $('.status-card').on('click', function() {
+    $('.status-card').on('click', function () {
       $('.status-card').removeClass('status-card-active');
       $(this).addClass('status-card-active');
-      
+
       var status = $(this).data('status');
-      currentStatusFilter = status;
-      
+      currentStatusFilter = status && status !== 'svi' ? status : null;
       applyFilters();
     });
 
-    // Store the custom filter function reference
-    var customFilterFunction = null;
-
-    // Apply filters function
-    function applyFilters() {
-      // Remove previous custom filter if it exists
-      if (customFilterFunction !== null) {
-        var idx = $.fn.dataTable.ext.search.indexOf(customFilterFunction);
-        if (idx !== -1) {
-          $.fn.dataTable.ext.search.splice(idx, 1);
-        }
-      }
-
-      var filters = {
-        kupac: $('#filter-kupac').val(),
-        primatelj: $('#filter-primatelj').val(),
-        proizvod: $('#filter-proizvod').val(),
-        planPocetakOd: $('#filter-plan-pocetak-od').val(),
-        planPocetakDo: $('#filter-plan-pocetak-do').val(),
-        planKrajOd: $('#filter-plan-kraj-od').val(),
-        planKrajDo: $('#filter-plan-kraj-do').val(),
-        datumOd: $('#filter-datum-od').val(),
-        datumDo: $('#filter-datum-do').val(),
-        vezniDok: $('#filter-vezni-dok').val()
-      };
-
-      // Custom filtering function
-      customFilterFunction = function(settings, data, dataIndex) {
-          var row = dtInvoice.row(dataIndex).data();
-          if (!row) return false;
-
-          // Status filter
-          if (currentStatusFilter && currentStatusFilter !== 'svi') {
-            var rowStatus = (row['status'] || '').toLowerCase();
-            var statusMatch = false;
-            
-            switch(currentStatusFilter) {
-              case 'planiran':
-                statusMatch = rowStatus.includes('planiran') || rowStatus.includes('novo');
-                break;
-              case 'otvoren':
-                statusMatch = rowStatus.includes('otvoren') || rowStatus.includes('novo');
-                break;
-              case 'rezerviran':
-                statusMatch = rowStatus.includes('rezerviran');
-                break;
-              case 'raspisan':
-                statusMatch = rowStatus.includes('raspisan');
-                break;
-              case 'u_radu':
-                statusMatch = rowStatus.includes('u toku') || rowStatus.includes('u radu');
-                break;
-              case 'djelimicno_zakljucen':
-                statusMatch = rowStatus.includes('djelimicno') || rowStatus.includes('djelomicno');
-                break;
-              case 'zakljucen':
-                statusMatch = rowStatus.includes('zavr') || rowStatus.includes('zaklj');
-                break;
-            }
-            
-            if (!statusMatch) return false;
-          }
-
-          // Text filters
-          if (filters.kupac) {
-            var klijent = (row['klijent'] || '').toLowerCase();
-            if (!klijent.includes(filters.kupac.toLowerCase())) return false;
-          }
-
-          if (filters.primatelj) {
-            var primatelj = (row['klijent'] || row['dodeljen_korisnik'] || '').toLowerCase();
-            if (!primatelj.includes(filters.primatelj.toLowerCase())) return false;
-          }
-
-          if (filters.proizvod) {
-            var proizvod = (row['opis'] || '').toLowerCase();
-            if (!proizvod.includes(filters.proizvod.toLowerCase())) return false;
-          }
-
-          if (filters.vezniDok) {
-            var vezniDok = (row['broj_naloga'] || '').toLowerCase();
-            if (!vezniDok.includes(filters.vezniDok.toLowerCase())) return false;
-          }
-
-          // Date filters
-          if (filters.datumOd) {
-            var datumKreiranja = row['datum_kreiranja'] || '';
-            if (datumKreiranja && datumKreiranja < filters.datumOd) return false;
-          }
-
-          if (filters.datumDo) {
-            var datumKreiranja = row['datum_kreiranja'] || '';
-            if (datumKreiranja && datumKreiranja > filters.datumDo) return false;
-          }
-
-          return true;
-        };
-
-      // Push the new filter function
-      $.fn.dataTable.ext.search.push(customFilterFunction);
-
-      dtInvoice.draw();
-    }
-
-    // Filter button click
-    $('#btn-filter').on('click', function() {
+    $('#btn-filter').on('click', function () {
       applyFilters();
     });
 
-    // Add filter button (placeholder - can be extended)
-    $('#btn-add-filter').on('click', function() {
-      // Can add dynamic filter rows here in the future
-      alert('Funkcionalnost "Dodaj filter" će biti implementirana.');
+    $('#btn-add-filter').on('click', function () {
+      alert('Funkcionalnost "Dodaj filter" ce biti implementirana.');
     });
 
-    // Clear filters button
-    $('#btn-delete-filter').on('click', function() {
+    $('#btn-delete-filter').on('click', function () {
       $('.filter-input').val('');
       currentStatusFilter = null;
       $('.status-card').removeClass('status-card-active');
-      
-      // Remove custom filter
-      if (customFilterFunction !== null) {
-        var idx = $.fn.dataTable.ext.search.indexOf(customFilterFunction);
-        if (idx !== -1) {
-          $.fn.dataTable.ext.search.splice(idx, 1);
-        }
-        customFilterFunction = null;
-      }
-      
-      dtInvoice.draw();
+      applyFilters();
     });
 
-    // Save filter (placeholder - can be extended to save to localStorage)
-    $('#btn-save-filter').on('click', function() {
+    $('#btn-save-filter').on('click', function () {
       var filters = {
         kupac: $('#filter-kupac').val(),
         primatelj: $('#filter-primatelj').val(),
@@ -515,12 +467,11 @@ $(function () {
         vezniDok: $('#filter-vezni-dok').val(),
         status: currentStatusFilter
       };
-      
+
       localStorage.setItem('radniNaloziFilters', JSON.stringify(filters));
-      alert('Filteri su sačuvani!');
+      alert('Filteri su sacuvani!');
     });
 
-    // Load saved filters (on page load)
     var savedFilters = localStorage.getItem('radniNaloziFilters');
     if (savedFilters) {
       try {
@@ -535,20 +486,21 @@ $(function () {
         $('#filter-datum-od').val(filters.datumOd || '');
         $('#filter-datum-do').val(filters.datumDo || '');
         $('#filter-vezni-dok').val(filters.vezniDok || '');
-        
+
         if (filters.status) {
           currentStatusFilter = filters.status;
           $('.status-card[data-status="' + filters.status + '"]').addClass('status-card-active');
         }
-      } catch(e) {
+
+        applyFilters();
+      } catch (e) {
         console.error('Error loading saved filters:', e);
       }
     }
 
-    // Enter key to apply filter
-    $('.filter-input').on('keypress', function(e) {
+    $('.filter-input').on('keypress', function (e) {
       if (e.which === 13) {
-        $('#btn-filter').click();
+        applyFilters();
       }
     });
   }

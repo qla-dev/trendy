@@ -17,12 +17,10 @@ class WorkOrderController extends Controller
         $pageConfigs = ['pageHeader' => false];
 
         try {
-            $orders = $this->fetchWorkOrders();
-
             return view('/content/apps/invoice/app-invoice-list', [
                 'pageConfigs' => $pageConfigs,
-                'radniNalozi' => $orders,
-                'statusStats' => $this->calculateStatusStats($orders),
+                'radniNalozi' => [],
+                'statusStats' => $this->fetchStatusStats(),
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order list query failed.', [
@@ -99,18 +97,34 @@ class WorkOrderController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $requestedLimit = $request->integer('limit', $this->resolveLimit());
-            $orders = $this->fetchWorkOrders($requestedLimit);
+            $requestedLimit = $request->filled('limit')
+                ? (int) $request->input('limit')
+                : ($request->filled('length') ? (int) $request->input('length') : null);
+
+            $limit = $this->resolveLimit($requestedLimit);
+            $page = $request->integer('page', 0);
+
+            if ($page < 1 && $request->filled('start')) {
+                $start = max(0, (int) $request->input('start'));
+                $page = (int) floor($start / $limit) + 1;
+            }
+
+            if ($page < 1) {
+                $page = 1;
+            }
+
+            $filters = $this->extractFilters($request);
+            $result = $this->fetchWorkOrders($limit, $page, $filters);
+            $statusStats = $this->fetchStatusStats($filters);
 
             return response()->json([
-                'data' => $orders,
-                'statusStats' => $this->calculateStatusStats($orders),
-                'meta' => [
-                    'count' => count($orders),
-                    'limit' => $this->resolveLimit($requestedLimit),
+                'draw' => (int) $request->input('draw', 0),
+                'data' => $result['data'],
+                'statusStats' => $statusStats,
+                'meta' => array_merge($result['meta'], [
                     'connection' => config('database.default'),
                     'table' => $this->qualifiedTableName(),
-                ],
+                ]),
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order API list query failed.', [
@@ -153,20 +167,39 @@ class WorkOrderController extends Controller
         }
     }
 
-    private function fetchWorkOrders(?int $limit = null): array
+    private function fetchWorkOrders(?int $limit = null, ?int $page = null, array $filters = []): array
     {
         $columns = $this->tableColumns();
+        $resolvedLimit = $this->resolveLimit($limit);
+        $resolvedPage = max(1, (int) ($page ?? 1));
+
+        $total = (clone $this->newTableQuery())->count();
         $query = $this->newTableQuery();
+
+        $this->applyFilters($query, $columns, $filters);
+        $filteredTotal = (clone $query)->count();
         $this->applyDefaultOrdering($query, $columns);
 
-        return $query
-            ->limit($this->resolveLimit($limit))
+        $data = $query
+            ->forPage($resolvedPage, $resolvedLimit)
             ->get()
             ->map(function ($row) {
                 return $this->mapRow((array) $row);
             })
             ->values()
             ->all();
+
+        return [
+            'data' => $data,
+            'meta' => [
+                'count' => count($data),
+                'page' => $resolvedPage,
+                'limit' => $resolvedLimit,
+                'total' => (int) $total,
+                'filtered_total' => (int) $filteredTotal,
+                'last_page' => $resolvedLimit > 0 ? (int) ceil($filteredTotal / $resolvedLimit) : 1,
+            ],
+        ];
     }
 
     private function findMappedWorkOrder(string $id, bool $includeRaw = false): ?array
@@ -265,46 +298,234 @@ class WorkOrderController extends Controller
         return $mapped;
     }
 
+    private function fetchStatusStats(array $filters = []): array
+    {
+        $stats = $this->emptyStatusStats();
+        $columns = $this->tableColumns();
+        $statusColumn = $this->firstExistingColumn($columns, ['acStatus', 'status']);
+
+        if ($statusColumn === null) {
+            return $stats;
+        }
+
+        $query = $this->newTableQuery();
+        $filtersWithoutStatus = $filters;
+        unset($filtersWithoutStatus['status']);
+        $this->applyFilters($query, $columns, $filtersWithoutStatus);
+
+        $stats['svi'] = (int) (clone $query)->count();
+
+        $rows = (clone $query)
+            ->select($statusColumn, DB::raw('COUNT(*) as total'))
+            ->groupBy($statusColumn)
+            ->get();
+
+        foreach ($rows as $row) {
+            $mappedStatus = $this->mapStatus($row->{$statusColumn} ?? null);
+            $bucket = $this->statusBucket($mappedStatus);
+
+            if ($bucket !== null && array_key_exists($bucket, $stats)) {
+                $stats[$bucket] += (int) $row->total;
+            }
+        }
+
+        return $stats;
+    }
+
+    private function extractFilters(Request $request): array
+    {
+        $rawSearch = $request->input('search.value');
+
+        if ($rawSearch === null) {
+            $rawSearch = $request->input('search');
+        }
+
+        return [
+            'status' => trim((string) $request->input('status', '')),
+            'kupac' => trim((string) $request->input('kupac', '')),
+            'primatelj' => trim((string) $request->input('primatelj', '')),
+            'proizvod' => trim((string) $request->input('proizvod', '')),
+            'plan_pocetak_od' => trim((string) $request->input('plan_pocetak_od', '')),
+            'plan_pocetak_do' => trim((string) $request->input('plan_pocetak_do', '')),
+            'plan_kraj_od' => trim((string) $request->input('plan_kraj_od', '')),
+            'plan_kraj_do' => trim((string) $request->input('plan_kraj_do', '')),
+            'datum_od' => trim((string) $request->input('datum_od', '')),
+            'datum_do' => trim((string) $request->input('datum_do', '')),
+            'vezni_dok' => trim((string) $request->input('vezni_dok', '')),
+            'search' => is_string($rawSearch) ? trim($rawSearch) : '',
+        ];
+    }
+
+    private function applyFilters(Builder $query, array $columns, array $filters): void
+    {
+        $statusColumn = $this->firstExistingColumn($columns, ['acStatus', 'status']);
+
+        if ($statusColumn !== null && !empty($filters['status'])) {
+            $this->applyStatusFilter($query, $statusColumn, (string) $filters['status']);
+        }
+
+        $this->applyLikeAny(
+            $query,
+            $this->existingColumns($columns, ['acConsignee', 'acReceiver', 'acPartner']),
+            (string) ($filters['kupac'] ?? '')
+        );
+
+        $this->applyLikeAny(
+            $query,
+            $this->existingColumns($columns, ['acReceiver', 'acConsignee', 'anClerk', 'acPartner']),
+            (string) ($filters['primatelj'] ?? '')
+        );
+
+        $this->applyLikeAny(
+            $query,
+            $this->existingColumns($columns, ['acNote', 'acStatement', 'acDescr', 'acName', 'acDocType']),
+            (string) ($filters['proizvod'] ?? '')
+        );
+
+        $this->applyLikeAny(
+            $query,
+            $this->existingColumns($columns, ['acRefNo1', 'acKey']),
+            (string) ($filters['vezni_dok'] ?? '')
+        );
+
+        $startDateColumn = $this->firstExistingColumn($columns, ['adDate', 'adDateIns']);
+        $endDateColumn = $this->firstExistingColumn($columns, ['adDeliveryDeadline', 'adDateOut']);
+
+        $this->applyDateRangeFilter(
+            $query,
+            $startDateColumn,
+            (string) ($filters['plan_pocetak_od'] ?? ''),
+            (string) ($filters['plan_pocetak_do'] ?? '')
+        );
+        $this->applyDateRangeFilter(
+            $query,
+            $endDateColumn,
+            (string) ($filters['plan_kraj_od'] ?? ''),
+            (string) ($filters['plan_kraj_do'] ?? '')
+        );
+        $this->applyDateRangeFilter(
+            $query,
+            $startDateColumn,
+            (string) ($filters['datum_od'] ?? ''),
+            (string) ($filters['datum_do'] ?? '')
+        );
+
+        $search = (string) ($filters['search'] ?? '');
+
+        if ($search !== '') {
+            $this->applyLikeAny(
+                $query,
+                $this->existingColumns($columns, ['acRefNo1', 'acKey', 'acConsignee', 'acReceiver', 'acNote', 'acStatement', 'acDescr', 'acStatus']),
+                $search
+            );
+        }
+    }
+
+    private function applyStatusFilter(Builder $query, string $column, string $statusFilter): void
+    {
+        $normalized = strtolower(trim($statusFilter));
+        $allowedStatuses = [
+            'planiran',
+            'otvoren',
+            'rezerviran',
+            'raspisan',
+            'u_radu',
+            'djelimicno_zakljucen',
+            'zakljucen',
+        ];
+
+        if ($normalized === '' || $normalized === 'svi' || !in_array($normalized, $allowedStatuses, true)) {
+            return;
+        }
+
+        $query->where(function (Builder $statusQuery) use ($column, $normalized) {
+            if ($normalized === 'planiran') {
+                $statusQuery->whereIn($column, ['N', 'PLANIRAN', 'NOVO']);
+                return;
+            }
+
+            if ($normalized === 'otvoren') {
+                $statusQuery->whereIn($column, ['O', 'OTVOREN']);
+                return;
+            }
+
+            if ($normalized === 'rezerviran') {
+                $statusQuery->whereIn($column, ['R', 'REZERVIRAN']);
+                return;
+            }
+
+            if ($normalized === 'raspisan') {
+                $statusQuery->whereIn($column, ['S', 'RASPISAN']);
+                return;
+            }
+
+            if ($normalized === 'u_radu') {
+                $statusQuery->whereIn($column, ['P', 'I', 'U TOKU', 'U RADU']);
+                return;
+            }
+
+            if ($normalized === 'djelimicno_zakljucen') {
+                $statusQuery->where($column, 'like', '%DJELIM%')
+                    ->orWhere($column, 'like', '%DELIM%');
+                return;
+            }
+
+            if ($normalized === 'zakljucen') {
+                $statusQuery->whereIn($column, ['F', 'ZAKLJUCEN', 'ZAVRSENO'])
+                    ->orWhere($column, 'like', '%ZAKLJ%')
+                    ->orWhere($column, 'like', '%ZAVRS%');
+            }
+        });
+    }
+
+    private function applyDateRangeFilter(Builder $query, ?string $column, string $from, string $to): void
+    {
+        if ($column === null) {
+            return;
+        }
+
+        $fromDate = $this->normalizeDateInput($from);
+        $toDate = $this->normalizeDateInput($to);
+
+        if ($fromDate !== null) {
+            $query->whereDate($column, '>=', $fromDate);
+        }
+
+        if ($toDate !== null) {
+            $query->whereDate($column, '<=', $toDate);
+        }
+    }
+
+    private function applyLikeAny(Builder $query, array $columns, string $value): void
+    {
+        $value = trim($value);
+
+        if ($value === '' || empty($columns)) {
+            return;
+        }
+
+        $query->where(function (Builder $textQuery) use ($columns, $value) {
+            foreach ($columns as $index => $column) {
+                if ($index === 0) {
+                    $textQuery->where($column, 'like', '%' . $value . '%');
+                    continue;
+                }
+
+                $textQuery->orWhere($column, 'like', '%' . $value . '%');
+            }
+        });
+    }
+
     private function calculateStatusStats(array $workOrders): array
     {
         $stats = $this->emptyStatusStats();
         $stats['svi'] = count($workOrders);
 
         foreach ($workOrders as $workOrder) {
-            $status = strtolower((string) ($workOrder['status'] ?? ''));
+            $bucket = $this->statusBucket((string) ($workOrder['status'] ?? ''));
 
-            if (str_contains($status, 'planiran') || str_contains($status, 'novo')) {
-                $stats['planiran']++;
-                continue;
-            }
-
-            if (str_contains($status, 'otvoren')) {
-                $stats['otvoren']++;
-                continue;
-            }
-
-            if (str_contains($status, 'rezerviran')) {
-                $stats['rezerviran']++;
-                continue;
-            }
-
-            if (str_contains($status, 'raspisan')) {
-                $stats['raspisan']++;
-                continue;
-            }
-
-            if (str_contains($status, 'u toku') || str_contains($status, 'u radu')) {
-                $stats['u_radu']++;
-                continue;
-            }
-
-            if (str_contains($status, 'djelimicno') || str_contains($status, 'djelomicno')) {
-                $stats['djelimicno_zakljucen']++;
-                continue;
-            }
-
-            if (str_contains($status, 'zavrseno') || str_contains($status, 'zakljucen')) {
-                $stats['zakljucen']++;
+            if ($bucket !== null && array_key_exists($bucket, $stats)) {
+                $stats[$bucket]++;
             }
         }
 
@@ -325,6 +546,45 @@ class WorkOrderController extends Controller
         ];
     }
 
+    private function statusBucket(string $status): ?string
+    {
+        $normalized = strtolower(trim($status));
+
+        if ($normalized === '' || $normalized === 'n/a') {
+            return null;
+        }
+
+        if (str_contains($normalized, 'planiran') || str_contains($normalized, 'novo')) {
+            return 'planiran';
+        }
+
+        if (str_contains($normalized, 'otvoren')) {
+            return 'otvoren';
+        }
+
+        if (str_contains($normalized, 'rezerviran')) {
+            return 'rezerviran';
+        }
+
+        if (str_contains($normalized, 'raspisan')) {
+            return 'raspisan';
+        }
+
+        if (str_contains($normalized, 'u toku') || str_contains($normalized, 'u radu')) {
+            return 'u_radu';
+        }
+
+        if (str_contains($normalized, 'djelimicno') || str_contains($normalized, 'djelomicno')) {
+            return 'djelimicno_zakljucen';
+        }
+
+        if (str_contains($normalized, 'zavrseno') || str_contains($normalized, 'zakljucen')) {
+            return 'zakljucen';
+        }
+
+        return null;
+    }
+
     private function mapStatus(mixed $status): string
     {
         if ($status === null || $status === '') {
@@ -342,6 +602,8 @@ class WorkOrderController extends Controller
             'C' => 'Otkazano',
             'D' => 'Nacrt',
             'O' => 'Otvoren',
+            'R' => 'Rezerviran',
+            'S' => 'Raspisan',
             'PLANIRAN' => 'Planiran',
             'OTVOREN' => 'Otvoren',
             'REZERVIRAN' => 'Rezerviran',
@@ -384,7 +646,7 @@ class WorkOrderController extends Controller
 
     private function applyDefaultOrdering(Builder $query, array $columns): void
     {
-        foreach (['adTimeIns', 'adDate', 'anNo'] as $column) {
+        foreach (['adDate', 'adDateIns', 'adTimeIns', 'anNo'] as $column) {
             if (in_array($column, $columns, true)) {
                 $query->orderByDesc($column);
             }
@@ -402,6 +664,24 @@ class WorkOrderController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    private function existingColumns(array $columns, array $candidates): array
+    {
+        return array_values(array_filter($candidates, function ($candidate) use ($columns) {
+            return in_array($candidate, $columns, true);
+        }));
+    }
+
+    private function firstExistingColumn(array $columns, array $candidates): ?string
+    {
+        foreach ($candidates as $candidate) {
+            if (in_array($candidate, $columns, true)) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     private function value(array $row, array $keys, mixed $default = null): mixed
@@ -446,6 +726,21 @@ class WorkOrderController extends Controller
         }
     }
 
+    private function normalizeDateInput(string $value): ?string
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value)->format('Y-m-d');
+        } catch (Throwable $exception) {
+            return null;
+        }
+    }
+
     private function displayDate(?string $value): string
     {
         if (!$value) {
@@ -479,8 +774,8 @@ class WorkOrderController extends Controller
 
     private function resolveLimit(?int $requestedLimit = null): int
     {
-        $maxLimit = max(1, (int) config('workorders.max_limit', 500));
-        $defaultLimit = max(1, (int) config('workorders.default_limit', 100));
+        $maxLimit = max(1, (int) config('workorders.max_limit', 100));
+        $defaultLimit = max(1, (int) config('workorders.default_limit', 10));
         $limit = $requestedLimit ?? $defaultLimit;
 
         if ($limit < 1) {
