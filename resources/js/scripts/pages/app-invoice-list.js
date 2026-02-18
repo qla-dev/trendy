@@ -48,9 +48,122 @@ $(function () {
     });
   }
 
+  function formatWorkOrderNumber(value) {
+    var rawValue = (value || '').toString().trim();
+
+    if (!rawValue) {
+      return 'N/A';
+    }
+
+    if (rawValue.indexOf('-') !== -1) {
+      return rawValue;
+    }
+
+    var digits = rawValue.replace(/\D/g, '');
+
+    if (digits.length === 13) {
+      return digits.slice(0, 2) + '-' + digits.slice(2, 7) + '-' + digits.slice(7);
+    }
+
+    return rawValue;
+  }
+
+  function normalizeStatusValue(value) {
+    return (value || '')
+      .toString()
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
+  function resolveStatusAppearance(status) {
+    var normalizedStatus = normalizeStatusValue(status);
+
+    if (normalizedStatus.includes('otkaz')) {
+      return {
+        icon: 'x-circle',
+        avatarClass: 'status-avatar-zakljucen',
+        badgeClass: 'status-badge-zakljucen'
+      };
+    }
+
+    if (normalizedStatus.includes('djelimic')) {
+      return {
+        icon: 'pause-circle',
+        avatarClass: 'status-avatar-djelimicno-zakljucen',
+        badgeClass: 'status-badge-djelimicno-zakljucen'
+      };
+    }
+
+    if (normalizedStatus.includes('zaklj') || normalizedStatus.includes('zavr')) {
+      return {
+        icon: 'check-circle',
+        avatarClass: 'status-avatar-zakljucen',
+        badgeClass: 'status-badge-zakljucen'
+      };
+    }
+
+    if (normalizedStatus.includes('u toku') || normalizedStatus.includes('u radu')) {
+      return {
+        icon: 'clock',
+        avatarClass: 'status-avatar-u-radu',
+        badgeClass: 'status-badge-u-radu'
+      };
+    }
+
+    if (normalizedStatus.includes('rezerv')) {
+      return {
+        icon: 'archive',
+        avatarClass: 'status-avatar-rezerviran',
+        badgeClass: 'status-badge-rezerviran'
+      };
+    }
+
+    if (normalizedStatus.includes('otvoren')) {
+      return {
+        icon: 'unlock',
+        avatarClass: 'status-avatar-otvoren',
+        badgeClass: 'status-badge-otvoren'
+      };
+    }
+
+    if (normalizedStatus.includes('raspis')) {
+      return {
+        icon: 'edit-3',
+        avatarClass: 'status-avatar-raspisan',
+        badgeClass: 'status-badge-raspisan'
+      };
+    }
+
+    if (normalizedStatus.includes('nacrt')) {
+      return {
+        icon: 'edit',
+        avatarClass: 'status-avatar-raspisan',
+        badgeClass: 'status-badge-raspisan'
+      };
+    }
+
+    if (normalizedStatus.includes('novo') || normalizedStatus.includes('planiran')) {
+      return {
+        icon: 'plus-circle',
+        avatarClass: 'status-avatar-planiran',
+        badgeClass: 'status-badge-planiran'
+      };
+    }
+
+    return {
+      icon: 'help-circle',
+      avatarClass: 'status-avatar-default',
+      badgeClass: 'status-badge-default'
+    };
+  }
+
   // datatable
   if (dtInvoiceTable.length) {
     var currentStatusFilter = null;
+    var moneyColumnIndex = 3;
+    var moneyColumnVisible = null;
     updateStatusCards(window.statusStats || {});
 
     var dtInvoice = dtInvoiceTable.DataTable({
@@ -75,6 +188,12 @@ $(function () {
           data: params,
           success: function (response) {
             updateStatusCards(response.statusStats || {});
+            var showMoneyColumn = !!(response.meta && response.meta.has_money_values);
+
+            if (moneyColumnVisible !== showMoneyColumn && dtInvoice && typeof dtInvoice.column === 'function') {
+              dtInvoice.column(moneyColumnIndex).visible(showMoneyColumn, false);
+              moneyColumnVisible = showMoneyColumn;
+            }
 
             callback({
               draw: requestData.draw,
@@ -96,10 +215,9 @@ $(function () {
       columns: [
         { data: 'responsive_id' },
         { data: 'id' },
-        { data: 'status' },
-        { data: 'datum_kreiranja' },
         { data: 'klijent' },
         { data: 'vrednost' },
+        { data: 'datum_kreiranja' },
         { data: 'status' },
         { data: 'prioritet' },
         { data: '' }
@@ -113,77 +231,31 @@ $(function () {
         },
         {
           targets: 1,
-          width: '46px',
+          className: 'text-nowrap',
+          width: '140px',
           type: 'num',
           render: function (data, type, full) {
-            var nalogId = full['id'] || full['broj_naloga'];
-            var numericSort = Number(nalogId);
-            var sortValue = Number.isFinite(numericSort) ? numericSort : nalogId;
+            var routeId = full['id'] || full['broj_naloga'];
+            var displayNumber = formatWorkOrderNumber(full['broj_naloga_prikaz'] || full['broj_naloga'] || routeId);
+            var numericSort = Number(routeId);
+            var sortValue = Number.isFinite(numericSort) ? numericSort : routeId;
 
             return (
               '<span class="d-none">' +
               sortValue +
               '</span>' +
-              '<a class="fw-bold" href="' +
+              '<a class="fw-bold text-nowrap" href="' +
               invoicePreview +
               '/' +
-              full['id'] +
-              '"> #' +
-              nalogId +
+              routeId +
+              '">' +
+              displayNumber +
               '</a>'
             );
           }
         },
         {
           targets: 2,
-          width: '42px',
-          orderable: false,
-          render: function (data, type, full) {
-            var status = full['status'],
-              datumZavrsetka = full['datum_zavrsetka'],
-              vrednost = full['vrednost'];
-            var normalizedStatus = (status || '').toString().toLowerCase();
-            var statusConfig = { class: 'bg-light-secondary', icon: 'help-circle' };
-
-            if (normalizedStatus.includes('zavr') || normalizedStatus.includes('zaklj')) {
-              statusConfig = { class: 'bg-light-success', icon: 'check-circle' };
-            } else if (normalizedStatus.includes('u toku') || normalizedStatus.includes('u radu')) {
-              statusConfig = { class: 'bg-light-warning', icon: 'clock' };
-            } else if (
-              normalizedStatus.includes('novo') ||
-              normalizedStatus.includes('planiran') ||
-              normalizedStatus.includes('otvoren')
-            ) {
-              statusConfig = { class: 'bg-light-primary', icon: 'plus-circle' };
-            } else if (normalizedStatus.includes('otkaz')) {
-              statusConfig = { class: 'bg-light-danger', icon: 'x-circle' };
-            } else if (normalizedStatus.includes('nacrt')) {
-              statusConfig = { class: 'bg-light-info', icon: 'edit' };
-            }
-
-            return (
-              "<span data-bs-toggle='tooltip' data-bs-html='true' title='<span>" +
-              status +
-              '<br> <span class="fw-bold">Vrijednost:</span> ' +
-              vrednost +
-              ' ' +
-              (full['valuta'] || 'RSD') +
-              '<br> <span class="fw-bold">Datum zavrsetka:</span> ' +
-              (datumZavrsetka || 'Nije dostupno') +
-              "</span>'>" +
-              '<div class="avatar avatar-status ' +
-              statusConfig.class +
-              '">' +
-              '<span class="avatar-content">' +
-              feather.icons[statusConfig.icon].toSvg({ class: 'avatar-icon' }) +
-              '</span>' +
-              '</div>' +
-              '</span>'
-            );
-          }
-        },
-        {
-          targets: 3,
           responsivePriority: 4,
           width: '270px',
           render: function (data, type, full) {
@@ -220,16 +292,25 @@ $(function () {
           }
         },
         {
-          targets: 4,
+          targets: 3,
           width: '73px',
           render: function (data, type, full) {
             var total = full['vrednost'];
-            var currency = full['valuta'] || 'RSD';
-            return '<span class="d-none">' + total + '</span>' + currency + ' ' + total;
+            var numericTotal = Number(total);
+            var hasValue = total !== null && total !== '' && Number.isFinite(numericTotal);
+
+            if (!hasValue) {
+              return '<span class="d-none">0</span>-';
+            }
+
+            var currency = (full['valuta'] || '').toString().trim();
+            var formatted = currency ? currency + ' ' + numericTotal : numericTotal;
+
+            return '<span class="d-none">' + numericTotal + '</span>' + formatted;
           }
         },
         {
-          targets: 5,
+          targets: 4,
           width: '130px',
           render: function (data, type, full) {
             var createdDate = new Date(full['datum_kreiranja']);
@@ -242,40 +323,15 @@ $(function () {
           }
         },
         {
-          targets: 6,
+          targets: 5,
           width: '98px',
           render: function (data, type, full) {
             var status = full['status'];
-            var badgeClass = 'badge-light-secondary';
-            var textColor = '';
-            var normalizedStatus = (status || '').toString().toLowerCase();
-
-            if (normalizedStatus.includes('zavr') || normalizedStatus.includes('zaklj')) {
-              badgeClass = 'badge-light-success';
-              textColor = 'text-success';
-            } else if (normalizedStatus.includes('u toku') || normalizedStatus.includes('u radu')) {
-              badgeClass = 'badge-light-warning';
-              textColor = 'text-warning';
-            } else if (
-              normalizedStatus.includes('novo') ||
-              normalizedStatus.includes('planiran') ||
-              normalizedStatus.includes('otvoren')
-            ) {
-              badgeClass = 'badge-light-primary';
-              textColor = 'text-primary';
-            } else if (normalizedStatus.includes('otkaz')) {
-              badgeClass = 'badge-light-danger';
-              textColor = 'text-danger';
-            } else if (normalizedStatus.includes('nacrt')) {
-              badgeClass = 'badge-light-info';
-              textColor = 'text-info';
-            }
+            var statusConfig = resolveStatusAppearance(status);
 
             return (
-              '<span class="badge rounded-pill ' +
-              badgeClass +
-              ' ' +
-              textColor +
+              '<span class="badge rounded-pill status-badge ' +
+              statusConfig.badgeClass +
               '" text-capitalized> ' +
               status +
               ' </span>'
@@ -283,21 +339,41 @@ $(function () {
           }
         },
         {
-          targets: 7,
+          targets: 6,
           width: '80px',
           render: function (data, type, full) {
             var priority = full['prioritet'];
             var badgeClass = 'badge-light-secondary';
             var textColor = '';
             var normalizedPriority = (priority || '').toString().toLowerCase();
+            var parsedPriorityCode = parseInt(normalizedPriority.split('-')[0], 10);
 
-            if (normalizedPriority === 'visok' || normalizedPriority === 'z' || normalizedPriority === 'high') {
+            if (
+              parsedPriorityCode === 1 ||
+              normalizedPriority.includes('visok') ||
+              normalizedPriority === 'z' ||
+              normalizedPriority === 'high'
+            ) {
               badgeClass = 'badge-light-danger';
               textColor = 'text-danger';
-            } else if (normalizedPriority === 'srednji' || normalizedPriority === 's' || normalizedPriority === 'medium') {
+            } else if (
+              parsedPriorityCode === 5 ||
+              normalizedPriority.includes('uobičajen') ||
+              normalizedPriority.includes('uobicajen') ||
+              normalizedPriority === 'srednji' ||
+              normalizedPriority === 's' ||
+              normalizedPriority === 'medium'
+            ) {
               badgeClass = 'badge-light-warning';
               textColor = 'text-warning';
-            } else if (normalizedPriority === 'nizak' || normalizedPriority === 'd' || normalizedPriority === 'low') {
+            } else if (
+              parsedPriorityCode === 10 ||
+              parsedPriorityCode === 15 ||
+              normalizedPriority.includes('nizak') ||
+              normalizedPriority.includes('uzor') ||
+              normalizedPriority === 'd' ||
+              normalizedPriority === 'low'
+            ) {
               badgeClass = 'badge-light-info';
               textColor = 'text-info';
             }
@@ -316,39 +392,18 @@ $(function () {
         {
           targets: -1,
           title: 'Akcije',
-          width: '80px',
+          width: '48px',
           orderable: false,
           render: function (data, type, full) {
             return (
-              '<div class="d-flex align-items-center col-actions">' +
-              '<a class="me-25" href="' +
+              '<div class="d-flex align-items-center justify-content-center col-actions">' +
+              '<a href="' +
               invoicePreview +
               '/' +
               full['id'] +
               '" data-bs-toggle="tooltip" data-bs-placement="top" title="Pregled radnog naloga">' +
               feather.icons['eye'].toSvg({ class: 'font-medium-2 text-body' }) +
               '</a>' +
-              '<div class="dropdown">' +
-              '<a class="btn btn-sm btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown">' +
-              feather.icons['more-vertical'].toSvg({ class: 'font-medium-2 text-body' }) +
-              '</a>' +
-              '<div class="dropdown-menu dropdown-menu-end">' +
-              '<a href="#" class="dropdown-item">' +
-              feather.icons['download'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Preuzmi</a>' +
-              '<a href="' +
-              invoiceEdit +
-              '" class="dropdown-item">' +
-              feather.icons['edit'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Uredi</a>' +
-              '<a href="#" class="dropdown-item">' +
-              feather.icons['trash'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Obrisi</a>' +
-              '<a href="#" class="dropdown-item">' +
-              feather.icons['copy'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Dupliciraj</a>' +
-              '</div>' +
-              '</div>' +
               '</div>'
             );
           }
@@ -365,9 +420,9 @@ $(function () {
         '<"col-sm-12 col-md-6"p>' +
         '>',
       language: {
-        sLengthMenu: 'Prikazi _MENU_',
+        sLengthMenu: 'Prikaži _MENU_',
         search: 'Brza pretraga',
-        searchPlaceholder: 'Pretrazi...',
+        searchPlaceholder: 'Pretraži...',
         info: 'Prikazano _START_ do _END_ od _TOTAL_ unosa',
         infoEmpty: 'Prikazano 0 do 0 od 0 unosa',
         infoFiltered: '(filtrirano od _MAX_ ukupnih unosa)',
@@ -388,7 +443,7 @@ $(function () {
           type: 'column',
           renderer: function (api, rowIdx, columns) {
             var data = $.map(columns, function (col) {
-              return col.columnIndex !== 2
+              return col.columnIndex !== 0 && col.title !== 'Akcije'
                 ? '<tr data-dt-row="' +
                     col.rowIdx +
                     '" data-dt-column="' +

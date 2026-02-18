@@ -42,7 +42,7 @@
   <!-- Status Cards Section -->
   <div class="row mb-2">
     <div class="col-12">
-      <div class="d-flex flex-wrap gap-1 status-cards-wrapper">
+      <div class="d-flex status-cards-wrapper">
         <div class="status-card" data-status="svi">
           <div class="status-card-body">
             <div class="status-label">Svi</div>
@@ -202,7 +202,6 @@
           <tr>
             <th></th>
             <th>#</th>
-            <th><i data-feather="trending-up"></i></th>
             <th>Klijent</th>
             <th>Ukupno</th>
             <th class="text-truncate">Datum Kreiranja</th>
@@ -226,14 +225,18 @@
 <style>
   .status-cards-wrapper {
     display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
+    flex-wrap: nowrap;
+    gap: 14px;
+    width: 100%;
+    align-items: stretch;
+    margin: 0;
+    padding: 0;
   }
 
   .status-card {
-    flex: 1;
-    min-width: 140px;
-    max-width: 200px;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
     background: #fff;
     border: 1px solid #ebe9f1;
     border-radius: 5px;
@@ -385,6 +388,90 @@
     font-weight: 700;
     color: #5e5873;
     line-height: 1;
+  }
+
+  .status-badge {
+    font-weight: 500;
+  }
+
+  .status-badge-default {
+    background-color: rgba(110, 107, 123, 0.12) !important;
+    color: #6e6b7b !important;
+  }
+
+  .status-badge-planiran {
+    background-color: rgba(0, 207, 232, 0.12) !important;
+    color: #00cfe8 !important;
+  }
+
+  .status-badge-otvoren {
+    background-color: rgba(40, 199, 111, 0.12) !important;
+    color: #28c76f !important;
+  }
+
+  .status-badge-rezerviran {
+    background-color: rgba(255, 159, 67, 0.12) !important;
+    color: #ff9f43 !important;
+  }
+
+  .status-badge-raspisan {
+    background-color: rgba(73, 91, 115, 0.12) !important;
+    color: #495B73 !important;
+  }
+
+  .status-badge-u-radu {
+    background-color: rgba(255, 193, 7, 0.16) !important;
+    color: #b38600 !important;
+  }
+
+  .status-badge-djelimicno-zakljucen {
+    background-color: rgba(253, 126, 20, 0.12) !important;
+    color: #fd7e14 !important;
+  }
+
+  .status-badge-zakljucen {
+    background-color: rgba(234, 84, 85, 0.12) !important;
+    color: #ea5455 !important;
+  }
+
+  .avatar.avatar-status.status-avatar-default {
+    background-color: rgba(110, 107, 123, 0.12);
+    color: #6e6b7b;
+  }
+
+  .avatar.avatar-status.status-avatar-planiran {
+    background-color: rgba(0, 207, 232, 0.12);
+    color: #00cfe8;
+  }
+
+  .avatar.avatar-status.status-avatar-otvoren {
+    background-color: rgba(40, 199, 111, 0.12);
+    color: #28c76f;
+  }
+
+  .avatar.avatar-status.status-avatar-rezerviran {
+    background-color: rgba(255, 159, 67, 0.12);
+    color: #ff9f43;
+  }
+
+  .avatar.avatar-status.status-avatar-raspisan {
+    background-color: rgba(73, 91, 115, 0.12);
+    color: #495B73;
+  }
+
+  .avatar.avatar-status.status-avatar-u-radu {
+    background-color: rgba(255, 193, 7, 0.16);
+    color: #b38600;
+  }
+
+  .avatar.avatar-status.status-avatar-djelimicno-zakljucen {
+    background-color: rgba(253, 126, 20, 0.12);
+    color: #fd7e14;
+  }
+
+  .avatar.avatar-status.status-avatar-zakljucen {
+    background-color: rgba(234, 84, 85, 0.12);
+    color: #ea5455;
   }
 
   .filter-input {

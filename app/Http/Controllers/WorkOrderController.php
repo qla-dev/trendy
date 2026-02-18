@@ -12,6 +12,8 @@ use Throwable;
 
 class WorkOrderController extends Controller
 {
+    private ?array $deliveryPriorityMap = null;
+
     public function invoiceList()
     {
         $pageConfigs = ['pageHeader' => false];
@@ -188,6 +190,7 @@ class WorkOrderController extends Controller
     private function fetchWorkOrders(?int $limit = null, ?int $page = null, array $filters = []): array
     {
         $columns = $this->tableColumns();
+        $moneyColumns = $this->monetaryColumns($columns);
         $resolvedLimit = $this->resolveLimit($limit);
         $resolvedPage = max(1, (int) ($page ?? 1));
 
@@ -196,6 +199,7 @@ class WorkOrderController extends Controller
 
         $this->applyFilters($query, $columns, $filters);
         $filteredTotal = (clone $query)->count();
+        $hasMoneyValues = $this->hasMonetaryValues($query, $moneyColumns);
         $this->applyDefaultOrdering($query, $columns);
 
         $data = $query
@@ -216,6 +220,8 @@ class WorkOrderController extends Controller
                 'total' => (int) $total,
                 'filtered_total' => (int) $filteredTotal,
                 'last_page' => $resolvedLimit > 0 ? (int) ceil($filteredTotal / $resolvedLimit) : 1,
+                'has_money_column' => !empty($moneyColumns),
+                'has_money_values' => $hasMoneyValues,
             ],
         ];
     }
@@ -453,10 +459,12 @@ class WorkOrderController extends Controller
             $id = $this->value($row, ['anNo', 'id'], $brojNaloga);
         }
 
-        $status = $this->mapStatus($this->value($row, ['acStatus', 'status'], 'N/A'));
-        $priority = $this->mapPriority($this->value($row, ['acPriority', 'acWayOfSale', 'priority'], 'Srednji'));
+        $status = $this->mapStatus($this->value($row, ['acStatusMF', 'acStatus', 'status'], 'N/A'));
+        $priority = $this->mapPriority($this->value($row, ['anPriority', 'acPriority', 'acWayOfSale', 'priority'], 5));
         $createdDate = $this->normalizeDate($this->value($row, ['adDate', 'adDateIns', 'created_at']));
         $endDate = $this->normalizeDate($this->value($row, ['adDeliveryDeadline', 'adDateOut', 'actual_end']));
+        $rawAmount = $this->value($row, $this->moneyValueCandidates(), null);
+        $amount = $this->normalizeNullableNumber($rawAmount);
 
         $mapped = [
             'responsive_id' => '',
@@ -470,8 +478,8 @@ class WorkOrderController extends Controller
             'datum_zavrsetka' => $endDate,
             'dodeljen_korisnik' => (string) $this->value($row, ['anClerk', 'created_by', 'acUser'], ''),
             'klijent' => (string) $this->value($row, ['acConsignee', 'acReceiver', 'client_name', 'acPartner'], 'N/A'),
-            'vrednost' => $this->normalizeNumber($this->value($row, ['anValue', 'anDocValue', 'total'], 0)),
-            'valuta' => (string) $this->value($row, ['acCurrency', 'currency'], 'BAM'),
+            'vrednost' => $amount,
+            'valuta' => $amount === null ? '' : (string) $this->value($row, ['acCurrency', 'currency'], 'BAM'),
             'magacin' => (string) $this->value($row, ['acWarehouse', 'linked_document', 'acWarehouseFrom'], ''),
         ];
 
@@ -570,7 +578,7 @@ class WorkOrderController extends Controller
     {
         $stats = $this->emptyStatusStats();
         $columns = $this->tableColumns();
-        $statusColumn = $this->firstExistingColumn($columns, ['acStatus', 'status']);
+        $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF', 'acStatus', 'status']);
 
         if ($statusColumn === null) {
             return $stats;
@@ -626,7 +634,7 @@ class WorkOrderController extends Controller
 
     private function applyFilters(Builder $query, array $columns, array $filters): void
     {
-        $statusColumn = $this->firstExistingColumn($columns, ['acStatus', 'status']);
+        $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF', 'acStatus', 'status']);
 
         if ($statusColumn !== null && !empty($filters['status'])) {
             $this->applyStatusFilter($query, $statusColumn, (string) $filters['status']);
@@ -718,28 +726,30 @@ class WorkOrderController extends Controller
             }
 
             if ($normalized === 'rezerviran') {
-                $statusQuery->whereIn($column, ['R', 'REZERVIRAN']);
+                $statusQuery->whereIn($column, ['REZERVIRAN'])
+                    ->orWhere($column, 'like', '%REZERV%');
                 return;
             }
 
             if ($normalized === 'raspisan') {
-                $statusQuery->whereIn($column, ['S', 'RASPISAN']);
+                $statusQuery->whereIn($column, ['S', 'D', 'RASPISAN']);
                 return;
             }
 
             if ($normalized === 'u_radu') {
-                $statusQuery->whereIn($column, ['P', 'I', 'U TOKU', 'U RADU']);
+                $statusQuery->whereIn($column, ['E', 'P', 'I', 'U TOKU', 'U RADU']);
                 return;
             }
 
             if ($normalized === 'djelimicno_zakljucen') {
-                $statusQuery->where($column, 'like', '%DJELIM%')
-                    ->orWhere($column, 'like', '%DELIM%');
+                $statusQuery->whereIn($column, ['R', 'DJELIMICNO ZAKLJUCEN', 'DJELOMICNO ZAKLJUCEN'])
+                    ->orWhere($column, 'like', '%DJELIM%')
+                    ->orWhere($column, 'like', '%DJELOM%');
                 return;
             }
 
             if ($normalized === 'zakljucen') {
-                $statusQuery->whereIn($column, ['F', 'ZAKLJUCEN', 'ZAVRSENO'])
+                $statusQuery->whereIn($column, ['F', 'Z', 'ZAKLJUCEN', 'ZAVRSENO'])
                     ->orWhere($column, 'like', '%ZAKLJ%')
                     ->orWhere($column, 'like', '%ZAVRS%');
             }
@@ -865,21 +875,25 @@ class WorkOrderController extends Controller
         $statusMap = [
             'F' => 'Zavrseno',
             'P' => 'U toku',
-            'I' => 'U toku',
+            'I' => 'Zakljucen',
             'N' => 'Novo',
             'C' => 'Otkazano',
-            'D' => 'Nacrt',
+            'D' => 'Raspisan',
             'O' => 'Otvoren',
-            'R' => 'Rezerviran',
+            'R' => 'Djelimično zaključen',
             'S' => 'Raspisan',
+            'E' => 'U radu',
+            'Z' => 'Zakljucen',
             'PLANIRAN' => 'Planiran',
             'OTVOREN' => 'Otvoren',
-            'REZERVIRAN' => 'Rezerviran',
+            'REZERVIRAN' => 'Djelimično zaključen',
+            'DJELIMICNO ZAKLJUCEN' => 'Rezerviran',
+            'DJELOMICNO ZAKLJUCEN' => 'Rezerviran',
             'RASPISAN' => 'Raspisan',
             'U TOKU' => 'U toku',
             'U RADU' => 'U toku',
-            'ZAVRSENO' => 'Zavrseno',
-            'ZAKLJUCEN' => 'Zavrseno',
+            'ZAVRSENO' => 'Zakljucen',
+            'ZAKLJUCEN' => 'Zakljucen',
         ];
 
         return $statusMap[$normalizedStatus] ?? $statusString;
@@ -887,29 +901,89 @@ class WorkOrderController extends Controller
 
     private function mapPriority(mixed $priority): string
     {
+        $priorityMap = $this->deliveryPriorityMap();
+
         if ($priority === null || $priority === '') {
-            return 'Srednji';
+            return $priorityMap[5] ?? '5 - Uobičajeni prioritet';
+        }
+
+        if (is_int($priority) || is_float($priority) || is_numeric((string) $priority)) {
+            $priorityCode = (int) $priority;
+            return $priorityMap[$priorityCode] ?? (string) $priorityCode;
         }
 
         $priorityString = trim((string) $priority);
         $normalizedPriority = strtoupper($priorityString);
 
-        $priorityMap = [
-            'V' => 'Visok',
-            'Z' => 'Visok',
-            'VISOK' => 'Visok',
-            'HIGH' => 'Visok',
-            'S' => 'Srednji',
-            'M' => 'Srednji',
-            'SREDNJI' => 'Srednji',
-            'MEDIUM' => 'Srednji',
-            'D' => 'Nizak',
-            'N' => 'Nizak',
-            'NIZAK' => 'Nizak',
-            'LOW' => 'Nizak',
+        if (preg_match('/^\d+\s*-\s*/', $priorityString) === 1) {
+            return $priorityString;
+        }
+
+        $legacyMap = [
+            'V' => 1,
+            'Z' => 1,
+            'VISOK' => 1,
+            'HIGH' => 1,
+            'S' => 5,
+            'M' => 5,
+            'SREDNJI' => 5,
+            'MEDIUM' => 5,
+            'D' => 10,
+            'N' => 10,
+            'NIZAK' => 10,
+            'LOW' => 10,
         ];
 
-        return $priorityMap[$normalizedPriority] ?? $priorityString;
+        if (array_key_exists($normalizedPriority, $legacyMap)) {
+            $priorityCode = $legacyMap[$normalizedPriority];
+            return $priorityMap[$priorityCode] ?? (string) $priorityCode;
+        }
+
+        return $priorityString;
+    }
+
+    private function deliveryPriorityMap(): array
+    {
+        if ($this->deliveryPriorityMap !== null) {
+            return $this->deliveryPriorityMap;
+        }
+
+        $fallbackMap = [
+            1 => '1 - Visoki prioritet',
+            5 => '5 - Uobičajeni prioritet',
+            10 => '10 - Niski prioritet',
+            15 => '15 - Uzorci',
+        ];
+
+        try {
+            $rows = DB::table($this->tableSchema() . '.tHE_SetDeliveryPriority')
+                ->select(['anPriority', 'acPriority', 'acName', 'abActive'])
+                ->where('abActive', 1)
+                ->orderBy('anPriority')
+                ->get();
+
+            $mapped = $rows
+                ->mapWithKeys(function ($row) {
+                    $code = (int) ($row->anPriority ?? 0);
+                    $label = trim((string) ($row->acPriority ?? ''));
+
+                    if ($label === '') {
+                        $name = trim((string) ($row->acName ?? ''));
+                        $label = $name !== '' ? ($code . ' - ' . $name) : (string) $code;
+                    }
+
+                    return [$code => $label];
+                })
+                ->all();
+
+            $this->deliveryPriorityMap = !empty($mapped)
+                ? array_replace($fallbackMap, $mapped)
+                : $fallbackMap;
+        } catch (Throwable $exception) {
+            $this->deliveryPriorityMap = $fallbackMap;
+        }
+
+        return $this->deliveryPriorityMap;
     }
 
     private function applyDefaultOrdering(Builder $query, array $columns): void
@@ -1101,6 +1175,57 @@ class WorkOrderController extends Controller
         }
 
         return $value ?? 0;
+    }
+
+    private function normalizeNullableNumber(mixed $value): mixed
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return $this->normalizeNumber($value);
+    }
+
+    private function moneyValueCandidates(): array
+    {
+        return [
+            'anValue',
+            'anDocValue',
+            'total',
+            'anAmount',
+            'anTotal',
+            'anNetValue',
+            'anGrossValue',
+            'anPrcValue',
+            'anPrice',
+        ];
+    }
+
+    private function monetaryColumns(array $columns): array
+    {
+        return $this->existingColumns($columns, $this->moneyValueCandidates());
+    }
+
+    private function hasMonetaryValues(Builder $query, array $moneyColumns): bool
+    {
+        if (empty($moneyColumns)) {
+            return false;
+        }
+
+        $valueQuery = clone $query;
+        $valueQuery->where(function (Builder $amountQuery) use ($moneyColumns) {
+            foreach ($moneyColumns as $index => $column) {
+                $method = $index === 0 ? 'where' : 'orWhere';
+
+                $amountQuery->{$method}(function (Builder $singleColumnQuery) use ($column) {
+                    $singleColumnQuery
+                        ->whereNotNull($column)
+                        ->where($column, '<>', 0);
+                });
+            }
+        });
+
+        return $valueQuery->exists();
     }
 
     private function newTableQuery(): Builder
