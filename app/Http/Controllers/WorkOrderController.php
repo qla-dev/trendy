@@ -332,6 +332,10 @@ class WorkOrderController extends Controller
             return [];
         }
 
+        if ($linkColumn === null) {
+            return $this->fetchMappedOperationsFromItems($workOrderKey);
+        }
+
         $query = $this->newRegOperationsTableQuery()->where($linkColumn, $workOrderKey);
 
         foreach (['anNo', 'anVariant', 'adDate', 'adTimeIns'] as $column) {
@@ -340,10 +344,43 @@ class WorkOrderController extends Controller
             }
         }
 
-        return $query
+        $operations = $query
             ->get()
             ->map(function ($row) {
                 return $this->mapRegOperationRow((array) $row);
+            })
+            ->values()
+            ->all();
+
+        if (!empty($operations)) {
+            return $operations;
+        }
+
+        return $this->fetchMappedOperationsFromItems($workOrderKey);
+    }
+
+    private function fetchMappedOperationsFromItems(string $workOrderKey): array
+    {
+        $columns = $this->itemTableColumns();
+
+        if (!in_array('acOperationType', $columns, true)) {
+            return [];
+        }
+
+        $query = $this->newItemTableQuery()
+            ->where('acKey', $workOrderKey)
+            ->whereRaw("LTRIM(RTRIM(ISNULL(acOperationType, ''))) <> ''");
+
+        foreach (['anNo', 'anVariant', 'adTimeIns'] as $column) {
+            if (in_array($column, $columns, true)) {
+                $query->orderBy($column);
+            }
+        }
+
+        return $query
+            ->get()
+            ->map(function ($row) {
+                return $this->mapOperationFromItemRow((array) $row);
             })
             ->values()
             ->all();
@@ -499,6 +536,33 @@ class WorkOrderController extends Controller
             'va' => (string) $this->value($row, ['acFieldSA', 'acVA'], ''),
             'prim_klas' => (string) $this->value($row, ['acFieldSB'], ''),
             'sek_klas' => (string) $this->value($row, ['acFieldSC'], ''),
+        ];
+    }
+
+    private function mapOperationFromItemRow(array $row): array
+    {
+        $timeUnit = strtoupper((string) $this->valueTrimmed($row, ['acUMTime'], ''));
+        $mjVrij = $timeUnit === 'H' ? 'Sat' : (string) $this->valueTrimmed($row, ['acUMTime'], '');
+        $normative = $this->normalizeNumber($this->valueTrimmed($row, ['anBatch', 'anQtyBase', 'anQtyBase3'], 0));
+        $va = (string) $this->valueTrimmed($row, ['acFieldSE', 'acFieldSA', 'acFieldSB'], '');
+
+        if ($va === '') {
+            $va = 'OPR';
+        }
+
+        return [
+            'id' => $this->value($row, ['anQId', 'anNo'], null),
+            'alternativa' => (string) $this->valueTrimmed($row, ['anVariant'], ''),
+            'pozicija' => (string) $this->valueTrimmed($row, ['anNo'], ''),
+            'operacija' => (string) $this->valueTrimmed($row, ['acIdent'], ''),
+            'naziv' => (string) $this->valueTrimmed($row, ['acDescr', 'acName', 'acIdent'], ''),
+            'napomena' => (string) $this->valueTrimmed($row, ['acNote'], ''),
+            'mj' => (string) $this->valueTrimmed($row, ['acUM'], ''),
+            'mj_vrij' => $mjVrij,
+            'normativna_osnova' => $normative,
+            'va' => $va,
+            'prim_klas' => (string) $this->valueTrimmed($row, ['acFieldSB'], ''),
+            'sek_klas' => (string) $this->valueTrimmed($row, ['acFieldSC'], ''),
         ];
     }
 
