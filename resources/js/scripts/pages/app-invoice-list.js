@@ -42,6 +42,48 @@ $(function () {
     };
   }
 
+  var filterLabels = {
+    status: 'Status',
+    kupac: 'Kupac',
+    primatelj: 'Primatelj',
+    proizvod: 'Proizvod',
+    plan_pocetak_od: 'Plan. pocetak od',
+    plan_pocetak_do: 'Plan. pocetak do',
+    plan_kraj_od: 'Plan. kraj od',
+    plan_kraj_do: 'Plan. kraj do',
+    datum_od: 'Datum od',
+    datum_do: 'RN datum do',
+    vezni_dok: 'Vezni dok.'
+  };
+
+  var filterInputIds = {
+    kupac: 'filter-kupac',
+    primatelj: 'filter-primatelj',
+    proizvod: 'filter-proizvod',
+    plan_pocetak_od: 'filter-plan-pocetak-od',
+    plan_pocetak_do: 'filter-plan-pocetak-do',
+    plan_kraj_od: 'filter-plan-kraj-od',
+    plan_kraj_do: 'filter-plan-kraj-do',
+    datum_od: 'filter-datum-od',
+    datum_do: 'filter-datum-do',
+    vezni_dok: 'filter-vezni-dok'
+  };
+
+  function getStatusFilterDisplayValue(statusKey) {
+    var normalizedStatusKey = (statusKey || '').toString().trim();
+    var statusLabel = $('.status-card[data-status="' + normalizedStatusKey + '"] .status-label').first().text().trim();
+
+    if (statusLabel) {
+      return statusLabel;
+    }
+
+    return normalizedStatusKey.replace(/_/g, ' ');
+  }
+
+  function escapeHtml(value) {
+    return $('<div/>').text(value === null || value === undefined ? '' : String(value)).html();
+  }
+
   function updateStatusCards(statusStats) {
     Object.keys(statusStats || {}).forEach(function (key) {
       $('.status-card[data-status="' + key + '"] .status-count').text(statusStats[key] || 0);
@@ -66,6 +108,37 @@ $(function () {
     }
 
     return rawValue;
+  }
+
+  function hashClientName(clientName) {
+    var normalizedName = (clientName || '').toString().trim().toLowerCase();
+    var hash = 0;
+    var i;
+
+    if (!normalizedName) {
+      return 0;
+    }
+
+    for (i = 0; i < normalizedName.length; i++) {
+      hash = (hash << 5) - hash + normalizedName.charCodeAt(i);
+      hash |= 0;
+    }
+
+    return hash >>> 0;
+  }
+
+  function resolveClientAvatarColors(clientName) {
+    var hash = hashClientName(clientName);
+    var hue = hash % 360;
+    var saturation = 62 + ((hash >> 8) % 24); // 62-85
+    var textLightness = 30 + ((hash >> 13) % 12); // 30-41
+    var bgLightness = 48 + ((hash >> 18) % 14); // 48-61
+
+    return {
+      text: 'hsl(' + hue + ', ' + Math.min(95, saturation + 8) + '%, ' + textLightness + '%)',
+      bg: 'hsla(' + hue + ', ' + saturation + '%, ' + bgLightness + '%, 0.18)',
+      border: 'hsla(' + hue + ', ' + saturation + '%, ' + bgLightness + '%, 0.35)'
+    };
   }
 
   function normalizeStatusValue(value) {
@@ -261,21 +334,26 @@ $(function () {
           render: function (data, type, full) {
             var name = full['klijent'] || 'N/A',
               dodeljenKorisnik = full['dodeljen_korisnik'] || '';
-            var stateNum = Math.floor(Math.random() * 6),
-              states = ['success', 'danger', 'warning', 'info', 'primary', 'secondary'],
-              state = states[stateNum],
+            var avatarColors = resolveClientAvatarColors(name),
               initials = name.match(/\b\w/g) || [];
             initials = ((initials.shift() || '') + (initials.pop() || '')).toUpperCase();
 
             var output = '<div class="avatar-content">' + initials + '</div>';
-            var colorClass = ' bg-light-' + state + ' ';
+            var avatarStyle =
+              ' style="background-color: ' +
+              avatarColors.bg +
+              '; color: ' +
+              avatarColors.text +
+              '; border: 1px solid ' +
+              avatarColors.border +
+              ';"';
 
             return (
               '<div class="d-flex justify-content-left align-items-center">' +
               '<div class="avatar-wrapper">' +
-              '<div class="avatar' +
-              colorClass +
-              'me-50">' +
+              '<div class="avatar me-50"' +
+              avatarStyle +
+              '>' +
               output +
               '</div>' +
               '</div>' +
@@ -430,6 +508,8 @@ $(function () {
         info: 'Prikazano _START_ do _END_ od _TOTAL_ naloga',
         infoEmpty: 'Prikazano 0 do 0 od 0 naloga',
         infoFiltered: '(filtrirano od _MAX_ ukupnih naloga)',
+        zeroRecords: 'Nema rezultata za odabrani filter',
+        emptyTable: 'Nema podataka u tabeli',
         paginate: {
           previous: '&nbsp;',
           next: '&nbsp;'
@@ -480,12 +560,90 @@ $(function () {
       }
     });
 
-    function applyFilters() {
-      dtInvoice.ajax.reload();
-    }
-
     var filtersBody = $('#filters-body');
     var toggleFiltersBtn = $('#btn-toggle-filters');
+    var deleteFiltersBtn = $('#btn-delete-filter');
+    var activeFiltersContainer = $('#active-filters-container');
+    var activeFiltersDivider = $('#active-filters-divider');
+
+    function releaseButtonState($button) {
+      if (!$button || !$button.length) {
+        return;
+      }
+
+      window.requestAnimationFrame(function () {
+        $button.removeClass('active focus');
+        $button.trigger('blur');
+      });
+    }
+
+    function renderActiveFilters() {
+      var filters = getFilters(currentStatusFilter);
+      var activeFilters = [];
+
+      Object.keys(filters).forEach(function (key) {
+        var rawValue = filters[key];
+        var value = rawValue === null || rawValue === undefined ? '' : String(rawValue).trim();
+
+        if (!value) {
+          return;
+        }
+
+        activeFilters.push({
+          key: key,
+          label: filterLabels[key] || key,
+          value: key === 'status' ? getStatusFilterDisplayValue(value) : value
+        });
+      });
+
+      if (!activeFilters.length) {
+        activeFiltersContainer.empty().addClass('d-none');
+        activeFiltersDivider.addClass('d-none');
+        return;
+      }
+
+      var activeFiltersHtml = activeFilters
+        .map(function (filter) {
+          var safeKey = escapeHtml(filter.key);
+          return (
+            '<span class="active-filter-chip" data-filter-key="' +
+            safeKey +
+            '">' +
+            '<span class="active-filter-chip-label">' +
+            escapeHtml(filter.label) +
+            ':</span>' +
+            '<span class="active-filter-chip-value">' +
+            escapeHtml(filter.value) +
+            '</span>' +
+            '<button type="button" class="active-filter-remove" data-filter-key="' +
+            safeKey +
+            '" aria-label="Ukloni filter">&times;</button>' +
+            '</span>'
+          );
+        })
+        .join('');
+
+      activeFiltersContainer.html(activeFiltersHtml).removeClass('d-none');
+      activeFiltersDivider.removeClass('d-none');
+    }
+
+    function clearSingleFilter(filterKey) {
+      if (filterKey === 'status') {
+        currentStatusFilter = null;
+        $('.status-card').removeClass('status-card-active');
+        $('.status-card[data-status="svi"]').addClass('status-card-active');
+        return;
+      }
+
+      if (filterInputIds[filterKey]) {
+        $('#' + filterInputIds[filterKey]).val('');
+      }
+    }
+
+    function applyFilters() {
+      renderActiveFilters();
+      dtInvoice.ajax.reload();
+    }
 
     function setFiltersBodyVisibility(isVisible) {
       filtersBody.toggleClass('d-none', !isVisible);
@@ -506,8 +664,11 @@ $(function () {
       setFiltersBodyVisibility(savedFiltersBodyVisibility === '1');
     }
 
+    renderActiveFilters();
+
     toggleFiltersBtn.on('click', function () {
       setFiltersBodyVisibility(filtersBody.hasClass('d-none'));
+      releaseButtonState($(this));
     });
 
     $('#btn-add').on('click', function () {
@@ -531,6 +692,14 @@ $(function () {
       $('.filter-input').val('');
       currentStatusFilter = null;
       $('.status-card').removeClass('status-card-active');
+      $('.status-card[data-status="svi"]').addClass('status-card-active');
+      applyFilters();
+      releaseButtonState(deleteFiltersBtn);
+    });
+
+    activeFiltersContainer.on('click', '.active-filter-remove', function (e) {
+      e.preventDefault();
+      clearSingleFilter($(this).data('filter-key'));
       applyFilters();
     });
 

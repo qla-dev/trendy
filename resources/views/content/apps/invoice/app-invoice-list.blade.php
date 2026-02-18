@@ -95,7 +95,9 @@
   <div class="card mb-2">
     <div class="card-header d-flex justify-content-between align-items-center">
       <h4 class="mb-0">Filter radnih naloga</h4>
-      <div class="d-flex gap-2">
+      <div class="d-flex align-items-center flex-wrap gap-2 filter-header-actions">
+        <div id="active-filters-container" class="active-filters-container d-none"></div>
+        <div id="active-filters-divider" class="active-filters-divider d-none"></div>
         <button type="button" class="btn btn-outline-primary btn-sm" id="btn-toggle-filters" aria-expanded="true">
           <i data-feather="filter" class="me-50"></i> Sakrij filtere
         </button>
@@ -481,6 +483,68 @@
     font-size: 14px;
   }
 
+  .filter-header-actions {
+    row-gap: 8px;
+  }
+
+  .active-filters-container {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .active-filters-divider {
+    width: 1px;
+    height: 28px;
+    background-color: #d8d6de;
+    margin-right: 2px;
+  }
+
+  .active-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid #d8d6de;
+    border-radius: 999px;
+    background-color: #f8f8f8;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .active-filter-chip-label {
+    color: #6e6b7b;
+    font-weight: 500;
+  }
+
+  .active-filter-chip-value {
+    color: #5e5873;
+    font-weight: 600;
+  }
+
+  .active-filter-remove {
+    border: 0;
+    background: transparent;
+    color: #ea5455;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+  }
+
+  #btn-toggle-filters:focus,
+  #btn-toggle-filters:active,
+  #btn-delete-filter:focus,
+  #btn-delete-filter:active {
+    box-shadow: none !important;
+  }
+
+  #btn-toggle-filters:not(:hover):not(:active),
+  #btn-delete-filter:not(:hover):not(:active) {
+    background-color: transparent;
+  }
+
   .filter-input::placeholder {
     padding-left: 8px;
   }
@@ -539,6 +603,20 @@
   .dark-layout #btn-toggle-filters:focus {
     color: #fff !important;
     border-color: #fff !important;
+  }
+
+  .dark-layout .active-filters-divider {
+    background-color: rgba(255, 255, 255, 0.4);
+  }
+
+  .dark-layout .active-filter-chip {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.24);
+  }
+
+  .dark-layout .active-filter-chip-label,
+  .dark-layout .active-filter-chip-value {
+    color: #fff;
   }
 </style>
 @endsection

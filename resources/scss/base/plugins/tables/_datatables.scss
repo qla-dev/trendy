@@ -9,7 +9,6 @@
 table.dataTable {
   // table width & collapse border
   width: 100% !important;
-  border-collapse: collapse !important;
   &.table-responsive:not(.datatables-ajax) {
     display: block; // For responsive data-table of BS5
   }
