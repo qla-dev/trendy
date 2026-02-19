@@ -42,7 +42,7 @@
           </div>
           <div class="card-body pb-0">
             <h5 class="section-label mb-1">
-              <span class="align-middle">Filter statusa</span>
+              <span class="align-middle">Filter statusa trenutnog prikaza kalendara</span>
             </h5>
             <div class="form-check mb-1">
               <input type="checkbox" class="form-check-input select-all" id="select-all" checked />

@@ -68,6 +68,24 @@ document.addEventListener('DOMContentLoaded', function () {
     raspisan: 'secondary'
   };
 
+  var monthNames = [
+    'Januar',
+    'Februar',
+    'Mart',
+    'April',
+    'Maj',
+    'Juni',
+    'Juli',
+    'Avgust',
+    'Septembar',
+    'Oktobar',
+    'Novembar',
+    'Decembar'
+  ];
+  var monthNamesShort = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec'];
+  var dayNamesShort = ['Ned', 'Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub'];
+  var dayNamesLong = ['Nedjelja', 'Ponedjeljak', 'Utorak', 'Srijeda', 'Četvrtak', 'Petak', 'Subota'];
+
   var startPicker = null;
   var endPicker = null;
 
@@ -77,10 +95,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     return text.charAt(0).toUpperCase() + text.slice(1);
-  }
-
-  function toBosnianDate(date, options) {
-    return new Intl.DateTimeFormat('bs-BA', options).format(date);
   }
 
   function normalizeDateOnly(dateInput) {
@@ -131,28 +145,48 @@ document.addEventListener('DOMContentLoaded', function () {
     var rangeStart = view.currentStart;
     var rangeEnd = new Date(view.currentEnd.getTime() - 86400000);
     var titleText = titleEl.textContent || '';
+    var startDay = rangeStart.getDate();
+    var endDay = rangeEnd.getDate();
+    var startMonth = rangeStart.getMonth();
+    var endMonth = rangeEnd.getMonth();
+    var startYear = rangeStart.getFullYear();
+    var endYear = rangeEnd.getFullYear();
 
     if (view.type === 'dayGridMonth' || view.type === 'listMonth') {
-      titleText = capitalize(toBosnianDate(rangeStart, { month: 'long', year: 'numeric' }));
+      titleText = monthNames[startMonth] + ' ' + startYear;
     } else if (view.type === 'timeGridWeek') {
-      var sameMonthYear =
-        rangeStart.getMonth() === rangeEnd.getMonth() && rangeStart.getFullYear() === rangeEnd.getFullYear();
+      var sameMonthYear = startMonth === endMonth && startYear === endYear;
 
       if (sameMonthYear) {
+        titleText = startDay + '. - ' + endDay + '. ' + monthNames[endMonth] + ' ' + endYear;
+      } else if (startYear === endYear) {
         titleText =
-          toBosnianDate(rangeStart, { day: 'numeric' }) +
+          startDay +
+          '. ' +
+          monthNamesShort[startMonth] +
           ' - ' +
-          toBosnianDate(rangeEnd, { day: 'numeric', month: 'long', year: 'numeric' });
+          endDay +
+          '. ' +
+          monthNamesShort[endMonth] +
+          ' ' +
+          endYear;
       } else {
         titleText =
-          toBosnianDate(rangeStart, { day: 'numeric', month: 'short', year: 'numeric' }) +
+          startDay +
+          '. ' +
+          monthNamesShort[startMonth] +
+          ' ' +
+          startYear +
           ' - ' +
-          toBosnianDate(rangeEnd, { day: 'numeric', month: 'short', year: 'numeric' });
+          endDay +
+          '. ' +
+          monthNamesShort[endMonth] +
+          ' ' +
+          endYear;
       }
     } else if (view.type === 'timeGridDay') {
-      titleText = capitalize(
-        toBosnianDate(rangeStart, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-      );
+      titleText =
+        dayNamesLong[rangeStart.getDay()] + ', ' + startDay + '. ' + monthNames[startMonth] + ' ' + startYear;
     }
 
     titleEl.textContent = titleText;
@@ -342,7 +376,7 @@ document.addEventListener('DOMContentLoaded', function () {
     initialDate: new Date(),
     navLinks: true,
     firstDay: 1,
-    locale: 'bs',
+    locale: 'en-gb',
     buttonText: {
       today: 'Danas',
       month: 'Mjesec',
@@ -356,7 +390,7 @@ document.addEventListener('DOMContentLoaded', function () {
       return '+ jos ' + amount;
     },
     dayHeaderContent: function (args) {
-      return capitalize(toBosnianDate(args.date, { weekday: 'short' }).replace('.', ''));
+      return dayNamesShort[args.date.getDay()];
     },
     eventClassNames: function (info) {
       var colorName = calendarsColor[info.event.extendedProps.calendar] || 'secondary';
