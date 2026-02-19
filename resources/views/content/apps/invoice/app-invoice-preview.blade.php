@@ -1,7 +1,5 @@
 @extends('layouts/contentLayoutMaster')
 
-@section('title', 'Pregled radnog naloga')
-
 @section('vendor-style')
 <link rel="stylesheet" href="{{asset('vendors/css/pickers/flatpickr/flatpickr.min.css')}}">
 @endsection
@@ -936,6 +934,8 @@
   }
 @endphp
 
+@section('title', 'Radni nalog ' . ($invoiceNumberDisplay !== '' ? $invoiceNumberDisplay : 'N/A'))
+
 @section('content')
 <section class="invoice-preview-wrapper">
   <div class="row invoice-preview">
@@ -1363,13 +1363,13 @@
           </button>
           <div class="invoice-actions-divider"></div>
           <button class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" onclick="alert('Uskoro')">
-            <i class="fa fa-cube me-50" style="font-size: 20px;"></i> Dodaj materijal
+            <i class="fa fa-cube me-50" style="margin-top: 2px;"></i> Dodaj materijal
           </button>
           <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" onclick="alert('Uskoro')">
-            <i class="fa fa-cog me-50" style="font-size: 20px;"></i> Dodaj operaciju
+            <i class="fa fa-cog me-50" style="margin-top: 2px;"></i> Dodaj operaciju
           </button>
           <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#send-invoice-sidebar">
-            <i class="fa fa-paper-plane me-50"></i> Pošalji
+            <i class="fa fa-paper-plane me-50" style="margin-top: 2px; font-size: 12px;"></i> Pošalji
           </button>
           <a
             class="btn btn-outline-secondary w-100 d-flex justify-content-center align-items-center"

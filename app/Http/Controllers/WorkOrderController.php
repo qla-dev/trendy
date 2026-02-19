@@ -152,16 +152,26 @@ class WorkOrderController extends Controller
                 'email' => (string) $this->value($raw, ['acReceiverEmail', 'acEmail'], ''),
             ];
 
+            $workOrderMeta = $this->buildWorkOrderMetadata(
+                $raw,
+                $workOrder,
+                $workOrderItems,
+                $workOrderItemResources,
+                $workOrderRegOperations
+            );
+
             return view('/content/apps/invoice/app-invoice-print', [
                 'pageConfigs' => $pageConfigs,
                 'workOrder' => $workOrder,
                 'workOrderItems' => $workOrderItems,
                 'workOrderItemResources' => $workOrderItemResources,
                 'workOrderRegOperations' => $workOrderRegOperations,
+                'workOrderMeta' => $workOrderMeta,
                 'sender' => $sender,
                 'recipient' => $recipient,
                 'invoiceNumber' => $this->formatWorkOrderNumberForCalendar((string) ($workOrder['broj_naloga'] ?? '')),
                 'issueDate' => $this->displayDate($workOrder['datum_kreiranja'] ?? null),
+                'plannedStartDate' => $this->formatMetaDateTime($this->value($raw, ['adSchedStartTime'], null)),
                 'dueDate' => $this->displayDate($workOrder['datum_zavrsetka'] ?? null),
             ]);
         } catch (Throwable $exception) {
