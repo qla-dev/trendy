@@ -1,19 +1,14 @@
 /**
- * App Calendar
+ * App Calendar - Work Orders
  */
 
-/**
- * ! If both start and end dates are same Full calendar will nullify the end date value.
- * ! Full calendar will end the event on a day before at 12:00:00AM thus, event won't extend to the end date.
- * ! We are getting events from a separate file named app-calendar-events.js. You can add or remove events from there.
- **/
-
-'use-strict';
+'use strict';
 
 // RTL Support
 var direction = 'ltr',
   assetPath = '../../../app-assets/';
-if ($('html').data('textdirection') == 'rtl') {
+
+if ($('html').data('textdirection') === 'rtl') {
   direction = 'rtl';
 }
 
@@ -21,25 +16,23 @@ if ($('body').attr('data-framework') === 'laravel') {
   assetPath = $('body').attr('data-asset-path');
 }
 
-$(document).on('click', '.fc-sidebarToggle-button', function (e) {
+$(document).on('click', '.fc-sidebarToggle-button', function () {
   $('.app-calendar-sidebar, .body-content-overlay').addClass('show');
 });
 
-$(document).on('click', '.body-content-overlay', function (e) {
+$(document).on('click', '.body-content-overlay', function () {
   $('.app-calendar-sidebar, .body-content-overlay').removeClass('show');
 });
 
 document.addEventListener('DOMContentLoaded', function () {
-  var calendarEl = document.getElementById('calendar'),
-    eventToUpdate,
-    sidebar = $('.event-sidebar'),
-    calendarsColor = {
-      Business: 'primary',
-      Holiday: 'success',
-      Personal: 'danger',
-      Family: 'warning',
-      ETC: 'info'
-    },
+  var appCalendarRoot = $('.app-calendar');
+  var calendarEl = document.getElementById('calendar');
+
+  if (!appCalendarRoot.length || !calendarEl) {
+    return;
+  }
+
+  var sidebar = $('.event-sidebar'),
     eventForm = $('.event-form'),
     addEventBtn = $('.add-event-btn'),
     cancelBtn = $('.btn-cancel'),
@@ -57,32 +50,207 @@ document.addEventListener('DOMContentLoaded', function () {
     calEventFilter = $('.calendar-events-filter'),
     filterInput = $('.input-filter'),
     btnDeleteEvent = $('.btn-delete-event'),
-    calendarEditor = $('#event-description-editor');
+    calendarEditor = $('#event-description-editor'),
+    addMeetingBtn = $('.btn-add-meeting');
 
-  // --------------------------------------------
-  // On add new item, clear sidebar-right field fields
-  // --------------------------------------------
-  $('.add-event button').on('click', function (e) {
-    $('.event-sidebar').addClass('show');
-    $('.sidebar-left').removeClass('show');
-    $('.app-calendar .body-content-overlay').addClass('show');
-  });
+  var workOrdersCalendarApi =
+    appCalendarRoot.data('work-orders-calendar-url') || assetPath + 'api/work-orders-calendar';
+  var previewBaseUrl =
+    appCalendarRoot.data('work-order-preview-base-url') || assetPath + 'app/invoice/preview';
 
-  // Label  select
+  var calendarsColor = {
+    planiran: 'info',
+    otvoren: 'success',
+    rezerviran: 'warning',
+    u_radu: 'primary',
+    djelimicno_zakljucen: 'warning',
+    zakljucen: 'danger',
+    raspisan: 'secondary'
+  };
+
+  var startPicker = null;
+  var endPicker = null;
+
+  function capitalize(text) {
+    if (!text || typeof text !== 'string') {
+      return text;
+    }
+
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  function toBosnianDate(date, options) {
+    return new Intl.DateTimeFormat('bs-BA', options).format(date);
+  }
+
+  function normalizeDateOnly(dateInput) {
+    if (!(dateInput instanceof Date)) {
+      return '';
+    }
+
+    return dateInput.toISOString().slice(0, 10);
+  }
+
+  function selectedStatuses() {
+    var selected = [];
+
+    $('.calendar-events-filter input:checked').each(function () {
+      selected.push($(this).attr('data-value'));
+    });
+
+    return selected;
+  }
+
+  function updateStatusCounts(statusStats) {
+    var resolvedStats = statusStats || {};
+
+    $('.calendar-filter-count').each(function () {
+      var statKey = $(this).data('stat-key');
+      var statValue = Object.prototype.hasOwnProperty.call(resolvedStats, statKey) ? resolvedStats[statKey] : 0;
+      $(this).text(statValue);
+    });
+  }
+
+  function modifyToggler() {
+    if (typeof feather === 'undefined') {
+      return;
+    }
+
+    $('.fc-sidebarToggle-button')
+      .empty()
+      .append(feather.icons['menu'].toSvg({ class: 'ficon' }));
+  }
+
+  function localizeCalendarTitle(view) {
+    var titleEl = calendarEl.querySelector('.fc-toolbar-title');
+
+    if (!titleEl || !view) {
+      return;
+    }
+
+    var rangeStart = view.currentStart;
+    var rangeEnd = new Date(view.currentEnd.getTime() - 86400000);
+    var titleText = titleEl.textContent || '';
+
+    if (view.type === 'dayGridMonth' || view.type === 'listMonth') {
+      titleText = capitalize(toBosnianDate(rangeStart, { month: 'long', year: 'numeric' }));
+    } else if (view.type === 'timeGridWeek') {
+      var sameMonthYear =
+        rangeStart.getMonth() === rangeEnd.getMonth() && rangeStart.getFullYear() === rangeEnd.getFullYear();
+
+      if (sameMonthYear) {
+        titleText =
+          toBosnianDate(rangeStart, { day: 'numeric' }) +
+          ' - ' +
+          toBosnianDate(rangeEnd, { day: 'numeric', month: 'long', year: 'numeric' });
+      } else {
+        titleText =
+          toBosnianDate(rangeStart, { day: 'numeric', month: 'short', year: 'numeric' }) +
+          ' - ' +
+          toBosnianDate(rangeEnd, { day: 'numeric', month: 'short', year: 'numeric' });
+      }
+    } else if (view.type === 'timeGridDay') {
+      titleText = capitalize(
+        toBosnianDate(rangeStart, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+      );
+    }
+
+    titleEl.textContent = titleText;
+  }
+
+  function resolvePreviewUrl(calendarEvent) {
+    var previewUrl =
+      calendarEvent.extendedProps && calendarEvent.extendedProps.previewUrl
+        ? calendarEvent.extendedProps.previewUrl
+        : '';
+
+    if (previewUrl) {
+      return previewUrl;
+    }
+
+    var workOrderId =
+      (calendarEvent.extendedProps && calendarEvent.extendedProps.workOrderId) ||
+      (calendarEvent.id && calendarEvent.id.toString ? calendarEvent.id.toString() : '');
+
+    if (!workOrderId) {
+      return '';
+    }
+
+    return previewBaseUrl.replace(/\/$/, '') + '/' + workOrderId;
+  }
+
+  function resetValues() {
+    endDate.val('');
+    eventUrl.val('');
+    startDate.val('');
+    eventTitle.val('');
+    eventLocation.val('');
+    allDaySwitch.prop('checked', false);
+    eventGuests.val('').trigger('change');
+    calendarEditor.val('');
+  }
+
+  function fetchEvents(fetchInfo, successCallback, failureCallback) {
+    var activeStatuses = selectedStatuses();
+    var applyStatusFilter = !selectAll.prop('checked');
+    var requestData = {
+      start: normalizeDateOnly(fetchInfo.start),
+      end: normalizeDateOnly(fetchInfo.end)
+    };
+
+    if (applyStatusFilter) {
+      requestData.statuses = activeStatuses;
+    }
+
+    $.ajax({
+      url: workOrdersCalendarApi,
+      method: 'GET',
+      dataType: 'json',
+      data: requestData,
+      success: function (response) {
+        updateStatusCounts(response.statusStats || {});
+
+        var calendarEvents = Array.isArray(response.data) ? response.data : [];
+
+        if (applyStatusFilter && activeStatuses.length === 0) {
+          calendarEvents = [];
+        }
+
+        successCallback(calendarEvents);
+      },
+      error: function (xhr) {
+        updateStatusCounts({});
+        successCallback([]);
+
+        if (typeof failureCallback === 'function') {
+          failureCallback(xhr);
+        }
+      }
+    });
+  }
+
+  if (addMeetingBtn.length) {
+    addMeetingBtn.on('click', function () {
+      window.alert('Uskoro');
+    });
+  }
+
   if (eventLabel.length) {
     function renderBullets(option) {
       if (!option.id) {
         return option.text;
       }
-      var $bullet =
+
+      var bullet =
         "<span class='bullet bullet-" +
         $(option.element).data('label') +
         " bullet-sm me-50'> " +
         '</span>' +
         option.text;
 
-      return $bullet;
+      return bullet;
     }
+
     eventLabel.wrap('<div class="position-relative"></div>').select2({
       placeholder: 'Select value',
       dropdownParent: eventLabel.parent(),
@@ -95,14 +263,13 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Guests select
   if (eventGuests.length) {
     function renderGuestAvatar(option) {
       if (!option.id) {
         return option.text;
       }
 
-      var $avatar =
+      var avatar =
         "<div class='d-flex flex-wrap align-items-center'>" +
         "<div class='avatar avatar-sm my-0 me-50'>" +
         "<span class='avatar-content'>" +
@@ -116,8 +283,9 @@ document.addEventListener('DOMContentLoaded', function () {
         option.text +
         '</div>';
 
-      return $avatar;
+      return avatar;
     }
+
     eventGuests.wrap('<div class="position-relative"></div>').select2({
       placeholder: 'Select value',
       dropdownParent: eventGuests.parent(),
@@ -130,9 +298,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Start date picker
   if (startDate.length) {
-    var start = startDate.flatpickr({
+    startPicker = startDate.flatpickr({
       enableTime: true,
       altFormat: 'Y-m-dTH:i:S',
       onReady: function (selectedDates, dateStr, instance) {
@@ -143,9 +310,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // End date picker
   if (endDate.length) {
-    var end = endDate.flatpickr({
+    endPicker = endDate.flatpickr({
       enableTime: true,
       altFormat: 'Y-m-dTH:i:S',
       onReady: function (selectedDates, dateStr, instance) {
@@ -156,103 +322,13 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Event click function
-  function eventClick(info) {
-    eventToUpdate = info.event;
-    if (eventToUpdate.url) {
-      info.jsEvent.preventDefault();
-      window.open(eventToUpdate.url, '_blank');
-    }
-
-    sidebar.modal('show');
-    addEventBtn.addClass('d-none');
-    cancelBtn.addClass('d-none');
-    updateEventBtn.removeClass('d-none');
-    btnDeleteEvent.removeClass('d-none');
-
-    eventTitle.val(eventToUpdate.title);
-    start.setDate(eventToUpdate.start, true, 'Y-m-d');
-    eventToUpdate.allDay === true ? allDaySwitch.prop('checked', true) : allDaySwitch.prop('checked', false);
-    eventToUpdate.end !== null
-      ? end.setDate(eventToUpdate.end, true, 'Y-m-d')
-      : end.setDate(eventToUpdate.start, true, 'Y-m-d');
-    sidebar.find(eventLabel).val(eventToUpdate.extendedProps.calendar).trigger('change');
-    eventToUpdate.extendedProps.location !== undefined ? eventLocation.val(eventToUpdate.extendedProps.location) : null;
-    eventToUpdate.extendedProps.guests !== undefined
-      ? eventGuests.val(eventToUpdate.extendedProps.guests).trigger('change')
-      : null;
-    eventToUpdate.extendedProps.guests !== undefined
-      ? calendarEditor.val(eventToUpdate.extendedProps.description)
-      : null;
-
-    //  Delete Event
-    btnDeleteEvent.on('click', function () {
-      eventToUpdate.remove();
-      // removeEvent(eventToUpdate.id);
-      sidebar.modal('hide');
-      $('.event-sidebar').removeClass('show');
-      $('.app-calendar .body-content-overlay').removeClass('show');
-    });
-  }
-
-  // Modify sidebar toggler
-  function modifyToggler() {
-    $('.fc-sidebarToggle-button')
-      .empty()
-      .append(feather.icons['menu'].toSvg({ class: 'ficon' }));
-  }
-
-  // Selected Checkboxes
-  function selectedCalendars() {
-    var selected = [];
-    $('.calendar-events-filter input:checked').each(function () {
-      selected.push($(this).attr('data-value'));
-    });
-    return selected;
-  }
-
-  // --------------------------------------------------------------------------------------------------
-  // AXIOS: fetchEvents
-  // * This will be called by fullCalendar to fetch events. Also this can be used to refetch events.
-  // --------------------------------------------------------------------------------------------------
-  function fetchEvents(info, successCallback) {
-    // Fetch Events from API endpoint reference
-    /* $.ajax(
-      {
-        url: '../../../app-assets/data/app-calendar-events.js',
-        type: 'GET',
-        success: function (result) {
-          // Get requested calendars as Array
-          var calendars = selectedCalendars();
-
-          return [result.events.filter(event => calendars.includes(event.extendedProps.calendar))];
-        },
-        error: function (error) {
-          console.log(error);
-        }
-      }
-    ); */
-
-    var calendars = selectedCalendars();
-    // We are reading event object from app-calendar-events.js file directly by including that file above app-calendar file.
-    // You should make an API call, look into above commented API call for reference
-    selectedEvents = events.filter(function (event) {
-      // console.log(event.extendedProps.calendar.toLowerCase());
-      return calendars.includes(event.extendedProps.calendar.toLowerCase());
-    });
-    // if (selectedEvents.length > 0) {
-    successCallback(selectedEvents);
-    // }
-  }
-
-  // Calendar plugins
   var calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: 'dayGridMonth',
     events: fetchEvents,
-    editable: true,
+    editable: false,
     dragScroll: true,
     dayMaxEvents: 2,
-    eventResizableFromStart: true,
+    eventResizableFromStart: false,
     customButtons: {
       sidebarToggle: {
         text: 'Sidebar'
@@ -264,43 +340,72 @@ document.addEventListener('DOMContentLoaded', function () {
     },
     direction: direction,
     initialDate: new Date(),
-    navLinks: true, // can click day/week names to navigate views
-    eventClassNames: function ({ event: calendarEvent }) {
-      const colorName = calendarsColor[calendarEvent._def.extendedProps.calendar];
+    navLinks: true,
+    firstDay: 1,
+    locale: 'bs',
+    buttonText: {
+      today: 'Danas',
+      month: 'Mjesec',
+      week: 'Sedmica',
+      day: 'Dan',
+      list: 'Lista'
+    },
+    allDayText: 'Cijeli dan',
+    noEventsContent: 'Nema zapisa za prikaz',
+    moreLinkText: function (amount) {
+      return '+ jos ' + amount;
+    },
+    dayHeaderContent: function (args) {
+      return capitalize(toBosnianDate(args.date, { weekday: 'short' }).replace('.', ''));
+    },
+    eventClassNames: function (info) {
+      var colorName = calendarsColor[info.event.extendedProps.calendar] || 'secondary';
 
-      return [
-        // Background Color
-        'bg-light-' + colorName
-      ];
+      return ['bg-light-' + colorName];
     },
     dateClick: function (info) {
-      var date = moment(info.date).format('YYYY-MM-DD');
+      var date = normalizeDateOnly(info.date);
+
       resetValues();
       sidebar.modal('show');
       addEventBtn.removeClass('d-none');
       updateEventBtn.addClass('d-none');
       btnDeleteEvent.addClass('d-none');
-      startDate.val(date);
-      endDate.val(date);
+
+      if (startPicker) {
+        startPicker.setDate(date, true, 'Y-m-d');
+      } else {
+        startDate.val(date);
+      }
+
+      if (endPicker) {
+        endPicker.setDate(date, true, 'Y-m-d');
+      } else {
+        endDate.val(date);
+      }
     },
     eventClick: function (info) {
-      eventClick(info);
+      info.jsEvent.preventDefault();
+
+      var previewUrl = resolvePreviewUrl(info.event);
+
+      if (previewUrl) {
+        window.location.href = previewUrl;
+      }
     },
-    datesSet: function () {
+    datesSet: function (info) {
       modifyToggler();
+      localizeCalendarTitle(info.view);
     },
-    viewDidMount: function () {
+    viewDidMount: function (info) {
       modifyToggler();
+      localizeCalendarTitle(info.view);
     }
   });
 
-  // Render calendar
   calendar.render();
-  // Modify sidebar toggler
   modifyToggler();
-  // updateEventClass();
 
-  // Validate add new and update form
   if (eventForm.length) {
     eventForm.validate({
       submitHandler: function (form, event) {
@@ -323,160 +428,24 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Sidebar Toggle Btn
-  if (toggleSidebarBtn.length) {
-    toggleSidebarBtn.on('click', function () {
-      cancelBtn.removeClass('d-none');
-    });
-  }
-
-  // ------------------------------------------------
-  // addEvent
-  // ------------------------------------------------
-  function addEvent(eventData) {
-    calendar.addEvent(eventData);
-    calendar.refetchEvents();
-  }
-
-  // ------------------------------------------------
-  // updateEvent
-  // ------------------------------------------------
-  function updateEvent(eventData) {
-    var propsToUpdate = ['id', 'title', 'url'];
-    var extendedPropsToUpdate = ['calendar', 'guests', 'location', 'description'];
-
-    updateEventInCalendar(eventData, propsToUpdate, extendedPropsToUpdate);
-  }
-
-  // ------------------------------------------------
-  // removeEvent
-  // ------------------------------------------------
-  function removeEvent(eventId) {
-    removeEventInCalendar(eventId);
-  }
-
-  // ------------------------------------------------
-  // (UI) updateEventInCalendar
-  // ------------------------------------------------
-  const updateEventInCalendar = (updatedEventData, propsToUpdate, extendedPropsToUpdate) => {
-    const existingEvent = calendar.getEventById(updatedEventData.id);
-
-    // --- Set event properties except date related ----- //
-    // ? Docs: https://fullcalendar.io/docs/Event-setProp
-    // dateRelatedProps => ['start', 'end', 'allDay']
-    // eslint-disable-next-line no-plusplus
-    for (var index = 0; index < propsToUpdate.length; index++) {
-      var propName = propsToUpdate[index];
-      existingEvent.setProp(propName, updatedEventData[propName]);
-    }
-
-    // --- Set date related props ----- //
-    // ? Docs: https://fullcalendar.io/docs/Event-setDates
-    existingEvent.setDates(updatedEventData.start, updatedEventData.end, { allDay: updatedEventData.allDay });
-
-    // --- Set event's extendedProps ----- //
-    // ? Docs: https://fullcalendar.io/docs/Event-setExtendedProp
-    // eslint-disable-next-line no-plusplus
-    for (var index = 0; index < extendedPropsToUpdate.length; index++) {
-      var propName = extendedPropsToUpdate[index];
-      existingEvent.setExtendedProp(propName, updatedEventData.extendedProps[propName]);
-    }
-  };
-
-  // ------------------------------------------------
-  // (UI) removeEventInCalendar
-  // ------------------------------------------------
-  function removeEventInCalendar(eventId) {
-    calendar.getEventById(eventId).remove();
-  }
-
-  // Add new event
-  $(addEventBtn).on('click', function () {
-    if (eventForm.valid()) {
-      var newEvent = {
-        id: calendar.getEvents().length + 1,
-        title: eventTitle.val(),
-        start: startDate.val(),
-        end: endDate.val(),
-        startStr: startDate.val(),
-        endStr: endDate.val(),
-        display: 'block',
-        extendedProps: {
-          location: eventLocation.val(),
-          guests: eventGuests.val(),
-          calendar: eventLabel.val(),
-          description: calendarEditor.val()
-        }
-      };
-      if (eventUrl.val().length) {
-        newEvent.url = eventUrl.val();
-      }
-      if (allDaySwitch.prop('checked')) {
-        newEvent.allDay = true;
-      }
-      addEvent(newEvent);
-    }
-  });
-
-  // Update new event
-  updateEventBtn.on('click', function () {
-    if (eventForm.valid()) {
-      var eventData = {
-        id: eventToUpdate.id,
-        title: sidebar.find(eventTitle).val(),
-        start: sidebar.find(startDate).val(),
-        end: sidebar.find(endDate).val(),
-        url: eventUrl.val(),
-        extendedProps: {
-          location: eventLocation.val(),
-          guests: eventGuests.val(),
-          calendar: eventLabel.val(),
-          description: calendarEditor.val()
-        },
-        display: 'block',
-        allDay: allDaySwitch.prop('checked') ? true : false
-      };
-
-      updateEvent(eventData);
-      sidebar.modal('hide');
-    }
-  });
-
-  // Reset sidebar input values
-  function resetValues() {
-    endDate.val('');
-    eventUrl.val('');
-    startDate.val('');
-    eventTitle.val('');
-    eventLocation.val('');
-    allDaySwitch.prop('checked', false);
-    eventGuests.val('').trigger('change');
-    calendarEditor.val('');
-  }
-
-  // When modal hides reset input values
   sidebar.on('hidden.bs.modal', function () {
     resetValues();
   });
 
-  // Hide left sidebar if the right sidebar is open
-  $('.btn-toggle-sidebar').on('click', function () {
-    btnDeleteEvent.addClass('d-none');
-    updateEventBtn.addClass('d-none');
-    addEventBtn.removeClass('d-none');
-    $('.app-calendar-sidebar, .body-content-overlay').removeClass('show');
-  });
+  if (toggleSidebarBtn.length) {
+    toggleSidebarBtn.on('click', function () {
+      cancelBtn.removeClass('d-none');
+      btnDeleteEvent.addClass('d-none');
+      updateEventBtn.addClass('d-none');
+      addEventBtn.removeClass('d-none');
+      $('.app-calendar-sidebar, .body-content-overlay').removeClass('show');
+    });
+  }
 
-  // Select all & filter functionality
   if (selectAll.length) {
     selectAll.on('change', function () {
-      var $this = $(this);
-
-      if ($this.prop('checked')) {
-        calEventFilter.find('input').prop('checked', true);
-      } else {
-        calEventFilter.find('input').prop('checked', false);
-      }
+      var self = $(this);
+      calEventFilter.find('input').prop('checked', self.prop('checked'));
       calendar.refetchEvents();
     });
   }
@@ -486,6 +455,7 @@ document.addEventListener('DOMContentLoaded', function () {
       $('.input-filter:checked').length < calEventFilter.find('input').length
         ? selectAll.prop('checked', false)
         : selectAll.prop('checked', true);
+
       calendar.refetchEvents();
     });
   }

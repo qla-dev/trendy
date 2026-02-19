@@ -197,6 +197,30 @@ class WorkOrderController extends Controller
         }
     }
 
+    public function calendar(Request $request): JsonResponse
+    {
+        try {
+            $startDate = $this->normalizeDateInput((string) $request->input('start', ''));
+            $endDate = $this->normalizeDateInput((string) $request->input('end', ''));
+            $statusBuckets = $this->normalizeCalendarStatuses($request->input('statuses', []));
+
+            return response()->json([
+                'data' => $this->fetchCalendarEvents($startDate, $endDate, $statusBuckets),
+                'statusStats' => $this->fetchCalendarStatusStats($startDate, $endDate),
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order API calendar query failed.', [
+                'connection' => config('database.default'),
+                'table' => $this->qualifiedTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Unable to fetch calendar work orders from database.',
+            ], 500);
+        }
+    }
+
     private function fetchWorkOrders(?int $limit = null, ?int $page = null, array $filters = []): array
     {
         $columns = $this->tableColumns();
@@ -234,6 +258,171 @@ class WorkOrderController extends Controller
                 'has_money_values' => $hasMoneyValues,
             ],
         ];
+    }
+
+    private function fetchCalendarEvents(?string $startDate, ?string $endDate, array $statusBuckets): array
+    {
+        $columns = $this->tableColumns();
+        $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF']);
+        $dateColumn = $this->firstExistingColumn($columns, ['adDate', 'adDateIns']);
+        $query = $this->newTableQuery();
+
+        if ($dateColumn !== null) {
+            if ($startDate !== null) {
+                $query->whereDate($dateColumn, '>=', $startDate);
+            }
+
+            if ($endDate !== null) {
+                $query->whereDate($dateColumn, '<', $endDate);
+            }
+        }
+
+        $this->applyStatusBucketsFilter($query, $statusColumn, $statusBuckets);
+        $this->applyDefaultOrdering($query, $columns);
+
+        return $query
+            ->get()
+            ->map(function ($row) {
+                $mappedRow = $this->mapRow((array) $row);
+                $workOrderId = trim((string) ($mappedRow['id'] ?? ''));
+                $start = $mappedRow['datum_kreiranja'] ?? null;
+
+                if ($workOrderId === '' || $start === null) {
+                    return null;
+                }
+
+                $displayNumber = $this->formatWorkOrderNumberForCalendar(
+                    (string) ($mappedRow['broj_naloga'] ?? $workOrderId)
+                );
+                $status = (string) ($mappedRow['status'] ?? '');
+                $bucket = $this->statusBucket($status) ?? 'planiran';
+
+                return [
+                    'id' => $workOrderId,
+                    'title' => $displayNumber,
+                    'start' => $start,
+                    'allDay' => true,
+                    'extendedProps' => [
+                        'calendar' => $bucket,
+                        'status' => $status,
+                        'workOrderId' => $workOrderId,
+                        'workOrderNumber' => (string) ($mappedRow['broj_naloga'] ?? $workOrderId),
+                        'previewUrl' => route('app-invoice-preview', ['id' => $workOrderId]),
+                    ],
+                ];
+            })
+            ->filter(function ($event) {
+                return $event !== null;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function fetchCalendarStatusStats(?string $startDate, ?string $endDate): array
+    {
+        $stats = $this->emptyStatusStats();
+        $columns = $this->tableColumns();
+        $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF']);
+        $dateColumn = $this->firstExistingColumn($columns, ['adDate', 'adDateIns']);
+
+        if ($statusColumn === null) {
+            return $stats;
+        }
+
+        $query = $this->newTableQuery();
+
+        if ($dateColumn !== null) {
+            if ($startDate !== null) {
+                $query->whereDate($dateColumn, '>=', $startDate);
+            }
+
+            if ($endDate !== null) {
+                $query->whereDate($dateColumn, '<', $endDate);
+            }
+        }
+
+        $stats['svi'] = (int) (clone $query)->count();
+
+        $rows = (clone $query)
+            ->select($statusColumn, DB::raw('COUNT(*) as total'))
+            ->groupBy($statusColumn)
+            ->get();
+
+        foreach ($rows as $row) {
+            $resolvedStatus = $this->resolveStatus($row->{$statusColumn} ?? null);
+            $bucket = $resolvedStatus['bucket'] ?? null;
+
+            if ($bucket !== null && array_key_exists($bucket, $stats)) {
+                $stats[$bucket] += (int) $row->total;
+            }
+        }
+
+        return $stats;
+    }
+
+    private function normalizeCalendarStatuses(mixed $statuses): array
+    {
+        $allowedBuckets = array_values(array_filter(array_keys($this->emptyStatusStats()), function ($bucket) {
+            return $bucket !== 'svi';
+        }));
+
+        if (is_string($statuses)) {
+            $statuses = explode(',', $statuses);
+        }
+
+        if (!is_array($statuses)) {
+            return [];
+        }
+
+        $normalized = array_map(function ($status) {
+            return strtolower(trim((string) $status));
+        }, $statuses);
+
+        return array_values(array_unique(array_filter($normalized, function ($status) use ($allowedBuckets) {
+            return in_array($status, $allowedBuckets, true);
+        })));
+    }
+
+    private function applyStatusBucketsFilter(Builder $query, ?string $statusColumn, array $statusBuckets): void
+    {
+        if ($statusColumn === null || empty($statusBuckets)) {
+            return;
+        }
+
+        $statusAliases = [];
+
+        foreach ($statusBuckets as $bucket) {
+            $statusAliases = array_merge($statusAliases, $this->statusAliasesByBucket($bucket));
+        }
+
+        $statusAliases = array_values(array_unique($statusAliases));
+
+        if (empty($statusAliases)) {
+            return;
+        }
+
+        $query->whereIn($statusColumn, $statusAliases);
+    }
+
+    private function formatWorkOrderNumberForCalendar(string $workOrderNumber): string
+    {
+        $rawValue = trim($workOrderNumber);
+
+        if ($rawValue === '') {
+            return 'N/A';
+        }
+
+        if (str_contains($rawValue, '-')) {
+            return $rawValue;
+        }
+
+        $digits = preg_replace('/\D+/', '', $rawValue);
+
+        if (strlen($digits) === 13) {
+            return substr($digits, 0, 2) . '-' . substr($digits, 2, 5) . '-' . substr($digits, 7);
+        }
+
+        return $rawValue;
     }
 
     private function fetchMappedWorkOrderItems(array $workOrderRow): array

@@ -1,6 +1,6 @@
 @extends('layouts/contentLayoutMaster')
 
-@section('title', 'App Calender')
+@section('title', 'Kalendar')
 
 @section('vendor-style')
   <!-- Vendor css files -->
@@ -19,66 +19,104 @@
 @section('content')
 <!-- Full calendar start -->
 <section>
-  <div class="app-calendar overflow-hidden border">
+  <div
+    class="app-calendar overflow-hidden border"
+    data-work-orders-calendar-url="{{ route('api.work-orders.calendar') }}"
+    data-work-order-preview-base-url="{{ url('app/invoice/preview') }}"
+  >
     <div class="row g-0">
       <!-- Sidebar -->
       <div class="col app-calendar-sidebar flex-grow-0 overflow-hidden d-flex flex-column" id="app-calendar-sidebar">
         <div class="sidebar-wrapper">
-          <div class="card-body d-flex justify-content-center">
+          <div class="card-body d-grid gap-1">
             <button
               class="btn btn-primary btn-toggle-sidebar w-100"
               data-bs-toggle="modal"
               data-bs-target="#add-new-sidebar"
             >
-              <span class="align-middle">Add Event</span>
+              <span class="align-middle">Dodaj radni nalog</span>
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-add-meeting w-100">
+              <span class="align-middle">Dodaj sastanak</span>
             </button>
           </div>
           <div class="card-body pb-0">
             <h5 class="section-label mb-1">
-              <span class="align-middle">Filter</span>
+              <span class="align-middle">Filter statusa</span>
             </h5>
             <div class="form-check mb-1">
               <input type="checkbox" class="form-check-input select-all" id="select-all" checked />
-              <label class="form-check-label" for="select-all">View All</label>
+              <label class="form-check-label d-flex justify-content-between align-items-center" for="select-all">
+                <span>Svi</span>
+                <span class="calendar-filter-count" data-stat-key="svi">0</span>
+              </label>
             </div>
             <div class="calendar-events-filter">
-              <div class="form-check form-check-danger mb-1">
+              <div class="form-check form-check-info mb-1">
                 <input
                   type="checkbox"
                   class="form-check-input input-filter"
-                  id="personal"
-                  data-value="personal"
+                  id="planiran"
+                  data-value="planiran"
                   checked
                 />
-                <label class="form-check-label" for="personal">Personal</label>
-              </div>
-              <div class="form-check form-check-primary mb-1">
-                <input
-                  type="checkbox"
-                  class="form-check-input input-filter"
-                  id="business"
-                  data-value="business"
-                  checked
-                />
-                <label class="form-check-label" for="business">Business</label>
-              </div>
-              <div class="form-check form-check-warning mb-1">
-                <input type="checkbox" class="form-check-input input-filter" id="family" data-value="family" checked />
-                <label class="form-check-label" for="family">Family</label>
+                <label class="form-check-label d-flex justify-content-between align-items-center" for="planiran">
+                  <span>Planiran</span>
+                  <span class="calendar-filter-count" data-stat-key="planiran">0</span>
+                </label>
               </div>
               <div class="form-check form-check-success mb-1">
                 <input
                   type="checkbox"
                   class="form-check-input input-filter"
-                  id="holiday"
-                  data-value="holiday"
+                  id="otvoren"
+                  data-value="otvoren"
                   checked
                 />
-                <label class="form-check-label" for="holiday">Holiday</label>
+                <label class="form-check-label d-flex justify-content-between align-items-center" for="otvoren">
+                  <span>Otvoren</span>
+                  <span class="calendar-filter-count" data-stat-key="otvoren">0</span>
+                </label>
               </div>
-              <div class="form-check form-check-info">
-                <input type="checkbox" class="form-check-input input-filter" id="etc" data-value="etc" checked />
-                <label class="form-check-label" for="etc">ETC</label>
+              <div class="form-check form-check-warning mb-1">
+                <input type="checkbox" class="form-check-input input-filter" id="rezerviran" data-value="rezerviran" checked />
+                <label class="form-check-label d-flex justify-content-between align-items-center" for="rezerviran">
+                  <span>Rezerviran</span>
+                  <span class="calendar-filter-count" data-stat-key="rezerviran">0</span>
+                </label>
+              </div>
+              <div class="form-check form-check-primary mb-1">
+                <input
+                  type="checkbox"
+                  class="form-check-input input-filter"
+                  id="u-radu"
+                  data-value="u_radu"
+                  checked
+                />
+                <label class="form-check-label d-flex justify-content-between align-items-center" for="u-radu">
+                  <span>U radu</span>
+                  <span class="calendar-filter-count" data-stat-key="u_radu">0</span>
+                </label>
+              </div>
+              <div class="form-check form-check-warning mb-1">
+                <input
+                  type="checkbox"
+                  class="form-check-input input-filter"
+                  id="djelimicno-zakljucen"
+                  data-value="djelimicno_zakljucen"
+                  checked
+                />
+                <label class="form-check-label d-flex justify-content-between align-items-center" for="djelimicno-zakljucen">
+                  <span>Djelimicno zakljucen</span>
+                  <span class="calendar-filter-count" data-stat-key="djelimicno_zakljucen">0</span>
+                </label>
+              </div>
+              <div class="form-check form-check-danger">
+                <input type="checkbox" class="form-check-input input-filter" id="zakljucen" data-value="zakljucen" checked />
+                <label class="form-check-label d-flex justify-content-between align-items-center" for="zakljucen">
+                  <span>Zakljucen</span>
+                  <span class="calendar-filter-count" data-stat-key="zakljucen">0</span>
+                </label>
               </div>
             </div>
           </div>
