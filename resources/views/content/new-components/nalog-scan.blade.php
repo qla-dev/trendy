@@ -27,7 +27,7 @@
           </div>
         </div>
 
-        <div class="px-1 px-md-2 wo-qr-controls-wrap" style="max-width: 420px; margin: 0 auto;">
+        <div class="wo-qr-controls-wrap" style="max-width: 400px; margin: 0 auto;">
           <div class="wo-qr-controls-panel mt-2 mb-1">
             <div class="wo-qr-controls-row">
               <div class="wo-qr-control-block">
@@ -54,11 +54,13 @@
             </div>
           </div>
 
-          <div id="qr-scanner-status" class="small wo-qr-status mb-50">Dozvoli pristup kameri da skeniranje zapocne.</div>
-          <div id="qr-scanner-error" class="small text-danger mb-1 d-none"></div>
+          <div class="wo-qr-feedback-wrap">
+            <div id="qr-scanner-status" class="small wo-qr-status">Dozvoli pristup kameri da skeniranje zapocne.</div>
+            <div id="qr-scanner-error" class="small wo-qr-error text-danger d-none"></div>
+          </div>
         </div>
 
-        <button type="button" class="btn btn-secondary mt-2" data-bs-dismiss="modal" aria-label="Zatvori">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" aria-label="Zatvori">
           <i class="fa fa-times me-50"></i> Zatvori
         </button>
       </div>
@@ -339,6 +341,23 @@
     line-height: 1.25rem;
     color: #bfc9e5 !important;
     text-align: center;
+    margin: 0;
+  }
+
+  #qr-scanner-modal .wo-qr-error {
+    margin: 0;
+    text-align: center;
+    line-height: 1.25rem;
+  }
+
+  #qr-scanner-modal .wo-qr-feedback-wrap {
+    min-height: 3rem;
+    margin: 0.5rem 0 0.75rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 0.2rem;
   }
 
   #qr-scanner-modal #qr-scanner-region > div {
