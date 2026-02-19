@@ -115,6 +115,71 @@ class WorkOrderController extends Controller
         }
     }
 
+    public function invoicePrint(Request $request, ?string $id = null)
+    {
+        $pageConfigs = ['pageHeader' => false];
+        $workOrderId = $id ?? $request->query('id');
+
+        if (!$workOrderId) {
+            return redirect()->route('app-invoice-list');
+        }
+
+        try {
+            $workOrder = $this->findMappedWorkOrder((string) $workOrderId, true);
+
+            if (!$workOrder) {
+                return redirect()->route('app-invoice-list')
+                    ->with('error', 'Radni nalog nije pronadjen.');
+            }
+
+            $raw = $workOrder['raw'] ?? [];
+            $workOrderItems = $this->fetchMappedWorkOrderItems($raw);
+            $workOrderItemResources = $this->fetchMappedWorkOrderItemResources($raw);
+            $workOrderRegOperations = $this->fetchMappedWorkOrderRegOperations($raw);
+            unset($workOrder['raw']);
+
+            $sender = [
+                'name' => (string) $this->value($raw, ['acConsignee', 'acReceiver', 'acPartner'], $workOrder['klijent'] ?? ''),
+                'address' => (string) $this->value($raw, ['acAddress', 'acConsigneeAddress', 'acAddress1'], ''),
+                'phone' => (string) $this->value($raw, ['acPhone', 'acConsigneePhone', 'acPhone1'], ''),
+                'email' => (string) $this->value($raw, ['acEmail', 'acConsigneeEmail'], ''),
+            ];
+
+            $recipient = [
+                'name' => (string) $this->value($raw, ['acReceiver', 'acConsignee', 'acPartner'], ''),
+                'address' => (string) $this->value($raw, ['acReceiverAddress', 'acAddress2', 'acAddress'], ''),
+                'phone' => (string) $this->value($raw, ['acReceiverPhone', 'acPhone2', 'acPhone'], ''),
+                'email' => (string) $this->value($raw, ['acReceiverEmail', 'acEmail'], ''),
+            ];
+
+            return view('/content/apps/invoice/app-invoice-print', [
+                'pageConfigs' => $pageConfigs,
+                'workOrder' => $workOrder,
+                'workOrderItems' => $workOrderItems,
+                'workOrderItemResources' => $workOrderItemResources,
+                'workOrderRegOperations' => $workOrderRegOperations,
+                'sender' => $sender,
+                'recipient' => $recipient,
+                'invoiceNumber' => $this->formatWorkOrderNumberForCalendar((string) ($workOrder['broj_naloga'] ?? '')),
+                'issueDate' => $this->displayDate($workOrder['datum_kreiranja'] ?? null),
+                'dueDate' => $this->displayDate($workOrder['datum_zavrsetka'] ?? null),
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order print query failed.', [
+                'id' => $workOrderId,
+                'connection' => config('database.default'),
+                'table' => $this->qualifiedTableName(),
+                'items_table' => $this->qualifiedItemTableName(),
+                'item_resources_table' => $this->qualifiedItemResourcesTableName(),
+                'reg_operations_table' => $this->qualifiedRegOperationsTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return redirect()->route('app-invoice-list')
+                ->with('error', 'Greska pri ucitavanju print prikaza radnog naloga.');
+        }
+    }
+
     public function index(Request $request): JsonResponse
     {
         try {

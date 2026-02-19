@@ -1,14 +1,15 @@
 @extends('layouts/fullLayoutMaster')
 
 @php
+  $workOrder = $workOrder ?? [];
   $invoiceNumber = $invoiceNumber ?? '';
   $issueDate = $issueDate ?? '';
   $dueDate = $dueDate ?? '';
   $sender = $sender ?? ['name' => '', 'address' => '', 'phone' => '', 'email' => ''];
   $recipient = $recipient ?? ['name' => '', 'address' => '', 'phone' => '', 'email' => ''];
-  $compositions = $workOrder->compositions ?? [];
-  $materials = $workOrder->materials ?? [];
-  $operations = $workOrder->operations ?? [];
+  $compositions = $workOrderItems ?? (is_object($workOrder) ? ($workOrder->compositions ?? []) : []);
+  $materials = $workOrderItemResources ?? (is_object($workOrder) ? ($workOrder->materials ?? []) : []);
+  $operations = $workOrderRegOperations ?? (is_object($workOrder) ? ($workOrder->operations ?? []) : []);
 @endphp
 
 @section('title', 'Radni nalog ' . ($invoiceNumber ?: ''))
@@ -66,11 +67,11 @@
       <tbody>
         @forelse($compositions as $item)
           <tr>
-            <td>{{ $item['alternative'] ? 'Da' : 'Ne' }}</td>
-            <td>{{ $item['position'] }}</td>
-            <td>{{ $item['article_code'] }}</td>
-            <td>{{ $item['description'] }}</td>
-            <td>{{ $item['quantity'] }}</td>
+            <td>{{ $item['alternativa'] ?? ($item['alternative'] ?? '') }}</td>
+            <td>{{ $item['pozicija'] ?? ($item['position'] ?? '') }}</td>
+            <td>{{ $item['artikal'] ?? ($item['article_code'] ?? '') }}</td>
+            <td>{{ $item['opis'] ?? ($item['description'] ?? '') }}</td>
+            <td>{{ $item['kolicina'] ?? ($item['quantity'] ?? '') }}</td>
           </tr>
         @empty
           <tr>
@@ -93,10 +94,10 @@
               @forelse($materials as $material)
                 <li class="list-group-item d-flex justify-content-between">
                   <div>
-                    <strong>{{ $material['material_code'] }}</strong>
-                    <div class="text-muted">{{ $material['name'] }}</div>
+                    <strong>{{ $material['materijal'] ?? ($material['material_code'] ?? '') }}</strong>
+                    <div class="text-muted">{{ $material['naziv'] ?? ($material['name'] ?? '') }}</div>
                   </div>
-                  <span>{{ $material['quantity'] }} {{ $material['unit'] }}</span>
+                  <span>{{ $material['kolicina'] ?? ($material['quantity'] ?? '') }} {{ $material['mj'] ?? ($material['unit'] ?? '') }}</span>
                 </li>
               @empty
                 <li class="list-group-item text-muted">Nema materijala</li>
@@ -115,10 +116,10 @@
               @forelse($operations as $operation)
                 <li class="list-group-item d-flex justify-content-between">
                   <div>
-                    <strong>{{ $operation['operation_code'] }}</strong>
-                    <div class="text-muted">{{ $operation['name'] }}</div>
+                    <strong>{{ $operation['operacija'] ?? ($operation['operation_code'] ?? '') }}</strong>
+                    <div class="text-muted">{{ $operation['naziv'] ?? ($operation['name'] ?? '') }}</div>
                   </div>
-                  <span>{{ $operation['unit_value'] }} {{ $operation['unit'] }}</span>
+                  <span>{{ $operation['mj_vrij'] ?? ($operation['unit_value'] ?? '') }} {{ $operation['mj'] ?? ($operation['unit'] ?? '') }}</span>
                 </li>
               @empty
                 <li class="list-group-item text-muted">Nema operacija</li>

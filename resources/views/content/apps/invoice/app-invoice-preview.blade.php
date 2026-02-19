@@ -1371,7 +1371,11 @@
           <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#send-invoice-sidebar">
             <i class="fa fa-paper-plane me-50"></i> Pošalji
           </button>
-          <a class="btn btn-outline-secondary w-100 d-flex justify-content-center align-items-center" href="{{url('app/invoice/print')}}" target="_blank">
+          <a
+            class="btn btn-outline-secondary w-100 d-flex justify-content-center align-items-center"
+            href="{{ route('app-invoice-print', ['id' => $workOrderRouteId]) }}"
+            target="_blank"
+          >
             <i class="fa fa-print me-50"></i> Isprintaj
           </a>
         </div>
