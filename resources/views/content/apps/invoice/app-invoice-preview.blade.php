@@ -32,6 +32,12 @@
   .invoice-preview .invoice-date-wrapper .invoice-date-title, .invoice-edit .invoice-date-wrapper .invoice-date-title, .invoice-add .invoice-date-wrapper .invoice-date-title {
     width: unset;
   }
+  .invoice-preview-wrapper .logo-wrapper .invoice-logo {
+    color: #42526e !important;
+  }
+  .invoice-preview-wrapper .logo-wrapper .wo-brand-logo {
+    border-radius: 999px;
+  }
   .invoice-actions .btn {
     color: #5e5873;
   }
@@ -92,9 +98,16 @@
   }
   .wo-meta-chip-row {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0.5rem;
     margin-bottom: 0.85rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  .wo-meta-chip-row > * {
+    flex: 0 0 auto;
   }
   .wo-meta-chip {
     display: inline-flex;
@@ -224,6 +237,8 @@
     background: #fff;
     padding: 0.7rem 0.85rem;
     margin-bottom: 0.9rem;
+    padding-left: 0!important;
+  
   }
   .wo-kpi-shell {
     border: 1px solid #ebe9f1;
@@ -474,11 +489,13 @@
     align-items: center;
     gap: 0.45rem;
     border-radius: 999px;
-    padding: 0.3rem 0.6rem;
-    border: 1px solid #ebe9f1;
-    background: #fff;
-    font-size: 0.72rem;
+    padding: 0.3rem 0.65rem;
+    border: 1px solid rgba(110, 107, 123, 0.35);
+    background-color: rgba(110, 107, 123, 0.08);
+    font-size: 0.78rem;
+    line-height: 1;
     color: #5e5873;
+    white-space: nowrap;
   }
   .wo-flag-dot {
     width: 7px;
@@ -502,6 +519,19 @@
   }
   body.dark-layout .invoice-actions-divider {
     border-top-color: var(--wo-divider-color);
+  }
+  body.dark-layout .invoice-preview-wrapper .logo-wrapper .invoice-logo,
+  body.semi-dark-layout .invoice-preview-wrapper .logo-wrapper .invoice-logo,
+  .dark-layout .invoice-preview-wrapper .logo-wrapper .invoice-logo,
+  .semi-dark-layout .invoice-preview-wrapper .logo-wrapper .invoice-logo {
+    color: #eaf0ff !important;
+  }
+  body.dark-layout .invoice-preview-wrapper .logo-wrapper .wo-brand-logo,
+  body.semi-dark-layout .invoice-preview-wrapper .logo-wrapper .wo-brand-logo,
+  .dark-layout .invoice-preview-wrapper .logo-wrapper .wo-brand-logo,
+  .semi-dark-layout .invoice-preview-wrapper .logo-wrapper .wo-brand-logo {
+    box-shadow: none !important;
+    filter: brightness(1.1) contrast(1.05);
   }
   body.dark-layout .wo-product-hero {
     border-color: #444e6e;
@@ -631,7 +661,6 @@
   body.dark-layout .invoice-preview-wrapper .wo-kpi-shell,
   body.dark-layout .invoice-preview-wrapper .wo-kpi-item,
   body.dark-layout .invoice-preview-wrapper .wo-meta-chip,
-  body.dark-layout .invoice-preview-wrapper .wo-flag-pill,
   body.dark-layout .invoice-preview-wrapper .wo-link-card,
   body.dark-layout .invoice-preview-wrapper .wo-links-empty,
   body.semi-dark-layout .invoice-preview-wrapper .tab-content,
@@ -643,7 +672,6 @@
   body.semi-dark-layout .invoice-preview-wrapper .wo-kpi-shell,
   body.semi-dark-layout .invoice-preview-wrapper .wo-kpi-item,
   body.semi-dark-layout .invoice-preview-wrapper .wo-meta-chip,
-  body.semi-dark-layout .invoice-preview-wrapper .wo-flag-pill,
   body.semi-dark-layout .invoice-preview-wrapper .wo-link-card,
   body.semi-dark-layout .invoice-preview-wrapper .wo-links-empty {
     background: transparent !important;
@@ -693,7 +721,6 @@
   .dark-layout .invoice-preview-wrapper .wo-kpi-shell,
   .dark-layout .invoice-preview-wrapper .wo-kpi-item,
   .dark-layout .invoice-preview-wrapper .wo-meta-chip,
-  .dark-layout .invoice-preview-wrapper .wo-flag-pill,
   .dark-layout .invoice-preview-wrapper .wo-link-card,
   .dark-layout .invoice-preview-wrapper .wo-links-empty,
   .semi-dark-layout .invoice-preview-wrapper .tab-content,
@@ -705,7 +732,6 @@
   .semi-dark-layout .invoice-preview-wrapper .wo-kpi-shell,
   .semi-dark-layout .invoice-preview-wrapper .wo-kpi-item,
   .semi-dark-layout .invoice-preview-wrapper .wo-meta-chip,
-  .semi-dark-layout .invoice-preview-wrapper .wo-flag-pill,
   .semi-dark-layout .invoice-preview-wrapper .wo-link-card,
   .semi-dark-layout .invoice-preview-wrapper .wo-links-empty {
     background: transparent !important;
@@ -828,6 +854,7 @@
 @php
   $invoiceNumber = $invoiceNumber ?? '';
   $issueDate = $issueDate ?? '';
+  $plannedStartDate = $plannedStartDate ?? '';
   $dueDate = $dueDate ?? '';
   $sender = $sender ?? ['name' => '', 'address' => '', 'phone' => '', 'email' => ''];
   $recipient = $recipient ?? ['name' => '', 'address' => '', 'phone' => '', 'email' => ''];
@@ -900,7 +927,7 @@
           <div class="d-flex justify-content-between flex-md-row flex-column invoice-spacing mt-0">
             <div>
               <div class="logo-wrapper">
-                <img src="{{ asset('/images/logo/TrendyCNC.png') }}" alt="Trendy d.o.o." width="50" height="auto">
+                <img src="{{ asset('/images/logo/TrendyCNC.png') }}" alt="Trendy d.o.o." width="50" height="auto" class="wo-brand-logo">
                 <h3 class="text-primary invoice-logo">eNalog.app</h3>
               </div>
               <p class="card-text mb-25">Trendy d.o.o.</p>
@@ -918,8 +945,8 @@
                   <p class="invoice-date">{{ $issueDate }}</p>
                 </div>
                 <div class="invoice-date-wrapper">
-                  <p class="invoice-date-title">Datum dospijeća:</p>
-                  <p class="invoice-date">{{ $dueDate }}</p>
+                  <p class="invoice-date-title">Planirani start:</p>
+                  <p class="invoice-date">{{ $plannedStartDate !== '' ? $plannedStartDate : '-' }}</p>
                 </div>
               </div>
               <div class="wo-header-qr-block">
@@ -973,12 +1000,12 @@
         <hr class="invoice-spacing" />
 
         @if($workOrderProductName !== '' || $workOrderProductCode !== '')
-          <div class="card-body invoice-padding pt-0 pb-0">
+          <div class="card-body invoice-padding pt-2 pb-0">
             <div class="wo-product-hero">
               <span class="wo-product-kicker">Naziv proizvoda</span>
               <span class="wo-product-title">{{ $workOrderProductName !== '' ? $workOrderProductName : '-' }}</span>
               @if($workOrderProductCode !== '')
-                <span class="wo-product-sub">Sifra proizvoda: {{ $workOrderProductCode }}</span>
+                <span class="wo-product-sub">Šifra proizvoda: {{ $workOrderProductCode }}</span>
               @endif
             </div>
           </div>
@@ -997,8 +1024,8 @@
         </div>
 
         <!-- Work Order Metadata starts -->
-        <div class="card-body invoice-padding pt-0">
-          @if(!empty($workOrderMetaHighlightChips))
+        <div class="card-body invoice-padding pt-0 pb-0">
+          @if(!empty($workOrderMetaHighlightChips) || !empty($workOrderMetaFlags))
             <div class="wo-chip-shell">
               <div class="wo-meta-chip-row mb-0">
                 @foreach($workOrderMetaHighlightChips as $metaChip)
@@ -1007,22 +1034,19 @@
                     <span class="wo-meta-chip-value">{{ $metaChip['value'] ?? '-' }}</span>
                   </div>
                 @endforeach
+                @foreach($workOrderMetaFlags as $metaFlag)
+                  <span class="wo-flag-pill wo-flag-{{ $metaFlag['tone'] ?? 'secondary' }}">
+                    <span class="wo-flag-dot"></span>
+                    <span>{{ $metaFlag['label'] ?? '' }}: <strong>{{ $metaFlag['value'] ?? '-' }}</strong></span>
+                  </span>
+                @endforeach
               </div>
-            </div>
-          @endif
-
-          @if(!empty($workOrderMetaFlags))
-            <div class="wo-meta-flag-row">
-              @foreach($workOrderMetaFlags as $metaFlag)
-                <span class="wo-flag-pill wo-flag-{{ $metaFlag['tone'] ?? 'secondary' }}">
-                  <span class="wo-flag-dot"></span>
-                  <span>{{ $metaFlag['label'] ?? '' }}: <strong>{{ $metaFlag['value'] ?? '-' }}</strong></span>
-                </span>
-              @endforeach
             </div>
           @endif
         </div>
         <!-- Work Order Metadata ends -->
+
+        <hr class="invoice-spacing mb-0" />
 
         <!-- Invoice Description starts -->
         <div class="nav-align-top">
@@ -1260,19 +1284,19 @@
                       if (str_contains($normalizedLabel, 'vezni')) {
                         $linkTone = 'info';
                         $linkIcon = 'fa-random';
-                      } elseif (str_contains($normalizedLabel, 'parent')) {
+                      } elseif (str_contains($normalizedLabel, 'parent') || str_contains($normalizedLabel, 'nadred')) {
                         $linkTone = 'warning';
                         $linkIcon = 'fa-sitemap';
                       } elseif (str_contains($normalizedLabel, 'qid')) {
                         $linkTone = 'warning';
                         $linkIcon = 'fa-barcode';
-                      } elseif (str_contains($normalizedLabel, 'user')) {
+                      } elseif (str_contains($normalizedLabel, 'user') || str_contains($normalizedLabel, 'korisnik')) {
                         $linkTone = 'success';
                         $linkIcon = 'fa-user';
-                      } elseif (str_contains($normalizedLabel, 'cost')) {
+                      } elseif (str_contains($normalizedLabel, 'cost') || str_contains($normalizedLabel, 'trosk')) {
                         $linkTone = 'danger';
                         $linkIcon = 'fa-money';
-                      } elseif (str_contains($normalizedLabel, 'izvor') || str_contains($normalizedLabel, 'crop')) {
+                      } elseif (str_contains($normalizedLabel, 'izvor') || str_contains($normalizedLabel, 'crop') || str_contains($normalizedLabel, 'kroj')) {
                         $linkTone = 'secondary';
                         $linkIcon = 'fa-cube';
                       } elseif (str_contains($normalizedLabel, 'rn')) {

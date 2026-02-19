@@ -96,6 +96,7 @@ class WorkOrderController extends Controller
                 'recipient' => $recipient,
                 'invoiceNumber' => (string) ($workOrder['broj_naloga'] ?? ''),
                 'issueDate' => $this->displayDate($workOrder['datum_kreiranja'] ?? null),
+                'plannedStartDate' => $this->formatMetaDateTime($this->value($raw, ['adSchedStartTime'], null)),
                 'dueDate' => $this->displayDate($workOrder['datum_zavrsetka'] ?? null),
             ]);
         } catch (Throwable $exception) {
@@ -531,7 +532,7 @@ class WorkOrderController extends Controller
 
         $progressPercent = $completionPercent ?? $itemsCompletionPercent ?? 0.0;
         $progressPercent = max(0.0, min(100.0, $progressPercent));
-        $progressLabel = $completionPercent !== null ? 'Realizacija po kolicini' : 'Realizacija po zavrsenim stavkama';
+        $progressLabel = $completionPercent !== null ? 'Realizacija po količini' : 'Realizacija po završenim stavkama';
 
         $statusBucket = $this->statusBucket((string) ($workOrder['status'] ?? ''));
         $statusToneMap = [
@@ -557,7 +558,7 @@ class WorkOrderController extends Controller
             ['label' => 'Status', 'value' => (string) ($workOrder['status'] ?? 'N/A'), 'tone' => $statusTone],
             ['label' => 'Prioritet', 'value' => (string) ($workOrder['prioritet'] ?? 'N/A'), 'tone' => $priorityTone],
             ['label' => 'Tip dokumenta', 'value' => (string) $this->valueTrimmed($raw, ['acDocTypeView', 'acDocType'], ''), 'tone' => 'slate'],
-            ['label' => 'Sifra proizvoda', 'value' => (string) $this->valueTrimmed($raw, ['acIdent'], ''), 'tone' => 'slate'],
+            ['label' => 'Šifra proizvoda', 'value' => (string) $this->valueTrimmed($raw, ['acIdent'], ''), 'tone' => 'slate'],
             ['label' => 'Naziv proizvoda', 'value' => (string) $this->valueTrimmed($raw, ['acName'], ''), 'tone' => 'slate'],
             ['label' => 'Varijanta', 'value' => (string) $this->valueTrimmed($raw, ['acProdVariant', 'anVariant'], ''), 'tone' => 'slate'],
             ['label' => 'Lokacija', 'value' => (string) $this->valueTrimmed($raw, ['acLocation', 'acDept'], ''), 'tone' => 'slate'],
@@ -567,8 +568,8 @@ class WorkOrderController extends Controller
         }));
 
         $kpis = [
-            ['label' => 'Planirana kolicina', 'value' => $this->formatMetaNumber($planQty), 'unit' => $unit],
-            ['label' => 'Izradjena kolicina', 'value' => $this->formatMetaNumber($producedQty), 'unit' => $unit],
+            ['label' => 'Planirana količina', 'value' => $this->formatMetaNumber($planQty), 'unit' => $unit],
+            ['label' => 'Izrađena količina', 'value' => $this->formatMetaNumber($producedQty), 'unit' => $unit],
             ['label' => 'Serija', 'value' => $this->formatMetaNumber($seriesQty), 'unit' => $unit],
             ['label' => 'Popravka', 'value' => $this->formatMetaNumber($repairQty), 'unit' => $unit],
             ['label' => 'Plan otpad', 'value' => $this->formatMetaNumber($planWasteQty), 'unit' => $unit],
@@ -594,23 +595,23 @@ class WorkOrderController extends Controller
         $timeline = $this->sortTimelineRowsChronologically($timelineRows);
 
         $traceability = [
-            ['label' => 'RN kljuc', 'value' => (string) $this->valueTrimmed($raw, ['acKeyView', 'acKey'], '-')],
+            ['label' => 'RN ključ', 'value' => (string) $this->valueTrimmed($raw, ['acKeyView', 'acKey'], '-')],
             ['label' => 'Vezni dokument', 'value' => (string) $this->valueTrimmed($raw, ['acLnkKeyView', 'acLnkKey'], '-')],
             ['label' => 'Vezni broj', 'value' => (string) $this->valueTrimmed($raw, ['anLnkNo'], '-')],
-            ['label' => 'Parent RN', 'value' => (string) $this->valueTrimmed($raw, ['acParentWOView', 'acParentWO'], '-')],
-            ['label' => 'Parent qty', 'value' => $this->formatMetaNumber($this->toFloatOrNull($this->valueTrimmed($raw, ['anParentWOQty'], null)))],
+            ['label' => 'Nadređeni RN', 'value' => (string) $this->valueTrimmed($raw, ['acParentWOView', 'acParentWO'], '-')],
+            ['label' => 'Nadređena količina', 'value' => $this->formatMetaNumber($this->toFloatOrNull($this->valueTrimmed($raw, ['anParentWOQty'], null)))],
             ['label' => 'QID', 'value' => (string) $this->valueTrimmed($raw, ['anQId'], '-')],
             ['label' => 'QID CA', 'value' => (string) $this->valueTrimmed($raw, ['anQIdCA'], '-')],
-            ['label' => 'User unos', 'value' => (string) $this->valueTrimmed($raw, ['anUserIns'], '-')],
-            ['label' => 'User izmjena', 'value' => (string) $this->valueTrimmed($raw, ['anUserChg'], '-')],
-            ['label' => 'Cost driver', 'value' => (string) $this->valueTrimmed($raw, ['acCostDrv'], '-')],
+            ['label' => 'Korisnik unosa', 'value' => (string) $this->valueTrimmed($raw, ['anUserIns'], '-')],
+            ['label' => 'Korisnik izmjene', 'value' => (string) $this->valueTrimmed($raw, ['anUserChg'], '-')],
+            ['label' => 'Nosilac troška', 'value' => (string) $this->valueTrimmed($raw, ['acCostDrv'], '-')],
             ['label' => 'Izvor kreiranja', 'value' => (string) $this->valueTrimmed($raw, ['acCreateFrom'], '-')],
-            ['label' => 'Crop tip', 'value' => (string) $this->valueTrimmed($raw, ['acCropType'], '-')],
+            ['label' => 'Tip kroja', 'value' => (string) $this->valueTrimmed($raw, ['acCropType'], '-')],
         ];
 
         $flags = [
-            ['label' => 'Reversal', 'value' => $this->formatMetaFlag($this->valueTrimmed($raw, ['acReversal'], null)), 'tone' => $this->flagTone($this->valueTrimmed($raw, ['acReversal'], null))],
-            ['label' => 'Receive finished', 'value' => $this->formatMetaFlag($this->valueTrimmed($raw, ['acReceiveFinished'], null)), 'tone' => $this->flagTone($this->valueTrimmed($raw, ['acReceiveFinished'], null))],
+            ['label' => 'Povrat', 'value' => $this->formatMetaFlag($this->valueTrimmed($raw, ['acReversal'], null)), 'tone' => $this->flagTone($this->valueTrimmed($raw, ['acReversal'], null))],
+            ['label' => 'Prijem završen', 'value' => $this->formatMetaFlag($this->valueTrimmed($raw, ['acReceiveFinished'], null)), 'tone' => $this->flagTone($this->valueTrimmed($raw, ['acReceiveFinished'], null))],
             ['label' => 'SN transfer', 'value' => $this->formatMetaFlag($this->valueTrimmed($raw, ['anSNTransfer'], null)), 'tone' => $this->flagTone($this->valueTrimmed($raw, ['anSNTransfer'], null))],
         ];
 
