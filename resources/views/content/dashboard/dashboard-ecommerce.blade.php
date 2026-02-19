@@ -14,6 +14,10 @@
   <link rel="stylesheet" href="{{ asset(mix('css/base/plugins/charts/chart-apex.css')) }}">
   <link rel="stylesheet" href="{{ asset(mix('css/base/plugins/extensions/ext-component-toastr.css')) }}">
   <style>
+
+    .dark-layout a:hover {
+      color: unset!important;
+    }
     .dashboard-workorders-card .table {
       margin-bottom: 0;
     }
@@ -35,6 +39,10 @@
       color: #5e5873;
       font-size: 1.1rem;
       font-weight: 500;
+    }
+
+    .dashboard-workorders-table.table-hover tbody tr:hover > * {
+      background-color: #f8f8fc;
     }
 
     .dashboard-workorder-link {
@@ -156,6 +164,25 @@
     .semi-dark-layout .dashboard-workorders-table tbody td {
       border-top-color: rgba(186, 191, 221, 0.16);
       color: #d7dbeb;
+    }
+
+    .dark-layout .dashboard-workorders-table,
+    .semi-dark-layout .dashboard-workorders-table {
+      --bs-table-bg: transparent;
+      --bs-table-accent-bg: transparent;
+      --bs-table-hover-bg: #36405a;
+      --bs-table-hover-color: #ffffff;
+    }
+
+    .dark-layout .dashboard-workorders-table > :not(caption) > * > *,
+    .semi-dark-layout .dashboard-workorders-table > :not(caption) > * > * {
+      box-shadow: none !important;
+    }
+
+    .dark-layout .dashboard-workorders-table.table-hover tbody tr:hover > *,
+    .semi-dark-layout .dashboard-workorders-table.table-hover tbody tr:hover > * {
+      background-color: #36405a !important;
+      color: #fff !important;
     }
 
     .dark-layout .dashboard-workorder-link,

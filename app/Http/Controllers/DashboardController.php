@@ -56,7 +56,7 @@ class DashboardController extends Controller
       }
 
       $latestOrders = $query
-        ->limit(5)
+        ->limit(6)
         ->get()
         ->map(function ($row) {
           $rowData = (array) $row;
