@@ -744,7 +744,7 @@ class WorkOrderController extends Controller
             'responsive_id' => '',
             'id' => $id,
             'broj_naloga' => $brojNaloga,
-            'naziv' => (string) $this->value($row, ['acDocType', 'acName', 'title'], 'Radni nalog'),
+            'naziv' => (string) $this->value($row, ['acName', 'acDescr', 'title'], 'Radni nalog'),
             'opis' => (string) $this->value($row, ['acNote', 'acStatement', 'acDescr', 'description'], ''),
             'status' => $status,
             'prioritet' => $priority,

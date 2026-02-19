@@ -206,6 +206,7 @@
           <tr>
             <th></th>
             <th>#</th>
+            <th>Naziv proizvoda</th>
             <th>Klijent</th>
             <th>Ukupno</th>
             <th class="text-truncate">Datum Kreiranja</th>
@@ -566,6 +567,21 @@
     justify-content: flex-end;
   }
 
+  .invoice-list-table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  .invoice-list-table tbody tr td a,
+  .invoice-list-table tbody tr td button,
+  .invoice-list-table tbody tr td .wo-eye-action {
+    cursor: pointer;
+  }
+
+  .invoice-list-table.table tbody tr:hover > * {
+    background-color: #f8f8fc;
+  }
+
   .wo-eye-action {
     width: 32px;
     height: 32px;
@@ -629,6 +645,12 @@
   .dark-layout .invoice-list-table tbody td:nth-child(2) a:visited,
   .dark-layout .invoice-list-table tbody td:nth-child(2) a:hover,
   .dark-layout .invoice-list-table tbody td:nth-child(2) a:focus {
+    color: #fff !important;
+  }
+
+  .dark-layout .invoice-list-table.table tbody tr:hover > *,
+  .semi-dark-layout .invoice-list-table.table tbody tr:hover > * {
+    background-color: #36405a !important;
     color: #fff !important;
   }
 

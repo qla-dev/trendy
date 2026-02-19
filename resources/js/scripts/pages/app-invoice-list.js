@@ -235,7 +235,7 @@ $(function () {
   // datatable
   if (dtInvoiceTable.length) {
     var currentStatusFilter = null;
-    var moneyColumnIndex = 3;
+    var moneyColumnIndex = 4;
     var moneyColumnVisible = null;
     updateStatusCards(window.statusStats || {});
 
@@ -288,6 +288,7 @@ $(function () {
       columns: [
         { data: 'responsive_id' },
         { data: 'id' },
+        { data: 'naziv' },
         { data: 'klijent' },
         { data: 'vrednost' },
         { data: 'datum_kreiranja' },
@@ -329,6 +330,16 @@ $(function () {
         },
         {
           targets: 2,
+          width: '250px',
+          render: function (data, type, full) {
+            var productName = (full['naziv'] || 'Radni nalog').toString().trim();
+            var safeName = escapeHtml(productName || 'N/A');
+
+            return '<span class="text-truncate d-inline-block w-100" title="' + safeName + '">' + safeName + '</span>';
+          }
+        },
+        {
+          targets: 3,
           responsivePriority: 4,
           width: '270px',
           render: function (data, type, full) {
@@ -370,7 +381,7 @@ $(function () {
           }
         },
         {
-          targets: 3,
+          targets: 4,
           width: '73px',
           render: function (data, type, full) {
             var total = full['vrednost'];
@@ -388,7 +399,7 @@ $(function () {
           }
         },
         {
-          targets: 4,
+          targets: 5,
           width: '130px',
           render: function (data, type, full) {
             var createdDate = new Date(full['datum_kreiranja']);
@@ -401,7 +412,7 @@ $(function () {
           }
         },
         {
-          targets: 5,
+          targets: 6,
           className: 'text-center align-middle',
           width: '98px',
           render: function (data, type, full) {
@@ -420,7 +431,7 @@ $(function () {
           }
         },
         {
-          targets: 6,
+          targets: 7,
           width: '80px',
           render: function (data, type, full) {
             var priority = full['prioritet'];
@@ -558,6 +569,25 @@ $(function () {
           feather.replace();
         }
       }
+    });
+
+    dtInvoiceTable.find('tbody').on('click', 'tr', function (event) {
+      var $target = $(event.target);
+
+      if (
+        $(this).hasClass('child') ||
+        $(this).find('td.dataTables_empty').length ||
+        $target.closest('a, button, input, textarea, select, label, .dropdown, .dropdown-menu, td.control, .dtr-control').length
+      ) {
+        return;
+      }
+
+      var rowData = dtInvoice.row(this).data();
+      if (!rowData || !rowData.id) {
+        return;
+      }
+
+      window.location.href = invoicePreview + '/' + rowData.id;
     });
 
     var filtersBody = $('#filters-body');

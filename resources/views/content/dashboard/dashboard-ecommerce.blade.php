@@ -22,6 +22,34 @@
       margin-bottom: 0;
     }
 
+    .dashboard-workorders-scroll {
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(132, 142, 168, 0.72) rgba(228, 232, 241, 0.8);
+      scrollbar-gutter: stable;
+    }
+
+    .dashboard-workorders-scroll::-webkit-scrollbar {
+      height: 11px;
+    }
+
+    .dashboard-workorders-scroll::-webkit-scrollbar-track {
+      background: rgba(228, 232, 241, 0.8);
+      border-radius: 999px;
+    }
+
+    .dashboard-workorders-scroll::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, rgba(130, 141, 168, 0.95) 0%, rgba(108, 119, 147, 0.95) 100%);
+      border-radius: 999px;
+      border: 2px solid rgba(228, 232, 241, 0.95);
+      min-width: 28px;
+    }
+
+    .dashboard-workorders-scroll::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, rgba(113, 126, 156, 1) 0%, rgba(94, 108, 139, 1) 100%);
+    }
+
     .dashboard-workorders-table thead th {
       background-color: #f8f8fc;
       border-bottom: 1px solid #ebe9f1;
@@ -63,6 +91,15 @@
       align-items: center;
       gap: 0.8rem;
       min-width: 0;
+    }
+
+    .dashboard-product-name {
+      font-weight: 500;
+      color: #5e5873;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 260px;
     }
 
     .dashboard-client-avatar {
@@ -174,6 +211,29 @@
       --bs-table-hover-color: #ffffff;
     }
 
+    .dark-layout .dashboard-workorders-scroll,
+    .semi-dark-layout .dashboard-workorders-scroll {
+      scrollbar-color: rgba(170, 182, 213, 0.85) rgba(50, 58, 82, 0.95);
+    }
+
+    .dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-track,
+    .semi-dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-track {
+      background: rgba(50, 58, 82, 0.95);
+      border-radius: 999px;
+    }
+
+    .dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-thumb,
+    .semi-dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, rgba(178, 188, 217, 0.92) 0%, rgba(147, 160, 192, 0.92) 100%);
+      border-radius: 999px;
+      border: 2px solid rgba(50, 58, 82, 0.98);
+    }
+
+    .dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-thumb:hover,
+    .semi-dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, rgba(195, 205, 232, 0.98) 0%, rgba(164, 177, 207, 0.98) 100%);
+    }
+
     .dark-layout .dashboard-workorders-table > :not(caption) > * > *,
     .semi-dark-layout .dashboard-workorders-table > :not(caption) > * > * {
       box-shadow: none !important;
@@ -192,6 +252,11 @@
 
     .dark-layout .dashboard-client-name,
     .semi-dark-layout .dashboard-client-name {
+      color: #d7dbeb;
+    }
+
+    .dark-layout .dashboard-product-name,
+    .semi-dark-layout .dashboard-product-name {
       color: #d7dbeb;
     }
 
@@ -475,11 +540,12 @@
     <div class="col-lg-8 col-12">
       <div class="card card-company-table dashboard-workorders-card">
         <div class="card-body p-0">
-          <div class="table-responsive">
+          <div class="table-responsive dashboard-workorders-scroll">
             <table class="table table-hover borderless mb-0 dashboard-workorders-table">
               <thead>
                 <tr>
                   <th>#</th>
+                  <th>Naziv proizvoda</th>
                   <th>Klijent</th>
                   <th>Datum kreiranja</th>
                   <th>Status</th>
@@ -498,6 +564,7 @@
                     }
 
                     $clientName = trim((string) ($order->client_name ?? 'N/A'));
+                    $productName = trim((string) ($order->product_name ?? 'Radni nalog'));
                     $words = preg_split('/\s+/', $clientName) ?: [];
                     $firstInitial = $words[0] ?? '';
                     $lastInitial = $words[count($words) - 1] ?? '';
@@ -536,6 +603,11 @@
                       </a>
                     </td>
                     <td>
+                      <span class="dashboard-product-name" title="{{ $productName !== '' ? $productName : 'N/A' }}">
+                        {{ $productName !== '' ? $productName : 'N/A' }}
+                      </span>
+                    </td>
+                    <td>
                       <div class="dashboard-client-wrap">
                         <span class="dashboard-client-avatar" style="background-color: {{ $avatarBg }}; color: {{ $avatarText }}; border: 1px solid {{ $avatarBorder }};">
                           {{ $initials }}
@@ -558,7 +630,7 @@
                 @endforeach
                 @if ($latestOrders->isEmpty())
                   <tr>
-                    <td colspan="5" class="text-center text-muted">Nema dostupnih naloga.</td>
+                    <td colspan="6" class="text-center text-muted">Nema dostupnih naloga.</td>
                   </tr>
                 @endif
               </tbody>
