@@ -866,6 +866,12 @@
   $workOrderMetaFlags = $workOrderMeta['flags'] ?? [];
   $workOrderMetaProgress = $workOrderMeta['progress'] ?? ['label' => 'Realizacija', 'percent' => 0, 'display' => '0 %'];
   $workOrderMetaProgressPercent = max(0, min(100, (float) ($workOrderMetaProgress['percent'] ?? 0)));
+  $workOrderRouteId = trim((string) ($workOrder['id'] ?? $invoiceNumber ?? ''));
+  if ($workOrderRouteId === '') {
+    $workOrderRouteId = trim((string) ($invoiceNumber ?? ''));
+  }
+  $previewQrTarget = request()->getSchemeAndHttpHost() . route('app-invoice-preview', ['id' => $workOrderRouteId], false);
+  $previewQrImage = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=' . urlencode($previewQrTarget);
   $workOrderHeaderHighlights = [];
   $workOrderMetaHighlightChips = [];
   $workOrderProductName = '';
@@ -950,7 +956,7 @@
                 </div>
               </div>
               <div class="wo-header-qr-block">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg" alt="QR Code" style="width: 120px; height: 120px; border: 1px solid #dee2e6; border-radius: 4px; padding: 8px; background: white;">
+                <img src="{{ $previewQrImage }}" alt="QR Code" style="width: 120px; height: 120px; border: 1px solid #dee2e6; border-radius: 4px; padding: 8px; background: white;">
               </div>
             </div>
           </div>
