@@ -853,6 +853,20 @@
 
 @php
   $invoiceNumber = $invoiceNumber ?? '';
+  $invoiceNumberDisplay = $invoiceNumber;
+  if (
+    is_string($invoiceNumberDisplay) &&
+    $invoiceNumberDisplay !== '' &&
+    !str_contains($invoiceNumberDisplay, '-')
+  ) {
+    $invoiceDigits = preg_replace('/\D+/', '', $invoiceNumberDisplay);
+    if (is_string($invoiceDigits) && strlen($invoiceDigits) === 13) {
+      $invoiceNumberDisplay =
+        substr($invoiceDigits, 0, 2) . '-' .
+        substr($invoiceDigits, 2, 5) . '-' .
+        substr($invoiceDigits, 7);
+    }
+  }
   $issueDate = $issueDate ?? '';
   $plannedStartDate = $plannedStartDate ?? '';
   $dueDate = $dueDate ?? '';
@@ -941,10 +955,10 @@
               <p class="card-text mb-0">+387 30 525 252</p>
               <p class="card-text mb-0">info@trendy.ba</p>
             </div>
-            <div class="mt-md-0 mt-2 d-flex align-items-center justify-content-end">
-              <div class="me-3">
+            <div class="mt-2 d-flex align-items-center justify-content-end">
+              <div class="me-2">
                 <h4 class="invoice-title">
-                  <span>RN<span class="invoice-number">{{ $invoiceNumber }}</span></span>
+                  <span>RN<span class="invoice-number">{{ $invoiceNumberDisplay }}</span></span>
                 </h4>
                 <div class="invoice-date-wrapper">
                   <p class="invoice-date-title">Datum izdavanja:</p>
