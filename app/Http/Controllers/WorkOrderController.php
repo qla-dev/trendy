@@ -77,12 +77,21 @@ class WorkOrderController extends Controller
                 'email' => (string) $this->value($raw, ['acReceiverEmail', 'acEmail'], ''),
             ];
 
+            $workOrderMeta = $this->buildWorkOrderMetadata(
+                $raw,
+                $workOrder,
+                $workOrderItems,
+                $workOrderItemResources,
+                $workOrderRegOperations
+            );
+
             return view('/content/apps/invoice/app-invoice-preview', [
                 'pageConfigs' => $pageConfigs,
                 'workOrder' => $workOrder,
                 'workOrderItems' => $workOrderItems,
                 'workOrderItemResources' => $workOrderItemResources,
                 'workOrderRegOperations' => $workOrderRegOperations,
+                'workOrderMeta' => $workOrderMeta,
                 'sender' => $sender,
                 'recipient' => $recipient,
                 'invoiceNumber' => (string) ($workOrder['broj_naloga'] ?? ''),
@@ -488,6 +497,134 @@ class WorkOrderController extends Controller
         }
 
         return $mapped;
+    }
+
+    private function buildWorkOrderMetadata(
+        array $raw,
+        array $workOrder,
+        array $workOrderItems,
+        array $workOrderItemResources,
+        array $workOrderRegOperations
+    ): array {
+        $unit = (string) $this->valueTrimmed($raw, ['acUM'], '');
+        $planQty = $this->toFloatOrNull($this->valueTrimmed($raw, ['anPlanQty'], null));
+        $producedQty = $this->toFloatOrNull($this->valueTrimmed($raw, ['anProducedQty'], null));
+        $seriesQty = $this->toFloatOrNull($this->valueTrimmed($raw, ['anQtySeries'], null));
+        $planWasteQty = $this->toFloatOrNull($this->valueTrimmed($raw, ['anPlanWasteQty'], null));
+        $wasteQty = $this->toFloatOrNull($this->valueTrimmed($raw, ['anWasteQty'], null));
+        $planScrapQty = $this->toFloatOrNull($this->valueTrimmed($raw, ['anPlanScrapQty'], null));
+        $scrapQty = $this->toFloatOrNull($this->valueTrimmed($raw, ['anScrapQty'], null));
+        $workTime = $this->toFloatOrNull($this->valueTrimmed($raw, ['anWorkTime'], null));
+        $throTime = $this->toFloatOrNull($this->valueTrimmed($raw, ['anThroTime'], null));
+        $repairQty = $this->toFloatOrNull($this->valueTrimmed($raw, ['anRepairQty'], null));
+
+        $completionPercent = null;
+        if ($planQty !== null && $producedQty !== null && abs($planQty) > 0.000001) {
+            $completionPercent = ($producedQty / $planQty) * 100;
+        }
+
+        $itemTotal = count($workOrderItems);
+        $finishedItems = count(array_filter($workOrderItems, function (array $item) {
+            return strtolower(trim((string) ($item['zavrseno'] ?? ''))) === 'da';
+        }));
+        $itemsCompletionPercent = $itemTotal > 0 ? ($finishedItems / $itemTotal) * 100 : null;
+
+        $progressPercent = $completionPercent ?? $itemsCompletionPercent ?? 0.0;
+        $progressPercent = max(0.0, min(100.0, $progressPercent));
+        $progressLabel = $completionPercent !== null ? 'Realizacija po kolicini' : 'Realizacija po zavrsenim stavkama';
+
+        $statusBucket = $this->statusBucket((string) ($workOrder['status'] ?? ''));
+        $statusToneMap = [
+            'planiran' => 'primary',
+            'otvoren' => 'success',
+            'rezerviran' => 'warning',
+            'raspisan' => 'info',
+            'u_radu' => 'warning',
+            'djelimicno_zakljucen' => 'orange',
+            'zakljucen' => 'danger',
+        ];
+        $statusTone = $statusBucket !== null ? ($statusToneMap[$statusBucket] ?? 'secondary') : 'secondary';
+
+        $priorityCode = (int) ($this->toFloatOrNull($this->valueTrimmed($raw, ['anPriority'], null)) ?? 0);
+        $priorityTone = 'warning';
+        if ($priorityCode === 1) {
+            $priorityTone = 'danger';
+        } elseif ($priorityCode >= 10) {
+            $priorityTone = 'info';
+        }
+
+        $highlights = array_values(array_filter([
+            ['label' => 'Status', 'value' => (string) ($workOrder['status'] ?? 'N/A'), 'tone' => $statusTone],
+            ['label' => 'Prioritet', 'value' => (string) ($workOrder['prioritet'] ?? 'N/A'), 'tone' => $priorityTone],
+            ['label' => 'Tip dokumenta', 'value' => (string) $this->valueTrimmed($raw, ['acDocTypeView', 'acDocType'], ''), 'tone' => 'slate'],
+            ['label' => 'Sifra proizvoda', 'value' => (string) $this->valueTrimmed($raw, ['acIdent'], ''), 'tone' => 'slate'],
+            ['label' => 'Naziv proizvoda', 'value' => (string) $this->valueTrimmed($raw, ['acName'], ''), 'tone' => 'slate'],
+            ['label' => 'Varijanta', 'value' => (string) $this->valueTrimmed($raw, ['acProdVariant', 'anVariant'], ''), 'tone' => 'slate'],
+            ['label' => 'Lokacija', 'value' => (string) $this->valueTrimmed($raw, ['acLocation', 'acDept'], ''), 'tone' => 'slate'],
+            ['label' => 'Plan ID', 'value' => (string) $this->valueTrimmed($raw, ['acPlanIDView', 'acPlanID'], ''), 'tone' => 'slate'],
+        ], function (array $entry) {
+            return trim((string) ($entry['value'] ?? '')) !== '';
+        }));
+
+        $kpis = [
+            ['label' => 'Planirana kolicina', 'value' => $this->formatMetaNumber($planQty), 'unit' => $unit],
+            ['label' => 'Izradjena kolicina', 'value' => $this->formatMetaNumber($producedQty), 'unit' => $unit],
+            ['label' => 'Serija', 'value' => $this->formatMetaNumber($seriesQty), 'unit' => $unit],
+            ['label' => 'Popravka', 'value' => $this->formatMetaNumber($repairQty), 'unit' => $unit],
+            ['label' => 'Plan otpad', 'value' => $this->formatMetaNumber($planWasteQty), 'unit' => $unit],
+            ['label' => 'Otpad', 'value' => $this->formatMetaNumber($wasteQty), 'unit' => $unit],
+            ['label' => 'Plan skart', 'value' => $this->formatMetaNumber($planScrapQty), 'unit' => $unit],
+            ['label' => 'Skart', 'value' => $this->formatMetaNumber($scrapQty), 'unit' => $unit],
+            ['label' => 'Vrijeme rada', 'value' => $this->formatMetaNumber($workTime), 'unit' => 'h'],
+            ['label' => 'Vrijeme protoka', 'value' => $this->formatMetaNumber($throTime), 'unit' => 'h'],
+            ['label' => 'Stavke', 'value' => (string) $itemTotal, 'unit' => ''],
+            ['label' => 'Materijali', 'value' => (string) count($workOrderItemResources), 'unit' => ''],
+            ['label' => 'Operacije', 'value' => (string) count($workOrderRegOperations), 'unit' => ''],
+        ];
+
+        $timeline = [
+            ['label' => 'Datum naloga', 'value' => $this->formatMetaDateTime($this->value($raw, ['adDate'], null))],
+            ['label' => 'Planirani start', 'value' => $this->formatMetaDateTime($this->value($raw, ['adSchedStartTime'], null))],
+            ['label' => 'Planirani kraj', 'value' => $this->formatMetaDateTime($this->value($raw, ['adSchedEndTime'], null))],
+            ['label' => 'Zavrsetak WO', 'value' => $this->formatMetaDateTime($this->value($raw, ['adWOFinishDate'], null))],
+            ['label' => 'Datum veze', 'value' => $this->formatMetaDateTime($this->value($raw, ['adLnkDate'], null))],
+            ['label' => 'Vrijeme unosa', 'value' => $this->formatMetaDateTime($this->value($raw, ['adTimeIns'], null))],
+            ['label' => 'Vrijeme izmjene', 'value' => $this->formatMetaDateTime($this->value($raw, ['adTimeChg'], null))],
+        ];
+
+        $traceability = [
+            ['label' => 'RN kljuc', 'value' => (string) $this->valueTrimmed($raw, ['acKeyView', 'acKey'], '-')],
+            ['label' => 'Vezni dokument', 'value' => (string) $this->valueTrimmed($raw, ['acLnkKeyView', 'acLnkKey'], '-')],
+            ['label' => 'Vezni broj', 'value' => (string) $this->valueTrimmed($raw, ['anLnkNo'], '-')],
+            ['label' => 'Parent RN', 'value' => (string) $this->valueTrimmed($raw, ['acParentWOView', 'acParentWO'], '-')],
+            ['label' => 'Parent qty', 'value' => $this->formatMetaNumber($this->toFloatOrNull($this->valueTrimmed($raw, ['anParentWOQty'], null)))],
+            ['label' => 'QID', 'value' => (string) $this->valueTrimmed($raw, ['anQId'], '-')],
+            ['label' => 'QID CA', 'value' => (string) $this->valueTrimmed($raw, ['anQIdCA'], '-')],
+            ['label' => 'User unos', 'value' => (string) $this->valueTrimmed($raw, ['anUserIns'], '-')],
+            ['label' => 'User izmjena', 'value' => (string) $this->valueTrimmed($raw, ['anUserChg'], '-')],
+            ['label' => 'Cost driver', 'value' => (string) $this->valueTrimmed($raw, ['acCostDrv'], '-')],
+            ['label' => 'Izvor kreiranja', 'value' => (string) $this->valueTrimmed($raw, ['acCreateFrom'], '-')],
+            ['label' => 'Crop tip', 'value' => (string) $this->valueTrimmed($raw, ['acCropType'], '-')],
+        ];
+
+        $flags = [
+            ['label' => 'Reversal', 'value' => $this->formatMetaFlag($this->valueTrimmed($raw, ['acReversal'], null)), 'tone' => $this->flagTone($this->valueTrimmed($raw, ['acReversal'], null))],
+            ['label' => 'Receive finished', 'value' => $this->formatMetaFlag($this->valueTrimmed($raw, ['acReceiveFinished'], null)), 'tone' => $this->flagTone($this->valueTrimmed($raw, ['acReceiveFinished'], null))],
+            ['label' => 'SN transfer', 'value' => $this->formatMetaFlag($this->valueTrimmed($raw, ['anSNTransfer'], null)), 'tone' => $this->flagTone($this->valueTrimmed($raw, ['anSNTransfer'], null))],
+        ];
+
+        return [
+            'highlights' => $highlights,
+            'kpis' => $kpis,
+            'timeline' => $timeline,
+            'traceability' => $traceability,
+            'flags' => $flags,
+            'progress' => [
+                'label' => $progressLabel,
+                'percent' => $progressPercent,
+                'display' => $this->formatMetaNumber($progressPercent, 1) . ' %',
+            ],
+        ];
     }
 
     private function mapItemRow(array $row): array
@@ -1116,6 +1253,104 @@ class WorkOrderController extends Controller
         }
 
         return $default;
+    }
+
+    private function toFloatOrNull(mixed $value): ?float
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (float) $value;
+        }
+
+        if (is_string($value)) {
+            $normalized = trim(str_replace(',', '.', $value));
+
+            if ($normalized === '' || !is_numeric($normalized)) {
+                return null;
+            }
+
+            return (float) $normalized;
+        }
+
+        if (is_numeric((string) $value)) {
+            return (float) $value;
+        }
+
+        return null;
+    }
+
+    private function formatMetaNumber(?float $value, int $precision = 3): string
+    {
+        if ($value === null) {
+            return '-';
+        }
+
+        $formatted = number_format($value, $precision, '.', '');
+        $formatted = rtrim(rtrim($formatted, '0'), '.');
+
+        if ($formatted === '-0') {
+            return '0';
+        }
+
+        return $formatted;
+    }
+
+    private function formatMetaDateTime(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '-';
+        }
+
+        try {
+            $dateTime = $value instanceof \DateTimeInterface
+                ? Carbon::instance($value)
+                : Carbon::parse((string) $value);
+
+            if ($dateTime->format('H:i:s') === '00:00:00') {
+                return $dateTime->format('d.m.Y');
+            }
+
+            return $dateTime->format('d.m.Y H:i');
+        } catch (Throwable $exception) {
+            return '-';
+        }
+    }
+
+    private function formatMetaFlag(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '-';
+        }
+
+        $normalized = strtoupper(trim((string) $value));
+
+        if (in_array($normalized, ['Y', 'D', '1', 'TRUE', 'T'], true)) {
+            return 'Da';
+        }
+
+        if (in_array($normalized, ['N', '0', 'FALSE', 'F'], true)) {
+            return 'Ne';
+        }
+
+        return (string) $value;
+    }
+
+    private function flagTone(mixed $value): string
+    {
+        $normalized = strtoupper(trim((string) ($value ?? '')));
+
+        if (in_array($normalized, ['Y', 'D', '1', 'TRUE', 'T'], true)) {
+            return 'success';
+        }
+
+        if (in_array($normalized, ['N', '0', 'FALSE', 'F'], true)) {
+            return 'secondary';
+        }
+
+        return 'info';
     }
 
     private function normalizeDate(mixed $value): ?string
