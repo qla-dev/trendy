@@ -582,15 +582,16 @@ class WorkOrderController extends Controller
             ['label' => 'Operacije', 'value' => (string) count($workOrderRegOperations), 'unit' => ''],
         ];
 
-        $timeline = [
-            ['label' => 'Datum naloga', 'value' => $this->formatMetaDateTime($this->value($raw, ['adDate'], null))],
-            ['label' => 'Planirani start', 'value' => $this->formatMetaDateTime($this->value($raw, ['adSchedStartTime'], null))],
-            ['label' => 'Planirani kraj', 'value' => $this->formatMetaDateTime($this->value($raw, ['adSchedEndTime'], null))],
-            ['label' => 'Zavrsetak WO', 'value' => $this->formatMetaDateTime($this->value($raw, ['adWOFinishDate'], null))],
-            ['label' => 'Datum veze', 'value' => $this->formatMetaDateTime($this->value($raw, ['adLnkDate'], null))],
-            ['label' => 'Vrijeme unosa', 'value' => $this->formatMetaDateTime($this->value($raw, ['adTimeIns'], null))],
-            ['label' => 'Vrijeme izmjene', 'value' => $this->formatMetaDateTime($this->value($raw, ['adTimeChg'], null))],
+        $timelineRows = [
+            ['label' => 'Datum naloga', 'raw' => $this->value($raw, ['adDate'], null)],
+            ['label' => 'Planirani start', 'raw' => $this->value($raw, ['adSchedStartTime'], null)],
+            ['label' => 'Planirani kraj', 'raw' => $this->value($raw, ['adSchedEndTime'], null)],
+            ['label' => 'Zavrsetak WO', 'raw' => $this->value($raw, ['adWOFinishDate'], null)],
+            ['label' => 'Datum veze', 'raw' => $this->value($raw, ['adLnkDate'], null)],
+            ['label' => 'Vrijeme unosa', 'raw' => $this->value($raw, ['adTimeIns'], null)],
+            ['label' => 'Vrijeme izmjene', 'raw' => $this->value($raw, ['adTimeChg'], null)],
         ];
+        $timeline = $this->sortTimelineRowsChronologically($timelineRows);
 
         $traceability = [
             ['label' => 'RN kljuc', 'value' => (string) $this->valueTrimmed($raw, ['acKeyView', 'acKey'], '-')],
@@ -625,6 +626,68 @@ class WorkOrderController extends Controller
                 'display' => $this->formatMetaNumber($progressPercent, 1) . ' %',
             ],
         ];
+    }
+
+    private function sortTimelineRowsChronologically(array $rows): array
+    {
+        $sortable = [];
+
+        foreach ($rows as $index => $row) {
+            $timestamp = $this->metaDateTimestamp($row['raw'] ?? null);
+            $sortable[] = [
+                'label' => (string) ($row['label'] ?? ''),
+                'raw' => $row['raw'] ?? null,
+                'timestamp' => $timestamp,
+                'index' => $index,
+            ];
+        }
+
+        usort($sortable, static function (array $a, array $b): int {
+            $aTs = $a['timestamp'];
+            $bTs = $b['timestamp'];
+
+            if ($aTs === null && $bTs === null) {
+                return $a['index'] <=> $b['index'];
+            }
+
+            if ($aTs === null) {
+                return 1;
+            }
+
+            if ($bTs === null) {
+                return -1;
+            }
+
+            if ($aTs === $bTs) {
+                return $a['index'] <=> $b['index'];
+            }
+
+            return $aTs <=> $bTs;
+        });
+
+        return array_map(function (array $row): array {
+            return [
+                'label' => $row['label'],
+                'value' => $this->formatMetaDateTime($row['raw'] ?? null),
+            ];
+        }, $sortable);
+    }
+
+    private function metaDateTimestamp(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            $dateTime = $value instanceof \DateTimeInterface
+                ? Carbon::instance($value)
+                : Carbon::parse((string) $value);
+
+            return $dateTime->getTimestamp();
+        } catch (Throwable $exception) {
+            return null;
+        }
     }
 
     private function mapItemRow(array $row): array

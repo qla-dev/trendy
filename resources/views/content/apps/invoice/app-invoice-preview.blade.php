@@ -47,16 +47,25 @@
   .invoice-preview-wrapper .invoice-actions .card {
     transition: transform 0.22s ease, box-shadow 0.22s ease;
   }
+  .invoice-preview-wrapper {
+    --wo-divider-color: #ebe9f1;
+  }
+  body.dark-layout .invoice-preview-wrapper,
+  body.semi-dark-layout .invoice-preview-wrapper,
+  .dark-layout .invoice-preview-wrapper,
+  .semi-dark-layout .invoice-preview-wrapper {
+    --wo-divider-color: rgba(184, 190, 220, 0.22);
+  }
+  .invoice-preview-wrapper hr.invoice-spacing {
+    border-top-color: var(--wo-divider-color) !important;
+  }
   .invoice-preview-wrapper .invoice-actions.invoice-actions-scrolled .card {
     transform: translateY(-2px);
     box-shadow: 0 10px 24px rgba(34, 41, 47, 0.12);
   }
   .invoice-actions-divider {
-    border-top: 1px dashed #d8d6de;
+    border-top: 1px solid var(--wo-divider-color) !important;
     margin: 0.25rem 0 0.75rem;
-  }
-  body:not(.dark-layout) .invoice-actions-divider {
-    border-top: 2px dashed #b6b3c1;
   }
   .wo-side-meta-btn {
     border-width: 1px;
@@ -149,6 +158,186 @@
     grid-template-columns: 1.2fr 1fr 1fr;
     gap: 0.75rem;
   }
+  .wo-section-shell {
+    border: 1px solid #ebe9f1;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(245, 247, 250, 0.6) 0%, rgba(255, 255, 255, 1) 100%);
+    padding: 1rem;
+    margin-top: 0.25rem;
+    margin-bottom: 1rem;
+  }
+  .wo-progress-shell {
+    border: 1px solid #ebe9f1;
+    border-radius: 10px;
+    background: transparent;
+    padding: 0.85rem 1rem;
+    margin-top: 0.25rem;
+    margin-bottom: 0.85rem;
+  }
+  .wo-progress-shell .wo-progress-head {
+    align-items: baseline;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #5e5873;
+    margin-bottom: 0.45rem;
+  }
+  .wo-progress-shell .wo-progress-head span:last-child {
+    font-size: 1.1rem;
+  }
+  .wo-progress-shell .wo-progress {
+    height: 9px;
+    background-color: #e9edf3;
+  }
+  .wo-product-hero {
+    border: 1px solid #ebe9f1;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(115, 103, 240, 0.08) 0%, rgba(255, 255, 255, 1) 100%);
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.85rem;
+  }
+  .wo-product-kicker {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6e6b7b;
+    margin-bottom: 0.3rem;
+    font-weight: 600;
+  }
+  .wo-product-title {
+    display: block;
+    font-size: 1.15rem;
+    line-height: 1.3;
+    font-weight: 700;
+    color: #5e5873;
+  }
+  .wo-product-sub {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.82rem;
+    color: #6e6b7b;
+    font-weight: 500;
+  }
+  .wo-chip-shell {
+    border: 1px solid #ebe9f1;
+    border-radius: 10px;
+    background: #fff;
+    padding: 0.7rem 0.85rem;
+    margin-bottom: 0.9rem;
+  }
+  .wo-kpi-shell {
+    border: 1px solid #ebe9f1;
+    border-radius: 10px;
+    background: #fff;
+    padding: 0.9rem 1rem 1rem;
+    margin-bottom: 1rem;
+  }
+  .wo-kpi-shell .wo-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .wo-subtle-tabs-pane {
+    border: 1px solid #ebe9f1;
+    border-top: 0;
+    border-radius: 0 0 10px 10px;
+    padding: 0.85rem 1rem;
+    background: #fff;
+    padding-top: 0!important;
+  }
+  .wo-timeline-pane .timeline {
+    margin-bottom: 0;
+  }
+  .wo-timeline-pane .timeline .timeline-item .timeline-event {
+    min-height: 3rem;
+    padding-bottom: 0.75rem;
+  }
+  .wo-timeline-pane .timeline .timeline-item .timeline-event h6 {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+  }
+  .wo-timeline-pane .timeline .timeline-item .timeline-event .timeline-event-time {
+    font-weight: 600;
+  }
+  .wo-links-pane {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+  .wo-links-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  .wo-link-card {
+    position: relative;
+    border: 1px solid var(--wo-divider-color);
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(245, 247, 250, 0.8) 0%, #fff 100%);
+    padding: 0.72rem 0.8rem 0.78rem;
+    overflow: hidden;
+  }
+  .wo-link-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: #7367f0;
+  }
+  .wo-link-head {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.45rem;
+  }
+  .wo-link-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(115, 103, 240, 0.14);
+    color: #7367f0;
+    font-size: 0.8rem;
+    flex: 0 0 auto;
+  }
+  .wo-link-label {
+    font-size: 0.86rem;
+    color: #6e6b7b;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .wo-link-value {
+    font-size: 1.05rem;
+    color: #5e5873;
+    font-weight: 700;
+    line-height: 1.25;
+    word-break: break-word;
+    letter-spacing: 0.01em;
+  }
+  .wo-link-value.wo-link-empty {
+    color: #b9b7c4;
+    font-weight: 600;
+  }
+  .wo-link-tone-primary::before { background: #7367f0; }
+  .wo-link-tone-primary .wo-link-icon { background: rgba(115, 103, 240, 0.14); color: #7367f0; }
+  .wo-link-tone-info::before { background: #00cfe8; }
+  .wo-link-tone-info .wo-link-icon { background: rgba(0, 207, 232, 0.14); color: #00cfe8; }
+  .wo-link-tone-success::before { background: #28c76f; }
+  .wo-link-tone-success .wo-link-icon { background: rgba(40, 199, 111, 0.14); color: #28c76f; }
+  .wo-link-tone-warning::before { background: #ff9f43; }
+  .wo-link-tone-warning .wo-link-icon { background: rgba(255, 159, 67, 0.14); color: #ff9f43; }
+  .wo-link-tone-danger::before { background: #ea5455; }
+  .wo-link-tone-danger .wo-link-icon { background: rgba(234, 84, 85, 0.14); color: #ea5455; }
+  .wo-link-tone-secondary::before { background: #82868b; }
+  .wo-link-tone-secondary .wo-link-icon { background: rgba(130, 134, 139, 0.16); color: #82868b; }
+  .wo-links-empty {
+    border: 1px solid var(--wo-divider-color);
+    border-radius: 10px;
+    padding: 0.95rem 1rem;
+    color: #6e6b7b;
+    font-size: 0.92rem;
+  }
   .wo-meta-card {
     border: 1px solid #ebe9f1;
     border-radius: 8px;
@@ -167,7 +356,7 @@
     gap: 0.6rem 0.75rem;
   }
   .wo-kpi-item {
-    border: 1px dashed #ebe9f1;
+    border: 1px solid var(--wo-divider-color);
     border-radius: 7px;
     padding: 0.5rem 0.55rem;
     background-color: rgba(115, 103, 240, 0.03);
@@ -210,11 +399,43 @@
     border-radius: 999px;
     background-color: #f1f1f5;
     overflow: hidden;
+    position: relative;
   }
   .wo-progress-bar {
     height: 100%;
+    width: 0;
     border-radius: 999px;
     background: linear-gradient(90deg, #00cfe8 0%, #28c76f 100%);
+    transition: width 1.25s cubic-bezier(0.22, 1, 0.36, 1), filter 0.2s ease;
+    position: relative;
+    will-change: width;
+  }
+  .wo-progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 34%;
+    min-width: 36px;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.65) 50%, transparent 100%);
+    transform: translateX(-150%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .wo-progress.wo-progress-charging .wo-progress-bar {
+    filter: brightness(1.04) saturate(1.15);
+  }
+  .wo-progress.wo-progress-live .wo-progress-bar::after {
+    opacity: 0.8;
+    animation: wo-progress-sheen 2.8s linear infinite;
+  }
+  @keyframes wo-progress-sheen {
+    0% {
+      transform: translateX(-150%);
+    }
+    100% {
+      transform: translateX(320%);
+    }
   }
   .wo-meta-list {
     display: grid;
@@ -269,9 +490,314 @@
   .wo-flag-secondary .wo-flag-dot { background: #6e6b7b; }
   .wo-flag-info .wo-flag-dot { background: #00cfe8; }
 
+  body:not(.dark-layout):not(.semi-dark-layout) .invoice-preview-wrapper .nav.nav-tabs .nav-link:not(.active):not([aria-selected='true']) {
+    color: #9aa0b5;
+  }
+  body:not(.dark-layout):not(.semi-dark-layout) .invoice-preview-wrapper .nav.nav-tabs .nav-link:hover:not(.active):not([aria-selected='true']) {
+    color: #8b92aa;
+  }
+
+  body.dark-layout .invoice-preview-wrapper .invoice-actions.invoice-actions-scrolled .card {
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  }
+  body.dark-layout .invoice-actions-divider {
+    border-top-color: var(--wo-divider-color);
+  }
+  body.dark-layout .wo-product-hero {
+    border-color: #444e6e;
+    background: linear-gradient(180deg, rgba(115, 103, 240, 0.26) 0%, rgba(40, 48, 70, 0.96) 100%);
+  }
+  body.dark-layout .wo-product-kicker {
+    color: #c1c5d8;
+  }
+  body.dark-layout .wo-product-title {
+    color: #f1f3f9;
+  }
+  body.dark-layout .wo-product-sub {
+    color: #c1c5d8;
+  }
+  body.dark-layout .wo-progress-shell {
+    background: transparent;
+    border-color: #444e6e;
+  }
+  body.dark-layout .wo-progress-shell .wo-progress-head {
+    color: #e1e4ef;
+  }
+  body.dark-layout .wo-progress-shell .wo-progress-head span:first-child,
+  body.semi-dark-layout .wo-progress-shell .wo-progress-head span:first-child,
+  .dark-layout .invoice-preview-wrapper .wo-progress-shell .wo-progress-head span:first-child,
+  .semi-dark-layout .invoice-preview-wrapper .wo-progress-shell .wo-progress-head span:first-child {
+    color: #ffffff !important;
+  }
+  body.dark-layout .wo-progress-shell .wo-progress-head span:last-child,
+  body.semi-dark-layout .wo-progress-shell .wo-progress-head span:last-child,
+  .dark-layout .invoice-preview-wrapper .wo-progress-shell .wo-progress-head span:last-child,
+  .semi-dark-layout .invoice-preview-wrapper .wo-progress-shell .wo-progress-head span:last-child {
+    color: #ffffff !important;
+  }
+  body.dark-layout .wo-progress-shell .wo-progress {
+    background-color: #3a4461;
+  }
+  body.dark-layout .wo-chip-shell {
+    background: #1f2940;
+    border-color: #444e6e;
+  }
+  body.dark-layout .wo-meta-chip {
+    border-color: #4a5373;
+    background-color: #283454;
+  }
+  body.dark-layout .wo-meta-chip-label {
+    color: #bdc2d6;
+  }
+  body.dark-layout .wo-meta-chip-value {
+    color: #eef1fa;
+  }
+  body.dark-layout .wo-flag-pill {
+    border-color: #4a5373;
+    background: #283454;
+    color: #d7dced;
+  }
+  body.dark-layout .wo-subtle-tabs-pane {
+    border-color: #444e6e;
+    background: #1f2940;
+  }
+  body.dark-layout .wo-kpi-shell {
+    border-color: #445071;
+    background: #252f49;
+  }
+  body.dark-layout .wo-kpi-item {
+    border-color: var(--wo-divider-color);
+    background-color: rgba(115, 103, 240, 0.12);
+  }
+  body.dark-layout .wo-kpi-label {
+    color: #b9bfd4;
+  }
+  body.dark-layout .wo-kpi-value {
+    color: #edf1fa;
+  }
+  body.dark-layout .wo-kpi-unit {
+    color: #c3c9db;
+  }
+  body.dark-layout .wo-timeline-pane .timeline .timeline-item {
+    border-left-color: #4b5678;
+  }
+  body.dark-layout .wo-timeline-pane .timeline .timeline-item .timeline-event h6 {
+    color: #e7ebf7;
+  }
+  body.dark-layout .wo-timeline-pane .timeline .timeline-item .timeline-event .timeline-event-time {
+    color: #c6ccde;
+  }
+  body.dark-layout .wo-link-card {
+    border-color: #465274;
+    background: linear-gradient(180deg, rgba(48, 61, 92, 0.95) 0%, rgba(34, 44, 69, 0.98) 100%);
+  }
+  body.dark-layout .wo-link-label {
+    color: #c7cce0;
+  }
+  body.dark-layout .wo-link-value {
+    color: #f2f5fb;
+  }
+  body.dark-layout .wo-link-value.wo-link-empty {
+    color: #8f96b0;
+  }
+  body.dark-layout .wo-links-empty {
+    border-color: #4a5474;
+    background: #283454;
+    color: #c7cce0;
+  }
+  body.dark-layout .wo-meta-row {
+    border-bottom-color: rgba(184, 190, 220, 0.22);
+  }
+  body.dark-layout .wo-meta-key {
+    color: #c2c8db;
+  }
+  body.dark-layout .wo-meta-value {
+    color: #eef1fa;
+  }
+  body.dark-layout .nav-tabs .nav-link {
+    color: #c0c6da;
+  }
+  body.dark-layout .nav-tabs .nav-link.active {
+    color: #f2f5fb;
+  }
+
+  /* Force transparent surfaces in dark variants to avoid white panels */
+  body.dark-layout .invoice-preview-wrapper .tab-content,
+  body.dark-layout .invoice-preview-wrapper .tab-pane,
+  body.dark-layout .invoice-preview-wrapper .wo-product-hero,
+  body.dark-layout .invoice-preview-wrapper .wo-progress-shell,
+  body.dark-layout .invoice-preview-wrapper .wo-chip-shell,
+  body.dark-layout .invoice-preview-wrapper .wo-subtle-tabs-pane,
+  body.dark-layout .invoice-preview-wrapper .wo-kpi-shell,
+  body.dark-layout .invoice-preview-wrapper .wo-kpi-item,
+  body.dark-layout .invoice-preview-wrapper .wo-meta-chip,
+  body.dark-layout .invoice-preview-wrapper .wo-flag-pill,
+  body.dark-layout .invoice-preview-wrapper .wo-link-card,
+  body.dark-layout .invoice-preview-wrapper .wo-links-empty,
+  body.semi-dark-layout .invoice-preview-wrapper .tab-content,
+  body.semi-dark-layout .invoice-preview-wrapper .tab-pane,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-hero,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-progress-shell,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-chip-shell,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-subtle-tabs-pane,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-kpi-shell,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-kpi-item,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-chip,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-flag-pill,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-link-card,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-links-empty {
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions-divider,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-row {
+    border-color: var(--wo-divider-color) !important;
+  }
+  body.semi-dark-layout .invoice-preview-wrapper .wo-progress-shell,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-chip-shell,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-subtle-tabs-pane,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-kpi-shell,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-link-card,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-links-empty,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-chip,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-flag-pill {
+    border-color: #465274 !important;
+  }
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-kicker,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-sub,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-kpi-label,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-key,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-link-label,
+  body.semi-dark-layout .invoice-preview-wrapper .timeline-event-time,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-chip-label {
+    color: #c4cade !important;
+  }
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-title,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-kpi-value,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-value,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-link-value,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-chip-value,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-flag-pill,
+  body.semi-dark-layout .invoice-preview-wrapper .timeline-event h6 {
+    color: #eef2fb !important;
+  }
+
+  /* Generic dark selectors in case dark class is not on body */
+  .dark-layout .invoice-preview-wrapper .tab-content,
+  .dark-layout .invoice-preview-wrapper .tab-pane,
+  .dark-layout .invoice-preview-wrapper .wo-product-hero,
+  .dark-layout .invoice-preview-wrapper .wo-progress-shell,
+  .dark-layout .invoice-preview-wrapper .wo-chip-shell,
+  .dark-layout .invoice-preview-wrapper .wo-subtle-tabs-pane,
+  .dark-layout .invoice-preview-wrapper .wo-kpi-shell,
+  .dark-layout .invoice-preview-wrapper .wo-kpi-item,
+  .dark-layout .invoice-preview-wrapper .wo-meta-chip,
+  .dark-layout .invoice-preview-wrapper .wo-flag-pill,
+  .dark-layout .invoice-preview-wrapper .wo-link-card,
+  .dark-layout .invoice-preview-wrapper .wo-links-empty,
+  .semi-dark-layout .invoice-preview-wrapper .tab-content,
+  .semi-dark-layout .invoice-preview-wrapper .tab-pane,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-hero,
+  .semi-dark-layout .invoice-preview-wrapper .wo-progress-shell,
+  .semi-dark-layout .invoice-preview-wrapper .wo-chip-shell,
+  .semi-dark-layout .invoice-preview-wrapper .wo-subtle-tabs-pane,
+  .semi-dark-layout .invoice-preview-wrapper .wo-kpi-shell,
+  .semi-dark-layout .invoice-preview-wrapper .wo-kpi-item,
+  .semi-dark-layout .invoice-preview-wrapper .wo-meta-chip,
+  .semi-dark-layout .invoice-preview-wrapper .wo-flag-pill,
+  .semi-dark-layout .invoice-preview-wrapper .wo-link-card,
+  .semi-dark-layout .invoice-preview-wrapper .wo-links-empty {
+    background: transparent !important;
+    background-image: none !important;
+    background-color: transparent !important;
+  }
+  .dark-layout .invoice-preview-wrapper .wo-product-kicker,
+  .dark-layout .invoice-preview-wrapper .wo-product-sub,
+  .dark-layout .invoice-preview-wrapper .wo-kpi-label,
+  .dark-layout .invoice-preview-wrapper .wo-meta-key,
+  .dark-layout .invoice-preview-wrapper .wo-link-label,
+  .dark-layout .invoice-preview-wrapper .timeline-event-time,
+  .dark-layout .invoice-preview-wrapper .wo-meta-chip-label,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-kicker,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-sub,
+  .semi-dark-layout .invoice-preview-wrapper .wo-kpi-label,
+  .semi-dark-layout .invoice-preview-wrapper .wo-meta-key,
+  .semi-dark-layout .invoice-preview-wrapper .wo-link-label,
+  .semi-dark-layout .invoice-preview-wrapper .timeline-event-time,
+  .semi-dark-layout .invoice-preview-wrapper .wo-meta-chip-label {
+    color: #c4cade !important;
+  }
+  .dark-layout .invoice-preview-wrapper .wo-product-title,
+  .dark-layout .invoice-preview-wrapper .wo-kpi-value,
+  .dark-layout .invoice-preview-wrapper .wo-meta-value,
+  .dark-layout .invoice-preview-wrapper .wo-link-value,
+  .dark-layout .invoice-preview-wrapper .wo-meta-chip-value,
+  .dark-layout .invoice-preview-wrapper .wo-flag-pill,
+  .dark-layout .invoice-preview-wrapper .timeline-event h6,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-title,
+  .semi-dark-layout .invoice-preview-wrapper .wo-kpi-value,
+  .semi-dark-layout .invoice-preview-wrapper .wo-meta-value,
+  .semi-dark-layout .invoice-preview-wrapper .wo-link-value,
+  .semi-dark-layout .invoice-preview-wrapper .wo-meta-chip-value,
+  .semi-dark-layout .invoice-preview-wrapper .wo-flag-pill,
+  .semi-dark-layout .invoice-preview-wrapper .timeline-event h6 {
+    color: #eef2fb !important;
+  }
+  .dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,
+  .semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,
+  body.dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,
+  body.semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link {
+    color: #9aa2be !important;
+  }
+  .dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link:hover:not(.active),
+  .semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link:hover:not(.active),
+  body.dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link:hover:not(.active),
+  body.semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link:hover:not(.active) {
+    color: #b3bbd4 !important;
+  }
+  .dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link.active,
+  .semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link.active,
+  body.dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link.active,
+  body.semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link.active,
+  .dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link[aria-selected='true'],
+  .semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link[aria-selected='true'],
+  body.dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link[aria-selected='true'],
+  body.semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link[aria-selected='true'] {
+    color: #ffffff !important;
+  }
+
+  /* Restore visible hero gradient in dark variants */
+  body.dark-layout .invoice-preview-wrapper .wo-product-hero,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-hero,
+  .dark-layout .invoice-preview-wrapper .wo-product-hero,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-hero {
+    background-image: linear-gradient(180deg, rgba(112, 134, 166, 0.24) 0%, rgba(74, 90, 114, 0.14) 56%, rgba(17, 19, 25, 0) 100%) !important;
+    background-color: transparent !important;
+  }
+
+  /* No outer borders on new section wrappers */
+  .invoice-preview-wrapper .wo-product-hero,
+  .invoice-preview-wrapper .wo-chip-shell,
+  .invoice-preview-wrapper .wo-kpi-shell,
+  .invoice-preview-wrapper .wo-subtle-tabs-pane {
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  .invoice-preview-wrapper .wo-progress-shell {
+    border: 1px solid var(--wo-divider-color) !important;
+    box-shadow: none !important;
+  }
+
   @media (max-width: 1200px) {
     .wo-meta-grid {
       grid-template-columns: 1fr;
+    }
+    .wo-kpi-shell .wo-kpi-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .wo-links-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
   @media (max-width: 767.98px) {
@@ -288,6 +814,12 @@
     .wo-header-chip-stack {
       min-width: 0;
       width: 100%;
+    }
+    .wo-kpi-shell .wo-kpi-grid {
+      grid-template-columns: 1fr;
+    }
+    .wo-links-grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>
@@ -309,10 +841,20 @@
   $workOrderMetaProgressPercent = max(0, min(100, (float) ($workOrderMetaProgress['percent'] ?? 0)));
   $workOrderHeaderHighlights = [];
   $workOrderMetaHighlightChips = [];
+  $workOrderProductName = '';
+  $workOrderProductCode = '';
   foreach ($workOrderMetaHighlights as $metaChip) {
     $metaLabel = strtolower(trim((string) ($metaChip['label'] ?? '')));
     if (in_array($metaLabel, ['status', 'prioritet'], true)) {
       $workOrderHeaderHighlights[] = $metaChip;
+      continue;
+    }
+    if ($metaLabel === 'naziv proizvoda') {
+      $workOrderProductName = trim((string) ($metaChip['value'] ?? ''));
+      continue;
+    }
+    if ($metaLabel === 'sifra proizvoda') {
+      $workOrderProductCode = trim((string) ($metaChip['value'] ?? ''));
       continue;
     }
     $workOrderMetaHighlightChips[] = $metaChip;
@@ -391,7 +933,7 @@
         <hr class="invoice-spacing" />
 
         <!-- Address and Contact starts -->
-        <div class="card-body invoice-padding pt-0">
+        <div class="card-body invoice-padding pt-0 pb-0">
           <div class="row invoice-spacing">
             <div class="col-xl-4 col-md-6 p-0">
               <h6 class="mb-2">Pošiljatelj:</h6>
@@ -428,11 +970,37 @@
         </div>
         <!-- Address and Contact ends -->
 
+        <hr class="invoice-spacing" />
+
+        @if($workOrderProductName !== '' || $workOrderProductCode !== '')
+          <div class="card-body invoice-padding pt-0 pb-0">
+            <div class="wo-product-hero">
+              <span class="wo-product-kicker">Naziv proizvoda</span>
+              <span class="wo-product-title">{{ $workOrderProductName !== '' ? $workOrderProductName : '-' }}</span>
+              @if($workOrderProductCode !== '')
+                <span class="wo-product-sub">Sifra proizvoda: {{ $workOrderProductCode }}</span>
+              @endif
+            </div>
+          </div>
+        @endif
+
+        <div class="card-body invoice-padding pt-0 pb-0">
+          <div class="wo-progress-shell">
+            <div class="wo-progress-head">
+              <span>{{ $workOrderMetaProgress['label'] ?? 'Realizacija' }}</span>
+              <span>{{ $workOrderMetaProgress['display'] ?? '0 %' }}</span>
+            </div>
+            <div class="wo-progress">
+              <div class="wo-progress-bar" data-target="{{ $workOrderMetaProgressPercent }}" style="width: 0%;"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- Work Order Metadata starts -->
         <div class="card-body invoice-padding pt-0">
-          <div class="wo-meta-shell">
-            @if(!empty($workOrderMetaHighlightChips))
-              <div class="wo-meta-chip-row">
+          @if(!empty($workOrderMetaHighlightChips))
+            <div class="wo-chip-shell">
+              <div class="wo-meta-chip-row mb-0">
                 @foreach($workOrderMetaHighlightChips as $metaChip)
                   <div class="wo-meta-chip wo-chip-{{ $metaChip['tone'] ?? 'secondary' }}">
                     <span class="wo-meta-chip-label">{{ $metaChip['label'] ?? '' }}</span>
@@ -440,71 +1008,19 @@
                   </div>
                 @endforeach
               </div>
-            @endif
-
-            <div class="wo-meta-grid">
-              <div class="wo-meta-card">
-                <div class="wo-meta-card-title">Operativni KPI</div>
-                <div class="wo-kpi-grid">
-                  @foreach($workOrderMetaKpis as $kpi)
-                    <div class="wo-kpi-item">
-                      <span class="wo-kpi-label">{{ $kpi['label'] ?? '' }}</span>
-                      <span class="wo-kpi-value">
-                        {{ $kpi['value'] ?? '-' }}
-                        @if(!empty($kpi['unit']))
-                          <span class="wo-kpi-unit">{{ $kpi['unit'] }}</span>
-                        @endif
-                      </span>
-                    </div>
-                  @endforeach
-                </div>
-                <div class="wo-progress-wrap">
-                  <div class="wo-progress-head">
-                    <span>{{ $workOrderMetaProgress['label'] ?? 'Realizacija' }}</span>
-                    <span>{{ $workOrderMetaProgress['display'] ?? '0 %' }}</span>
-                  </div>
-                  <div class="wo-progress">
-                    <div class="wo-progress-bar" style="width: {{ $workOrderMetaProgressPercent }}%;"></div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="wo-meta-card">
-                <div class="wo-meta-card-title">Vremenski tok</div>
-                <div class="wo-meta-list">
-                  @foreach($workOrderMetaTimeline as $metaRow)
-                    <div class="wo-meta-row">
-                      <span class="wo-meta-key">{{ $metaRow['label'] ?? '' }}</span>
-                      <span class="wo-meta-value">{{ $metaRow['value'] ?? '-' }}</span>
-                    </div>
-                  @endforeach
-                </div>
-              </div>
-
-              <div class="wo-meta-card">
-                <div class="wo-meta-card-title">Traceability i poveznice</div>
-                <div class="wo-meta-list">
-                  @foreach($workOrderMetaTraceability as $metaRow)
-                    <div class="wo-meta-row">
-                      <span class="wo-meta-key">{{ $metaRow['label'] ?? '' }}</span>
-                      <span class="wo-meta-value">{{ $metaRow['value'] ?? '-' }}</span>
-                    </div>
-                  @endforeach
-                </div>
-              </div>
             </div>
+          @endif
 
-            @if(!empty($workOrderMetaFlags))
-              <div class="wo-meta-flag-row">
-                @foreach($workOrderMetaFlags as $metaFlag)
-                  <span class="wo-flag-pill wo-flag-{{ $metaFlag['tone'] ?? 'secondary' }}">
-                    <span class="wo-flag-dot"></span>
-                    <span>{{ $metaFlag['label'] ?? '' }}: <strong>{{ $metaFlag['value'] ?? '-' }}</strong></span>
-                  </span>
-                @endforeach
-              </div>
-            @endif
-          </div>
+          @if(!empty($workOrderMetaFlags))
+            <div class="wo-meta-flag-row">
+              @foreach($workOrderMetaFlags as $metaFlag)
+                <span class="wo-flag-pill wo-flag-{{ $metaFlag['tone'] ?? 'secondary' }}">
+                  <span class="wo-flag-dot"></span>
+                  <span>{{ $metaFlag['label'] ?? '' }}: <strong>{{ $metaFlag['value'] ?? '-' }}</strong></span>
+                </span>
+              @endforeach
+            </div>
+          @endif
         </div>
         <!-- Work Order Metadata ends -->
 
@@ -524,6 +1040,21 @@
             <li class="nav-item">
               <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#tab-operacija" aria-controls="tab-operacija" aria-selected="false">
                 <i class="fa fa-cog me-50"></i> Operacija
+              </button>
+            </li>
+            <li class="nav-item">
+              <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#tab-kpi" aria-controls="tab-kpi" aria-selected="false">
+                <i class="fa fa-line-chart me-50"></i> KPI
+              </button>
+            </li>
+            <li class="nav-item">
+              <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#tab-timeline" aria-controls="tab-timeline" aria-selected="false">
+                <i class="fa fa-clock-o me-50"></i> Timeline
+              </button>
+            </li>
+            <li class="nav-item">
+              <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#tab-poveznice" aria-controls="tab-poveznice" aria-selected="false">
+                <i class="fa fa-link me-50"></i> Poveznice
               </button>
             </li>
           </ul>
@@ -651,6 +1182,115 @@
                     @endforelse
                   </tbody>
                 </table>
+              </div>
+            </div>
+            <!-- KPI Tab -->
+            <div class="tab-pane fade" id="tab-kpi" role="tabpanel">
+              <div class="wo-subtle-tabs-pane">
+                <div class="wo-kpi-shell mb-0 pt-0">
+                  <div class="wo-kpi-grid">
+                    @foreach($workOrderMetaKpis as $kpi)
+                      <div class="wo-kpi-item">
+                        <span class="wo-kpi-label">{{ $kpi['label'] ?? '' }}</span>
+                        <span class="wo-kpi-value">
+                          {{ $kpi['value'] ?? '-' }}
+                          @if(!empty($kpi['unit']))
+                            <span class="wo-kpi-unit">{{ $kpi['unit'] }}</span>
+                          @endif
+                        </span>
+                      </div>
+                    @endforeach
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Timeline Tab -->
+            <div class="tab-pane fade" id="tab-timeline" role="tabpanel">
+              <div class="wo-subtle-tabs-pane wo-timeline-pane">
+                <ul class="timeline ms-50">
+                  @forelse($workOrderMetaTimeline as $metaRow)
+                    @php
+                      $timelineLabel = strtolower((string) ($metaRow['label'] ?? ''));
+                      $timelineTone = 'primary';
+                      if (str_contains($timelineLabel, 'datum naloga') || str_contains($timelineLabel, 'unosa')) {
+                        $timelineTone = 'info';
+                      } elseif (str_contains($timelineLabel, 'start')) {
+                        $timelineTone = 'success';
+                      } elseif (str_contains($timelineLabel, 'kraj')) {
+                        $timelineTone = 'warning';
+                      } elseif (str_contains($timelineLabel, 'zavrsetak')) {
+                        $timelineTone = 'danger';
+                      } elseif (str_contains($timelineLabel, 'izmjene')) {
+                        $timelineTone = 'secondary';
+                      }
+                    @endphp
+                    <li class="timeline-item">
+                      <span class="timeline-point timeline-point-{{ $timelineTone }} timeline-point-indicator"></span>
+                      <div class="timeline-event">
+                        <div class="d-flex justify-content-between flex-sm-row flex-column mb-sm-0 mb-25">
+                          <h6>{{ $metaRow['label'] ?? '' }}</h6>
+                          <span class="timeline-event-time">{{ $metaRow['value'] ?? '-' }}</span>
+                        </div>
+                      </div>
+                    </li>
+                  @empty
+                    <li class="timeline-item">
+                      <span class="timeline-point timeline-point-secondary timeline-point-indicator"></span>
+                      <div class="timeline-event">
+                        <div class="text-muted">Nema podataka za timeline.</div>
+                      </div>
+                    </li>
+                  @endforelse
+                </ul>
+              </div>
+            </div>
+            <!-- Poveznice Tab -->
+            <div class="tab-pane fade" id="tab-poveznice" role="tabpanel">
+              <div class="wo-subtle-tabs-pane wo-links-pane">
+                <div class="wo-links-grid">
+                  @forelse($workOrderMetaTraceability as $metaRow)
+                    @php
+                      $linkLabel = (string) ($metaRow['label'] ?? '');
+                      $linkValue = trim((string) ($metaRow['value'] ?? '-'));
+                      $linkValue = $linkValue !== '' ? $linkValue : '-';
+                      $normalizedLabel = strtolower($linkLabel);
+                      $linkTone = 'primary';
+                      $linkIcon = 'fa-link';
+
+                      if (str_contains($normalizedLabel, 'vezni')) {
+                        $linkTone = 'info';
+                        $linkIcon = 'fa-random';
+                      } elseif (str_contains($normalizedLabel, 'parent')) {
+                        $linkTone = 'warning';
+                        $linkIcon = 'fa-sitemap';
+                      } elseif (str_contains($normalizedLabel, 'qid')) {
+                        $linkTone = 'warning';
+                        $linkIcon = 'fa-barcode';
+                      } elseif (str_contains($normalizedLabel, 'user')) {
+                        $linkTone = 'success';
+                        $linkIcon = 'fa-user';
+                      } elseif (str_contains($normalizedLabel, 'cost')) {
+                        $linkTone = 'danger';
+                        $linkIcon = 'fa-money';
+                      } elseif (str_contains($normalizedLabel, 'izvor') || str_contains($normalizedLabel, 'crop')) {
+                        $linkTone = 'secondary';
+                        $linkIcon = 'fa-cube';
+                      } elseif (str_contains($normalizedLabel, 'rn')) {
+                        $linkTone = 'primary';
+                        $linkIcon = 'fa-key';
+                      }
+                    @endphp
+                    <article class="wo-link-card wo-link-tone-{{ $linkTone }}">
+                      <div class="wo-link-head">
+                        <span class="wo-link-icon"><i class="fa {{ $linkIcon }}"></i></span>
+                        <span class="wo-link-label">{{ $linkLabel }}</span>
+                      </div>
+                      <div class="wo-link-value{{ $linkValue === '-' ? ' wo-link-empty' : '' }}">{{ $linkValue }}</div>
+                    </article>
+                  @empty
+                    <div class="wo-links-empty">Nema podataka o poveznicama.</div>
+                  @endforelse
+                </div>
               </div>
             </div>
           </div>
@@ -835,16 +1475,58 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     var sidebar = document.querySelector('.invoice-preview-wrapper .invoice-actions');
-    if (!sidebar) {
-      return;
-    }
+    var progressBars = document.querySelectorAll('.wo-progress-bar[data-target]');
 
     var onScroll = function () {
       sidebar.classList.toggle('invoice-actions-scrolled', window.scrollY > 80);
     };
 
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
+    if (sidebar) {
+      onScroll();
+      window.addEventListener('scroll', onScroll, { passive: true });
+    }
+
+    progressBars.forEach(function (bar, index) {
+      var target = parseFloat(bar.getAttribute('data-target') || '0');
+      var track = bar.closest('.wo-progress');
+
+      if (!Number.isFinite(target)) {
+        target = 0;
+      }
+
+      target = Math.max(0, Math.min(100, target));
+      bar.style.width = '0%';
+
+      if (track) {
+        track.classList.remove('wo-progress-live');
+        track.classList.add('wo-progress-charging');
+      }
+
+      var finalize = function () {
+        if (!track) {
+          return;
+        }
+
+        track.classList.remove('wo-progress-charging');
+        track.classList.add('wo-progress-live');
+      };
+
+      bar.addEventListener('transitionend', function (event) {
+        if (event.propertyName === 'width') {
+          finalize();
+        }
+      }, { once: true });
+
+      window.requestAnimationFrame(function () {
+        window.requestAnimationFrame(function () {
+          bar.style.width = target + '%';
+        });
+      });
+
+      if (target === 0) {
+        window.setTimeout(finalize, 520 + (index * 70));
+      }
+    });
   });
 </script>
 {{-- Include QR Scanner Modals --}}
@@ -854,4 +1536,3 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 @include('content.new-components.sirovina-scan')
 @include('content.new-components.confirm-weight')
 @endsection
-
