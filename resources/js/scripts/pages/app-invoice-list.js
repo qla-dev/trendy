@@ -479,7 +479,7 @@ $(function () {
           render: function (data, type, full) {
             return (
               '<div class="d-flex align-items-center justify-content-center col-actions">' +
-              '<a href="' +
+              '<a class="wo-eye-action" href="' +
               invoicePreview +
               '/' +
               full['id'] +

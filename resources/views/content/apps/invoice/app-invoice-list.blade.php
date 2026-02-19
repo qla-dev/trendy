@@ -566,6 +566,40 @@
     justify-content: flex-end;
   }
 
+  .wo-eye-action {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #96a0b5;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #6e6b7b;
+    background-color: transparent;
+    transition: all 0.2s ease;
+  }
+
+  .wo-eye-action svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .wo-eye-action svg * {
+    stroke: currentColor;
+  }
+
+  .wo-eye-action:hover,
+  .wo-eye-action:focus {
+    color: #42526e;
+    border-color: #42526e;
+    background-color: rgba(66, 82, 110, 0.08);
+  }
+
+  .wo-eye-action:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(66, 82, 110, 0.18);
+  }
+
   div.dataTables_wrapper div.dataTables_filter {
     text-align: right;
     float: right;
@@ -617,6 +651,22 @@
   .dark-layout .active-filter-chip-label,
   .dark-layout .active-filter-chip-value {
     color: #fff;
+  }
+
+  .dark-layout .wo-eye-action,
+  .semi-dark-layout .wo-eye-action {
+    color: #d6dcec;
+    border-color: rgba(214, 220, 236, 0.45);
+    background-color: transparent;
+  }
+
+  .dark-layout .wo-eye-action:hover,
+  .dark-layout .wo-eye-action:focus,
+  .semi-dark-layout .wo-eye-action:hover,
+  .semi-dark-layout .wo-eye-action:focus {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(255, 255, 255, 0.08);
   }
 </style>
 @endsection

@@ -13,6 +13,177 @@
   <link rel="stylesheet" href="{{ asset(mix('css/base/pages/dashboard-ecommerce.css')) }}">
   <link rel="stylesheet" href="{{ asset(mix('css/base/plugins/charts/chart-apex.css')) }}">
   <link rel="stylesheet" href="{{ asset(mix('css/base/plugins/extensions/ext-component-toastr.css')) }}">
+  <style>
+    .dashboard-workorders-card .table {
+      margin-bottom: 0;
+    }
+
+    .dashboard-workorders-table thead th {
+      background-color: #f8f8fc;
+      border-bottom: 1px solid #ebe9f1;
+      color: #6e6b7b;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .dashboard-workorders-table tbody td {
+      border-top: 1px solid #ebe9f1;
+      vertical-align: middle;
+      color: #5e5873;
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+
+    .dashboard-workorder-link {
+      color: #42526e;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .dashboard-workorder-link:hover {
+      color: #42526e;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .dashboard-client-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      min-width: 0;
+    }
+
+    .dashboard-client-avatar {
+      width: 2.1rem;
+      height: 2.1rem;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1rem;
+      flex: 0 0 auto;
+    }
+
+    .dashboard-client-name {
+      font-weight: 500;
+      color: #5e5873;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .dashboard-status-badge {
+      font-weight: 500;
+    }
+
+    .dashboard-status-default {
+      background-color: rgba(110, 107, 123, 0.12) !important;
+      color: #6e6b7b !important;
+    }
+
+    .dashboard-status-planiran {
+      background-color: rgba(0, 207, 232, 0.12) !important;
+      color: #00cfe8 !important;
+    }
+
+    .dashboard-status-otvoren {
+      background-color: rgba(40, 199, 111, 0.12) !important;
+      color: #28c76f !important;
+    }
+
+    .dashboard-status-rezerviran {
+      background-color: rgba(255, 159, 67, 0.12) !important;
+      color: #ff9f43 !important;
+    }
+
+    .dashboard-status-u-radu {
+      background-color: rgba(255, 193, 7, 0.16) !important;
+      color: #b38600 !important;
+    }
+
+    .dashboard-status-djelimicno {
+      background-color: rgba(253, 126, 20, 0.12) !important;
+      color: #fd7e14 !important;
+    }
+
+    .dashboard-status-zakljucen {
+      background-color: rgba(234, 84, 85, 0.12) !important;
+      color: #ea5455 !important;
+    }
+
+    .wo-eye-action {
+      width: 32px;
+      height: 32px;
+      border: 1px solid #96a0b5;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #6e6b7b;
+      background-color: transparent;
+      transition: all 0.2s ease;
+    }
+
+    .wo-eye-action svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .wo-eye-action svg * {
+      stroke: currentColor;
+    }
+
+    .wo-eye-action:hover,
+    .wo-eye-action:focus {
+      color: #42526e;
+      border-color: #42526e;
+      background-color: rgba(66, 82, 110, 0.08);
+    }
+
+    .dark-layout .dashboard-workorders-table thead th,
+    .semi-dark-layout .dashboard-workorders-table thead th {
+      background-color: #303a52;
+      border-bottom-color: rgba(186, 191, 221, 0.18);
+      color: #c7cbda;
+    }
+
+    .dark-layout .dashboard-workorders-table tbody td,
+    .semi-dark-layout .dashboard-workorders-table tbody td {
+      border-top-color: rgba(186, 191, 221, 0.16);
+      color: #d7dbeb;
+    }
+
+    .dark-layout .dashboard-workorder-link,
+    .semi-dark-layout .dashboard-workorder-link {
+      color: #dce2f2;
+    }
+
+    .dark-layout .dashboard-client-name,
+    .semi-dark-layout .dashboard-client-name {
+      color: #d7dbeb;
+    }
+
+    .dark-layout .wo-eye-action,
+    .semi-dark-layout .wo-eye-action {
+      color: #d6dcec;
+      border-color: rgba(214, 220, 236, 0.45);
+      background-color: transparent;
+    }
+
+    .dark-layout .wo-eye-action:hover,
+    .dark-layout .wo-eye-action:focus,
+    .semi-dark-layout .wo-eye-action:hover,
+    .semi-dark-layout .wo-eye-action:focus {
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.7);
+      background-color: rgba(255, 255, 255, 0.08);
+    }
+  </style>
 @endsection
 
 @section('content')
@@ -275,35 +446,84 @@
     </div>
 
     <div class="col-lg-8 col-12">
-      <div class="card card-company-table">
+      <div class="card card-company-table dashboard-workorders-card">
         <div class="card-body p-0">
           <div class="table-responsive">
-            <table class="table table-hover borderless mb-0">
+            <table class="table table-hover borderless mb-0 dashboard-workorders-table">
               <thead>
                 <tr>
-                  <th>Radni Nalog</th>
+                  <th>#</th>
                   <th>Klijent</th>
-                  <th>Početak</th>
+                  <th>Datum kreiranja</th>
                   <th>Status</th>
-                  <th></th>
+                  <th class="text-center">Akcije</th>
                 </tr>
               </thead>
               <tbody>
                 @foreach ($latestOrders as $order)
+                  @php
+                    $routeId = (string) ($order->id ?? '');
+                    $rawNumber = trim((string) ($order->work_order_number ?? $routeId));
+                    $digits = preg_replace('/\D+/', '', $rawNumber);
+                    $displayNumber = $rawNumber;
+                    if (is_string($digits) && strlen($digits) === 13) {
+                      $displayNumber = substr($digits, 0, 2) . '-' . substr($digits, 2, 5) . '-' . substr($digits, 7);
+                    }
+
+                    $clientName = trim((string) ($order->client_name ?? 'N/A'));
+                    $words = preg_split('/\s+/', $clientName) ?: [];
+                    $firstInitial = $words[0] ?? '';
+                    $lastInitial = $words[count($words) - 1] ?? '';
+                    $initials = strtoupper(substr($firstInitial, 0, 1) . substr($lastInitial, 0, 1));
+                    if ($initials === '') {
+                      $initials = 'NA';
+                    }
+
+                    $hash = sprintf('%u', crc32(mb_strtolower($clientName)));
+                    $hue = ((int) $hash) % 360;
+                    $avatarText = 'hsl(' . $hue . ', 82%, 30%)';
+                    $avatarBg = 'hsla(' . $hue . ', 72%, 52%, 0.18)';
+                    $avatarBorder = 'hsla(' . $hue . ', 72%, 52%, 0.35)';
+
+                    $statusText = trim((string) ($order->status ?? 'N/A'));
+                    $normalizedStatus = mb_strtolower($statusText);
+                    $statusClass = 'dashboard-status-default';
+                    if (str_contains($normalizedStatus, 'otvoren')) {
+                      $statusClass = 'dashboard-status-otvoren';
+                    } elseif (str_contains($normalizedStatus, 'u radu') || str_contains($normalizedStatus, 'u toku')) {
+                      $statusClass = 'dashboard-status-u-radu';
+                    } elseif (str_contains($normalizedStatus, 'rezerv')) {
+                      $statusClass = 'dashboard-status-rezerviran';
+                    } elseif (str_contains($normalizedStatus, 'djelimic')) {
+                      $statusClass = 'dashboard-status-djelimicno';
+                    } elseif (str_contains($normalizedStatus, 'zaklj') || str_contains($normalizedStatus, 'zavr') || str_contains($normalizedStatus, 'otkaz')) {
+                      $statusClass = 'dashboard-status-zakljucen';
+                    } elseif (str_contains($normalizedStatus, 'planiran') || str_contains($normalizedStatus, 'novo') || str_contains($normalizedStatus, 'raspis') || str_contains($normalizedStatus, 'nacrt')) {
+                      $statusClass = 'dashboard-status-planiran';
+                    }
+                  @endphp
                   <tr>
                     <td class="text-nowrap">
-                      <div class="fw-bolder mb-0">{{ $order->work_order_number }}</div>
-                      <small class="text-muted">{{ $order->linked_document }}</small>
+                      <a href="{{ url('app/invoice/preview/' . $routeId) }}" class="dashboard-workorder-link">
+                        {{ $displayNumber !== '' ? $displayNumber : 'N/A' }}
+                      </a>
                     </td>
-                    <td>{{ $order->client_name }}</td>
-                    <td>{{ optional($order->planned_start)->format('d.m.Y') ?? 'N/A' }}</td>
                     <td>
-                      <span class="badge rounded-pill bg-light-primary text-primary">
-                        {{ $order->status ?? 'N/A' }}
+                      <div class="dashboard-client-wrap">
+                        <span class="dashboard-client-avatar" style="background-color: {{ $avatarBg }}; color: {{ $avatarText }}; border: 1px solid {{ $avatarBorder }};">
+                          {{ $initials }}
+                        </span>
+                        <span class="dashboard-client-name">{{ $clientName !== '' ? $clientName : 'N/A' }}</span>
+                      </div>
+                    </td>
+                    <td>{{ optional($order->planned_start)->format('d M Y') ?? 'N/A' }}</td>
+                    <td>
+                      <span class="badge rounded-pill dashboard-status-badge {{ $statusClass }}">
+                        {{ $statusText !== '' ? $statusText : 'N/A' }}
                       </span>
                     </td>
-                    <td class="text-nowrap">
-                      <a href="{{ url('app/invoice/preview/' . $order->id) }}" class="btn btn-sm btn-icon btn-outline-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="Pregled radnog naloga">
+                    <td class="text-center">
+                      <a href="{{ url('app/invoice/preview/' . $routeId) }}" class="wo-eye-action" data-bs-toggle="tooltip" data-bs-placement="top" title="Pregled radnog naloga">
                         <i data-feather="eye"></i>
                       </a>
                     </td>
@@ -311,7 +531,7 @@
                 @endforeach
                 @if ($latestOrders->isEmpty())
                   <tr>
-                    <td colspan="6" class="text-center text-muted">Nema dostupnih naloga.</td>
+                    <td colspan="5" class="text-center text-muted">Nema dostupnih naloga.</td>
                   </tr>
                 @endif
               </tbody>

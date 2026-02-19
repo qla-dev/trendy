@@ -67,7 +67,7 @@ class DashboardController extends Controller
             'linked_document' => $rowData['acKey'] ?? '',
             'client_name' => $rowData['acConsignee'] ?? $rowData['acReceiver'] ?? 'N/A',
             'planned_start' => $this->parseDate($rowData['adDate'] ?? null),
-            'status' => $this->mapStatus($rowData['acStatus'] ?? null),
+            'status' => $this->mapStatus($rowData['acStatusMF'] ?? ($rowData['acStatus'] ?? null)),
           ];
         });
     } catch (Throwable $exception) {
@@ -108,13 +108,16 @@ class DashboardController extends Controller
     $code = strtoupper(trim((string) $status));
 
     return [
-      'F' => 'Zavrseno',
-      'P' => 'U toku',
-      'I' => 'U toku',
+      'F' => 'Zakljucen',
+      'I' => 'Zakljucen',
+      'Z' => 'Zakljucen',
+      'R' => 'Djelimicno zakljucen',
+      'D' => 'U radu',
+      'P' => 'Planiran',
+      'S' => 'Rezerviran',
+      'O' => 'Otvoren',
       'N' => 'Novo',
       'C' => 'Otkazano',
-      'D' => 'Nacrt',
-      'O' => 'Otvoren',
     ][$code] ?? (string) $status;
   }
 }
