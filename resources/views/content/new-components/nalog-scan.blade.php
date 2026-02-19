@@ -2,157 +2,374 @@
   $workOrderPreviewPathPattern = route('app-invoice-preview', ['id' => '__WORK_ORDER_ID__'], false);
 @endphp
 
-<!-- Work Order QR Scanner Modal -->
+<!-- QR Scanner Modal for Work Order -->
 <div class="modal fade" id="qr-scanner-modal" tabindex="-1" aria-labelledby="qr-scanner-modal-label" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content wo-qr-modal-content">
-      <div class="modal-body p-1 p-md-2">
-        <div class="d-flex align-items-center justify-content-between mb-1">
-          <h4 class="text-white mb-0" id="qr-scanner-modal-label">Skeniraj QR kod radnog naloga</h4>
-          <button type="button" class="btn btn-sm btn-outline-light" data-bs-dismiss="modal" aria-label="Zatvori">
-            <i class="fa fa-times me-50"></i>Zatvori
-          </button>
-        </div>
+    <div class="modal-content" style="background: transparent; border: none;">
+      <div class="modal-body p-0 text-center">
+        <h4 class="text-white mb-4" id="qr-scanner-modal-label">Skeniraj QR code radnog naloga</h4>
 
-        <div class="wo-qr-region-wrap mb-1">
-          <div id="qr-scanner-region" class="wo-qr-region"></div>
-          <div class="wo-qr-corner wo-qr-corner-tl"></div>
-          <div class="wo-qr-corner wo-qr-corner-tr"></div>
-          <div class="wo-qr-corner wo-qr-corner-bl"></div>
-          <div class="wo-qr-corner wo-qr-corner-br"></div>
-          <div class="wo-qr-scan-line"></div>
-        </div>
+        <div class="qr-scanner-container position-relative" style="max-width: 400px; margin: 0 auto;">
+          <div id="qr-scanner-frame" class="qr-scanner-frame position-relative" style="width: 100%; padding-top: 100%; background: rgba(255, 255, 255, 0.1); border: 2px solid var(--bs-success, #28c76f); border-radius: 12px; overflow: hidden;">
+            <div id="qr-scanner-region" class="position-absolute" style="inset: 0;"></div>
 
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-75 mb-1">
-          <div class="form-check form-switch mb-0">
-            <input class="form-check-input" type="checkbox" id="qr-mirror-toggle">
-            <label class="form-check-label text-white-50" for="qr-mirror-toggle">Preslikaj prikaz (mirror)</label>
-          </div>
-          <button type="button" class="btn btn-sm btn-outline-light" id="qr-scanner-restart-btn">
-            <i class="fa fa-refresh me-50"></i>Ponovo pokreni
-          </button>
-        </div>
+            <div class="qr-corner qr-corner-top-left" style="position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-top: 3px solid var(--bs-success, #28c76f); border-left: 3px solid var(--bs-success, #28c76f);"></div>
+            <div class="qr-corner qr-corner-top-right" style="position: absolute; top: 0; right: 0; width: 40px; height: 40px; border-top: 3px solid var(--bs-success, #28c76f); border-right: 3px solid var(--bs-success, #28c76f);"></div>
+            <div class="qr-corner qr-corner-bottom-left" style="position: absolute; bottom: 0; left: 0; width: 40px; height: 40px; border-bottom: 3px solid var(--bs-success, #28c76f); border-left: 3px solid var(--bs-success, #28c76f);"></div>
+            <div class="qr-corner qr-corner-bottom-right" style="position: absolute; bottom: 0; right: 0; width: 40px; height: 40px; border-bottom: 3px solid var(--bs-success, #28c76f); border-right: 3px solid var(--bs-success, #28c76f);"></div>
 
-        <div class="row g-75 mb-1">
-          <div class="col-12 col-md-8">
-            <label class="form-label text-white-50 mb-50" for="qr-camera-select">Kamera</label>
-            <select class="form-select form-select-sm" id="qr-camera-select">
-              <option value="">Automatski odabir</option>
-            </select>
-          </div>
-          <div class="col-12 col-md-4 d-grid">
-            <button type="button" class="btn btn-sm btn-outline-light mt-md-175" id="qr-camera-apply-btn">Primijeni</button>
+            <div class="qr-scan-line" style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--bs-success, #28c76f), transparent); animation: scanLineNalog 2s linear infinite;"></div>
+
+            <div class="qr-grid" style="position: absolute; inset: 0; background-image:
+              linear-gradient(rgba(40, 199, 111, 0.1) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(40, 199, 111, 0.1) 1px, transparent 1px);
+              background-size: 20px 20px; opacity: 0.3;"></div>
           </div>
         </div>
 
-        <div id="qr-scanner-status" class="small text-white-50">Dozvoli pristup kameri da skeniranje započne.</div>
-        <div id="qr-scanner-error" class="small text-danger mt-50 d-none"></div>
+        <div class="px-1 px-md-2 wo-qr-controls-wrap" style="max-width: 420px; margin: 0 auto;">
+          <div class="wo-qr-controls-panel mt-2 mb-1">
+            <div class="wo-qr-controls-row">
+              <div class="wo-qr-control-block">
+                <span class="wo-qr-control-kicker">Prikaz</span>
+                <div class="form-check form-switch mb-0 d-flex align-items-center">
+                  <input class="form-check-input me-50" type="checkbox" id="qr-mirror-toggle">
+                  <label class="form-check-label mb-0" for="qr-mirror-toggle">Mirror</label>
+                </div>
+              </div>
+              <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-subtle" id="qr-scanner-restart-btn">
+                <i class="fa fa-refresh me-50"></i> Ponovo pokreni
+              </button>
+            </div>
+
+            <div class="wo-qr-controls-row wo-qr-camera-controls-row">
+              <span class="wo-qr-camera-icon" aria-hidden="true"><i class="fa fa-camera"></i></span>
+              <label class="visually-hidden" for="qr-camera-select">Kamera</label>
+              <div class="wo-qr-camera-row">
+                <select class="form-select form-select-sm" id="qr-camera-select">
+                  <option value="">Automatski odabir</option>
+                </select>
+                <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-primary" id="qr-camera-apply-btn">Primijeni</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="qr-scanner-status" class="small wo-qr-status mb-50">Dozvoli pristup kameri da skeniranje zapocne.</div>
+          <div id="qr-scanner-error" class="small text-danger mb-1 d-none"></div>
+        </div>
+
+        <button type="button" class="btn btn-secondary mt-2" data-bs-dismiss="modal" aria-label="Zatvori">
+          <i class="fa fa-times me-50"></i> Zatvori
+        </button>
       </div>
     </div>
   </div>
 </div>
 
 <style>
+  /* Stronger backdrop for work order scanner */
   .qr-scanner-backdrop {
-    background-color: rgba(0, 0, 0, 0.95) !important;
+    background-color: rgba(0, 0, 0, 0.992) !important;
     opacity: 1 !important;
+    backdrop-filter: blur(3px);
+  }
+
+  #qr-scanner-modal {
+    --qr-accent: rgba(74, 179, 148, 0.78);
+    --qr-accent-soft: rgba(74, 179, 148, 0.24);
+    --qr-border-muted: rgba(189, 199, 221, 0.32);
+    --qr-surface-dark: rgba(18, 22, 33, 0.82);
+    --qr-text-soft: #cfd7ee;
+    --qr-text-main: #e8edf9;
+  }
+
+  #qr-scanner-modal .qr-scanner-frame {
+    border: 1px solid var(--qr-accent-soft) !important;
+    background: rgba(255, 255, 255, 0.045) !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  }
+
+  @keyframes scanLineNalog {
+    0% {
+      top: 0;
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.8;
+    }
+    100% {
+      top: 100%;
+      opacity: 0;
+    }
+  }
+
+  @keyframes cornerPulseNalog {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.7;
+      transform: scale(1.1);
+    }
+  }
+
+  #qr-scanner-modal .qr-corner {
+    width: 34px !important;
+    height: 34px !important;
+    border-color: var(--qr-accent) !important;
+    animation: cornerPulseNalog 2s ease-in-out infinite;
+    opacity: 0.85;
+  }
+
+  #qr-scanner-modal .qr-corner-top-right {
+    border-top-width: 2px !important;
+    border-right-width: 2px !important;
+    animation-delay: 0.5s;
+  }
+
+  #qr-scanner-modal .qr-corner-bottom-left {
+    border-bottom-width: 2px !important;
+    border-left-width: 2px !important;
+    animation-delay: 1s;
+  }
+
+  #qr-scanner-modal .qr-corner-bottom-right {
+    border-bottom-width: 2px !important;
+    border-right-width: 2px !important;
+    animation-delay: 1.5s;
+  }
+
+  #qr-scanner-modal .qr-corner-top-left {
+    border-top-width: 2px !important;
+    border-left-width: 2px !important;
+  }
+
+  #qr-scanner-modal .qr-scan-line {
+    height: 1.5px !important;
+    background: linear-gradient(90deg, transparent, var(--qr-accent), transparent) !important;
+    opacity: 0.7;
+  }
+
+  @keyframes gridMoveNalog {
+    0% {
+      background-position: 0 0;
+    }
+    100% {
+      background-position: 20px 20px;
+    }
+  }
+
+  #qr-scanner-modal .qr-grid {
+    background-image:
+      linear-gradient(rgba(74, 179, 148, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(74, 179, 148, 0.08) 1px, transparent 1px) !important;
+    opacity: 0.22 !important;
+    animation: gridMoveNalog 3s linear infinite;
   }
 
   #qr-scanner-modal .modal-dialog {
-    max-width: 520px;
+    background: transparent;
   }
 
-  #qr-scanner-modal .wo-qr-modal-content {
-    background: rgba(11, 14, 20, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45);
-    border-radius: 12px;
+  #qr-scanner-modal .modal-content {
+    background: transparent;
+    box-shadow: none;
+    border: none;
   }
 
-  #qr-scanner-modal .wo-qr-region-wrap {
-    position: relative;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 12px;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.06);
-    aspect-ratio: 1 / 1;
+  #qr-scanner-modal .form-label {
+    color: var(--qr-text-soft) !important;
   }
 
-  #qr-scanner-modal .wo-qr-region {
-    width: 100%;
-    height: 100%;
+  #qr-scanner-modal .wo-qr-controls-wrap {
+    text-align: left;
   }
 
-  #qr-scanner-modal .wo-qr-region > div {
+  #qr-scanner-modal .wo-qr-controls-panel {
+    border: 1px solid rgba(170, 183, 212, 0.24);
+    border-radius: 10px;
+    background: rgba(14, 19, 30, 0.68);
+    padding: 0.72rem;
+  }
+
+  #qr-scanner-modal .wo-qr-controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  #qr-scanner-modal .wo-qr-controls-row + .wo-qr-controls-row {
+    margin-top: 0.7rem;
+    padding-top: 0.7rem;
+    border-top: 1px solid rgba(170, 183, 212, 0.18);
+  }
+
+  #qr-scanner-modal .wo-qr-camera-controls-row {
+    align-items: center;
+  }
+
+  #qr-scanner-modal .wo-qr-control-block {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.36rem;
+  }
+
+  #qr-scanner-modal .wo-qr-control-kicker {
+    font-size: 0.72rem;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.045em;
+    color: #98a8ce;
+    font-weight: 600;
+  }
+
+  #qr-scanner-modal .form-check-label {
+    color: var(--qr-text-soft) !important;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  #qr-scanner-modal .form-check-input {
+    width: 2.35em;
+    height: 1.3em;
+    margin-top: 0;
+    background-color: rgba(255, 255, 255, 0.11);
+    border-color: rgba(168, 179, 204, 0.38);
+    box-shadow: none !important;
+    cursor: pointer;
+  }
+
+  #qr-scanner-modal .form-check-input:focus {
+    border-color: rgba(74, 179, 148, 0.58);
+    box-shadow: 0 0 0 0.12rem rgba(74, 179, 148, 0.16) !important;
+  }
+
+  #qr-scanner-modal .form-check-input:checked {
+    background-color: rgba(74, 179, 148, 0.35);
+    border-color: rgba(74, 179, 148, 0.66);
+  }
+
+  #qr-scanner-modal .wo-qr-camera-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex: 1 1 auto;
+  }
+
+  #qr-scanner-modal .wo-qr-camera-icon {
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 8px;
+    border: 1px solid rgba(177, 189, 216, 0.26);
+    background: rgba(255, 255, 255, 0.035);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #aeb9d8;
+    flex: 0 0 auto;
+  }
+
+  #qr-scanner-modal .wo-qr-camera-row .form-select {
+    flex: 1 1 auto;
+  }
+
+  #qr-scanner-modal .form-select {
+    min-height: 2.3rem;
+    background-color: rgba(16, 22, 35, 0.85);
+    color: var(--qr-text-main);
+    border-color: rgba(168, 179, 204, 0.34);
+    font-weight: 500;
+    box-shadow: none !important;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23aeb8d5' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+  }
+
+  #qr-scanner-modal .form-select:focus {
+    border-color: rgba(74, 179, 148, 0.54);
+    box-shadow: 0 0 0 0.12rem rgba(74, 179, 148, 0.13) !important;
+  }
+
+  #qr-scanner-modal .form-select option {
+    background: #121826;
+    color: #e5ebfb;
+  }
+
+  #qr-scanner-modal .wo-qr-btn {
+    min-height: 2.3rem;
+    border-radius: 8px;
+    padding: 0.42rem 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    box-shadow: none !important;
+  }
+
+  #qr-scanner-modal .wo-qr-btn-subtle {
+    border: 1px solid rgba(177, 189, 216, 0.34);
+    background-color: rgba(255, 255, 255, 0.035);
+    color: #dde5fa;
+  }
+
+  #qr-scanner-modal .wo-qr-btn-subtle:hover,
+  #qr-scanner-modal .wo-qr-btn-subtle:focus {
+    border-color: rgba(205, 215, 238, 0.55);
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+
+  #qr-scanner-modal .wo-qr-btn-primary {
+    border: 1px solid rgba(74, 179, 148, 0.5);
+    background-color: rgba(74, 179, 148, 0.12);
+    color: #dbfff2;
+    min-width: 7.4rem;
+  }
+
+  #qr-scanner-modal .wo-qr-btn-primary:hover,
+  #qr-scanner-modal .wo-qr-btn-primary:focus {
+    border-color: rgba(74, 179, 148, 0.75);
+    background-color: rgba(74, 179, 148, 0.2);
+    color: #ffffff;
+  }
+
+  #qr-scanner-modal .wo-qr-status {
+    padding-left: 0;
+    line-height: 1.25rem;
+    color: #bfc9e5 !important;
+    text-align: center;
+  }
+
+  #qr-scanner-modal #qr-scanner-region > div {
     border: 0 !important;
   }
 
-  #qr-scanner-modal .wo-qr-region.is-mirrored video,
-  #qr-scanner-modal .wo-qr-region.is-mirrored canvas {
+  #qr-scanner-frame.qr-mirror-on video,
+  #qr-scanner-frame.qr-mirror-on canvas {
     transform: scaleX(-1);
   }
 
-  #qr-scanner-modal .wo-qr-corner {
-    position: absolute;
-    width: 34px;
-    height: 34px;
-    border-color: #00cfe8;
-    border-style: solid;
-    border-width: 0;
-    z-index: 4;
-    animation: woQrCornerPulse 2.2s ease-in-out infinite;
-  }
+  @media (max-width: 575.98px) {
+    #qr-scanner-modal .wo-qr-controls-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
 
-  #qr-scanner-modal .wo-qr-corner-tl {
-    top: 0;
-    left: 0;
-    border-top-width: 3px;
-    border-left-width: 3px;
-  }
+    #qr-scanner-modal .wo-qr-camera-controls-row {
+      flex-direction: row;
+      align-items: center;
+    }
 
-  #qr-scanner-modal .wo-qr-corner-tr {
-    top: 0;
-    right: 0;
-    border-top-width: 3px;
-    border-right-width: 3px;
-    animation-delay: .4s;
-  }
+    #qr-scanner-modal .wo-qr-camera-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
 
-  #qr-scanner-modal .wo-qr-corner-bl {
-    bottom: 0;
-    left: 0;
-    border-bottom-width: 3px;
-    border-left-width: 3px;
-    animation-delay: .8s;
-  }
-
-  #qr-scanner-modal .wo-qr-corner-br {
-    bottom: 0;
-    right: 0;
-    border-bottom-width: 3px;
-    border-right-width: 3px;
-    animation-delay: 1.2s;
-  }
-
-  #qr-scanner-modal .wo-qr-scan-line {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent 0%, #00cfe8 50%, transparent 100%);
-    z-index: 3;
-    animation: woQrScanLine 2.1s linear infinite;
-  }
-
-  @keyframes woQrCornerPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.55; }
-  }
-
-  @keyframes woQrScanLine {
-    0% { top: 0; opacity: 1; }
-    100% { top: calc(100% - 2px); opacity: .2; }
+    #qr-scanner-modal .wo-qr-btn-primary {
+      width: 100%;
+      min-width: 0;
+    }
   }
 </style>
 
@@ -164,7 +381,7 @@
       return;
     }
 
-    var region = document.getElementById('qr-scanner-region');
+    var frameEl = document.getElementById('qr-scanner-frame');
     var statusEl = document.getElementById('qr-scanner-status');
     var errorEl = document.getElementById('qr-scanner-error');
     var mirrorToggle = document.getElementById('qr-mirror-toggle');
@@ -180,6 +397,7 @@
     var lastDecodedText = '';
     var lastDecodedAt = 0;
     var duplicateWindowMs = 900;
+
     var scanConfig = {
       fps: 10,
       qrbox: function (viewfinderWidth, viewfinderHeight) {
@@ -213,8 +431,18 @@
       errorEl.classList.add('d-none');
     }
 
+    function applyBackdrop() {
+      var backdrop = document.querySelector('.modal-backdrop');
+      if (!backdrop) {
+        return;
+      }
+      backdrop.classList.add('qr-scanner-backdrop');
+      backdrop.style.backgroundColor = 'rgba(0, 0, 0, 0.985)';
+      backdrop.style.opacity = '1';
+    }
+
     function applyMirrorState() {
-      region.classList.toggle('is-mirrored', !!mirrorToggle.checked);
+      frameEl.classList.toggle('qr-mirror-on', !!mirrorToggle.checked);
     }
 
     function extractWorkOrderIdFromPath(pathname) {
@@ -225,7 +453,7 @@
     function parseWorkOrderIdFromQr(rawText) {
       var text = (rawText || '').trim();
       if (!text) {
-        return { id: null, error: 'Prazan QR sadržaj.' };
+        return { id: null, error: 'Prazan QR sadrzaj.' };
       }
 
       if (/^https?:\/\//i.test(text)) {
@@ -235,9 +463,9 @@
           if (idFromUrl) {
             return { id: idFromUrl, error: null };
           }
-          return { id: null, error: 'Neispravan QR format. Očekivan je link na radni nalog.' };
+          return { id: null, error: 'Neispravan QR format. Ocekivan je link na radni nalog.' };
         } catch (e) {
-          return { id: null, error: 'QR ne sadrži validan URL radnog naloga.' };
+          return { id: null, error: 'QR ne sadrzi validan URL radnog naloga.' };
         }
       }
 
@@ -340,12 +568,12 @@
 
       if (typeof Html5Qrcode === 'undefined') {
         setStatus('Skener nije spreman.');
-        showError('QR biblioteka nije dostupna. Osvjezi stranicu i pokusaj ponovo.');
+        showError('QR biblioteka nije dostupna. Osvježi stranicu i pokušaj ponovo.');
         return;
       }
 
       clearError();
-      setStatus('Pokrecem kameru...');
+      setStatus('Pokrećem kameru...');
 
       if (!scanner) {
         scanner = new Html5Qrcode('qr-scanner-region');
@@ -408,17 +636,26 @@
       restartScanner();
     });
 
-    modal.addEventListener('show.bs.modal', function () {
-      var backdrop = document.querySelector('.modal-backdrop');
-      if (backdrop) {
-        backdrop.classList.add('qr-scanner-backdrop');
+    var observer = new MutationObserver(function () {
+      if (modal.classList.contains('show')) {
+        applyBackdrop();
       }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+
+    modal.addEventListener('show.bs.modal', function () {
+      setTimeout(applyBackdrop, 40);
     });
 
     modal.addEventListener('shown.bs.modal', function () {
       redirecting = false;
       lastDecodedText = '';
       lastDecodedAt = 0;
+      applyBackdrop();
       startScanner();
     });
 
@@ -436,4 +673,3 @@
     });
   });
 </script>
-
