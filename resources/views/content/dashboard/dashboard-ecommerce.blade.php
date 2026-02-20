@@ -61,12 +61,24 @@
       white-space: nowrap;
     }
 
+    .dashboard-workorders-table > :not(caption) > * > * {
+      box-shadow: none !important;
+    }
+
+    .dashboard-workorders-table > :not(:first-child) {
+      border-top: 0 !important;
+    }
+
     .dashboard-workorders-table tbody td {
       border-top: 1px solid #ebe9f1;
       vertical-align: middle;
       color: #5e5873;
       font-size: 1.1rem;
       font-weight: 500;
+    }
+
+    .dashboard-workorders-table tbody tr:first-child td {
+      border-top: 0;
     }
 
     .dashboard-workorders-table.table-hover tbody tr:hover > * {
