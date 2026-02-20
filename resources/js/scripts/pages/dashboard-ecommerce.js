@@ -338,7 +338,7 @@ $(window).on('load', function () {
     dashboardDefaultCompareYear = 2022;
   }
 
-  var reportMonthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec'];
+  var reportMonthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec'];
   var reportState = {
     currentYear: dashboardCurrentYear,
     compareYear: dashboardDefaultCompareYear,

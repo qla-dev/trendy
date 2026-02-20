@@ -514,7 +514,7 @@
               <div id="revenue-report-chart"></div>
             </div>
           </div>
-          <div class="col-md-4 col-12 budget-wrapper">
+          <div class="col-md-4 col-12 budget-wrapper pb-2 pb-md-0">
             <div class="btn-group">
               <button
                 type="button"
