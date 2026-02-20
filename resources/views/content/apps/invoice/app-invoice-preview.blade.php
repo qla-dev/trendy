@@ -149,6 +149,23 @@
     display: flex;
     align-items: flex-end;
   }
+  .wo-preview-qr-image {
+    width: 120px;
+    height: 120px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 8px;
+    background: #fff;
+  }
+  .wo-sidebar-qr-block {
+    display: none;
+    justify-content: center;
+    padding-bottom: 1.5rem;
+  }
+  .wo-sidebar-qr-divider {
+    display: none;
+    margin: 0 0 1.5rem;
+  }
   .wo-header-chip-stack {
     display: flex;
     flex-direction: column;
@@ -866,6 +883,20 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
+  @media (min-width: 768px) and (max-width: 1199.98px) {
+    .invoice-actions .btn {
+      font-size: 0.7rem;
+    }
+    .wo-header-qr-block {
+      display: none;
+    }
+    .wo-sidebar-qr-block {
+      display: flex;
+    }
+    .wo-sidebar-qr-divider {
+      display: block;
+    }
+  }
   @media (max-width: 767.98px) {
     .invoice-preview-wrapper .invoice-actions {
       position: static;
@@ -907,11 +938,39 @@
         substr($invoiceDigits, 7);
     }
   }
-  $issueDate = $issueDate ?? '';
-  $plannedStartDate = $plannedStartDate ?? '';
-  $dueDate = $dueDate ?? '';
-  $sender = $sender ?? ['name' => '', 'address' => '', 'phone' => '', 'email' => ''];
-  $recipient = $recipient ?? ['name' => '', 'address' => '', 'phone' => '', 'email' => ''];
+  $displayValue = static function ($value): string {
+    if ($value === null) {
+      return '-';
+    }
+
+    if (is_string($value)) {
+      $trimmedValue = trim($value);
+      return $trimmedValue !== '' ? $trimmedValue : '-';
+    }
+
+    return trim((string) $value) !== '' ? (string) $value : '-';
+  };
+
+  $invoiceNumberDisplay = $displayValue($invoiceNumberDisplay);
+  $issueDate = $displayValue($issueDate ?? null);
+  $plannedStartDate = $displayValue($plannedStartDate ?? null);
+  $dueDate = $displayValue($dueDate ?? null);
+
+  $senderRaw = $sender ?? [];
+  $sender = [
+    'name' => $displayValue($senderRaw['name'] ?? null),
+    'address' => $displayValue($senderRaw['address'] ?? null),
+    'phone' => $displayValue($senderRaw['phone'] ?? null),
+    'email' => $displayValue($senderRaw['email'] ?? null),
+  ];
+
+  $recipientRaw = $recipient ?? [];
+  $recipient = [
+    'name' => $displayValue($recipientRaw['name'] ?? null),
+    'address' => $displayValue($recipientRaw['address'] ?? null),
+    'phone' => $displayValue($recipientRaw['phone'] ?? null),
+    'email' => $displayValue($recipientRaw['email'] ?? null),
+  ];
   $workOrderMeta = $workOrderMeta ?? [];
   $workOrderMetaHighlights = $workOrderMeta['highlights'] ?? [];
   $workOrderMetaKpis = $workOrderMeta['kpis'] ?? [];
@@ -946,8 +1005,10 @@
     }
     $workOrderMetaHighlightChips[] = $metaChip;
   }
-  $statusDisplayLabel = trim((string) ($workOrder['status'] ?? 'N/A'));
-  $priorityDisplayLabel = trim((string) ($workOrder['prioritet'] ?? 'N/A'));
+  $workOrderProductName = $displayValue($workOrderProductName);
+  $workOrderProductCode = $displayValue($workOrderProductCode);
+  $statusDisplayLabel = $displayValue($workOrder['status'] ?? null);
+  $priorityDisplayLabel = $displayValue($workOrder['prioritet'] ?? null);
   $statusToneClass = 'secondary';
   $priorityToneClass = 'secondary';
   $normalizedStatusLabel = strtolower($statusDisplayLabel);
@@ -976,7 +1037,7 @@
   }
 @endphp
 
-@section('title', 'Radni nalog ' . ($invoiceNumberDisplay !== '' ? $invoiceNumberDisplay : 'N/A'))
+@section('title', 'Radni nalog ' . ($invoiceNumberDisplay !== '' ? $invoiceNumberDisplay : '-'))
 
 @section('content')
 <section class="invoice-preview-wrapper">
@@ -1008,11 +1069,11 @@
                 </div>
                 <div class="invoice-date-wrapper">
                   <p class="invoice-date-title">Planirani start:</p>
-                  <p class="invoice-date">{{ $plannedStartDate !== '' ? $plannedStartDate : '-' }}</p>
+                  <p class="invoice-date">{{ $plannedStartDate }}</p>
                 </div>
               </div>
               <div class="wo-header-qr-block">
-                <img src="{{ $previewQrImage }}" alt="QR Code" style="width: 120px; height: 120px; border: 1px solid #dee2e6; border-radius: 4px; padding: 8px; background: white;">
+                <img src="{{ $previewQrImage }}" alt="QR Code" class="wo-preview-qr-image">
               </div>
             </div>
           </div>
@@ -1029,15 +1090,7 @@
               @if($sender['name'])
                 <h6 class="mb-25">{{ $sender['name'] }}</h6>
               @endif
-              @if($sender['address'])
-                <p class="card-text mb-25">{{ $sender['address'] }}</p>
-              @endif
-              @if($sender['phone'])
-                <p class="card-text mb-25">{{ $sender['phone'] }}</p>
-              @endif
-              @if($sender['email'])
-                <p class="card-text mb-0">{{ $sender['email'] }}</p>
-              @endif
+             
             </div>
             <div class="col-xl-4 d-none d-xl-block"></div>
             <div class="col-xl-4 col-md-6 p-0">
@@ -1045,15 +1098,7 @@
               @if($recipient['name'])
                 <h6 class="mb-25">{{ $recipient['name'] }}</h6>
               @endif
-              @if($recipient['address'])
-                <p class="card-text mb-25">{{ $recipient['address'] }}</p>
-              @endif
-              @if($recipient['phone'])
-                <p class="card-text mb-25">{{ $recipient['phone'] }}</p>
-              @endif
-              @if($recipient['email'])
-                <p class="card-text mb-0">{{ $recipient['email'] }}</p>
-              @endif
+              
             </div>
           </div>
         </div>
@@ -1065,9 +1110,9 @@
           <div class="card-body invoice-padding pt-2 pb-0">
             <div class="wo-product-hero">
               <span class="wo-product-kicker">Naziv proizvoda</span>
-              <span class="wo-product-title">{{ $workOrderProductName !== '' ? $workOrderProductName : '-' }}</span>
+              <span class="wo-product-title">{{ $displayValue($workOrderProductName) }}</span>
               @if($workOrderProductCode !== '')
-                <span class="wo-product-sub">Šifra proizvoda: {{ $workOrderProductCode }}</span>
+                <span class="wo-product-sub">Šifra proizvoda: {{ $displayValue($workOrderProductCode) }}</span>
               @endif
             </div>
           </div>
@@ -1076,8 +1121,8 @@
         <div class="card-body invoice-padding pt-0 pb-0">
           <div class="wo-progress-shell">
             <div class="wo-progress-head">
-              <span>{{ $workOrderMetaProgress['label'] ?? 'Realizacija' }}</span>
-              <span>{{ $workOrderMetaProgress['display'] ?? '0 %' }}</span>
+              <span>{{ $displayValue($workOrderMetaProgress['label'] ?? null) }}</span>
+              <span>{{ $displayValue($workOrderMetaProgress['display'] ?? null) }}</span>
             </div>
             <div class="wo-progress">
               <div class="wo-progress-bar" data-target="{{ $workOrderMetaProgressPercent }}" style="width: 0%;"></div>
@@ -1092,14 +1137,14 @@
               <div class="wo-meta-chip-row mb-0">
                 @foreach($workOrderMetaHighlightChips as $metaChip)
                   <div class="wo-meta-chip wo-chip-{{ $metaChip['tone'] ?? 'secondary' }}">
-                    <span class="wo-meta-chip-label">{{ $metaChip['label'] ?? '' }}</span>
-                    <span class="wo-meta-chip-value">{{ $metaChip['value'] ?? '-' }}</span>
+                    <span class="wo-meta-chip-label">{{ $displayValue($metaChip['label'] ?? null) }}</span>
+                    <span class="wo-meta-chip-value">{{ $displayValue($metaChip['value'] ?? null) }}</span>
                   </div>
                 @endforeach
                 @foreach($workOrderMetaFlags as $metaFlag)
                   <span class="wo-flag-pill wo-flag-{{ $metaFlag['tone'] ?? 'secondary' }}">
                     <span class="wo-flag-dot"></span>
-                    <span>{{ $metaFlag['label'] ?? '' }}: <strong>{{ $metaFlag['value'] ?? '-' }}</strong></span>
+                    <span>{{ $displayValue($metaFlag['label'] ?? null) }}: <strong>{{ $displayValue($metaFlag['value'] ?? null) }}</strong></span>
                   </span>
                 @endforeach
               </div>
@@ -1171,21 +1216,21 @@
                   <tbody>
                     @forelse(($workOrderItems ?? []) as $item)
                       <tr>
-                        <td class="py-1">{{ $item['alternativa'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['pozicija'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['artikal'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['opis'] ?? '' }}</td>
+                        <td class="py-1">{{ $displayValue($item['alternativa'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['pozicija'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['artikal'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['opis'] ?? null) }}</td>
                         <td class="py-1 text-center"><span class="text-muted">-</span></td>
-                        <td class="py-1">{{ $item['napomena'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['kolicina'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['mj'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['serija'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['normativna_osnova'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['aktivno'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['zavrseno'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['va'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['prim_klas'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['sek_klas'] ?? '' }}</td>
+                        <td class="py-1">{{ $displayValue($item['napomena'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['kolicina'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['mj'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['serija'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['normativna_osnova'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['aktivno'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['zavrseno'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['va'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['prim_klas'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['sek_klas'] ?? null) }}</td>
                       </tr>
                     @empty
                       <tr>
@@ -1212,11 +1257,11 @@
                   <tbody>
                     @forelse(($workOrderItemResources ?? []) as $item)
                       <tr>
-                        <td class="py-1">{{ $item['pozicija'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['materijal'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['naziv'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['kolicina'] ?? '' }}</td>
-                        <td class="py-1">{{ $item['napomena'] ?? '' }}</td>
+                        <td class="py-1">{{ $displayValue($item['pozicija'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['materijal'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['naziv'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['kolicina'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($item['napomena'] ?? null) }}</td>
                       </tr>
                     @empty
                       <tr>
@@ -1249,17 +1294,17 @@
                   <tbody>
                     @forelse(($workOrderRegOperations ?? []) as $operation)
                       <tr>
-                        <td class="py-1">{{ $operation['alternativa'] ?? '' }}</td>
-                        <td class="py-1">{{ $operation['pozicija'] ?? '' }}</td>
-                        <td class="py-1">{{ $operation['operacija'] ?? '' }}</td>
-                        <td class="py-1">{{ $operation['naziv'] ?? '' }}</td>
-                        <td class="py-1">{{ $operation['napomena'] ?? '' }}</td>
-                        <td class="py-1">{{ $operation['mj'] ?? '' }}</td>
-                        <td class="py-1">{{ $operation['mj_vrij'] ?? '' }}</td>
-                        <td class="py-1">{{ $operation['normativna_osnova'] ?? '' }}</td>
-                        <td class="py-1">{{ $operation['va'] ?? '' }}</td>
-                        <td class="py-1">{{ $operation['prim_klas'] ?? '' }}</td>
-                        <td class="py-1">{{ $operation['sek_klas'] ?? '' }}</td>
+                        <td class="py-1">{{ $displayValue($operation['alternativa'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($operation['pozicija'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($operation['operacija'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($operation['naziv'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($operation['napomena'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($operation['mj'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($operation['mj_vrij'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($operation['normativna_osnova'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($operation['va'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($operation['prim_klas'] ?? null) }}</td>
+                        <td class="py-1">{{ $displayValue($operation['sek_klas'] ?? null) }}</td>
                       </tr>
                     @empty
                       <tr>
@@ -1277,9 +1322,9 @@
                   <div class="wo-kpi-grid">
                     @foreach($workOrderMetaKpis as $kpi)
                       <div class="wo-kpi-item">
-                        <span class="wo-kpi-label">{{ $kpi['label'] ?? '' }}</span>
+                        <span class="wo-kpi-label">{{ $displayValue($kpi['label'] ?? null) }}</span>
                         <span class="wo-kpi-value">
-                          {{ $kpi['value'] ?? '-' }}
+                          {{ $displayValue($kpi['value'] ?? null) }}
                           @if(!empty($kpi['unit']))
                             <span class="wo-kpi-unit">{{ $kpi['unit'] }}</span>
                           @endif
@@ -1314,8 +1359,8 @@
                       <span class="timeline-point timeline-point-{{ $timelineTone }} timeline-point-indicator"></span>
                       <div class="timeline-event">
                         <div class="d-flex justify-content-between flex-sm-row flex-column mb-sm-0 mb-25">
-                          <h6>{{ $metaRow['label'] ?? '' }}</h6>
-                          <span class="timeline-event-time">{{ $metaRow['value'] ?? '-' }}</span>
+                          <h6>{{ $displayValue($metaRow['label'] ?? null) }}</h6>
+                          <span class="timeline-event-time">{{ $displayValue($metaRow['value'] ?? null) }}</span>
                         </div>
                       </div>
                     </li>
@@ -1336,9 +1381,8 @@
                 <div class="wo-links-grid">
                   @forelse($workOrderMetaTraceability as $metaRow)
                     @php
-                      $linkLabel = (string) ($metaRow['label'] ?? '');
-                      $linkValue = trim((string) ($metaRow['value'] ?? '-'));
-                      $linkValue = $linkValue !== '' ? $linkValue : '-';
+                      $linkLabel = $displayValue($metaRow['label'] ?? null);
+                      $linkValue = $displayValue($metaRow['value'] ?? null);
                       $normalizedLabel = strtolower($linkLabel);
                       $linkTone = 'primary';
                       $linkIcon = 'fa-link';
@@ -1390,6 +1434,10 @@
     <div class="col-xl-3 col-md-4 col-12 invoice-actions mt-md-0 mt-2">
       <div class="card">
         <div class="card-body">
+          <div class="wo-sidebar-qr-block">
+            <img src="{{ $previewQrImage }}" alt="QR Code" class="wo-preview-qr-image">
+          </div>
+          <div class="invoice-actions-divider wo-sidebar-qr-divider"></div>
           <button class="btn btn-primary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#qr-scanner-modal">
             <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog
           </button>
@@ -1398,10 +1446,10 @@
           </button>
           <div class="invoice-actions-divider"></div>
           <button class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $statusToneClass }}" data-bs-toggle="modal" data-bs-target="#change-status-modal">
-            <i class="fa fa-circle-notch me-50"></i> Status: {{ $statusDisplayLabel !== '' ? $statusDisplayLabel : 'N/A' }}
+            <i class="fa fa-circle-notch me-50"></i> Status: {{ $statusDisplayLabel }}
           </button>
           <button class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $priorityToneClass }}" data-bs-toggle="modal" data-bs-target="#change-priority-modal">
-            {{ $priorityDisplayLabel !== '' ? $priorityDisplayLabel : 'N/A' }}
+            {{ $priorityDisplayLabel }}
           </button>
           <div class="invoice-actions-divider"></div>
           <button class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" onclick="alert('Uskoro')">

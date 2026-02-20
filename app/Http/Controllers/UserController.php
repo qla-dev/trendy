@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
@@ -48,8 +49,19 @@ class UserController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'username' => 'required|string|max:255|unique:users',
-            'email' => 'required|string|email|max:255|unique:users',
+            'username' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique($this->usersTableForValidation(), 'username'),
+            ],
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                Rule::unique($this->usersTableForValidation(), 'email'),
+            ],
             'password' => 'required|string|min:6|confirmed',
             'role' => 'required|in:admin,user',
         ]);
@@ -105,8 +117,19 @@ class UserController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'username' => 'required|string|max:255|unique:users,username,' . $id,
-            'email' => 'required|string|email|max:255|unique:users,email,' . $id,
+            'username' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique($this->usersTableForValidation(), 'username')->ignore($id),
+            ],
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                Rule::unique($this->usersTableForValidation(), 'email')->ignore($id),
+            ],
             'role' => 'required|in:admin,user',
         ]);
 
@@ -157,5 +180,18 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
         return view('content.apps.user.app-user-view-account', compact('user'));
+    }
+
+    private function usersTableForValidation(): string
+    {
+        $userModel = new User();
+        $connection = $userModel->getConnectionName();
+        $table = $userModel->getTable();
+
+        if (is_string($connection) && $connection !== '') {
+            return $connection . '.' . $table;
+        }
+
+        return $table;
     }
 }

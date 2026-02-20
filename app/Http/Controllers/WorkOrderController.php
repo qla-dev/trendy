@@ -43,18 +43,24 @@ class WorkOrderController extends Controller
     public function invoicePreview(Request $request, ?string $id = null)
     {
         $pageConfigs = ['pageHeader' => false];
-        $workOrderId = $id ?? $request->query('id');
+        $routeWorkOrderId = trim((string) ($id ?? ''));
+        $queryWorkOrderId = trim((string) $request->query('id', ''));
+
+        if ($routeWorkOrderId === '' && $queryWorkOrderId !== '') {
+            return redirect()->route('app-invoice-preview', ['id' => $queryWorkOrderId]);
+        }
+
+        $workOrderId = $routeWorkOrderId !== '' ? $routeWorkOrderId : $queryWorkOrderId;
 
         if (!$workOrderId) {
-            return redirect()->route('app-invoice-list');
+            return $this->emptyInvoicePreviewResponse($pageConfigs);
         }
 
         try {
             $workOrder = $this->findMappedWorkOrder((string) $workOrderId, true);
 
             if (!$workOrder) {
-                return redirect()->route('app-invoice-list')
-                    ->with('error', 'Radni nalog nije pronadjen.');
+                return $this->emptyInvoicePreviewResponse($pageConfigs, (string) $workOrderId);
             }
 
             $raw = $workOrder['raw'] ?? [];
@@ -110,8 +116,7 @@ class WorkOrderController extends Controller
                 'message' => $exception->getMessage(),
             ]);
 
-            return redirect()->route('app-invoice-list')
-                ->with('error', 'Greska pri ucitavanju detalja radnog naloga.');
+            return $this->emptyInvoicePreviewResponse($pageConfigs, (string) $workOrderId);
         }
     }
 
@@ -1985,5 +1990,33 @@ class WorkOrderController extends Controller
     private function qualifiedRegOperationsTableName(): string
     {
         return $this->tableSchema() . '.' . $this->regOperationsTableName();
+    }
+
+    private function emptyInvoicePreviewResponse(array $pageConfigs, ?string $invoiceNumber = null)
+    {
+        return view('/content/apps/invoice/app-invoice-preview', [
+            'pageConfigs' => $pageConfigs,
+            'workOrder' => [],
+            'workOrderItems' => [],
+            'workOrderItemResources' => [],
+            'workOrderRegOperations' => [],
+            'workOrderMeta' => [],
+            'sender' => [
+                'name' => '',
+                'address' => '',
+                'phone' => '',
+                'email' => '',
+            ],
+            'recipient' => [
+                'name' => '',
+                'address' => '',
+                'phone' => '',
+                'email' => '',
+            ],
+            'invoiceNumber' => (string) ($invoiceNumber ?? ''),
+            'issueDate' => '',
+            'plannedStartDate' => '',
+            'dueDate' => '',
+        ]);
     }
 }
