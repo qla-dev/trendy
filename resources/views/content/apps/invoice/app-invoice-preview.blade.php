@@ -524,6 +524,48 @@
   .semi-dark-layout .invoice-preview-wrapper .logo-wrapper .invoice-logo {
     color: #eaf0ff !important;
   }
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary,
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary {
+    border-color: rgba(255, 255, 255, 0.9) !important;
+    color: #ffffff !important;
+    background-color: transparent !important;
+  }
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary i,
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary i,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary i,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary i,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary i,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary i,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary i,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary i {
+    color: #ffffff !important;
+  }
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:hover,
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:focus,
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:hover,
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:focus,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:hover,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:focus,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:hover,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:focus,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:hover,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:focus,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:hover,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:focus,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:hover,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:focus,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:hover,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:focus {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    color: #ffffff !important;
+    border-color: #ffffff !important;
+  }
   body.dark-layout .invoice-preview-wrapper .logo-wrapper .wo-brand-logo,
   body.semi-dark-layout .invoice-preview-wrapper .logo-wrapper .wo-brand-logo,
   .dark-layout .invoice-preview-wrapper .logo-wrapper .wo-brand-logo,

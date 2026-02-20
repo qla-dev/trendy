@@ -110,6 +110,21 @@ $(function () {
     return rawValue;
   }
 
+  function trimProductName(value, maxLength) {
+    var normalizedValue = (value || '').toString().trim();
+    var limit = Number(maxLength) || 5;
+
+    if (!normalizedValue) {
+      return 'N/A';
+    }
+
+    if (normalizedValue.length <= limit) {
+      return normalizedValue;
+    }
+
+    return normalizedValue.slice(0, limit) + '..';
+  }
+
   function hashClientName(clientName) {
     var normalizedName = (clientName || '').toString().trim().toLowerCase();
     var hash = 0;
@@ -235,7 +250,7 @@ $(function () {
   // datatable
   if (dtInvoiceTable.length) {
     var currentStatusFilter = null;
-    var moneyColumnIndex = 4;
+    var moneyColumnIndex = 3;
     var moneyColumnVisible = null;
     updateStatusCards(window.statusStats || {});
 
@@ -286,7 +301,6 @@ $(function () {
         });
       },
       columns: [
-        { data: 'responsive_id' },
         { data: 'id' },
         { data: 'naziv' },
         { data: 'klijent' },
@@ -298,13 +312,7 @@ $(function () {
       ],
       columnDefs: [
         {
-          className: 'control',
-          responsivePriority: 2,
           targets: 0,
-          orderable: false
-        },
-        {
-          targets: 1,
           className: 'text-nowrap',
           width: '140px',
           type: 'num',
@@ -329,18 +337,25 @@ $(function () {
           }
         },
         {
-          targets: 2,
+          targets: 1,
           width: '250px',
           render: function (data, type, full) {
             var productName = (full['naziv'] || 'Radni nalog').toString().trim();
+            var displayName = trimProductName(productName, 10);
             var safeName = escapeHtml(productName || 'N/A');
+            var safeDisplayName = escapeHtml(displayName);
 
-            return '<span class="text-truncate d-inline-block w-100" title="' + safeName + '">' + safeName + '</span>';
+            return (
+              '<span class="text-truncate d-inline-block w-100" title="' +
+              safeName +
+              '">' +
+              safeDisplayName +
+              '</span>'
+            );
           }
         },
         {
-          targets: 3,
-          responsivePriority: 4,
+          targets: 2,
           width: '270px',
           render: function (data, type, full) {
             var name = full['klijent'] || 'N/A',
@@ -381,7 +396,7 @@ $(function () {
           }
         },
         {
-          targets: 4,
+          targets: 3,
           width: '73px',
           render: function (data, type, full) {
             var total = full['vrednost'];
@@ -399,7 +414,7 @@ $(function () {
           }
         },
         {
-          targets: 5,
+          targets: 4,
           width: '130px',
           render: function (data, type, full) {
             var createdDate = new Date(full['datum_kreiranja']);
@@ -412,7 +427,7 @@ $(function () {
           }
         },
         {
-          targets: 6,
+          targets: 5,
           className: 'text-center align-middle',
           width: '98px',
           render: function (data, type, full) {
@@ -431,7 +446,7 @@ $(function () {
           }
         },
         {
-          targets: 7,
+          targets: 6,
           width: '80px',
           render: function (data, type, full) {
             var priority = full['prioritet'];
@@ -527,36 +542,7 @@ $(function () {
         }
       },
       buttons: [],
-      responsive: {
-        details: {
-          display: $.fn.dataTable.Responsive.display.modal({
-            header: function (row) {
-              var data = row.data();
-              return 'Detalji od ' + data['klijent'];
-            }
-          }),
-          type: 'column',
-          renderer: function (api, rowIdx, columns) {
-            var data = $.map(columns, function (col) {
-              return col.columnIndex !== 0 && col.title !== 'Akcije'
-                ? '<tr data-dt-row="' +
-                    col.rowIdx +
-                    '" data-dt-column="' +
-                    col.columnIndex +
-                    '">' +
-                    '<td>' +
-                    col.title +
-                    ':</td> ' +
-                    '<td>' +
-                    col.data +
-                    '</td>' +
-                    '</tr>'
-                : '';
-            }).join('');
-            return data ? $('<table class="table"/>').append('<tbody>' + data + '</tbody>') : false;
-          }
-        }
-      },
+      responsive: false,
       initComplete: function () {
         $(document).find('[data-bs-toggle="tooltip"]').tooltip();
         if (typeof feather !== 'undefined') {
@@ -577,7 +563,7 @@ $(function () {
       if (
         $(this).hasClass('child') ||
         $(this).find('td.dataTables_empty').length ||
-        $target.closest('a, button, input, textarea, select, label, .dropdown, .dropdown-menu, td.control, .dtr-control').length
+        $target.closest('a, button, input, textarea, select, label, .dropdown, .dropdown-menu').length
       ) {
         return;
       }

@@ -204,7 +204,6 @@
       <table class="invoice-list-table table">
         <thead>
           <tr>
-            <th></th>
             <th>#</th>
             <th>Naziv proizvoda</th>
             <th>Klijent</th>
@@ -641,10 +640,10 @@
     color: #fff;
   }
 
-  .dark-layout .invoice-list-table tbody td:nth-child(2) a,
-  .dark-layout .invoice-list-table tbody td:nth-child(2) a:visited,
-  .dark-layout .invoice-list-table tbody td:nth-child(2) a:hover,
-  .dark-layout .invoice-list-table tbody td:nth-child(2) a:focus {
+  .dark-layout .invoice-list-table tbody td:nth-child(1) a,
+  .dark-layout .invoice-list-table tbody td:nth-child(1) a:visited,
+  .dark-layout .invoice-list-table tbody td:nth-child(1) a:hover,
+  .dark-layout .invoice-list-table tbody td:nth-child(1) a:focus {
     color: #fff !important;
   }
 

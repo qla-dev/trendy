@@ -565,6 +565,10 @@
 
                     $clientName = trim((string) ($order->client_name ?? 'N/A'));
                     $productName = trim((string) ($order->product_name ?? 'Radni nalog'));
+                    $productDisplayName = $productName;
+                    if ($productDisplayName !== '' && mb_strlen($productDisplayName) > 10) {
+                      $productDisplayName = mb_substr($productDisplayName, 0, 10) . '..';
+                    }
                     $words = preg_split('/\s+/', $clientName) ?: [];
                     $firstInitial = $words[0] ?? '';
                     $lastInitial = $words[count($words) - 1] ?? '';
@@ -604,7 +608,7 @@
                     </td>
                     <td>
                       <span class="dashboard-product-name" title="{{ $productName !== '' ? $productName : 'N/A' }}">
-                        {{ $productName !== '' ? $productName : 'N/A' }}
+                        {{ $productDisplayName !== '' ? $productDisplayName : 'N/A' }}
                       </span>
                     </td>
                     <td>
