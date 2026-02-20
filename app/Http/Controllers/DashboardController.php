@@ -35,17 +35,36 @@ class DashboardController extends Controller
   {
     $pageConfigs = ['pageHeader' => false];
     $latestOrders = collect();
+    $dashboardStats = [
+      'work_orders_total' => 0,
+      'customers_total' => 0,
+      'products_total' => 0,
+    ];
 
     try {
-      $table = config('workorders.schema', 'dbo') . '.' . config('workorders.table', 'tHF_WOEx');
+      $schema = config('workorders.schema', 'dbo');
+      $tableName = config('workorders.table', 'tHF_WOEx');
+      $table = $schema . '.' . $tableName;
       $columns = DB::table('INFORMATION_SCHEMA.COLUMNS')
-        ->where('TABLE_SCHEMA', config('workorders.schema', 'dbo'))
-        ->where('TABLE_NAME', config('workorders.table', 'tHF_WOEx'))
+        ->where('TABLE_SCHEMA', $schema)
+        ->where('TABLE_NAME', $tableName)
         ->pluck('COLUMN_NAME')
         ->map(function ($column) {
           return (string) $column;
         })
         ->all();
+
+      $dashboardStats['work_orders_total'] = (int) DB::table($table)->count();
+
+      $customerColumn = $this->resolveFirstExistingColumn($columns, ['acConsignee', 'acReceiver', 'acPartner']);
+      if ($customerColumn !== null) {
+        $dashboardStats['customers_total'] = $this->countDistinctTrimmedValues($table, $customerColumn);
+      }
+
+      $productColumn = $this->resolveFirstExistingColumn($columns, ['acName', 'acDescr', 'acProduct', 'acItem']);
+      if ($productColumn !== null) {
+        $dashboardStats['products_total'] = $this->countDistinctTrimmedValues($table, $productColumn);
+      }
 
       $query = DB::table($table);
 
@@ -79,8 +98,30 @@ class DashboardController extends Controller
 
     return view('/content/dashboard/dashboard-ecommerce', [
       'pageConfigs' => $pageConfigs,
-      'latestOrders' => $latestOrders
+      'latestOrders' => $latestOrders,
+      'dashboardStats' => $dashboardStats,
     ]);
+  }
+
+  private function resolveFirstExistingColumn(array $columns, array $candidates): ?string
+  {
+    foreach ($candidates as $candidate) {
+      if (in_array($candidate, $columns, true)) {
+        return $candidate;
+      }
+    }
+
+    return null;
+  }
+
+  private function countDistinctTrimmedValues(string $table, string $column): int
+  {
+    $wrappedColumn = '[' . str_replace(']', ']]', $column) . ']';
+    $expression = "NULLIF(LTRIM(RTRIM(CAST($wrappedColumn AS NVARCHAR(255)))), '')";
+
+    return (int) DB::table($table)
+      ->selectRaw("COUNT(DISTINCT $expression) AS aggregate")
+      ->value('aggregate');
   }
 
   private function parseDate(mixed $value): ?Carbon

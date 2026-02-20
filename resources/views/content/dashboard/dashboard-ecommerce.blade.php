@@ -393,14 +393,14 @@
           <div class="row">
             <div class="col-xl-3 col-sm-6 col-12 mb-2 mb-xl-0">
               <div class="d-flex flex-row">
-                <div class="avatar bg-light-primary me-2">
+                <div class="avatar bg-light-warning me-2">
                   <div class="avatar-content">
-                    <i data-feather="trending-up" class="avatar-icon"></i>
+                    <i data-feather="clipboard" class="avatar-icon"></i>
                   </div>
                 </div>
                 <div class="my-auto">
-                  <h4 class="fw-bolder mb-0">230k</h4>
-                  <p class="card-text font-small-3 mb-0">Prodaja</p>
+                  <h4 class="fw-bolder mb-0">{{ number_format((int) ($dashboardStats['work_orders_total'] ?? 0), 0, ',', '.') }}</h4>
+                  <p class="card-text font-small-3 mb-0">Radni nalozi</p>
                 </div>
               </div>
             </div>
@@ -412,8 +412,8 @@
                   </div>
                 </div>
                 <div class="my-auto">
-                  <h4 class="fw-bolder mb-0">8.549k</h4>
-                  <p class="card-text font-small-3 mb-0">Kupci</p>
+                  <h4 class="fw-bolder mb-0">{{ number_format((int) ($dashboardStats['customers_total'] ?? 0), 0, ',', '.') }}</h4>
+                  <p class="card-text font-small-3 mb-0">Pošiljatelji</p>
                 </div>
               </div>
             </div>
@@ -425,7 +425,7 @@
                   </div>
                 </div>
                 <div class="my-auto">
-                  <h4 class="fw-bolder mb-0">1.423k</h4>
+                  <h4 class="fw-bolder mb-0">{{ number_format((int) ($dashboardStats['products_total'] ?? 0), 0, ',', '.') }}</h4>
                   <p class="card-text font-small-3 mb-0">Proizvodi</p>
                 </div>
               </div>
