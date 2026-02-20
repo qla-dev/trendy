@@ -22,3 +22,4 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::get('/work-orders', [WorkOrderController::class, 'index'])->name('api.work-orders.index');
 Route::get('/work-orders/{id}', [WorkOrderController::class, 'show'])->name('api.work-orders.show');
 Route::get('/work-orders-calendar', [WorkOrderController::class, 'calendar'])->name('api.work-orders.calendar');
+Route::get('/work-orders-yearly-summary', [WorkOrderController::class, 'yearlySummary'])->name('api.work-orders.yearly-summary');

@@ -296,6 +296,36 @@ class WorkOrderController extends Controller
         }
     }
 
+    public function yearlySummary(Request $request): JsonResponse
+    {
+        try {
+            $currentYear = max(2022, (int) $request->integer('current_year', (int) now()->year));
+            $compareYear = (int) $request->integer('compare_year', $currentYear - 1);
+
+            if ($compareYear >= $currentYear) {
+                $compareYear = $currentYear - 1;
+            }
+
+            if ($compareYear < 2022) {
+                $compareYear = 2022;
+            }
+
+            return response()->json([
+                'data' => $this->fetchYearlySummary($currentYear, $compareYear),
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order API yearly summary query failed.', [
+                'connection' => config('database.default'),
+                'table' => $this->qualifiedTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Unable to fetch yearly work order summary from database.',
+            ], 500);
+        }
+    }
+
     private function fetchWorkOrders(?int $limit = null, ?int $page = null, array $filters = []): array
     {
         $columns = $this->tableColumns();
@@ -433,6 +463,89 @@ class WorkOrderController extends Controller
         }
 
         return $stats;
+    }
+
+    private function fetchYearlySummary(int $currentYear, int $compareYear): array
+    {
+        $columns = $this->tableColumns();
+        $dateColumn = $this->firstExistingColumn($columns, ['adDate', 'adDateIns']);
+        $currentMonthly = $this->emptyYearMonthlyCounts();
+        $compareMonthly = $this->emptyYearMonthlyCounts();
+
+        if ($dateColumn !== null) {
+            $wrappedDateColumn = '[' . str_replace(']', ']]', $dateColumn) . ']';
+            $rows = $this->newTableQuery()
+                ->selectRaw("YEAR($wrappedDateColumn) as year_no")
+                ->selectRaw("MONTH($wrappedDateColumn) as month_no")
+                ->selectRaw('COUNT(*) as total')
+                ->whereNotNull($dateColumn)
+                ->where(function (Builder $yearQuery) use ($dateColumn, $currentYear, $compareYear) {
+                    $yearQuery->whereYear($dateColumn, $currentYear);
+
+                    if ($compareYear !== $currentYear) {
+                        $yearQuery->orWhereYear($dateColumn, $compareYear);
+                    }
+                })
+                ->groupByRaw("YEAR($wrappedDateColumn), MONTH($wrappedDateColumn)")
+                ->get();
+
+            foreach ($rows as $row) {
+                $yearNo = (int) ($row->year_no ?? 0);
+                $monthNo = (int) ($row->month_no ?? 0);
+                $total = (int) ($row->total ?? 0);
+
+                if ($monthNo < 1 || $monthNo > 12) {
+                    continue;
+                }
+
+                if ($yearNo === $currentYear) {
+                    $currentMonthly[$monthNo] = $total;
+                }
+
+                if ($yearNo === $compareYear) {
+                    $compareMonthly[$monthNo] = $total;
+                }
+            }
+        }
+
+        $currentSeries = array_values($currentMonthly);
+        $compareSeries = array_values($compareMonthly);
+        $currentTotal = (int) array_sum($currentSeries);
+        $compareTotal = (int) array_sum($compareSeries);
+        $delta = $currentTotal - $compareTotal;
+        $deltaPercent = $compareTotal > 0
+            ? round(($delta / $compareTotal) * 100, 1)
+            : null;
+
+        return [
+            'current_year' => $currentYear,
+            'compare_year' => $compareYear,
+            'months' => [
+                'current' => $currentMonthly,
+                'compare' => $compareMonthly,
+            ],
+            'series' => [
+                'current' => $currentSeries,
+                'compare' => $compareSeries,
+            ],
+            'totals' => [
+                'current' => $currentTotal,
+                'compare' => $compareTotal,
+                'delta' => $delta,
+                'delta_percent' => $deltaPercent,
+            ],
+        ];
+    }
+
+    private function emptyYearMonthlyCounts(): array
+    {
+        $months = [];
+
+        for ($month = 1; $month <= 12; $month++) {
+            $months[$month] = 0;
+        }
+
+        return $months;
     }
 
     private function normalizeCalendarStatuses(mixed $statuses): array

@@ -319,6 +319,188 @@ $(window).on('load', function () {
 
   //------------ Revenue Report Chart ------------
   //----------------------------------------------
+  var dashboardRoot = document.querySelector('#dashboard-ecommerce');
+  var workOrdersYearlySummaryApi =
+    (dashboardRoot && dashboardRoot.getAttribute('data-work-orders-yearly-summary-url')) ||
+    assetPath + 'api/work-orders-yearly-summary';
+  var dashboardCurrentYear = Number(
+    (dashboardRoot && dashboardRoot.getAttribute('data-current-year')) || new Date().getFullYear()
+  );
+  var dashboardDefaultCompareYear = Number(
+    (dashboardRoot && dashboardRoot.getAttribute('data-default-compare-year')) || dashboardCurrentYear - 1
+  );
+  var $reportLoader = $('#dashboard-report-loader');
+
+  if (!Number.isFinite(dashboardDefaultCompareYear) || dashboardDefaultCompareYear >= dashboardCurrentYear) {
+    dashboardDefaultCompareYear = dashboardCurrentYear - 1;
+  }
+  if (dashboardDefaultCompareYear < 2022) {
+    dashboardDefaultCompareYear = 2022;
+  }
+
+  var reportMonthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec'];
+  var reportState = {
+    currentYear: dashboardCurrentYear,
+    compareYear: dashboardDefaultCompareYear,
+    currentSeries: new Array(12).fill(0),
+    compareSeries: new Array(12).fill(0),
+    currentTotal: 0,
+    compareTotal: 0
+  };
+
+  function formatCountNumber(value) {
+    var normalized = Number(value);
+
+    if (!Number.isFinite(normalized)) {
+      return '0';
+    }
+
+    return new Intl.NumberFormat('bs-BA', { maximumFractionDigits: 0 }).format(Math.round(normalized));
+  }
+
+  function emptyMonthlySeries() {
+    return new Array(12).fill(0);
+  }
+
+  function normalizeSeries(values) {
+    var fallback = emptyMonthlySeries();
+
+    if (!Array.isArray(values)) {
+      return fallback;
+    }
+
+    return fallback.map(function (_, index) {
+      return Number(values[index]) || 0;
+    });
+  }
+
+  function calculateYearTotal(values) {
+    return (values || []).reduce(function (sum, value) {
+      return sum + (Number(value) || 0);
+    }, 0);
+  }
+
+  function updateReportSummary() {
+    var compareDiff = reportState.currentTotal - reportState.compareTotal;
+    var compareDiffPercent =
+      reportState.compareTotal > 0 ? ((compareDiff / reportState.compareTotal) * 100).toFixed(1) + '%' : 'n/a';
+    var signedDiff = (compareDiff > 0 ? '+' : '') + formatCountNumber(compareDiff);
+    var deltaText = 'Razlika: ' + signedDiff + ' (' + compareDiffPercent + ')';
+    var $deltaBadge = $('#work-orders-delta');
+
+    $('#dashboard-report-year-toggle').text(reportState.compareYear);
+    $('#revenue-current-label').text(String(reportState.currentYear));
+    $('#revenue-compare-label').text(String(reportState.compareYear));
+    $('#work-orders-total-primary').text(formatCountNumber(reportState.currentTotal) + ' naloga');
+    $('#work-orders-total-subtitle').text('Teku\u0107a godina: ' + reportState.currentYear);
+    $('#work-orders-total-compare-label').text('Pore\u0111enje sa ' + reportState.compareYear + ':');
+    $('#work-orders-total-compare').text(formatCountNumber(reportState.compareTotal) + ' naloga');
+
+    $deltaBadge
+      .removeClass('badge-light-success badge-light-danger badge-light-warning')
+      .addClass(compareDiff > 0 ? 'badge-light-success' : compareDiff < 0 ? 'badge-light-danger' : 'badge-light-warning')
+      .text(deltaText);
+
+    $('#dashboard-report-year-menu .dropdown-item').removeClass('active');
+    $('#dashboard-report-year-menu .dropdown-item[data-year="' + reportState.compareYear + '"]').addClass('active');
+  }
+
+  function updateReportCharts() {
+    var compareSeriesNegative = reportState.compareSeries.map(function (value) {
+      return -Math.abs(Number(value) || 0);
+    });
+
+    reportState.currentTotal = calculateYearTotal(reportState.currentSeries);
+    reportState.compareTotal = calculateYearTotal(reportState.compareSeries);
+
+    revenueReportChart.updateSeries(
+      [
+        {
+          name: String(reportState.currentYear),
+          data: reportState.currentSeries
+        },
+        {
+          name: String(reportState.compareYear),
+          data: compareSeriesNegative
+        }
+      ],
+      true
+    );
+
+    budgetChart.updateSeries(
+      [
+        {
+          name: String(reportState.currentYear),
+          data: reportState.currentSeries
+        },
+        {
+          name: String(reportState.compareYear),
+          data: reportState.compareSeries
+        }
+      ],
+      true
+    );
+
+    updateReportSummary();
+  }
+
+  function setReportLoadingState(isLoading) {
+    $('#dashboard-report-year-toggle').prop('disabled', !!isLoading);
+
+    if ($reportLoader.length) {
+      $reportLoader.toggleClass('is-hidden', !isLoading);
+    }
+  }
+
+  function fetchYearSummary(compareYear) {
+    return $.ajax({
+      url: workOrdersYearlySummaryApi,
+      method: 'GET',
+      dataType: 'json',
+      data: {
+        current_year: reportState.currentYear,
+        compare_year: compareYear
+      }
+    }).then(
+      function (response) {
+        var payload = response && response.data ? response.data : {};
+        var currentYear = Number(payload.current_year);
+        var compareYearValue = Number(payload.compare_year);
+        var series = payload && payload.series ? payload.series : {};
+
+        return {
+          currentYear: Number.isFinite(currentYear) ? currentYear : reportState.currentYear,
+          compareYear: Number.isFinite(compareYearValue) ? compareYearValue : compareYear,
+          currentSeries: normalizeSeries(series.current),
+          compareSeries: normalizeSeries(series.compare)
+        };
+      },
+      function () {
+        return {
+          currentYear: reportState.currentYear,
+          compareYear: compareYear,
+          currentSeries: emptyMonthlySeries(),
+          compareSeries: emptyMonthlySeries()
+        };
+      }
+    );
+  }
+
+  function loadReportData(compareYear) {
+    setReportLoadingState(true);
+
+    return fetchYearSummary(compareYear).then(function (summary) {
+      reportState.currentYear = summary.currentYear;
+      reportState.compareYear = summary.compareYear;
+      reportState.currentSeries = summary.currentSeries;
+      reportState.compareSeries = summary.compareSeries;
+      updateReportCharts();
+      setReportLoadingState(false);
+
+      return summary;
+    });
+  }
+
   revenueReportChartOptions = {
     chart: {
       height: 230,
@@ -333,15 +515,15 @@ $(window).on('load', function () {
       },
       distributed: true
     },
-    colors: [window.colors.solid.primary, window.colors.solid.warning],
+    colors: [window.colors.solid.warning, $budgetStrokeColor2],
     series: [
       {
-        name: 'Earning',
-        data: [95, 177, 284, 256, 105, 63, 168, 218, 72]
+        name: String(reportState.currentYear),
+        data: reportState.currentSeries
       },
       {
-        name: 'Expense',
-        data: [-145, -80, -60, -180, -100, -60, -85, -75, -100]
+        name: String(reportState.compareYear),
+        data: reportState.compareSeries
       }
     ],
     dataLabels: {
@@ -360,7 +542,7 @@ $(window).on('load', function () {
       }
     },
     xaxis: {
-      categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'],
+      categories: reportMonthLabels,
       labels: {
         style: {
           colors: $textMutedColor,
@@ -379,6 +561,15 @@ $(window).on('load', function () {
         style: {
           colors: $textMutedColor,
           fontSize: '0.86rem'
+        }
+      }
+    },
+    tooltip: {
+      shared: true,
+      intersect: false,
+      y: {
+        formatter: function (value) {
+          return formatCountNumber(Math.abs(value)) + ' naloga';
         }
       }
     }
@@ -401,21 +592,57 @@ $(window).on('load', function () {
       dashArray: [0, 5],
       width: [2]
     },
-    colors: [window.colors.solid.primary, $budgetStrokeColor2],
+    xaxis: {
+      categories: reportMonthLabels
+    },
+    colors: [window.colors.solid.warning, $budgetStrokeColor2],
     series: [
       {
-        data: [61, 48, 69, 52, 60, 40, 79, 60, 59, 43, 62]
+        name: String(reportState.currentYear),
+        data: reportState.currentSeries
       },
       {
-        data: [20, 10, 30, 15, 23, 0, 25, 15, 20, 5, 27]
+        name: String(reportState.compareYear),
+        data: reportState.compareSeries
       }
     ],
     tooltip: {
-      enabled: false
+      enabled: true,
+      shared: true,
+      intersect: false,
+      x: {
+        formatter: function (value, context) {
+          var monthIndex = context && typeof context.dataPointIndex === 'number' ? context.dataPointIndex : -1;
+          return monthIndex >= 0 && monthIndex < reportMonthLabels.length ? reportMonthLabels[monthIndex] : value;
+        }
+      },
+      y: {
+        formatter: function (value) {
+          return formatCountNumber(value) + ' naloga';
+        }
+      }
     }
   };
   budgetChart = new ApexCharts($budgetChart, budgetChartOptions);
   budgetChart.render();
+
+  $('#dashboard-report-year-menu').on('click', '.dropdown-item[data-year]', function (event) {
+    event.preventDefault();
+
+    var selectedYear = Number($(this).data('year'));
+
+    if (!Number.isFinite(selectedYear) || selectedYear >= reportState.currentYear || selectedYear < 2022) {
+      return;
+    }
+
+    if (selectedYear === reportState.compareYear) {
+      return;
+    }
+
+    loadReportData(selectedYear);
+  });
+
+  loadReportData(reportState.compareYear);
 
   //------------ Browser State Charts ------------
   //----------------------------------------------

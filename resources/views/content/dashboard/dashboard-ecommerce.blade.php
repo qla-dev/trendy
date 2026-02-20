@@ -1,4 +1,3 @@
-
 @extends('layouts/contentLayoutMaster')
 
 @section('title', 'Kontrolna ploča')
@@ -63,6 +62,29 @@
 
     .dashboard-workorders-table > :not(caption) > * > * {
       box-shadow: none !important;
+    }
+
+    .dashboard-report-chart-shell {
+      position: relative;
+      min-height: 230px;
+    }
+
+    .dashboard-report-loader {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(1px);
+      transition: opacity 0.18s ease, visibility 0.18s ease;
+    }
+
+    .dashboard-report-loader.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
     }
 
     .dashboard-workorders-table > :not(:first-child) {
@@ -251,6 +273,11 @@
       box-shadow: none !important;
     }
 
+    .dark-layout .dashboard-report-loader,
+    .semi-dark-layout .dashboard-report-loader {
+      background: rgba(29, 37, 58, 0.76);
+    }
+
     .dark-layout .dashboard-workorders-table.table-hover tbody tr:hover > *,
     .semi-dark-layout .dashboard-workorders-table.table-hover tbody tr:hover > * {
       background-color: #36405a !important;
@@ -292,7 +319,21 @@
 
 @section('content')
 <!-- Dashboard Ecommerce Starts -->
-<section id="dashboard-ecommerce">
+@php
+  $dashboardCurrentYear = now()->year;
+  $dashboardPreviousYears = [];
+  for ($year = $dashboardCurrentYear - 1; $year >= 2022; $year--) {
+    $dashboardPreviousYears[] = $year;
+  }
+  $dashboardDefaultCompareYear = $dashboardPreviousYears[0] ?? 2022;
+@endphp
+<section
+  id="dashboard-ecommerce"
+  data-work-orders-calendar-url="{{ route('api.work-orders.calendar') }}"
+  data-work-orders-yearly-summary-url="{{ route('api.work-orders.yearly-summary') }}"
+  data-current-year="{{ $dashboardCurrentYear }}"
+  data-default-compare-year="{{ $dashboardDefaultCompareYear }}"
+>
   <div class="row match-height">
     <!-- Medal Card -->
       <!-- Developer Meetup Card -->
@@ -413,7 +454,7 @@
                 </div>
                 <div class="my-auto">
                   <h4 class="fw-bolder mb-0">{{ number_format((int) ($dashboardStats['customers_total'] ?? 0), 0, ',', '.') }}</h4>
-                  <p class="card-text font-small-3 mb-0">Pošiljatelji</p>
+                  <p class="card-text font-small-3 mb-0">Kupci</p>
                 </div>
               </div>
             </div>
@@ -452,44 +493,59 @@
         <div class="row mx-0">
           <div class="col-md-8 col-12 revenue-report-wrapper">
             <div class="d-sm-flex justify-content-between align-items-center mb-3">
-              <h4 class="card-title mb-50 mb-sm-0">Izvještaj o prihodima</h4>
+              <h4 class="card-title mb-50 mb-sm-0">Izvještaj o radnim nalozima</h4>
               <div class="d-flex align-items-center">
                 <div class="d-flex align-items-center me-2">
-                  <span class="bullet bullet-primary font-small-3 me-50 cursor-pointer"></span>
-                  <span>Zarada</span>
+                  <span class="bullet bullet-warning font-small-3 me-50 cursor-pointer"></span>
+                  <span id="revenue-current-label">{{ $dashboardCurrentYear }}</span>
                 </div>
                 <div class="d-flex align-items-center ms-75">
-                  <span class="bullet bullet-warning font-small-3 me-50 cursor-pointer"></span>
-                  <span>Troškovi</span>
+                  <span class="bullet bullet-secondary font-small-3 me-50 cursor-pointer"></span>
+                  <span id="revenue-compare-label">{{ $dashboardDefaultCompareYear }}</span>
                 </div>
               </div>
             </div>
-            <div id="revenue-report-chart"></div>
+            <div class="dashboard-report-chart-shell">
+              <div id="dashboard-report-loader" class="dashboard-report-loader">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Učitavanje...</span>
+                </div>
+              </div>
+              <div id="revenue-report-chart"></div>
+            </div>
           </div>
           <div class="col-md-4 col-12 budget-wrapper">
             <div class="btn-group">
               <button
                 type="button"
+                id="dashboard-report-year-toggle"
                 class="btn btn-outline-primary btn-sm dropdown-toggle budget-dropdown"
                 data-bs-toggle="dropdown"
                 aria-haspopup="true"
                 aria-expanded="false"
               >
-                2026
+                {{ $dashboardDefaultCompareYear }}
               </button>
-              <div class="dropdown-menu">
-                <a class="dropdown-item" href="#">2026</a>
-                <a class="dropdown-item" href="#">2025</a>
-                <a class="dropdown-item" href="#">2024</a>
+              <div class="dropdown-menu" id="dashboard-report-year-menu">
+                @forelse ($dashboardPreviousYears as $yearOption)
+                  <a class="dropdown-item{{ $yearOption === $dashboardDefaultCompareYear ? ' active' : '' }}" href="#" data-year="{{ $yearOption }}">
+                    {{ $yearOption }}
+                  </a>
+                @empty
+                  <span class="dropdown-item disabled">Nema godina</span>
+                @endforelse
               </div>
             </div>
-            <h2 class="mb-25">25.852 KM</h2>
+            <p class="text-center text-muted mb-50" id="work-orders-total-subtitle">Tekuća godina</p>
+            <h2 class="mb-25" id="work-orders-total-primary">0 naloga</h2>
             <div class="d-flex justify-content-center">
-              <span class="fw-bolder me-25">Budžet:</span>
-              <span>56.800 KM</span>
+              <span class="fw-bolder me-25" id="work-orders-total-compare-label">Poređenje:</span>
+              <span id="work-orders-total-compare">0 naloga</span>
+            </div>
+            <div class="d-flex justify-content-center mb-1">
+              <span class="badge rounded-pill badge-light-primary" id="work-orders-delta">0</span>
             </div>
             <div id="budget-chart"></div>
-            <button type="button" class="btn btn-primary">Povećaj budžet</button>
           </div>
         </div>
       </div>
@@ -672,3 +728,4 @@
   {{-- Page js files --}}
   <script src="{{ asset(mix('js/scripts/pages/dashboard-ecommerce.js')) }}"></script>
 @endsection
+
