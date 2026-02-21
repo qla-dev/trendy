@@ -14,6 +14,24 @@
   <link rel="stylesheet" href="{{ asset(mix('css/base/plugins/forms/pickers/form-flat-pickr.css')) }}">
   <link rel="stylesheet" href="{{ asset(mix('css/base/pages/app-calendar.css')) }}">
   <link rel="stylesheet" href="{{ asset(mix('css/base/plugins/forms/form-validation.css')) }}">
+  <style>
+    .app-calendar .fc .fc-more-popover {
+      max-height: min(72vh, 480px);
+      display: flex;
+      flex-direction: column;
+    }
+    .app-calendar .fc .fc-more-popover .fc-popover-header {
+      flex: 0 0 auto;
+    }
+    .app-calendar .fc .fc-more-popover .fc-popover-body {
+      max-height: min(62vh, 390px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+      padding-right: 0.15rem;
+    }
+  </style>
 @endsection
 
 @section('content')
@@ -147,46 +165,46 @@
   <div class="modal modal-slide-in event-sidebar fade" id="add-new-sidebar">
     <div class="modal-dialog sidebar-lg">
       <div class="modal-content p-0">
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">×</button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori">×</button>
         <div class="modal-header mb-1">
-          <h5 class="modal-title">Add Event</h5>
+          <h5 class="modal-title">Dodaj dogadjaj</h5>
         </div>
         <div class="modal-body flex-grow-1 pb-sm-0 pb-3">
           <form class="event-form needs-validation" data-ajax="false" novalidate>
             <div class="mb-1">
-              <label for="title" class="form-label">Title</label>
-              <input type="text" class="form-control" id="title" name="title" placeholder="Event Title" required />
+              <label for="title" class="form-label">Naslov</label>
+              <input type="text" class="form-control" id="title" name="title" placeholder="Naslov dogadjaja" required />
             </div>
             <div class="mb-1">
-              <label for="select-label" class="form-label">Label</label>
+              <label for="select-label" class="form-label">Oznaka</label>
               <select class="select2 select-label form-select w-100" id="select-label" name="select-label">
-                <option data-label="primary" value="Business" selected>Business</option>
-                <option data-label="danger" value="Personal">Personal</option>
-                <option data-label="warning" value="Family">Family</option>
-                <option data-label="success" value="Holiday">Holiday</option>
-                <option data-label="info" value="ETC">ETC</option>
+                <option data-label="primary" value="Business" selected>Poslovno</option>
+                <option data-label="danger" value="Personal">Privatno</option>
+                <option data-label="warning" value="Family">Porodicno</option>
+                <option data-label="success" value="Holiday">Odmor</option>
+                <option data-label="info" value="ETC">Ostalo</option>
               </select>
             </div>
             <div class="mb-1 position-relative">
-              <label for="start-date" class="form-label">Start Date</label>
-              <input type="text" class="form-control" id="start-date" name="start-date" placeholder="Start Date" />
+              <label for="start-date" class="form-label">Datum pocetka</label>
+              <input type="text" class="form-control" id="start-date" name="start-date" placeholder="Datum pocetka" />
             </div>
             <div class="mb-1 position-relative">
-              <label for="end-date" class="form-label">End Date</label>
-              <input type="text" class="form-control" id="end-date" name="end-date" placeholder="End Date" />
+              <label for="end-date" class="form-label">Datum zavrsetka</label>
+              <input type="text" class="form-control" id="end-date" name="end-date" placeholder="Datum zavrsetka" />
             </div>
             <div class="mb-1">
               <div class="form-check form-switch">
                 <input type="checkbox" class="form-check-input allDay-switch" id="customSwitch3" />
-                <label class="form-check-label" for="customSwitch3">All Day</label>
+                <label class="form-check-label" for="customSwitch3">Cijeli dan</label>
               </div>
             </div>
             <div class="mb-1">
-              <label for="event-url" class="form-label">Event URL</label>
+              <label for="event-url" class="form-label">URL dogadjaja</label>
               <input type="url" class="form-control" id="event-url" placeholder="https://www.google.com" />
             </div>
             <div class="mb-1 select2-primary">
-              <label for="event-guests" class="form-label">Add Guests</label>
+              <label for="event-guests" class="form-label">Dodaj goste</label>
               <select class="select2 select-add-guests form-select w-100" id="event-guests" multiple>
                 <option data-avatar="1-small.png" value="Jane Foster">Jane Foster</option>
                 <option data-avatar="3-small.png" value="Donna Frank">Donna Frank</option>
@@ -197,18 +215,18 @@
               </select>
             </div>
             <div class="mb-1">
-              <label for="event-location" class="form-label">Location</label>
-              <input type="text" class="form-control" id="event-location" placeholder="Enter Location" />
+              <label for="event-location" class="form-label">Lokacija</label>
+              <input type="text" class="form-control" id="event-location" placeholder="Unesite lokaciju" />
             </div>
             <div class="mb-1">
-              <label class="form-label">Description</label>
+              <label class="form-label">Opis</label>
               <textarea name="event-description-editor" id="event-description-editor" class="form-control"></textarea>
             </div>
             <div class="mb-1 d-flex">
-              <button type="submit" class="btn btn-primary add-event-btn me-1">Add</button>
-              <button type="button" class="btn btn-outline-secondary btn-cancel" data-bs-dismiss="modal">Cancel</button>
-              <button type="submit" class="btn btn-primary update-event-btn d-none me-1">Update</button>
-              <button class="btn btn-outline-danger btn-delete-event d-none">Delete</button>
+              <button type="submit" class="btn btn-primary add-event-btn me-1">Dodaj</button>
+              <button type="button" class="btn btn-outline-secondary btn-cancel" data-bs-dismiss="modal">Otkazi</button>
+              <button type="submit" class="btn btn-primary update-event-btn d-none me-1">Azuriraj</button>
+              <button class="btn btn-outline-danger btn-delete-event d-none">Obrisi</button>
             </div>
           </form>
         </div>

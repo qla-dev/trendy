@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     eventLabel.wrap('<div class="position-relative"></div>').select2({
-      placeholder: 'Select value',
+      placeholder: 'Odaberite',
       dropdownParent: eventLabel.parent(),
       templateResult: renderBullets,
       templateSelection: renderBullets,
@@ -321,7 +321,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     eventGuests.wrap('<div class="position-relative"></div>').select2({
-      placeholder: 'Select value',
+      placeholder: 'Odaberite',
       dropdownParent: eventGuests.parent(),
       closeOnSelect: false,
       templateResult: renderGuestAvatar,
@@ -456,8 +456,8 @@ document.addEventListener('DOMContentLoaded', function () {
         'end-date': { required: true }
       },
       messages: {
-        'start-date': { required: 'Start Date is required' },
-        'end-date': { required: 'End Date is required' }
+        'start-date': { required: 'Datum pocetka je obavezan' },
+        'end-date': { required: 'Datum zavrsetka je obavezan' }
       }
     });
   }
