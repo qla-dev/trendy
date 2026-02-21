@@ -54,9 +54,11 @@
             data-feather="menu"></i></a></li>
     </ul>
     <ul class="nav navbar-nav bookmark-icons">
-      <li class="nav-item d-none d-md-block"><a class="nav-link" href="{{ url('app/calendar') }}"
-          data-bs-toggle="tooltip" data-bs-placement="bottom" title="Kalendar"><i class="ficon"
-            data-feather="calendar"></i></a></li>
+      @if (!(Auth::check() && Auth::user()->role === 'user'))
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="{{ url('app/calendar') }}"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" title="Kalendar"><i class="ficon"
+              data-feather="calendar"></i></a></li>
+      @endif
       <li class="nav-item d-none d-md-block"><a class="nav-link" href="{{ url('app/invoice/preview') }}"
           data-bs-toggle="tooltip" data-bs-placement="bottom" title="Skeniraj nalog"><i class="ficon"
             data-feather="camera"></i></a></li>
@@ -66,7 +68,8 @@
     
     <li class="nav-item d-none d-md-block"><a class="nav-link nav-link-style"><i class="ficon"
           data-feather="{{ $configData['theme'] === 'dark' ? 'sun' : 'moon' }}"></i></a></li>
-    <li class="nav-item nav-search"><a class="nav-link nav-link-search"><i class="ficon"
+    @if (!(Auth::check() && Auth::user()->role === 'user'))
+      <li class="nav-item nav-search"><a class="nav-link nav-link-search"><i class="ficon"
           data-feather="search"></i></a>
       <div class="search-input">
         <div class="search-input-icon"><i data-feather="search"></i></div>
@@ -74,7 +77,8 @@
         <div class="search-input-close"><i data-feather="x"></i></div>
         <ul class="search-list search-list-main"></ul>
       </div>
-    </li>
+      </li>
+    @endif
     <li class="nav-item dropdown dropdown-user">
       <a class="nav-link dropdown-toggle dropdown-user-link" id="dropdown-user" href="javascript:void(0);"
         data-bs-toggle="dropdown" aria-haspopup="true">

@@ -7,6 +7,9 @@
 <link rel="stylesheet" href="{{asset('css/base/plugins/forms/pickers/form-flat-pickr.css')}}">
 <link rel="stylesheet" href="{{asset('css/base/pages/app-invoice.css')}}">
 <style>
+  .dark-layout .modal .modal-content, .dark-layout .modal .modal-body, .dark-layout .modal .modal-footer {
+    background-color: unset !important;
+  }
   .nav-tabs {
     margin-bottom: 0 !important;
   }
@@ -923,6 +926,8 @@
 @endsection
 
 @php
+  $workOrder = is_array($workOrder ?? null) ? $workOrder : [];
+  $hasLoadedWorkOrder = !empty($workOrder);
   $invoiceNumber = $invoiceNumber ?? '';
   $invoiceNumberDisplay = $invoiceNumber;
   if (
@@ -983,6 +988,11 @@
   if ($workOrderRouteId === '') {
     $workOrderRouteId = trim((string) ($invoiceNumber ?? ''));
   }
+  $pageTitle = 'eNalog.app';
+  if ($hasLoadedWorkOrder) {
+    $titleIdentifier = $invoiceNumberDisplay !== '-' ? $invoiceNumberDisplay : $displayValue($workOrderRouteId);
+    $pageTitle = 'Radni nalog - ' . $titleIdentifier;
+  }
   $previewQrTarget = request()->getSchemeAndHttpHost() . route('app-invoice-preview', ['id' => $workOrderRouteId], false);
   $previewQrImage = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=' . urlencode($previewQrTarget);
   $workOrderHeaderHighlights = [];
@@ -1037,7 +1047,7 @@
   }
 @endphp
 
-@section('title', 'Radni nalog ' . ($invoiceNumberDisplay !== '' ? $invoiceNumberDisplay : '-'))
+@section('title', $pageTitle)
 
 @section('content')
 <section class="invoice-preview-wrapper">
@@ -1482,7 +1492,7 @@
       <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori">×</button>
       <div class="modal-header mb-1">
         <h5 class="modal-title">
-          <span class="align-middle">Pošalji fakturu</span>
+          <span class="align-middle">Pošalji fakturu (prijedlog implementacije)</span>
         </h5>
       </div>
       <div class="modal-body flex-grow-1">
