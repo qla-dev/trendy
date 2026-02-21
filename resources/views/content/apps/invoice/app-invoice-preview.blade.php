@@ -138,19 +138,75 @@
   .wo-chip-secondary,
   .wo-chip-slate,
   .wo-chip-orange { border-color: rgba(110, 107, 123, 0.35); background-color: rgba(110, 107, 123, 0.08); }
+  .wo-header-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.95rem;
+  }
+  .wo-header-brand-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .invoice-preview-wrapper .wo-header-brand-row .logo-wrapper {
+    margin-bottom: 0;
+  }
+  .invoice-preview-wrapper .wo-header-brand-row .wo-header-qr-block {
+    margin-left: auto;
+  }
+  .wo-header-details-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .wo-header-company-block {
+    flex: 1 1 320px;
+    min-width: 0;
+  }
   .wo-header-right-column {
     display: flex;
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-end;
+    margin-left: auto;
+    text-align: right;
+    flex: 0 1 auto;
   }
   .wo-header-main-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: flex-end;
+    gap: 0.75rem;
+  }
+  .wo-header-meta {
+    text-align: right;
+  }
+  .wo-header-meta .invoice-title {
+    text-align: right;
+  }
+  .wo-header-meta .invoice-title > span {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    word-break: keep-all;
+  }
+  .wo-header-meta .invoice-date-wrapper {
+    justify-content: flex-end;
+  }
+  .wo-header-meta .invoice-date-title {
+    min-width: 8rem;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .wo-header-meta .invoice-date {
+    white-space: nowrap;
   }
   .wo-header-qr-block {
     display: flex;
-    align-items: flex-end;
+    align-items: flex-start;
+    justify-content: flex-end;
   }
   .wo-preview-qr-image {
     width: 120px;
@@ -886,6 +942,12 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
+  @media (min-width: 1200px) {
+    .wo-preview-qr-image {
+      width: 108px;
+      height: 108px;
+    }
+  }
   @media (min-width: 768px) and (max-width: 1199.98px) {
     .invoice-actions .btn {
       font-size: 0.7rem;
@@ -893,30 +955,20 @@
     .invoice-preview-wrapper .logo-wrapper .invoice-logo {
       font-size: 1.25rem;
     }
-    .invoice-preview-wrapper .invoice-preview .invoice-spacing > .mt-2 {
-      margin-left: auto;
-      align-items: center !important;
-    }
-    .invoice-preview-wrapper .invoice-preview .invoice-spacing > .mt-2 > .me-2 {
-      margin-right: 0 !important;
-      text-align: right;
-    }
-    .invoice-preview-wrapper .invoice-preview .invoice-spacing > .mt-2 .invoice-title > span {
-      display: inline-flex;
+    .wo-header-details-row {
+      flex-direction: row;
       flex-wrap: nowrap;
-      white-space: nowrap;
-      word-break: keep-all;
+      gap: 0.9rem;
     }
-    .invoice-preview-wrapper .invoice-preview .invoice-spacing > .mt-2 .invoice-date-wrapper {
-      justify-content: flex-end;
+    .wo-header-company-block {
+      flex: 1 1 auto;
+      min-width: 0;
     }
-    .invoice-preview-wrapper .invoice-preview .invoice-spacing > .mt-2 .invoice-date-title {
-      min-width: 8rem;
-      text-align: right;
-      white-space: nowrap;
+    .wo-header-right-column {
+      flex: 0 0 auto;
     }
-    .invoice-preview-wrapper .invoice-preview .invoice-spacing > .mt-2 .invoice-date {
-      white-space: nowrap;
+    .wo-header-meta .invoice-date-title {
+      min-width: 7rem;
     }
     .wo-header-qr-block {
       display: none;
@@ -933,11 +985,14 @@
       position: static;
       top: auto;
     }
+    .wo-header-details-row {
+      gap: 0.75rem;
+    }
     .wo-header-right-column {
       width: 100%;
     }
     .wo-header-main-row {
-      justify-content: flex-start;
+      justify-content: flex-end;
     }
     .wo-header-chip-stack {
       min-width: 0;
@@ -1085,33 +1140,40 @@
       <div class="card invoice-preview-card">
         <div class="card-body invoice-padding pb-0">
           <!-- Header starts -->
-          <div class="d-flex justify-content-between flex-md-row flex-column invoice-spacing mt-0">
-            <div>
+          <div class="wo-header-shell invoice-spacing mt-0">
+            <div class="wo-header-brand-row">
               <div class="logo-wrapper">
                 <img src="{{ asset('/images/logo/TrendyCNC.png') }}" alt="Trendy d.o.o." width="50" height="auto" class="wo-brand-logo">
                 <h3 class="text-primary invoice-logo">eNalog.app</h3>
               </div>
-              <p class="card-text mb-25">Trendy d.o.o.</p>
-              <p class="card-text mb-25">Bratstvo 11, 72290, Novi Travnik, BiH</p>
-              <p class="card-text mb-0">+387 30 525 252</p>
-              <p class="card-text mb-0">info@trendy.ba</p>
-            </div>
-            <div class="mt-2 d-flex align-items-center justify-content-end">
-              <div class="me-2">
-                <h4 class="invoice-title">
-                  <span>RN<span class="invoice-number">{{ $invoiceNumberDisplay }}</span></span>
-                </h4>
-                <div class="invoice-date-wrapper">
-                  <p class="invoice-date-title">Datum izdavanja:</p>
-                  <p class="invoice-date">{{ $issueDate }}</p>
-                </div>
-                <div class="invoice-date-wrapper">
-                  <p class="invoice-date-title">Planirani start:</p>
-                  <p class="invoice-date">{{ $plannedStartDate }}</p>
-                </div>
-              </div>
               <div class="wo-header-qr-block">
                 <img src="{{ $previewQrImage }}" alt="QR Code" class="wo-preview-qr-image">
+              </div>
+            </div>
+            <div class="wo-header-details-row">
+              <div class="wo-header-company-block">
+                <p class="card-text mb-25">Trendy d.o.o.</p>
+                <p class="card-text mb-25">Bratstvo 11, 72290</p>
+                <p class="card-text mb-25">Novi Travnik, BiH</p>
+                <p class="card-text mb-0">+387 30 525 252</p>
+                <p class="card-text mb-0">info@trendy.ba</p>
+              </div>
+              <div class="wo-header-right-column">
+                <div class="wo-header-main-row">
+                  <div class="wo-header-meta">
+                    <h4 class="invoice-title">
+                      <span>RN<span class="invoice-number">{{ $invoiceNumberDisplay }}</span></span>
+                    </h4>
+                    <div class="invoice-date-wrapper">
+                      <p class="invoice-date-title">Datum izdavanja:</p>
+                      <p class="invoice-date">{{ $issueDate }}</p>
+                    </div>
+                    <div class="invoice-date-wrapper">
+                      <p class="invoice-date-title">Planirani start:</p>
+                      <p class="invoice-date">{{ $plannedStartDate }}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
