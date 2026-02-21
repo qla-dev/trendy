@@ -107,14 +107,14 @@
                   checked
                 />
                 <label class="form-check-label d-flex justify-content-between align-items-center" for="djelimicno-zakljucen">
-                  <span>Djelimicno zakljucen</span>
+                  <span>Djelimično zaključen</span>
                   <span class="calendar-filter-count" data-stat-key="djelimicno_zakljucen">0</span>
                 </label>
               </div>
               <div class="form-check form-check-danger">
                 <input type="checkbox" class="form-check-input input-filter" id="zakljucen" data-value="zakljucen" checked />
                 <label class="form-check-label d-flex justify-content-between align-items-center" for="zakljucen">
-                  <span>Zakljucen</span>
+                  <span>Zaključen</span>
                   <span class="calendar-filter-count" data-stat-key="zakljucen">0</span>
                 </label>
               </div>

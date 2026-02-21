@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="{{asset('css/base/plugins/forms/pickers/form-flat-pickr.css')}}">
 <link rel="stylesheet" href="{{asset('css/base/pages/app-invoice.css')}}">
 <style>
-  .dark-layout .modal .modal-content, .dark-layout .modal .modal-body, .dark-layout .modal .modal-footer {
+  #qr-scanner-modal .modal-body {
     background-color: unset !important;
   }
   .nav-tabs {
@@ -890,6 +890,34 @@
     .invoice-actions .btn {
       font-size: 0.7rem;
     }
+    .invoice-preview-wrapper .logo-wrapper .invoice-logo {
+      font-size: 1.25rem;
+    }
+    .invoice-preview-wrapper .invoice-preview .invoice-spacing > .mt-2 {
+      margin-left: auto;
+      align-items: center !important;
+    }
+    .invoice-preview-wrapper .invoice-preview .invoice-spacing > .mt-2 > .me-2 {
+      margin-right: 0 !important;
+      text-align: right;
+    }
+    .invoice-preview-wrapper .invoice-preview .invoice-spacing > .mt-2 .invoice-title > span {
+      display: inline-flex;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+      word-break: keep-all;
+    }
+    .invoice-preview-wrapper .invoice-preview .invoice-spacing > .mt-2 .invoice-date-wrapper {
+      justify-content: flex-end;
+    }
+    .invoice-preview-wrapper .invoice-preview .invoice-spacing > .mt-2 .invoice-date-title {
+      min-width: 8rem;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .invoice-preview-wrapper .invoice-preview .invoice-spacing > .mt-2 .invoice-date {
+      white-space: nowrap;
+    }
     .wo-header-qr-block {
       display: none;
     }
@@ -1455,11 +1483,11 @@
             <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Dodaj sirovinu
           </button>
           <div class="invoice-actions-divider"></div>
-          <button class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $statusToneClass }}" data-bs-toggle="modal" data-bs-target="#change-status-modal">
+          <button class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $statusToneClass }}" data-bs-toggle="modal" data-bs-target="#change-status-modal" @if (!$hasLoadedWorkOrder) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
             <i class="fa fa-circle-notch me-50"></i> Status: {{ $statusDisplayLabel }}
           </button>
-          <button class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $priorityToneClass }}" data-bs-toggle="modal" data-bs-target="#change-priority-modal">
-            {{ $priorityDisplayLabel }}
+          <button class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $priorityToneClass }}" data-bs-toggle="modal" data-bs-target="#change-priority-modal" @if (!$hasLoadedWorkOrder) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
+            {{ $priorityDisplayLabel === '-' ? 'Prioritet -' : $priorityDisplayLabel }}
           </button>
           <div class="invoice-actions-divider"></div>
           <button class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" onclick="alert('Uskoro')">
