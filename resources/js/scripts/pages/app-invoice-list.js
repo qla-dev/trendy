@@ -32,12 +32,12 @@ $(function () {
       kupac: $('#filter-kupac').val() || '',
       primatelj: $('#filter-primatelj').val() || '',
       proizvod: $('#filter-proizvod').val() || '',
-      plan_pocetak_od: $('#filter-plan-pocetak-od').val() || '',
-      plan_pocetak_do: $('#filter-plan-pocetak-do').val() || '',
-      plan_kraj_od: $('#filter-plan-kraj-od').val() || '',
-      plan_kraj_do: $('#filter-plan-kraj-do').val() || '',
-      datum_od: $('#filter-datum-od').val() || '',
-      datum_do: $('#filter-datum-do').val() || '',
+      plan_pocetak_od: formatDateForApi($('#filter-plan-pocetak-od').val() || ''),
+      plan_pocetak_do: formatDateForApi($('#filter-plan-pocetak-do').val() || ''),
+      plan_kraj_od: formatDateForApi($('#filter-plan-kraj-od').val() || ''),
+      plan_kraj_do: formatDateForApi($('#filter-plan-kraj-do').val() || ''),
+      datum_od: formatDateForApi($('#filter-datum-od').val() || ''),
+      datum_do: formatDateForApi($('#filter-datum-do').val() || ''),
       vezni_dok: $('#filter-vezni-dok').val() || ''
     };
   }
@@ -68,6 +68,137 @@ $(function () {
     datum_do: 'filter-datum-do',
     vezni_dok: 'filter-vezni-dok'
   };
+  var dateFilterKeys = [
+    'plan_pocetak_od',
+    'plan_pocetak_do',
+    'plan_kraj_od',
+    'plan_kraj_do',
+    'datum_od',
+    'datum_do'
+  ];
+  var bosnianDatePickerLocale = {
+    firstDayOfWeek: 1,
+    weekdays: {
+      shorthand: ['Ned', 'Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub'],
+      longhand: ['Nedjelja', 'Ponedjeljak', 'Utorak', 'Srijeda', 'Cetvrtak', 'Petak', 'Subota']
+    },
+    months: {
+      shorthand: ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec'],
+      longhand: [
+        'Januar',
+        'Februar',
+        'Mart',
+        'April',
+        'Maj',
+        'Juni',
+        'Juli',
+        'August',
+        'Septembar',
+        'Oktobar',
+        'Novembar',
+        'Decembar'
+      ]
+    }
+  };
+
+  function isDateFilterKey(filterKey) {
+    return dateFilterKeys.indexOf(filterKey) !== -1;
+  }
+
+  function formatDateForApi(value) {
+    var normalizedValue = (value || '').toString().trim();
+    var dotDateMatch;
+
+    if (!normalizedValue) {
+      return '';
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
+      return normalizedValue;
+    }
+
+    dotDateMatch = normalizedValue.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (dotDateMatch) {
+      return dotDateMatch[3] + '-' + dotDateMatch[2] + '-' + dotDateMatch[1];
+    }
+
+    return normalizedValue;
+  }
+
+  function formatDateForDisplay(value) {
+    var normalizedValue = (value || '').toString().trim();
+    var isoDateMatch;
+
+    if (!normalizedValue) {
+      return '';
+    }
+
+    isoDateMatch = normalizedValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoDateMatch) {
+      return isoDateMatch[3] + '.' + isoDateMatch[2] + '.' + isoDateMatch[1];
+    }
+
+    return normalizedValue;
+  }
+
+  function clearFilterInputByKey(filterKey) {
+    var inputId = filterInputIds[filterKey];
+    var inputElement;
+    var flatpickrInstance;
+
+    if (!inputId) {
+      return;
+    }
+
+    inputElement = document.getElementById(inputId);
+    if (!inputElement) {
+      return;
+    }
+
+    flatpickrInstance = inputElement._flatpickr;
+    if (flatpickrInstance) {
+      flatpickrInstance.clear();
+      return;
+    }
+
+    inputElement.value = '';
+  }
+
+  function initializeDateFilterPickers() {
+    if (typeof flatpickr === 'undefined') {
+      return;
+    }
+
+    dateFilterKeys.forEach(function (filterKey) {
+      var inputId = filterInputIds[filterKey];
+      var inputElement = inputId ? document.getElementById(inputId) : null;
+      var initialValue;
+      var pickerInstance;
+
+      if (!inputElement || inputElement._flatpickr) {
+        return;
+      }
+
+      initialValue = formatDateForApi(inputElement.value);
+      pickerInstance = flatpickr(inputElement, {
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'd.m.Y',
+        locale: bosnianDatePickerLocale,
+        disableMobile: true,
+        allowInput: false
+      });
+
+      inputElement.style.cursor = 'pointer';
+      if (pickerInstance.altInput) {
+        pickerInstance.altInput.style.cursor = 'pointer';
+      }
+
+      if (initialValue) {
+        pickerInstance.setDate(initialValue, false, 'Y-m-d');
+      }
+    });
+  }
 
   function getStatusFilterDisplayValue(statusKey) {
     var normalizedStatusKey = (statusKey || '').toString().trim();
@@ -608,7 +739,7 @@ $(function () {
         activeFilters.push({
           key: key,
           label: filterLabels[key] || key,
-          value: key === 'status' ? getStatusFilterDisplayValue(value) : value
+          value: key === 'status' ? getStatusFilterDisplayValue(value) : isDateFilterKey(key) ? formatDateForDisplay(value) : value
         });
       });
 
@@ -652,7 +783,7 @@ $(function () {
       }
 
       if (filterInputIds[filterKey]) {
-        $('#' + filterInputIds[filterKey]).val('');
+        clearFilterInputByKey(filterKey);
       }
     }
 
@@ -680,6 +811,7 @@ $(function () {
       setFiltersBodyVisibility(savedFiltersBodyVisibility === '1');
     }
 
+    initializeDateFilterPickers();
     renderActiveFilters();
 
     toggleFiltersBtn.on('click', function () {
@@ -705,7 +837,9 @@ $(function () {
     });
 
     $('#btn-delete-filter').on('click', function () {
-      $('.filter-input').val('');
+      Object.keys(filterInputIds).forEach(function (filterKey) {
+        clearFilterInputByKey(filterKey);
+      });
       currentStatusFilter = null;
       $('.status-card').removeClass('status-card-active');
       $('.status-card[data-status="svi"]').addClass('status-card-active');

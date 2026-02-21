@@ -6,10 +6,12 @@
 <link rel="stylesheet" href="{{asset('vendors/css/tables/datatable/dataTables.bootstrap5.min.css')}}">
 <link rel="stylesheet" href="{{asset('vendors/css/tables/datatable/extensions/dataTables.checkboxes.css')}}">
 <link rel="stylesheet" href="{{asset('vendors/css/tables/datatable/responsive.bootstrap5.min.css')}}">
+<link rel="stylesheet" href="{{asset('vendors/css/pickers/flatpickr/flatpickr.min.css')}}">
 @endsection
 
 @section('page-style')
 <link rel="stylesheet" href="{{asset('css/base/pages/app-invoice-list.css')}}">
+<link rel="stylesheet" href="{{asset('css/base/plugins/forms/pickers/form-flat-pickr.css')}}">
 <style>
   .content-header {
     margin-top: -6px;
@@ -133,7 +135,7 @@
           <label class="form-label">Plan. početak od</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="date" class="form-control filter-input" id="filter-plan-pocetak-od">
+            <input type="text" class="form-control filter-input filter-date-input" id="filter-plan-pocetak-od" placeholder="dd.mm.yyyy" autocomplete="off">
           </div>
         </div>
       </div>
@@ -142,28 +144,28 @@
           <label class="form-label">Plan. početak do</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="date" class="form-control filter-input" id="filter-plan-pocetak-do">
+            <input type="text" class="form-control filter-input filter-date-input" id="filter-plan-pocetak-do" placeholder="dd.mm.yyyy" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">
           <label class="form-label">Plan. kraj od</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="date" class="form-control filter-input" id="filter-plan-kraj-od">
+            <input type="text" class="form-control filter-input filter-date-input" id="filter-plan-kraj-od" placeholder="dd.mm.yyyy" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">
           <label class="form-label">Plan. kraj do</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="date" class="form-control filter-input" id="filter-plan-kraj-do">
+            <input type="text" class="form-control filter-input filter-date-input" id="filter-plan-kraj-do" placeholder="dd.mm.yyyy" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">
           <label class="form-label">Datum od</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="date" class="form-control filter-input" id="filter-datum-od">
+            <input type="text" class="form-control filter-input filter-date-input" id="filter-datum-od" placeholder="dd.mm.yyyy" autocomplete="off">
           </div>
         </div>
       </div>
@@ -172,7 +174,7 @@
           <label class="form-label">RN datum do</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="date" class="form-control filter-input" id="filter-datum-do">
+            <input type="text" class="form-control filter-input filter-date-input" id="filter-datum-do" placeholder="dd.mm.yyyy" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">
@@ -483,6 +485,14 @@
     font-size: 14px;
   }
 
+  .filter-date-input,
+  .filter-date-input.flatpickr-input,
+  .filter-date-input + .flatpickr-input,
+  .filter-date-input[readonly],
+  .flatpickr-input[readonly] {
+    cursor: pointer;
+  }
+
   .filter-header-actions {
     row-gap: 8px;
   }
@@ -700,6 +710,7 @@
 <script src="{{asset('vendors/js/tables/datatable/datatables.checkboxes.min.js')}}"></script>
 <script src="{{asset('vendors/js/tables/datatable/dataTables.responsive.min.js')}}"></script>
 <script src="{{asset('vendors/js/tables/datatable/responsive.bootstrap5.js')}}"></script>
+<script src="{{asset('vendors/js/pickers/flatpickr/flatpickr.min.js')}}"></script>
 @endsection
 
 @section('page-script')

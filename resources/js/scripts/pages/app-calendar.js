@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function () {
     'Maj',
     'Juni',
     'Juli',
-    'Avgust',
+    'August',
     'Septembar',
     'Oktobar',
     'Novembar',
