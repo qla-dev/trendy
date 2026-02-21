@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use App\Models\Sanctum\PersonalAccessToken;
 
 class AuthenticationController extends Controller
 {
@@ -53,7 +54,27 @@ class AuthenticationController extends Controller
         if (Auth::attempt($credentials, $remember)) {
             $request->session()->regenerate();
 
-            if (Auth::user() && Auth::user()->hasRole('user')) {
+            $user = Auth::user();
+
+            $existingTokenId = $request->session()->get('auth_token_id');
+            if ($existingTokenId) {
+                PersonalAccessToken::whereKey($existingTokenId)->delete();
+            }
+
+            $existingToken = $request->session()->get('auth_token');
+            if ($existingToken) {
+                $previousToken = PersonalAccessToken::findToken($existingToken);
+                if ($previousToken) {
+                    $previousToken->delete();
+                }
+            }
+
+            // Keep API auth in sync with web auth by issuing a Sanctum token.
+            $tokenResult = $user->createToken('auth_token');
+            $request->session()->put('auth_token', $tokenResult->plainTextToken);
+            $request->session()->put('auth_token_id', $tokenResult->accessToken->id);
+
+            if ($user && $user->hasRole('user')) {
                 return redirect()->intended(route('app-invoice-preview'));
             }
 
@@ -68,6 +89,28 @@ class AuthenticationController extends Controller
     // Handle Logout
     public function logout(Request $request)
     {
+        $tokenId = $request->session()->pull('auth_token_id');
+        if ($tokenId) {
+            PersonalAccessToken::whereKey($tokenId)->delete();
+        }
+
+        $plainTextToken = $request->session()->get('auth_token');
+        if ($plainTextToken) {
+            $currentToken = PersonalAccessToken::findToken($plainTextToken);
+            if ($currentToken) {
+                $currentToken->delete();
+            }
+            $request->session()->forget('auth_token');
+        }
+
+        $bearerToken = $request->bearerToken();
+        if ($bearerToken) {
+            $currentToken = PersonalAccessToken::findToken($bearerToken);
+            if ($currentToken) {
+                $currentToken->delete();
+            }
+        }
+
         Auth::logout();
         
         $request->session()->invalidate();
