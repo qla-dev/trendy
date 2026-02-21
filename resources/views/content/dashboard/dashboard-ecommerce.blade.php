@@ -275,7 +275,8 @@
 
     .dark-layout .dashboard-report-loader,
     .semi-dark-layout .dashboard-report-loader {
-      background: rgba(29, 37, 58, 0.76);
+      background: rgba(40, 48, 70, 0.92);
+      backdrop-filter: none;
     }
 
     .dark-layout .dashboard-workorders-table.table-hover tbody tr:hover > *,
@@ -313,6 +314,25 @@
       color: #fff;
       border-color: rgba(255, 255, 255, 0.7);
       background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .dark-layout #dashboard-report-year-toggle,
+    .semi-dark-layout #dashboard-report-year-toggle {
+      border-color: rgba(255, 255, 255, 0.8) !important;
+      color: #ffffff !important;
+    }
+
+    .dark-layout #dashboard-report-year-toggle:hover,
+    .dark-layout #dashboard-report-year-toggle:focus,
+    .dark-layout #dashboard-report-year-toggle:active,
+    .dark-layout #dashboard-report-year-toggle.show,
+    .semi-dark-layout #dashboard-report-year-toggle:hover,
+    .semi-dark-layout #dashboard-report-year-toggle:focus,
+    .semi-dark-layout #dashboard-report-year-toggle:active,
+    .semi-dark-layout #dashboard-report-year-toggle.show {
+      border-color: #ffffff !important;
+      color: #ffffff !important;
+      background-color: rgba(255, 255, 255, 0.08) !important;
     }
   </style>
 @endsection
