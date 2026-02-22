@@ -41,7 +41,8 @@ class AuthenticationController extends Controller
 
         $loginField = $request->input('email');
         $password = $request->input('password');
-        $remember = $request->has('remember');
+        // Default to persistent login so web auth survives long idle periods.
+        $remember = $request->boolean('remember', true);
 
         // Determine if login field is email or username
         $fieldType = filter_var($loginField, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
