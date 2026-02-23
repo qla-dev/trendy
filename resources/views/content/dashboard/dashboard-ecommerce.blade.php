@@ -177,17 +177,14 @@
       background-color: #f8f8fc;
     }
 
-    .dashboard-workorder-link {
-      color: #42526e;
-      font-weight: 700;
-      text-decoration: none;
-      white-space: nowrap;
+    .dashboard-workorders-table tbody tr.dashboard-workorder-row {
+      cursor: pointer;
     }
 
-    .dashboard-workorder-link:hover {
+    .dashboard-workorder-id {
       color: #42526e;
-      text-decoration: underline;
-      text-underline-offset: 2px;
+      font-weight: 700;
+      white-space: nowrap;
     }
 
     .dashboard-client-wrap {
@@ -373,8 +370,8 @@
       color: #fff !important;
     }
 
-    .dark-layout .dashboard-workorder-link,
-    .semi-dark-layout .dashboard-workorder-link {
+    .dark-layout .dashboard-workorder-id,
+    .semi-dark-layout .dashboard-workorder-id {
       color: #dce2f2;
     }
 
@@ -763,6 +760,7 @@
                     $statusText = trim((string) ($order->status ?? 'N/A'));
                     $normalizedStatus = mb_strtolower($statusText);
                     $statusClass = 'dashboard-status-default';
+                    $previewUrl = url('app/invoice/preview/' . $routeId);
                     if (str_contains($normalizedStatus, 'otvoren')) {
                       $statusClass = 'dashboard-status-otvoren';
                     } elseif (str_contains($normalizedStatus, 'u radu') || str_contains($normalizedStatus, 'u toku')) {
@@ -777,11 +775,11 @@
                       $statusClass = 'dashboard-status-planiran';
                     }
                   @endphp
-                  <tr>
+                  <tr class="dashboard-workorder-row" data-preview-url="{{ $previewUrl }}">
                     <td class="text-nowrap">
-                      <a href="{{ url('app/invoice/preview/' . $routeId) }}" class="dashboard-workorder-link">
+                      <span class="dashboard-workorder-id">
                         {{ $displayNumber !== '' ? $displayNumber : 'N/A' }}
-                      </a>
+                      </span>
                     </td>
                     <td>
                       <span class="dashboard-product-name" title="{{ $productName !== '' ? $productName : 'N/A' }}">
@@ -803,7 +801,7 @@
                       </span>
                     </td>
                     <td class="text-center">
-                      <a href="{{ url('app/invoice/preview/' . $routeId) }}" class="wo-eye-action" data-bs-toggle="tooltip" data-bs-placement="top" title="Pregled radnog naloga">
+                      <a href="{{ $previewUrl }}" class="wo-eye-action" data-bs-toggle="tooltip" data-bs-placement="top" title="Pregled radnog naloga">
                         <i data-feather="eye"></i>
                       </a>
                     </td>

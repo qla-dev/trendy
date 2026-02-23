@@ -57,6 +57,25 @@ $(window).on('load', function () {
   var goalOverviewChart;
   var isRtl = $('html').attr('data-textdirection') === 'rtl';
 
+  function shouldIgnoreRowNavigation(targetElement) {
+    return $(targetElement).closest('a, button, input, select, textarea, label, [role="button"], [data-bs-toggle]').length > 0;
+  }
+
+  $(document).on('click', '.dashboard-workorder-row[data-preview-url]', function (event) {
+    var previewUrl;
+
+    if (shouldIgnoreRowNavigation(event.target)) {
+      return;
+    }
+
+    previewUrl = $(this).attr('data-preview-url');
+    if (!previewUrl) {
+      return;
+    }
+
+    window.location.href = previewUrl;
+  });
+
   // On load Toast
   setTimeout(function () {
     toastr['success'](
@@ -744,8 +763,10 @@ $(window).on('load', function () {
       enabled: false
     }
   };
-  budgetChart = new ApexCharts($budgetChart, budgetChartOptions);
-  budgetChart.render();
+  if ($budgetChart) {
+    budgetChart = new ApexCharts($budgetChart, budgetChartOptions);
+    budgetChart.render();
+  }
 
   $('#dashboard-report-year-menu').on('click', '.dropdown-item[data-year]', function (event) {
     event.preventDefault();
@@ -809,8 +830,10 @@ $(window).on('load', function () {
       lineCap: 'round'
     }
   };
-  browserStatePrimaryChart = new ApexCharts($browserStateChartPrimary, browserStatePrimaryChartOptions);
-  browserStatePrimaryChart.render();
+  if ($browserStateChartPrimary) {
+    browserStatePrimaryChart = new ApexCharts($browserStateChartPrimary, browserStatePrimaryChartOptions);
+    browserStatePrimaryChart.render();
+  }
 
   // State Warning Chart
   browserStateWarningChartOptions = {
@@ -853,8 +876,10 @@ $(window).on('load', function () {
       lineCap: 'round'
     }
   };
-  browserStateWarningChart = new ApexCharts($browserStateChartWarning, browserStateWarningChartOptions);
-  browserStateWarningChart.render();
+  if ($browserStateChartWarning) {
+    browserStateWarningChart = new ApexCharts($browserStateChartWarning, browserStateWarningChartOptions);
+    browserStateWarningChart.render();
+  }
 
   // State Secondary Chart 1
   browserStateSecondaryChartOptions = {
@@ -897,8 +922,10 @@ $(window).on('load', function () {
       lineCap: 'round'
     }
   };
-  browserStateSecondaryChart = new ApexCharts($browserStateChartSecondary, browserStateSecondaryChartOptions);
-  browserStateSecondaryChart.render();
+  if ($browserStateChartSecondary) {
+    browserStateSecondaryChart = new ApexCharts($browserStateChartSecondary, browserStateSecondaryChartOptions);
+    browserStateSecondaryChart.render();
+  }
 
   // State Info Chart
   browserStateInfoChartOptions = {
@@ -941,8 +968,10 @@ $(window).on('load', function () {
       lineCap: 'round'
     }
   };
-  browserStateInfoChart = new ApexCharts($browserStateChartInfo, browserStateInfoChartOptions);
-  browserStateInfoChart.render();
+  if ($browserStateChartInfo) {
+    browserStateInfoChart = new ApexCharts($browserStateChartInfo, browserStateInfoChartOptions);
+    browserStateInfoChart.render();
+  }
 
   // State Danger Chart
   browserStateDangerChartOptions = {
@@ -985,8 +1014,10 @@ $(window).on('load', function () {
       lineCap: 'round'
     }
   };
-  browserStateDangerChart = new ApexCharts($browserStateChartDanger, browserStateDangerChartOptions);
-  browserStateDangerChart.render();
+  if ($browserStateChartDanger) {
+    browserStateDangerChart = new ApexCharts($browserStateChartDanger, browserStateDangerChartOptions);
+    browserStateDangerChart.render();
+  }
 
   //------------ Goal Overview Chart ------------
   //---------------------------------------------
@@ -1053,6 +1084,8 @@ $(window).on('load', function () {
       }
     }
   };
-  goalOverviewChart = new ApexCharts($goalOverviewChart, goalOverviewChartOptions);
-  goalOverviewChart.render();
+  if ($goalOverviewChart) {
+    goalOverviewChart = new ApexCharts($goalOverviewChart, goalOverviewChartOptions);
+    goalOverviewChart.render();
+  }
 });
