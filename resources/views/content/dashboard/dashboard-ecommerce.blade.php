@@ -87,6 +87,76 @@
       pointer-events: none;
     }
 
+    .dashboard-report-chart-shell #revenue-report-chart .apexcharts-tooltip {
+      display: none !important;
+    }
+
+    .dashboard-report-hover-box {
+      position: absolute;
+      z-index: 7;
+      min-width: 176px;
+      max-width: 240px;
+      padding: 0.55rem 0.65rem;
+      border-radius: 10px;
+      border: 1px solid #ebe9f1;
+      background: rgba(255, 255, 255, 0.97);
+      color: #5e5873;
+      box-shadow: 0 10px 24px rgba(34, 41, 47, 0.22);
+      pointer-events: none;
+      transition: opacity 0.12s ease, visibility 0.12s ease;
+    }
+
+    .dashboard-report-hover-box.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .dashboard-report-hover-title {
+      font-size: 0.86rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+      color: inherit;
+    }
+
+    .dashboard-report-hover-row {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.78rem;
+      line-height: 1.35;
+    }
+
+    .dashboard-report-hover-row + .dashboard-report-hover-row {
+      margin-top: 0.22rem;
+    }
+
+    .dashboard-report-hover-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+    }
+
+    .dashboard-report-hover-dot-current {
+      background: #ff9f43;
+    }
+
+    .dashboard-report-hover-dot-compare {
+      background: #b9b9c3;
+    }
+
+    .dashboard-report-hover-label {
+      color: #6e6b7b;
+      font-weight: 600;
+    }
+
+    .dashboard-report-hover-value {
+      margin-left: auto;
+      color: inherit;
+      font-weight: 700;
+      text-align: right;
+    }
+
     .dashboard-workorders-table > :not(:first-child) {
       border-top: 0 !important;
     }
@@ -277,6 +347,24 @@
     .semi-dark-layout .dashboard-report-loader {
       background: rgba(40, 48, 70, 0.92);
       backdrop-filter: none;
+    }
+
+    .dark-layout .dashboard-report-hover-box,
+    .semi-dark-layout .dashboard-report-hover-box {
+      border-color: rgba(186, 191, 221, 0.24);
+      background: rgba(40, 48, 70, 0.98);
+      color: #d7dbeb;
+      box-shadow: 0 10px 24px rgba(10, 14, 22, 0.45);
+    }
+
+    .dark-layout .dashboard-report-hover-label,
+    .semi-dark-layout .dashboard-report-hover-label {
+      color: #b4b7bd;
+    }
+
+    .dark-layout .dashboard-report-hover-dot-compare,
+    .semi-dark-layout .dashboard-report-hover-dot-compare {
+      background: #959cb2;
     }
 
     .dark-layout .dashboard-workorders-table.table-hover tbody tr:hover > *,
@@ -532,6 +620,7 @@
                 </div>
               </div>
               <div id="revenue-report-chart"></div>
+              <div id="dashboard-report-hover-box" class="dashboard-report-hover-box is-hidden" aria-hidden="true"></div>
             </div>
           </div>
           <div class="col-md-4 col-12 budget-wrapper pb-2 pb-md-0">

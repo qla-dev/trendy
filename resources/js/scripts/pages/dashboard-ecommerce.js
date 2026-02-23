@@ -330,6 +330,7 @@ $(window).on('load', function () {
     (dashboardRoot && dashboardRoot.getAttribute('data-default-compare-year')) || dashboardCurrentYear - 1
   );
   var $reportLoader = $('#dashboard-report-loader');
+  var $reportHoverBox = $('#dashboard-report-hover-box');
 
   if (!Number.isFinite(dashboardDefaultCompareYear) || dashboardDefaultCompareYear >= dashboardCurrentYear) {
     dashboardDefaultCompareYear = dashboardCurrentYear - 1;
@@ -356,6 +357,139 @@ $(window).on('load', function () {
     }
 
     return new Intl.NumberFormat('bs-BA', { maximumFractionDigits: 0 }).format(Math.round(normalized));
+  }
+
+  function hideReportHoverBox() {
+    if (!$reportHoverBox.length) {
+      return;
+    }
+
+    $reportHoverBox.addClass('is-hidden').attr('aria-hidden', 'true');
+  }
+
+  function resolveReportHoverMonthIndex(clientX) {
+    if (!$revenueReportChart) {
+      return -1;
+    }
+
+    var labelNodes = $revenueReportChart.querySelectorAll('.apexcharts-xaxis-label');
+
+    if (!labelNodes.length) {
+      return -1;
+    }
+
+    var nearestIndex = -1;
+    var nearestDistance = Number.POSITIVE_INFINITY;
+
+    Array.prototype.forEach.call(labelNodes, function (labelNode, labelIndex) {
+      var labelRect = labelNode.getBoundingClientRect();
+      var centerX = labelRect.left + labelRect.width / 2;
+      var distance = Math.abs(centerX - clientX);
+
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = labelIndex;
+      }
+    });
+
+    return nearestIndex >= 0 && nearestIndex < reportMonthLabels.length ? nearestIndex : -1;
+  }
+
+  function buildReportHoverBoxHtml(monthIndex) {
+    var monthLabel = reportMonthLabels[monthIndex];
+    var currentValue = Number(reportState.currentSeries[monthIndex]) || 0;
+    var compareValue = Number(reportState.compareSeries[monthIndex]) || 0;
+
+    return (
+      '<div class="dashboard-report-hover-title">' +
+      monthLabel +
+      '</div>' +
+      '<div class="dashboard-report-hover-row">' +
+      '<span class="dashboard-report-hover-dot dashboard-report-hover-dot-current"></span>' +
+      '<span class="dashboard-report-hover-label">' +
+      reportState.currentYear +
+      ':</span>' +
+      '<span class="dashboard-report-hover-value">' +
+      formatCountNumber(currentValue) +
+      ' naloga</span>' +
+      '</div>' +
+      '<div class="dashboard-report-hover-row">' +
+      '<span class="dashboard-report-hover-dot dashboard-report-hover-dot-compare"></span>' +
+      '<span class="dashboard-report-hover-label">' +
+      reportState.compareYear +
+      ':</span>' +
+      '<span class="dashboard-report-hover-value">' +
+      formatCountNumber(compareValue) +
+      ' naloga</span>' +
+      '</div>'
+    );
+  }
+
+  function showReportHoverBox(monthIndex, clientX, clientY) {
+    if (!$reportHoverBox.length || monthIndex < 0 || monthIndex >= reportMonthLabels.length) {
+      hideReportHoverBox();
+      return;
+    }
+
+    var shellRect = $revenueReportChart.getBoundingClientRect();
+    var nextLeft = clientX - shellRect.left + 14;
+    var nextTop = clientY - shellRect.top + 14;
+
+    $reportHoverBox.html(buildReportHoverBoxHtml(monthIndex)).removeClass('is-hidden').attr('aria-hidden', 'false');
+
+    var boxWidth = $reportHoverBox.outerWidth();
+    var boxHeight = $reportHoverBox.outerHeight();
+    var maxLeft = shellRect.width - boxWidth - 10;
+    var maxTop = shellRect.height - boxHeight - 10;
+
+    if (nextLeft > maxLeft) {
+      nextLeft = Math.max(10, clientX - shellRect.left - boxWidth - 14);
+    }
+    if (nextLeft < 10) {
+      nextLeft = 10;
+    }
+
+    if (nextTop > maxTop) {
+      nextTop = Math.max(10, clientY - shellRect.top - boxHeight - 14);
+    }
+    if (nextTop < 10) {
+      nextTop = 10;
+    }
+
+    $reportHoverBox.css({
+      left: nextLeft + 'px',
+      top: nextTop + 'px'
+    });
+  }
+
+  function bindReportHoverEvents() {
+    if (!$revenueReportChart || !$reportHoverBox.length) {
+      return;
+    }
+
+    var $reportChart = $($revenueReportChart);
+
+    $reportChart.off('.reportHoverBox');
+
+    $reportChart.on('mousemove.reportHoverBox', function (event) {
+      if ($reportLoader.length && !$reportLoader.hasClass('is-hidden')) {
+        hideReportHoverBox();
+        return;
+      }
+
+      var monthIndex = resolveReportHoverMonthIndex(event.clientX);
+
+      if (monthIndex < 0) {
+        hideReportHoverBox();
+        return;
+      }
+
+      showReportHoverBox(monthIndex, event.clientX, event.clientY);
+    });
+
+    $reportChart.on('mouseleave.reportHoverBox', function () {
+      hideReportHoverBox();
+    });
   }
 
   function emptyMonthlySeries() {
@@ -449,6 +583,10 @@ $(window).on('load', function () {
 
     if ($reportLoader.length) {
       $reportLoader.toggleClass('is-hidden', !isLoading);
+    }
+
+    if (isLoading) {
+      hideReportHoverBox();
     }
   }
 
@@ -565,17 +703,13 @@ $(window).on('load', function () {
       }
     },
     tooltip: {
-      shared: true,
-      intersect: false,
-      y: {
-        formatter: function (value) {
-          return formatCountNumber(Math.abs(value)) + ' naloga';
-        }
-      }
+      enabled: false
     }
   };
   revenueReportChart = new ApexCharts($revenueReportChart, revenueReportChartOptions);
-  revenueReportChart.render();
+  revenueReportChart.render().then(function () {
+    bindReportHoverEvents();
+  });
 
   //---------------- Budget Chart ----------------
   //----------------------------------------------
@@ -607,20 +741,7 @@ $(window).on('load', function () {
       }
     ],
     tooltip: {
-      enabled: true,
-      shared: true,
-      intersect: false,
-      x: {
-        formatter: function (value, context) {
-          var monthIndex = context && typeof context.dataPointIndex === 'number' ? context.dataPointIndex : -1;
-          return monthIndex >= 0 && monthIndex < reportMonthLabels.length ? reportMonthLabels[monthIndex] : value;
-        }
-      },
-      y: {
-        formatter: function (value) {
-          return formatCountNumber(value) + ' naloga';
-        }
-      }
+      enabled: false
     }
   };
   budgetChart = new ApexCharts($budgetChart, budgetChartOptions);
