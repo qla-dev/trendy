@@ -1,5 +1,10 @@
 @php
-  $currentPriority = $currentPriority ?? '';
+  $currentPriority = (string) ($currentPriority ?? '');
+  $currentPriorityCode = null;
+
+  if (preg_match('/^\s*(\d+)/', $currentPriority, $currentPriorityMatches) === 1) {
+    $currentPriorityCode = (int) ($currentPriorityMatches[1] ?? 0);
+  }
 @endphp
 
 <div class="modal fade" id="change-priority-modal" tabindex="-1" aria-labelledby="change-priority-modal-label" aria-hidden="true">
@@ -21,16 +26,25 @@
             ];
           @endphp
           @foreach($priorityOptions as $priorityOption)
-            <option value="{{ $priorityOption }}" {{ strcasecmp($currentPriority, $priorityOption) === 0 ? 'selected' : '' }}>
+            @php
+              $priorityOptionCode = null;
+              if (preg_match('/^\s*(\d+)/', $priorityOption, $priorityOptionMatches) === 1) {
+                $priorityOptionCode = (int) ($priorityOptionMatches[1] ?? 0);
+              }
+              $isPrioritySelected = $currentPriorityCode !== null
+                ? $currentPriorityCode === $priorityOptionCode
+                : strcasecmp($currentPriority, $priorityOption) === 0;
+            @endphp
+            <option value="{{ $priorityOption }}" {{ $isPrioritySelected ? 'selected' : '' }}>
               {{ $priorityOption }}
             </option>
           @endforeach
         </select>
-        <small class="text-muted d-block mt-75">Demo modal (frontend only). Backend update trenutno nije aktiviran.</small>
+        <small class="text-muted d-block mt-75">Odabir će biti sačuvan nakon potvrde.</small>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Otkaži</button>
-        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Sačuvaj</button>
+        <button type="button" class="btn btn-primary" id="wo-priority-save-btn" data-default-label="Sačuvaj">Sačuvaj</button>
       </div>
     </div>
   </div>

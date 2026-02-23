@@ -60,6 +60,8 @@ Route::middleware('auth:web')->group(function () {
         Route::get('kanban', [AppsController::class, 'kanbanApp'])->name('app-kanban');
         Route::get('invoice/list', [WorkOrderController::class, 'invoiceList'])->name('app-invoice-list');
         Route::get('invoice/preview/{id?}', [WorkOrderController::class, 'invoicePreview'])->name('app-invoice-preview');
+        Route::post('invoice/preview/{id}/status', [WorkOrderController::class, 'updateInvoiceStatus'])->name('app-invoice-update-status');
+        Route::post('invoice/preview/{id}/priority', [WorkOrderController::class, 'updateInvoicePriority'])->name('app-invoice-update-priority');
         Route::get('invoice/edit', [AppsController::class, 'invoice_edit'])->name('app-invoice-edit');
         Route::get('invoice/add', [AppsController::class, 'invoice_add'])->name('app-invoice-add');
         Route::get('invoice/print/{id?}', [WorkOrderController::class, 'invoicePrint'])->name('app-invoice-print');

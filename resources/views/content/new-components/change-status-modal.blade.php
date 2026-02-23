@@ -1,5 +1,24 @@
 @php
-  $currentStatus = $currentStatus ?? '';
+  $currentStatus = (string) ($currentStatus ?? '');
+  $normalizeStatus = static function (string $value): string {
+    $normalizedValue = strtolower(trim(\Illuminate\Support\Str::ascii($value)));
+    $normalizedValue = preg_replace('/\s+/', ' ', $normalizedValue);
+
+    return trim((string) $normalizedValue);
+  };
+  $normalizedCurrentStatus = $normalizeStatus($currentStatus);
+  $statusAliases = [
+    'novo' => 'planiran',
+    'u toku' => 'u radu',
+    'djelimicno zavrseno' => 'djelimicno zavrsen',
+    'djelimično završeno' => 'djelimicno zavrsen',
+    'zavrseno' => 'zavrsen',
+    'završeno' => 'zavrsen',
+  ];
+
+  if (array_key_exists($normalizedCurrentStatus, $statusAliases)) {
+    $normalizedCurrentStatus = (string) $statusAliases[$normalizedCurrentStatus];
+  }
 @endphp
 
 <div class="modal fade" id="change-status-modal" tabindex="-1" aria-labelledby="change-status-modal-label" aria-hidden="true">
@@ -24,16 +43,19 @@
             ];
           @endphp
           @foreach($statusOptions as $statusOption)
-            <option value="{{ $statusOption }}" {{ strcasecmp($currentStatus, $statusOption) === 0 ? 'selected' : '' }}>
+            @php
+              $normalizedOptionStatus = $normalizeStatus($statusOption);
+            @endphp
+            <option value="{{ $statusOption }}" {{ $normalizedCurrentStatus === $normalizedOptionStatus ? 'selected' : '' }}>
               {{ $statusOption }}
             </option>
           @endforeach
         </select>
-        <small class="text-muted d-block mt-75">Demo modal (frontend only). Backend update trenutno nije aktiviran.</small>
+        <small class="text-muted d-block mt-75">Odabir će biti sačuvan nakon potvrde.</small>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Otkaži</button>
-        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Sačuvaj</button>
+        <button type="button" class="btn btn-primary" id="wo-status-save-btn" data-default-label="Sačuvaj">Sačuvaj</button>
       </div>
     </div>
   </div>

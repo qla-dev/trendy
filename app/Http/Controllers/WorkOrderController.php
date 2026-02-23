@@ -9,6 +9,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Throwable;
 
 class WorkOrderController extends Controller
@@ -193,6 +194,183 @@ class WorkOrderController extends Controller
 
             return redirect()->route('app-invoice-list')
                 ->with('error', 'Greska pri ucitavanju print prikaza radnog naloga.');
+        }
+    }
+
+    public function updateInvoiceStatus(Request $request, string $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'status' => ['required', 'string', 'max:80'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravan status.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $selectedStatus = $this->normalizeStatusSelection((string) $validator->validated()['status']);
+
+        if ($selectedStatus === null) {
+            return response()->json([
+                'message' => 'Odabrani status nije podržan.',
+            ], 422);
+        }
+
+        try {
+            $row = $this->findWorkOrderRow($id);
+
+            if ($row === null) {
+                return response()->json([
+                    'message' => 'Radni nalog nije pronađen.',
+                ], 404);
+            }
+
+            $columns = $this->tableColumns();
+            $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF', 'acStatus', 'status']);
+
+            if ($statusColumn === null) {
+                return response()->json([
+                    'message' => 'Kolona za status nije pronađena.',
+                ], 500);
+            }
+
+            $resolvedStatusValue = $this->resolveStatusStorageValue($selectedStatus, $row, $statusColumn);
+            $updates = [$statusColumn => $resolvedStatusValue];
+
+            if ($this->rowAlreadyHasUpdates($row, $updates)) {
+                return response()->json([
+                    'message' => 'Status je već postavljen na odabranu vrijednost.',
+                    'data' => [
+                        'id' => $id,
+                        'status' => $selectedStatus,
+                        'changed' => false,
+                    ],
+                ]);
+            }
+
+            if (!$this->updateWorkOrderRow($row, $updates)) {
+                return response()->json([
+                    'message' => 'Status nije ažuriran.',
+                ], 500);
+            }
+
+            return response()->json([
+                'message' => 'Status je uspješno ažuriran.',
+                'data' => [
+                    'id' => $id,
+                    'status' => $selectedStatus,
+                    'changed' => true,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order status update failed.', [
+                'id' => $id,
+                'connection' => config('database.default'),
+                'table' => $this->qualifiedTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greška pri ažuriranju statusa.',
+            ], 500);
+        }
+    }
+
+    public function updateInvoicePriority(Request $request, string $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'priority' => ['required', 'string', 'max:120'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravan prioritet.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $priorityCode = $this->resolvePriorityCode((string) $validator->validated()['priority']);
+
+        if ($priorityCode === null) {
+            return response()->json([
+                'message' => 'Odabrani prioritet nije podržan.',
+            ], 422);
+        }
+
+        $priorityLabel = (string) ($this->deliveryPriorityMap()[$priorityCode] ?? '');
+
+        if ($priorityLabel === '') {
+            return response()->json([
+                'message' => 'Odabrani prioritet nije podržan.',
+            ], 422);
+        }
+
+        try {
+            $row = $this->findWorkOrderRow($id);
+
+            if ($row === null) {
+                return response()->json([
+                    'message' => 'Radni nalog nije pronađen.',
+                ], 404);
+            }
+
+            $columns = $this->tableColumns();
+            $priorityCodeColumn = $this->firstExistingColumn($columns, ['anPriority']);
+            $priorityTextColumn = $this->firstExistingColumn($columns, ['acPriority', 'priority']);
+            $updates = [];
+
+            if ($priorityCodeColumn !== null) {
+                $updates[$priorityCodeColumn] = $priorityCode;
+            } elseif ($priorityTextColumn !== null) {
+                $updates[$priorityTextColumn] = $priorityLabel;
+            }
+
+            if (empty($updates)) {
+                return response()->json([
+                    'message' => 'Kolona za prioritet nije pronađena.',
+                ], 500);
+            }
+
+            if ($this->rowAlreadyHasUpdates($row, $updates)) {
+                return response()->json([
+                    'message' => 'Prioritet je već postavljen na odabranu vrijednost.',
+                    'data' => [
+                        'id' => $id,
+                        'priority' => $priorityLabel,
+                        'priority_code' => $priorityCode,
+                        'changed' => false,
+                    ],
+                ]);
+            }
+
+            if (!$this->updateWorkOrderRow($row, $updates)) {
+                return response()->json([
+                    'message' => 'Prioritet nije ažuriran.',
+                ], 500);
+            }
+
+            return response()->json([
+                'message' => 'Prioritet je uspješno ažuriran.',
+                'data' => [
+                    'id' => $id,
+                    'priority' => $priorityLabel,
+                    'priority_code' => $priorityCode,
+                    'changed' => true,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order priority update failed.', [
+                'id' => $id,
+                'connection' => config('database.default'),
+                'table' => $this->qualifiedTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greška pri ažuriranju prioriteta.',
+            ], 500);
         }
     }
 
@@ -2213,6 +2391,109 @@ class WorkOrderController extends Controller
                 $query->orderByDesc($column);
             }
         }
+    }
+
+    private function normalizeStatusSelection(string $status): ?string
+    {
+        return match ($this->normalizeSearchValue($status)) {
+            'planiran', 'novo' => 'Planiran',
+            'otvoren' => 'Otvoren',
+            'rezerviran' => 'Rezerviran',
+            'raspisan' => 'Raspisan',
+            'u radu', 'u toku' => 'U radu',
+            'djelimicno zavrsen', 'djelimicno zavrseno' => 'Djelimično završen',
+            'zavrsen', 'zavrseno' => 'Završen',
+            default => null,
+        };
+    }
+
+    private function resolveStatusStorageValue(string $statusSelection, array $row, string $statusColumn): string
+    {
+        $statusCode = $this->statusCodeFromSelection($statusSelection);
+        $currentStatusValue = trim((string) ($row[$statusColumn] ?? ''));
+        $currentStatusIsCode = $currentStatusValue !== ''
+            && array_key_exists(strtoupper($currentStatusValue), $this->statusCodeMap());
+
+        if ($statusCode !== null && ($statusColumn === 'acStatusMF' || $statusColumn === 'acStatus' || $currentStatusIsCode)) {
+            return $statusCode;
+        }
+
+        return $statusSelection;
+    }
+
+    private function statusCodeFromSelection(string $statusSelection): ?string
+    {
+        return match ($this->normalizeSearchValue($statusSelection)) {
+            'planiran', 'novo' => 'N',
+            'otvoren' => 'O',
+            'raspisan' => 'D',
+            'u radu', 'u toku' => 'E',
+            'djelimicno zavrsen', 'djelimicno zavrseno' => 'R',
+            'zavrsen', 'zavrseno' => 'Z',
+            default => null,
+        };
+    }
+
+    private function rowAlreadyHasUpdates(array $row, array $updates): bool
+    {
+        foreach ($updates as $column => $value) {
+            if (!array_key_exists($column, $row)) {
+                return false;
+            }
+
+            if (!$this->updateValuesMatch($row[$column], $value)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function updateValuesMatch(mixed $currentValue, mixed $newValue): bool
+    {
+        if ($currentValue === null && $newValue === null) {
+            return true;
+        }
+
+        if (
+            (is_int($currentValue) || is_float($currentValue) || is_numeric((string) $currentValue))
+            && (is_int($newValue) || is_float($newValue) || is_numeric((string) $newValue))
+        ) {
+            return (float) $currentValue === (float) $newValue;
+        }
+
+        return trim((string) $currentValue) === trim((string) $newValue);
+    }
+
+    private function updateWorkOrderRow(array $row, array $updates): bool
+    {
+        if (empty($updates)) {
+            return false;
+        }
+
+        $query = $this->newTableQuery();
+        $hasIdentity = false;
+
+        foreach (['acRefNo1', 'acKey', 'anNo', 'id'] as $identityColumn) {
+            if (!array_key_exists($identityColumn, $row)) {
+                continue;
+            }
+
+            $identityValue = $row[$identityColumn];
+
+            if ($identityValue === null || (is_string($identityValue) && trim($identityValue) === '')) {
+                continue;
+            }
+
+            $query->where($identityColumn, $identityValue);
+            $hasIdentity = true;
+        }
+
+        if (!$hasIdentity) {
+            return false;
+        }
+
+        return $query->update($updates) > 0;
     }
 
     private function tableColumns(): array

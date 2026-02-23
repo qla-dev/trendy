@@ -2,6 +2,7 @@
 
 @section('vendor-style')
 <link rel="stylesheet" href="{{asset('vendors/css/pickers/flatpickr/flatpickr.min.css')}}">
+<link rel="stylesheet" href="{{asset('vendors/css/extensions/sweetalert2.min.css')}}">
 @endsection
 @section('page-style')
 <link rel="stylesheet" href="{{asset('css/base/plugins/forms/pickers/form-flat-pickr.css')}}">
@@ -886,6 +887,15 @@
   .semi-dark-layout .invoice-preview-wrapper .timeline-event h6 {
     color: #eef2fb !important;
   }
+  .swal2-popup.wo-swal-dark {
+    background: #283046 !important;
+    color: #d0d2d6 !important;
+  }
+  .swal2-popup.wo-swal-dark .swal2-title,
+  .swal2-popup.wo-swal-dark .swal2-html-container,
+  .swal2-popup.wo-swal-dark .swal2-content {
+    color: #d0d2d6 !important;
+  }
   .dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,
   .semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,
   body.dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,
@@ -1071,6 +1081,8 @@
   if ($workOrderRouteId === '') {
     $workOrderRouteId = trim((string) ($invoiceNumber ?? ''));
   }
+  $statusUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-update-status', ['id' => $workOrderRouteId]) : '';
+  $priorityUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-update-priority', ['id' => $workOrderRouteId]) : '';
   $pageTitle = 'eNalog.app';
   if ($hasLoadedWorkOrder) {
     $titleIdentifier = $invoiceNumberDisplay !== '-' ? $invoiceNumberDisplay : $displayValue($workOrderRouteId);
@@ -1545,11 +1557,11 @@
             <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Dodaj sirovinu
           </button>
           <div class="invoice-actions-divider"></div>
-          <button class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $statusToneClass }}" data-bs-toggle="modal" data-bs-target="#change-status-modal" @if (!$hasLoadedWorkOrder) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
-            <i class="fa fa-circle-notch me-50"></i> Status: {{ $statusDisplayLabel }}
+          <button id="wo-status-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $statusToneClass }}" data-bs-toggle="modal" data-bs-target="#change-status-modal" @if (!$hasLoadedWorkOrder) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
+            <i class="fa fa-circle-notch me-50"></i> Status: <span id="wo-status-label" class="ms-25">{{ $statusDisplayLabel }}</span>
           </button>
-          <button class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $priorityToneClass }}" data-bs-toggle="modal" data-bs-target="#change-priority-modal" @if (!$hasLoadedWorkOrder) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
-            {{ $priorityDisplayLabel === '-' ? 'Prioritet -' : $priorityDisplayLabel }}
+          <button id="wo-priority-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $priorityToneClass }}" data-bs-toggle="modal" data-bs-target="#change-priority-modal" @if (!$hasLoadedWorkOrder) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
+            <span id="wo-priority-label">{{ $priorityDisplayLabel === '-' ? 'Prioritet -' : $priorityDisplayLabel }}</span>
           </button>
           <div class="invoice-actions-divider"></div>
           <button class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" onclick="alert('Uskoro')">
@@ -1706,6 +1718,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 @section('vendor-script')
 <script src="{{asset('vendors/js/forms/repeater/jquery.repeater.min.js')}}"></script>
 <script src="{{asset('vendors/js/pickers/flatpickr/flatpickr.min.js')}}"></script>
+<script src="{{asset('vendors/js/extensions/sweetalert2.all.min.js')}}"></script>
 @endsection
 
 @section('page-script')
@@ -1714,6 +1727,22 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
   document.addEventListener('DOMContentLoaded', function () {
     var sidebar = document.querySelector('.invoice-preview-wrapper .invoice-actions');
     var progressBars = document.querySelectorAll('.wo-progress-bar[data-target]');
+    var mutationConfig = {
+      statusUrl: @json($statusUpdateUrl),
+      priorityUrl: @json($priorityUpdateUrl),
+      csrfToken: @json(csrf_token())
+    };
+    var toneClasses = ['primary', 'secondary', 'success', 'warning', 'danger', 'info'];
+    var statusSaveButton = document.getElementById('wo-status-save-btn');
+    var prioritySaveButton = document.getElementById('wo-priority-save-btn');
+    var statusSelect = document.getElementById('wo-status-select');
+    var prioritySelect = document.getElementById('wo-priority-select');
+    var statusLabel = document.getElementById('wo-status-label');
+    var priorityLabel = document.getElementById('wo-priority-label');
+    var statusTriggerButton = document.getElementById('wo-status-trigger-btn');
+    var priorityTriggerButton = document.getElementById('wo-priority-trigger-btn');
+    var statusModalElement = document.getElementById('change-status-modal');
+    var priorityModalElement = document.getElementById('change-priority-modal');
 
     var onScroll = function () {
       sidebar.classList.toggle('invoice-actions-scrolled', window.scrollY > 80);
@@ -1765,6 +1794,310 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         window.setTimeout(finalize, 520 + (index * 70));
       }
     });
+
+    function swalWithTheme(options) {
+      var resolvedOptions = Object.assign({}, options || {});
+      var htmlElement = document.documentElement;
+      var bodyElement = document.body;
+      var htmlDataLayout = (htmlElement.getAttribute('data-layout') || '').toLowerCase();
+      var isDarkTheme =
+        htmlElement.classList.contains('dark-layout') ||
+        htmlElement.classList.contains('semi-dark-layout') ||
+        bodyElement.classList.contains('dark-layout') ||
+        bodyElement.classList.contains('semi-dark-layout') ||
+        htmlDataLayout.indexOf('dark-layout') !== -1 ||
+        htmlDataLayout.indexOf('semi-dark-layout') !== -1;
+
+      if (!isDarkTheme) {
+        return resolvedOptions;
+      }
+
+      resolvedOptions.background = resolvedOptions.background || '#283046';
+      resolvedOptions.color = resolvedOptions.color || '#d0d2d6';
+      resolvedOptions.customClass = Object.assign({}, resolvedOptions.customClass || {});
+      resolvedOptions.customClass.popup = (
+        (resolvedOptions.customClass.popup || '') + ' wo-swal-dark'
+      ).trim();
+      var originalDidOpen = resolvedOptions.didOpen;
+      resolvedOptions.didOpen = function (popup) {
+        if (popup) {
+          popup.style.background = '#283046';
+          popup.style.color = '#d0d2d6';
+        }
+
+        if (typeof originalDidOpen === 'function') {
+          originalDidOpen(popup);
+        }
+      };
+
+      return resolvedOptions;
+    }
+
+    function setActionButtonLoading(button, isLoading) {
+      if (!button) {
+        return;
+      }
+
+      if (isLoading) {
+        if (!button.dataset.defaultLabel) {
+          button.dataset.defaultLabel = (button.textContent || '').trim();
+        }
+
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-50" role="status" aria-hidden="true"></span> Obrada';
+        return;
+      }
+
+      button.disabled = false;
+      button.textContent = button.dataset.defaultLabel || 'Sačuvaj';
+    }
+
+    function extractErrorMessage(payload, fallbackMessage) {
+      if (payload && typeof payload.message === 'string' && payload.message.trim() !== '') {
+        return payload.message.trim();
+      }
+
+      if (payload && payload.errors && typeof payload.errors === 'object') {
+        var firstKey = Object.keys(payload.errors)[0];
+        var firstError = firstKey && Array.isArray(payload.errors[firstKey]) ? payload.errors[firstKey][0] : '';
+
+        if (typeof firstError === 'string' && firstError.trim() !== '') {
+          return firstError.trim();
+        }
+      }
+
+      return fallbackMessage;
+    }
+
+    function requestMutation(url, payload, fallbackMessage) {
+      return fetch(url, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': mutationConfig.csrfToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(payload || {})
+      }).then(function (response) {
+        return response.json().catch(function () {
+          return {};
+        }).then(function (body) {
+          if (!response.ok) {
+            throw new Error(extractErrorMessage(body, fallbackMessage));
+          }
+
+          return body;
+        });
+      });
+    }
+
+    function updateSideButtonTone(button, resolvedTone) {
+      if (!button) {
+        return;
+      }
+
+      toneClasses.forEach(function (toneClass) {
+        button.classList.remove('wo-side-meta-btn-' + toneClass);
+      });
+      button.classList.add('wo-side-meta-btn-' + resolvedTone);
+    }
+
+    function resolveStatusToneClass(statusValue) {
+      var normalized = (statusValue || '').toString().trim().toLowerCase();
+
+      if (normalized.indexOf('otvoren') !== -1) {
+        return 'success';
+      }
+
+      if (normalized.indexOf('u radu') !== -1 || normalized.indexOf('u toku') !== -1) {
+        return 'warning';
+      }
+
+      if (normalized.indexOf('planiran') !== -1 || normalized.indexOf('novo') !== -1) {
+        return 'primary';
+      }
+
+      if (normalized.indexOf('rezerv') !== -1) {
+        return 'info';
+      }
+
+      if (normalized.indexOf('zavr') !== -1 || normalized.indexOf('zaklj') !== -1) {
+        return 'danger';
+      }
+
+      if (normalized.indexOf('djelimic') !== -1) {
+        return 'warning';
+      }
+
+      return 'secondary';
+    }
+
+    function resolvePriorityToneClass(priorityValue) {
+      var normalized = (priorityValue || '').toString().trim();
+      var codeMatch = normalized.match(/^\s*(\d+)/);
+      var code = codeMatch ? parseInt(codeMatch[1], 10) : 0;
+
+      if (code === 1) {
+        return 'danger';
+      }
+
+      if (code === 5) {
+        return 'warning';
+      }
+
+      if (code >= 10) {
+        return 'info';
+      }
+
+      return 'secondary';
+    }
+
+    function hideModal(modalElement) {
+      if (!modalElement || !window.bootstrap || !window.bootstrap.Modal) {
+        return;
+      }
+
+      window.bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+    }
+
+    if (statusSaveButton && statusSelect) {
+      statusSaveButton.addEventListener('click', function () {
+        var selectedStatus = (statusSelect.value || '').toString().trim();
+
+        if (!selectedStatus) {
+          return;
+        }
+
+        if (!mutationConfig.statusUrl) {
+          Swal.fire(swalWithTheme({
+            icon: 'error',
+            title: 'Nedostaje ruta',
+            text: 'Status endpoint nije dostupan.'
+          }));
+          return;
+        }
+
+        hideModal(statusModalElement);
+
+        Swal.fire(swalWithTheme({
+          title: 'Potvrda promjene statusa',
+          text: 'Novi status će biti: ' + selectedStatus,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: 'Sačuvaj',
+          cancelButtonText: 'Otkaži',
+          customClass: {
+            confirmButton: 'btn btn-primary',
+            cancelButton: 'btn btn-outline-secondary ms-1'
+          },
+          buttonsStyling: false
+        })).then(function (result) {
+          if (!result.isConfirmed) {
+            return;
+          }
+
+          setActionButtonLoading(statusSaveButton, true);
+
+          requestMutation(mutationConfig.statusUrl, { status: selectedStatus }, 'Ažuriranje statusa nije uspjelo.')
+            .then(function (response) {
+              var resolvedStatus = response && response.data && response.data.status ? response.data.status : selectedStatus;
+
+              if (statusLabel) {
+                statusLabel.textContent = resolvedStatus;
+              }
+
+              updateSideButtonTone(statusTriggerButton, resolveStatusToneClass(resolvedStatus));
+              hideModal(statusModalElement);
+
+              Swal.fire(swalWithTheme({
+                icon: 'success',
+                title: 'Status ažuriran',
+                text: response && response.message ? response.message : 'Status je uspješno ažuriran.'
+              }));
+            })
+            .catch(function (error) {
+              Swal.fire(swalWithTheme({
+                icon: 'error',
+                title: 'Greška',
+                text: error && error.message ? error.message : 'Ažuriranje statusa nije uspjelo.'
+              }));
+            })
+            .finally(function () {
+              setActionButtonLoading(statusSaveButton, false);
+            });
+        });
+      });
+    }
+
+    if (prioritySaveButton && prioritySelect) {
+      prioritySaveButton.addEventListener('click', function () {
+        var selectedPriority = (prioritySelect.value || '').toString().trim();
+
+        if (!selectedPriority) {
+          return;
+        }
+
+        if (!mutationConfig.priorityUrl) {
+          Swal.fire(swalWithTheme({
+            icon: 'error',
+            title: 'Nedostaje ruta',
+            text: 'Prioritet endpoint nije dostupan.'
+          }));
+          return;
+        }
+
+        hideModal(priorityModalElement);
+
+        Swal.fire(swalWithTheme({
+          title: 'Potvrda promjene prioriteta',
+          text: 'Novi prioritet će biti: ' + selectedPriority,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: 'Sačuvaj',
+          cancelButtonText: 'Otkaži',
+          customClass: {
+            confirmButton: 'btn btn-primary',
+            cancelButton: 'btn btn-outline-secondary ms-1'
+          },
+          buttonsStyling: false
+        })).then(function (result) {
+          if (!result.isConfirmed) {
+            return;
+          }
+
+          setActionButtonLoading(prioritySaveButton, true);
+
+          requestMutation(mutationConfig.priorityUrl, { priority: selectedPriority }, 'Ažuriranje prioriteta nije uspjelo.')
+            .then(function (response) {
+              var resolvedPriority = response && response.data && response.data.priority ? response.data.priority : selectedPriority;
+
+              if (priorityLabel) {
+                priorityLabel.textContent = resolvedPriority;
+              }
+
+              updateSideButtonTone(priorityTriggerButton, resolvePriorityToneClass(resolvedPriority));
+              hideModal(priorityModalElement);
+
+              Swal.fire(swalWithTheme({
+                icon: 'success',
+                title: 'Prioritet ažuriran',
+                text: response && response.message ? response.message : 'Prioritet je uspješno ažuriran.'
+              }));
+            })
+            .catch(function (error) {
+              Swal.fire(swalWithTheme({
+                icon: 'error',
+                title: 'Greška',
+                text: error && error.message ? error.message : 'Ažuriranje prioriteta nije uspjelo.'
+              }));
+            })
+            .finally(function () {
+              setActionButtonLoading(prioritySaveButton, false);
+            });
+        });
+      });
+    }
   });
 </script>
 {{-- Include QR Scanner Modals --}}
