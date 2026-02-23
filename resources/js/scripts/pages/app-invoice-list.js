@@ -399,6 +399,12 @@ $(function () {
     var tableLoadingRequestCount = 0;
     var searchDebounceTimer = null;
     var searchOverlaySafetyTimer = null;
+    var sortableColumnMap = {
+      2: 'klijent',
+      4: 'datum',
+      5: 'status',
+      6: 'prioritet'
+    };
     var quickSearchIdleLabel = 'Brza pretraga';
     var quickSearchLoadingLabel = 'Filterisanje';
     updateStatusCards(window.statusStats || {});
@@ -586,12 +592,21 @@ $(function () {
         beginTableLoadingRequest();
 
         var page = Math.floor(requestData.start / requestData.length) + 1;
+        var firstOrder = requestData.order && requestData.order.length ? requestData.order[0] : null;
+        var orderColumnIndex = firstOrder && firstOrder.column !== undefined ? parseInt(firstOrder.column, 10) : NaN;
+        var sortBy = Number.isInteger(orderColumnIndex) ? sortableColumnMap[orderColumnIndex] || '' : '';
         var params = getFilters(currentStatusFilter);
 
         params.page = page;
         params.limit = requestData.length || 10;
         params.draw = requestData.draw;
         params.search = requestData.search && requestData.search.value ? requestData.search.value : '';
+        params.sort_by = sortBy;
+        params.sort_dir = firstOrder && firstOrder.dir === 'asc' ? 'asc' : 'desc';
+
+        if (!sortBy) {
+          params.sort_dir = '';
+        }
 
         $.ajax({
           url: workOrdersApi,
@@ -638,6 +653,10 @@ $(function () {
         { data: '' }
       ],
       columnDefs: [
+        {
+          targets: [0, 1, 3, 7],
+          orderable: false
+        },
         {
           targets: 0,
           className: 'text-nowrap',
@@ -844,7 +863,9 @@ $(function () {
           }
         }
       ],
-      ordering: false,
+      ordering: true,
+      order: [[4, 'desc']],
+      orderMulti: false,
       dom:
         '<"row d-flex justify-content-between align-items-center m-1"' +
         '<"col-lg-6 d-flex align-items-center"l<"dt-action-buttons text-xl-end text-lg-start text-lg-end text-start "B>>' +

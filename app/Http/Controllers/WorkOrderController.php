@@ -216,7 +216,8 @@ class WorkOrderController extends Controller
             }
 
             $filters = $this->extractFilters($request);
-            $result = $this->fetchWorkOrders($limit, $page, $filters);
+            $sort = $this->extractSort($request);
+            $result = $this->fetchWorkOrders($limit, $page, $filters, $sort);
             $statusStats = $this->fetchStatusStats($filters);
 
             return response()->json([
@@ -332,7 +333,12 @@ class WorkOrderController extends Controller
         }
     }
 
-    private function fetchWorkOrders(?int $limit = null, ?int $page = null, array $filters = []): array
+    private function fetchWorkOrders(
+        ?int $limit = null,
+        ?int $page = null,
+        array $filters = [],
+        array $sort = []
+    ): array
     {
         $columns = $this->tableColumns();
         $moneyColumns = $this->monetaryColumns($columns);
@@ -345,7 +351,11 @@ class WorkOrderController extends Controller
         $this->applyFilters($query, $columns, $filters);
         $filteredTotal = (clone $query)->count();
         $hasMoneyValues = $this->hasMonetaryValues($query, $moneyColumns);
-        $this->applyDefaultOrdering($query, $columns);
+        $hasCustomOrdering = $this->applyRequestedOrdering($query, $columns, $sort);
+
+        if (!$hasCustomOrdering) {
+            $this->applyDefaultOrdering($query, $columns);
+        }
 
         $data = $query
             ->forPage($resolvedPage, $resolvedLimit)
@@ -1217,6 +1227,35 @@ class WorkOrderController extends Controller
         ];
     }
 
+    private function extractSort(Request $request): array
+    {
+        $sortBy = $this->normalizeSortColumnAlias((string) $request->input('sort_by', ''));
+        $sortDir = strtolower(trim((string) $request->input('sort_dir', 'desc')));
+
+        if (!in_array($sortDir, ['asc', 'desc'], true)) {
+            $sortDir = 'desc';
+        }
+
+        if ($sortBy === '') {
+            $orderColumnIndex = $request->input('order.0.column');
+            $orderDirection = strtolower(trim((string) $request->input('order.0.dir', '')));
+
+            if (in_array($orderDirection, ['asc', 'desc'], true)) {
+                $sortDir = $orderDirection;
+            }
+
+            if (is_numeric($orderColumnIndex)) {
+                $columnData = (string) $request->input('columns.' . ((int) $orderColumnIndex) . '.data', '');
+                $sortBy = $this->normalizeSortColumnAlias($columnData);
+            }
+        }
+
+        return [
+            'by' => $sortBy,
+            'dir' => $sortDir,
+        ];
+    }
+
     private function applyFilters(Builder $query, array $columns, array $filters): void
     {
         $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF']);
@@ -1815,6 +1854,113 @@ class WorkOrderController extends Controller
         }
 
         return $this->deliveryPriorityMap;
+    }
+
+    private function applyRequestedOrdering(Builder $query, array $columns, array $sort): bool
+    {
+        $sortBy = $this->normalizeSortColumnAlias((string) ($sort['by'] ?? ''));
+        $direction = strtolower((string) ($sort['dir'] ?? 'desc'));
+        $direction = in_array($direction, ['asc', 'desc'], true) ? $direction : 'desc';
+
+        if ($sortBy === '') {
+            return false;
+        }
+
+        if ($sortBy === 'klijent') {
+            return $this->applyOrderByFirstNonEmptyString(
+                $query,
+                $this->existingColumns($columns, ['acConsignee', 'acReceiver', 'client_name', 'acPartner']),
+                $direction
+            );
+        }
+
+        if ($sortBy === 'datum') {
+            $dateColumn = $this->firstExistingColumn($columns, ['adDate', 'adDateIns', 'created_at']);
+
+            if ($dateColumn === null) {
+                return false;
+            }
+
+            $query->orderBy($dateColumn, $direction);
+            return true;
+        }
+
+        if ($sortBy === 'status') {
+            $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF', 'acStatus']);
+
+            if ($statusColumn === null) {
+                return false;
+            }
+
+            if ($statusColumn === 'acStatusMF') {
+                $wrappedStatusColumn = $query->getGrammar()->wrap($statusColumn);
+                $caseParts = [];
+
+                foreach ($this->statusCodeMap() as $statusCode => $statusMeta) {
+                    $escapedCode = str_replace("'", "''", strtoupper((string) $statusCode));
+                    $escapedLabel = str_replace("'", "''", (string) ($statusMeta['label'] ?? $statusCode));
+                    $caseParts[] = "WHEN '" . $escapedCode . "' THEN '" . $escapedLabel . "'";
+                }
+
+                $query->orderByRaw(
+                    "CASE UPPER(COALESCE($wrappedStatusColumn, '')) " . implode(' ', $caseParts) . " ELSE COALESCE($wrappedStatusColumn, '') END $direction"
+                );
+
+                return true;
+            }
+
+            $query->orderBy($statusColumn, $direction);
+            return true;
+        }
+
+        if ($sortBy === 'prioritet') {
+            $priorityCodeColumn = $this->firstExistingColumn($columns, ['anPriority']);
+
+            if ($priorityCodeColumn !== null) {
+                $query->orderBy($priorityCodeColumn, $direction);
+                return true;
+            }
+
+            return $this->applyOrderByFirstNonEmptyString(
+                $query,
+                $this->existingColumns($columns, ['acPriority', 'acWayOfSale', 'priority']),
+                $direction
+            );
+        }
+
+        return false;
+    }
+
+    private function applyOrderByFirstNonEmptyString(Builder $query, array $candidateColumns, string $direction): bool
+    {
+        if (empty($candidateColumns)) {
+            return false;
+        }
+
+        $direction = strtolower($direction);
+        $direction = in_array($direction, ['asc', 'desc'], true) ? $direction : 'desc';
+        $grammar = $query->getGrammar();
+        $coalesceParts = array_map(function ($column) use ($grammar) {
+            $wrappedColumn = $grammar->wrap((string) $column);
+            return "NULLIF(LTRIM(RTRIM($wrappedColumn)), '')";
+        }, $candidateColumns);
+
+        $query->orderByRaw('COALESCE(' . implode(', ', $coalesceParts) . ') ' . $direction);
+
+        return true;
+    }
+
+    private function normalizeSortColumnAlias(string $sortBy): string
+    {
+        $normalized = strtolower(trim($sortBy));
+
+        return match ($normalized) {
+            'klijent', 'kupac', 'client' => 'klijent',
+            'datum', 'date', 'datum_kreiranja' => 'datum',
+            'status' => 'status',
+            'prioritet', 'priority' => 'prioritet',
+            default => '',
+        };
     }
 
     private function applyDefaultOrdering(Builder $query, array $columns): void
