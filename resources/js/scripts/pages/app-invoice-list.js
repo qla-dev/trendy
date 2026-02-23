@@ -1089,18 +1089,12 @@ $(function () {
         '<i data-feather="filter" class="me-50"></i> ' + (isVisible ? 'Sakrij filtere' : 'Pokaži filtere')
       );
       toggleFiltersBtn.attr('aria-expanded', isVisible ? 'true' : 'false');
-      localStorage.setItem('radniNaloziFiltersBodyVisible', isVisible ? '1' : '0');
       if (typeof feather !== 'undefined') {
         feather.replace();
       }
     }
 
-    var savedFiltersBodyVisibility = localStorage.getItem('radniNaloziFiltersBodyVisible');
-    if (savedFiltersBodyVisibility === null) {
-      setFiltersBodyVisibility(true);
-    } else {
-      setFiltersBodyVisibility(savedFiltersBodyVisibility === '1');
-    }
+    setFiltersBodyVisibility(false);
 
     initializeDateFilterPickers();
     renderActiveFilters();
