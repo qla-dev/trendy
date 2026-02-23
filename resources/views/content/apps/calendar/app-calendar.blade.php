@@ -58,13 +58,77 @@
               <span class="align-middle">Dodaj sastanak</span>
             </button>
           </div>
-          <div class="card-body pb-0">
+          <div class="card-body pb-0 pt-0">
             <h5 class="section-label mb-1">
-              <span class="align-middle">Filter statusa trenutnog prikaza kalendara</span>
+              <span class="align-middle">Filter prioriteta</span>
             </h5>
             <div class="form-check mb-1">
-              <input type="checkbox" class="form-check-input select-all" id="select-all" checked />
-              <label class="form-check-label d-flex justify-content-between align-items-center" for="select-all">
+              <input type="checkbox" class="form-check-input select-all-priority" id="select-all-priority" checked />
+              <label class="form-check-label d-flex justify-content-between align-items-center" for="select-all-priority">
+                <span>Svi</span>
+                <span class="calendar-priority-count" data-priority-key="svi">0</span>
+              </label>
+            </div>
+            <div class="calendar-priority-filter">
+              <div class="form-check form-check-danger mb-1">
+                <input
+                  type="checkbox"
+                  class="form-check-input input-filter-priority"
+                  id="priority-high"
+                  data-value="1"
+                  checked
+                />
+                <label class="form-check-label d-flex justify-content-between align-items-center" for="priority-high">
+                  <span>1 - Visoki prioritet</span>
+                  <span class="calendar-priority-count" data-priority-key="1">0</span>
+                </label>
+              </div>
+              <div class="form-check form-check-warning mb-1">
+                <input
+                  type="checkbox"
+                  class="form-check-input input-filter-priority"
+                  id="priority-normal"
+                  data-value="5"
+                  checked
+                />
+                <label class="form-check-label d-flex justify-content-between align-items-center" for="priority-normal">
+                  <span>5 - Uobič. prioritet</span>
+                  <span class="calendar-priority-count" data-priority-key="5">0</span>
+                </label>
+              </div>
+              <div class="form-check form-check-info mb-1">
+                <input
+                  type="checkbox"
+                  class="form-check-input input-filter-priority"
+                  id="priority-low"
+                  data-value="10"
+                  checked
+                />
+                <label class="form-check-label d-flex justify-content-between align-items-center" for="priority-low">
+                  <span>10 - Niski prioritet</span>
+                  <span class="calendar-priority-count" data-priority-key="10">0</span>
+                </label>
+              </div>
+              <div class="form-check form-check-secondary mb-2">
+                <input
+                  type="checkbox"
+                  class="form-check-input input-filter-priority"
+                  id="priority-samples"
+                  data-value="15"
+                  checked
+                />
+                <label class="form-check-label d-flex justify-content-between align-items-center" for="priority-samples">
+                  <span>15 - Uzorci</span>
+                  <span class="calendar-priority-count" data-priority-key="15">0</span>
+                </label>
+              </div>
+            </div>
+            <h5 class="section-label mb-1">
+              <span class="align-middle">Filter statusa</span>
+            </h5>
+            <div class="form-check mb-1">
+              <input type="checkbox" class="form-check-input select-all-status" id="select-all-status" checked />
+              <label class="form-check-label d-flex justify-content-between align-items-center" for="select-all-status">
                 <span>Svi</span>
                 <span class="calendar-filter-count" data-stat-key="svi">0</span>
               </label>
@@ -73,7 +137,7 @@
               <div class="form-check form-check-info mb-1">
                 <input
                   type="checkbox"
-                  class="form-check-input input-filter"
+                  class="form-check-input input-filter-status"
                   id="planiran"
                   data-value="planiran"
                   checked
@@ -86,7 +150,7 @@
               <div class="form-check form-check-success mb-1">
                 <input
                   type="checkbox"
-                  class="form-check-input input-filter"
+                  class="form-check-input input-filter-status"
                   id="otvoren"
                   data-value="otvoren"
                   checked
@@ -97,7 +161,7 @@
                 </label>
               </div>
               <div class="form-check form-check-warning mb-1">
-                <input type="checkbox" class="form-check-input input-filter" id="rezerviran" data-value="rezerviran" checked />
+                <input type="checkbox" class="form-check-input input-filter-status" id="rezerviran" data-value="rezerviran" checked />
                 <label class="form-check-label d-flex justify-content-between align-items-center" for="rezerviran">
                   <span>Rezerviran</span>
                   <span class="calendar-filter-count" data-stat-key="rezerviran">0</span>
@@ -106,7 +170,7 @@
               <div class="form-check form-check-primary mb-1">
                 <input
                   type="checkbox"
-                  class="form-check-input input-filter"
+                  class="form-check-input input-filter-status"
                   id="u-radu"
                   data-value="u_radu"
                   checked
@@ -119,7 +183,7 @@
               <div class="form-check form-check-warning mb-1">
                 <input
                   type="checkbox"
-                  class="form-check-input input-filter"
+                  class="form-check-input input-filter-status"
                   id="djelimicno-zakljucen"
                   data-value="djelimicno_zakljucen"
                   checked
@@ -130,7 +194,7 @@
                 </label>
               </div>
               <div class="form-check form-check-danger">
-                <input type="checkbox" class="form-check-input input-filter" id="zakljucen" data-value="zakljucen" checked />
+                <input type="checkbox" class="form-check-input input-filter-status" id="zakljucen" data-value="zakljucen" checked />
                 <label class="form-check-label d-flex justify-content-between align-items-center" for="zakljucen">
                   <span>Zaključen</span>
                   <span class="calendar-filter-count" data-stat-key="zakljucen">0</span>
@@ -143,7 +207,7 @@
           <img
             src="{{asset('images/pages/calendar-illustration.png')}}"
             alt="Calendar illustration"
-            class="img-fluid"
+            class="img-fluid" style="width:50%!important"
           />
         </div>
       </div>

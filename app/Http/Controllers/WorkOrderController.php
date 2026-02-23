@@ -285,10 +285,12 @@ class WorkOrderController extends Controller
             $startDate = $this->normalizeDateInput((string) $request->input('start', ''));
             $endDate = $this->normalizeDateInput((string) $request->input('end', ''));
             $statusBuckets = $this->normalizeCalendarStatuses($request->input('statuses', []));
+            $priorityCodes = $this->normalizeCalendarPriorities($request->input('priorities', []));
 
             return response()->json([
-                'data' => $this->fetchCalendarEvents($startDate, $endDate, $statusBuckets),
-                'statusStats' => $this->fetchCalendarStatusStats($startDate, $endDate),
+                'data' => $this->fetchCalendarEvents($startDate, $endDate, $statusBuckets, $priorityCodes),
+                'statusStats' => $this->fetchCalendarStatusStats($startDate, $endDate, $priorityCodes),
+                'priorityStats' => $this->fetchCalendarPriorityStats($startDate, $endDate, $statusBuckets),
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order API calendar query failed.', [
@@ -381,7 +383,7 @@ class WorkOrderController extends Controller
         ];
     }
 
-    private function fetchCalendarEvents(?string $startDate, ?string $endDate, array $statusBuckets): array
+    private function fetchCalendarEvents(?string $startDate, ?string $endDate, array $statusBuckets, array $priorityCodes = []): array
     {
         $columns = $this->tableColumns();
         $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF']);
@@ -399,6 +401,7 @@ class WorkOrderController extends Controller
         }
 
         $this->applyStatusBucketsFilter($query, $statusColumn, $statusBuckets);
+        $this->applyCalendarPriorityCodesFilter($query, $columns, $priorityCodes);
         $this->applyDefaultOrdering($query, $columns);
 
         return $query
@@ -426,6 +429,7 @@ class WorkOrderController extends Controller
                     'extendedProps' => [
                         'calendar' => $bucket,
                         'status' => $status,
+                        'priority' => (string) ($mappedRow['prioritet'] ?? ''),
                         'workOrderId' => $workOrderId,
                         'workOrderNumber' => (string) ($mappedRow['broj_naloga'] ?? $workOrderId),
                         'previewUrl' => route('app-invoice-preview', ['id' => $workOrderId]),
@@ -439,7 +443,7 @@ class WorkOrderController extends Controller
             ->all();
     }
 
-    private function fetchCalendarStatusStats(?string $startDate, ?string $endDate): array
+    private function fetchCalendarStatusStats(?string $startDate, ?string $endDate, array $priorityCodes = []): array
     {
         $stats = $this->emptyStatusStats();
         $columns = $this->tableColumns();
@@ -462,6 +466,7 @@ class WorkOrderController extends Controller
             }
         }
 
+        $this->applyCalendarPriorityCodesFilter($query, $columns, $priorityCodes);
         $stats['svi'] = (int) (clone $query)->count();
 
         $rows = (clone $query)
@@ -475,6 +480,72 @@ class WorkOrderController extends Controller
 
             if ($bucket !== null && array_key_exists($bucket, $stats)) {
                 $stats[$bucket] += (int) $row->total;
+            }
+        }
+
+        return $stats;
+    }
+
+    private function fetchCalendarPriorityStats(?string $startDate, ?string $endDate, array $statusBuckets = []): array
+    {
+        $stats = $this->emptyPriorityStats();
+        $columns = $this->tableColumns();
+        $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF']);
+        $dateColumn = $this->firstExistingColumn($columns, ['adDate', 'adDateIns']);
+        $priorityColumns = $this->existingColumns($columns, ['anPriority', 'acPriority', 'acWayOfSale', 'priority']);
+
+        if (empty($priorityColumns)) {
+            return $stats;
+        }
+
+        $query = $this->newTableQuery();
+
+        if ($dateColumn !== null) {
+            if ($startDate !== null) {
+                $query->whereDate($dateColumn, '>=', $startDate);
+            }
+
+            if ($endDate !== null) {
+                $query->whereDate($dateColumn, '<', $endDate);
+            }
+        }
+
+        $this->applyStatusBucketsFilter($query, $statusColumn, $statusBuckets);
+
+        $rows = $query
+            ->get($priorityColumns)
+            ->map(function ($row) use ($priorityColumns) {
+                $rowData = (array) $row;
+                $priorityValue = null;
+
+                foreach ($priorityColumns as $priorityColumn) {
+                    if (!array_key_exists($priorityColumn, $rowData)) {
+                        continue;
+                    }
+
+                    if ($rowData[$priorityColumn] === null || trim((string) $rowData[$priorityColumn]) === '') {
+                        continue;
+                    }
+
+                    $priorityValue = $rowData[$priorityColumn];
+                    break;
+                }
+
+                return $this->resolvePriorityCode($priorityValue);
+            })
+            ->all();
+
+        $stats['svi'] = count($rows);
+
+        foreach ($rows as $priorityCode) {
+            if ($priorityCode === null) {
+                continue;
+            }
+
+            $statKey = (string) $priorityCode;
+
+            if (array_key_exists($statKey, $stats)) {
+                $stats[$statKey]++;
             }
         }
 
@@ -587,6 +658,48 @@ class WorkOrderController extends Controller
         })));
     }
 
+    private function normalizeCalendarPriorities(mixed $priorities): array
+    {
+        $allowedCodes = $this->calendarPriorityCodes();
+
+        if (is_string($priorities)) {
+            $priorities = explode(',', $priorities);
+        }
+
+        if (!is_array($priorities) || empty($allowedCodes)) {
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach ($priorities as $priority) {
+            $priorityValue = trim((string) $priority);
+
+            if ($priorityValue === '') {
+                continue;
+            }
+
+            $matchedCodes = $this->priorityCodesForSearch($priorityValue);
+
+            if (empty($matchedCodes) && ctype_digit($priorityValue)) {
+                $matchedCodes = [(int) $priorityValue];
+            }
+
+            foreach ($matchedCodes as $matchedCode) {
+                $priorityCode = (int) $matchedCode;
+
+                if (in_array($priorityCode, $allowedCodes, true)) {
+                    $normalized[] = $priorityCode;
+                }
+            }
+        }
+
+        $normalized = array_values(array_unique($normalized));
+        sort($normalized);
+
+        return $normalized;
+    }
+
     private function applyStatusBucketsFilter(Builder $query, ?string $statusColumn, array $statusBuckets): void
     {
         if ($statusColumn === null || empty($statusBuckets)) {
@@ -606,6 +719,66 @@ class WorkOrderController extends Controller
         }
 
         $query->whereIn($statusColumn, $statusAliases);
+    }
+
+    private function applyCalendarPriorityCodesFilter(Builder $query, array $columns, array $priorityCodes): void
+    {
+        if (empty($priorityCodes)) {
+            return;
+        }
+
+        $priorityCodeColumn = $this->firstExistingColumn($columns, ['anPriority']);
+        $priorityTextColumns = $this->existingColumns($columns, ['acPriority', 'acWayOfSale', 'priority']);
+        $priorityCodes = array_values(array_unique(array_map(function ($priorityCode) {
+            return (int) $priorityCode;
+        }, $priorityCodes)));
+        $priorityLabels = [];
+
+        foreach ($priorityCodes as $priorityCode) {
+            $priorityLabel = trim((string) ($this->deliveryPriorityMap()[$priorityCode] ?? ''));
+
+            if ($priorityLabel !== '') {
+                $priorityLabels[] = $priorityLabel;
+            }
+        }
+
+        $priorityLabels = array_values(array_unique($priorityLabels));
+
+        if ($priorityCodeColumn === null && empty($priorityTextColumns)) {
+            return;
+        }
+
+        $query->where(function (Builder $priorityQuery) use ($priorityCodeColumn, $priorityCodes, $priorityTextColumns, $priorityLabels) {
+            $hasAnyClause = false;
+
+            if ($priorityCodeColumn !== null && !empty($priorityCodes)) {
+                $priorityQuery->where(function (Builder $codeQuery) use ($priorityCodeColumn, $priorityCodes) {
+                    $codeQuery->whereIn($priorityCodeColumn, $priorityCodes);
+
+                    if (in_array(5, $priorityCodes, true)) {
+                        $codeQuery->orWhereNull($priorityCodeColumn);
+                    }
+                });
+                $hasAnyClause = true;
+            }
+
+            if (!empty($priorityTextColumns) && !empty($priorityLabels)) {
+                foreach ($priorityTextColumns as $priorityTextColumn) {
+                    foreach ($priorityLabels as $priorityLabel) {
+                        if ($hasAnyClause) {
+                            $priorityQuery->orWhere($priorityTextColumn, 'like', '%' . $priorityLabel . '%');
+                        } else {
+                            $priorityQuery->where($priorityTextColumn, 'like', '%' . $priorityLabel . '%');
+                            $hasAnyClause = true;
+                        }
+                    }
+                }
+            }
+
+            if (!$hasAnyClause) {
+                $priorityQuery->whereRaw('1 = 0');
+            }
+        });
     }
 
     private function formatWorkOrderNumberForCalendar(string $workOrderNumber): string
@@ -1613,6 +1786,31 @@ class WorkOrderController extends Controller
         return array_values(array_unique($matchedCodes));
     }
 
+    private function resolvePriorityCode(mixed $priority): ?int
+    {
+        if ($priority === null || trim((string) $priority) === '') {
+            return array_key_exists(5, $this->deliveryPriorityMap()) ? 5 : null;
+        }
+
+        if (is_int($priority) || is_float($priority) || is_numeric((string) $priority)) {
+            return (int) $priority;
+        }
+
+        $priorityText = trim((string) $priority);
+
+        if (preg_match('/^\s*(\d+)/', $priorityText, $matches) === 1) {
+            return (int) ($matches[1] ?? 0);
+        }
+
+        $matchedCodes = $this->priorityCodesForSearch($priorityText);
+
+        if (!empty($matchedCodes)) {
+            return (int) ($matchedCodes[0] ?? 0);
+        }
+
+        return null;
+    }
+
     private function normalizeSearchValue(string $value): string
     {
         $normalized = Str::ascii(trim($value));
@@ -1650,6 +1848,31 @@ class WorkOrderController extends Controller
             'djelimicno_zakljucen' => 0,
             'zakljucen' => 0,
         ];
+    }
+
+    private function emptyPriorityStats(): array
+    {
+        $stats = ['svi' => 0];
+
+        foreach ($this->calendarPriorityCodes() as $priorityCode) {
+            $stats[(string) $priorityCode] = 0;
+        }
+
+        return $stats;
+    }
+
+    private function calendarPriorityCodes(): array
+    {
+        $codes = array_map(function ($priorityCode) {
+            return (int) $priorityCode;
+        }, array_keys($this->deliveryPriorityMap()));
+
+        $codes = array_values(array_unique(array_filter($codes, function ($priorityCode) {
+            return $priorityCode > 0;
+        })));
+        sort($codes);
+
+        return $codes;
     }
 
     private function statusCodeMap(): array

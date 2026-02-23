@@ -46,9 +46,12 @@ document.addEventListener('DOMContentLoaded', function () {
     eventGuests = $('#event-guests'),
     eventLocation = $('#event-location'),
     allDaySwitch = $('.allDay-switch'),
-    selectAll = $('.select-all'),
-    calEventFilter = $('.calendar-events-filter'),
-    filterInput = $('.input-filter'),
+    selectAllStatus = $('.select-all-status'),
+    statusFilterContainer = $('.calendar-events-filter'),
+    statusFilterInput = $('.input-filter-status'),
+    selectAllPriority = $('.select-all-priority'),
+    priorityFilterContainer = $('.calendar-priority-filter'),
+    priorityFilterInput = $('.input-filter-priority'),
     btnDeleteEvent = $('.btn-delete-event'),
     calendarEditor = $('#event-description-editor'),
     addMeetingBtn = $('.btn-add-meeting');
@@ -115,11 +118,35 @@ document.addEventListener('DOMContentLoaded', function () {
     return selected;
   }
 
+  function selectedPriorities() {
+    var selected = [];
+
+    $('.calendar-priority-filter input:checked').each(function () {
+      var value = $(this).attr('data-value');
+
+      if (value !== undefined && value !== null && value !== '') {
+        selected.push(String(value));
+      }
+    });
+
+    return selected;
+  }
+
   function updateStatusCounts(statusStats) {
     var resolvedStats = statusStats || {};
 
     $('.calendar-filter-count').each(function () {
       var statKey = $(this).data('stat-key');
+      var statValue = Object.prototype.hasOwnProperty.call(resolvedStats, statKey) ? resolvedStats[statKey] : 0;
+      $(this).text(statValue);
+    });
+  }
+
+  function updatePriorityCounts(priorityStats) {
+    var resolvedStats = priorityStats || {};
+
+    $('.calendar-priority-count').each(function () {
+      var statKey = String($(this).data('priority-key'));
       var statValue = Object.prototype.hasOwnProperty.call(resolvedStats, statKey) ? resolvedStats[statKey] : 0;
       $(this).text(statValue);
     });
@@ -226,7 +253,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function fetchEvents(fetchInfo, successCallback, failureCallback) {
     var activeStatuses = selectedStatuses();
-    var applyStatusFilter = !selectAll.prop('checked');
+    var activePriorities = selectedPriorities();
+    var applyStatusFilter = selectAllStatus.length ? !selectAllStatus.prop('checked') : false;
+    var applyPriorityFilter = selectAllPriority.length ? !selectAllPriority.prop('checked') : false;
     var requestData = {
       start: normalizeDateOnly(fetchInfo.start),
       end: normalizeDateOnly(fetchInfo.end)
@@ -236,6 +265,10 @@ document.addEventListener('DOMContentLoaded', function () {
       requestData.statuses = activeStatuses;
     }
 
+    if (applyPriorityFilter) {
+      requestData.priorities = activePriorities;
+    }
+
     $.ajax({
       url: workOrdersCalendarApi,
       method: 'GET',
@@ -243,6 +276,7 @@ document.addEventListener('DOMContentLoaded', function () {
       data: requestData,
       success: function (response) {
         updateStatusCounts(response.statusStats || {});
+        updatePriorityCounts(response.priorityStats || {});
 
         var calendarEvents = Array.isArray(response.data) ? response.data : [];
 
@@ -250,10 +284,15 @@ document.addEventListener('DOMContentLoaded', function () {
           calendarEvents = [];
         }
 
+        if (applyPriorityFilter && activePriorities.length === 0) {
+          calendarEvents = [];
+        }
+
         successCallback(calendarEvents);
       },
       error: function (xhr) {
         updateStatusCounts({});
+        updatePriorityCounts({});
         successCallback([]);
 
         if (typeof failureCallback === 'function') {
@@ -476,19 +515,37 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  if (selectAll.length) {
-    selectAll.on('change', function () {
+  if (selectAllStatus.length) {
+    selectAllStatus.on('change', function () {
       var self = $(this);
-      calEventFilter.find('input').prop('checked', self.prop('checked'));
+      statusFilterContainer.find('input').prop('checked', self.prop('checked'));
       calendar.refetchEvents();
     });
   }
 
-  if (filterInput.length) {
-    filterInput.on('change', function () {
-      $('.input-filter:checked').length < calEventFilter.find('input').length
-        ? selectAll.prop('checked', false)
-        : selectAll.prop('checked', true);
+  if (statusFilterInput.length) {
+    statusFilterInput.on('change', function () {
+      statusFilterInput.filter(':checked').length < statusFilterContainer.find('input').length
+        ? selectAllStatus.prop('checked', false)
+        : selectAllStatus.prop('checked', true);
+
+      calendar.refetchEvents();
+    });
+  }
+
+  if (selectAllPriority.length) {
+    selectAllPriority.on('change', function () {
+      var self = $(this);
+      priorityFilterContainer.find('input').prop('checked', self.prop('checked'));
+      calendar.refetchEvents();
+    });
+  }
+
+  if (priorityFilterInput.length) {
+    priorityFilterInput.on('change', function () {
+      priorityFilterInput.filter(':checked').length < priorityFilterContainer.find('input').length
+        ? selectAllPriority.prop('checked', false)
+        : selectAllPriority.prop('checked', true);
 
       calendar.refetchEvents();
     });
