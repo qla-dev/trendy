@@ -396,7 +396,185 @@ $(function () {
     var currentStatusFilter = null;
     var moneyColumnIndex = 3;
     var moneyColumnVisible = null;
+    var tableLoadingRequestCount = 0;
+    var searchDebounceTimer = null;
+    var searchOverlaySafetyTimer = null;
+    var quickSearchIdleLabel = 'Brza pretraga';
+    var quickSearchLoadingLabel = 'Filterisanje';
     updateStatusCards(window.statusStats || {});
+
+    function ensureQuickSearchHeaderLabel() {
+      var tableWrapper = dtInvoiceTable.closest('.dataTables_wrapper');
+      var searchLabel;
+      var searchInput;
+
+      if (!tableWrapper.length) {
+        tableWrapper = dtInvoiceTable.closest('.card-datatable').find('.dataTables_wrapper').first();
+      }
+
+      searchLabel = tableWrapper.find('div.dataTables_filter label').first();
+      searchInput = searchLabel.find('input').first();
+
+      if (!searchLabel.length || !searchInput.length) {
+        return null;
+      }
+
+      if (!searchLabel.find('.invoice-search-label-wrap').length) {
+        searchInput.detach();
+        searchLabel.empty().append(
+          '<span class="invoice-search-label-wrap">' +
+            '<span class="spinner-border spinner-border-sm invoice-search-header-spinner" role="status" aria-hidden="true"></span>' +
+            '<span class="invoice-search-header-label">' + quickSearchIdleLabel + '</span>' +
+          '</span>'
+        );
+        searchLabel.append(searchInput);
+      }
+
+      return searchLabel;
+    }
+
+    function setQuickSearchHeaderLoading(isLoading) {
+      var searchLabel = ensureQuickSearchHeaderLabel();
+      var isBusy = !!isLoading;
+
+      if (!searchLabel || !searchLabel.length) {
+        return;
+      }
+
+      searchLabel.toggleClass('is-filtering', isBusy);
+      searchLabel.find('.invoice-search-header-label').text(isBusy ? quickSearchLoadingLabel : quickSearchIdleLabel);
+      searchLabel
+        .find('.invoice-search-header-spinner')
+        .toggleClass('is-visible', isBusy)
+        .attr('aria-hidden', isBusy ? 'false' : 'true');
+    }
+
+    function ensureTableLoadingOverlay() {
+      var overlayHost = dtInvoiceTable.closest('.card-datatable');
+
+      if (!overlayHost.length) {
+        return null;
+      }
+
+      overlayHost.addClass('invoice-table-overlay-host');
+
+      var overlay = overlayHost.find('.invoice-table-loading-overlay').first();
+
+      if (overlay.length) {
+        return overlay;
+      }
+
+      overlayHost.append(
+        '<div class="invoice-table-loading-overlay" aria-hidden="true">' +
+          '<div class="invoice-table-loading-overlay-content">' +
+            '<div class="spinner-border invoice-table-loading-spinner" role="status" aria-hidden="true"></div>' +
+            '<div class="invoice-table-loading-message">Učitavanje rezultata</div>' +
+          '</div>' +
+        '</div>'
+      );
+
+      return overlayHost.find('.invoice-table-loading-overlay').first();
+    }
+
+    function updateTableLoadingOverlayBounds() {
+      var overlayHost = dtInvoiceTable.closest('.card-datatable');
+      var overlay = overlayHost.find('.invoice-table-loading-overlay').first();
+      var hostElement = overlayHost.get(0);
+      var bodyElement = dtInvoiceTable.find('tbody').get(0);
+      var top;
+      var left;
+      var width;
+      var height;
+      var hostRect;
+      var bodyRect;
+      var tableRect;
+      var headerHeight;
+
+      if (!overlay.length || !hostElement || !bodyElement) {
+        return;
+      }
+
+      hostRect = hostElement.getBoundingClientRect();
+      bodyRect = bodyElement.getBoundingClientRect();
+
+      top = bodyRect.top - hostRect.top;
+      left = bodyRect.left - hostRect.left;
+      width = bodyRect.width;
+      height = bodyRect.height;
+
+      if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
+        tableRect = dtInvoiceTable.get(0).getBoundingClientRect();
+        headerHeight = dtInvoiceTable.find('thead').outerHeight() || 0;
+        top = Math.max(0, tableRect.top - hostRect.top + headerHeight);
+        left = Math.max(0, tableRect.left - hostRect.left);
+        width = Math.max(0, tableRect.width);
+        height = Math.max(120, tableRect.height - headerHeight);
+      }
+
+      overlay.css({
+        top: Math.max(0, top) + 'px',
+        left: Math.max(0, left) + 'px',
+        width: Math.max(0, width) + 'px',
+        height: Math.max(120, height) + 'px'
+      });
+    }
+
+    function showTableLoadingOverlay() {
+      var overlay = ensureTableLoadingOverlay();
+
+      if (!overlay || !overlay.length) {
+        return;
+      }
+
+      updateTableLoadingOverlayBounds();
+      overlay.addClass('is-visible').attr('aria-hidden', 'false');
+      setQuickSearchHeaderLoading(true);
+    }
+
+    function hideTableLoadingOverlay(force) {
+      var overlayHost = dtInvoiceTable.closest('.card-datatable');
+      var overlay = overlayHost.find('.invoice-table-loading-overlay').first();
+
+      if (!overlay.length) {
+        return;
+      }
+
+      if (!force && tableLoadingRequestCount > 0) {
+        return;
+      }
+
+      overlay.removeClass('is-visible').attr('aria-hidden', 'true');
+      setQuickSearchHeaderLoading(false);
+    }
+
+    function beginTableLoadingRequest() {
+      tableLoadingRequestCount += 1;
+      showTableLoadingOverlay();
+    }
+
+    function finishTableLoadingRequest() {
+      tableLoadingRequestCount = Math.max(0, tableLoadingRequestCount - 1);
+
+      if (tableLoadingRequestCount === 0) {
+        hideTableLoadingOverlay(true);
+      }
+    }
+
+    function scheduleSearchOverlaySafetyHide() {
+      if (searchOverlaySafetyTimer) {
+        clearTimeout(searchOverlaySafetyTimer);
+      }
+
+      searchOverlaySafetyTimer = setTimeout(function () {
+        if (tableLoadingRequestCount === 0) {
+          hideTableLoadingOverlay(true);
+        }
+      }, 1000);
+    }
+
+    $(window).on('resize.invoiceTableOverlay', function () {
+      updateTableLoadingOverlayBounds();
+    });
 
     var dtInvoice = dtInvoiceTable.DataTable({
       processing: true,
@@ -405,6 +583,8 @@ $(function () {
       lengthMenu: [10, 25, 50],
       autoWidth: false,
       ajax: function (requestData, callback) {
+        beginTableLoadingRequest();
+
         var page = Math.floor(requestData.start / requestData.length) + 1;
         var params = getFilters(currentStatusFilter);
 
@@ -441,6 +621,9 @@ $(function () {
               recordsFiltered: 0,
               data: []
             });
+          },
+          complete: function () {
+            finishTableLoadingRequest();
           }
         });
       },
@@ -688,12 +871,74 @@ $(function () {
       buttons: [],
       responsive: false,
       initComplete: function () {
+        var tableApi = this.api();
+        var searchInput = $(tableApi.table().container()).find('div.dataTables_filter input');
+
+        ensureQuickSearchHeaderLabel();
+        setQuickSearchHeaderLoading(false);
+
+        searchInput.off('.DT');
+
+        searchInput.on('input.invoice-search', function () {
+          var searchValue = ($(this).val() || '').toString();
+
+          showTableLoadingOverlay();
+          scheduleSearchOverlaySafetyHide();
+
+          if (searchDebounceTimer) {
+            clearTimeout(searchDebounceTimer);
+          }
+
+          searchDebounceTimer = setTimeout(function () {
+            if (tableApi.search() === searchValue) {
+              if (tableLoadingRequestCount === 0) {
+                hideTableLoadingOverlay(true);
+              }
+
+              return;
+            }
+
+            tableApi.search(searchValue).draw();
+          }, 320);
+        });
+
+        searchInput.on('keydown.invoice-search', function (event) {
+          var searchValue;
+
+          if (event.key !== 'Enter') {
+            return;
+          }
+
+          event.preventDefault();
+          searchValue = ($(this).val() || '').toString();
+
+          if (searchDebounceTimer) {
+            clearTimeout(searchDebounceTimer);
+          }
+
+          showTableLoadingOverlay();
+
+          if (tableApi.search() === searchValue) {
+            if (tableLoadingRequestCount === 0) {
+              hideTableLoadingOverlay(true);
+            }
+
+            return;
+          }
+
+          tableApi.search(searchValue).draw();
+        });
+
         $(document).find('[data-bs-toggle="tooltip"]').tooltip();
         if (typeof feather !== 'undefined') {
           feather.replace();
         }
       },
       drawCallback: function () {
+        ensureQuickSearchHeaderLabel();
+        updateTableLoadingOverlayBounds();
+        hideTableLoadingOverlay();
+
         $(document).find('[data-bs-toggle="tooltip"]').tooltip();
         if (typeof feather !== 'undefined') {
           feather.replace();
@@ -808,7 +1053,12 @@ $(function () {
     }
 
     function applyFilters() {
+      if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer);
+      }
+
       renderActiveFilters();
+      showTableLoadingOverlay();
       dtInvoice.ajax.reload();
     }
 
