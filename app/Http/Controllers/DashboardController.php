@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -67,10 +68,13 @@ class DashboardController extends Controller
       }
 
       $query = DB::table($table);
+      $hasIdentifierOrdering = $this->applyLatestOrdersIdentifierOrdering($query, $columns);
 
-      foreach (['adTimeIns', 'adDate', 'anNo'] as $orderColumn) {
-        if (in_array($orderColumn, $columns, true)) {
-          $query->orderByDesc($orderColumn);
+      if (!$hasIdentifierOrdering) {
+        foreach (['adTimeIns', 'adDate', 'anNo'] as $orderColumn) {
+          if (in_array($orderColumn, $columns, true)) {
+            $query->orderByDesc($orderColumn);
+          }
         }
       }
 
@@ -122,6 +126,29 @@ class DashboardController extends Controller
     return (int) DB::table($table)
       ->selectRaw("COUNT(DISTINCT $expression) AS aggregate")
       ->value('aggregate');
+  }
+
+  private function applyLatestOrdersIdentifierOrdering(Builder $query, array $columns): bool
+  {
+    $identifierColumn = $this->resolveFirstExistingColumn($columns, ['acRefNo1', 'acKey', 'anNo', 'id']);
+
+    if ($identifierColumn === null) {
+      return false;
+    }
+
+    $wrappedColumn = $query->getGrammar()->wrap($identifierColumn);
+    $normalizedIdentifier = "REPLACE(REPLACE(REPLACE(COALESCE(CAST($wrappedColumn AS NVARCHAR(64)), ''), '-', ''), ' ', ''), '/', '')";
+    $prefixExpression = "TRY_CAST(CASE WHEN LEN($normalizedIdentifier) >= 2 THEN LEFT($normalizedIdentifier, 2) ELSE $normalizedIdentifier END AS INT)";
+    $suffixExpression = "TRY_CAST(CASE WHEN LEN($normalizedIdentifier) >= 6 THEN RIGHT($normalizedIdentifier, 6) ELSE $normalizedIdentifier END AS INT)";
+
+    // Keep dashboard list aligned with invoice # hierarchy (prefix + last sequence part).
+    $query->orderByRaw("CASE WHEN $prefixExpression IS NULL THEN 1 ELSE 0 END ASC");
+    $query->orderByRaw("$prefixExpression DESC");
+    $query->orderByRaw("CASE WHEN $suffixExpression IS NULL THEN 1 ELSE 0 END ASC");
+    $query->orderByRaw("$suffixExpression DESC");
+    $query->orderByRaw("$normalizedIdentifier DESC");
+
+    return true;
   }
 
   private function parseDate(mixed $value): ?Carbon

@@ -1866,23 +1866,16 @@ class WorkOrderController extends Controller
             return false;
         }
 
+        if ($sortBy === 'id') {
+            return $this->applyWorkOrderIdentifierOrdering($query, $columns, $direction);
+        }
+
         if ($sortBy === 'klijent') {
             return $this->applyOrderByFirstNonEmptyString(
                 $query,
                 $this->existingColumns($columns, ['acConsignee', 'acReceiver', 'client_name', 'acPartner']),
                 $direction
             );
-        }
-
-        if ($sortBy === 'datum') {
-            $dateColumn = $this->firstExistingColumn($columns, ['adDate', 'adDateIns', 'created_at']);
-
-            if ($dateColumn === null) {
-                return false;
-            }
-
-            $query->orderBy($dateColumn, $direction);
-            return true;
         }
 
         if ($sortBy === 'status') {
@@ -1950,13 +1943,38 @@ class WorkOrderController extends Controller
         return true;
     }
 
+    private function applyWorkOrderIdentifierOrdering(Builder $query, array $columns, string $direction): bool
+    {
+        $identifierColumn = $this->firstExistingColumn($columns, ['acRefNo1', 'acKey', 'anNo', 'id']);
+
+        if ($identifierColumn === null) {
+            return false;
+        }
+
+        $direction = strtolower($direction);
+        $direction = in_array($direction, ['asc', 'desc'], true) ? $direction : 'desc';
+        $wrappedColumn = $query->getGrammar()->wrap($identifierColumn);
+        $normalizedIdentifier = "REPLACE(REPLACE(REPLACE(COALESCE(CAST($wrappedColumn AS NVARCHAR(64)), ''), '-', ''), ' ', ''), '/', '')";
+        $prefixExpression = "TRY_CAST(CASE WHEN LEN($normalizedIdentifier) >= 2 THEN LEFT($normalizedIdentifier, 2) ELSE $normalizedIdentifier END AS INT)";
+        $suffixExpression = "TRY_CAST(CASE WHEN LEN($normalizedIdentifier) >= 6 THEN RIGHT($normalizedIdentifier, 6) ELSE $normalizedIdentifier END AS INT)";
+
+        // Hierarchical WO sorting: first prefix (e.g. 26), then sequence part (e.g. 001091).
+        $query->orderByRaw("CASE WHEN $prefixExpression IS NULL THEN 1 ELSE 0 END ASC");
+        $query->orderByRaw("$prefixExpression $direction");
+        $query->orderByRaw("CASE WHEN $suffixExpression IS NULL THEN 1 ELSE 0 END ASC");
+        $query->orderByRaw("$suffixExpression $direction");
+        $query->orderByRaw("$normalizedIdentifier $direction");
+
+        return true;
+    }
+
     private function normalizeSortColumnAlias(string $sortBy): string
     {
         $normalized = strtolower(trim($sortBy));
 
         return match ($normalized) {
+            'id', '#', 'broj', 'broj_naloga', 'work_order_number' => 'id',
             'klijent', 'kupac', 'client' => 'klijent',
-            'datum', 'date', 'datum_kreiranja' => 'datum',
             'status' => 'status',
             'prioritet', 'priority' => 'prioritet',
             default => '',

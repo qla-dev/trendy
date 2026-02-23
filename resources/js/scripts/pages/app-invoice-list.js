@@ -400,8 +400,8 @@ $(function () {
     var searchDebounceTimer = null;
     var searchOverlaySafetyTimer = null;
     var sortableColumnMap = {
+      0: 'id',
       2: 'klijent',
-      4: 'datum',
       5: 'status',
       6: 'prioritet'
     };
@@ -654,13 +654,14 @@ $(function () {
       ],
       columnDefs: [
         {
-          targets: [0, 1, 3, 7],
+          targets: [1, 3, 4, 7],
           orderable: false
         },
         {
           targets: 0,
           className: 'text-nowrap',
           width: '140px',
+          orderSequence: ['desc', 'asc'],
           type: 'num',
           render: function (data, type, full) {
             var routeId = full['id'] || full['broj_naloga'];
@@ -864,7 +865,7 @@ $(function () {
         }
       ],
       ordering: true,
-      order: [[4, 'desc']],
+      order: [[0, 'desc']],
       orderMulti: false,
       dom:
         '<"row d-flex justify-content-between align-items-center m-1"' +
