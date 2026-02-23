@@ -38,7 +38,8 @@ $(function () {
       plan_kraj_do: formatDateForApi($('#filter-plan-kraj-do').val() || ''),
       datum_od: formatDateForApi($('#filter-datum-od').val() || ''),
       datum_do: formatDateForApi($('#filter-datum-do').val() || ''),
-      vezni_dok: $('#filter-vezni-dok').val() || ''
+      vezni_dok: $('#filter-vezni-dok').val() || '',
+      prioritet: $('#filter-prioritet').val() || ''
     };
   }
 
@@ -53,7 +54,8 @@ $(function () {
     plan_kraj_do: 'Plan. kraj do',
     datum_od: 'Datum od',
     datum_do: 'RN datum do',
-    vezni_dok: 'Vezni dok.'
+    vezni_dok: 'Vezni dok.',
+    prioritet: 'Prioritet'
   };
 
   var filterInputIds = {
@@ -66,7 +68,8 @@ $(function () {
     plan_kraj_do: 'filter-plan-kraj-do',
     datum_od: 'filter-datum-od',
     datum_do: 'filter-datum-do',
-    vezni_dok: 'filter-vezni-dok'
+    vezni_dok: 'filter-vezni-dok',
+    prioritet: 'filter-prioritet'
   };
   var dateFilterKeys = [
     'plan_pocetak_od',
@@ -209,6 +212,16 @@ $(function () {
     }
 
     return normalizedStatusKey.replace(/_/g, ' ');
+  }
+
+  function getPriorityFilterDisplayValue(priorityValue) {
+    var normalizedPriorityValue = (priorityValue || '').toString().trim();
+    var priorityLabel = $('#filter-prioritet option[value="' + normalizedPriorityValue + '"]')
+      .first()
+      .text()
+      .trim();
+
+    return priorityLabel || normalizedPriorityValue;
   }
 
   function escapeHtml(value) {
@@ -739,7 +752,14 @@ $(function () {
         activeFilters.push({
           key: key,
           label: filterLabels[key] || key,
-          value: key === 'status' ? getStatusFilterDisplayValue(value) : isDateFilterKey(key) ? formatDateForDisplay(value) : value
+          value:
+            key === 'status'
+              ? getStatusFilterDisplayValue(value)
+              : key === 'prioritet'
+                ? getPriorityFilterDisplayValue(value)
+                : isDateFilterKey(key)
+                  ? formatDateForDisplay(value)
+                  : value
         });
       });
 

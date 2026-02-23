@@ -185,6 +185,14 @@
           </div>
         </div>
         <div class="col-md-3">
+          <label class="form-label">Prioritet</label>
+          <select class="form-select filter-input" id="filter-prioritet">
+            <option value="">Svi prioriteti</option>
+            <option value="1">1 - Visoki prioritet</option>
+            <option value="5">5 - Uobičajeni prioritet</option>
+            <option value="10">10 - Niski prioritet</option>
+            <option value="15">15 - Uzorci</option>
+          </select>
         </div>
         <div class="col-md-3 d-flex align-items-end">
           <button type="button" class="btn btn-primary w-100" id="btn-filter">

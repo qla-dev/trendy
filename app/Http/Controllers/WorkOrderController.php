@@ -6,6 +6,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -1211,6 +1212,7 @@ class WorkOrderController extends Controller
             'datum_od' => trim((string) $request->input('datum_od', '')),
             'datum_do' => trim((string) $request->input('datum_do', '')),
             'vezni_dok' => trim((string) $request->input('vezni_dok', '')),
+            'prioritet' => trim((string) $request->input('prioritet', '')),
             'search' => is_string($rawSearch) ? trim($rawSearch) : '',
         ];
     }
@@ -1247,6 +1249,12 @@ class WorkOrderController extends Controller
             (string) ($filters['vezni_dok'] ?? '')
         );
 
+        $this->applyPriorityFilter(
+            $query,
+            $this->existingColumns($columns, ['anPriority', 'acPriority', 'acWayOfSale', 'priority']),
+            (string) ($filters['prioritet'] ?? '')
+        );
+
         $startDateColumn = $this->firstExistingColumn($columns, ['adDate', 'adDateIns']);
         $endDateColumn = $this->firstExistingColumn($columns, ['adDeliveryDeadline', 'adDateOut']);
 
@@ -1272,11 +1280,7 @@ class WorkOrderController extends Controller
         $search = (string) ($filters['search'] ?? '');
 
         if ($search !== '') {
-            $this->applyLikeAny(
-                $query,
-                $this->existingColumns($columns, ['acRefNo1', 'acKey', 'acConsignee', 'acReceiver', 'acNote', 'acStatement', 'acDescr', 'acStatus']),
-                $search
-            );
+            $this->applyQuickSearchFilter($query, $columns, $search);
         }
     }
 
@@ -1299,6 +1303,70 @@ class WorkOrderController extends Controller
 
         $query->where(function (Builder $statusQuery) use ($column, $statusAliases) {
             $statusQuery->whereIn($column, $statusAliases);
+        });
+    }
+
+    private function applyPriorityFilter(Builder $query, array $columns, string $priorityFilter): void
+    {
+        $priorityFilter = trim($priorityFilter);
+
+        if ($priorityFilter === '' || empty($columns)) {
+            return;
+        }
+
+        $priorityCodes = $this->priorityCodesForSearch($priorityFilter);
+        $priorityLabels = [];
+
+        foreach ($priorityCodes as $priorityCode) {
+            $priorityLabel = trim((string) ($this->deliveryPriorityMap()[$priorityCode] ?? ''));
+
+            if ($priorityLabel !== '') {
+                $priorityLabels[] = $priorityLabel;
+            }
+        }
+
+        $isNumericFilter = ctype_digit($priorityFilter);
+        $searchValues = array_values(array_unique(array_filter(
+            array_merge(
+                (!$isNumericFilter || empty($priorityLabels)) ? [$priorityFilter] : [],
+                $priorityLabels
+            ),
+            function ($value) {
+                return trim((string) $value) !== '';
+            }
+        )));
+
+        $query->where(function (Builder $priorityQuery) use ($columns, $priorityCodes, $searchValues) {
+            $hasAnyClause = false;
+
+            foreach ($columns as $column) {
+                if ($column === 'anPriority') {
+                    if (!empty($priorityCodes)) {
+                        if ($hasAnyClause) {
+                            $priorityQuery->orWhereIn($column, $priorityCodes);
+                        } else {
+                            $priorityQuery->whereIn($column, $priorityCodes);
+                            $hasAnyClause = true;
+                        }
+                    }
+
+                    continue;
+                }
+
+                foreach ($searchValues as $searchValue) {
+                    if ($hasAnyClause) {
+                        $priorityQuery->orWhere($column, 'like', '%' . $searchValue . '%');
+                        continue;
+                    }
+
+                    $priorityQuery->where($column, 'like', '%' . $searchValue . '%');
+                    $hasAnyClause = true;
+                }
+            }
+
+            if (!$hasAnyClause) {
+                $priorityQuery->whereRaw('1 = 0');
+            }
         });
     }
 
@@ -1338,6 +1406,181 @@ class WorkOrderController extends Controller
                 $textQuery->orWhere($column, 'like', '%' . $value . '%');
             }
         });
+    }
+
+    private function applyQuickSearchFilter(Builder $query, array $columns, string $search): void
+    {
+        $search = trim($search);
+
+        if ($search === '') {
+            return;
+        }
+
+        $searchColumns = $this->existingColumns($columns, [
+            'acRefNo1',
+            'acKey',
+            'acConsignee',
+            'acReceiver',
+            'acPartner',
+            'acNote',
+            'acStatement',
+            'acDescr',
+            'acName',
+            'title',
+            'acStatusMF',
+            'acStatus',
+            'acPriority',
+            'acWayOfSale',
+            'priority',
+        ]);
+        $statusColumn = $this->firstExistingColumn($columns, ['acStatusMF', 'acStatus']);
+        $priorityCodeColumns = $this->existingColumns($columns, ['anPriority']);
+        $statusAliases = $this->statusAliasesForSearch($search);
+        $priorityCodes = $this->priorityCodesForSearch($search);
+        $searchVariants = $this->searchVariants($search);
+
+        $query->where(function (Builder $searchQuery) use (
+            $searchColumns,
+            $statusColumn,
+            $statusAliases,
+            $priorityCodeColumns,
+            $priorityCodes,
+            $searchVariants
+        ) {
+            $hasAnyClause = false;
+
+            foreach ($searchVariants as $variant) {
+                if ($variant === '') {
+                    continue;
+                }
+
+                foreach ($searchColumns as $column) {
+                    if ($hasAnyClause) {
+                        $searchQuery->orWhere($column, 'like', '%' . $variant . '%');
+                        continue;
+                    }
+
+                    $searchQuery->where($column, 'like', '%' . $variant . '%');
+                    $hasAnyClause = true;
+                }
+            }
+
+            if ($statusColumn !== null && !empty($statusAliases)) {
+                if ($hasAnyClause) {
+                    $searchQuery->orWhereIn($statusColumn, $statusAliases);
+                } else {
+                    $searchQuery->whereIn($statusColumn, $statusAliases);
+                    $hasAnyClause = true;
+                }
+            }
+
+            if (!empty($priorityCodes)) {
+                foreach ($priorityCodeColumns as $priorityCodeColumn) {
+                    if ($hasAnyClause) {
+                        $searchQuery->orWhereIn($priorityCodeColumn, $priorityCodes);
+                        continue;
+                    }
+
+                    $searchQuery->whereIn($priorityCodeColumn, $priorityCodes);
+                    $hasAnyClause = true;
+                }
+            }
+
+            if (!$hasAnyClause) {
+                $searchQuery->whereRaw('1 = 0');
+            }
+        });
+    }
+
+    private function searchVariants(string $search): array
+    {
+        $variants = [trim($search)];
+        $digits = preg_replace('/\D+/', '', $search);
+
+        if (is_string($digits) && $digits !== '' && !in_array($digits, $variants, true)) {
+            $variants[] = $digits;
+        }
+
+        if (is_string($digits) && $digits !== '') {
+            $formatted = $this->formatWorkOrderNumberForCalendar($digits);
+
+            if ($formatted !== 'N/A' && !in_array($formatted, $variants, true)) {
+                $variants[] = $formatted;
+            }
+        }
+
+        return $variants;
+    }
+
+    private function statusAliasesForSearch(string $search): array
+    {
+        $normalizedSearch = $this->normalizeSearchValue($search);
+
+        if ($normalizedSearch === '') {
+            return [];
+        }
+
+        $aliases = [];
+
+        foreach ($this->statusCodeMap() as $statusCode => $statusMeta) {
+            $normalizedCode = $this->normalizeSearchValue((string) $statusCode);
+            $normalizedLabel = $this->normalizeSearchValue((string) ($statusMeta['label'] ?? ''));
+            $normalizedBucket = str_replace('_', ' ', $this->normalizeSearchValue((string) ($statusMeta['bucket'] ?? '')));
+
+            if (
+                $normalizedSearch === $normalizedCode
+                || ($normalizedLabel !== '' && str_contains($normalizedLabel, $normalizedSearch))
+                || ($normalizedBucket !== '' && str_contains($normalizedBucket, $normalizedSearch))
+            ) {
+                $aliases[] = (string) $statusCode;
+            }
+        }
+
+        return array_values(array_unique($aliases));
+    }
+
+    private function priorityCodesForSearch(string $search): array
+    {
+        $normalizedSearch = $this->normalizeSearchValue($search);
+
+        if ($normalizedSearch === '') {
+            return [];
+        }
+
+        $isNumericSearch = ctype_digit($normalizedSearch);
+        $matchedCodes = [];
+
+        foreach ($this->deliveryPriorityMap() as $priorityCode => $priorityLabel) {
+            $code = (int) $priorityCode;
+            $normalizedCode = (string) $code;
+            $normalizedLabel = $this->normalizeSearchValue((string) $priorityLabel);
+
+            if ($isNumericSearch) {
+                if ($normalizedSearch === $normalizedCode) {
+                    $matchedCodes[] = $code;
+                }
+
+                continue;
+            }
+
+            if (
+                ($normalizedLabel !== '' && str_contains($normalizedLabel, $normalizedSearch))
+                || str_contains($normalizedCode . ' - ' . $normalizedLabel, $normalizedSearch)
+            ) {
+                $matchedCodes[] = $code;
+            }
+        }
+
+        return array_values(array_unique($matchedCodes));
+    }
+
+    private function normalizeSearchValue(string $value): string
+    {
+        $normalized = Str::ascii(trim($value));
+        $normalized = strtolower($normalized);
+        $normalized = preg_replace('/\s+/', ' ', $normalized);
+
+        return trim((string) $normalized);
     }
 
     private function calculateStatusStats(array $workOrders): array
