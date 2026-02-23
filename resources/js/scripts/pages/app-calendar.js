@@ -240,6 +240,109 @@ document.addEventListener('DOMContentLoaded', function () {
     return previewBaseUrl.replace(/\/$/, '') + '/' + workOrderId;
   }
 
+  function normalizePriorityValue(value) {
+    return (value || '')
+      .toString()
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  }
+
+  function resolvePriorityBadgeAppearance(priority) {
+    var priorityText = (priority || '').toString().trim();
+    var normalizedPriority = normalizePriorityValue(priorityText);
+    var parsedPriorityCode = parseInt(normalizedPriority.split('-')[0], 10);
+    var badgeClass = 'badge-light-secondary';
+    var textClass = '';
+
+    if (
+      parsedPriorityCode === 1 ||
+      normalizedPriority.includes('visok') ||
+      normalizedPriority === 'z' ||
+      normalizedPriority === 'high'
+    ) {
+      badgeClass = 'badge-light-danger';
+      textClass = 'text-danger';
+    } else if (
+      parsedPriorityCode === 5 ||
+      normalizedPriority.includes('uobicajen') ||
+      normalizedPriority === 'srednji' ||
+      normalizedPriority === 's' ||
+      normalizedPriority === 'medium'
+    ) {
+      badgeClass = 'badge-light-warning';
+      textClass = 'text-warning';
+    } else if (
+      parsedPriorityCode >= 10 ||
+      normalizedPriority.includes('nizak') ||
+      normalizedPriority.includes('uzor') ||
+      normalizedPriority === 'd' ||
+      normalizedPriority === 'low'
+    ) {
+      badgeClass = 'badge-light-info';
+      textClass = 'text-info';
+    }
+
+    return {
+      label: priorityText,
+      badgeClass: badgeClass,
+      textClass: textClass
+    };
+  }
+
+  function appendListPriorityBadge(info) {
+    if (!info || !info.view || info.view.type.indexOf('list') !== 0) {
+      return;
+    }
+
+    var titleCell = info.el ? info.el.querySelector('.fc-list-event-title') : null;
+    var titleLink = titleCell ? titleCell.querySelector('a') : null;
+    var priorityText =
+      info.event && info.event.extendedProps && info.event.extendedProps.priority
+        ? String(info.event.extendedProps.priority).trim()
+        : '';
+    var currentTitleText = '';
+    var titleTextElement;
+    var existingBadge;
+    var badgeAppearance;
+    var badgeElement;
+
+    if (!titleLink) {
+      return;
+    }
+
+    titleLink.classList.add('calendar-list-event-link');
+
+    titleTextElement = titleLink.querySelector('.calendar-list-event-title-text');
+    if (!titleTextElement) {
+      currentTitleText = (titleLink.textContent || '').trim() || (info.event ? info.event.title : '');
+      titleLink.textContent = '';
+      titleTextElement = document.createElement('span');
+      titleTextElement.className = 'calendar-list-event-title-text';
+      titleTextElement.textContent = currentTitleText;
+      titleLink.appendChild(titleTextElement);
+    }
+
+    existingBadge = titleLink.querySelector('.calendar-list-priority-badge');
+    if (existingBadge) {
+      existingBadge.remove();
+    }
+
+    if (!priorityText) {
+      return;
+    }
+
+    badgeAppearance = resolvePriorityBadgeAppearance(priorityText);
+    badgeElement = document.createElement('span');
+    badgeElement.className =
+      'calendar-list-priority-badge badge rounded-pill ' +
+      badgeAppearance.badgeClass +
+      (badgeAppearance.textClass ? ' ' + badgeAppearance.textClass : '');
+    badgeElement.textContent = badgeAppearance.label;
+    titleLink.appendChild(badgeElement);
+  }
+
   function resetValues() {
     endDate.val('');
     eventUrl.val('');
@@ -465,6 +568,9 @@ document.addEventListener('DOMContentLoaded', function () {
       if (previewUrl) {
         window.location.href = previewUrl;
       }
+    },
+    eventDidMount: function (info) {
+      appendListPriorityBadge(info);
     },
     datesSet: function (info) {
       modifyToggler();

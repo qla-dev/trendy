@@ -31,6 +31,25 @@
       scrollbar-gutter: stable;
       padding-right: 0.15rem;
     }
+    .app-calendar .fc .fc-list-event-title a.calendar-list-event-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      width: 100%;
+      min-width: 0;
+    }
+    .app-calendar .fc .fc-list-event-title .calendar-list-event-title-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .app-calendar .fc .fc-list-event-title .calendar-list-priority-badge {
+      flex: 0 0 auto;
+      font-size: 0.75rem;
+      line-height: 1.2;
+    }
   </style>
 @endsection
 
