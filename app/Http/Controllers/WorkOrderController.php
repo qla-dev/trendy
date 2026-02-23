@@ -513,6 +513,656 @@ class WorkOrderController extends Controller
         }
     }
 
+    public function workOrderProducts(Request $request, string $id): JsonResponse
+    {
+        try {
+            $workOrderRow = $this->findWorkOrderRow($id);
+
+            if ($workOrderRow === null) {
+                return response()->json([
+                    'message' => 'Radni nalog nije pronadjen.',
+                ], 404);
+            }
+
+            $search = trim((string) $request->query('q', ''));
+            $products = $this->resolveWorkOrderProducts($workOrderRow, $search);
+
+            return response()->json([
+                'data' => $products,
+                'meta' => [
+                    'count' => count($products),
+                    'limit' => $this->bomLimit(),
+                    'search' => $search,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order products query failed.', [
+                'id' => $id,
+                'connection' => config('database.default'),
+                'work_orders_table' => $this->qualifiedTableName(),
+                'items_table' => $this->qualifiedItemTableName(),
+                'product_structure_table' => $this->qualifiedProductStructureTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greska pri ucitavanju proizvoda.',
+            ], 500);
+        }
+    }
+
+    public function workOrderBom(Request $request, string $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'product_id' => ['required', 'string', 'max:64'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravan proizvod.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $productId = (string) $validator->validated()['product_id'];
+
+        if (trim($productId) === '') {
+            return response()->json([
+                'message' => 'Product ID (acIdent) je obavezan.',
+            ], 422);
+        }
+
+        try {
+            $workOrderRow = $this->findWorkOrderRow($id);
+
+            if ($workOrderRow === null) {
+                return response()->json([
+                    'message' => 'Radni nalog nije pronadjen.',
+                ], 404);
+            }
+
+            $components = $this->fetchBomComponentsByProduct($productId, $this->bomLimit());
+
+            return response()->json([
+                'data' => $components,
+                'meta' => [
+                    'count' => count($components),
+                    'product_id' => $productId,
+                    'limit' => $this->bomLimit(),
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order BOM query failed.', [
+                'id' => $id,
+                'product_id' => $productId,
+                'connection' => config('database.default'),
+                'product_structure_table' => $this->qualifiedProductStructureTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greska pri ucitavanju BOM strukture.',
+            ], 500);
+        }
+    }
+
+    public function storePlannedConsumption(Request $request, string $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'product_id' => ['required', 'string', 'max:64'],
+            'quantity' => ['required', 'numeric', 'gt:0'],
+            'quantity_unit' => ['nullable', 'string', 'in:AUTO,KG,RDS'],
+            'description' => ['nullable', 'string', 'max:500'],
+            'components' => ['required', 'array', 'min:1', 'max:100'],
+            'components.*.acIdentChild' => ['required', 'string', 'max:64'],
+            'components.*.anNo' => ['nullable', 'numeric'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravni podaci za planiranu potrosnju.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $workOrderRow = $this->findWorkOrderRow($id);
+
+            if ($workOrderRow === null) {
+                return response()->json([
+                    'message' => 'Radni nalog nije pronadjen.',
+                ], 404);
+            }
+
+            $validated = $validator->validated();
+            $productId = (string) ($validated['product_id'] ?? '');
+            $quantityFactor = (float) ($validated['quantity'] ?? 0);
+            $quantityUnit = strtoupper(trim((string) ($validated['quantity_unit'] ?? 'AUTO')));
+            $userDescription = trim((string) ($validated['description'] ?? ''));
+
+            if (trim($productId) === '') {
+                return response()->json([
+                    'message' => 'Product ID (acIdent) je obavezan.',
+                ], 422);
+            }
+
+            if ($quantityFactor <= 0) {
+                return response()->json([
+                    'message' => 'Kolicina mora biti veca od 0.',
+                ], 422);
+            }
+
+            $workOrderKey = trim((string) $this->valueTrimmed($workOrderRow, ['acKey'], ''));
+
+            if ($workOrderKey === '') {
+                return response()->json([
+                    'message' => 'RN kljuc nije pronadjen.',
+                ], 422);
+            }
+
+            $bomRows = $this->fetchBomComponentsByProduct($productId, $this->bomLimit());
+
+            if (empty($bomRows)) {
+                return response()->json([
+                    'message' => 'Za odabrani proizvod nema BOM stavki.',
+                ], 422);
+            }
+
+            $selectedKeys = [];
+
+            foreach ((array) ($validated['components'] ?? []) as $component) {
+                $componentId = trim((string) ($component['acIdentChild'] ?? ''));
+                $lineNo = (int) ($this->toFloatOrNull($component['anNo'] ?? null) ?? 0);
+
+                if ($componentId === '') {
+                    continue;
+                }
+
+                $selectedKeys[$this->bomSelectionKey($lineNo, $componentId)] = true;
+            }
+
+            if (empty($selectedKeys)) {
+                return response()->json([
+                    'message' => 'Nijedna komponenta nije odabrana.',
+                ], 422);
+            }
+
+            $selectedRows = array_values(array_filter($bomRows, function (array $row) use ($selectedKeys) {
+                $lineNo = (int) ($this->toFloatOrNull($row['anNo'] ?? null) ?? 0);
+                $componentId = trim((string) ($row['acIdentChild'] ?? ''));
+
+                if ($componentId === '') {
+                    return false;
+                }
+
+                return array_key_exists($this->bomSelectionKey($lineNo, $componentId), $selectedKeys);
+            }));
+
+            if (empty($selectedRows)) {
+                return response()->json([
+                    'message' => 'Odabrane komponente nisu pronadjene u BOM strukturi.',
+                ], 422);
+            }
+
+            $now = now();
+            $userId = (int) (auth()->id() ?? 0);
+            $variant = (int) ($this->toFloatOrNull($this->valueTrimmed($workOrderRow, ['anVariant'], 0)) ?? 0);
+            $itemColumns = $this->itemTableColumns();
+            $identityColumns = $this->itemTableIdentityColumns();
+            $manualNoInsert = in_array('anNo', $itemColumns, true) && !in_array('anNo', $identityColumns, true);
+            $manualQIdInsert = in_array('anQId', $itemColumns, true) && !in_array('anQId', $identityColumns, true);
+            $hasNoteColumn = in_array('acNote', $itemColumns, true);
+            $hasStatementColumn = in_array('acStatement', $itemColumns, true);
+
+            Log::info('Planned consumption save started.', [
+                'id' => $id,
+                'work_order_key' => $workOrderKey,
+                'product_id' => $productId,
+                'quantity_factor' => $quantityFactor,
+                'quantity_unit' => $quantityUnit,
+                'description_present' => $userDescription !== '',
+                'description_length' => strlen($userDescription),
+                'requested_components_count' => count((array) ($validated['components'] ?? [])),
+                'selected_components_count' => count($selectedRows),
+                'variant' => $variant,
+                'user_id' => $userId,
+                'items_table' => $this->qualifiedItemTableName(),
+                'identity_columns' => $identityColumns,
+                'manual_anNo_insert' => $manualNoInsert,
+                'manual_anQId_insert' => $manualQIdInsert,
+                'has_note_column' => $hasNoteColumn,
+                'has_statement_column' => $hasStatementColumn,
+            ]);
+
+            $insertedRows = DB::transaction(function () use (
+                $selectedRows,
+                $quantityFactor,
+                $productId,
+                $workOrderKey,
+                $variant,
+                $userId,
+                $now,
+                $quantityUnit,
+                $userDescription,
+                $hasNoteColumn,
+                $hasStatementColumn,
+                $manualNoInsert,
+                $manualQIdInsert
+            ) {
+                $nextNo = null;
+                $nextQId = null;
+
+                if ($manualNoInsert) {
+                    $nextNo = ((int) ($this->newItemTableQuery()->where('acKey', $workOrderKey)->max('anNo') ?? 0)) + 1;
+                }
+
+                if ($manualQIdInsert) {
+                    $nextQId = ((int) ($this->newItemTableQuery()->where('acKey', $workOrderKey)->max('anQId') ?? 0)) + 1;
+                }
+
+                $saved = [];
+
+                foreach ($selectedRows as $row) {
+                    $componentId = trim((string) ($row['acIdentChild'] ?? ''));
+                    $description = trim((string) ($row['acDescr'] ?? ''));
+                    $operationType = substr(trim((string) ($row['acOperationType'] ?? '')), 0, 1);
+                    $baseQty = $this->toFloatOrNull($row['anGrossQty'] ?? null) ?? 0.0;
+                    $sourceUnit = strtoupper(substr(trim((string) ($row['acUM'] ?? '')), 0, 3));
+                    $resolvedUnit = $quantityUnit === 'AUTO' ? $sourceUnit : $quantityUnit;
+                    // Fallback to entered quantity when BOM gross qty is 0 to avoid saving 0 by default.
+                    $plannedQty = abs($baseQty) > 0.000001 ? ($baseQty * $quantityFactor) : $quantityFactor;
+
+                    if ($componentId === '') {
+                        continue;
+                    }
+
+                    $insertPayload = [
+                        'acKey' => $workOrderKey,
+                        'anVariant' => $variant,
+                        'acIdent' => substr($componentId, 0, 16),
+                        'acDescr' => $description === '' ? null : substr($description, 0, 80),
+                        'acOperationType' => $operationType === '' ? null : $operationType,
+                        'anPlanQty' => $plannedQty,
+                        'anQty' => $plannedQty,
+                        'anQty1' => $plannedQty,
+                        'anQtyBase' => 0,
+                        'adTimeIns' => $now,
+                        'adTimeChg' => $now,
+                        'anUserIns' => $userId,
+                        'anUserChg' => $userId,
+                    ];
+
+                    if ($hasNoteColumn) {
+                        if ($hasStatementColumn) {
+                            $insertPayload['acNote'] = $userDescription === '' ? null : substr($userDescription, 0, 4000);
+                        } else {
+                            $noteMarker = 'PLANNED_BOM|';
+                            $maxDescriptionLength = max(0, 4000 - strlen($noteMarker));
+                            $trimmedDescription = $userDescription === '' ? '' : substr($userDescription, 0, $maxDescriptionLength);
+                            $insertPayload['acNote'] = $noteMarker . $trimmedDescription;
+                        }
+                    }
+
+                    if ($hasStatementColumn) {
+                        $insertPayload['acStatement'] = 'PLANNED_BOM';
+                    }
+
+                    if ($resolvedUnit !== '') {
+                        $insertPayload['acUM'] = $resolvedUnit;
+                    }
+
+                    if ($manualNoInsert && $nextNo !== null) {
+                        $insertPayload['anNo'] = $nextNo;
+                    }
+
+                    if ($manualQIdInsert && $nextQId !== null) {
+                        $insertPayload['anQId'] = $nextQId;
+                    }
+
+                    $this->newItemTableQuery()->insert($insertPayload);
+
+                    $saved[] = [
+                        'anNo' => $nextNo,
+                        'anQId' => $nextQId,
+                        'acIdent' => $componentId,
+                        'acDescr' => $description,
+                        'acUM' => $resolvedUnit,
+                        'acOperationType' => $operationType,
+                        'anGrossQty' => $baseQty,
+                        'anPlanQty' => $plannedQty,
+                    ];
+
+                    if ($manualNoInsert && $nextNo !== null) {
+                        $nextNo++;
+                    }
+
+                    if ($manualQIdInsert && $nextQId !== null) {
+                        $nextQId++;
+                    }
+                }
+
+                return $saved;
+            });
+
+            if (empty($insertedRows)) {
+                return response()->json([
+                    'message' => 'Nema stavki za snimanje planirane potrosnje.',
+                ], 422);
+            }
+
+            return response()->json([
+                'message' => 'Planirana potrosnja je uspjesno sacuvana.',
+                'data' => [
+                    'work_order_id' => $id,
+                    'work_order_key' => $workOrderKey,
+                    'product_id' => $productId,
+                    'quantity_factor' => $quantityFactor,
+                    'description' => $userDescription,
+                    'saved_count' => count($insertedRows),
+                    'items' => $insertedRows,
+                ],
+            ], 201);
+        } catch (Throwable $exception) {
+            Log::error('Planned consumption save failed.', [
+                'id' => $id,
+                'connection' => config('database.default'),
+                'items_table' => $this->qualifiedItemTableName(),
+                'product_structure_table' => $this->qualifiedProductStructureTableName(),
+                'message' => $exception->getMessage(),
+                'exception_class' => get_class($exception),
+                'exception_code' => (string) $exception->getCode(),
+                'line' => $exception->getLine(),
+                'file' => $exception->getFile(),
+                'trace' => Str::limit($exception->getTraceAsString(), 2000),
+                'request_product_id' => (string) $request->input('product_id', ''),
+                'request_quantity' => $this->toFloatOrNull($request->input('quantity')),
+                'request_quantity_unit' => strtoupper(trim((string) $request->input('quantity_unit', 'AUTO'))),
+                'request_description' => trim((string) $request->input('description', '')),
+                'request_components_count' => count((array) $request->input('components', [])),
+            ]);
+
+            return response()->json([
+                'message' => 'Greska pri snimanju planirane potrosnje.',
+            ], 500);
+        }
+    }
+
+    public function removePlannedConsumptionItem(Request $request, string $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'item_id' => ['nullable', 'numeric'],
+            'item_no' => ['nullable', 'numeric'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravni podaci za brisanje stavke.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $workOrderRow = $this->findWorkOrderRow($id);
+
+            if ($workOrderRow === null) {
+                return response()->json([
+                    'message' => 'Radni nalog nije pronadjen.',
+                ], 404);
+            }
+
+            $columns = $this->itemTableColumns();
+            $workOrderKey = trim((string) $this->valueTrimmed($workOrderRow, ['acKey'], ''));
+
+            if ($workOrderKey === '') {
+                return response()->json([
+                    'message' => 'RN kljuc nije pronadjen.',
+                ], 422);
+            }
+
+            if (!in_array('acKey', $columns, true)) {
+                return response()->json([
+                    'message' => 'Tabela stavki nema RN kljuc.',
+                ], 500);
+            }
+
+            $validated = $validator->validated();
+            $itemId = $this->toFloatOrNull($validated['item_id'] ?? null);
+            $itemNo = $this->toFloatOrNull($validated['item_no'] ?? null);
+            $hasQId = in_array('anQId', $columns, true);
+            $hasNo = in_array('anNo', $columns, true);
+
+            if ($itemId === null && $itemNo === null) {
+                return response()->json([
+                    'message' => 'Nedostaje identifikator stavke za brisanje.',
+                ], 422);
+            }
+
+            if ($itemId !== null && !$hasQId && $itemNo === null) {
+                return response()->json([
+                    'message' => 'Kolona anQId nije dostupna za brisanje.',
+                ], 422);
+            }
+
+            if ($itemNo !== null && !$hasNo && $itemId === null) {
+                return response()->json([
+                    'message' => 'Kolona anNo nije dostupna za brisanje.',
+                ], 422);
+            }
+
+            $deleteQuery = $this->newItemTableQuery()->where('acKey', $workOrderKey);
+
+            if ($itemId !== null && $hasQId) {
+                $deleteQuery->where('anQId', (int) $itemId);
+            } elseif ($itemNo !== null && $hasNo) {
+                $deleteQuery->where('anNo', (int) $itemNo);
+            } else {
+                return response()->json([
+                    'message' => 'Nije moguce odrediti stavku za brisanje.',
+                ], 422);
+            }
+
+            $row = (clone $deleteQuery)->first();
+
+            if ($row === null) {
+                return response()->json([
+                    'message' => 'Stavka nije pronadjena.',
+                ], 404);
+            }
+
+            $deletedCount = $deleteQuery->delete();
+
+            if ($deletedCount < 1) {
+                return response()->json([
+                    'message' => 'Stavka nije obrisana.',
+                ], 500);
+            }
+
+            Log::info('Work order item removed.', [
+                'id' => $id,
+                'work_order_key' => $workOrderKey,
+                'item_id' => $hasQId ? (int) ($row->anQId ?? 0) : null,
+                'item_no' => $hasNo ? (int) ($row->anNo ?? 0) : null,
+                'ac_ident' => trim((string) ($row->acIdent ?? '')),
+                'deleted_count' => $deletedCount,
+                'user_id' => (int) (auth()->id() ?? 0),
+            ]);
+
+            return response()->json([
+                'message' => 'Stavka je obrisana.',
+                'data' => [
+                    'work_order_id' => $id,
+                    'work_order_key' => $workOrderKey,
+                    'item_id' => $hasQId ? (int) ($row->anQId ?? 0) : null,
+                    'item_no' => $hasNo ? (int) ($row->anNo ?? 0) : null,
+                    'deleted_count' => $deletedCount,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order item remove failed.', [
+                'id' => $id,
+                'connection' => config('database.default'),
+                'items_table' => $this->qualifiedItemTableName(),
+                'message' => $exception->getMessage(),
+                'exception_class' => get_class($exception),
+                'exception_code' => (string) $exception->getCode(),
+                'line' => $exception->getLine(),
+                'file' => $exception->getFile(),
+                'request_item_id' => $this->toFloatOrNull($request->input('item_id')),
+                'request_item_no' => $this->toFloatOrNull($request->input('item_no')),
+            ]);
+
+            return response()->json([
+                'message' => 'Greska pri brisanju stavke planirane potrosnje.',
+            ], 500);
+        }
+    }
+
+    private function resolveWorkOrderProducts(array $workOrderRow, string $search = ''): array
+    {
+        $limit = $this->bomLimit();
+        $products = [];
+        $seenKeys = [];
+        $addProduct = function (string $ident, string $name, string $source) use (&$products, &$seenKeys) {
+            $normalizedIdent = trim($ident);
+
+            if ($normalizedIdent === '') {
+                return;
+            }
+
+            $seenKey = strtolower($normalizedIdent);
+
+            if (array_key_exists($seenKey, $seenKeys)) {
+                return;
+            }
+
+            $displayLabel = $normalizedIdent;
+            $normalizedName = trim($name);
+
+            if ($normalizedName !== '') {
+                $displayLabel .= ' - ' . $normalizedName;
+            }
+
+            $products[] = [
+                'acIdent' => $ident,
+                'acIdentTrimmed' => $normalizedIdent,
+                'acName' => $normalizedName,
+                'label' => $displayLabel,
+                'source' => $source,
+                'bom_count' => 0,
+            ];
+            $seenKeys[$seenKey] = true;
+        };
+
+        $search = trim($search);
+        $headerProductIdent = (string) $this->value($workOrderRow, ['acIdent'], '');
+        $headerProductName = trim((string) $this->value($workOrderRow, ['acName'], ''));
+        if (
+            $search === ''
+            || stripos($headerProductIdent, $search) !== false
+            || stripos($headerProductName, $search) !== false
+        ) {
+            $addProduct($headerProductIdent, $headerProductName, 'work_order');
+        }
+
+        if ($search !== '') {
+            $masterProducts = $this->newProductStructureTableQuery()
+                ->select('acIdent')
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) <> ''")
+                ->where('acIdent', 'like', '%' . $search . '%')
+                ->distinct()
+                ->orderBy('acIdent')
+                ->limit($limit)
+                ->get();
+
+            foreach ($masterProducts as $masterProduct) {
+                $addProduct((string) ($masterProduct->acIdent ?? ''), '', 'master_structure');
+            }
+        }
+
+        if (empty($products)) {
+            return [];
+        }
+
+        usort($products, static function (array $left, array $right): int {
+            return strcmp(
+                strtolower((string) ($left['acIdentTrimmed'] ?? '')),
+                strtolower((string) ($right['acIdentTrimmed'] ?? ''))
+            );
+        });
+
+        return array_slice($products, 0, $limit);
+    }
+
+    private function fetchBomComponentsByProduct(string $productId, ?int $limit = null): array
+    {
+        $resolvedLimit = max(1, (int) ($limit ?? $this->bomLimit()));
+
+        $query = $this->newProductStructureTableQuery()
+            ->select([
+                'acIdentChild',
+                'acDescr',
+                'acUM',
+                'anGrossQty',
+                'acOperationType',
+                'anNo',
+            ])
+            ->where('acIdent', $productId)
+            ->orderBy('anNo')
+            ->limit($resolvedLimit);
+
+        $rows = $query->get();
+
+        if ($rows->isEmpty()) {
+            $trimmedProduct = trim($productId);
+
+            if ($trimmedProduct !== '' && $trimmedProduct !== $productId) {
+                $rows = $this->newProductStructureTableQuery()
+                    ->select([
+                        'acIdentChild',
+                        'acDescr',
+                        'acUM',
+                        'anGrossQty',
+                        'acOperationType',
+                        'anNo',
+                    ])
+                    ->whereRaw('LTRIM(RTRIM(acIdent)) = ?', [$trimmedProduct])
+                    ->orderBy('anNo')
+                    ->limit($resolvedLimit)
+                    ->get();
+            }
+        }
+
+        return $rows
+            ->map(function ($row) {
+                return [
+                    'acIdentChild' => trim((string) ($row->acIdentChild ?? '')),
+                    'acDescr' => trim((string) ($row->acDescr ?? '')),
+                    'acUM' => strtoupper(substr(trim((string) ($row->acUM ?? '')), 0, 3)),
+                    'anGrossQty' => $this->toFloatOrNull($row->anGrossQty ?? null) ?? 0.0,
+                    'acOperationType' => trim((string) ($row->acOperationType ?? '')),
+                    'anNo' => (int) ($this->toFloatOrNull($row->anNo ?? null) ?? 0),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function bomSelectionKey(int $lineNo, string $componentId): string
+    {
+        return $lineNo . '|' . strtolower(trim($componentId));
+    }
+
+    private function bomLimit(): int
+    {
+        $limit = (int) config('workorders.bom_limit', 100);
+
+        if ($limit < 1) {
+            return 100;
+        }
+
+        return min($limit, 100);
+    }
+
     private function fetchWorkOrders(
         ?int $limit = null,
         ?int $page = null,
@@ -1440,16 +2090,24 @@ class WorkOrderController extends Controller
     {
         $taskState = strtoupper(trim((string) $this->value($row, ['acTaskState'], '')));
         $isFinished = in_array($taskState, ['F', 'Z', 'C', 'D'], true);
+        $note = (string) $this->value($row, ['acNote'], '');
+        $displayNote = $this->plannedConsumptionDisplayNote($note);
+        $itemId = $this->value($row, ['anQId', 'anNo'], null);
+        $itemQid = $this->value($row, ['anQId'], null);
+        $itemNo = $this->value($row, ['anNo'], null);
+        $canRemove = $itemQid !== null || $itemNo !== null;
 
         return [
-            'id' => $this->value($row, ['anQId', 'anNo'], null),
+            'id' => $itemId,
+            'qid' => $itemQid,
+            'no' => $itemNo,
             'ac_key' => trim((string) $this->value($row, ['acKey'], '')),
             'alternativa' => (string) $this->value($row, ['anVariant'], ''),
             'pozicija' => (string) $this->value($row, ['anNo'], ''),
             'artikal' => (string) $this->value($row, ['acIdent'], ''),
             'opis' => (string) $this->value($row, ['acDescr'], ''),
-            'napomena' => (string) $this->value($row, ['acNote'], ''),
-            'kolicina' => $this->normalizeNumber($this->value($row, ['anQty', 'anPlanQty'], 0)),
+            'napomena' => $displayNote,
+            'kolicina' => $this->normalizeNumber($this->value($row, ['anQty', 'anQty1', 'anPlanQty'], 0)),
             'mj' => (string) $this->value($row, ['acUM'], ''),
             'serija' => $this->normalizeNumber($this->value($row, ['anQtySE', 'anBatch'], 0)),
             'normativna_osnova' => $this->normalizeNumber($this->value($row, ['anQtyBase', 'anQtyBase3'], 0)),
@@ -1458,7 +2116,36 @@ class WorkOrderController extends Controller
             'va' => (string) $this->value($row, ['acFieldSA', 'acFieldSE'], ''),
             'prim_klas' => (string) $this->value($row, ['acFieldSB'], ''),
             'sek_klas' => (string) $this->value($row, ['acFieldSC'], ''),
+            'can_remove' => $canRemove,
         ];
+    }
+
+    private function plannedConsumptionDisplayNote(string $note): string
+    {
+        $trimmedNote = trim($note);
+
+        if ($trimmedNote === '') {
+            return '';
+        }
+
+        $markerPrefix = 'PLANNED_BOM|';
+        if (Str::startsWith($trimmedNote, $markerPrefix)) {
+            return trim(substr($trimmedNote, strlen($markerPrefix)));
+        }
+
+        $legacyPrefix = 'Planned BOM consumption from tHF_SetPrSt.';
+        if (Str::startsWith($trimmedNote, $legacyPrefix)) {
+            $legacyDescriptionTag = '| Description:';
+            $descriptionOffset = stripos($trimmedNote, $legacyDescriptionTag);
+
+            if ($descriptionOffset !== false) {
+                return trim(substr($trimmedNote, $descriptionOffset + strlen($legacyDescriptionTag)));
+            }
+
+            return '';
+        }
+
+        return $trimmedNote;
     }
 
     private function mapItemResourceRow(array $row): array
@@ -2522,6 +3209,36 @@ class WorkOrderController extends Controller
             ->all();
     }
 
+    private function itemTableIdentityColumns(): array
+    {
+        if (DB::getDriverName() !== 'sqlsrv') {
+            return [];
+        }
+
+        try {
+            return DB::table('sys.columns as c')
+                ->join('sys.tables as t', 'c.object_id', '=', 't.object_id')
+                ->join('sys.schemas as s', 't.schema_id', '=', 's.schema_id')
+                ->where('s.name', $this->tableSchema())
+                ->where('t.name', $this->itemTableName())
+                ->where('c.is_identity', 1)
+                ->pluck('c.name')
+                ->map(function ($columnName) {
+                    return (string) $columnName;
+                })
+                ->values()
+                ->all();
+        } catch (Throwable $exception) {
+            Log::warning('Unable to resolve item table identity columns.', [
+                'connection' => config('database.default'),
+                'items_table' => $this->qualifiedItemTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [];
+        }
+    }
+
     private function itemResourcesTableColumns(): array
     {
         return DB::table('INFORMATION_SCHEMA.COLUMNS')
@@ -2847,6 +3564,11 @@ class WorkOrderController extends Controller
         return DB::table($this->qualifiedRegOperationsTableName());
     }
 
+    private function newProductStructureTableQuery(): Builder
+    {
+        return DB::table($this->qualifiedProductStructureTableName());
+    }
+
     private function resolveLimit(?int $requestedLimit = null): int
     {
         $maxLimit = max(1, (int) config('workorders.max_limit', 100));
@@ -2885,6 +3607,11 @@ class WorkOrderController extends Controller
         return (string) config('workorders.reg_operations_table', 'tHF_WOExRegOper');
     }
 
+    private function productStructureTableName(): string
+    {
+        return (string) config('workorders.product_structure_table', 'tHF_SetPrSt');
+    }
+
     private function qualifiedTableName(): string
     {
         return $this->tableSchema() . '.' . $this->tableName();
@@ -2903,6 +3630,11 @@ class WorkOrderController extends Controller
     private function qualifiedRegOperationsTableName(): string
     {
         return $this->tableSchema() . '.' . $this->regOperationsTableName();
+    }
+
+    private function qualifiedProductStructureTableName(): string
+    {
+        return $this->tableSchema() . '.' . $this->productStructureTableName();
     }
 
     private function emptyInvoicePreviewResponse(array $pageConfigs, ?string $invoiceNumber = null)

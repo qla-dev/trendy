@@ -62,6 +62,10 @@ Route::middleware('auth:web')->group(function () {
         Route::get('invoice/preview/{id?}', [WorkOrderController::class, 'invoicePreview'])->name('app-invoice-preview');
         Route::post('invoice/preview/{id}/status', [WorkOrderController::class, 'updateInvoiceStatus'])->name('app-invoice-update-status');
         Route::post('invoice/preview/{id}/priority', [WorkOrderController::class, 'updateInvoicePriority'])->name('app-invoice-update-priority');
+        Route::get('invoice/preview/{id}/products', [WorkOrderController::class, 'workOrderProducts'])->name('app-invoice-products');
+        Route::get('invoice/preview/{id}/bom', [WorkOrderController::class, 'workOrderBom'])->name('app-invoice-bom');
+        Route::post('invoice/preview/{id}/planned-consumption', [WorkOrderController::class, 'storePlannedConsumption'])->name('app-invoice-planned-consumption');
+        Route::post('invoice/preview/{id}/planned-consumption/remove', [WorkOrderController::class, 'removePlannedConsumptionItem'])->name('app-invoice-planned-consumption-remove');
         Route::get('invoice/edit', [AppsController::class, 'invoice_edit'])->name('app-invoice-edit');
         Route::get('invoice/add', [AppsController::class, 'invoice_add'])->name('app-invoice-add');
         Route::get('invoice/print/{id?}', [WorkOrderController::class, 'invoicePrint'])->name('app-invoice-print');

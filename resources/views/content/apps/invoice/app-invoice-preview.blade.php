@@ -262,6 +262,32 @@
     margin-top: 0.25rem;
     margin-bottom: 0.85rem;
   }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap {
+    position: relative;
+  }
+  .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background-color: #ffffff;
+    box-shadow: -10px 0 12px -12px rgba(34, 41, 47, 0.45);
+  }
+  .invoice-preview-wrapper #sastavnica-table thead .wo-sastavnica-action-col {
+    z-index: 3;
+    background-color: #f8f8fa;
+  }
+  body.dark-layout .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col,
+  body.semi-dark-layout .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col,
+  .dark-layout .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col,
+  .semi-dark-layout .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col {
+    background-color: #283046;
+  }
+  body.dark-layout .invoice-preview-wrapper #sastavnica-table thead .wo-sastavnica-action-col,
+  body.semi-dark-layout .invoice-preview-wrapper #sastavnica-table thead .wo-sastavnica-action-col,
+  .dark-layout .invoice-preview-wrapper #sastavnica-table thead .wo-sastavnica-action-col,
+  .semi-dark-layout .invoice-preview-wrapper #sastavnica-table thead .wo-sastavnica-action-col {
+    background-color: #2f3854;
+  }
   .wo-progress-shell .wo-progress-head {
     align-items: baseline;
     font-size: 0.95rem;
@@ -1083,6 +1109,10 @@
   }
   $statusUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-update-status', ['id' => $workOrderRouteId]) : '';
   $priorityUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-update-priority', ['id' => $workOrderRouteId]) : '';
+  $productsFetchUrl = $hasLoadedWorkOrder ? route('app-invoice-products', ['id' => $workOrderRouteId]) : '';
+  $bomFetchUrl = $hasLoadedWorkOrder ? route('app-invoice-bom', ['id' => $workOrderRouteId]) : '';
+  $plannedConsumptionStoreUrl = $hasLoadedWorkOrder ? route('app-invoice-planned-consumption', ['id' => $workOrderRouteId]) : '';
+  $plannedConsumptionRemoveUrl = $hasLoadedWorkOrder ? route('app-invoice-planned-consumption-remove', ['id' => $workOrderRouteId]) : '';
   $pageTitle = 'eNalog.app';
   if ($hasLoadedWorkOrder) {
     $titleIdentifier = $invoiceNumberDisplay !== '-' ? $invoiceNumberDisplay : $displayValue($workOrderRouteId);
@@ -1304,7 +1334,7 @@
           <div class="tab-content">
             <!-- Sastavnica Tab -->
             <div class="tab-pane fade show active" id="tab-sastavnica" role="tabpanel">
-              <div class="table-responsive">
+              <div class="table-responsive wo-sastavnica-table-wrap">
                 <table class="table" id="sastavnica-table">
                   <thead>
                     <tr>
@@ -1323,6 +1353,7 @@
                       <th class="py-1 text-center">VA</th>
                       <th class="py-1 text-center">Prim.klas</th>
                       <th class="py-1 text-center">Sek.klas</th>
+                      <th class="py-1 text-center wo-sastavnica-action-col">Akcija</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1343,10 +1374,32 @@
                         <td class="py-1">{{ $displayValue($item['va'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($item['prim_klas'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($item['sek_klas'] ?? null) }}</td>
+                        <td class="py-1 text-center wo-sastavnica-action-col">
+                          <div class="d-inline-flex align-items-center gap-50">
+                            <button
+                              type="button"
+                              class="btn btn-sm btn-outline-primary wo-edit-sastavnica-btn"
+                              title="Uredi stavku (uskoro)"
+                            >
+                              <i class="fa fa-pencil"></i>
+                            </button>
+                            @if((bool) ($item['can_remove'] ?? false))
+                              <button
+                                type="button"
+                                class="btn btn-sm btn-outline-danger wo-remove-sastavnica-btn"
+                                data-item-id="{{ $displayValue($item['qid'] ?? null) }}"
+                                data-item-no="{{ $displayValue($item['no'] ?? null) }}"
+                                title="Ukloni iz radnog naloga"
+                              >
+                                <i class="fa fa-trash"></i>
+                              </button>
+                            @endif
+                          </div>
+                        </td>
                       </tr>
                     @empty
                       <tr>
-                        <td colspan="15" class="text-center text-muted py-2">Nema stavki za ovaj radni nalog.</td>
+                        <td colspan="16" class="text-center text-muted py-2">Nema stavki za ovaj radni nalog.</td>
                       </tr>
                     @endforelse
                   </tbody>
@@ -1554,7 +1607,7 @@
             <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog
           </button>
           <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#sirovina-scanner-modal">
-            <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Dodaj sirovinu
+            <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Dodaj sastavnicu
           </button>
           <div class="invoice-actions-divider"></div>
           <button id="wo-status-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $statusToneClass }}" data-bs-toggle="modal" data-bs-target="#change-status-modal" @if (!$hasLoadedWorkOrder) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
@@ -1730,6 +1783,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var mutationConfig = {
       statusUrl: @json($statusUpdateUrl),
       priorityUrl: @json($priorityUpdateUrl),
+      plannedConsumptionRemoveUrl: @json($plannedConsumptionRemoveUrl),
       csrfToken: @json(csrf_token())
     };
     var toneClasses = ['primary', 'secondary', 'success', 'warning', 'danger', 'info'];
@@ -1743,6 +1797,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var priorityTriggerButton = document.getElementById('wo-priority-trigger-btn');
     var statusModalElement = document.getElementById('change-status-modal');
     var priorityModalElement = document.getElementById('change-priority-modal');
+    var sastavnicaTable = document.getElementById('sastavnica-table');
 
     var onScroll = function () {
       sidebar.classList.toggle('invoice-actions-scrolled', window.scrollY > 80);
@@ -1961,6 +2016,26 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       window.bootstrap.Modal.getOrCreateInstance(modalElement).hide();
     }
 
+    function ensureSastavnicaEmptyState() {
+      if (!sastavnicaTable) {
+        return;
+      }
+
+      var body = sastavnicaTable.querySelector('tbody');
+      if (!body) {
+        return;
+      }
+
+      var rows = body.querySelectorAll('tr');
+      if (rows.length > 0) {
+        return;
+      }
+
+      var emptyRow = document.createElement('tr');
+      emptyRow.innerHTML = '<td colspan="16" class="text-center text-muted py-2">Nema stavki za ovaj radni nalog.</td>';
+      body.appendChild(emptyRow);
+    }
+
     if (statusSaveButton && statusSelect) {
       statusSaveButton.addEventListener('click', function () {
         var selectedStatus = (statusSelect.value || '').toString().trim();
@@ -2098,12 +2173,122 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         });
       });
     }
+
+    if (sastavnicaTable) {
+      sastavnicaTable.addEventListener('click', function (event) {
+        var editButton = event.target.closest('.wo-edit-sastavnica-btn');
+        if (editButton) {
+          Swal.fire(swalWithTheme({
+            icon: 'info',
+            title: 'Uskoro',
+            text: 'Uređivanje stavke biće dostupno uskoro.'
+          }));
+          return;
+        }
+
+        var removeButton = event.target.closest('.wo-remove-sastavnica-btn');
+
+        if (!removeButton) {
+          return;
+        }
+
+        if (!mutationConfig.plannedConsumptionRemoveUrl) {
+          Swal.fire(swalWithTheme({
+            icon: 'error',
+            title: 'Nedostaje ruta',
+            text: 'Endpoint za brisanje nije dostupan.'
+          }));
+          return;
+        }
+
+        var row = removeButton.closest('tr');
+        if (!row) {
+          return;
+        }
+
+        var itemIdRaw = (removeButton.getAttribute('data-item-id') || '').trim();
+        var itemNoRaw = (removeButton.getAttribute('data-item-no') || '').trim();
+        var itemId = itemIdRaw && itemIdRaw !== '-' ? Number(itemIdRaw) : null;
+        var itemNo = itemNoRaw && itemNoRaw !== '-' ? Number(itemNoRaw) : null;
+
+        if (itemId === null && itemNo === null) {
+          Swal.fire(swalWithTheme({
+            icon: 'warning',
+            title: 'Nedostaje identifikator',
+            text: 'Stavku nije moguce identifikovati za brisanje.'
+          }));
+          return;
+        }
+
+        var componentCode = '';
+        var componentCell = row.children.length > 2 ? row.children[2] : null;
+        if (componentCell) {
+          componentCode = (componentCell.textContent || '').trim();
+        }
+
+        Swal.fire(swalWithTheme({
+          title: 'Ukloniti stavku?',
+          text: componentCode ? ('Stavka: ' + componentCode) : 'Ova stavka ce biti uklonjena iz radnog naloga.',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Ukloni',
+          cancelButtonText: 'Otkazi',
+          customClass: {
+            confirmButton: 'btn btn-danger',
+            cancelButton: 'btn btn-outline-secondary ms-1'
+          },
+          buttonsStyling: false
+        })).then(function (result) {
+          if (!result.isConfirmed) {
+            return;
+          }
+
+          removeButton.disabled = true;
+          removeButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+          requestMutation(mutationConfig.plannedConsumptionRemoveUrl, {
+            item_id: itemId,
+            item_no: itemNo
+          }, 'Brisanje stavke nije uspjelo.')
+            .then(function (response) {
+              row.remove();
+              ensureSastavnicaEmptyState();
+
+              Swal.fire(swalWithTheme({
+                icon: 'success',
+                title: 'Stavka obrisana',
+                text: response && response.message ? response.message : 'Stavka je uspjesno obrisana.'
+              }));
+            })
+            .catch(function (error) {
+              Swal.fire(swalWithTheme({
+                icon: 'error',
+                title: 'Greska',
+                text: error && error.message ? error.message : 'Brisanje stavke nije uspjelo.'
+              }));
+            })
+            .finally(function () {
+              if (!document.body.contains(removeButton)) {
+                return;
+              }
+
+              removeButton.disabled = false;
+              removeButton.innerHTML = '<i class="fa fa-trash"></i>';
+            });
+        });
+      });
+    }
   });
 </script>
 {{-- Include QR Scanner Modals --}}
 @include('content.new-components.change-status-modal', ['currentStatus' => $statusDisplayLabel])
 @include('content.new-components.change-priority-modal', ['currentPriority' => $priorityDisplayLabel])
 @include('content.new-components.nalog-scan')
-@include('content.new-components.sirovina-scan')
+@include('content.new-components.sirovina-scan', [
+  'productsFetchUrl' => $productsFetchUrl,
+  'bomFetchUrl' => $bomFetchUrl,
+  'plannedConsumptionStoreUrl' => $plannedConsumptionStoreUrl,
+  'defaultProductIdent' => trim((string) ($workOrder['sifra'] ?? '')),
+])
 @include('content.new-components.confirm-weight')
 @endsection
