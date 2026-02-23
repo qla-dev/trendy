@@ -88,6 +88,7 @@ class DashboardController extends Controller
             'id' => $rowData['acRefNo1'] ?? $rowData['acKey'] ?? $rowData['anNo'] ?? null,
             'work_order_number' => $rowData['acRefNo1'] ?? $rowData['acKey'] ?? 'N/A',
             'product_name' => $rowData['acName'] ?? $rowData['acDescr'] ?? 'Radni nalog',
+            'product_code' => $rowData['acIdent'] ?? $rowData['acCode'] ?? '',
             'linked_document' => $rowData['acKey'] ?? '',
             'client_name' => $rowData['acConsignee'] ?? $rowData['acReceiver'] ?? 'N/A',
             'planned_start' => $this->parseDate($rowData['adDate'] ?? null),

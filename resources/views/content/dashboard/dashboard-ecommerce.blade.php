@@ -719,11 +719,11 @@
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Naziv proizvoda</th>
+                  <th>Naziv</th>
+                  <th>Šifra</th>
                   <th>Klijent</th>
                   <th>Datum kreiranja</th>
                   <th>Status</th>
-                  <th class="text-center">Akcije</th>
                 </tr>
               </thead>
               <tbody>
@@ -740,6 +740,7 @@
                     $clientName = trim((string) ($order->client_name ?? 'N/A'));
                     $productName = trim((string) ($order->product_name ?? 'Radni nalog'));
                     $productDisplayName = $productName;
+                    $productCode = trim((string) ($order->product_code ?? ''));
                     if ($productDisplayName !== '' && mb_strlen($productDisplayName) > 10) {
                       $productDisplayName = mb_substr($productDisplayName, 0, 10) . '..';
                     }
@@ -786,6 +787,11 @@
                         {{ $productDisplayName !== '' ? $productDisplayName : 'N/A' }}
                       </span>
                     </td>
+                    <td class="text-nowrap">
+                      <span title="{{ $productCode !== '' ? $productCode : 'N/A' }}">
+                        {{ $productCode !== '' ? $productCode : '-' }}
+                      </span>
+                    </td>
                     <td>
                       <div class="dashboard-client-wrap">
                         <span class="dashboard-client-avatar" style="background-color: {{ $avatarBg }}; color: {{ $avatarText }}; border: 1px solid {{ $avatarBorder }};">
@@ -799,11 +805,6 @@
                       <span class="badge rounded-pill dashboard-status-badge {{ $statusClass }}">
                         {{ $statusText !== '' ? $statusText : 'N/A' }}
                       </span>
-                    </td>
-                    <td class="text-center">
-                      <a href="{{ $previewUrl }}" class="wo-eye-action" data-bs-toggle="tooltip" data-bs-placement="top" title="Pregled radnog naloga">
-                        <i data-feather="eye"></i>
-                      </a>
                     </td>
                   </tr>
                 @endforeach

@@ -394,18 +394,18 @@ $(function () {
   // datatable
   if (dtInvoiceTable.length) {
     var currentStatusFilter = null;
-    var moneyColumnIndex = 3;
+    var moneyColumnIndex = 4;
     var moneyColumnVisible = null;
     var tableLoadingRequestCount = 0;
     var searchDebounceTimer = null;
     var searchOverlaySafetyTimer = null;
     var sortableColumnMap = {
       0: 'id',
-      2: 'klijent',
-      5: 'status',
-      6: 'prioritet'
+      3: 'klijent',
+      6: 'status',
+      7: 'prioritet'
     };
-    var quickSearchIdleLabel = 'Brza pretraga';
+    var quickSearchIdleLabel = 'Brza pretraga po nazivu, šifri, klijentu itd..';
     var quickSearchLoadingLabel = 'Filterisanje';
     updateStatusCards(window.statusStats || {});
 
@@ -645,16 +645,16 @@ $(function () {
       columns: [
         { data: 'id' },
         { data: 'naziv' },
+        { data: 'sifra' },
         { data: 'klijent' },
         { data: 'vrednost' },
         { data: 'datum_kreiranja' },
         { data: 'status' },
-        { data: 'prioritet' },
-        { data: '' }
+        { data: 'prioritet' }
       ],
       columnDefs: [
         {
-          targets: [1, 3, 4, 7],
+          targets: [1, 2, 4, 5],
           orderable: false
         },
         {
@@ -703,10 +703,26 @@ $(function () {
         },
         {
           targets: 2,
+          width: '130px',
+          render: function (data, type, full) {
+            var productCode = (full['sifra'] || '').toString().trim();
+
+            if (!productCode) {
+              return '<span class="text-muted">-</span>';
+            }
+
+            return '<span class="text-nowrap">' + escapeHtml(productCode) + '</span>';
+          }
+        },
+        {
+          targets: 3,
           width: '270px',
           render: function (data, type, full) {
             var name = full['klijent'] || 'N/A',
               dodeljenKorisnik = full['dodeljen_korisnik'] || '';
+            var displayName = trimProductName(name, 10);
+            var safeName = escapeHtml(name);
+            var safeDisplayName = escapeHtml(displayName);
             var avatarColors = resolveClientAvatarColors(name),
               initials = name.match(/\b\w/g) || [];
             initials = ((initials.shift() || '') + (initials.pop() || '')).toUpperCase();
@@ -731,8 +747,10 @@ $(function () {
               '</div>' +
               '</div>' +
               '<div class="d-flex flex-column">' +
-              '<h6 class="user-name text-truncate mb-0">' +
-              name +
+              '<h6 class="user-name text-truncate mb-0" title="' +
+              safeName +
+              '">' +
+              safeDisplayName +
               '</h6>' +
               '<small class="text-truncate text-muted">' +
               dodeljenKorisnik +
@@ -743,7 +761,7 @@ $(function () {
           }
         },
         {
-          targets: 3,
+          targets: 4,
           width: '73px',
           render: function (data, type, full) {
             var total = full['vrednost'];
@@ -761,7 +779,7 @@ $(function () {
           }
         },
         {
-          targets: 4,
+          targets: 5,
           width: '130px',
           render: function (data, type, full) {
             var createdDate = new Date(full['datum_kreiranja']);
@@ -774,7 +792,7 @@ $(function () {
           }
         },
         {
-          targets: 5,
+          targets: 6,
           className: 'text-center align-middle',
           width: '98px',
           render: function (data, type, full) {
@@ -793,7 +811,7 @@ $(function () {
           }
         },
         {
-          targets: 6,
+          targets: 7,
           width: '80px',
           render: function (data, type, full) {
             var priority = full['prioritet'];
@@ -842,26 +860,6 @@ $(function () {
               ' </span>'
             );
           }
-        },
-        {
-          targets: -1,
-          className: 'text-center align-middle',
-          title: 'Akcije',
-          width: '48px',
-          orderable: false,
-          render: function (data, type, full) {
-            return (
-              '<div class="d-flex align-items-center justify-content-center col-actions">' +
-              '<a class="wo-eye-action" href="' +
-              invoicePreview +
-              '/' +
-              full['id'] +
-              '" data-bs-toggle="tooltip" data-bs-placement="top" title="Pregled radnog naloga">' +
-              feather.icons['eye'].toSvg({ class: 'font-medium-2 text-body' }) +
-              '</a>' +
-              '</div>'
-            );
-          }
         }
       ],
       ordering: true,
@@ -878,7 +876,7 @@ $(function () {
         '>',
       language: {
         sLengthMenu: 'Prikaži _MENU_',
-        search: 'Brza pretraga',
+        search: 'Brza pretraga po nazivu, šifri, klijentu itd..',
         searchPlaceholder: 'Pretraži...',
         info: 'Prikazano _START_ do _END_ od _TOTAL_ naloga',
         infoEmpty: 'Prikazano 0 do 0 od 0 naloga',

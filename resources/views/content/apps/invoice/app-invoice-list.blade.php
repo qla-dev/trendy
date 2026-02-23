@@ -215,13 +215,13 @@
         <thead>
           <tr>
             <th>#</th>
-            <th>Naziv proizvoda</th>
+            <th>Naziv</th>
+            <th>Šifra</th>
             <th>Klijent</th>
             <th>Ukupno</th>
             <th class="text-truncate">Datum Kreiranja</th>
             <th>Status</th>
             <th>Prioritet</th>
-            <th class="cell-fit">Akcije</th>
           </tr>
         </thead>
       </table>

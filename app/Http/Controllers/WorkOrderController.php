@@ -1047,6 +1047,7 @@ class WorkOrderController extends Controller
             'id' => $id,
             'broj_naloga' => $brojNaloga,
             'naziv' => (string) $this->value($row, ['acName', 'acDescr', 'title'], 'Radni nalog'),
+            'sifra' => (string) $this->valueTrimmed($row, ['acIdent', 'product_code', 'acCode'], ''),
             'opis' => (string) $this->value($row, ['acNote', 'acStatement', 'acDescr', 'description'], ''),
             'status' => $status,
             'prioritet' => $priority,
@@ -1451,7 +1452,7 @@ class WorkOrderController extends Controller
 
         $this->applyLikeAny(
             $query,
-            $this->existingColumns($columns, ['acNote', 'acStatement', 'acDescr', 'acName', 'acDocType']),
+            $this->existingColumns($columns, ['acIdent', 'acNote', 'acStatement', 'acDescr', 'acName', 'acDocType']),
             (string) ($filters['proizvod'] ?? '')
         );
 
@@ -1634,6 +1635,7 @@ class WorkOrderController extends Controller
             'acConsignee',
             'acReceiver',
             'acPartner',
+            'acIdent',
             'acNote',
             'acStatement',
             'acDescr',
