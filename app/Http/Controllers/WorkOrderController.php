@@ -49,9 +49,23 @@ class WorkOrderController extends Controller
         $pageConfigs = ['pageHeader' => false];
         $routeWorkOrderId = trim((string) ($id ?? ''));
         $queryWorkOrderId = trim((string) $request->query('id', ''));
+        $scanQueryFlag = trim((string) $request->query('scan', ''));
+        $sourceQueryFlag = trim((string) $request->query('source', ''));
+        $isScanLookup = in_array(strtolower($scanQueryFlag), ['1', 'true', 'yes'], true);
+        $normalizedSource = strtolower($sourceQueryFlag);
 
         if ($routeWorkOrderId === '' && $queryWorkOrderId !== '') {
-            return redirect()->route('app-invoice-preview', ['id' => $queryWorkOrderId]);
+            $redirectParams = ['id' => $queryWorkOrderId];
+
+            if ($scanQueryFlag !== '') {
+                $redirectParams['scan'] = $scanQueryFlag;
+            }
+
+            if ($sourceQueryFlag !== '') {
+                $redirectParams['source'] = $sourceQueryFlag;
+            }
+
+            return redirect()->route('app-invoice-preview', $redirectParams);
         }
 
         $workOrderId = $routeWorkOrderId !== '' ? $routeWorkOrderId : $queryWorkOrderId;
@@ -64,7 +78,13 @@ class WorkOrderController extends Controller
             $workOrder = $this->findMappedWorkOrder((string) $workOrderId, true);
 
             if (!$workOrder) {
-                return $this->emptyInvoicePreviewResponse($pageConfigs, (string) $workOrderId);
+                return redirect()
+                    ->route('app-invoice-preview')
+                    ->with('scan_lookup_notice', [
+                        'icon' => 'error',
+                        'title' => 'Nalog nije pronađen',
+                        'text' => 'Ne postoji nalog za odabrane parametre. Probaj sa drugim QR kodom.',
+                    ]);
             }
 
             $raw = $workOrder['raw'] ?? [];
@@ -95,6 +115,28 @@ class WorkOrderController extends Controller
                 $workOrderRegOperations
             );
 
+            $successNotice = null;
+
+            if ($isScanLookup) {
+                $successNotice = [
+                    'icon' => 'success',
+                    'title' => 'Nalog učitan',
+                    'text' => 'Radni nalog je uspješno otvoren iz QR koda',
+                ];
+            } elseif (in_array($normalizedSource, ['invoice_list', 'upravljanje_nalozima', 'lista_naloga'], true)) {
+                $successNotice = [
+                    'icon' => 'success',
+                    'title' => 'Nalog učitan',
+                    'text' => 'Radni nalog je otvoren kroz administraciju',
+                ];
+            } elseif (in_array($normalizedSource, ['dashboard_home', 'home_table', 'kontrolna_ploca'], true)) {
+                $successNotice = [
+                    'icon' => 'success',
+                    'title' => 'Nalog učitan',
+                    'text' => 'Radni nalog je otvoren kroz administraciju',
+                ];
+            }
+
             return view('/content/apps/invoice/app-invoice-preview', [
                 'pageConfigs' => $pageConfigs,
                 'workOrder' => $workOrder,
@@ -108,6 +150,7 @@ class WorkOrderController extends Controller
                 'issueDate' => $this->displayDate($workOrder['datum_kreiranja'] ?? null),
                 'plannedStartDate' => $this->formatMetaDateTime($this->value($raw, ['adSchedStartTime'], null)),
                 'dueDate' => $this->displayDate($workOrder['datum_zavrsetka'] ?? null),
+                'scanLookupNotice' => $successNotice,
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order preview query failed.', [

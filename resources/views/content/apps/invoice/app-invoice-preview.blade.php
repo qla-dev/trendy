@@ -1872,6 +1872,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
   document.addEventListener('DOMContentLoaded', function () {
     var sidebar = document.querySelector('.invoice-preview-wrapper .invoice-actions');
     var progressBars = document.querySelectorAll('.wo-progress-bar[data-target]');
+    var scanLookupNotice = @json(session('scan_lookup_notice') ?? ($scanLookupNotice ?? null));
     var mutationConfig = {
       statusUrl: @json($statusUpdateUrl),
       priorityUrl: @json($priorityUpdateUrl),
@@ -1978,6 +1979,17 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       };
 
       return resolvedOptions;
+    }
+
+    if (scanLookupNotice && window.Swal && typeof window.Swal.fire === 'function') {
+      Swal.fire(swalWithTheme({
+        icon: String(scanLookupNotice.icon || 'info'),
+        title: String(scanLookupNotice.title || ''),
+        text: String(scanLookupNotice.text || ''),
+        timer: 3000,
+        timerProgressBar: true,
+        showConfirmButton: false
+      }));
     }
 
     function setActionButtonLoading(button, isLoading) {

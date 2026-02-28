@@ -141,8 +141,8 @@
               </div>
 
               <div class="wo-bom-modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                  <i class="fa fa-times me-50"></i> Zatvorite
+                <button type="button" class="btn btn-secondary wo-scanner-close-fab" data-bs-dismiss="modal" aria-label="Zatvori">
+                  <i class="fa fa-times me-50"></i> Zatvori
                 </button>
                 <button type="button" class="btn btn-success" id="bom-open-quantity-btn" disabled>
                   <i class="fa fa-check me-50"></i> Nastavite na unos količine
@@ -587,6 +587,27 @@
     gap: 0.85rem;
   }
 
+  #sirovina-scanner-modal .wo-scanner-close-fab {
+    position: fixed;
+    top: max(1rem, env(safe-area-inset-top));
+    left: max(1rem, env(safe-area-inset-left));
+    z-index: 1085;
+    border-radius: 10px;
+    padding: 0.55rem 0.95rem;
+    border: 1px solid rgba(205, 215, 238, 0.42);
+    background-color: rgba(10, 14, 22, 0.82);
+    color: #eef3ff;
+    box-shadow: 0 8px 20px rgba(6, 8, 14, 0.45);
+    backdrop-filter: blur(2px);
+  }
+
+  #sirovina-scanner-modal .wo-scanner-close-fab:hover,
+  #sirovina-scanner-modal .wo-scanner-close-fab:focus {
+    border-color: rgba(223, 231, 248, 0.7);
+    background-color: rgba(18, 24, 37, 0.94);
+    color: #ffffff;
+  }
+
   #sirovina-scanner-modal .form-control,
   #sirovina-scanner-modal .form-select {
     background-color: rgba(16, 22, 35, 0.85);
@@ -615,6 +636,10 @@
     border-color: #28c76f;
   }
 
+  #sirovina-scanner-modal .modal-body {
+    background-color: unset!important;
+  }
+
   @media (max-width: 991.98px) {
     #sirovina-scanner-modal .wo-bom-split-row {
       grid-template-columns: 1fr;
@@ -628,6 +653,12 @@
   }
 
   @media (max-width: 767.98px) {
+    #sirovina-scanner-modal .wo-scanner-close-fab {
+      top: max(0.75rem, env(safe-area-inset-top));
+      left: max(0.75rem, env(safe-area-inset-left));
+      padding: 0.5rem 0.82rem;
+    }
+
     #sirovina-scanner-modal .wo-bom-modal-shell {
       padding: 0;
     }

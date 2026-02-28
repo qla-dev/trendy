@@ -768,7 +768,10 @@
                     $statusText = trim((string) ($order->status ?? 'N/A'));
                     $normalizedStatus = mb_strtolower($statusText);
                     $statusClass = 'dashboard-status-default';
-                    $previewUrl = url('app/invoice/preview/' . $routeId);
+                    $previewUrl = route('app-invoice-preview', [
+                      'id' => $routeId,
+                      'source' => 'dashboard_home',
+                    ]);
                     if (str_contains($normalizedStatus, 'otvoren')) {
                       $statusClass = 'dashboard-status-otvoren';
                     } elseif (str_contains($normalizedStatus, 'u radu') || str_contains($normalizedStatus, 'u toku')) {

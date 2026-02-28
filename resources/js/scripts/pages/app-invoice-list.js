@@ -26,6 +26,18 @@ $(function () {
     workOrdersApi = assetPath + 'api/work-orders';
   }
 
+  function buildInvoicePreviewUrl(routeId, sourceTag) {
+    var normalizedRouteId = encodeURIComponent((routeId || '').toString().trim());
+    var normalizedSource = (sourceTag || '').toString().trim();
+    var baseUrl = invoicePreview + '/' + normalizedRouteId;
+
+    if (!normalizedSource) {
+      return baseUrl;
+    }
+
+    return baseUrl + '?source=' + encodeURIComponent(normalizedSource);
+  }
+
   function getFilters(currentStatusFilter) {
     return {
       status: currentStatusFilter || '',
@@ -675,9 +687,7 @@ $(function () {
               sortValue +
               '</span>' +
               '<a class="fw-bold text-nowrap" href="' +
-              invoicePreview +
-              '/' +
-              routeId +
+              buildInvoicePreviewUrl(routeId, 'invoice_list') +
               '">' +
               displayNumber +
               '</a>'
@@ -997,7 +1007,7 @@ $(function () {
         return;
       }
 
-      window.location.href = invoicePreview + '/' + rowData.id;
+      window.location.href = buildInvoicePreviewUrl(rowData.id, 'invoice_list');
     });
 
     var filtersBody = $('#filters-body');

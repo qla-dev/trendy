@@ -7,7 +7,7 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content" style="background: transparent; border: none;">
       <div class="modal-body p-0 text-center">
-        <h4 class="text-white mb-4" id="qr-scanner-modal-label">Skeniraj QR code radnog naloga</h4>
+        <h4 class="text-white mb-2" id="qr-scanner-modal-label">Skeniraj QR code radnog naloga</h4>
 
         <div class="qr-scanner-container position-relative" style="max-width: 400px; margin: 0 auto;">
           <div id="qr-scanner-frame" class="qr-scanner-frame position-relative" style="width: 100%; padding-top: 100%; background: rgba(255, 255, 255, 0.1); border: 2px solid var(--bs-success, #28c76f); border-radius: 12px; overflow: hidden;">
@@ -60,7 +60,7 @@
           </div>
         </div>
 
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" aria-label="Zatvori">
+        <button type="button" class="btn btn-secondary wo-scanner-close-fab" data-bs-dismiss="modal" aria-label="Zatvori">
           <i class="fa fa-times me-50"></i> Zatvori
         </button>
       </div>
@@ -360,6 +360,27 @@
     gap: 0.2rem;
   }
 
+  #qr-scanner-modal .wo-scanner-close-fab {
+    position: fixed;
+    top: max(1rem, env(safe-area-inset-top));
+    left: max(1rem, env(safe-area-inset-left));
+    z-index: 1085;
+    border-radius: 10px;
+    padding: 0.55rem 0.95rem;
+    border: 1px solid rgba(205, 215, 238, 0.42);
+    background-color: rgba(10, 14, 22, 0.82);
+    color: #eef3ff;
+    box-shadow: 0 8px 20px rgba(6, 8, 14, 0.45);
+    backdrop-filter: blur(2px);
+  }
+
+  #qr-scanner-modal .wo-scanner-close-fab:hover,
+  #qr-scanner-modal .wo-scanner-close-fab:focus {
+    border-color: rgba(223, 231, 248, 0.7);
+    background-color: rgba(18, 24, 37, 0.94);
+    color: #ffffff;
+  }
+
   #qr-scanner-modal #qr-scanner-region > div {
     border: 0 !important;
   }
@@ -370,6 +391,12 @@
   }
 
   @media (max-width: 575.98px) {
+    #qr-scanner-modal .wo-scanner-close-fab {
+      top: max(0.75rem, env(safe-area-inset-top));
+      left: max(0.75rem, env(safe-area-inset-left));
+      padding: 0.5rem 0.82rem;
+    }
+
     #qr-scanner-modal .wo-qr-controls-row {
       flex-direction: column;
       align-items: stretch;
@@ -547,7 +574,9 @@
 
     function toWorkOrderPreviewUrl(workOrderId) {
       var path = previewPathPattern.replace('__WORK_ORDER_ID__', encodeURIComponent(workOrderId));
-      return new URL(path, window.location.origin).toString();
+      var targetUrl = new URL(path, window.location.origin);
+      targetUrl.searchParams.set('scan', '1');
+      return targetUrl.toString();
     }
 
     function renderCameraOptions() {
