@@ -215,6 +215,7 @@
         <thead>
           <tr>
             <th>#</th>
+            <th>Narudžba</th>
             <th>Naziv</th>
             <th>Šifra</th>
             <th>Klijent</th>

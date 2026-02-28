@@ -19,20 +19,45 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   }
   .invoice-preview .invoice-title, .invoice-edit .invoice-title, .invoice-add .invoice-title {
-    margin-bottom: 0.5rem !important;
+    margin-bottom: 0.7rem !important;
   }
   .invoice-preview .invoice-title .invoice-number {
     margin-left: 0.5rem;
   }
+  .invoice-preview .invoice-title .invoice-key {
+    font-weight: 700;
+  }
+  .invoice-preview .invoice-title .invoice-order-number {
+    margin-left: 0;
+    font-size: 0.85em;
+    font-weight: 600;
+    color: #6e6b7b;
+  }
+  .invoice-preview .invoice-title .invoice-title-stack {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.3rem;
+  }
+  .invoice-preview .invoice-title .invoice-order-number .invoice-number {
+    margin-left: 0.45rem;
+  }
+  body.dark-layout .invoice-preview .invoice-title .invoice-order-number,
+  body.semi-dark-layout .invoice-preview .invoice-title .invoice-order-number,
+  .dark-layout .invoice-preview .invoice-title .invoice-order-number,
+  .semi-dark-layout .invoice-preview .invoice-title .invoice-order-number {
+    color: #b4bdd3;
+  }
   .invoice-preview .invoice-date-wrapper, .invoice-edit .invoice-date-wrapper, .invoice-add .invoice-date-wrapper {
     justify-content: flex-end;
-    margin-bottom: 0.5rem !important;
+    margin-bottom: 0.45rem !important;
   }
   .invoice-preview .invoice-date-wrapper:last-child {
     margin-bottom: 0 !important;
   }
   .invoice-preview .invoice-date-wrapper .invoice-date-title, .invoice-edit .invoice-date-wrapper .invoice-date-title, .invoice-add .invoice-date-wrapper .invoice-date-title {
     width: unset;
+    font-weight: 700;
   }
   .invoice-preview-wrapper .logo-wrapper .invoice-logo {
     color: #42526e !important;
@@ -1076,6 +1101,22 @@
   };
 
   $invoiceNumberDisplay = $displayValue($invoiceNumberDisplay);
+  $orderNumberDisplay = $workOrder['broj_narudzbe'] ?? '';
+  if (
+    is_string($orderNumberDisplay) &&
+    $orderNumberDisplay !== '' &&
+    !str_contains($orderNumberDisplay, '-')
+  ) {
+    $orderDigits = preg_replace('/\D+/', '', $orderNumberDisplay);
+    if (is_string($orderDigits) && strlen($orderDigits) === 13) {
+      $orderNumberDisplay =
+        substr($orderDigits, 0, 2) . '-' .
+        substr($orderDigits, 2, 5) . '-' .
+        substr($orderDigits, 7);
+    }
+  }
+  $orderNumberDisplay = $displayValue($orderNumberDisplay);
+  $hasOrderNumber = $orderNumberDisplay !== '-';
   $issueDate = $displayValue($issueDate ?? null);
   $plannedStartDate = $displayValue($plannedStartDate ?? null);
   $dueDate = $displayValue($dueDate ?? null);
@@ -1204,7 +1245,12 @@
                 <div class="wo-header-main-row">
                   <div class="wo-header-meta">
                     <h4 class="invoice-title">
-                      <span>RN<span class="invoice-number">{{ $invoiceNumberDisplay }}</span></span>
+                      <span class="invoice-title-stack">
+                        <span><span class="invoice-key">RN</span><span class="invoice-number">{{ $invoiceNumberDisplay }}</span></span>
+                        @if($hasOrderNumber)
+                          <span class="invoice-order-number">Narudžba<span class="invoice-number">{{ $orderNumberDisplay }}</span></span>
+                        @endif
+                      </span>
                     </h4>
                     <div class="invoice-date-wrapper">
                       <p class="invoice-date-title">Datum izdavanja:</p>

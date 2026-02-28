@@ -394,16 +394,16 @@ $(function () {
   // datatable
   if (dtInvoiceTable.length) {
     var currentStatusFilter = null;
-    var moneyColumnIndex = 4;
+    var moneyColumnIndex = 5;
     var moneyColumnVisible = null;
     var tableLoadingRequestCount = 0;
     var searchDebounceTimer = null;
     var searchOverlaySafetyTimer = null;
     var sortableColumnMap = {
       0: 'id',
-      3: 'klijent',
-      6: 'status',
-      7: 'prioritet'
+      4: 'klijent',
+      7: 'status',
+      8: 'prioritet'
     };
     var quickSearchIdleLabel = 'Brza pretraga po nazivu, šifri, klijentu itd..';
     var quickSearchLoadingLabel = 'Filterisanje';
@@ -644,6 +644,7 @@ $(function () {
       },
       columns: [
         { data: 'id' },
+        { data: 'broj_narudzbe' },
         { data: 'naziv' },
         { data: 'sifra' },
         { data: 'klijent' },
@@ -654,7 +655,7 @@ $(function () {
       ],
       columnDefs: [
         {
-          targets: [1, 2, 4, 5],
+          targets: [1, 2, 3, 5, 6],
           orderable: false
         },
         {
@@ -685,6 +686,20 @@ $(function () {
         },
         {
           targets: 1,
+          width: '150px',
+          render: function (data, type, full) {
+            var orderNumber = (full['broj_narudzbe'] || full['narudzba_kljuc'] || '').toString().trim();
+            var displayNumber = formatWorkOrderNumber(orderNumber);
+
+            if (!orderNumber) {
+              return '<span class="text-muted">-</span>';
+            }
+
+            return '<span class="text-nowrap">' + escapeHtml(displayNumber) + '</span>';
+          }
+        },
+        {
+          targets: 2,
           width: '250px',
           render: function (data, type, full) {
             var productName = (full['naziv'] || 'Radni nalog').toString().trim();
@@ -702,7 +717,7 @@ $(function () {
           }
         },
         {
-          targets: 2,
+          targets: 3,
           width: '130px',
           render: function (data, type, full) {
             var productCode = (full['sifra'] || '').toString().trim();
@@ -715,7 +730,7 @@ $(function () {
           }
         },
         {
-          targets: 3,
+          targets: 4,
           width: '270px',
           render: function (data, type, full) {
             var name = full['klijent'] || 'N/A',
@@ -761,7 +776,7 @@ $(function () {
           }
         },
         {
-          targets: 4,
+          targets: 5,
           width: '73px',
           render: function (data, type, full) {
             var total = full['vrednost'];
@@ -779,7 +794,7 @@ $(function () {
           }
         },
         {
-          targets: 5,
+          targets: 6,
           width: '130px',
           render: function (data, type, full) {
             var createdDate = new Date(full['datum_kreiranja']);
@@ -792,7 +807,7 @@ $(function () {
           }
         },
         {
-          targets: 6,
+          targets: 7,
           className: 'text-center align-middle',
           width: '98px',
           render: function (data, type, full) {
@@ -811,7 +826,7 @@ $(function () {
           }
         },
         {
-          targets: 7,
+          targets: 8,
           width: '80px',
           render: function (data, type, full) {
             var priority = full['prioritet'];

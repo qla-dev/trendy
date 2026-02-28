@@ -15,6 +15,8 @@ use Throwable;
 class WorkOrderController extends Controller
 {
     private ?array $deliveryPriorityMap = null;
+    private ?array $orderTableColumnsCache = null;
+    private array $linkedOrderCache = [];
 
     public function invoiceList()
     {
@@ -1187,14 +1189,18 @@ class WorkOrderController extends Controller
             $this->applyDefaultOrdering($query, $columns);
         }
 
-        $data = $query
+        $rows = $query
             ->forPage($resolvedPage, $resolvedLimit)
             ->get()
             ->map(function ($row) {
-                return $this->mapRow((array) $row);
+                return (array) $row;
             })
             ->values()
             ->all();
+        $linkedOrders = $this->resolveLinkedOrdersForRows($rows);
+        $data = array_map(function (array $row) use ($linkedOrders) {
+            return $this->mapRow($row, false, $linkedOrders);
+        }, $rows);
 
         return [
             'data' => $data,
@@ -1804,7 +1810,7 @@ class WorkOrderController extends Controller
             return null;
         }
 
-        return $this->mapRow($row, $includeRaw);
+        return $this->mapRow($row, $includeRaw, $this->resolveLinkedOrdersForRows([$row]), true);
     }
 
     private function findWorkOrderRow(string $id): ?array
@@ -1854,7 +1860,12 @@ class WorkOrderController extends Controller
         return $row ? (array) $row : null;
     }
 
-    private function mapRow(array $row, bool $includeRaw = false): array
+    private function mapRow(
+        array $row,
+        bool $includeRaw = false,
+        array $linkedOrders = [],
+        bool $loadLinkedOrderOnMiss = false
+    ): array
     {
         $brojNaloga = (string) $this->value($row, ['acRefNo1', 'acKey', 'anNo', 'id'], 'N/A');
         $id = $this->value($row, ['acRefNo1', 'acKey'], null);
@@ -1869,6 +1880,10 @@ class WorkOrderController extends Controller
         $endDate = $this->normalizeDate($this->value($row, ['adDeliveryDeadline', 'adDateOut', 'actual_end']));
         $rawAmount = $this->value($row, $this->moneyValueCandidates(), null);
         $amount = $this->normalizeNullableNumber($rawAmount);
+        $orderLinkKey = $this->extractOrderLinkKey($row);
+        $linkedOrder = $this->resolveLinkedOrder($orderLinkKey, $linkedOrders, $loadLinkedOrderOnMiss);
+        $orderKey = trim((string) ($linkedOrder['order_key'] ?? $orderLinkKey));
+        $orderNumber = trim((string) ($linkedOrder['order_number'] ?? $orderKey));
 
         $mapped = [
             'responsive_id' => '',
@@ -1886,6 +1901,8 @@ class WorkOrderController extends Controller
             'vrednost' => $amount,
             'valuta' => $amount === null ? '' : (string) $this->value($row, ['acCurrency', 'currency'], 'BAM'),
             'magacin' => (string) $this->value($row, ['acWarehouse', 'linked_document', 'acWarehouseFrom'], ''),
+            'broj_narudzbe' => $orderNumber,
+            'narudzba_kljuc' => $orderKey,
         ];
 
         if ($includeRaw) {
@@ -1991,6 +2008,7 @@ class WorkOrderController extends Controller
 
         $traceability = [
             ['label' => 'RN ključ', 'value' => (string) $this->valueTrimmed($raw, ['acKeyView', 'acKey'], '-')],
+            ['label' => 'Broj narudžbe', 'value' => (string) ($workOrder['broj_narudzbe'] ?? '-')],
             ['label' => 'Vezni dokument', 'value' => (string) $this->valueTrimmed($raw, ['acLnkKeyView', 'acLnkKey'], '-')],
             ['label' => 'Vezni broj', 'value' => (string) $this->valueTrimmed($raw, ['anLnkNo'], '-')],
             ['label' => 'Nadređeni RN', 'value' => (string) $this->valueTrimmed($raw, ['acParentWOView', 'acParentWO'], '-')],
@@ -2118,6 +2136,141 @@ class WorkOrderController extends Controller
             'sek_klas' => (string) $this->value($row, ['acFieldSC'], ''),
             'can_remove' => $canRemove,
         ];
+    }
+
+    private function resolveLinkedOrdersForRows(array $rows): array
+    {
+        $linkKeys = array_values(array_unique(array_filter(array_map(function ($row) {
+            return $this->extractOrderLinkKey(is_array($row) ? $row : (array) $row);
+        }, $rows))));
+
+        if (empty($linkKeys)) {
+            return [];
+        }
+
+        $this->primeLinkedOrderCache($linkKeys);
+
+        $resolved = [];
+
+        foreach ($linkKeys as $linkKey) {
+            if (!array_key_exists($linkKey, $this->linkedOrderCache) || empty($this->linkedOrderCache[$linkKey])) {
+                continue;
+            }
+
+            $resolved[$linkKey] = $this->linkedOrderCache[$linkKey];
+        }
+
+        return $resolved;
+    }
+
+    private function extractOrderLinkKey(array $row): string
+    {
+        return trim((string) $this->valueTrimmed($row, ['acLnkKey'], ''));
+    }
+
+    private function resolveLinkedOrder(string $linkKey, array $linkedOrders = [], bool $loadOnMiss = false): array
+    {
+        if ($linkKey === '') {
+            return [];
+        }
+
+        if (array_key_exists($linkKey, $linkedOrders) && !empty($linkedOrders[$linkKey])) {
+            return $linkedOrders[$linkKey];
+        }
+
+        if (array_key_exists($linkKey, $this->linkedOrderCache) && !empty($this->linkedOrderCache[$linkKey])) {
+            return $this->linkedOrderCache[$linkKey];
+        }
+
+        if (!$loadOnMiss) {
+            return [];
+        }
+
+        $this->primeLinkedOrderCache([$linkKey]);
+
+        return (array) ($this->linkedOrderCache[$linkKey] ?? []);
+    }
+
+    private function primeLinkedOrderCache(array $linkKeys): void
+    {
+        $linkKeys = array_values(array_unique(array_filter(array_map(function ($key) {
+            return trim((string) $key);
+        }, $linkKeys), function ($key) {
+            return $key !== '';
+        })));
+
+        if (empty($linkKeys)) {
+            return;
+        }
+
+        $missingLinkKeys = array_values(array_filter($linkKeys, function ($key) {
+            return !array_key_exists($key, $this->linkedOrderCache);
+        }));
+
+        if (empty($missingLinkKeys)) {
+            return;
+        }
+
+        $orderColumns = $this->orderTableColumns();
+        $orderKeyColumn = $this->firstExistingColumn($orderColumns, ['acKey']);
+        $orderNumberColumn = $this->firstExistingColumn($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']);
+        $orderQidColumn = $this->firstExistingColumn($orderColumns, ['anQId']);
+
+        foreach ($missingLinkKeys as $linkKey) {
+            $this->linkedOrderCache[$linkKey] = [];
+        }
+
+        if ($orderKeyColumn === null) {
+            return;
+        }
+
+        $selectColumns = array_values(array_unique(array_filter([
+            $orderKeyColumn,
+            $orderNumberColumn,
+            $orderQidColumn,
+        ])));
+
+        try {
+            $rows = $this->newOrderTableQuery()
+                ->whereIn($orderKeyColumn, $missingLinkKeys)
+                ->get($selectColumns)
+                ->map(function ($row) {
+                    return (array) $row;
+                })
+                ->values()
+                ->all();
+
+            foreach ($rows as $row) {
+                $orderKey = trim((string) ($row[$orderKeyColumn] ?? ''));
+
+                if ($orderKey === '') {
+                    continue;
+                }
+
+                $orderNumber = $orderNumberColumn !== null
+                    ? trim((string) ($row[$orderNumberColumn] ?? ''))
+                    : '';
+
+                if ($orderNumber === '') {
+                    $orderNumber = $orderKey;
+                }
+
+                $this->linkedOrderCache[$orderKey] = [
+                    'order_key' => $orderKey,
+                    'order_number' => $orderNumber,
+                    'order_qid' => $orderQidColumn !== null
+                        ? ($row[$orderQidColumn] ?? null)
+                        : null,
+                ];
+            }
+        } catch (Throwable $exception) {
+            Log::warning('Unable to resolve linked order numbers for work orders.', [
+                'connection' => config('database.default'),
+                'work_orders_table' => $this->qualifiedTableName(),
+                'orders_table' => $this->qualifiedOrderTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     private function plannedConsumptionDisplayNote(string $note): string
@@ -2323,7 +2476,7 @@ class WorkOrderController extends Controller
 
         $this->applyLikeAny(
             $query,
-            $this->existingColumns($columns, ['acRefNo1', 'acKey']),
+            $this->existingColumns($columns, ['acRefNo1', 'acKey', 'acLnkKey', 'acLnkKeyView']),
             (string) ($filters['vezni_dok'] ?? '')
         );
 
@@ -2497,6 +2650,8 @@ class WorkOrderController extends Controller
         $searchColumns = $this->existingColumns($columns, [
             'acRefNo1',
             'acKey',
+            'acLnkKey',
+            'acLnkKeyView',
             'acConsignee',
             'acReceiver',
             'acPartner',
@@ -3209,6 +3364,25 @@ class WorkOrderController extends Controller
             ->all();
     }
 
+    private function orderTableColumns(): array
+    {
+        if ($this->orderTableColumnsCache !== null) {
+            return $this->orderTableColumnsCache;
+        }
+
+        $this->orderTableColumnsCache = DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->where('TABLE_SCHEMA', $this->tableSchema())
+            ->where('TABLE_NAME', $this->orderTableName())
+            ->pluck('COLUMN_NAME')
+            ->map(function ($columnName) {
+                return (string) $columnName;
+            })
+            ->values()
+            ->all();
+
+        return $this->orderTableColumnsCache;
+    }
+
     private function itemTableIdentityColumns(): array
     {
         if (DB::getDriverName() !== 'sqlsrv') {
@@ -3569,6 +3743,11 @@ class WorkOrderController extends Controller
         return DB::table($this->qualifiedProductStructureTableName());
     }
 
+    private function newOrderTableQuery(): Builder
+    {
+        return DB::table($this->qualifiedOrderTableName());
+    }
+
     private function resolveLimit(?int $requestedLimit = null): int
     {
         $maxLimit = max(1, (int) config('workorders.max_limit', 100));
@@ -3612,6 +3791,11 @@ class WorkOrderController extends Controller
         return (string) config('workorders.product_structure_table', 'tHF_SetPrSt');
     }
 
+    private function orderTableName(): string
+    {
+        return (string) config('workorders.orders_table', 'tHE_Order');
+    }
+
     private function qualifiedTableName(): string
     {
         return $this->tableSchema() . '.' . $this->tableName();
@@ -3635,6 +3819,11 @@ class WorkOrderController extends Controller
     private function qualifiedProductStructureTableName(): string
     {
         return $this->tableSchema() . '.' . $this->productStructureTableName();
+    }
+
+    private function qualifiedOrderTableName(): string
+    {
+        return $this->tableSchema() . '.' . $this->orderTableName();
     }
 
     private function emptyInvoicePreviewResponse(array $pageConfigs, ?string $invoiceNumber = null)
