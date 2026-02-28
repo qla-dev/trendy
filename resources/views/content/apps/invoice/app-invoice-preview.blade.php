@@ -19,10 +19,11 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   }
   .invoice-preview .invoice-title, .invoice-edit .invoice-title, .invoice-add .invoice-title {
-    margin-bottom: 0.7rem !important;
+    margin-bottom: 0.5rem !important;
   }
   .invoice-preview .invoice-title .invoice-number {
     margin-left: 0.5rem;
+    font-weight: 400;
   }
   .invoice-preview .invoice-title .invoice-key {
     font-weight: 700;
@@ -30,17 +31,18 @@
   .invoice-preview .invoice-title .invoice-order-number {
     margin-left: 0;
     font-size: 0.85em;
-    font-weight: 600;
+    font-weight: 700;
     color: #6e6b7b;
   }
   .invoice-preview .invoice-title .invoice-title-stack {
     display: inline-flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 0.3rem;
+    gap: 0.5rem;
   }
   .invoice-preview .invoice-title .invoice-order-number .invoice-number {
     margin-left: 0.45rem;
+    font-weight: 400;
   }
   body.dark-layout .invoice-preview .invoice-title .invoice-order-number,
   body.semi-dark-layout .invoice-preview .invoice-title .invoice-order-number,
@@ -58,6 +60,9 @@
   .invoice-preview .invoice-date-wrapper .invoice-date-title, .invoice-edit .invoice-date-wrapper .invoice-date-title, .invoice-add .invoice-date-wrapper .invoice-date-title {
     width: unset;
     font-weight: 700;
+  }
+  .invoice-preview .invoice-date-wrapper .invoice-date, .invoice-edit .invoice-date-wrapper .invoice-date, .invoice-add .invoice-date-wrapper .invoice-date {
+    font-weight: 400;
   }
   .invoice-preview-wrapper .logo-wrapper .invoice-logo {
     color: #42526e !important;
@@ -183,7 +188,7 @@
   }
   .wo-header-details-row {
     display: flex;
-    align-items: flex-start;
+    align-items: flex-end;
     justify-content: space-between;
     gap: 1.5rem;
     flex-wrap: wrap;
@@ -1248,7 +1253,7 @@
                       <span class="invoice-title-stack">
                         <span><span class="invoice-key">RN</span><span class="invoice-number">{{ $invoiceNumberDisplay }}</span></span>
                         @if($hasOrderNumber)
-                          <span class="invoice-order-number">Narudžba<span class="invoice-number">{{ $orderNumberDisplay }}</span></span>
+                          <span class="invoice-order-number">Narudžba:<span class="invoice-number">{{ $orderNumberDisplay }}</span></span>
                         @endif
                       </span>
                     </h4>
@@ -2338,3 +2343,4 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 ])
 @include('content.new-components.confirm-weight')
 @endsection
+

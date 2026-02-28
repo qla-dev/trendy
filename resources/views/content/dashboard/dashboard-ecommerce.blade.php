@@ -719,6 +719,7 @@
               <thead>
                 <tr>
                   <th>#</th>
+                  <th>Narudžba</th>
                   <th>Naziv</th>
                   <th>Šifra</th>
                   <th>Klijent</th>
@@ -735,6 +736,12 @@
                     $displayNumber = $rawNumber;
                     if (is_string($digits) && strlen($digits) === 13) {
                       $displayNumber = substr($digits, 0, 2) . '-' . substr($digits, 2, 5) . '-' . substr($digits, 7);
+                    }
+                    $rawOrderNumber = trim((string) ($order->order_number ?? $order->order_key ?? ''));
+                    $orderDigits = preg_replace('/\D+/', '', $rawOrderNumber);
+                    $displayOrderNumber = $rawOrderNumber;
+                    if (is_string($orderDigits) && strlen($orderDigits) === 13) {
+                      $displayOrderNumber = substr($orderDigits, 0, 2) . '-' . substr($orderDigits, 2, 5) . '-' . substr($orderDigits, 7);
                     }
 
                     $clientName = trim((string) ($order->client_name ?? 'N/A'));
@@ -782,6 +789,9 @@
                         {{ $displayNumber !== '' ? $displayNumber : 'N/A' }}
                       </span>
                     </td>
+                    <td class="text-nowrap">
+                      <span>{{ $displayOrderNumber !== '' ? $displayOrderNumber : '-' }}</span>
+                    </td>
                     <td>
                       <span class="dashboard-product-name" title="{{ $productName !== '' ? $productName : 'N/A' }}">
                         {{ $productDisplayName !== '' ? $productDisplayName : 'N/A' }}
@@ -810,7 +820,7 @@
                 @endforeach
                 @if ($latestOrders->isEmpty())
                   <tr>
-                    <td colspan="6" class="text-center text-muted">Nema dostupnih naloga.</td>
+                    <td colspan="7" class="text-center text-muted">Nema dostupnih naloga.</td>
                   </tr>
                 @endif
               </tbody>

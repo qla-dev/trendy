@@ -11,6 +11,9 @@ use Throwable;
 
 class DashboardController extends Controller
 {
+  private ?array $orderTableColumnsCache = null;
+  private array $linkedOrderCache = [];
+
   // Dashboard - Analytics
   public function dashboardAnalytics()
   {
@@ -78,15 +81,30 @@ class DashboardController extends Controller
         }
       }
 
-      $latestOrders = $query
+      $latestRows = $query
         ->limit(6)
         ->get()
         ->map(function ($row) {
-          $rowData = (array) $row;
+          return (array) $row;
+        })
+        ->values()
+        ->all();
+      $linkedOrders = $this->resolveLinkedOrdersForRows($latestRows);
+
+      $latestOrders = collect($latestRows)
+        ->map(function (array $rowData) use ($linkedOrders) {
+          $orderLinkKey = trim((string) ($rowData['acLnkKey'] ?? ''));
+          $linkedOrder = $orderLinkKey !== '' && array_key_exists($orderLinkKey, $linkedOrders)
+            ? (array) $linkedOrders[$orderLinkKey]
+            : [];
+          $orderKey = trim((string) ($linkedOrder['order_key'] ?? $orderLinkKey));
+          $orderNumber = trim((string) ($linkedOrder['order_number'] ?? $orderKey));
 
           return (object) [
             'id' => $rowData['acRefNo1'] ?? $rowData['acKey'] ?? $rowData['anNo'] ?? null,
             'work_order_number' => $rowData['acRefNo1'] ?? $rowData['acKey'] ?? 'N/A',
+            'order_number' => $orderNumber,
+            'order_key' => $orderKey,
             'product_name' => $rowData['acName'] ?? $rowData['acDescr'] ?? 'Radni nalog',
             'product_code' => $rowData['acIdent'] ?? $rowData['acCode'] ?? '',
             'linked_document' => $rowData['acKey'] ?? '',
@@ -189,5 +207,140 @@ class DashboardController extends Controller
       'N' => 'Novo',
       'C' => 'Otkazano',
     ][$code] ?? (string) $status;
+  }
+
+  private function resolveLinkedOrdersForRows(array $rows): array
+  {
+    $linkKeys = array_values(array_unique(array_filter(array_map(function ($row) {
+      $rowData = is_array($row) ? $row : (array) $row;
+      return trim((string) ($rowData['acLnkKey'] ?? ''));
+    }, $rows), function ($value) {
+      return $value !== '';
+    })));
+
+    if (empty($linkKeys)) {
+      return [];
+    }
+
+    $this->primeLinkedOrderCache($linkKeys);
+
+    $resolved = [];
+
+    foreach ($linkKeys as $linkKey) {
+      if (!array_key_exists($linkKey, $this->linkedOrderCache) || empty($this->linkedOrderCache[$linkKey])) {
+        continue;
+      }
+
+      $resolved[$linkKey] = $this->linkedOrderCache[$linkKey];
+    }
+
+    return $resolved;
+  }
+
+  private function primeLinkedOrderCache(array $linkKeys): void
+  {
+    $linkKeys = array_values(array_unique(array_filter(array_map(function ($key) {
+      return trim((string) $key);
+    }, $linkKeys), function ($key) {
+      return $key !== '';
+    })));
+
+    if (empty($linkKeys)) {
+      return;
+    }
+
+    $missingLinkKeys = array_values(array_filter($linkKeys, function ($key) {
+      return !array_key_exists($key, $this->linkedOrderCache);
+    }));
+
+    if (empty($missingLinkKeys)) {
+      return;
+    }
+
+    $orderColumns = $this->orderTableColumns();
+    $orderKeyColumn = $this->resolveFirstExistingColumn($orderColumns, ['acKey']);
+    $orderNumberColumn = $this->resolveFirstExistingColumn($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']);
+    $orderQidColumn = $this->resolveFirstExistingColumn($orderColumns, ['anQId']);
+
+    foreach ($missingLinkKeys as $linkKey) {
+      $this->linkedOrderCache[$linkKey] = [];
+    }
+
+    if ($orderKeyColumn === null) {
+      return;
+    }
+
+    $selectColumns = array_values(array_unique(array_filter([
+      $orderKeyColumn,
+      $orderNumberColumn,
+      $orderQidColumn,
+    ])));
+
+    try {
+      $rows = DB::table($this->qualifiedOrderTableName())
+        ->whereIn($orderKeyColumn, $missingLinkKeys)
+        ->get($selectColumns)
+        ->map(function ($row) {
+          return (array) $row;
+        })
+        ->values()
+        ->all();
+
+      foreach ($rows as $row) {
+        $orderKey = trim((string) ($row[$orderKeyColumn] ?? ''));
+
+        if ($orderKey === '') {
+          continue;
+        }
+
+        $orderNumber = $orderNumberColumn !== null
+          ? trim((string) ($row[$orderNumberColumn] ?? ''))
+          : '';
+
+        if ($orderNumber === '') {
+          $orderNumber = $orderKey;
+        }
+
+        $this->linkedOrderCache[$orderKey] = [
+          'order_key' => $orderKey,
+          'order_number' => $orderNumber,
+          'order_qid' => $orderQidColumn !== null
+            ? ($row[$orderQidColumn] ?? null)
+            : null,
+        ];
+      }
+    } catch (Throwable $exception) {
+      Log::warning('Dashboard linked order lookup failed.', [
+        'work_orders_table' => config('workorders.schema', 'dbo') . '.' . config('workorders.table', 'tHF_WOEx'),
+        'orders_table' => $this->qualifiedOrderTableName(),
+        'message' => $exception->getMessage(),
+      ]);
+    }
+  }
+
+  private function orderTableColumns(): array
+  {
+    if ($this->orderTableColumnsCache !== null) {
+      return $this->orderTableColumnsCache;
+    }
+
+    $schema = (string) config('workorders.schema', 'dbo');
+    $tableName = (string) config('workorders.orders_table', 'tHE_Order');
+    $this->orderTableColumnsCache = DB::table('INFORMATION_SCHEMA.COLUMNS')
+      ->where('TABLE_SCHEMA', $schema)
+      ->where('TABLE_NAME', $tableName)
+      ->pluck('COLUMN_NAME')
+      ->map(function ($columnName) {
+        return (string) $columnName;
+      })
+      ->values()
+      ->all();
+
+    return $this->orderTableColumnsCache;
+  }
+
+  private function qualifiedOrderTableName(): string
+  {
+    return (string) config('workorders.schema', 'dbo') . '.' . (string) config('workorders.orders_table', 'tHE_Order');
   }
 }
