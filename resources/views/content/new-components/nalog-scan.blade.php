@@ -469,10 +469,58 @@
       return match ? decodeURIComponent(match[1]) : null;
     }
 
+    function parseOrderLocatorToken(text) {
+      var parts = (text || '').split(';').map(function (part) {
+        return (part || '').trim();
+      });
+      if (parts.length < 2 || parts.length > 3) {
+        return null;
+      }
+
+      var rawOrderNumber = parts[0] || '';
+      var rawOrderPosition = parts[1] || '';
+      var rawProductCode = parts.length === 3 ? (parts[2] || '') : '';
+
+      if (!rawOrderNumber || !rawOrderPosition) {
+        return null;
+      }
+
+      var normalizedOrderNumber = rawOrderNumber.replace(/[^0-9A-Za-z]+/g, '').toUpperCase();
+      if (!normalizedOrderNumber) {
+        return null;
+      }
+
+      var numericPosition = Number(rawOrderPosition.replace(',', '.'));
+      if (!Number.isFinite(numericPosition)) {
+        return null;
+      }
+
+      var integerPosition = Math.round(numericPosition);
+      if (Math.abs(numericPosition - integerPosition) > 0.000001) {
+        return null;
+      }
+
+      if (parts.length === 3) {
+        var normalizedProductCode = rawProductCode.replace(/[^0-9A-Za-z]+/g, '').toUpperCase();
+        if (!normalizedProductCode) {
+          return null;
+        }
+
+        return normalizedOrderNumber + ';' + String(integerPosition) + ';' + normalizedProductCode;
+      }
+
+      return normalizedOrderNumber + ';' + String(integerPosition);
+    }
+
     function parseWorkOrderIdFromQr(rawText) {
       var text = (rawText || '').trim();
       if (!text) {
         return { id: null, error: 'Prazan QR sadrzaj.' };
+      }
+
+      var orderLocator = parseOrderLocatorToken(text);
+      if (orderLocator) {
+        return { id: orderLocator, error: null };
       }
 
       if (/^https?:\/\//i.test(text)) {
@@ -494,7 +542,7 @@
         return { id: idFromPath, error: null };
       }
 
-      return { id: null, error: 'Neispravan QR format. Skeniraj QR radnog naloga.' };
+      return { id: null, error: 'Neispravan QR format. Koristi brojNarudzbe;pozicija;sifraProizvoda ili link na radni nalog.' };
     }
 
     function toWorkOrderPreviewUrl(workOrderId) {

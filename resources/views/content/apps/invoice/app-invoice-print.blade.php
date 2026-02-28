@@ -43,7 +43,38 @@
   if ($workOrderRouteId === '') {
     $workOrderRouteId = trim((string) ($invoiceNumber ?? ''));
   }
+  $orderNumberQrRaw = trim((string) ($workOrder['broj_narudzbe'] ?? ''));
+  $orderNumberQrPayload = preg_replace('/\D+/', '', $orderNumberQrRaw);
+  if (!is_string($orderNumberQrPayload) || $orderNumberQrPayload === '') {
+    $orderNumberQrPayload = preg_replace('/[^A-Za-z0-9]+/', '', $orderNumberQrRaw);
+  }
+  $orderPositionQrRaw = trim((string) ($workOrder['broj_pozicije_narudzbe'] ?? ''));
+  $orderPositionQrPayload = '';
+  if (is_numeric(str_replace(',', '.', $orderPositionQrRaw))) {
+    $orderPositionQrPayload = (string) ((int) round((float) str_replace(',', '.', $orderPositionQrRaw)));
+  }
+  $productCodeQrRaw = trim((string) ($workOrder['sifra'] ?? ''));
+  $productCodeQrPayload = preg_replace('/[^A-Za-z0-9]+/', '', $productCodeQrRaw);
+  if (is_string($productCodeQrPayload)) {
+    $productCodeQrPayload = strtoupper($productCodeQrPayload);
+  } else {
+    $productCodeQrPayload = '';
+  }
   $previewQrTarget = request()->getSchemeAndHttpHost() . route('app-invoice-preview', ['id' => $workOrderRouteId], false);
+  if (
+    is_string($orderNumberQrPayload) &&
+    $orderNumberQrPayload !== '' &&
+    $orderPositionQrPayload !== '' &&
+    $productCodeQrPayload !== ''
+  ) {
+    $previewQrTarget = $orderNumberQrPayload . ';' . $orderPositionQrPayload . ';' . $productCodeQrPayload;
+  } elseif (
+    is_string($orderNumberQrPayload) &&
+    $orderNumberQrPayload !== '' &&
+    $orderPositionQrPayload !== ''
+  ) {
+    $previewQrTarget = $orderNumberQrPayload . ';' . $orderPositionQrPayload;
+  }
   $previewQrImage = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=' . urlencode($previewQrTarget);
 @endphp
 

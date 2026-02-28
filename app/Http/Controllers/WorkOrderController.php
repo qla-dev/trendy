@@ -1815,6 +1815,28 @@ class WorkOrderController extends Controller
 
     private function findWorkOrderRow(string $id): ?array
     {
+        $id = trim($id);
+
+        if ($id === '') {
+            return null;
+        }
+
+        $orderLocator = $this->parseOrderLocatorIdentifier($id);
+
+        if ($orderLocator !== null) {
+            $rowFromOrderLocator = $this->findWorkOrderRowByOrderLocator(
+                (string) ($orderLocator['order_number'] ?? ''),
+                (int) ($orderLocator['order_position'] ?? 0),
+                array_key_exists('product_code', $orderLocator)
+                    ? (string) ($orderLocator['product_code'] ?? '')
+                    : null
+            );
+
+            if ($rowFromOrderLocator !== null) {
+                return $rowFromOrderLocator;
+            }
+        }
+
         $columns = $this->tableColumns();
         $query = $this->newTableQuery();
         $hasCondition = false;
@@ -1858,6 +1880,154 @@ class WorkOrderController extends Controller
         $row = $query->first();
 
         return $row ? (array) $row : null;
+    }
+
+    private function parseOrderLocatorIdentifier(string $identifier): ?array
+    {
+        $identifier = trim($identifier);
+
+        if ($identifier === '' || !str_contains($identifier, ';')) {
+            return null;
+        }
+
+        $parts = array_map(static function ($part) {
+            return trim((string) $part);
+        }, explode(';', $identifier));
+
+        if (count($parts) < 2 || count($parts) > 3) {
+            return null;
+        }
+
+        $orderNumberRaw = $parts[0] ?? '';
+        $orderPositionRaw = $parts[1] ?? '';
+        $productCodeRaw = $parts[2] ?? null;
+
+        if ($orderNumberRaw === '' || $orderPositionRaw === '') {
+            return null;
+        }
+
+        $positionValue = $this->toFloatOrNull($orderPositionRaw);
+
+        if ($positionValue === null) {
+            return null;
+        }
+
+        $orderPosition = (int) round($positionValue);
+
+        if (abs($positionValue - $orderPosition) > 0.000001) {
+            return null;
+        }
+
+        $normalizedOrderNumber = $this->normalizeComparableIdentifier($orderNumberRaw);
+
+        if ($normalizedOrderNumber === '') {
+            return null;
+        }
+
+        $parsed = [
+            'order_number' => $normalizedOrderNumber,
+            'order_position' => $orderPosition,
+        ];
+
+        if ($productCodeRaw !== null) {
+            $normalizedProductCode = $this->normalizeComparableIdentifier($productCodeRaw);
+
+            if ($normalizedProductCode === '') {
+                return null;
+            }
+
+            $parsed['product_code'] = $normalizedProductCode;
+        }
+
+        return $parsed;
+    }
+
+    private function findWorkOrderRowByOrderLocator(
+        string $normalizedOrderNumber,
+        int $orderPosition,
+        ?string $normalizedProductCode = null
+    ): ?array
+    {
+        if ($normalizedOrderNumber === '') {
+            return null;
+        }
+
+        try {
+            $workOrderColumns = $this->tableColumns();
+            $workOrderLinkColumn = $this->firstExistingColumn($workOrderColumns, ['acLnkKey']);
+            $workOrderPositionColumn = $this->firstExistingColumn($workOrderColumns, ['anLnkNo']);
+            $workOrderProductColumn = $this->firstExistingColumn($workOrderColumns, ['acIdent', 'product_code', 'acCode']);
+            $orderColumns = $this->orderTableColumns();
+            $orderKeyColumn = $this->firstExistingColumn($orderColumns, ['acKey']);
+            $orderNumberColumns = $this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']);
+
+            if (
+                $workOrderLinkColumn === null
+                || $workOrderPositionColumn === null
+                || $orderKeyColumn === null
+                || empty($orderNumberColumns)
+            ) {
+                return null;
+            }
+
+            $query = DB::table($this->qualifiedTableName() . ' as wo')
+                ->join(
+                    $this->qualifiedOrderTableName() . ' as ord',
+                    'wo.' . $workOrderLinkColumn,
+                    '=',
+                    'ord.' . $orderKeyColumn
+                )
+                ->select('wo.*')
+                ->where('wo.' . $workOrderPositionColumn, $orderPosition)
+                ->where(function (Builder $orderNumberQuery) use ($orderNumberColumns, $normalizedOrderNumber) {
+                    foreach ($orderNumberColumns as $index => $orderNumberColumn) {
+                        $normalizedExpression = $this->normalizedIdentifierExpression($orderNumberQuery, 'ord.' . $orderNumberColumn);
+                        $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
+                        $orderNumberQuery->{$method}("$normalizedExpression = ?", [$normalizedOrderNumber]);
+                    }
+                });
+
+            if ($normalizedProductCode !== null && $normalizedProductCode !== '' && $workOrderProductColumn !== null) {
+                $normalizedProductExpression = $this->normalizedIdentifierExpression($query, 'wo.' . $workOrderProductColumn);
+                $query->whereRaw("$normalizedProductExpression = ?", [$normalizedProductCode]);
+            }
+
+            foreach (['adDate', 'adDateIns', 'adTimeIns', 'anNo'] as $orderByColumn) {
+                if (in_array($orderByColumn, $workOrderColumns, true)) {
+                    $query->orderByDesc('wo.' . $orderByColumn);
+                }
+            }
+
+            $row = $query->first();
+
+            return $row ? (array) $row : null;
+        } catch (Throwable $exception) {
+            Log::warning('Unable to resolve work order by order number and position.', [
+                'connection' => config('database.default'),
+                'work_orders_table' => $this->qualifiedTableName(),
+                'orders_table' => $this->qualifiedOrderTableName(),
+                'order_number' => $normalizedOrderNumber,
+                'order_position' => $orderPosition,
+                'product_code' => $normalizedProductCode,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function normalizeComparableIdentifier(string $value): string
+    {
+        $normalized = preg_replace('/[^A-Z0-9]+/', '', strtoupper(trim($value)));
+
+        return is_string($normalized) ? $normalized : '';
+    }
+
+    private function normalizedIdentifierExpression(Builder $query, string $columnIdentifier): string
+    {
+        $wrappedColumn = $query->getGrammar()->wrap($columnIdentifier);
+
+        return "UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(CAST($wrappedColumn AS NVARCHAR(64)), ''), '-', ''), ' ', ''), '/', ''), '.', ''), '_', ''))";
     }
 
     private function mapRow(
