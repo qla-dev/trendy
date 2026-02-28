@@ -1884,6 +1884,7 @@ class WorkOrderController extends Controller
         $linkedOrder = $this->resolveLinkedOrder($orderLinkKey, $linkedOrders, $loadLinkedOrderOnMiss);
         $orderKey = trim((string) ($linkedOrder['order_key'] ?? $orderLinkKey));
         $orderNumber = trim((string) ($linkedOrder['order_number'] ?? $orderKey));
+        $orderPosition = $this->valueTrimmed($row, ['anLnkNo'], null);
 
         $mapped = [
             'responsive_id' => '',
@@ -1903,6 +1904,7 @@ class WorkOrderController extends Controller
             'magacin' => (string) $this->value($row, ['acWarehouse', 'linked_document', 'acWarehouseFrom'], ''),
             'broj_narudzbe' => $orderNumber,
             'narudzba_kljuc' => $orderKey,
+            'broj_pozicije_narudzbe' => $orderPosition,
         ];
 
         if ($includeRaw) {

@@ -223,6 +223,10 @@
     white-space: nowrap;
     word-break: keep-all;
   }
+  .wo-header-meta .invoice-title .invoice-title-stack > span:first-child {
+    font-size: 1.85rem;
+    line-height: 1.05;
+  }
   .wo-header-meta .invoice-date-wrapper {
     justify-content: flex-end;
   }
@@ -1121,7 +1125,13 @@
     }
   }
   $orderNumberDisplay = $displayValue($orderNumberDisplay);
+  $orderPositionDisplay = $displayValue($workOrder['broj_pozicije_narudzbe'] ?? null);
   $hasOrderNumber = $orderNumberDisplay !== '-';
+  $hasOrderPosition = $orderPositionDisplay !== '-';
+  $orderNumberWithPositionDisplay = $orderNumberDisplay;
+  if ($hasOrderNumber && $hasOrderPosition) {
+    $orderNumberWithPositionDisplay .= ';' . $orderPositionDisplay;
+  }
   $issueDate = $displayValue($issueDate ?? null);
   $plannedStartDate = $displayValue($plannedStartDate ?? null);
   $dueDate = $displayValue($dueDate ?? null);
@@ -1253,7 +1263,7 @@
                       <span class="invoice-title-stack">
                         <span><span class="invoice-key">RN</span><span class="invoice-number">{{ $invoiceNumberDisplay }}</span></span>
                         @if($hasOrderNumber)
-                          <span class="invoice-order-number">Narudžba:<span class="invoice-number">{{ $orderNumberDisplay }}</span></span>
+                          <span class="invoice-order-number">Narudžba:<span class="invoice-number">{{ $orderNumberWithPositionDisplay }}</span></span>
                         @endif
                       </span>
                     </h4>
@@ -2343,4 +2353,3 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 ])
 @include('content.new-components.confirm-weight')
 @endsection
-
