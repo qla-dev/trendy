@@ -1081,6 +1081,7 @@
 @php
   $workOrder = is_array($workOrder ?? null) ? $workOrder : [];
   $hasLoadedWorkOrder = !empty($workOrder);
+  $showPreviewQr = $hasLoadedWorkOrder;
   $invoiceNumber = $invoiceNumber ?? '';
   $invoiceNumberDisplay = $invoiceNumber;
   if (
@@ -1275,9 +1276,11 @@
                 <img src="{{ asset('/images/logo/TrendyCNC.png') }}" alt="Trendy d.o.o." width="50" height="auto" class="wo-brand-logo">
                 <h3 class="text-primary invoice-logo">eNalog.app</h3>
               </div>
-              <div class="wo-header-qr-block">
-                <img src="{{ $previewQrImage }}" alt="QR Code" class="wo-preview-qr-image">
-              </div>
+              @if($showPreviewQr)
+                <div class="wo-header-qr-block">
+                  <img src="{{ $previewQrImage }}" alt="QR Code" class="wo-preview-qr-image">
+                </div>
+              @endif
             </div>
             <div class="wo-header-details-row">
               <div class="wo-header-company-block">
@@ -1691,10 +1694,12 @@
     <div class="col-xl-3 col-md-4 col-12 invoice-actions mt-md-0 mt-2">
       <div class="card">
         <div class="card-body">
-          <div class="wo-sidebar-qr-block">
-            <img src="{{ $previewQrImage }}" alt="QR Code" class="wo-preview-qr-image">
-          </div>
-          <div class="invoice-actions-divider wo-sidebar-qr-divider"></div>
+          @if($showPreviewQr)
+            <div class="wo-sidebar-qr-block">
+              <img src="{{ $previewQrImage }}" alt="QR Code" class="wo-preview-qr-image">
+            </div>
+            <div class="invoice-actions-divider wo-sidebar-qr-divider"></div>
+          @endif
           <button class="btn btn-primary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#qr-scanner-modal">
             <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog
           </button>
