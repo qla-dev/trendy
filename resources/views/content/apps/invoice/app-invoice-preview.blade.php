@@ -359,12 +359,39 @@
     font-weight: 700;
     color: #5e5873;
   }
-  .wo-product-sub {
-    display: block;
-    margin-top: 0.3rem;
+  .wo-product-code-accent {
+    margin-top: 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border-radius: 9px;
+    padding: 0.36rem 0.72rem 0.36rem 0.56rem;
+    background: linear-gradient(90deg, rgba(40, 199, 111, 0.2) 0%, rgba(40, 199, 111, 0.06) 68%, rgba(40, 199, 111, 0) 100%);
+    box-shadow: inset 0 0 0 1px rgba(40, 199, 111, 0.34);
+  }
+  .wo-product-code-accent::before {
+    content: '';
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: #28c76f;
+    box-shadow: 0 0 0 4px rgba(40, 199, 111, 0.2);
+    flex: 0 0 auto;
+  }
+  .wo-product-code-label {
+    font-size: 0.64rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    color: #1b8f4c;
+    line-height: 1;
+  }
+  .wo-product-code-value {
     font-size: 0.82rem;
-    color: #6e6b7b;
-    font-weight: 500;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    color: #28c76f;
   }
   .wo-chip-shell {
     border: 1px solid #ebe9f1;
@@ -720,8 +747,16 @@
   body.dark-layout .wo-product-title {
     color: #f1f3f9;
   }
-  body.dark-layout .wo-product-sub {
-    color: #c1c5d8;
+  body.dark-layout .wo-product-code-accent {
+    background: linear-gradient(90deg, rgba(40, 199, 111, 0.28) 0%, rgba(40, 199, 111, 0.09) 68%, rgba(40, 199, 111, 0) 100%);
+    box-shadow: inset 0 0 0 1px rgba(40, 199, 111, 0.4);
+  }
+  body.dark-layout .wo-product-code-label {
+    color: #91eeb8;
+  }
+  body.dark-layout .wo-product-code-value {
+    color: #28c76f;
+    text-shadow: 0 0 10px rgba(40, 199, 111, 0.18);
   }
   body.dark-layout .wo-progress-shell {
     background: transparent;
@@ -946,6 +981,19 @@
   .semi-dark-layout .invoice-preview-wrapper .wo-flag-pill,
   .semi-dark-layout .invoice-preview-wrapper .timeline-event h6 {
     color: #eef2fb !important;
+  }
+  body.dark-layout .invoice-preview-wrapper .wo-product-code-label,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-code-label,
+  .dark-layout .invoice-preview-wrapper .wo-product-code-label,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-code-label {
+    color: #91eeb8 !important;
+  }
+  body.dark-layout .invoice-preview-wrapper .wo-product-code-value,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-code-value,
+  .dark-layout .invoice-preview-wrapper .wo-product-code-value,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-code-value {
+    color: #28c76f !important;
+    text-shadow: 0 0 10px rgba(40, 199, 111, 0.18);
   }
   .swal2-popup.wo-swal-dark {
     background: #283046 !important;
@@ -1213,16 +1261,20 @@
   $workOrderProductName = '';
   $workOrderProductCode = '';
   foreach ($workOrderMetaHighlights as $metaChip) {
-    $metaLabel = strtolower(trim((string) ($metaChip['label'] ?? '')));
-    if (in_array($metaLabel, ['status', 'prioritet'], true)) {
+    $metaLabelNormalized = \Illuminate\Support\Str::of((string) ($metaChip['label'] ?? ''))
+      ->ascii()
+      ->lower()
+      ->trim()
+      ->value();
+    if (in_array($metaLabelNormalized, ['status', 'prioritet'], true)) {
       $workOrderHeaderHighlights[] = $metaChip;
       continue;
     }
-    if ($metaLabel === 'naziv proizvoda') {
+    if ($metaLabelNormalized === 'naziv proizvoda') {
       $workOrderProductName = trim((string) ($metaChip['value'] ?? ''));
       continue;
     }
-    if ($metaLabel === 'sifra proizvoda') {
+    if ($metaLabelNormalized === 'sifra proizvoda') {
       $workOrderProductCode = trim((string) ($metaChip['value'] ?? ''));
       continue;
     }
@@ -1349,7 +1401,10 @@
               <span class="wo-product-kicker">Naziv proizvoda</span>
               <span class="wo-product-title">{{ $displayValue($workOrderProductName) }}</span>
               @if($workOrderProductCode !== '')
-                <span class="wo-product-sub">Šifra proizvoda: {{ $displayValue($workOrderProductCode) }}</span>
+                <span class="wo-product-code-accent" aria-label="Šifra proizvoda">
+                  <span class="wo-product-code-label">Šifra proizvoda</span>
+                  <span class="wo-product-code-value">{{ $displayValue($workOrderProductCode) }}</span>
+                </span>
               @endif
             </div>
           </div>

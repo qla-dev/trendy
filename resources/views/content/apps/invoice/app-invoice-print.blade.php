@@ -27,12 +27,16 @@
   $workOrderProductCode = '';
   $workOrderMetaHighlightChips = [];
   foreach ($workOrderMetaHighlights as $metaChip) {
-    $metaLabel = strtolower(trim((string) ($metaChip['label'] ?? '')));
-    if ($metaLabel === 'naziv proizvoda') {
+    $metaLabelNormalized = \Illuminate\Support\Str::of((string) ($metaChip['label'] ?? ''))
+      ->ascii()
+      ->lower()
+      ->trim()
+      ->value();
+    if ($metaLabelNormalized === 'naziv proizvoda') {
       $workOrderProductName = trim((string) ($metaChip['value'] ?? ''));
       continue;
     }
-    if (str_contains($metaLabel, 'ifra proizvoda')) {
+    if ($metaLabelNormalized === 'sifra proizvoda') {
       $workOrderProductCode = trim((string) ($metaChip['value'] ?? ''));
       continue;
     }
