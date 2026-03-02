@@ -3812,7 +3812,7 @@ class WorkOrderController extends Controller
         }
 
         if (in_array($normalized, ['N', '0', 'FALSE', 'F'], true)) {
-            return 'secondary';
+            return 'danger';
         }
 
         return 'info';

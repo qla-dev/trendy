@@ -666,6 +666,7 @@
     background: #6e6b7b;
   }
   .wo-flag-success .wo-flag-dot { background: #28c76f; }
+  .wo-flag-danger .wo-flag-dot { background: #ea5455; }
   .wo-flag-secondary .wo-flag-dot { background: #6e6b7b; }
   .wo-flag-info .wo-flag-dot { background: #00cfe8; }
 
