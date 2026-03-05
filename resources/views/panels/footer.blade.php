@@ -12,7 +12,10 @@
   .footer-qla-link .footer-qla-logo {
     height: 18px;
     width: auto;
+    display: inline-block;
     vertical-align: middle;
+    transform: scaleX(0.9);
+    transform-origin: center;
   }
 
   .footer-qla-link .footer-qla-logo-dark {

@@ -79,8 +79,8 @@
   <meta name="csrf-token" content="{{ csrf_token() }}" />
   <title>@yield('title')</title>
   <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('images/logo/TrendyCNC.png') }}">
-  <link rel="icon" type="image/png" sizes="64x64" href="{{ asset('images/logo/TrendyCNC.png') }}" />
-  <link rel="shortcut icon" type="image/png" href="{{ asset('images/logo/TrendyCNC.png') }}" />
+  <link rel="icon" type="image/png" sizes="64x64" href="{{ asset('images/logo/TrendyCNC-favicon.png') }}" />
+  <link rel="shortcut icon" type="image/png" href="{{ asset('images/logo/TrendyCNC-favicon.png') }}" />
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;1,400;1,500;1,600"
     rel="stylesheet">
 

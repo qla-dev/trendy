@@ -2,11 +2,13 @@
   <div class="modal-dialog modal-fullscreen">
     <div class="modal-content fine-adjust-bom-content">
       <div class="modal-header fine-adjust-bom-header">
-        <div>
+        <button type="button" class="btn btn-secondary fine-adjust-close-fab" data-bs-dismiss="modal" aria-label="Zatvori">
+          <i class="fa fa-times me-50"></i> Zatvori
+        </button>
+        <div class="fine-adjust-bom-header-copy">
           <h4 class="mb-25 text-white" id="fine-adjust-bom-label">Ručno prilagođavanje sastavnice</h4>
           <p class="mb-0 small fine-adjust-bom-subtitle">Ovaj prikaz dopušta administratoru ručno prilagođavanje svih stavki unutar nove privremene sastavnice prije dodavanje iste na radni nalog</p>
         </div>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
       </div>
 
       <div class="modal-body fine-adjust-bom-body">
@@ -86,38 +88,54 @@
   }
 
   #fine-adjust-bom-modal .fine-adjust-bom-header {
-    border-bottom: 1px solid rgba(196, 204, 220, 0.28);
+    border-bottom: 1px solid rgba(196, 204, 220, 0.18);
     background: rgba(6, 12, 22, 0.92);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
   }
 
-  #fine-adjust-bom-modal .btn-close {
-    background-image: none;
-    background-color: rgba(232, 238, 248, 0.18) !important;
-    opacity: 1;
-    border: 1px solid rgba(206, 214, 230, 0.42);
+  #fine-adjust-bom-modal .fine-adjust-bom-header-copy {
+    margin-left: auto;
+    text-align: right;
+    max-width: calc(100% - 170px);
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-close-fab {
+    position: static;
     border-radius: 10px;
-    width: 2.15rem;
-    height: 2.15rem;
-    padding: 0;
+    padding: 0.55rem 0.95rem;
+    border: 1px solid rgba(205, 215, 238, 0.42);
+    background-color: rgba(10, 14, 22, 0.82);
+    color: #eef3ff;
+    box-shadow: 0 8px 20px rgba(6, 8, 14, 0.45);
+    backdrop-filter: blur(2px);
+    height: 42px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: #ffffff !important;
-  }
-
-  #fine-adjust-bom-modal .btn-close::before {
-    content: "\00d7";
-    color: #ffffff;
-    font-size: 1.45rem;
     line-height: 1;
-    font-weight: 500;
+    white-space: nowrap;
   }
 
-  #fine-adjust-bom-modal .btn-close:hover,
-  #fine-adjust-bom-modal .btn-close:focus {
-    background-color: rgba(232, 238, 248, 0.28) !important;
-    border-color: rgba(222, 229, 242, 0.62);
-    box-shadow: 0 0 0 0.14rem rgba(198, 206, 222, 0.24);
+  #fine-adjust-bom-modal .fine-adjust-close-fab:hover,
+  #fine-adjust-bom-modal .fine-adjust-close-fab:focus {
+    border-color: rgba(223, 231, 248, 0.7);
+    background-color: rgba(18, 24, 37, 0.94);
+    color: #ffffff;
+  }
+
+  @media (max-width: 767.98px) {
+    #fine-adjust-bom-modal .fine-adjust-bom-header {
+      flex-wrap: wrap;
+    }
+
+    #fine-adjust-bom-modal .fine-adjust-bom-header-copy {
+      max-width: 100%;
+      width: 100%;
+      text-align: right;
+    }
   }
 
   #fine-adjust-bom-modal .fine-adjust-bom-body {
@@ -125,11 +143,11 @@
   }
 
   #fine-adjust-bom-modal .fine-adjust-bom-footer {
-    border-top: 1px solid rgba(196, 204, 220, 0.28) !important;
+    border-top: 1px solid rgba(196, 204, 220, 0.18) !important;
   }
 
   #fine-adjust-bom-modal .fine-adjust-bom-table-wrap {
-    border: 1px solid rgba(196, 204, 220, 0.28);
+    border: 1px solid rgba(196, 204, 220, 0.18);
     border-radius: 10px;
     overflow: auto;
     max-height: calc(100vh - 220px);
@@ -176,12 +194,12 @@
     text-transform: uppercase;
     font-size: 0.74rem;
     letter-spacing: 0.03em;
-    border-bottom: 1px solid rgba(204, 213, 229, 0.32);
+    border-bottom: 1px solid rgba(204, 213, 229, 0.2);
     white-space: nowrap;
   }
 
   #fine-adjust-bom-modal .table > :not(caption) > * > * {
-    border-color: rgba(186, 194, 210, 0.26) !important;
+    border-color: rgba(186, 194, 210, 0.16) !important;
   }
 
   #fine-adjust-bom-modal table tbody td {

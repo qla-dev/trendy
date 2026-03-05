@@ -1622,7 +1622,7 @@
             </div>
             <!-- Materijali Tab -->
             <div class="tab-pane fade" id="tab-materijali" role="tabpanel">
-              <div class="table-responsive">
+              <div class="table-responsive wo-sastavnica-table-wrap">
                 <table class="table" id="materijali-table">
                   <thead>
                     <tr>
@@ -1653,7 +1653,7 @@
             </div>
             <!-- Operacija Tab -->
             <div class="tab-pane fade" id="tab-operacija" role="tabpanel">
-              <div class="table-responsive">
+              <div class="table-responsive wo-sastavnica-table-wrap">
                 <table class="table" id="operacija-table">
                   <thead>
                     <tr>
