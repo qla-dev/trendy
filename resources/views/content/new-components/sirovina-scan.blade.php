@@ -30,9 +30,9 @@
       <div class="modal-header wo-bom-modal-header wo-bom-content-header">
         <div class="w-100 text-center">
           <h4 class="mb-0 text-white" id="sirovina-scanner-modal-label">
-            Planirana potrosnja za RN <span id="sirovina-rn-number">-</span>
+            Planirana potrošnja za RN <span id="sirovina-rn-number">-</span>
           </h4>
-          <p class="mb-0 wo-bom-modal-subtitle">Izaberite proizvod, zatim stavke sastavnice i unesite kolicinu.</p>
+          <p class="mb-0 wo-bom-modal-subtitle">Izaberite proizvod ili materijal i operacije pojediačno za privremenu sastavnicu</p>
         </div>
       </div>
       <div class="modal-body p-0">
@@ -106,12 +106,13 @@
                           <th style="width: 80px;">Poz</th>
                           <th style="width: 200px;">Komponenta</th>
                           <th>Opis</th>
+                          <th style="width: 120px;" class="text-end">Zaliha</th>
                           <th style="width: 120px;" class="text-center">Tip</th>
                         </tr>
                       </thead>
                       <tbody id="bom-quick-components-body">
                         <tr class="wo-bom-empty-row">
-                          <td colspan="4" class="text-center text-white-50 py-2">Nema odabranih komponenti.</td>
+                          <td colspan="5" class="text-center text-white-50 py-2">Nema odabranih komponenti.</td>
                         </tr>
                       </tbody>
                     </table>
@@ -164,7 +165,7 @@
                   <div class="wo-bom-loading-overlay d-none" id="bom-loading-overlay" aria-hidden="true">
                     <div class="wo-bom-loading-inner">
                       <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
-                      <span>Ucitavanje...</span>
+                      <span>Učitavanje</span>
                     </div>
                   </div>
                 </div>
@@ -174,13 +175,13 @@
                 <div class="wo-bom-mode-panel d-none" id="bom-mode-all-panel" data-mode-panel="all" aria-hidden="true">
                   <div class="wo-bom-field">
                     <label class="form-label wo-bom-section-title mb-50" for="bom-all-search-input">Pretraga</label>
-                    <input type="text" class="form-control form-control-sm" id="bom-all-search-input" placeholder="Unesite sifru ili naziv">
+                    <input type="text" class="form-control form-control-sm" id="bom-all-search-input" placeholder="Unesite šifru ili naziv">
                   </div>
 
                   <div class="wo-bom-table-section mt-1">
                     <div class="wo-bom-table-head">
                       <h6 class="wo-bom-section-title mb-0" id="bom-all-title">Sve stavke - Materijali</h6>
-                      <span class="wo-bom-table-found">Pronadjeno: <strong id="bom-all-total-count">0</strong></span>
+                      <span class="wo-bom-table-found">Pronađeno: <strong id="bom-all-total-count">0</strong></span>
                     </div>
                     <div class="wo-bom-loading-more-note d-none" id="bom-all-loading-more-note" aria-live="polite">
                       U&#269;itavanje jo&#353; rezultata...
@@ -210,7 +211,7 @@
                     <div class="wo-bom-loading-overlay d-none" id="bom-all-loading-overlay" aria-hidden="true">
                       <div class="wo-bom-loading-inner">
                         <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
-                        <span>Ucitavanje...</span>
+                        <span>Učitavanje</span>
                       </div>
                     </div>
                   </div>
@@ -836,6 +837,21 @@
     background: rgba(62, 132, 86, 0.24);
   }
 
+  #sirovina-scanner-modal .wo-zaliha-loading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 1.1rem;
+  }
+
+  #sirovina-scanner-modal .wo-zaliha-loading .spinner-border {
+    width: 0.9rem;
+    height: 0.9rem;
+    border-width: 0.14em;
+    color: rgba(214, 224, 246, 0.9);
+    vertical-align: middle;
+  }
+
   #sirovina-scanner-modal .wo-opis-cell {
     white-space: normal !important;
     text-overflow: clip !important;
@@ -1030,9 +1046,15 @@
     color: #dce5fb;
   }
 
+  #sirovina-scanner-modal .select2-results__option[aria-selected=true],
+  #sirovina-scanner-modal .select2-results__option[aria-selected=false]:hover,
+  #sirovina-scanner-modal .select2-results__option[aria-selected=true]:hover {
+    color: #ffffff !important;
+  }
+
   #sirovina-scanner-modal .select2-results__option--highlighted[aria-selected] {
     background-color: rgba(168, 176, 190, 0.25);
-    color: #ffffff;
+    color: #ffffff !important;
   }
 
   #sirovina-scanner-modal .select2-results__options {
@@ -1264,7 +1286,8 @@
         materials: new Set(),
         operations: new Set()
       },
-      materialStockByIdent: new Map()
+      materialStockByIdent: new Map(),
+      materialStockPendingByIdent: new Map()
     };
 
     function setStatus(text, tone) {
@@ -1438,6 +1461,107 @@
       return Number.isFinite(parsed) ? parsed : 0;
     }
 
+    function refreshQuickSelectionStocks(forceRender) {
+      if (!state.quickSelections || state.quickSelections.size === 0) {
+        return;
+      }
+
+      var hasChanges = false;
+      state.quickSelections.forEach(function (row) {
+        if (!row) {
+          return;
+        }
+
+        var componentId = String(row.acIdentChild || '').trim();
+        if (!componentId) {
+          return;
+        }
+
+        var knownStock = resolveKnownStock(componentId);
+        var currentStock = Number(row.stockQty);
+        if (!Number.isFinite(currentStock)) {
+          currentStock = 0;
+        }
+
+        if (knownStock !== currentStock) {
+          row.stockQty = knownStock;
+          hasChanges = true;
+        }
+      });
+
+      if (!hasChanges && !forceRender) {
+        return;
+      }
+
+      renderQuickBomRows();
+      if (fineAdjustModalEl && fineAdjustModalEl.classList.contains('show')) {
+        state.fineAdjustRows = buildFineAdjustRowsFromSelection();
+        renderFineAdjustRows();
+      }
+    }
+
+    function ensureKnownStockForComponent(componentId) {
+      var ident = String(componentId || '').trim();
+      var key = stockLookupKey(ident);
+      if (!ident || !key) {
+        return Promise.resolve(0);
+      }
+
+      if (state.materialStockByIdent.has(key)) {
+        return Promise.resolve(resolveKnownStock(ident));
+      }
+
+      if (!allMaterialsUrl) {
+        return Promise.resolve(0);
+      }
+
+      if (state.materialStockPendingByIdent.has(key)) {
+        return state.materialStockPendingByIdent.get(key);
+      }
+
+      var url = buildUrl(allMaterialsUrl, {
+        q: ident,
+        limit: 100,
+        offset: 0
+      });
+
+      var request = fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+        .then(parseResponse)
+        .then(function (payload) {
+          var rows = Array.isArray(payload && payload.data) ? payload.data : [];
+          var match = rows.find(function (row) {
+            return stockLookupKey(row && row.acIdentChild ? row.acIdentChild : '') === key;
+          });
+          var stockValue = Number(match && match.anGrossQty ? match.anGrossQty : 0);
+          if (!Number.isFinite(stockValue)) {
+            stockValue = 0;
+          }
+
+          state.materialStockByIdent.set(key, stockValue);
+          refreshQuickSelectionStocks();
+          return stockValue;
+        })
+        .catch(function () {
+          state.materialStockByIdent.set(key, 0);
+          refreshQuickSelectionStocks();
+          return 0;
+        })
+        .finally(function () {
+          state.materialStockPendingByIdent.delete(key);
+          refreshQuickSelectionStocks(true);
+        });
+
+      state.materialStockPendingByIdent.set(key, request);
+      refreshQuickSelectionStocks(true);
+      return request;
+    }
+
     function selectedAllSet(type) {
       return type === 'operations'
         ? state.selectedAllKeysByType.operations
@@ -1528,7 +1652,7 @@
 
       var rows = selectedDetailedRows();
       if (!Array.isArray(rows) || rows.length === 0) {
-        quickComponentsBody.innerHTML = '<tr class="wo-bom-empty-row"><td colspan="4" class="text-center text-white-50 py-2">Nema odabranih komponenti.</td></tr>';
+        quickComponentsBody.innerHTML = '<tr class="wo-bom-empty-row"><td colspan="5" class="text-center text-white-50 py-2">Nema odabranih komponenti.</td></tr>';
         return;
       }
 
@@ -1536,6 +1660,15 @@
         var lineNo = row.anNo || 0;
         var componentId = row.acIdentChild || '';
         var descr = row.acDescr || '-';
+        var isStockLoading = state.materialStockPendingByIdent.has(stockLookupKey(componentId));
+        var stockQty = Number(row.stockQty);
+        if (!Number.isFinite(stockQty)) {
+          stockQty = resolveKnownStock(componentId);
+          if (!Number.isFinite(stockQty)) {
+            stockQty = 0;
+          }
+          row.stockQty = stockQty;
+        }
         var operationType = row.acOperationType || '';
         var rowClass = isOperationType(operationType) ? ' class="wo-bom-quick-operation-row"' : '';
 
@@ -1544,6 +1677,10 @@
             '<td>' + lineNo + '</td>' +
             '<td class="fw-semibold">' + componentId + '</td>' +
             '<td class="wo-opis-cell">' + formatOpisCell(descr) + '</td>' +
+            '<td class="text-end">' + (isStockLoading
+              ? '<span class="wo-zaliha-loading" aria-label="Ucitavanje zalihe"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span></span>'
+              : formatQuantity(stockQty)
+            ) + '</td>' +
             '<td class="text-center">' + operationType + '</td>' +
           '</tr>';
       }).join('');
@@ -1605,6 +1742,30 @@
       }
 
       return parsed.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+    }
+
+    function parseDecimalValue(value, fallbackValue) {
+      var normalized = String(value === null || value === undefined ? '' : value).trim().replace(',', '.');
+      var parsed = Number(normalized);
+      if (!Number.isFinite(parsed)) {
+        return Number(fallbackValue || 0);
+      }
+
+      return parsed;
+    }
+
+    function clampPlaniranoToZaliha(planiranoValue, zalihaValue) {
+      var planirano = parseDecimalValue(planiranoValue, 0);
+      if (!Number.isFinite(planirano) || planirano < 0) {
+        planirano = 0;
+      }
+
+      var zaliha = parseDecimalValue(zalihaValue, NaN);
+      if (Number.isFinite(zaliha) && zaliha >= 0 && planirano > zaliha) {
+        planirano = zaliha;
+      }
+
+      return planirano;
     }
 
     function allTypeLabel() {
@@ -1911,6 +2072,7 @@
 
               state.materialStockByIdent.set(stockLookupKey(ident), stockValue);
             });
+            refreshQuickSelectionStocks();
           }
 
           if (append) {
@@ -2225,9 +2387,16 @@
             : 'text';
           var stepAttr = inputType === 'number' ? ' step="0.0001"' : '';
           var minAttr = field === 'planirano' ? ' min="0"' : '';
+          var maxAttr = '';
+          if (field === 'planirano') {
+            var maxPlaniranoValue = parseDecimalValue(row && row.zaliha ? row.zaliha : 0, 0);
+            if (Number.isFinite(maxPlaniranoValue) && maxPlaniranoValue >= 0) {
+              maxAttr = ' max="' + escapeHtml(String(maxPlaniranoValue)) + '"';
+            }
+          }
 
           return '<td><input type="' + inputType + '" class="form-control form-control-sm fine-adjust-input" ' +
-            'data-row="' + rowIndex + '" data-field="' + field + '" value="' + value + '"' + stepAttr + minAttr + '></td>';
+            'data-row="' + rowIndex + '" data-field="' + field + '" value="' + value + '"' + stepAttr + minAttr + maxAttr + '></td>';
         }).join('');
 
         return '<tr data-row="' + rowIndex + '">' + cells + '</tr>';
@@ -2264,6 +2433,13 @@
 
           rowData[field] = String(inputEl.value || '').trim();
         });
+
+        rowData.planirano = String(
+          clampPlaniranoToZaliha(
+            rowData.planirano,
+            rowData.zaliha
+          )
+        );
 
         rows.push(rowData);
       });
@@ -2405,13 +2581,13 @@
         },
         language: {
           searching: function () {
-            return 'Pretrazujem...';
+            return 'Pretražujem';
           },
           loadingMore: function () {
-            return 'Učitavanje još rezultata.';
+            return 'Učitavanje još rezultata...';
           },
           noResults: function () {
-            return 'Nema rezultata.';
+            return 'Nema rezultata';
           }
         }
       });
@@ -2429,7 +2605,7 @@
           state.selectedKeys.clear();
           renderBomRows();
           setBomLoading(false);
-          setStatus('Izaberite proizvod iz liste za ucitavanje sastavnice.', 'warning');
+          setStatus('Izaberite proizvod iz liste za učitavanje sastavnice', 'warning');
           syncAllSearchInputHeight();
         });
 
@@ -2746,10 +2922,10 @@
 
     function handleSaveSuccess(payload) {
       var savedCount = payload && payload.data ? Number(payload.data.saved_count || 0) : 0;
-      var message = payload && payload.message ? payload.message : 'Planirana potrosnja je sacuvana.';
+      var message = payload && payload.message ? payload.message : 'Planirana potrošnja je uspješno sačuvana.';
 
       notify('success', 'Uspjesno', message + ' (Stavki: ' + savedCount + ')');
-      setStatus('Planirana potrosnja je sacuvana.', 'success');
+      setStatus('Planirana potrošnja je uspješno sačuvana.', 'success');
       hideModalIfOpen(confirmModalEl);
       hideModalIfOpen(fineAdjustModalEl);
 
@@ -2817,7 +2993,8 @@
         var unitValue = String((row && row.mj) || '').trim().toUpperCase();
         var sourceUnitValue = String((row && row.acUMSource) || '').trim().toUpperCase();
         var operationTypeValue = String((row && row.acOperationType) || '').trim().toUpperCase();
-        var planiranoValue = Number((row && row.planirano) || 0);
+        var planiranoValue = parseDecimalValue((row && row.planirano) || 0, 0);
+        var zalihaValue = parseDecimalValue((row && row.zaliha) || 0, 0);
 
         if (!componentId || !Number.isFinite(lineNo)) {
           return;
@@ -2836,9 +3013,7 @@
           ? unitValue
           : normalizedSourceUnit;
 
-        var normalizedPlanirano = Number.isFinite(planiranoValue) && planiranoValue >= 0
-          ? planiranoValue
-          : 0;
+        var normalizedPlanirano = clampPlaniranoToZaliha(planiranoValue, zalihaValue);
 
         unique.set(key, {
           acIdentChild: componentId,
@@ -2913,6 +3088,10 @@
         syncQuickSelectionRow(productId, rowData, target.checked);
         storeSelectionForProduct(productId, state.selectedKeys);
 
+        if (target.checked && componentId) {
+          ensureKnownStockForComponent(componentId);
+        }
+
         markProceedSource('manual');
         updateSelectionSummary();
       });
@@ -2985,6 +3164,34 @@
     if (fineAdjustSaveBtn) {
       fineAdjustSaveBtn.addEventListener('click', function () {
         saveFineAdjustedConsumption();
+      });
+    }
+
+    if (fineAdjustBodyEl) {
+      fineAdjustBodyEl.addEventListener('input', function (event) {
+        var target = event.target;
+        if (!target || !target.classList || !target.classList.contains('fine-adjust-input')) {
+          return;
+        }
+
+        var field = String(target.getAttribute('data-field') || '').trim();
+        if (field !== 'planirano') {
+          return;
+        }
+
+        var rowIndex = Number(target.getAttribute('data-row') || -1);
+        if (!Number.isFinite(rowIndex) || rowIndex < 0) {
+          return;
+        }
+
+        var row = Array.isArray(state.fineAdjustRows) ? state.fineAdjustRows[rowIndex] : null;
+        var zalihaValue = row ? row.zaliha : 0;
+        var clamped = clampPlaniranoToZaliha(target.value, zalihaValue);
+        var current = parseDecimalValue(target.value, 0);
+
+        if (clamped !== current) {
+          target.value = formatQuantity(clamped);
+        }
       });
     }
 
@@ -3109,7 +3316,7 @@
           state.selectedKeys.clear();
           renderBomRows();
           setBomLoading(false);
-          setStatus('Izaberite proizvod iz liste za ucitavanje sastavnice.', 'warning');
+          setStatus('Izaberite proizvod iz liste za učitavanje sastavnice', 'warning');
         });
         return;
       }
@@ -3124,7 +3331,7 @@
       state.selectedKeys.clear();
       renderBomRows();
       setBomLoading(false);
-      setStatus('Izaberite proizvod iz liste za ucitavanje sastavnice.', 'warning');
+      setStatus('Izaberite proizvod iz liste za učitavanje sastavnice', 'warning');
     });
 
     modalEl.addEventListener('hidden.bs.modal', function () {

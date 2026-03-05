@@ -204,7 +204,7 @@ class WorkOrderController extends Controller
 
             if (!$workOrder) {
                 return redirect()->route('app-invoice-list')
-                    ->with('error', 'Radni nalog nije pronadjen.');
+                    ->with('error', 'Radni nalog nije pronađen.');
             }
 
             $raw = $workOrder['raw'] ?? [];
@@ -588,7 +588,7 @@ class WorkOrderController extends Controller
 
             if ($workOrderRow === null) {
                 return response()->json([
-                    'message' => 'Radni nalog nije pronadjen.',
+                    'message' => 'Radni nalog nije pronađen.',
                 ], 404);
             }
 
@@ -646,7 +646,7 @@ class WorkOrderController extends Controller
 
             if ($workOrderRow === null) {
                 return response()->json([
-                    'message' => 'Radni nalog nije pronadjen.',
+                    'message' => 'Radni nalog nije pronađen.',
                 ], 404);
             }
 
@@ -704,7 +704,7 @@ class WorkOrderController extends Controller
 
             if ($workOrderRow === null) {
                 return response()->json([
-                    'message' => 'Radni nalog nije pronadjen.',
+                    'message' => 'Radni nalog nije pronađen.',
                 ], 404);
             }
 
@@ -730,7 +730,7 @@ class WorkOrderController extends Controller
 
             if ($workOrderKey === '') {
                 return response()->json([
-                    'message' => 'RN kljuc nije pronadjen.',
+                    'message' => 'RN kljuc nije pronađen.',
                 ], 422);
             }
 
@@ -1033,7 +1033,7 @@ class WorkOrderController extends Controller
             }
 
             return response()->json([
-                'message' => 'Planirana potrosnja je uspjesno sacuvana.',
+                'message' => 'Planirana potrošnja je uspjesno sacuvana.',
                 'data' => [
                     'work_order_id' => $id,
                     'work_order_key' => $workOrderKey,
@@ -1088,7 +1088,7 @@ class WorkOrderController extends Controller
 
             if ($workOrderRow === null) {
                 return response()->json([
-                    'message' => 'Radni nalog nije pronadjen.',
+                    'message' => 'Radni nalog nije pronađen.',
                 ], 404);
             }
 
@@ -1097,7 +1097,7 @@ class WorkOrderController extends Controller
 
             if ($workOrderKey === '') {
                 return response()->json([
-                    'message' => 'RN kljuc nije pronadjen.',
+                    'message' => 'RN kljuc nije pronađen.',
                 ], 422);
             }
 
@@ -1147,7 +1147,7 @@ class WorkOrderController extends Controller
 
             if ($row === null) {
                 return response()->json([
-                    'message' => 'Stavka nije pronadjena.',
+                    'message' => 'Stavka nije pronađena.',
                 ], 404);
             }
 

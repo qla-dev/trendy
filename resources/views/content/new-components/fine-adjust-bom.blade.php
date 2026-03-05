@@ -104,7 +104,7 @@
 
   #fine-adjust-bom-modal .fine-adjust-close-fab {
     position: static;
-    border-radius: 10px;
+    border-radius: 10px !important;
     padding: 0.55rem 0.95rem;
     border: 1px solid rgba(205, 215, 238, 0.42);
     background-color: rgba(10, 14, 22, 0.82);
