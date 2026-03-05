@@ -30,9 +30,9 @@
       <div class="modal-header wo-bom-modal-header wo-bom-content-header">
         <div class="w-100 text-center">
           <h4 class="mb-0 text-white" id="sirovina-scanner-modal-label">
-            Planirana potrošnja za RN <span id="sirovina-rn-number">-</span>
+            Planiraj novu potrošnju za RN <span id="sirovina-rn-number">-</span>
           </h4>
-          <p class="mb-0 wo-bom-modal-subtitle">Izaberite proizvod ili materijal i operacije pojediačno za privremenu sastavnicu</p>
+          <p class="mb-0 wo-bom-modal-subtitle">Izaberite proizvod ili materijal i operacije pojediačno za privremenu sastavnicu. Stavke će biti dodane kao nove, te će postojeće ostati kakvi jesu.</p>
         </div>
       </div>
       <div class="modal-body p-0">
