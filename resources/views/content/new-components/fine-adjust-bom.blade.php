@@ -86,24 +86,38 @@
   }
 
   #fine-adjust-bom-modal .fine-adjust-bom-header {
-    border-bottom: 1px solid rgba(95, 127, 194, 0.35);
+    border-bottom: 1px solid rgba(196, 204, 220, 0.28);
     background: rgba(6, 12, 22, 0.92);
   }
 
   #fine-adjust-bom-modal .btn-close {
-    filter: invert(1) grayscale(100%);
-    opacity: 0.88;
-    border: 1px solid rgba(122, 141, 178, 0.42);
+    background-image: none;
+    background-color: rgba(232, 238, 248, 0.18) !important;
+    opacity: 1;
+    border: 1px solid rgba(206, 214, 230, 0.42);
     border-radius: 10px;
-    padding: 0.7rem;
+    width: 2.15rem;
+    height: 2.15rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff !important;
+  }
+
+  #fine-adjust-bom-modal .btn-close::before {
+    content: "\00d7";
+    color: #ffffff;
+    font-size: 1.45rem;
+    line-height: 1;
+    font-weight: 500;
   }
 
   #fine-adjust-bom-modal .btn-close:hover,
   #fine-adjust-bom-modal .btn-close:focus {
-    opacity: 1;
-    background-color: rgba(22, 32, 52, 0.95);
-    border-color: rgba(155, 173, 206, 0.62);
-    box-shadow: 0 0 0 0.14rem rgba(98, 124, 176, 0.28);
+    background-color: rgba(232, 238, 248, 0.28) !important;
+    border-color: rgba(222, 229, 242, 0.62);
+    box-shadow: 0 0 0 0.14rem rgba(198, 206, 222, 0.24);
   }
 
   #fine-adjust-bom-modal .fine-adjust-bom-body {
@@ -111,11 +125,11 @@
   }
 
   #fine-adjust-bom-modal .fine-adjust-bom-footer {
-    border-top: 1px solid rgba(95, 127, 194, 0.35) !important;
+    border-top: 1px solid rgba(196, 204, 220, 0.28) !important;
   }
 
   #fine-adjust-bom-modal .fine-adjust-bom-table-wrap {
-    border: 1px solid rgba(95, 127, 194, 0.35);
+    border: 1px solid rgba(196, 204, 220, 0.28);
     border-radius: 10px;
     overflow: auto;
     max-height: calc(100vh - 220px);
@@ -162,12 +176,12 @@
     text-transform: uppercase;
     font-size: 0.74rem;
     letter-spacing: 0.03em;
-    border-bottom: 1px solid rgba(118, 144, 199, 0.4);
+    border-bottom: 1px solid rgba(204, 213, 229, 0.32);
     white-space: nowrap;
   }
 
   #fine-adjust-bom-modal .table > :not(caption) > * > * {
-    border-color: rgba(70, 89, 123, 0.52) !important;
+    border-color: rgba(186, 194, 210, 0.26) !important;
   }
 
   #fine-adjust-bom-modal table tbody td {
