@@ -10,12 +10,14 @@ use Throwable;
 
 class OperationsController extends Controller
 {
+    private const OPERATIONS_SET = 'OPR';
+
     public function scannerIndex(Request $request, string $id): JsonResponse
     {
         try {
             $search = trim((string) $request->query('q', ''));
             $limit = $this->resolveLimit((int) $request->integer('limit', 100));
-            $operations = Operation::scannerList($search, $limit);
+            $operations = Operation::scannerList($search, $limit, self::OPERATIONS_SET);
 
             return response()->json([
                 'data' => $operations,

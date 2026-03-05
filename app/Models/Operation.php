@@ -33,62 +33,33 @@ class Operation extends Model
 
     public static function scannerSourceTable(): string
     {
-        return self::sourceSchema() . '.' . self::sourceTable();
+        return self::sourceSchema() . '.' . self::itemsTable();
     }
 
-    public static function scannerList(string $search = '', int $limit = 100): array
+    public static function scannerList(string $search = '', int $limit = 100, string $operationsSet = 'OPR'): array
     {
         $resolvedLimit = self::resolveScannerLimit($limit);
-        $columns = self::sourceColumns();
-        $operationColumn = self::firstExistingColumn($columns, ['acIdent']);
-        $nameColumn = self::firstExistingColumn($columns, ['acDescr', 'acName']);
-        $unitColumn = self::firstExistingColumn($columns, ['acUM', 'acUMTime']);
-        $qtyColumn = self::firstExistingColumn($columns, ['anQty', 'anQtyBase', 'anPlanQty']);
-        $operationTypeColumn = self::firstExistingColumn($columns, ['acOperationType']);
+        $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
+        $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
 
-        if ($operationColumn === null && $nameColumn === null) {
-            return [];
-        }
+        $query = DB::table($itemsTable)
+            ->leftJoin($stockTable, 's.acIdent', '=', 'i.acIdent')
+            ->whereRaw(
+                "LTRIM(RTRIM(ISNULL(i.acSetOfItem, ''))) = ?",
+                [trim($operationsSet)]
+            )
+            ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) <> ''");
 
-        $query = DB::table(self::scannerSourceTable());
-
-        if ($operationTypeColumn !== null) {
-            $query->whereRaw("LTRIM(RTRIM(ISNULL({$operationTypeColumn}, ''))) <> ''");
-        }
-
-        if ($operationColumn !== null) {
-            $query->whereRaw("LTRIM(RTRIM(ISNULL({$operationColumn}, ''))) <> ''");
-        }
-
-        self::applyLikeAny(
-            $query,
-            array_values(array_filter([$operationColumn, $nameColumn])),
-            $search
-        );
-
-        $selectColumns = [];
-
-        if ($operationColumn !== null) {
-            $selectColumns[] = $operationColumn . ' as operation_code';
-        }
-        if ($nameColumn !== null) {
-            $selectColumns[] = $nameColumn . ' as operation_name';
-        }
-        if ($unitColumn !== null) {
-            $selectColumns[] = $unitColumn . ' as operation_um';
-        }
-        if ($qtyColumn !== null) {
-            $selectColumns[] = $qtyColumn . ' as operation_qty';
-        }
-
-        if (empty($selectColumns)) {
-            return [];
-        }
+        self::applyLikeAny($query, ['i.acIdent', 'i.acName'], $search);
 
         $rows = $query
-            ->select($selectColumns)
-            ->orderBy($operationColumn ?? $nameColumn ?? 'anNo')
-            ->limit(max($resolvedLimit * 4, $resolvedLimit))
+            ->selectRaw("LTRIM(RTRIM(i.acIdent)) as operation_code")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acName, ''))) as operation_name")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as operation_um")
+            ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as operation_qty")
+            ->groupBy('i.acIdent', 'i.acName', 'i.acUM')
+            ->orderBy('i.acIdent')
+            ->limit($resolvedLimit)
             ->get()
             ->map(function ($row) {
                 return (array) $row;
@@ -96,7 +67,6 @@ class Operation extends Model
             ->values()
             ->all();
 
-        $unique = [];
         $operations = [];
 
         foreach ($rows as $row) {
@@ -106,14 +76,6 @@ class Operation extends Model
             if ($operationCode === '' && $operationName === '') {
                 continue;
             }
-
-            $key = strtolower($operationCode !== '' ? $operationCode : $operationName);
-
-            if (isset($unique[$key])) {
-                continue;
-            }
-
-            $unique[$key] = true;
             $rawQty = $row['operation_qty'] ?? null;
             $parsedQty = is_numeric((string) $rawQty) ? (float) $rawQty : 0.0;
 
@@ -154,28 +116,14 @@ class Operation extends Model
         });
     }
 
-    private static function sourceColumns(): array
+    private static function itemsTable(): string
     {
-        return DB::table('INFORMATION_SCHEMA.COLUMNS')
-            ->where('TABLE_SCHEMA', self::sourceSchema())
-            ->where('TABLE_NAME', self::sourceTable())
-            ->pluck('COLUMN_NAME')
-            ->map(function ($columnName) {
-                return (string) $columnName;
-            })
-            ->values()
-            ->all();
+        return (string) config('workorders.catalog_items_table', 'tHE_SetItem');
     }
 
-    private static function firstExistingColumn(array $columns, array $candidates): ?string
+    private static function stockTable(): string
     {
-        foreach ($candidates as $candidate) {
-            if (in_array($candidate, $columns, true)) {
-                return $candidate;
-            }
-        }
-
-        return null;
+        return (string) config('workorders.stock_table', 'tHE_Stock');
     }
 
     private static function resolveScannerLimit(?int $requestedLimit = null): int
@@ -192,10 +140,5 @@ class Operation extends Model
     private static function sourceSchema(): string
     {
         return (string) config('workorders.schema', 'dbo');
-    }
-
-    private static function sourceTable(): string
-    {
-        return (string) config('workorders.items_table', 'tHF_WOExItem');
     }
 }

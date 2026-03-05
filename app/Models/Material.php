@@ -28,62 +28,48 @@ class Material extends Model
 
     public static function scannerSourceTable(): string
     {
-        return self::sourceSchema() . '.' . self::sourceTable();
+        return self::sourceSchema() . '.' . self::itemsTable();
     }
 
-    public static function scannerList(string $search = '', int $limit = 100): array
+    public static function scannerList(
+        string $search = '',
+        int $limit = 100,
+        array $materialsSets = []
+    ): array
     {
         $resolvedLimit = self::resolveScannerLimit($limit);
-        $columns = self::sourceColumns();
-        $materialColumn = self::firstExistingColumn($columns, ['acIdent']);
-        $nameColumn = self::firstExistingColumn($columns, ['acDescr', 'acName']);
-        $unitColumn = self::firstExistingColumn($columns, ['acUM']);
-        $qtyColumn = self::firstExistingColumn($columns, ['anQty', 'anPlanQty', 'anQtyBase']);
-        $operationTypeColumn = self::firstExistingColumn($columns, ['acOperationType']);
+        $normalizedSets = array_values(array_filter(array_map(function ($value) {
+            return trim((string) $value);
+        }, $materialsSets), function ($value) {
+            return $value !== '';
+        }));
+        $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
+        $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
+        $query = DB::table($stockTable)
+            ->join($itemsTable, function ($join) {
+                $join->whereRaw("LTRIM(RTRIM(ISNULL(s.acIdent, ''))) = LTRIM(RTRIM(ISNULL(i.acIdent, '')))");
+            })
+            ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) <> ''");
 
-        if ($materialColumn === null && $nameColumn === null) {
-            return [];
+        if (!empty($normalizedSets)) {
+            $query->whereIn(
+                DB::raw("LTRIM(RTRIM(ISNULL(i.acSetOfItem, '')))"),
+                $normalizedSets
+            );
         }
 
-        $query = DB::table(self::scannerSourceTable());
+        self::applyLikeAny($query, ['i.acIdent', 'i.acName'], $search);
 
-        if ($operationTypeColumn !== null) {
-            $query->whereRaw("LTRIM(RTRIM(ISNULL({$operationTypeColumn}, ''))) = ''");
-        }
-
-        if ($materialColumn !== null) {
-            $query->whereRaw("LTRIM(RTRIM(ISNULL({$materialColumn}, ''))) <> ''");
-        }
-
-        self::applyLikeAny(
-            $query,
-            array_values(array_filter([$materialColumn, $nameColumn])),
-            $search
-        );
-
-        $selectColumns = [];
-
-        if ($materialColumn !== null) {
-            $selectColumns[] = $materialColumn . ' as material_code';
-        }
-        if ($nameColumn !== null) {
-            $selectColumns[] = $nameColumn . ' as material_name';
-        }
-        if ($unitColumn !== null) {
-            $selectColumns[] = $unitColumn . ' as material_um';
-        }
-        if ($qtyColumn !== null) {
-            $selectColumns[] = $qtyColumn . ' as material_qty';
-        }
-
-        if (empty($selectColumns)) {
-            return [];
-        }
-
+        $codeExpr = "LTRIM(RTRIM(ISNULL(i.acIdent, '')))";
         $rows = $query
-            ->select($selectColumns)
-            ->orderBy($materialColumn ?? $nameColumn ?? 'anNo')
-            ->limit(max($resolvedLimit * 4, $resolvedLimit))
+            ->selectRaw("$codeExpr as material_code")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acName, ''))) as material_name")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as material_um")
+            ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as material_qty")
+            ->groupBy('i.acIdent', 'i.acName', 'i.acUM')
+            ->orderByRaw("CASE WHEN LEFT($codeExpr, 1) LIKE '[A-Za-z]' THEN 0 WHEN LEFT($codeExpr, 1) LIKE '[0-9]' THEN 2 ELSE 1 END ASC")
+            ->orderByRaw("UPPER($codeExpr) ASC")
+            ->limit($resolvedLimit)
             ->get()
             ->map(function ($row) {
                 return (array) $row;
@@ -91,7 +77,6 @@ class Material extends Model
             ->values()
             ->all();
 
-        $unique = [];
         $materials = [];
 
         foreach ($rows as $row) {
@@ -101,14 +86,6 @@ class Material extends Model
             if ($materialCode === '' && $materialName === '') {
                 continue;
             }
-
-            $key = strtolower($materialCode !== '' ? $materialCode : $materialName);
-
-            if (isset($unique[$key])) {
-                continue;
-            }
-
-            $unique[$key] = true;
             $rawQty = $row['material_qty'] ?? null;
             $parsedQty = is_numeric((string) $rawQty) ? (float) $rawQty : 0.0;
 
@@ -149,28 +126,14 @@ class Material extends Model
         });
     }
 
-    private static function sourceColumns(): array
+    private static function itemsTable(): string
     {
-        return DB::table('INFORMATION_SCHEMA.COLUMNS')
-            ->where('TABLE_SCHEMA', self::sourceSchema())
-            ->where('TABLE_NAME', self::sourceTable())
-            ->pluck('COLUMN_NAME')
-            ->map(function ($columnName) {
-                return (string) $columnName;
-            })
-            ->values()
-            ->all();
+        return (string) config('workorders.catalog_items_table', 'tHE_SetItem');
     }
 
-    private static function firstExistingColumn(array $columns, array $candidates): ?string
+    private static function stockTable(): string
     {
-        foreach ($candidates as $candidate) {
-            if (in_array($candidate, $columns, true)) {
-                return $candidate;
-            }
-        }
-
-        return null;
+        return (string) config('workorders.stock_table', 'tHE_Stock');
     }
 
     private static function resolveScannerLimit(?int $requestedLimit = null): int
@@ -187,10 +150,5 @@ class Material extends Model
     private static function sourceSchema(): string
     {
         return (string) config('workorders.schema', 'dbo');
-    }
-
-    private static function sourceTable(): string
-    {
-        return (string) config('workorders.items_table', 'tHF_WOExItem');
     }
 }

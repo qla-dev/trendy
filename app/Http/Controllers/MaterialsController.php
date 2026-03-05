@@ -10,12 +10,38 @@ use Throwable;
 
 class MaterialsController extends Controller
 {
+    private const MATERIALS_SETS = [
+        '011',
+        '020',
+        '021',
+        '022',
+        '023',
+        '024',
+        '025',
+        '026',
+        '101',
+        '102',
+        '103',
+        '104',
+        '10A',
+        '111',
+        '120',
+        '134',
+        '13S',
+        '13X',
+        'H1',
+    ];
+
     public function scannerIndex(Request $request, string $id): JsonResponse
     {
         try {
             $search = trim((string) $request->query('q', ''));
             $limit = $this->resolveLimit((int) $request->integer('limit', 100));
-            $materials = Material::scannerList($search, $limit);
+            $materials = Material::scannerList(
+                $search,
+                $limit,
+                self::MATERIALS_SETS
+            );
 
             return response()->json([
                 'data' => $materials,

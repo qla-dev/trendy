@@ -133,7 +133,7 @@
                 </div>
                 <div class="wo-bom-table-section">
                   <div class="wo-bom-table-head">
-                    <h6 class="wo-bom-section-title mb-0">Sastavnice proizvoda</h6>
+                    <h6 class="wo-bom-section-title mt-1 mb-0">Sastavnice proizvoda</h6>
                     <span class="wo-bom-table-found">Pronađeno: <strong id="bom-total-count">0</strong></span>
                   </div>
 
@@ -159,7 +159,7 @@
 
                   <div class="wo-bom-loading-overlay d-none" id="bom-loading-overlay" aria-hidden="true">
                     <div class="wo-bom-loading-inner">
-                      <span class="spinner-border spinner-border-sm text-success" role="status" aria-hidden="true"></span>
+                      <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
                       <span>Ucitavanje...</span>
                     </div>
                   </div>
@@ -168,14 +168,7 @@
                 </div>
 
                 <div class="wo-bom-mode-panel d-none" id="bom-mode-all-panel" data-mode-panel="all" aria-hidden="true">
-                  <div class="wo-bom-head-block mb-0">
-                    <div class="wo-bom-segment-switch" id="bom-all-type-switch" role="tablist" aria-label="Filter svih stavki">
-                      <button type="button" class="wo-bom-segment-btn is-active" data-all-type="materials" aria-selected="true">Materijali</button>
-                      <button type="button" class="wo-bom-segment-btn" data-all-type="operations" aria-selected="false">Operacije</button>
-                    </div>
-                  </div>
-
-                  <div class="wo-bom-field mt-1">
+                  <div class="wo-bom-field">
                     <label class="form-label wo-bom-section-title mb-50" for="bom-all-search-input">Pretraga</label>
                     <input type="text" class="form-control form-control-sm" id="bom-all-search-input" placeholder="Unesite sifru ili naziv">
                   </div>
@@ -190,7 +183,8 @@
                       <table class="table table-sm mb-0 wo-bom-table">
                         <thead id="bom-all-items-head">
                           <tr>
-                            <th style="width: 70px;">#</th>
+                            <th class="text-center" style="width: 46px;">#</th>
+                            <th style="width: 70px;">Poz</th>
                             <th style="width: 210px;">Sifra</th>
                             <th>Opis</th>
                             <th style="width: 120px;" class="text-end">Kolicina</th>
@@ -200,7 +194,7 @@
                         </thead>
                         <tbody id="bom-all-items-body">
                           <tr>
-                            <td colspan="6" class="text-center text-white-50 py-2">Ucitajte stavke iz liste "Sve".</td>
+                            <td colspan="7" class="text-center text-white-50 py-2">Ucitajte stavke iz odabranog prikaza.</td>
                           </tr>
                         </tbody>
                       </table>
@@ -208,7 +202,7 @@
 
                     <div class="wo-bom-loading-overlay d-none" id="bom-all-loading-overlay" aria-hidden="true">
                       <div class="wo-bom-loading-inner">
-                        <span class="spinner-border spinner-border-sm text-success" role="status" aria-hidden="true"></span>
+                        <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
                         <span>Ucitavanje...</span>
                       </div>
                     </div>
@@ -228,7 +222,8 @@
 
               <div class="wo-bom-bottom-mode-switch" id="bom-mode-switcher" role="tablist" aria-label="Rezim prikaza">
                 <button type="button" class="wo-bom-bottom-mode-btn is-active" data-mode="product" aria-selected="true">Pretraga po proizvodu</button>
-                <button type="button" class="wo-bom-bottom-mode-btn" data-mode="all" aria-selected="false">Sve</button>
+                <button type="button" class="wo-bom-bottom-mode-btn" data-mode="materials" aria-selected="false">Svi materijali</button>
+                <button type="button" class="wo-bom-bottom-mode-btn" data-mode="operations" aria-selected="false">Sve operacije</button>
               </div>
             </div>
           </div>
@@ -252,11 +247,12 @@
   }
 
   #sirovina-scanner-modal {
-    --qr-accent: rgba(74, 179, 148, 0.78);
-    --qr-accent-soft: rgba(74, 179, 148, 0.24);
+    --qr-accent: rgba(168, 176, 190, 0.78);
+    --qr-accent-soft: rgba(168, 176, 190, 0.24);
     --qr-border-muted: rgba(189, 199, 221, 0.32);
     --qr-text-soft: #cfd7ee;
     --qr-text-main: #e8edf9;
+    --bom-control-height: calc(1.5em + 0.572rem + 2px);
   }
 
   #sirovina-scanner-modal .modal-dialog {
@@ -325,7 +321,7 @@
   #sirovina-scanner-modal .wo-bom-main-card {
     display: flex;
     flex-direction: column;
-    gap: 1.35rem;
+    gap: 0;
   }
 
   #sirovina-scanner-modal .wo-bom-right-col {
@@ -372,7 +368,7 @@
 
   #sirovina-scanner-modal .wo-bom-segment-btn.is-active {
     color: #ffffff;
-    background: linear-gradient(135deg, rgba(56, 161, 131, 0.98), rgba(42, 136, 111, 0.98));
+    background: linear-gradient(135deg, rgba(122, 132, 148, 0.98), rgba(92, 102, 118, 0.98));
     box-shadow: 0 8px 18px rgba(6, 8, 14, 0.34);
   }
 
@@ -442,7 +438,7 @@
     border-radius: 999px;
     color: #e8edfb;
     background: rgba(10, 16, 27, 0.86);
-    border: 1px solid rgba(86, 199, 164, 0.38);
+    border: 1px solid rgba(168, 176, 190, 0.38);
     font-size: 0.84rem;
     font-weight: 500;
     letter-spacing: 0.01em;
@@ -560,8 +556,8 @@
     position: absolute;
     inset: 0;
     background-image:
-      linear-gradient(rgba(74, 179, 148, 0.08) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(74, 179, 148, 0.08) 1px, transparent 1px);
+      linear-gradient(rgba(172, 180, 194, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(172, 180, 194, 0.08) 1px, transparent 1px);
     background-size: 20px 20px;
     opacity: 0.22;
     animation: gridMoveSirovina 3s linear infinite;
@@ -663,16 +659,16 @@
   }
 
   #sirovina-scanner-modal .wo-qr-btn-primary {
-    border: 1px solid rgba(74, 179, 148, 0.5);
-    background-color: rgba(74, 179, 148, 0.12);
-    color: #dbfff2;
+    border: 1px solid rgba(168, 176, 190, 0.5);
+    background-color: rgba(168, 176, 190, 0.12);
+    color: #eef3ff;
     min-width: 7.4rem;
   }
 
   #sirovina-scanner-modal .wo-qr-btn-primary:hover,
   #sirovina-scanner-modal .wo-qr-btn-primary:focus {
-    border-color: rgba(74, 179, 148, 0.75);
-    background-color: rgba(74, 179, 148, 0.2);
+    border-color: rgba(168, 176, 190, 0.75);
+    background-color: rgba(168, 176, 190, 0.2);
     color: #ffffff;
   }
 
@@ -756,8 +752,10 @@
     margin-top: 0;
     border: 1px solid rgba(177, 189, 216, 0.22);
     border-radius: 8px;
-    overflow: hidden;
-    max-height: 330px;
+    overflow-x: auto;
+    overflow-y: auto;
+    height: 262px;
+    max-height: 262px;
     width: 100%;
   }
 
@@ -777,12 +775,17 @@
     border-bottom-color: rgba(170, 183, 214, 0.28);
   }
 
-  #sirovina-scanner-modal .wo-bom-table tbody td {
+  #sirovina-scanner-modal .wo-bom-table-wrap .wo-bom-table tbody td {
     border-top-color: rgba(170, 183, 214, 0.14);
     vertical-align: middle;
+    height: 56px;
+    max-height: 56px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  #sirovina-scanner-modal .wo-bom-table tbody tr:hover td {
+  #sirovina-scanner-modal .wo-bom-table-wrap .wo-bom-table tbody tr:hover td {
     background: rgba(255, 255, 255, 0.04);
   }
 
@@ -853,8 +856,8 @@
   #sirovina-scanner-modal .wo-bom-bottom-mode-btn {
     border: 0;
     border-radius: 999px;
-    padding: 0.42rem 0.95rem;
-    min-width: 150px;
+    padding: 0.42rem 0.82rem;
+    min-width: 130px;
     font-size: 0.78rem;
     color: #d3ddf5;
     background: transparent;
@@ -863,11 +866,12 @@
 
   #sirovina-scanner-modal .wo-bom-bottom-mode-btn.is-active {
     color: #ffffff;
-    background: linear-gradient(135deg, rgba(56, 161, 131, 0.98), rgba(42, 136, 111, 0.98));
+    background: linear-gradient(135deg, rgba(122, 132, 148, 0.98), rgba(92, 102, 118, 0.98));
   }
 
   #sirovina-scanner-modal .wo-bom-all-table-wrap {
-    max-height: 530px;
+    height: 262px;
+    max-height: 262px;
   }
 
   #sirovina-scanner-modal .form-control,
@@ -883,8 +887,8 @@
 
   #sirovina-scanner-modal .form-control:focus,
   #sirovina-scanner-modal .form-select:focus {
-    border-color: rgba(74, 179, 148, 0.64);
-    box-shadow: 0 0 0 0.12rem rgba(74, 179, 148, 0.15);
+    border-color: rgba(168, 176, 190, 0.64);
+    box-shadow: 0 0 0 0.12rem rgba(168, 176, 190, 0.15);
   }
 
   #sirovina-scanner-modal .select2-container {
@@ -892,16 +896,25 @@
   }
 
   #sirovina-scanner-modal .select2-container--default .select2-selection--single {
-    height: calc(1.5em + 0.572rem + 2px);
+    height: var(--bom-control-height);
     background-color: rgba(16, 22, 35, 0.85);
     border-color: rgba(168, 179, 204, 0.34);
     color: #e8edfb;
     border-radius: 0.357rem;
   }
 
+  #sirovina-scanner-modal #bom-all-search-input {
+    height: 38px !important;
+    min-height: 38px !important;
+    max-height: 38px !important;
+    line-height: 1.5 !important;
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
+  }
+
   #sirovina-scanner-modal .select2-container--default .select2-selection--single .select2-selection__rendered {
     color: #e8edfb;
-    line-height: calc(1.5em + 0.572rem);
+    line-height: calc(var(--bom-control-height) - 2px);
     padding-left: 0.75rem;
     padding-right: 2rem;
   }
@@ -911,18 +924,18 @@
   }
 
   #sirovina-scanner-modal .select2-container--default .select2-selection--single .select2-selection__arrow {
-    height: calc(1.5em + 0.572rem + 2px);
+    height: var(--bom-control-height);
   }
 
   #sirovina-scanner-modal .select2-container--default.select2-container--focus .select2-selection--single,
   #sirovina-scanner-modal .select2-container--open .select2-selection--single {
-    border-color: rgba(74, 179, 148, 0.64);
-    box-shadow: 0 0 0 0.12rem rgba(74, 179, 148, 0.15);
+    border-color: rgba(168, 176, 190, 0.64);
+    box-shadow: 0 0 0 0.12rem rgba(168, 176, 190, 0.15);
   }
 
   #sirovina-scanner-modal .select2-dropdown {
     background-color: rgba(10, 15, 26, 0.98);
-    border-color: rgba(74, 179, 148, 0.35);
+    border-color: rgba(168, 176, 190, 0.35);
   }
 
   #sirovina-scanner-modal .select2-search--dropdown .select2-search__field {
@@ -936,13 +949,13 @@
   }
 
   #sirovina-scanner-modal .select2-results__option--highlighted[aria-selected] {
-    background-color: rgba(74, 179, 148, 0.25);
+    background-color: rgba(168, 176, 190, 0.25);
     color: #ffffff;
   }
 
   #sirovina-scanner-modal .select2-results__options {
     scrollbar-width: thin;
-    scrollbar-color: rgba(74, 179, 148, 0.85) rgba(16, 22, 35, 0.35);
+    scrollbar-color: rgba(168, 176, 190, 0.85) rgba(16, 22, 35, 0.35);
   }
 
   #sirovina-scanner-modal .select2-results__options::-webkit-scrollbar {
@@ -955,18 +968,18 @@
   }
 
   #sirovina-scanner-modal .select2-results__options::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(74, 179, 148, 0.95), rgba(58, 153, 126, 0.95));
+    background: linear-gradient(180deg, rgba(168, 176, 190, 0.95), rgba(140, 149, 165, 0.95));
     border-radius: 999px;
   }
 
   #sirovina-scanner-modal .select2-results__options::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, rgba(95, 198, 167, 0.98), rgba(70, 170, 141, 0.98));
+    background: linear-gradient(180deg, rgba(188, 196, 209, 0.98), rgba(158, 168, 184, 0.98));
   }
 
   #sirovina-scanner-modal .wo-bom-table-wrap,
   #sirovina-scanner-modal .wo-bom-quick-table-wrap {
     scrollbar-width: thin;
-    scrollbar-color: rgba(74, 179, 148, 0.75) rgba(16, 22, 35, 0.25);
+    scrollbar-color: rgba(168, 176, 190, 0.75) rgba(16, 22, 35, 0.25);
   }
 
   #sirovina-scanner-modal .wo-bom-table-wrap::-webkit-scrollbar,
@@ -983,7 +996,7 @@
 
   #sirovina-scanner-modal .wo-bom-table-wrap::-webkit-scrollbar-thumb,
   #sirovina-scanner-modal .wo-bom-quick-table-wrap::-webkit-scrollbar-thumb {
-    background: rgba(74, 179, 148, 0.82);
+    background: rgba(168, 176, 190, 0.82);
     border-radius: 999px;
   }
 
@@ -994,8 +1007,8 @@
   }
 
   #sirovina-scanner-modal .form-check-input:checked {
-    background-color: #28c76f;
-    border-color: #28c76f;
+    background-color: #7a8698;
+    border-color: #7a8698;
   }
 
   #sirovina-scanner-modal .modal-body {
@@ -1034,8 +1047,8 @@
     }
 
     #sirovina-scanner-modal .wo-bom-bottom-mode-btn {
-      min-width: 120px;
-      padding: 0.38rem 0.75rem;
+      min-width: 108px;
+      padding: 0.38rem 0.62rem;
     }
 
     #sirovina-scanner-modal .wo-bom-modal-shell {
@@ -1104,8 +1117,6 @@
     var modeButtons = modeSwitcherEl ? modeSwitcherEl.querySelectorAll('[data-mode]') : [];
     var productModePanel = document.getElementById('bom-mode-product-panel');
     var allModePanel = document.getElementById('bom-mode-all-panel');
-    var allTypeSwitchEl = document.getElementById('bom-all-type-switch');
-    var allTypeButtons = allTypeSwitchEl ? allTypeSwitchEl.querySelectorAll('[data-all-type]') : [];
     var allSearchInput = document.getElementById('bom-all-search-input');
     var allItemsTitleEl = document.getElementById('bom-all-title');
     var allItemsHeadEl = document.getElementById('bom-all-items-head');
@@ -1143,7 +1154,11 @@
       allRows: [],
       allLoading: false,
       allRequestSeq: 0,
-      allSearchDebounce: null
+      allSearchDebounce: null,
+      selectedAllKeysByType: {
+        materials: new Set(),
+        operations: new Set()
+      }
     };
 
     function setStatus(text, tone) {
@@ -1151,11 +1166,18 @@
         return;
       }
 
+      if (!text) {
+        statusEl.textContent = '';
+        statusEl.classList.add('d-none');
+        return;
+      }
+
+      statusEl.classList.remove('d-none');
       statusEl.textContent = text;
-      statusEl.classList.remove('text-success', 'text-warning', 'text-danger', 'text-white-50');
+      statusEl.classList.remove('text-success', 'text-secondary', 'text-warning', 'text-danger', 'text-white-50');
 
       if (tone === 'success') {
-        statusEl.classList.add('text-success');
+        statusEl.classList.add('text-secondary');
       } else if (tone === 'warning') {
         statusEl.classList.add('text-warning');
       } else if (tone === 'danger') {
@@ -1182,8 +1204,9 @@
 
     function notify(icon, title, text) {
       if (window.Swal && typeof window.Swal.fire === 'function') {
+        var resolvedIcon = icon === 'success' ? 'info' : icon;
         window.Swal.fire({
-          icon: icon,
+          icon: resolvedIcon,
           title: title,
           text: text
         });
@@ -1284,6 +1307,46 @@
         acDescr: row.acDescr || '-',
         anGrossQty: Number(row.anGrossQty || 0),
         acOperationType: row.acOperationType || '',
+        acUM: row.acUM || 'AUTO'
+      });
+    }
+
+    function allItemKey(type, componentId) {
+      var resolvedType = type === 'operations' ? 'operations' : 'materials';
+      var resolvedComponentId = String(componentId || '').trim().toLowerCase();
+      return resolvedType + '|' + resolvedComponentId;
+    }
+
+    function selectedAllSet(type) {
+      return type === 'operations'
+        ? state.selectedAllKeysByType.operations
+        : state.selectedAllKeysByType.materials;
+    }
+
+    function syncAllSelectionRow(type, row, isSelected) {
+      if (!row) {
+        return;
+      }
+
+      var resolvedType = type === 'operations' ? 'operations' : 'materials';
+      var componentId = String(row.acIdentChild || '').trim();
+      if (!componentId) {
+        return;
+      }
+
+      var key = 'all::' + allItemKey(resolvedType, componentId);
+      if (!isSelected) {
+        state.quickSelections.delete(key);
+        return;
+      }
+
+      state.quickSelections.set(key, {
+        productId: 'all:' + resolvedType,
+        anNo: Number(row.anNo || 0),
+        acIdentChild: componentId,
+        acDescr: row.acDescr || '-',
+        anGrossQty: Number(row.anGrossQty || 0),
+        acOperationType: row.acOperationType || (resolvedType === 'operations' ? 'O' : 'M'),
         acUM: row.acUM || 'AUTO'
       });
     }
@@ -1407,6 +1470,26 @@
       return type === 'operations' ? allOperationsUrl : allMaterialsUrl;
     }
 
+    function syncAllSearchInputHeight() {
+      return;
+    }
+
+    function resolveMode(mode) {
+      if (mode === 'operations') {
+        return 'operations';
+      }
+
+      if (mode === 'materials') {
+        return 'materials';
+      }
+
+      return 'product';
+    }
+
+    function isAllMode(mode) {
+      return mode === 'materials' || mode === 'operations';
+    }
+
     function updateModeButtons() {
       if (!modeButtons || modeButtons.length === 0) {
         return;
@@ -1420,35 +1503,35 @@
       });
     }
 
-    function updateAllTypeButtons() {
-      if (!allTypeButtons || allTypeButtons.length === 0) {
-        return;
-      }
-
-      Array.prototype.forEach.call(allTypeButtons, function (button) {
-        var type = String(button.getAttribute('data-all-type') || '').trim();
-        var isActive = type === state.allType;
-        button.classList.toggle('is-active', isActive);
-        button.setAttribute('aria-selected', isActive ? 'true' : 'false');
-      });
-    }
-
     function showModePanel(nextMode) {
-      var normalizedMode = nextMode === 'all' ? 'all' : 'product';
-      var fromPanel = state.activeMode === 'all' ? allModePanel : productModePanel;
-      var toPanel = normalizedMode === 'all' ? allModePanel : productModePanel;
+      var normalizedMode = resolveMode(nextMode);
+      var nextIsAll = isAllMode(normalizedMode);
+      var previousMode = state.activeMode;
+      var previousIsAll = isAllMode(previousMode);
+      var fromPanel = previousIsAll ? allModePanel : productModePanel;
+      var toPanel = nextIsAll ? allModePanel : productModePanel;
+      var switchedPanel = fromPanel && toPanel && fromPanel !== toPanel;
 
-      if (!fromPanel || !toPanel || normalizedMode === state.activeMode) {
-        state.activeMode = normalizedMode;
-        updateModeButtons();
-        if (state.activeMode === 'all') {
+      state.activeMode = normalizedMode;
+      state.allType = normalizedMode === 'operations' ? 'operations' : 'materials';
+      updateModeButtons();
+
+      if (!fromPanel || !toPanel) {
+        if (nextIsAll) {
+          syncAllSearchInputHeight();
           loadAllRows();
         }
         return;
       }
 
-      state.activeMode = normalizedMode;
-      updateModeButtons();
+      if (!switchedPanel) {
+        if (nextIsAll) {
+          syncAllSearchInputHeight();
+          renderAllRows();
+          loadAllRows();
+        }
+        return;
+      }
 
       toPanel.classList.remove('d-none', 'wo-panel-exit');
       toPanel.classList.add('wo-panel-enter');
@@ -1466,7 +1549,9 @@
         fromPanel.setAttribute('aria-hidden', 'true');
       }, 230);
 
-      if (normalizedMode === 'all') {
+      if (nextIsAll) {
+        syncAllSearchInputHeight();
+        renderAllRows();
         loadAllRows();
       }
     }
@@ -1477,6 +1562,7 @@
       }
 
       var rows = Array.isArray(state.allRows) ? state.allRows : [];
+      var selectedSet = selectedAllSet(state.allType);
 
       if (allItemsTitleEl) {
         allItemsTitleEl.textContent = 'Sve stavke - ' + allTypeLabel();
@@ -1485,7 +1571,8 @@
       if (allItemsHeadEl) {
         allItemsHeadEl.innerHTML = '' +
           '<tr>' +
-            '<th style="width: 70px;">#</th>' +
+            '<th class="text-center" style="width: 46px;">#</th>' +
+            '<th style="width: 70px;">Poz</th>' +
             '<th style="width: 210px;">Sifra</th>' +
             '<th>Opis</th>' +
             '<th style="width: 120px;" class="text-end">Kolicina</th>' +
@@ -1495,7 +1582,7 @@
       }
 
       if (!Array.isArray(rows) || rows.length === 0) {
-        allItemsBodyEl.innerHTML = '<tr><td colspan="6" class="text-center text-white-50 py-2">Nema stavki za odabrani filter.</td></tr>';
+        allItemsBodyEl.innerHTML = '<tr><td colspan="7" class="text-center text-white-50 py-2">Nema stavki za odabrani filter.</td></tr>';
         if (allItemsTotalEl) {
           allItemsTotalEl.textContent = '0';
         }
@@ -1503,15 +1590,28 @@
       }
 
       var html = rows.map(function (row, index) {
-        var code = escapeHtml(row && row.acIdentChild ? row.acIdentChild : '-');
+        var lineNo = Number(row && row.anNo ? row.anNo : (index + 1));
+        var componentIdRaw = row && row.acIdentChild ? row.acIdentChild : '-';
+        var code = escapeHtml(componentIdRaw);
         var description = escapeHtml(row && row.acDescr ? row.acDescr : '-');
         var quantity = formatQuantity(row && row.anGrossQty ? row.anGrossQty : 0);
         var unit = escapeHtml(row && row.acUM ? row.acUM : '-');
-        var type = escapeHtml(row && row.acOperationType ? row.acOperationType : (state.allType === 'operations' ? 'O' : 'M'));
+        var typeValue = row && row.acOperationType ? row.acOperationType : (state.allType === 'operations' ? 'O' : 'M');
+        var type = escapeHtml(typeValue);
+        var key = allItemKey(state.allType, componentIdRaw);
+        var checked = selectedSet.has(key) ? 'checked' : '';
 
         return '' +
           '<tr>' +
-            '<td>' + (index + 1) + '</td>' +
+            '<td class="text-center">' +
+              '<input type="checkbox" class="form-check-input bom-all-item-checkbox" ' +
+              'data-key="' + escapeHtml(key) + '" ' +
+              'data-type="' + escapeHtml(state.allType) + '" ' +
+              'data-no="' + escapeHtml(lineNo) + '" ' +
+              'data-ident="' + code + '" ' +
+              checked + '>' +
+            '</td>' +
+            '<td>' + lineNo + '</td>' +
             '<td class="fw-semibold">' + code + '</td>' +
             '<td>' + description + '</td>' +
             '<td class="text-end">' + quantity + '</td>' +
@@ -1770,6 +1870,7 @@
 
       var $select = window.jQuery(productSelect);
       if ($select.data('select2')) {
+        syncAllSearchInputHeight();
         return;
       }
 
@@ -1852,6 +1953,7 @@
         $select.on('select2:select', function () {
           markProceedSource('manual');
           loadBomForSelectedProduct();
+          syncAllSearchInputHeight();
         });
 
         $select.on('select2:clear', function () {
@@ -1861,10 +1963,13 @@
           renderBomRows();
           setBomLoading(false);
           setStatus('Izaberite proizvod iz liste za ucitavanje sastavnice.', 'warning');
+          syncAllSearchInputHeight();
         });
 
         state.select2EventsBound = true;
       }
+
+      window.requestAnimationFrame(syncAllSearchInputHeight);
     }
 
     function renderProducts() {
@@ -2029,7 +2134,7 @@
             return;
           }
 
-          setStatus('Početna sastavnica za artikal učitana. Prilagodite parametre po potrebi ručno prije dodavanja na radni nalog.', 'success');
+          setStatus('', null);
         })
         .catch(function (error) {
           if (requestSeq !== state.bomRequestSeq) {
@@ -2319,6 +2424,51 @@
       });
     }
 
+    if (allItemsBodyEl) {
+      allItemsBodyEl.addEventListener('change', function (event) {
+        var target = event.target;
+
+        if (!target || !target.classList.contains('bom-all-item-checkbox')) {
+          return;
+        }
+
+        var rowKey = String(target.getAttribute('data-key') || '').trim();
+        var rowType = String(target.getAttribute('data-type') || '').trim() === 'operations' ? 'operations' : 'materials';
+        var componentId = String(target.getAttribute('data-ident') || '').trim();
+        var lineNo = Number(target.getAttribute('data-no') || 0);
+        var selectedSet = selectedAllSet(rowType);
+
+        if (!rowKey || !componentId) {
+          return;
+        }
+
+        if (target.checked) {
+          selectedSet.add(rowKey);
+        } else {
+          selectedSet.delete(rowKey);
+        }
+
+        var rowData = state.allRows.find(function (row) {
+          return allItemKey(rowType, row && row.acIdentChild ? row.acIdentChild : '') === rowKey;
+        });
+
+        if (!rowData) {
+          rowData = {
+            anNo: lineNo,
+            acIdentChild: componentId,
+            acDescr: '-',
+            anGrossQty: 0,
+            acOperationType: rowType === 'operations' ? 'O' : 'M',
+            acUM: 'AUTO'
+          };
+        }
+
+        syncAllSelectionRow(rowType, rowData, target.checked);
+        markProceedSource('manual');
+        updateSelectionSummary();
+      });
+    }
+
     if (productSelect && !hasSelect2()) {
       productSelect.addEventListener('change', function () {
         markProceedSource('manual');
@@ -2349,23 +2499,6 @@
         button.addEventListener('click', function () {
           var mode = String(button.getAttribute('data-mode') || '').trim();
           showModePanel(mode);
-        });
-      });
-    }
-
-    if (allTypeButtons && allTypeButtons.length > 0) {
-      Array.prototype.forEach.call(allTypeButtons, function (button) {
-        button.addEventListener('click', function () {
-          var nextType = String(button.getAttribute('data-all-type') || '').trim();
-          var normalizedType = nextType === 'operations' ? 'operations' : 'materials';
-
-          if (normalizedType === state.allType) {
-            return;
-          }
-
-          state.allType = normalizedType;
-          updateAllTypeButtons();
-          loadAllRows();
         });
       });
     }
@@ -2419,7 +2552,6 @@
       }
 
       updateModeButtons();
-      updateAllTypeButtons();
       renderAllRows();
 
       var invoiceNumberNode = document.querySelector('.invoice-number');
@@ -2432,6 +2564,7 @@
 
     modalEl.addEventListener('shown.bs.modal', function () {
       applyBackdrop();
+      syncAllSearchInputHeight();
 
       if (!productsUrl || !bomUrl || !saveUrl) {
         setStatus('Skenirajte i učitajte validan radni nalog prije planiranja potrošnje.', 'warning');
@@ -2447,6 +2580,7 @@
 
       if (!hasSelect2()) {
         loadProducts().then(function () {
+          syncAllSearchInputHeight();
           if (productSelect && productSelect.value) {
             loadBomForSelectedProduct();
             return;
@@ -2462,6 +2596,7 @@
       }
 
       if (productSelect && productSelect.value) {
+        syncAllSearchInputHeight();
         loadBomForSelectedProduct();
         return;
       }
