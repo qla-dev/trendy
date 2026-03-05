@@ -260,11 +260,11 @@
     --qr-text-soft: #cfd7ee;
     --qr-text-main: #e8edf9;
     --bom-control-height: calc(1.5em + 0.572rem + 2px);
-    --wo-scroll-track: rgba(216, 223, 236, 0.94);
-    --wo-scroll-thumb: rgba(128, 139, 164, 0.86);
-    --wo-scroll-thumb-hover: rgba(106, 118, 145, 0.9);
-    --wo-scroll-thumb-active: rgba(92, 104, 132, 0.94);
-    --wo-scroll-thumb-border: rgba(246, 248, 253, 0.88);
+    --wo-scroll-track: rgba(12, 18, 30, 0.92);
+    --wo-scroll-thumb: rgba(138, 148, 169, 0.86);
+    --wo-scroll-thumb-hover: rgba(160, 170, 190, 0.92);
+    --wo-scroll-thumb-active: rgba(176, 186, 206, 0.95);
+    --wo-scroll-thumb-border: rgba(11, 17, 29, 0.9);
   }
 
   body.dark-layout #sirovina-scanner-modal,
@@ -1037,7 +1037,7 @@
 
   #sirovina-scanner-modal .select2-results__options {
     scrollbar-width: thin;
-    scrollbar-color: rgba(168, 176, 190, 0.85) rgba(16, 22, 35, 0.35);
+    scrollbar-color: var(--wo-scroll-thumb) var(--wo-scroll-track);
   }
 
   #sirovina-scanner-modal .select2-results__options::-webkit-scrollbar {
@@ -1045,17 +1045,18 @@
   }
 
   #sirovina-scanner-modal .select2-results__options::-webkit-scrollbar-track {
-    background: rgba(16, 22, 35, 0.35);
+    background: var(--wo-scroll-track);
     border-radius: 999px;
   }
 
   #sirovina-scanner-modal .select2-results__options::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(168, 176, 190, 0.95), rgba(140, 149, 165, 0.95));
+    background: var(--wo-scroll-thumb);
     border-radius: 999px;
+    border: 1px solid var(--wo-scroll-thumb-border);
   }
 
   #sirovina-scanner-modal .select2-results__options::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, rgba(188, 196, 209, 0.98), rgba(158, 168, 184, 0.98));
+    background: var(--wo-scroll-thumb-hover);
   }
 
   #sirovina-scanner-modal .wo-bom-table-wrap,
@@ -1505,6 +1506,7 @@
           anNo: row.anNo,
           acDescr: row.acDescr || '',
           acUM: row.acUM || 'AUTO',
+          acUMSource: row.acUM || '',
           acOperationType: row.acOperationType || ''
         };
       });
@@ -2164,6 +2166,7 @@
             artikal: String(row.acIdentChild || '').trim(),
             opis: String(row.acDescr || '').trim(),
             acOperationType: String(row.acOperationType || '').trim(),
+            acUMSource: String(row.acUM || '').trim(),
             slika: '-',
             napomena: '',
             planirano: String(planiranoQty),
@@ -2812,6 +2815,7 @@
         var lineNo = Number((row && row.pozicija) || 0);
         var opis = String((row && row.opis) || '').trim();
         var unitValue = String((row && row.mj) || '').trim().toUpperCase();
+        var sourceUnitValue = String((row && row.acUMSource) || '').trim().toUpperCase();
         var operationTypeValue = String((row && row.acOperationType) || '').trim().toUpperCase();
         var planiranoValue = Number((row && row.planirano) || 0);
 
@@ -2824,9 +2828,13 @@
           ? operationTypeValue
           : '';
 
-        var normalizedUnit = (unitValue === 'AUTO' || unitValue === 'KG' || unitValue === 'MJ')
+        var normalizedSourceUnit = sourceUnitValue === 'AUTO'
+          ? ''
+          : sourceUnitValue.slice(0, 3);
+
+        var normalizedUnit = (unitValue === 'KG' || unitValue === 'MJ')
           ? unitValue
-          : 'AUTO';
+          : normalizedSourceUnit;
 
         var normalizedPlanirano = Number.isFinite(planiranoValue) && planiranoValue >= 0
           ? planiranoValue
@@ -2837,6 +2845,7 @@
           anNo: lineNo,
           acDescr: opis,
           acUM: normalizedUnit,
+          acUMSource: normalizedSourceUnit,
           acOperationType: normalizedOperationType,
           anPlanQty: normalizedPlanirano
         });

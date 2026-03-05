@@ -1041,6 +1041,31 @@
   .swal2-popup.wo-swal-dark .swal2-content {
     color: #d0d2d6 !important;
   }
+  .swal2-popup.wo-scan-swal-popup {
+    overflow: hidden;
+    --wo-scan-progress-duration: 3000ms;
+  }
+  .swal2-popup .wo-scan-swal-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.12);
+    pointer-events: none;
+  }
+  .swal2-popup .wo-scan-swal-progress-fill {
+    width: 0;
+    height: 100%;
+    background: #28c76f;
+    transition: width var(--wo-scan-progress-duration) linear;
+  }
+  .swal2-popup.wo-swal-dark .wo-scan-swal-progress {
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .swal2-popup.wo-swal-dark .wo-scan-swal-progress-fill {
+    background: #00cfe8;
+  }
   .dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,
   .semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,
   body.dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,
@@ -1991,6 +2016,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var statusModalElement = document.getElementById('change-status-modal');
     var priorityModalElement = document.getElementById('change-priority-modal');
     var sastavnicaTable = document.getElementById('sastavnica-table');
+    var materijaliTable = document.getElementById('materijali-table');
+    var operacijaTable = document.getElementById('operacija-table');
 
     var onScroll = function () {
       sidebar.classList.toggle('invoice-actions-scrolled', window.scrollY > 80);
@@ -2082,13 +2109,35 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     }
 
     if (scanLookupNotice && window.Swal && typeof window.Swal.fire === 'function') {
+      var scanLookupTimerMs = 3000;
       Swal.fire(swalWithTheme({
         icon: String(scanLookupNotice.icon || 'info'),
         title: String(scanLookupNotice.title || ''),
         text: String(scanLookupNotice.text || ''),
-        timer: 3000,
-        timerProgressBar: true,
-        showConfirmButton: false
+        timer: scanLookupTimerMs,
+        timerProgressBar: false,
+        showConfirmButton: false,
+        customClass: {
+          popup: 'wo-scan-swal-popup'
+        },
+        didOpen: function (popup) {
+          if (!popup) {
+            return;
+          }
+
+          popup.style.setProperty('--wo-scan-progress-duration', String(scanLookupTimerMs) + 'ms');
+
+          var progress = document.createElement('div');
+          progress.className = 'wo-scan-swal-progress';
+          var fill = document.createElement('div');
+          fill.className = 'wo-scan-swal-progress-fill';
+          progress.appendChild(fill);
+          popup.appendChild(progress);
+
+          window.requestAnimationFrame(function () {
+            fill.style.width = '100%';
+          });
+        }
       }));
     }
 
@@ -2238,6 +2287,67 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       var emptyRow = document.createElement('tr');
       emptyRow.innerHTML = '<td colspan="16" class="text-center text-muted py-2">Nema stavki za ovaj radni nalog.</td>';
       body.appendChild(emptyRow);
+    }
+
+    function ensureTabTableEmptyState(tableElement, colspan, message) {
+      if (!tableElement) {
+        return;
+      }
+
+      var body = tableElement.querySelector('tbody');
+      if (!body) {
+        return;
+      }
+
+      var rows = body.querySelectorAll('tr');
+      if (rows.length > 0) {
+        return;
+      }
+
+      var emptyRow = document.createElement('tr');
+      emptyRow.innerHTML = '<td colspan="' + String(colspan) + '" class="text-center text-muted py-2">' + String(message || '') + '</td>';
+      body.appendChild(emptyRow);
+    }
+
+    function removeLinkedRowsFromTabs(positionValue, componentCodeValue) {
+      var positionText = String(positionValue || '').trim();
+      var componentCode = String(componentCodeValue || '').trim().toUpperCase();
+
+      var removeInTable = function (tableElement, positionColumnIndex, codeColumnIndex) {
+        if (!tableElement) {
+          return;
+        }
+
+        var body = tableElement.querySelector('tbody');
+        if (!body) {
+          return;
+        }
+
+        var rows = Array.prototype.slice.call(body.querySelectorAll('tr'));
+        rows.forEach(function (candidateRow) {
+          var cells = candidateRow.children || [];
+          if (!cells.length || candidateRow.querySelector('td[colspan]')) {
+            return;
+          }
+
+          var candidatePosition = cells.length > positionColumnIndex
+            ? String(cells[positionColumnIndex].textContent || '').trim()
+            : '';
+          var candidateCode = cells.length > codeColumnIndex
+            ? String(cells[codeColumnIndex].textContent || '').trim().toUpperCase()
+            : '';
+
+          if (candidatePosition === positionText && candidateCode === componentCode) {
+            candidateRow.remove();
+          }
+        });
+      };
+
+      removeInTable(materijaliTable, 0, 1);
+      removeInTable(operacijaTable, 1, 2);
+
+      ensureTabTableEmptyState(materijaliTable, 5, 'Nema stavki za ovaj radni nalog.');
+      ensureTabTableEmptyState(operacijaTable, 11, 'Nema operacija za ovaj radni nalog.');
     }
 
     if (statusSaveButton && statusSelect) {
@@ -2430,6 +2540,12 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           componentCode = (componentCell.textContent || '').trim();
         }
 
+        var positionText = '';
+        var positionCell = row.children.length > 1 ? row.children[1] : null;
+        if (positionCell) {
+          positionText = (positionCell.textContent || '').trim();
+        }
+
         Swal.fire(swalWithTheme({
           title: 'Ukloniti stavku?',
           text: componentCode ? ('Stavka: ' + componentCode) : 'Ova stavka ce biti uklonjena iz radnog naloga.',
@@ -2457,6 +2573,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
             .then(function (response) {
               row.remove();
               ensureSastavnicaEmptyState();
+              removeLinkedRowsFromTabs(positionText, componentCode);
 
               Swal.fire(swalWithTheme({
                 icon: 'success',

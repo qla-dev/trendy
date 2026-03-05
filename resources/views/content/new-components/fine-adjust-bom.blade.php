@@ -1,10 +1,10 @@
-<div class="modal fade" id="fine-adjust-bom-modal" tabindex="-1" aria-labelledby="fine-adjust-bom-label" aria-hidden="true">
+<div class="modal fade fine-adjust-bom-fixed-theme" id="fine-adjust-bom-modal" tabindex="-1" aria-labelledby="fine-adjust-bom-label" aria-hidden="true">
   <div class="modal-dialog modal-fullscreen">
     <div class="modal-content fine-adjust-bom-content">
       <div class="modal-header fine-adjust-bom-header">
         <div>
           <h4 class="mb-25 text-white" id="fine-adjust-bom-label">Ručno prilagođavanje sastavnice</h4>
-          <p class="mb-0 small text-muted">Prilagodite stavke prije dodavanja na radni nalog.</p>
+          <p class="mb-0 small fine-adjust-bom-subtitle">Ovaj prikaz dopušta administratoru ručno prilagođavanje svih stavki unutar nove privremene sastavnice prije dodavanje iste na radni nalog</p>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
       </div>
@@ -45,7 +45,7 @@
         </div>
       </div>
 
-      <div class="modal-footer">
+      <div class="modal-footer fine-adjust-bom-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
           <i class="fa fa-times me-50"></i> Odustani
         </button>
@@ -59,27 +59,30 @@
 
 <style>
   #fine-adjust-bom-modal {
-    --wo-scroll-track: rgba(216, 223, 236, 0.94);
-    --wo-scroll-thumb: rgba(128, 139, 164, 0.86);
-    --wo-scroll-thumb-hover: rgba(106, 118, 145, 0.9);
-    --wo-scroll-thumb-active: rgba(92, 104, 132, 0.94);
-    --wo-scroll-thumb-border: rgba(246, 248, 253, 0.88);
+    --wo-scroll-track: rgba(12, 18, 30, 0.92);
+    --wo-scroll-thumb: rgba(138, 148, 169, 0.86);
+    --wo-scroll-thumb-hover: rgba(160, 170, 190, 0.92);
+    --wo-scroll-thumb-active: rgba(176, 186, 206, 0.95);
+    --wo-scroll-thumb-border: rgba(11, 17, 29, 0.9);
   }
 
-  body.dark-layout #fine-adjust-bom-modal,
-  body.semi-dark-layout #fine-adjust-bom-modal,
-  .dark-layout #fine-adjust-bom-modal,
-  .semi-dark-layout #fine-adjust-bom-modal {
-    --wo-scroll-track: rgba(10, 16, 28, 0.92);
-    --wo-scroll-thumb: rgba(120, 136, 170, 0.86);
-    --wo-scroll-thumb-hover: rgba(149, 164, 194, 0.92);
-    --wo-scroll-thumb-active: rgba(162, 176, 206, 0.95);
-    --wo-scroll-thumb-border: rgba(12, 19, 33, 0.9);
+  #fine-adjust-bom-modal .fine-adjust-bom-subtitle {
+    color: rgba(194, 208, 238, 0.72);
   }
 
   #fine-adjust-bom-modal .fine-adjust-bom-content {
     background: linear-gradient(180deg, #0a1020 0%, #0a1324 70%, #091421 100%);
     color: #dfe8ff;
+  }
+
+  #fine-adjust-bom-modal.fine-adjust-bom-fixed-theme .modal-content {
+    background: linear-gradient(180deg, #0a1020 0%, #0a1324 70%, #091421 100%) !important;
+    color: #dfe8ff !important;
+  }
+
+  #fine-adjust-bom-modal.fine-adjust-bom-fixed-theme .modal-body,
+  #fine-adjust-bom-modal.fine-adjust-bom-fixed-theme .modal-footer {
+    background: transparent !important;
   }
 
   #fine-adjust-bom-modal .fine-adjust-bom-header {
@@ -105,6 +108,10 @@
 
   #fine-adjust-bom-modal .fine-adjust-bom-body {
     padding-top: 1rem;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-bom-footer {
+    border-top: 1px solid rgba(95, 127, 194, 0.35) !important;
   }
 
   #fine-adjust-bom-modal .fine-adjust-bom-table-wrap {

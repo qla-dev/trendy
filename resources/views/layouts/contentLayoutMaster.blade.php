@@ -80,8 +80,9 @@ $configData = Helper::applClasses();
     content="admin template, Vuexy admin template, dashboard template, flat admin template, responsive admin template, web app">
   <meta name="author" content="PIXINVENT">
   <title>@yield('title')</title>
-  <link rel="apple-touch-icon" href="{{ asset('images/ico/favicon-32x32.png') }}">
-  <link rel="shortcut icon" type="image/x-icon" href="{{ asset('images/logo/favicon.ico') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('images/logo/TrendyCNC.png') }}">
+  <link rel="icon" type="image/png" sizes="64x64" href="{{ asset('images/logo/TrendyCNC.png') }}">
+  <link rel="shortcut icon" type="image/png" href="{{ asset('images/logo/TrendyCNC.png') }}">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;1,400;1,500;1,600"
     rel="stylesheet">
 

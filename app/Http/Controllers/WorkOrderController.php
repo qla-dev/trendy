@@ -14,6 +14,29 @@ use Throwable;
 
 class WorkOrderController extends Controller
 {
+    private const MATERIALS_SETS = [
+        '011',
+        '020',
+        '021',
+        '022',
+        '023',
+        '024',
+        '025',
+        '026',
+        '101',
+        '102',
+        '103',
+        '104',
+        '10A',
+        '111',
+        '120',
+        '134',
+        '13S',
+        '13X',
+        'H1',
+    ];
+    private const OPERATIONS_SET = 'OPR';
+
     private ?array $deliveryPriorityMap = null;
     private ?array $orderTableColumnsCache = null;
     private array $linkedOrderCache = [];
@@ -664,6 +687,7 @@ class WorkOrderController extends Controller
             'components.*.anNo' => ['nullable', 'numeric'],
             'components.*.acDescr' => ['nullable', 'string', 'max:200'],
             'components.*.acUM' => ['nullable', 'string', 'max:8'],
+            'components.*.acUMSource' => ['nullable', 'string', 'max:8'],
             'components.*.acOperationType' => ['nullable', 'string', 'max:8'],
             'components.*.anPlanQty' => ['nullable', 'numeric', 'min:0'],
         ]);
@@ -729,19 +753,17 @@ class WorkOrderController extends Controller
 
                 $normalizedSeen[$selectionKey] = true;
                 $manualOperationType = strtoupper(substr(trim((string) ($component['acOperationType'] ?? '')), 0, 1));
-
-                if (!in_array($manualOperationType, ['M', 'O'], true)) {
-                    $manualOperationType = '';
-                }
-
                 $manualUnitRaw = strtoupper(trim((string) ($component['acUM'] ?? '')));
                 $manualUnit = $manualUnitRaw === 'AUTO' ? '' : strtoupper(substr($manualUnitRaw, 0, 3));
+                $manualUnitSourceRaw = strtoupper(trim((string) ($component['acUMSource'] ?? '')));
+                $manualUnitSource = $manualUnitSourceRaw === 'AUTO' ? '' : strtoupper(substr($manualUnitSourceRaw, 0, 3));
 
                 $normalizedComponents[] = [
                     'acIdentChild' => $componentId,
                     'anNo' => $lineNo,
                     'acDescr' => trim((string) ($component['acDescr'] ?? '')),
                     'acUM' => $manualUnit,
+                    'acUMSource' => $manualUnitSource,
                     'acOperationType' => $manualOperationType,
                     'anPlanQty' => $this->toFloatOrNull($component['anPlanQty'] ?? null),
                 ];
@@ -752,6 +774,46 @@ class WorkOrderController extends Controller
                     'message' => 'Nijedna komponenta nije odabrana.',
                 ], 422);
             }
+
+            $catalogMetaByIdent = $this->fetchCatalogMetaForComponentIds(array_map(function (array $component) {
+                return (string) ($component['acIdentChild'] ?? '');
+            }, $normalizedComponents));
+
+            $normalizedComponents = array_map(function (array $component) use ($catalogMetaByIdent) {
+                $componentId = trim((string) ($component['acIdentChild'] ?? ''));
+                $catalogMeta = $catalogMetaByIdent[strtolower($componentId)] ?? [];
+                $catalogName = trim((string) ($catalogMeta['name'] ?? ''));
+                $catalogUnit = strtoupper(substr(trim((string) ($catalogMeta['um'] ?? '')), 0, 3));
+                $catalogSet = strtoupper(trim((string) ($catalogMeta['set'] ?? '')));
+                $componentDescription = trim((string) ($component['acDescr'] ?? ''));
+                $componentUnit = strtoupper(substr(trim((string) ($component['acUM'] ?? '')), 0, 3));
+                $componentUnitSource = strtoupper(substr(trim((string) ($component['acUMSource'] ?? '')), 0, 3));
+
+                if ($componentDescription === '' && $catalogName !== '') {
+                    $componentDescription = $catalogName;
+                }
+
+                if ($componentUnit === '') {
+                    if ($componentUnitSource !== '') {
+                        $componentUnit = $componentUnitSource;
+                    } elseif ($catalogUnit !== '') {
+                        $componentUnit = $catalogUnit;
+                    }
+                }
+
+                return [
+                    'acIdentChild' => $componentId,
+                    'anNo' => (int) ($component['anNo'] ?? 0),
+                    'acDescr' => $componentDescription,
+                    'acUM' => $componentUnit,
+                    'acOperationType' => $this->resolveOperationTypeForSave(
+                        (string) ($component['acOperationType'] ?? ''),
+                        $catalogSet
+                    ),
+                    'catalog_set' => $catalogSet,
+                    'anPlanQty' => $this->toFloatOrNull($component['anPlanQty'] ?? null),
+                ];
+            }, $normalizedComponents);
 
             $bomRowsByKey = [];
             foreach ($bomRows as $row) {
@@ -867,10 +929,13 @@ class WorkOrderController extends Controller
                     $descriptionFromRequested = trim((string) ($requestedRow['acDescr'] ?? ''));
                     $descriptionFromBom = trim((string) ($bomRow['acDescr'] ?? ''));
                     $description = $descriptionFromRequested !== '' ? $descriptionFromRequested : $descriptionFromBom;
-                    $operationType = strtoupper(substr(trim((string) ($requestedRow['acOperationType'] ?? ($bomRow['acOperationType'] ?? ''))), 0, 1));
+                    $operationType = strtoupper(substr(trim((string) ($requestedRow['acOperationType'] ?? '')), 0, 1));
+                    if ($operationType === '') {
+                        $operationType = strtoupper(substr(trim((string) ($bomRow['acOperationType'] ?? '')), 0, 1));
+                    }
 
-                    if (!in_array($operationType, ['M', 'O'], true)) {
-                        $operationType = '';
+                    if ($operationType === '') {
+                        $operationType = $this->resolveOperationTypeForSave('', (string) ($requestedRow['catalog_set'] ?? ''));
                     }
 
                     $baseQty = $this->toFloatOrNull($bomRow['anGrossQty'] ?? null) ?? 0.0;
@@ -916,14 +981,7 @@ class WorkOrderController extends Controller
                     ];
 
                     if ($hasNoteColumn) {
-                        if ($hasStatementColumn) {
-                            $insertPayload['acNote'] = $userDescription === '' ? null : substr($userDescription, 0, 4000);
-                        } else {
-                            $noteMarker = $statementMarker . '|';
-                            $maxDescriptionLength = max(0, 4000 - strlen($noteMarker));
-                            $trimmedDescription = $userDescription === '' ? '' : substr($userDescription, 0, $maxDescriptionLength);
-                            $insertPayload['acNote'] = $noteMarker . $trimmedDescription;
-                        }
+                        $insertPayload['acNote'] = $userDescription === '' ? null : substr($userDescription, 0, 4000);
                     }
 
                     if ($hasStatementColumn) {
@@ -1962,7 +2020,7 @@ class WorkOrderController extends Controller
                 ->all();
 
             if (empty($itemQIds)) {
-                return [];
+                return $this->fetchMappedMaterialsFromItems($workOrderKey);
             }
 
             $query->whereIn($itemQIdField, $itemQIds)
@@ -1979,7 +2037,7 @@ class WorkOrderController extends Controller
             $linkColumn = $this->firstExistingColumn($columns, ['acKey', 'acWOKey', 'acDocKey', 'acLnkKey']);
 
             if ($linkColumn === null) {
-                return [];
+                return $this->fetchMappedMaterialsFromItems($workOrderKey);
             }
 
             $query->where('r.' . $linkColumn, $workOrderKey);
@@ -1991,23 +2049,43 @@ class WorkOrderController extends Controller
             }
         }
 
-        return $query
+        $resources = $query
             ->get()
             ->map(function ($row) {
                 return $this->mapItemResourceRow((array) $row);
             })
             ->values()
             ->all();
+
+        if (!empty($resources)) {
+            $catalogMetaByIdent = $this->fetchCatalogMetaForComponentIds(array_map(function (array $resource) {
+                return (string) ($resource['materijal'] ?? '');
+            }, $resources));
+
+            $filteredResources = array_values(array_filter($resources, function (array $resource) use ($catalogMetaByIdent) {
+                $ident = strtolower(trim((string) ($resource['materijal'] ?? '')));
+                if ($ident === '') {
+                    return false;
+                }
+
+                $catalogSet = $catalogMetaByIdent[$ident]['set'] ?? '';
+                $itemKind = $this->resolveItemKindForPreview('', (string) $catalogSet);
+
+                return $itemKind === 'materials' || $itemKind === 'unknown';
+            }));
+
+            if (!empty($filteredResources)) {
+                return $filteredResources;
+            }
+        }
+
+        return $this->fetchMappedMaterialsFromItems($workOrderKey);
     }
 
     private function fetchMappedWorkOrderRegOperations(array $workOrderRow): array
     {
         $columns = $this->regOperationsTableColumns();
         $linkColumn = $this->firstExistingColumn($columns, ['acKey', 'acWOKey', 'acDocKey', 'acLnkKey']);
-
-        if ($linkColumn === null) {
-            return [];
-        }
 
         $workOrderKey = trim((string) $this->value($workOrderRow, ['acKey'], ''));
 
@@ -2036,7 +2114,25 @@ class WorkOrderController extends Controller
             ->all();
 
         if (!empty($operations)) {
-            return $operations;
+            $catalogMetaByIdent = $this->fetchCatalogMetaForComponentIds(array_map(function (array $operation) {
+                return (string) ($operation['operacija'] ?? '');
+            }, $operations));
+
+            $filteredOperations = array_values(array_filter($operations, function (array $operation) use ($catalogMetaByIdent) {
+                $ident = strtolower(trim((string) ($operation['operacija'] ?? '')));
+                if ($ident === '') {
+                    return false;
+                }
+
+                $catalogSet = $catalogMetaByIdent[$ident]['set'] ?? '';
+                $itemKind = $this->resolveItemKindForPreview('O', (string) $catalogSet);
+
+                return $itemKind === 'operations' || $itemKind === 'unknown';
+            }));
+
+            if (!empty($filteredOperations)) {
+                return $filteredOperations;
+            }
         }
 
         return $this->fetchMappedOperationsFromItems($workOrderKey);
@@ -2044,15 +2140,73 @@ class WorkOrderController extends Controller
 
     private function fetchMappedOperationsFromItems(string $workOrderKey): array
     {
-        $columns = $this->itemTableColumns();
-
-        if (!in_array('acOperationType', $columns, true)) {
+        $itemRows = $this->fetchWorkOrderItemRows($workOrderKey);
+        if (empty($itemRows)) {
             return [];
         }
 
-        $query = $this->newItemTableQuery()
-            ->where('acKey', $workOrderKey)
-            ->whereRaw("LTRIM(RTRIM(ISNULL(acOperationType, ''))) <> ''");
+        $catalogMetaByIdent = $this->fetchCatalogMetaForComponentIds(array_map(function (array $row) {
+            return (string) ($row['acIdent'] ?? '');
+        }, $itemRows));
+
+        $operations = [];
+        foreach ($itemRows as $row) {
+            $ident = trim((string) ($row['acIdent'] ?? ''));
+            $catalogSet = $catalogMetaByIdent[strtolower($ident)]['set'] ?? '';
+            $itemKind = $this->resolveItemKindForPreview(
+                (string) ($row['acOperationType'] ?? ''),
+                (string) $catalogSet
+            );
+
+            if ($itemKind !== 'operations') {
+                continue;
+            }
+
+            $operations[] = $this->mapOperationFromItemRow($row);
+        }
+
+        return array_values($operations);
+    }
+
+    private function fetchMappedMaterialsFromItems(string $workOrderKey): array
+    {
+        $itemRows = $this->fetchWorkOrderItemRows($workOrderKey);
+        if (empty($itemRows)) {
+            return [];
+        }
+
+        $catalogMetaByIdent = $this->fetchCatalogMetaForComponentIds(array_map(function (array $row) {
+            return (string) ($row['acIdent'] ?? '');
+        }, $itemRows));
+
+        $materials = [];
+        foreach ($itemRows as $row) {
+            $ident = trim((string) ($row['acIdent'] ?? ''));
+            $catalogSet = $catalogMetaByIdent[strtolower($ident)]['set'] ?? '';
+            $itemKind = $this->resolveItemKindForPreview(
+                (string) ($row['acOperationType'] ?? ''),
+                (string) $catalogSet
+            );
+
+            if ($itemKind !== 'materials') {
+                continue;
+            }
+
+            $materials[] = $this->mapMaterialFromItemRow($row);
+        }
+
+        return array_values($materials);
+    }
+
+    private function fetchWorkOrderItemRows(string $workOrderKey): array
+    {
+        $columns = $this->itemTableColumns();
+
+        if (!in_array('acKey', $columns, true)) {
+            return [];
+        }
+
+        $query = $this->newItemTableQuery()->where('acKey', $workOrderKey);
 
         foreach (['anNo', 'anVariant', 'adTimeIns'] as $column) {
             if (in_array($column, $columns, true)) {
@@ -2063,7 +2217,7 @@ class WorkOrderController extends Controller
         return $query
             ->get()
             ->map(function ($row) {
-                return $this->mapOperationFromItemRow((array) $row);
+                return (array) $row;
             })
             ->values()
             ->all();
@@ -2751,7 +2905,21 @@ class WorkOrderController extends Controller
             'naziv' => (string) $this->valueTrimmed($row, ['acResType', 'acDescr', 'acName', 'acResDescr', '__item_descr', '__item_ident'], ''),
             'kolicina' => $this->normalizeNumber($this->valueTrimmed($row, ['anQty', 'anPlanQty', 'anNormQty', '__item_qty', '__item_plan_qty'], 0)),
             'mj' => (string) $this->valueTrimmed($row, ['acUM', 'acUMRes', '__item_um'], ''),
-            'napomena' => (string) $this->valueTrimmed($row, ['acNote'], ''),
+            'napomena' => $this->plannedConsumptionDisplayNote((string) $this->valueTrimmed($row, ['acNote'], '')),
+        ];
+    }
+
+    private function mapMaterialFromItemRow(array $row): array
+    {
+        return [
+            'id' => $this->value($row, ['anQId', 'anNo'], null),
+            'item_qid' => $this->value($row, ['anQId'], null),
+            'pozicija' => (string) $this->valueTrimmed($row, ['anNo'], ''),
+            'materijal' => (string) $this->valueTrimmed($row, ['acIdent'], ''),
+            'naziv' => (string) $this->valueTrimmed($row, ['acDescr', 'acName', 'acIdent'], ''),
+            'kolicina' => $this->normalizeNumber($this->valueTrimmed($row, ['anQty', 'anPlanQty', 'anNormQty'], 0)),
+            'mj' => (string) $this->valueTrimmed($row, ['acUM'], ''),
+            'napomena' => $this->plannedConsumptionDisplayNote((string) $this->valueTrimmed($row, ['acNote'], '')),
         ];
     }
 
@@ -2763,7 +2931,7 @@ class WorkOrderController extends Controller
             'pozicija' => (string) $this->value($row, ['anNo', 'anItemNo', 'anRegNo'], ''),
             'operacija' => (string) $this->value($row, ['acOperation', 'acOper', 'acOperationType', 'acIdent'], ''),
             'naziv' => (string) $this->value($row, ['acName', 'acDescr', 'acOperationName'], ''),
-            'napomena' => (string) $this->value($row, ['acNote'], ''),
+            'napomena' => $this->plannedConsumptionDisplayNote((string) $this->value($row, ['acNote'], '')),
             'mj' => (string) $this->value($row, ['acUM', 'acUMTime'], ''),
             'mj_vrij' => $this->normalizeNumber($this->value($row, ['anQty', 'anWorkTime', 'anTime', 'anDuration'], 0)),
             'normativna_osnova' => $this->normalizeNumber($this->value($row, ['anNormQty', 'anQtyBase', 'anPlanQty'], 0)),
@@ -2790,7 +2958,7 @@ class WorkOrderController extends Controller
             'pozicija' => (string) $this->valueTrimmed($row, ['anNo'], ''),
             'operacija' => (string) $this->valueTrimmed($row, ['acIdent'], ''),
             'naziv' => (string) $this->valueTrimmed($row, ['acDescr', 'acName', 'acIdent'], ''),
-            'napomena' => (string) $this->valueTrimmed($row, ['acNote'], ''),
+            'napomena' => $this->plannedConsumptionDisplayNote((string) $this->valueTrimmed($row, ['acNote'], '')),
             'mj' => (string) $this->valueTrimmed($row, ['acUM'], ''),
             'mj_vrij' => $mjVrij,
             'normativna_osnova' => $normative,
@@ -2798,6 +2966,93 @@ class WorkOrderController extends Controller
             'prim_klas' => (string) $this->valueTrimmed($row, ['acFieldSB'], ''),
             'sek_klas' => (string) $this->valueTrimmed($row, ['acFieldSC'], ''),
         ];
+    }
+
+    private function fetchCatalogMetaForComponentIds(array $componentIds): array
+    {
+        $normalizedIds = array_values(array_unique(array_filter(array_map(function ($value) {
+            return trim((string) $value);
+        }, $componentIds), function ($value) {
+            return $value !== '';
+        })));
+
+        if (empty($normalizedIds)) {
+            return [];
+        }
+
+        try {
+            return $this->newCatalogItemsTableQuery()
+                ->select(['acIdent', 'acName', 'acUM', 'acSetOfItem'])
+                ->whereIn('acIdent', $normalizedIds)
+                ->get()
+                ->mapWithKeys(function ($row) {
+                    $ident = strtolower(trim((string) ($row->acIdent ?? '')));
+
+                    if ($ident === '') {
+                        return [];
+                    }
+
+                    return [
+                        $ident => [
+                            'name' => trim((string) ($row->acName ?? '')),
+                            'um' => strtoupper(substr(trim((string) ($row->acUM ?? '')), 0, 3)),
+                            'set' => strtoupper(trim((string) ($row->acSetOfItem ?? ''))),
+                        ],
+                    ];
+                })
+                ->all();
+        } catch (Throwable $exception) {
+            Log::warning('Unable to resolve catalog metadata for selected components.', [
+                'connection' => config('database.default'),
+                'catalog_items_table' => $this->qualifiedCatalogItemsTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [];
+        }
+    }
+
+    private function resolveOperationTypeForSave(string $operationType, string $catalogSet): string
+    {
+        $normalizedSet = strtoupper(trim($catalogSet));
+        if ($normalizedSet === self::OPERATIONS_SET) {
+            return 'O';
+        }
+
+        if (in_array($normalizedSet, self::MATERIALS_SETS, true)) {
+            return 'M';
+        }
+
+        $normalizedType = strtoupper(substr(trim($operationType), 0, 1));
+        if ($normalizedType !== '') {
+            return $normalizedType;
+        }
+
+        return '';
+    }
+
+    private function resolveItemKindForPreview(string $operationType, string $catalogSet): string
+    {
+        $normalizedSet = strtoupper(trim($catalogSet));
+
+        if ($normalizedSet === self::OPERATIONS_SET) {
+            return 'operations';
+        }
+
+        if (in_array($normalizedSet, self::MATERIALS_SETS, true)) {
+            return 'materials';
+        }
+
+        $normalizedType = strtoupper(substr(trim($operationType), 0, 1));
+        if ($normalizedType === 'M') {
+            return 'materials';
+        }
+
+        if ($normalizedType !== '') {
+            return 'operations';
+        }
+
+        return 'unknown';
     }
 
     private function fetchStatusStats(array $filters = []): array
@@ -4188,6 +4443,11 @@ class WorkOrderController extends Controller
         return DB::table($this->qualifiedOrderTableName());
     }
 
+    private function newCatalogItemsTableQuery(): Builder
+    {
+        return DB::table($this->qualifiedCatalogItemsTableName());
+    }
+
     private function resolveLimit(?int $requestedLimit = null): int
     {
         $maxLimit = max(1, (int) config('workorders.max_limit', 100));
@@ -4236,6 +4496,11 @@ class WorkOrderController extends Controller
         return (string) config('workorders.orders_table', 'tHE_Order');
     }
 
+    private function catalogItemsTableName(): string
+    {
+        return (string) config('workorders.catalog_items_table', 'tHE_SetItem');
+    }
+
     private function qualifiedTableName(): string
     {
         return $this->tableSchema() . '.' . $this->tableName();
@@ -4264,6 +4529,11 @@ class WorkOrderController extends Controller
     private function qualifiedOrderTableName(): string
     {
         return $this->tableSchema() . '.' . $this->orderTableName();
+    }
+
+    private function qualifiedCatalogItemsTableName(): string
+    {
+        return $this->tableSchema() . '.' . $this->catalogItemsTableName();
     }
 
     private function emptyInvoicePreviewResponse(array $pageConfigs, ?string $invoiceNumber = null)
