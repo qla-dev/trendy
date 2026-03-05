@@ -2460,5 +2460,6 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     trim((string) ($workOrder['naziv'] ?? '')) !== '' ? ' - ' . trim((string) ($workOrder['naziv'] ?? '')) : ''
   ),
 ])
+@include('content.new-components.fine-adjust-bom')
 @include('content.new-components.confirm-weight')
 @endsection
