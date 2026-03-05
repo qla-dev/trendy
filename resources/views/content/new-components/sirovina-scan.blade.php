@@ -1502,7 +1502,10 @@
       return Array.from(state.quickSelections.values()).map(function (row) {
         return {
           acIdentChild: row.acIdentChild,
-          anNo: row.anNo
+          anNo: row.anNo,
+          acDescr: row.acDescr || '',
+          acUM: row.acUM || 'AUTO',
+          acOperationType: row.acOperationType || ''
         };
       });
     }
@@ -2160,6 +2163,7 @@
             pozicija: String(row.anNo || 0),
             artikal: String(row.acIdentChild || '').trim(),
             opis: String(row.acDescr || '').trim(),
+            acOperationType: String(row.acOperationType || '').trim(),
             slika: '-',
             napomena: '',
             planirano: String(planiranoQty),
@@ -2242,7 +2246,11 @@
       var rowElements = fineAdjustBodyEl.querySelectorAll('tr[data-row]');
 
       rowElements.forEach(function (rowEl) {
-        var rowData = {};
+        var rowIndex = Number(rowEl.getAttribute('data-row') || 0);
+        var existingRow = Array.isArray(state.fineAdjustRows) ? state.fineAdjustRows[rowIndex] : null;
+        var rowData = existingRow && typeof existingRow === 'object'
+          ? Object.assign({}, existingRow)
+          : {};
         var inputs = rowEl.querySelectorAll('.fine-adjust-input[data-field]');
 
         inputs.forEach(function (inputEl) {
@@ -2802,15 +2810,35 @@
       editedRows.forEach(function (row) {
         var componentId = String((row && row.artikal) || '').trim();
         var lineNo = Number((row && row.pozicija) || 0);
+        var opis = String((row && row.opis) || '').trim();
+        var unitValue = String((row && row.mj) || '').trim().toUpperCase();
+        var operationTypeValue = String((row && row.acOperationType) || '').trim().toUpperCase();
+        var planiranoValue = Number((row && row.planirano) || 0);
 
-        if (!componentId || !Number.isFinite(lineNo) || lineNo <= 0) {
+        if (!componentId || !Number.isFinite(lineNo)) {
           return;
         }
 
         var key = bomKey(lineNo, componentId);
+        var normalizedOperationType = (operationTypeValue === 'M' || operationTypeValue === 'O')
+          ? operationTypeValue
+          : '';
+
+        var normalizedUnit = (unitValue === 'AUTO' || unitValue === 'KG' || unitValue === 'MJ')
+          ? unitValue
+          : 'AUTO';
+
+        var normalizedPlanirano = Number.isFinite(planiranoValue) && planiranoValue >= 0
+          ? planiranoValue
+          : 0;
+
         unique.set(key, {
           acIdentChild: componentId,
-          anNo: lineNo
+          anNo: lineNo,
+          acDescr: opis,
+          acUM: normalizedUnit,
+          acOperationType: normalizedOperationType,
+          anPlanQty: normalizedPlanirano
         });
       });
 

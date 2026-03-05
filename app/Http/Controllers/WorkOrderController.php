@@ -657,11 +657,15 @@ class WorkOrderController extends Controller
         $validator = Validator::make($request->all(), [
             'product_id' => ['required', 'string', 'max:64'],
             'quantity' => ['required', 'numeric', 'gt:0'],
-            'quantity_unit' => ['nullable', 'string', 'in:AUTO,KG,RDS'],
+            'quantity_unit' => ['nullable', 'string', 'in:AUTO,KG,MJ,RDS'],
             'description' => ['nullable', 'string', 'max:500'],
             'components' => ['required', 'array', 'min:1', 'max:100'],
             'components.*.acIdentChild' => ['required', 'string', 'max:64'],
             'components.*.anNo' => ['nullable', 'numeric'],
+            'components.*.acDescr' => ['nullable', 'string', 'max:200'],
+            'components.*.acUM' => ['nullable', 'string', 'max:8'],
+            'components.*.acOperationType' => ['nullable', 'string', 'max:8'],
+            'components.*.anPlanQty' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         if ($validator->fails()) {
@@ -707,14 +711,8 @@ class WorkOrderController extends Controller
             }
 
             $bomRows = $this->fetchBomComponentsByProduct($productId, $this->bomLimit());
-
-            if (empty($bomRows)) {
-                return response()->json([
-                    'message' => 'Za odabrani proizvod nema BOM stavki.',
-                ], 422);
-            }
-
-            $selectedKeys = [];
+            $normalizedComponents = [];
+            $normalizedSeen = [];
 
             foreach ((array) ($validated['components'] ?? []) as $component) {
                 $componentId = trim((string) ($component['acIdentChild'] ?? ''));
@@ -724,29 +722,80 @@ class WorkOrderController extends Controller
                     continue;
                 }
 
-                $selectedKeys[$this->bomSelectionKey($lineNo, $componentId)] = true;
+                $selectionKey = $this->bomSelectionKey($lineNo, $componentId);
+                if (array_key_exists($selectionKey, $normalizedSeen)) {
+                    continue;
+                }
+
+                $normalizedSeen[$selectionKey] = true;
+                $manualOperationType = strtoupper(substr(trim((string) ($component['acOperationType'] ?? '')), 0, 1));
+
+                if (!in_array($manualOperationType, ['M', 'O'], true)) {
+                    $manualOperationType = '';
+                }
+
+                $manualUnitRaw = strtoupper(trim((string) ($component['acUM'] ?? '')));
+                $manualUnit = $manualUnitRaw === 'AUTO' ? '' : strtoupper(substr($manualUnitRaw, 0, 3));
+
+                $normalizedComponents[] = [
+                    'acIdentChild' => $componentId,
+                    'anNo' => $lineNo,
+                    'acDescr' => trim((string) ($component['acDescr'] ?? '')),
+                    'acUM' => $manualUnit,
+                    'acOperationType' => $manualOperationType,
+                    'anPlanQty' => $this->toFloatOrNull($component['anPlanQty'] ?? null),
+                ];
             }
 
-            if (empty($selectedKeys)) {
+            if (empty($normalizedComponents)) {
                 return response()->json([
                     'message' => 'Nijedna komponenta nije odabrana.',
                 ], 422);
             }
 
-            $selectedRows = array_values(array_filter($bomRows, function (array $row) use ($selectedKeys) {
+            $bomRowsByKey = [];
+            foreach ($bomRows as $row) {
                 $lineNo = (int) ($this->toFloatOrNull($row['anNo'] ?? null) ?? 0);
                 $componentId = trim((string) ($row['acIdentChild'] ?? ''));
 
                 if ($componentId === '') {
-                    return false;
+                    continue;
                 }
 
-                return array_key_exists($this->bomSelectionKey($lineNo, $componentId), $selectedKeys);
-            }));
+                $key = $this->bomSelectionKey($lineNo, $componentId);
+                if (!array_key_exists($key, $bomRowsByKey)) {
+                    $bomRowsByKey[$key] = $row;
+                }
+            }
 
-            if (empty($selectedRows)) {
+            $resolvedRows = [];
+            $bomMatchedCount = 0;
+            $manualRawCount = 0;
+
+            foreach ($normalizedComponents as $component) {
+                $key = $this->bomSelectionKey((int) ($component['anNo'] ?? 0), (string) ($component['acIdentChild'] ?? ''));
+
+                if (array_key_exists($key, $bomRowsByKey)) {
+                    $bomMatchedCount++;
+                    $resolvedRows[] = [
+                        'source' => 'bom',
+                        'requested' => $component,
+                        'bom' => $bomRowsByKey[$key],
+                    ];
+                    continue;
+                }
+
+                $manualRawCount++;
+                $resolvedRows[] = [
+                    'source' => 'raw',
+                    'requested' => $component,
+                    'bom' => null,
+                ];
+            }
+
+            if (empty($resolvedRows)) {
                 return response()->json([
-                    'message' => 'Odabrane komponente nisu pronadjene u BOM strukturi.',
+                    'message' => 'Nijedna komponenta nije spremna za snimanje.',
                 ], 422);
             }
 
@@ -769,7 +818,9 @@ class WorkOrderController extends Controller
                 'description_present' => $userDescription !== '',
                 'description_length' => strlen($userDescription),
                 'requested_components_count' => count((array) ($validated['components'] ?? [])),
-                'selected_components_count' => count($selectedRows),
+                'selected_components_count' => count($resolvedRows),
+                'bom_matched_components_count' => $bomMatchedCount,
+                'raw_manual_components_count' => $manualRawCount,
                 'variant' => $variant,
                 'user_id' => $userId,
                 'items_table' => $this->qualifiedItemTableName(),
@@ -781,9 +832,8 @@ class WorkOrderController extends Controller
             ]);
 
             $insertedRows = DB::transaction(function () use (
-                $selectedRows,
+                $resolvedRows,
                 $quantityFactor,
-                $productId,
                 $workOrderKey,
                 $variant,
                 $userId,
@@ -808,20 +858,47 @@ class WorkOrderController extends Controller
 
                 $saved = [];
 
-                foreach ($selectedRows as $row) {
-                    $componentId = trim((string) ($row['acIdentChild'] ?? ''));
-                    $description = trim((string) ($row['acDescr'] ?? ''));
-                    $operationType = substr(trim((string) ($row['acOperationType'] ?? '')), 0, 1);
-                    $baseQty = $this->toFloatOrNull($row['anGrossQty'] ?? null) ?? 0.0;
-                    $sourceUnit = strtoupper(substr(trim((string) ($row['acUM'] ?? '')), 0, 3));
+                foreach ($resolvedRows as $resolvedRow) {
+                    $source = (string) ($resolvedRow['source'] ?? 'raw');
+                    $requestedRow = is_array($resolvedRow['requested'] ?? null) ? $resolvedRow['requested'] : [];
+                    $bomRow = is_array($resolvedRow['bom'] ?? null) ? $resolvedRow['bom'] : [];
+
+                    $componentId = trim((string) ($requestedRow['acIdentChild'] ?? ($bomRow['acIdentChild'] ?? '')));
+                    $descriptionFromRequested = trim((string) ($requestedRow['acDescr'] ?? ''));
+                    $descriptionFromBom = trim((string) ($bomRow['acDescr'] ?? ''));
+                    $description = $descriptionFromRequested !== '' ? $descriptionFromRequested : $descriptionFromBom;
+                    $operationType = strtoupper(substr(trim((string) ($requestedRow['acOperationType'] ?? ($bomRow['acOperationType'] ?? ''))), 0, 1));
+
+                    if (!in_array($operationType, ['M', 'O'], true)) {
+                        $operationType = '';
+                    }
+
+                    $baseQty = $this->toFloatOrNull($bomRow['anGrossQty'] ?? null) ?? 0.0;
+                    $manualPlanQty = $this->toFloatOrNull($requestedRow['anPlanQty'] ?? null);
+                    $requestedUnitRaw = strtoupper(trim((string) ($requestedRow['acUM'] ?? '')));
+                    $requestedUnit = $requestedUnitRaw === 'AUTO' ? '' : strtoupper(substr($requestedUnitRaw, 0, 3));
+                    $bomUnit = strtoupper(substr(trim((string) ($bomRow['acUM'] ?? '')), 0, 3));
+                    $sourceUnit = $requestedUnit !== '' ? $requestedUnit : $bomUnit;
                     $resolvedUnit = $quantityUnit === 'AUTO' ? $sourceUnit : $quantityUnit;
-                    // Fallback to entered quantity when BOM gross qty is 0 to avoid saving 0 by default.
-                    $plannedQty = abs($baseQty) > 0.000001 ? ($baseQty * $quantityFactor) : $quantityFactor;
+
+                    if ($resolvedUnit === '' && $quantityUnit !== 'AUTO') {
+                        $resolvedUnit = $quantityUnit;
+                    }
+
+                    if ($manualPlanQty !== null) {
+                        $plannedQty = max(0, $manualPlanQty);
+                    } elseif ($source === 'bom') {
+                        // Fallback to entered quantity when BOM gross qty is 0 to avoid saving 0 by default.
+                        $plannedQty = abs($baseQty) > 0.000001 ? ($baseQty * $quantityFactor) : $quantityFactor;
+                    } else {
+                        $plannedQty = $quantityFactor;
+                    }
 
                     if ($componentId === '') {
                         continue;
                     }
 
+                    $statementMarker = $source === 'bom' ? 'PLANNED_BOM' : 'PLANNED_RAW';
                     $insertPayload = [
                         'acKey' => $workOrderKey,
                         'anVariant' => $variant,
@@ -842,7 +919,7 @@ class WorkOrderController extends Controller
                         if ($hasStatementColumn) {
                             $insertPayload['acNote'] = $userDescription === '' ? null : substr($userDescription, 0, 4000);
                         } else {
-                            $noteMarker = 'PLANNED_BOM|';
+                            $noteMarker = $statementMarker . '|';
                             $maxDescriptionLength = max(0, 4000 - strlen($noteMarker));
                             $trimmedDescription = $userDescription === '' ? '' : substr($userDescription, 0, $maxDescriptionLength);
                             $insertPayload['acNote'] = $noteMarker . $trimmedDescription;
@@ -850,7 +927,7 @@ class WorkOrderController extends Controller
                     }
 
                     if ($hasStatementColumn) {
-                        $insertPayload['acStatement'] = 'PLANNED_BOM';
+                        $insertPayload['acStatement'] = $statementMarker;
                     }
 
                     if ($resolvedUnit !== '') {
@@ -868,6 +945,7 @@ class WorkOrderController extends Controller
                     $this->newItemTableQuery()->insert($insertPayload);
 
                     $saved[] = [
+                        'source' => $source,
                         'anNo' => $nextNo,
                         'anQId' => $nextQId,
                         'acIdent' => $componentId,
@@ -2642,9 +2720,10 @@ class WorkOrderController extends Controller
             return '';
         }
 
-        $markerPrefix = 'PLANNED_BOM|';
-        if (Str::startsWith($trimmedNote, $markerPrefix)) {
-            return trim(substr($trimmedNote, strlen($markerPrefix)));
+        foreach (['PLANNED_BOM|', 'PLANNED_RAW|'] as $markerPrefix) {
+            if (Str::startsWith($trimmedNote, $markerPrefix)) {
+                return trim(substr($trimmedNote, strlen($markerPrefix)));
+            }
         }
 
         $legacyPrefix = 'Planned BOM consumption from tHF_SetPrSt.';
