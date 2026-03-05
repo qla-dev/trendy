@@ -25,7 +25,7 @@
     <div class="modal-content wo-bom-modal-content">
       <div class="modal-body p-0">
         <div class="wo-bom-modal-shell">
-          <div class="wo-bom-modal-header">
+          <div class="wo-bom-modal-header mb-0">
             <h4 class="mb-0 text-white" id="sirovina-scanner-modal-label">
               Planirana potrošnja za RN <span id="sirovina-rn-number">-</span>
             </h4>
@@ -35,7 +35,7 @@
           <div class="row g-4 wo-bom-split-row">
             <div class="col-12 col-lg-6">
               <div class="wo-bom-card wo-bom-dummy-qr-card">
-                <h5 class="text-white mb-1">Skenirajte QR kod radnog naloga</h5>
+                <h5 class="text-white mb-1">Skenirajte BARCODE artikla</h5>
 
                 <div class="qr-scanner-container position-relative wo-bom-dummy-qr-wrap">
                   <div id="sirovina-qr-scanner-frame" class="qr-scanner-frame position-relative">
@@ -327,7 +327,7 @@
 
   #sirovina-scanner-modal #sirovina-qr-scanner-frame {
     width: 100%;
-    padding-top: 100%;
+    padding-top: 52%;
     border-radius: 12px;
     border: 1px solid var(--qr-accent-soft);
     background: rgba(255, 255, 255, 0.045);
