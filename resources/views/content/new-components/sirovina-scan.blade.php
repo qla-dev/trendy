@@ -25,7 +25,7 @@
   data-default-product-label="{{ $defaultProductLabel }}"
   data-csrf-token="{{ csrf_token() }}"
 >
-  <div class="modal-dialog modal-dialog-centered modal-xl">
+  <div class="modal-dialog modal-dialog-centered modal-xl mt-0">
     <div class="modal-content wo-bom-modal-content">
       <div class="modal-header wo-bom-modal-header wo-bom-content-header">
         <div class="w-100 text-center">
@@ -111,7 +111,7 @@
                         </tr>
                       </thead>
                       <tbody id="bom-quick-components-body">
-                        <tr>
+                        <tr class="wo-bom-empty-row">
                           <td colspan="5" class="text-center text-white-50 py-2">Nema odabranih komponenti.</td>
                         </tr>
                       </tbody>
@@ -313,11 +313,18 @@
     overflow: hidden;
   }
 
+  #sirovina-scanner-modal .wo-bom-quick-card {
+    min-height: 0;
+    overflow: hidden;
+  }
+
   #sirovina-scanner-modal .wo-bom-mode-panel {
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
+    padding-top: 0;
+    padding-bottom: 0.35rem;
     overflow: hidden;
     width: 100%;
     transition: opacity 0.24s ease, transform 0.24s ease;
@@ -695,9 +702,17 @@
 
   #sirovina-scanner-modal .wo-bom-quick-persistent {
     position: relative;
-    padding-bottom: 0.8rem;
-    margin-bottom: 0.35rem;
+    padding-top: 0;
+    padding-bottom: 0.65rem;
+    margin-bottom: 0;
     min-height: 0;
+  }
+
+  #sirovina-scanner-modal .wo-bom-mode-panel .wo-bom-field > .wo-bom-section-title {
+    display: block;
+    margin-top: 0 !important;
+    margin-bottom: 0.35rem !important;
+    line-height: 1.2;
   }
 
   #sirovina-scanner-modal .wo-bom-quick-persistent::after {
@@ -764,9 +779,12 @@
     border-bottom-color: rgba(170, 183, 214, 0.28);
   }
 
+  #sirovina-scanner-modal .wo-bom-table.table > :not(caption) > * > * {
+    border-color: rgba(56, 66, 88, 0.62) !important;
+  }
+
   #sirovina-scanner-modal .wo-bom-table-wrap .wo-bom-table tbody td,
   #sirovina-scanner-modal .wo-bom-quick-table-wrap .wo-bom-table tbody td {
-    border-top-color: rgba(170, 183, 214, 0.14);
     vertical-align: middle;
     min-height: 68px;
     height: 68px;
@@ -779,6 +797,18 @@
   #sirovina-scanner-modal .wo-bom-table-wrap .wo-bom-table tbody tr:hover td,
   #sirovina-scanner-modal .wo-bom-quick-table-wrap .wo-bom-table tbody tr:hover td {
     background: rgba(255, 255, 255, 0.04);
+  }
+
+  #sirovina-scanner-modal .wo-bom-table tbody tr.wo-bom-empty-row td {
+    border-top: 0 !important;
+  }
+
+  #sirovina-scanner-modal .wo-bom-quick-table tbody tr.wo-bom-quick-operation-row td {
+    background: rgba(62, 132, 86, 0.18);
+  }
+
+  #sirovina-scanner-modal .wo-bom-quick-table tbody tr.wo-bom-quick-operation-row:hover td {
+    background: rgba(62, 132, 86, 0.24);
   }
 
   #sirovina-scanner-modal .wo-opis-cell {
@@ -947,6 +977,11 @@
 
   #sirovina-scanner-modal .select2-container--default .select2-selection--single .select2-selection__arrow {
     height: var(--bom-control-height);
+  }
+
+  #sirovina-scanner-modal .select2-container--classic .select2-selection--single .select2-selection__arrow b,
+  #sirovina-scanner-modal .select2-container--default .select2-selection--single .select2-selection__arrow b {
+    margin-top: -4px;
   }
 
   #sirovina-scanner-modal .select2-container--default.select2-container--focus .select2-selection--single,
@@ -1130,6 +1165,7 @@
     var allLoadingOverlay = document.getElementById('bom-all-loading-overlay');
     var allTableWrapEl = document.getElementById('bom-all-table-wrap');
     var scannerCardEl = modalEl.querySelector('.wo-bom-dummy-qr-card');
+    var quickCardEl = modalEl.querySelector('.wo-bom-quick-card');
     var rightMainCardEl = modalEl.querySelector('.wo-bom-main-card');
 
     var confirmModalEl = document.getElementById('confirm-weight-modal');
@@ -1164,6 +1200,7 @@
       allLoading: false,
       allRequestSeq: 0,
       allSearchDebounce: null,
+      prefillOperationsSeq: 0,
       allOffsetByType: {
         materials: 0,
         operations: 0
@@ -1404,6 +1441,11 @@
       return Array.from(state.quickSelections.values());
     }
 
+    function isOperationType(value) {
+      var normalized = String(value || '').trim().toUpperCase();
+      return normalized === 'O' || normalized === 'OP' || normalized === 'OPR';
+    }
+
     function renderQuickBomRows() {
       if (!quickComponentsBody) {
         return;
@@ -1411,7 +1453,7 @@
 
       var rows = selectedDetailedRows();
       if (!Array.isArray(rows) || rows.length === 0) {
-        quickComponentsBody.innerHTML = '<tr><td colspan="5" class="text-center text-white-50 py-2">Nema odabranih komponenti.</td></tr>';
+        quickComponentsBody.innerHTML = '<tr class="wo-bom-empty-row"><td colspan="5" class="text-center text-white-50 py-2">Nema odabranih komponenti.</td></tr>';
         return;
       }
 
@@ -1421,9 +1463,10 @@
         var descr = row.acDescr || '-';
         var baseQty = Number(row.anGrossQty || 0);
         var operationType = row.acOperationType || '';
+        var rowClass = isOperationType(operationType) ? ' class="wo-bom-quick-operation-row"' : '';
 
         return '' +
-          '<tr>' +
+          '<tr' + rowClass + '>' +
             '<td>' + lineNo + '</td>' +
             '<td class="fw-semibold">' + componentId + '</td>' +
             '<td class="wo-opis-cell">' + formatOpisCell(descr) + '</td>' +
@@ -1507,13 +1550,19 @@
     }
 
     function syncRightColumnHeightToScanner() {
-      if (!scannerCardEl || !rightMainCardEl) {
+      if (!scannerCardEl) {
         return;
       }
 
       if (window.matchMedia('(max-width: 991.98px)').matches) {
-        rightMainCardEl.style.height = '';
-        rightMainCardEl.style.maxHeight = '';
+        if (quickCardEl) {
+          quickCardEl.style.height = '';
+          quickCardEl.style.maxHeight = '';
+        }
+        if (rightMainCardEl) {
+          rightMainCardEl.style.height = '';
+          rightMainCardEl.style.maxHeight = '';
+        }
         return;
       }
 
@@ -1522,8 +1571,15 @@
         return;
       }
 
-      rightMainCardEl.style.height = scannerHeight + 'px';
-      rightMainCardEl.style.maxHeight = scannerHeight + 'px';
+      if (quickCardEl) {
+        quickCardEl.style.height = scannerHeight + 'px';
+        quickCardEl.style.maxHeight = scannerHeight + 'px';
+      }
+
+      if (rightMainCardEl) {
+        rightMainCardEl.style.height = scannerHeight + 'px';
+        rightMainCardEl.style.maxHeight = scannerHeight + 'px';
+      }
     }
 
     function scheduleLayoutSync() {
@@ -1810,6 +1866,91 @@
       }, 200);
     }
 
+    function resetSelectionsForOpen() {
+      state.selectedKeys.clear();
+      state.selectedKeysByProduct.clear();
+      state.quickSelections.clear();
+      state.selectedAllKeysByType.materials.clear();
+      state.selectedAllKeysByType.operations.clear();
+    }
+
+    function prefillOperationsForOpen() {
+      state.prefillOperationsSeq += 1;
+      var requestSeq = state.prefillOperationsSeq;
+      var operationsSet = selectedAllSet('operations');
+      var prefillOperationCodes = new Set(['op10', 'op50', 'op60', 'op90']);
+      operationsSet.clear();
+
+      if (!allOperationsUrl) {
+        updateSelectionSummary();
+        return Promise.resolve();
+      }
+
+      var url = buildUrl(allOperationsUrl, {
+        q: '',
+        limit: 100,
+        offset: 0
+      });
+
+      return fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+        .then(parseResponse)
+        .then(function (payload) {
+          if (requestSeq !== state.prefillOperationsSeq) {
+            return;
+          }
+
+          var rows = Array.isArray(payload && payload.data) ? payload.data.slice(0, 100) : [];
+          rows.forEach(function (row, index) {
+            var componentId = String(row && row.acIdentChild ? row.acIdentChild : '').trim();
+            if (!componentId) {
+              return;
+            }
+            if (!prefillOperationCodes.has(componentId.toLowerCase())) {
+              return;
+            }
+
+            var lineNo = Number(row && row.anNo ? row.anNo : (index + 1));
+            var quantity = Number(row && row.anGrossQty ? row.anGrossQty : 0);
+            if (!Number.isFinite(quantity)) {
+              quantity = 0;
+            }
+
+            var normalizedRow = {
+              anNo: Number.isFinite(lineNo) ? lineNo : (index + 1),
+              acIdentChild: componentId,
+              acDescr: row && row.acDescr ? row.acDescr : '-',
+              anGrossQty: quantity,
+              acOperationType: 'O',
+              acUM: row && row.acUM ? row.acUM : 'AUTO'
+            };
+
+            operationsSet.add(allItemKey('operations', componentId));
+            syncAllSelectionRow('operations', normalizedRow, true);
+          });
+        })
+        .catch(function () {
+          if (requestSeq !== state.prefillOperationsSeq) {
+            return;
+          }
+        })
+        .finally(function () {
+          if (requestSeq !== state.prefillOperationsSeq) {
+            return;
+          }
+
+          updateSelectionSummary();
+          if (state.activeMode === 'operations') {
+            renderAllRows();
+          }
+        });
+    }
+
     function markProceedSource(source) {
       state.proceedSource = source === 'barcode' ? 'barcode' : 'manual';
     }
@@ -1829,11 +1970,51 @@
         text = '-';
       }
 
-      var firstLine = text.slice(0, 20);
-      var secondLine = text.slice(20, 40);
-      if (text.length > 40) {
-        secondLine = secondLine.replace(/\s+$/, '') + '...';
+      var maxCharsPerLine = 20;
+
+      function pickChunk(input, maxChars, addEllipsisIfTrimmed) {
+        var source = String(input || '');
+        if (!source) {
+          return {
+            chunk: '',
+            rest: '',
+            trimmed: false
+          };
+        }
+
+        if (source.length <= maxChars) {
+          return {
+            chunk: source,
+            rest: '',
+            trimmed: false
+          };
+        }
+
+        var breakAt = source.lastIndexOf(' ', maxChars);
+        if (breakAt <= 0) {
+          breakAt = maxChars;
+        }
+
+        var chunk = source.slice(0, breakAt).trimEnd();
+        var rest = source.slice(breakAt).trimStart();
+        var trimmed = rest.length > 0;
+
+        if (addEllipsisIfTrimmed && trimmed) {
+          chunk = chunk + '...';
+          rest = '';
+        }
+
+        return {
+          chunk: chunk,
+          rest: rest,
+          trimmed: trimmed
+        };
       }
+
+      var first = pickChunk(text, maxCharsPerLine, false);
+      var second = pickChunk(first.rest, maxCharsPerLine, true);
+      var firstLine = first.chunk;
+      var secondLine = second.chunk;
       var hasSecondLine = secondLine.length > 0;
       var modeClass = hasSecondLine ? 'is-double' : 'is-single';
 
@@ -2700,6 +2881,7 @@
       state.activeMode = 'product';
       state.allType = 'materials';
       state.allRows = [];
+      resetSelectionsForOpen();
       resetAllPaging('materials');
       resetAllPaging('operations');
 
@@ -2724,6 +2906,8 @@
 
       updateModeButtons();
       renderAllRows();
+      updateSelectionSummary();
+      prefillOperationsForOpen();
       scheduleLayoutSync();
 
       var invoiceNumberNode = document.querySelector('.invoice-number');
@@ -2782,9 +2966,14 @@
     });
 
     modalEl.addEventListener('hidden.bs.modal', function () {
+      state.prefillOperationsSeq += 1;
       showError('');
       setBomLoading(false);
       setAllLoading(false);
+      if (quickCardEl) {
+        quickCardEl.style.height = '';
+        quickCardEl.style.maxHeight = '';
+      }
       if (rightMainCardEl) {
         rightMainCardEl.style.height = '';
         rightMainCardEl.style.maxHeight = '';
