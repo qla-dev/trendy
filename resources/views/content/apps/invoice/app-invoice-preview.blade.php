@@ -3,6 +3,7 @@
 @section('vendor-style')
 <link rel="stylesheet" href="{{asset('vendors/css/pickers/flatpickr/flatpickr.min.css')}}">
 <link rel="stylesheet" href="{{asset('vendors/css/extensions/sweetalert2.min.css')}}">
+<link rel="stylesheet" href="{{asset('vendors/css/forms/select/select2.min.css')}}">
 @endsection
 @section('page-style')
 <link rel="stylesheet" href="{{asset('css/base/plugins/forms/pickers/form-flat-pickr.css')}}">
@@ -1760,7 +1761,7 @@
             <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog
           </button>
           <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#sirovina-scanner-modal">
-            <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Dodaj sastavnicu
+            <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Pripremi materijal
           </button>
           <div class="invoice-actions-divider"></div>
           <button id="wo-status-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $statusToneClass }}" data-bs-toggle="modal" data-bs-target="#change-status-modal" @if (!$hasLoadedWorkOrder) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
@@ -1925,6 +1926,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 <script src="{{asset('vendors/js/forms/repeater/jquery.repeater.min.js')}}"></script>
 <script src="{{asset('vendors/js/pickers/flatpickr/flatpickr.min.js')}}"></script>
 <script src="{{asset('vendors/js/extensions/sweetalert2.all.min.js')}}"></script>
+<script src="{{asset('vendors/js/forms/select/select2.full.min.js')}}"></script>
 @endsection
 
 @section('page-script')
@@ -2454,6 +2456,9 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
   'bomFetchUrl' => $bomFetchUrl,
   'plannedConsumptionStoreUrl' => $plannedConsumptionStoreUrl,
   'defaultProductIdent' => trim((string) ($workOrder['sifra'] ?? '')),
+  'defaultProductLabel' => trim((string) ($workOrder['sifra'] ?? '')) . (
+    trim((string) ($workOrder['naziv'] ?? '')) !== '' ? ' - ' . trim((string) ($workOrder['naziv'] ?? '')) : ''
+  ),
 ])
 @include('content.new-components.confirm-weight')
 @endsection

@@ -570,7 +570,8 @@ class WorkOrderController extends Controller
             }
 
             $search = trim((string) $request->query('q', ''));
-            $products = $this->resolveWorkOrderProducts($workOrderRow, $search);
+            $selected = trim((string) $request->query('selected', ''));
+            $products = $this->resolveWorkOrderProducts($workOrderRow, $search, $selected);
 
             return response()->json([
                 'data' => $products,
@@ -1062,7 +1063,7 @@ class WorkOrderController extends Controller
         }
     }
 
-    private function resolveWorkOrderProducts(array $workOrderRow, string $search = ''): array
+    private function resolveWorkOrderProducts(array $workOrderRow, string $search = '', string $selectedIdent = ''): array
     {
         $limit = $this->bomLimit();
         $products = [];
@@ -1075,13 +1076,22 @@ class WorkOrderController extends Controller
             }
 
             $seenKey = strtolower($normalizedIdent);
+            $normalizedName = trim($name);
 
             if (array_key_exists($seenKey, $seenKeys)) {
+                $existingIndex = (int) $seenKeys[$seenKey];
+                $existingName = trim((string) ($products[$existingIndex]['acName'] ?? ''));
+
+                if ($normalizedName !== '' && $existingName === '') {
+                    $displayLabel = $normalizedIdent . ' - ' . $normalizedName;
+                    $products[$existingIndex]['acName'] = $normalizedName;
+                    $products[$existingIndex]['label'] = $displayLabel;
+                }
+
                 return;
             }
 
             $displayLabel = $normalizedIdent;
-            $normalizedName = trim($name);
 
             if ($normalizedName !== '') {
                 $displayLabel .= ' - ' . $normalizedName;
@@ -1095,10 +1105,22 @@ class WorkOrderController extends Controller
                 'source' => $source,
                 'bom_count' => 0,
             ];
-            $seenKeys[$seenKey] = true;
+            $seenKeys[$seenKey] = count($products) - 1;
         };
 
         $search = trim($search);
+        $selectedIdent = trim($selectedIdent);
+
+        if ($selectedIdent !== '') {
+            $selectedName = trim((string) (
+                $this->newTableQuery()
+                    ->whereRaw('LTRIM(RTRIM(ISNULL(acIdent, \'\'))) = ?', [$selectedIdent])
+                    ->whereRaw("LTRIM(RTRIM(ISNULL(acName, ''))) <> ''")
+                    ->value('acName')
+            ));
+            $addProduct($selectedIdent, $selectedName, 'selected');
+        }
+
         $headerProductIdent = (string) $this->value($workOrderRow, ['acIdent'], '');
         $headerProductName = trim((string) $this->value($workOrderRow, ['acName'], ''));
         if (
@@ -1109,23 +1131,128 @@ class WorkOrderController extends Controller
             $addProduct($headerProductIdent, $headerProductName, 'work_order');
         }
 
-        if ($search !== '') {
-            $masterProducts = $this->newProductStructureTableQuery()
-                ->select('acIdent')
-                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) <> ''")
-                ->where('acIdent', 'like', '%' . $search . '%')
-                ->distinct()
-                ->orderBy('acIdent')
-                ->limit($limit)
-                ->get();
+        $workOrderProductsQuery = $this->newTableQuery()
+            ->select([
+                'acIdent',
+                DB::raw('MAX(acName) as acName'),
+            ])
+            ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) <> ''");
 
-            foreach ($masterProducts as $masterProduct) {
-                $addProduct((string) ($masterProduct->acIdent ?? ''), '', 'master_structure');
-            }
+        if ($search !== '') {
+            $workOrderProductsQuery->where(function (Builder $query) use ($search): void {
+                $query
+                    ->where('acIdent', 'like', '%' . $search . '%')
+                    ->orWhere('acName', 'like', '%' . $search . '%');
+            });
+        }
+
+        $workOrderProducts = $workOrderProductsQuery
+            ->groupBy('acIdent')
+            ->orderBy('acIdent')
+            ->limit($limit)
+            ->get();
+
+        foreach ($workOrderProducts as $workOrderProduct) {
+            $addProduct(
+                (string) ($workOrderProduct->acIdent ?? ''),
+                (string) ($workOrderProduct->acName ?? ''),
+                'work_order_history'
+            );
+        }
+
+        $masterProductsQuery = $this->newProductStructureTableQuery()
+            ->select('acIdent')
+            ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) <> ''");
+
+        if ($search !== '') {
+            $masterProductsQuery->where('acIdent', 'like', '%' . $search . '%');
+        }
+
+        $masterProducts = $masterProductsQuery
+            ->distinct()
+            ->orderBy('acIdent')
+            ->limit($limit)
+            ->get();
+
+        foreach ($masterProducts as $masterProduct) {
+            $addProduct((string) ($masterProduct->acIdent ?? ''), '', 'master_structure');
         }
 
         if (empty($products)) {
             return [];
+        }
+
+        $missingNameIdents = [];
+        foreach ($products as $product) {
+            $ident = trim((string) ($product['acIdentTrimmed'] ?? ''));
+            $name = trim((string) ($product['acName'] ?? ''));
+
+            if ($ident !== '' && $name === '') {
+                $missingNameIdents[] = $ident;
+            }
+        }
+
+        $missingNameIdents = array_values(array_unique($missingNameIdents));
+
+        if (!empty($missingNameIdents)) {
+            $nameByIdent = [];
+
+            $workOrderNameRows = $this->newTableQuery()
+                ->select([
+                    'acIdent',
+                    DB::raw('MAX(acName) as acName'),
+                ])
+                ->whereIn('acIdent', $missingNameIdents)
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acName, ''))) <> ''")
+                ->groupBy('acIdent')
+                ->get();
+
+            foreach ($workOrderNameRows as $row) {
+                $ident = strtolower(trim((string) ($row->acIdent ?? '')));
+                $name = trim((string) ($row->acName ?? ''));
+
+                if ($ident !== '' && $name !== '') {
+                    $nameByIdent[$ident] = $name;
+                }
+            }
+
+            $itemNameRows = $this->newItemTableQuery()
+                ->select([
+                    'acIdent',
+                    DB::raw('MAX(acDescr) as acDescr'),
+                ])
+                ->whereIn('acIdent', $missingNameIdents)
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acDescr, ''))) <> ''")
+                ->groupBy('acIdent')
+                ->get();
+
+            foreach ($itemNameRows as $row) {
+                $ident = strtolower(trim((string) ($row->acIdent ?? '')));
+                $name = trim((string) ($row->acDescr ?? ''));
+
+                if ($ident !== '' && $name !== '' && !array_key_exists($ident, $nameByIdent)) {
+                    $nameByIdent[$ident] = $name;
+                }
+            }
+
+            foreach ($products as &$product) {
+                $ident = trim((string) ($product['acIdentTrimmed'] ?? ''));
+                $name = trim((string) ($product['acName'] ?? ''));
+
+                if ($ident === '' || $name !== '') {
+                    continue;
+                }
+
+                $resolvedName = (string) ($nameByIdent[strtolower($ident)] ?? '');
+
+                if ($resolvedName === '') {
+                    continue;
+                }
+
+                $product['acName'] = $resolvedName;
+                $product['label'] = $ident . ' - ' . $resolvedName;
+            }
+            unset($product);
         }
 
         usort($products, static function (array $left, array $right): int {
@@ -1134,6 +1261,25 @@ class WorkOrderController extends Controller
                 strtolower((string) ($right['acIdentTrimmed'] ?? ''))
             );
         });
+
+        if ($selectedIdent !== '') {
+            $selectedKey = strtolower($selectedIdent);
+            $selectedProducts = [];
+            $otherProducts = [];
+
+            foreach ($products as $product) {
+                $productKey = strtolower((string) ($product['acIdentTrimmed'] ?? ''));
+
+                if ($productKey === $selectedKey) {
+                    $selectedProducts[] = $product;
+                    continue;
+                }
+
+                $otherProducts[] = $product;
+            }
+
+            $products = array_merge($selectedProducts, $otherProducts);
+        }
 
         return array_slice($products, 0, $limit);
     }

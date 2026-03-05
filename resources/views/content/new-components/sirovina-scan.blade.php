@@ -3,6 +3,7 @@
   $bomEndpoint = (string) ($bomFetchUrl ?? '');
   $plannedEndpoint = (string) ($plannedConsumptionStoreUrl ?? '');
   $defaultProduct = trim((string) ($defaultProductIdent ?? ''));
+  $defaultProductLabel = trim((string) ($defaultProductLabel ?? ''));
 @endphp
 
 <div
@@ -17,6 +18,7 @@
   data-bom-url="{{ $bomEndpoint }}"
   data-save-url="{{ $plannedEndpoint }}"
   data-default-product="{{ $defaultProduct }}"
+  data-default-product-label="{{ $defaultProductLabel }}"
   data-csrf-token="{{ csrf_token() }}"
 >
   <div class="modal-dialog modal-dialog-centered modal-xl">
@@ -121,6 +123,13 @@
                       </tbody>
                     </table>
                   </div>
+
+                  <div class="wo-bom-loading-overlay d-none" id="bom-loading-overlay" aria-hidden="true">
+                    <div class="wo-bom-loading-inner">
+                      <span class="spinner-border spinner-border-sm text-success" role="status" aria-hidden="true"></span>
+                      <span>Ucitavanje...</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="wo-bom-summary">
@@ -144,7 +153,7 @@
                 <button type="button" class="btn btn-secondary wo-scanner-close-fab" data-bs-dismiss="modal" aria-label="Zatvori">
                   <i class="fa fa-times me-50"></i> Zatvori
                 </button>
-                <button type="button" class="btn btn-success" id="bom-open-quantity-btn" disabled>
+                <button type="button" class="btn btn-success wo-scanner-open-fab" id="bom-open-quantity-btn" disabled>
                   <i class="fa fa-check me-50"></i> Nastavite na unos količine
                 </button>
               </div>
@@ -274,6 +283,35 @@
     display: flex;
     flex-direction: column;
     gap: 0.45rem;
+    position: relative;
+  }
+
+  #sirovina-scanner-modal .wo-bom-loading-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    border-radius: 10px;
+    background: rgba(5, 10, 18, 0.42);
+    backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+  }
+
+  #sirovina-scanner-modal .wo-bom-loading-inner {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: 999px;
+    color: #e8edfb;
+    background: rgba(10, 16, 27, 0.86);
+    border: 1px solid rgba(86, 199, 164, 0.38);
+    font-size: 0.84rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
   }
 
   #sirovina-scanner-modal .wo-bom-grid {
@@ -581,17 +619,20 @@
   }
 
   #sirovina-scanner-modal .wo-bom-modal-footer {
-    margin-top: 0.95rem;
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.85rem;
-  }
-
-  #sirovina-scanner-modal .wo-scanner-close-fab {
+    margin-top: 0;
     position: fixed;
     top: max(1rem, env(safe-area-inset-top));
     left: max(1rem, env(safe-area-inset-left));
     z-index: 1085;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+  }
+
+  #sirovina-scanner-modal .wo-scanner-close-fab {
+    position: static;
     border-radius: 10px;
     padding: 0.55rem 0.95rem;
     border: 1px solid rgba(205, 215, 238, 0.42);
@@ -606,6 +647,22 @@
     border-color: rgba(223, 231, 248, 0.7);
     background-color: rgba(18, 24, 37, 0.94);
     color: #ffffff;
+  }
+
+  #sirovina-scanner-modal .wo-scanner-close-fab,
+  #sirovina-scanner-modal .wo-scanner-open-fab {
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
+  #sirovina-scanner-modal .wo-scanner-open-fab {
+    position: static;
+    border-radius: 10px;
+    padding: 0.55rem 1.35rem 0.55rem 0.95rem;
+    box-shadow: 0 8px 20px rgba(6, 8, 14, 0.45);
   }
 
   #sirovina-scanner-modal .form-control,
@@ -623,6 +680,102 @@
   #sirovina-scanner-modal .form-select:focus {
     border-color: rgba(74, 179, 148, 0.64);
     box-shadow: 0 0 0 0.12rem rgba(74, 179, 148, 0.15);
+  }
+
+  #sirovina-scanner-modal .select2-container {
+    width: 100% !important;
+  }
+
+  #sirovina-scanner-modal .select2-container--default .select2-selection--single {
+    height: calc(1.5em + 0.572rem + 2px);
+    background-color: rgba(16, 22, 35, 0.85);
+    border-color: rgba(168, 179, 204, 0.34);
+    color: #e8edfb;
+    border-radius: 0.357rem;
+  }
+
+  #sirovina-scanner-modal .select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: #e8edfb;
+    line-height: calc(1.5em + 0.572rem);
+    padding-left: 0.75rem;
+    padding-right: 2rem;
+  }
+
+  #sirovina-scanner-modal .select2-container--default .select2-selection--single .select2-selection__placeholder {
+    color: #9fb0d6;
+  }
+
+  #sirovina-scanner-modal .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: calc(1.5em + 0.572rem + 2px);
+  }
+
+  #sirovina-scanner-modal .select2-container--default.select2-container--focus .select2-selection--single,
+  #sirovina-scanner-modal .select2-container--open .select2-selection--single {
+    border-color: rgba(74, 179, 148, 0.64);
+    box-shadow: 0 0 0 0.12rem rgba(74, 179, 148, 0.15);
+  }
+
+  #sirovina-scanner-modal .select2-dropdown {
+    background-color: rgba(10, 15, 26, 0.98);
+    border-color: rgba(74, 179, 148, 0.35);
+  }
+
+  #sirovina-scanner-modal .select2-search--dropdown .select2-search__field {
+    background-color: rgba(16, 22, 35, 0.9);
+    color: #e8edfb;
+    border-color: rgba(168, 179, 204, 0.34);
+  }
+
+  #sirovina-scanner-modal .select2-results__option {
+    color: #dce5fb;
+  }
+
+  #sirovina-scanner-modal .select2-results__option--highlighted[aria-selected] {
+    background-color: rgba(74, 179, 148, 0.25);
+    color: #ffffff;
+  }
+
+  #sirovina-scanner-modal .select2-results__options {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(74, 179, 148, 0.85) rgba(16, 22, 35, 0.35);
+  }
+
+  #sirovina-scanner-modal .select2-results__options::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  #sirovina-scanner-modal .select2-results__options::-webkit-scrollbar-track {
+    background: rgba(16, 22, 35, 0.35);
+    border-radius: 999px;
+  }
+
+  #sirovina-scanner-modal .select2-results__options::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(74, 179, 148, 0.95), rgba(58, 153, 126, 0.95));
+    border-radius: 999px;
+  }
+
+  #sirovina-scanner-modal .select2-results__options::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(95, 198, 167, 0.98), rgba(70, 170, 141, 0.98));
+  }
+
+  #sirovina-scanner-modal .wo-bom-table-wrap {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(74, 179, 148, 0.75) rgba(16, 22, 35, 0.25);
+  }
+
+  #sirovina-scanner-modal .wo-bom-table-wrap::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  #sirovina-scanner-modal .wo-bom-table-wrap::-webkit-scrollbar-track {
+    background: rgba(16, 22, 35, 0.25);
+    border-radius: 999px;
+  }
+
+  #sirovina-scanner-modal .wo-bom-table-wrap::-webkit-scrollbar-thumb {
+    background: rgba(74, 179, 148, 0.82);
+    border-radius: 999px;
   }
 
   #sirovina-scanner-modal .form-check-input {
@@ -653,10 +806,18 @@
   }
 
   @media (max-width: 767.98px) {
-    #sirovina-scanner-modal .wo-scanner-close-fab {
+    #sirovina-scanner-modal .wo-bom-modal-footer {
       top: max(0.75rem, env(safe-area-inset-top));
       left: max(0.75rem, env(safe-area-inset-left));
+      gap: 0.45rem;
+    }
+
+    #sirovina-scanner-modal .wo-scanner-close-fab {
       padding: 0.5rem 0.82rem;
+    }
+
+    #sirovina-scanner-modal .wo-scanner-open-fab {
+      padding: 0.5rem 1.15rem 0.5rem 0.82rem;
     }
 
     #sirovina-scanner-modal .wo-bom-modal-shell {
@@ -679,8 +840,8 @@
     }
 
     #sirovina-scanner-modal .wo-bom-modal-footer {
-      flex-direction: column;
-      align-items: stretch;
+      flex-direction: row;
+      align-items: center;
     }
 
     #sirovina-scanner-modal .wo-qr-controls-row {
@@ -707,6 +868,7 @@
     var saveUrl = modalEl.getAttribute('data-save-url') || '';
     var csrfToken = modalEl.getAttribute('data-csrf-token') || '';
     var defaultProduct = modalEl.getAttribute('data-default-product') || '';
+    var defaultProductLabel = modalEl.getAttribute('data-default-product-label') || '';
 
     var rnNumberEl = document.getElementById('sirovina-rn-number');
     var statusEl = document.getElementById('bom-status');
@@ -714,6 +876,7 @@
     var productSelect = document.getElementById('bom-product-select');
     var descriptionInput = document.getElementById('bom-description-input');
     var componentsBody = document.getElementById('bom-components-body');
+    var bomLoadingOverlay = document.getElementById('bom-loading-overlay');
     var selectedCountEl = document.getElementById('bom-selected-count');
     var totalCountEl = document.getElementById('bom-total-count');
     var openQuantityBtn = document.getElementById('bom-open-quantity-btn');
@@ -723,6 +886,7 @@
     var quantityInput = document.getElementById('weight-input');
     var quantityUnitSelect = document.getElementById('weight-unit-select');
     var confirmSaveBtn = document.getElementById('confirm-add-sirovina-btn');
+    var select2PageSize = 10;
 
     var state = {
       initialized: false,
@@ -731,6 +895,8 @@
       selectedKeys: new Set(),
       loadingProducts: false,
       loadingBom: false,
+      bomRequestSeq: 0,
+      select2EventsBound: false,
       saving: false
     };
 
@@ -853,6 +1019,176 @@
       }
     }
 
+    function setBomLoading(isLoading) {
+      if (!bomLoadingOverlay) {
+        return;
+      }
+
+      bomLoadingOverlay.classList.toggle('d-none', !isLoading);
+      bomLoadingOverlay.setAttribute('aria-hidden', isLoading ? 'false' : 'true');
+    }
+
+    function hasSelect2() {
+      return Boolean(window.jQuery && window.jQuery.fn && typeof window.jQuery.fn.select2 === 'function');
+    }
+
+    function normalizeProductOption(product) {
+      var id = String((product && (product.acIdent || product.acIdentTrimmed)) || '').trim();
+      var name = String((product && product.acName) || '').trim();
+      var text = String((product && product.label) || '').trim();
+
+      if (!id) {
+        return null;
+      }
+
+      if (!text && name) {
+        text = id + ' - ' + name;
+      }
+
+      if (!text) {
+        text = String((product && (product.acIdentTrimmed || product.acIdent)) || '').trim();
+      }
+
+      return {
+        id: id,
+        text: text || id
+      };
+    }
+
+    function ensureProductOptionSelected(productId, productText) {
+      if (!productSelect) {
+        return;
+      }
+
+      var normalizedId = String(productId || '').trim();
+      if (!normalizedId) {
+        return;
+      }
+
+      var hasOption = false;
+      for (var index = 0; index < productSelect.options.length; index += 1) {
+        if (String(productSelect.options[index].value || '').trim() === normalizedId) {
+          hasOption = true;
+          break;
+        }
+      }
+
+      if (!hasOption) {
+        var option = document.createElement('option');
+        option.value = normalizedId;
+        option.textContent = String(productText || normalizedId).trim() || normalizedId;
+        productSelect.appendChild(option);
+      }
+
+      productSelect.value = normalizedId;
+
+      if (hasSelect2()) {
+        window.jQuery(productSelect).trigger('change.select2');
+      }
+    }
+
+    function initProductSelect2() {
+      if (!productSelect || !productsUrl || !hasSelect2()) {
+        return;
+      }
+
+      var $select = window.jQuery(productSelect);
+      if ($select.data('select2')) {
+        return;
+      }
+
+      $select.select2({
+        width: '100%',
+        placeholder: 'Pretrazite proizvod',
+        allowClear: true,
+        dropdownParent: window.jQuery(modalEl),
+        minimumInputLength: 0,
+        ajax: {
+          url: productsUrl,
+          dataType: 'json',
+          delay: 200,
+          data: function (params) {
+            return {
+              q: String((params && params.term) || '').trim(),
+              selected: String((productSelect && productSelect.value) || '').trim()
+            };
+          },
+          processResults: function (payload, params) {
+            params.page = params.page || 1;
+
+            var rows = Array.isArray(payload && payload.data) ? payload.data : [];
+            var selectedValue = String((productSelect && productSelect.value) || '').trim();
+            var selectedText = '';
+            var options = productSelect ? productSelect.options : null;
+
+            if (selectedValue && options && productSelect.selectedIndex > -1) {
+              selectedText = String(options[productSelect.selectedIndex].text || '').trim();
+            }
+
+            var items = rows
+              .map(normalizeProductOption)
+              .filter(function (item) {
+                return item !== null;
+              });
+
+            if (selectedValue) {
+              var selectedIndex = items.findIndex(function (item) {
+                return item.id === selectedValue;
+              });
+
+              if (selectedIndex > -1) {
+                var selectedItem = items.splice(selectedIndex, 1)[0];
+                selectedItem.selected = true;
+                items.unshift(selectedItem);
+              } else {
+                items.unshift({
+                  id: selectedValue,
+                  text: selectedText || selectedValue,
+                  selected: true
+                });
+              }
+            }
+
+            var start = (params.page - 1) * select2PageSize;
+            var end = start + select2PageSize;
+
+            return {
+              results: items.slice(start, end),
+              pagination: { more: end < items.length }
+            };
+          },
+          cache: false
+        },
+        language: {
+          searching: function () {
+            return 'Pretrazujem...';
+          },
+          loadingMore: function () {
+            return 'Učitavanje još rezultata.';
+          },
+          noResults: function () {
+            return 'Nema rezultata.';
+          }
+        }
+      });
+
+      if (!state.select2EventsBound) {
+        $select.on('select2:select', function () {
+          loadBomForSelectedProduct();
+        });
+
+        $select.on('select2:clear', function () {
+          state.bomRows = [];
+          state.selectedKeys.clear();
+          renderBomRows();
+          setBomLoading(false);
+          setStatus('Izaberite proizvod iz liste za ucitavanje sastavnice.', 'warning');
+        });
+
+        state.select2EventsBound = true;
+      }
+    }
+
     function renderProducts() {
       if (!productSelect) {
         return;
@@ -864,7 +1200,7 @@
       state.products.forEach(function (product) {
         var option = document.createElement('option');
         option.value = product.acIdent || '';
-        option.textContent = product.acIdentTrimmed || product.acIdent || '';
+        option.textContent = product.label || product.acIdentTrimmed || product.acIdent || '';
         productSelect.appendChild(option);
       });
 
@@ -880,6 +1216,10 @@
 
       if (state.products.length > 0) {
         productSelect.value = state.products[0].acIdent || '';
+      }
+
+      if (hasSelect2()) {
+        window.jQuery(productSelect).trigger('change.select2');
       }
     }
 
@@ -969,16 +1309,24 @@
       var productId = (productSelect && productSelect.value) ? productSelect.value : '';
 
       if (!productId) {
-        setStatus('Izaberite proizvod prije učitavanja sastavnice.', 'warning');
+        state.bomRows = [];
+        state.selectedKeys.clear();
+        renderBomRows();
+        setBomLoading(false);
+        setStatus('Izaberite proizvod prije ucitavanja sastavnice.', 'warning');
         return Promise.resolve();
       }
 
-      if (!bomUrl || state.loadingBom) {
+      if (!bomUrl) {
+        setBomLoading(false);
         return Promise.resolve();
       }
 
+      state.bomRequestSeq += 1;
+      var requestSeq = state.bomRequestSeq;
       state.loadingBom = true;
       showError('');
+      setBomLoading(true);
       setStatus('Učitavam sastavnicu...');
 
       return fetch(buildUrl(bomUrl, { product_id: productId }), {
@@ -990,6 +1338,10 @@
       })
         .then(parseResponse)
         .then(function (payload) {
+          if (requestSeq !== state.bomRequestSeq) {
+            return;
+          }
+
           state.bomRows = Array.isArray(payload.data) ? payload.data.slice(0, 100) : [];
           state.selectedKeys.clear();
           renderBomRows();
@@ -999,9 +1351,13 @@
             return;
           }
 
-          setStatus('Sastavnica učitana. Označite komponente koje želite planirati.', 'success');
+          setStatus('Početna sastavnica za artikal učitana. Prilagodite parametre po potrebi ručno prije dodavanja na radni nalog.', 'success');
         })
         .catch(function (error) {
+          if (requestSeq !== state.bomRequestSeq) {
+            return;
+          }
+
           state.bomRows = [];
           state.selectedKeys.clear();
           renderBomRows();
@@ -1009,7 +1365,10 @@
           showError(error && error.message ? error.message : 'Greška pri učitavanju sastavnice.');
         })
         .finally(function () {
-          state.loadingBom = false;
+          if (requestSeq === state.bomRequestSeq) {
+            state.loadingBom = false;
+            setBomLoading(false);
+          }
         });
     }
 
@@ -1150,7 +1509,7 @@
       });
     }
 
-    if (productSelect) {
+    if (productSelect && !hasSelect2()) {
       productSelect.addEventListener('change', function () {
         loadBomForSelectedProduct();
       });
@@ -1197,23 +1556,43 @@
         return;
       }
 
-      if (state.initialized) {
-        if (productSelect && productSelect.value) {
-          loadBomForSelectedProduct();
-        }
+      if (!state.initialized) {
+        state.initialized = true;
+        initProductSelect2();
+        ensureProductOptionSelected(defaultProduct, defaultProductLabel || defaultProduct);
+      }
+
+      if (!hasSelect2()) {
+        loadProducts().then(function () {
+          if (productSelect && productSelect.value) {
+            loadBomForSelectedProduct();
+            return;
+          }
+
+          state.bomRows = [];
+          state.selectedKeys.clear();
+          renderBomRows();
+          setBomLoading(false);
+          setStatus('Izaberite proizvod iz liste za ucitavanje sastavnice.', 'warning');
+        });
         return;
       }
 
-      state.initialized = true;
-      loadProducts().then(function () {
-        if (productSelect && productSelect.value) {
-          loadBomForSelectedProduct();
-        }
-      });
+      if (productSelect && productSelect.value) {
+        loadBomForSelectedProduct();
+        return;
+      }
+
+      state.bomRows = [];
+      state.selectedKeys.clear();
+      renderBomRows();
+      setBomLoading(false);
+      setStatus('Izaberite proizvod iz liste za ucitavanje sastavnice.', 'warning');
     });
 
     modalEl.addEventListener('hidden.bs.modal', function () {
       showError('');
+      setBomLoading(false);
       var backdrop = document.querySelector('.modal-backdrop');
       if (backdrop) {
         backdrop.classList.remove('sirovina-scanner-backdrop');
