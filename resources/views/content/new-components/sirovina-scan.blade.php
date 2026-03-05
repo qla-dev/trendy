@@ -37,8 +37,8 @@
       </div>
       <div class="modal-body p-0">
         <div class="wo-bom-modal-shell">
-          <div class="row g-4 wo-bom-split-row">
-            <div class="col-12 col-lg-6">
+          <div class="row g-4 align-items-stretch pb-5">
+            <div class="col-12 col-lg-4">
               <div class="wo-bom-card wo-bom-dummy-qr-card">
                 <h5 class="text-white mb-1">Skenirajte BARCODE artikla</h5>
 
@@ -92,9 +92,9 @@
               </div>
             </div>
 
-            <div class="col-12 col-lg-6 wo-bom-right-col">
-              <div class="wo-bom-card wo-bom-main-card">
-                <div class="wo-bom-field wo-bom-quick-last wo-bom-quick-persistent">
+            <div class="col-12 col-lg-4 d-flex">
+              <div class="wo-bom-card wo-bom-quick-card h-100 w-100 d-flex flex-column">
+                <div class="wo-bom-field wo-bom-quick-last wo-bom-quick-persistent d-flex flex-column flex-grow-1">
                   <div class="wo-bom-quick-head">
                     <label class="form-label wo-bom-section-title mb-50">Privremena sastavnica</label>
                     <span class="wo-bom-quick-selected">Odabrano: <strong id="bom-selected-count">0</strong></span>
@@ -118,7 +118,11 @@
                     </table>
                   </div>
                 </div>
+              </div>
+            </div>
 
+            <div class="col-12 col-lg-4 wo-bom-right-col d-flex">
+              <div class="wo-bom-card wo-bom-main-card h-100 w-100 d-flex flex-column">
                 <div class="wo-bom-mode-panel wo-panel-active" id="bom-mode-product-panel" data-mode-panel="product">
                   <div class="wo-bom-head-block">
                   <div class="wo-bom-grid">
@@ -256,24 +260,15 @@
     --bom-control-height: calc(1.5em + 0.572rem + 2px);
   }
 
-  #sirovina-scanner-modal .modal-dialog {
-    max-width: 1400px;
-    margin: 0;
-  }
-
   #sirovina-scanner-modal .wo-bom-modal-shell {
     border-radius: 0;
     border: none;
     background: transparent;
-    padding: 0 1rem;
-    max-width: 1320px;
-    margin: 0 auto;
+    padding: 0;
   }
 
   #sirovina-scanner-modal .wo-bom-modal-header {
-    margin: 0 auto 1.4rem;
-    max-width: 1180px;
-    width: 100%;
+    margin: 0 0 1.4rem;
     text-align: center;
   }
 
@@ -282,24 +277,6 @@
     justify-content: center;
     background: transparent;
     padding: 0.95rem 1rem 0.45rem;
-  }
-
-  #sirovina-scanner-modal .wo-bom-split-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: 3.5rem;
-    row-gap: 1.6rem;
-    width: 100%;
-    max-width: 1180px;
-    margin: 0 auto !important;
-  }
-
-  #sirovina-scanner-modal .wo-bom-split-row > [class*='col-'] {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    max-width: none;
-    padding: 0 !important;
   }
 
   #sirovina-scanner-modal .wo-bom-modal-subtitle {
@@ -316,9 +293,11 @@
   }
 
   #sirovina-scanner-modal .wo-bom-dummy-qr-card,
-  #sirovina-scanner-modal .wo-bom-main-card {
+  #sirovina-scanner-modal .wo-bom-main-card,
+  #sirovina-scanner-modal .wo-bom-quick-card {
     flex: 1 1 auto;
     width: 100%;
+    min-height: 0;
   }
 
   #sirovina-scanner-modal .wo-bom-dummy-qr-card > h5 {
@@ -330,13 +309,16 @@
     display: flex;
     flex-direction: column;
     gap: 0;
-  }
-
-  #sirovina-scanner-modal .wo-bom-right-col {
-    padding-bottom: max(5rem, calc(3.5rem + env(safe-area-inset-bottom))) !important;
+    min-height: 0;
+    overflow: hidden;
   }
 
   #sirovina-scanner-modal .wo-bom-mode-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
     width: 100%;
     transition: opacity 0.24s ease, transform 0.24s ease;
     transform: translateX(0) scale(1);
@@ -407,6 +389,8 @@
   #sirovina-scanner-modal .wo-bom-table-section {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
     gap: 0.45rem;
     position: relative;
   }
@@ -465,7 +449,8 @@
 
   #sirovina-scanner-modal #sirovina-qr-scanner-frame {
     width: 100%;
-    padding-top: 52%;
+    height: 280px;
+    padding-top: 0;
     border-radius: 12px;
     border: 1px solid var(--qr-accent-soft);
     background: rgba(255, 255, 255, 0.045);
@@ -712,21 +697,11 @@
     position: relative;
     padding-bottom: 0.8rem;
     margin-bottom: 0.35rem;
+    min-height: 0;
   }
 
   #sirovina-scanner-modal .wo-bom-quick-persistent::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      rgba(177, 189, 216, 0.03),
-      rgba(177, 189, 216, 0.2),
-      rgba(177, 189, 216, 0.03)
-    );
+    display: none;
   }
 
   #sirovina-scanner-modal .wo-bom-quick-head {
@@ -753,19 +728,23 @@
     border-radius: 8px;
     overflow-x: auto;
     overflow-y: auto;
-    height: 238px;
-    max-height: 238px;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    max-height: none;
     width: 100%;
   }
 
-  #sirovina-scanner-modal .wo-bom-table-wrap {
+  #sirovina-scanner-modal .wo-bom-main-card .wo-bom-table-wrap {
     margin-top: 0;
     border: 1px solid rgba(177, 189, 216, 0.22);
     border-radius: 8px;
     overflow-x: auto;
     overflow-y: auto;
-    height: 238px;
-    max-height: 238px;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    max-height: none;
     width: 100%;
   }
 
@@ -913,8 +892,8 @@
   }
 
   #sirovina-scanner-modal .wo-bom-all-table-wrap {
-    height: 238px;
-    max-height: 238px;
+    height: auto;
+    max-height: none;
   }
 
   #sirovina-scanner-modal .form-control,
@@ -1059,22 +1038,16 @@
   }
 
   @media (max-width: 991.98px) {
-    #sirovina-scanner-modal .wo-bom-split-row {
-      grid-template-columns: 1fr;
-      column-gap: 0;
-      max-width: none;
-    }
-
-    #sirovina-scanner-modal .wo-bom-right-col {
-      display: none !important;
-    }
-
     #sirovina-scanner-modal .wo-bom-bottom-mode-switch {
       display: none !important;
     }
   }
 
   @media (max-width: 767.98px) {
+    #sirovina-scanner-modal #sirovina-qr-scanner-frame {
+      height: 220px;
+    }
+
     #sirovina-scanner-modal .wo-bom-modal-footer {
       top: max(0.75rem, env(safe-area-inset-top));
       left: max(0.75rem, env(safe-area-inset-left));
@@ -1096,17 +1069,6 @@
 
     #sirovina-scanner-modal .wo-bom-modal-shell {
       padding: 0;
-    }
-
-    #sirovina-scanner-modal .wo-bom-modal-header {
-      max-width: none;
-    }
-
-    #sirovina-scanner-modal .wo-bom-split-row {
-      grid-template-columns: 1fr;
-      column-gap: 0;
-      row-gap: 1rem;
-      max-width: none;
     }
 
     #sirovina-scanner-modal .wo-bom-grid {
@@ -1167,6 +1129,8 @@
     var allItemsTotalEl = document.getElementById('bom-all-total-count');
     var allLoadingOverlay = document.getElementById('bom-all-loading-overlay');
     var allTableWrapEl = document.getElementById('bom-all-table-wrap');
+    var scannerCardEl = modalEl.querySelector('.wo-bom-dummy-qr-card');
+    var rightMainCardEl = modalEl.querySelector('.wo-bom-main-card');
 
     var confirmModalEl = document.getElementById('confirm-weight-modal');
     var confirmLabelEl = document.getElementById('scanned-material-name');
@@ -1178,6 +1142,7 @@
     var fineAdjustCountEl = document.getElementById('fine-adjust-selected-count');
     var fineAdjustSaveBtn = document.getElementById('fine-adjust-save-btn');
     var select2PageSize = 10;
+    var layoutSyncRaf = null;
 
     var state = {
       initialized: false,
@@ -1541,6 +1506,37 @@
       return;
     }
 
+    function syncRightColumnHeightToScanner() {
+      if (!scannerCardEl || !rightMainCardEl) {
+        return;
+      }
+
+      if (window.matchMedia('(max-width: 991.98px)').matches) {
+        rightMainCardEl.style.height = '';
+        rightMainCardEl.style.maxHeight = '';
+        return;
+      }
+
+      var scannerHeight = Math.round(scannerCardEl.getBoundingClientRect().height);
+      if (!Number.isFinite(scannerHeight) || scannerHeight <= 0) {
+        return;
+      }
+
+      rightMainCardEl.style.height = scannerHeight + 'px';
+      rightMainCardEl.style.maxHeight = scannerHeight + 'px';
+    }
+
+    function scheduleLayoutSync() {
+      if (layoutSyncRaf) {
+        window.cancelAnimationFrame(layoutSyncRaf);
+      }
+
+      layoutSyncRaf = window.requestAnimationFrame(function () {
+        layoutSyncRaf = null;
+        syncRightColumnHeightToScanner();
+      });
+    }
+
     function resolveMode(mode) {
       if (mode === 'operations') {
         return 'operations';
@@ -1588,6 +1584,7 @@
           syncAllSearchInputHeight();
           loadAllRows({ reset: true });
         }
+        scheduleLayoutSync();
         return;
       }
 
@@ -1597,30 +1594,24 @@
           renderAllRows();
           loadAllRows({ reset: true });
         }
+        scheduleLayoutSync();
         return;
       }
 
-      toPanel.classList.remove('d-none', 'wo-panel-exit');
-      toPanel.classList.add('wo-panel-enter');
+      fromPanel.classList.add('d-none');
+      fromPanel.classList.remove('wo-panel-enter', 'wo-panel-exit');
+      fromPanel.setAttribute('aria-hidden', 'true');
+
+      toPanel.classList.remove('d-none', 'wo-panel-enter', 'wo-panel-exit');
       toPanel.setAttribute('aria-hidden', 'false');
-
-      window.requestAnimationFrame(function () {
-        toPanel.classList.remove('wo-panel-enter');
-      });
-
-      fromPanel.classList.add('wo-panel-exit');
-
-      window.setTimeout(function () {
-        fromPanel.classList.add('d-none');
-        fromPanel.classList.remove('wo-panel-exit');
-        fromPanel.setAttribute('aria-hidden', 'true');
-      }, 230);
 
       if (nextIsAll) {
         syncAllSearchInputHeight();
         renderAllRows();
         loadAllRows({ reset: true });
       }
+
+      scheduleLayoutSync();
     }
 
     function renderAllRows() {
@@ -1691,6 +1682,7 @@
       if (allItemsTotalEl) {
         allItemsTotalEl.textContent = String(rows.length);
       }
+      scheduleLayoutSync();
     }
 
     function loadAllRows(options) {
@@ -2205,6 +2197,7 @@
 
       componentsBody.innerHTML = html;
       updateSelectionSummary();
+      scheduleLayoutSync();
     }
 
     function loadProducts() {
@@ -2675,6 +2668,12 @@
       });
     }
 
+    window.addEventListener('resize', function () {
+      if (modalEl.classList.contains('show')) {
+        scheduleLayoutSync();
+      }
+    });
+
     window.sirovinaScannerProceedFromBarcode = function () {
       markProceedSource('barcode');
       openProceedFlow('barcode');
@@ -2725,6 +2724,7 @@
 
       updateModeButtons();
       renderAllRows();
+      scheduleLayoutSync();
 
       var invoiceNumberNode = document.querySelector('.invoice-number');
       if (rnNumberEl) {
@@ -2737,6 +2737,7 @@
     modalEl.addEventListener('shown.bs.modal', function () {
       applyBackdrop();
       syncAllSearchInputHeight();
+      scheduleLayoutSync();
 
       if (!productsUrl || !bomUrl || !saveUrl) {
         setStatus('Skenirajte i učitajte validan radni nalog prije planiranja potrošnje.', 'warning');
@@ -2784,6 +2785,10 @@
       showError('');
       setBomLoading(false);
       setAllLoading(false);
+      if (rightMainCardEl) {
+        rightMainCardEl.style.height = '';
+        rightMainCardEl.style.maxHeight = '';
+      }
 
       if (state.allSearchDebounce) {
         window.clearTimeout(state.allSearchDebounce);
