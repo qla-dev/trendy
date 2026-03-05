@@ -121,19 +121,19 @@ class WorkOrderController extends Controller
                 $successNotice = [
                     'icon' => 'success',
                     'title' => 'Nalog učitan',
-                    'text' => 'Radni nalog je uspješno otvoren iz QR koda',
+                    'text' => 'Radni nalog je uspješno učitan iz QR koda',
                 ];
             } elseif (in_array($normalizedSource, ['invoice_list', 'upravljanje_nalozima', 'lista_naloga'], true)) {
                 $successNotice = [
                     'icon' => 'success',
                     'title' => 'Nalog učitan',
-                    'text' => 'Radni nalog je otvoren kroz administraciju',
+                    'text' => 'Radni nalog je učitan kroz administraciju',
                 ];
             } elseif (in_array($normalizedSource, ['dashboard_home', 'home_table', 'kontrolna_ploca'], true)) {
                 $successNotice = [
                     'icon' => 'success',
                     'title' => 'Nalog učitan',
-                    'text' => 'Radni nalog je otvoren kroz administraciju',
+                    'text' => 'Radni nalog je učitan kroz administraciju',
                 ];
             }
 
