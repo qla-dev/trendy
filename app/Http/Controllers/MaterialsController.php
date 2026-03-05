@@ -44,11 +44,13 @@ class MaterialsController extends Controller
                 self::MATERIALS_SETS,
                 $offset
             );
+            $totalAll = Material::scannerTotalCount(self::MATERIALS_SETS);
 
             return response()->json([
                 'data' => $materials,
                 'meta' => [
                     'count' => count($materials),
+                    'total_all' => $totalAll,
                     'limit' => $limit,
                     'offset' => $offset,
                     'search' => $search,

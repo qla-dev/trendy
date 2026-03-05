@@ -106,13 +106,12 @@
                           <th style="width: 80px;">Poz</th>
                           <th style="width: 200px;">Komponenta</th>
                           <th>Opis</th>
-                          <th style="width: 130px;" class="text-end">anGrossQty</th>
                           <th style="width: 120px;" class="text-center">Tip</th>
                         </tr>
                       </thead>
                       <tbody id="bom-quick-components-body">
                         <tr class="wo-bom-empty-row">
-                          <td colspan="5" class="text-center text-white-50 py-2">Nema odabranih komponenti.</td>
+                          <td colspan="4" class="text-center text-white-50 py-2">Nema odabranih komponenti.</td>
                         </tr>
                       </tbody>
                     </table>
@@ -150,7 +149,7 @@
                           <th style="width: 80px;">Poz</th>
                           <th style="width: 200px;">Komponenta</th>
                           <th>Opis</th>
-                          <th style="width: 130px;" class="text-end">anGrossQty</th>
+                          <th style="width: 130px;" class="text-end">Planirano</th>
                           <th style="width: 120px;" class="text-center">Tip</th>
                         </tr>
                       </thead>
@@ -183,6 +182,9 @@
                       <h6 class="wo-bom-section-title mb-0" id="bom-all-title">Sve stavke - Materijali</h6>
                       <span class="wo-bom-table-found">Pronadjeno: <strong id="bom-all-total-count">0</strong></span>
                     </div>
+                    <div class="wo-bom-loading-more-note d-none" id="bom-all-loading-more-note" aria-live="polite">
+                      U&#269;itavanje jo&#353; rezultata...
+                    </div>
 
                     <div class="table-responsive wo-bom-table-wrap wo-bom-all-table-wrap" id="bom-all-table-wrap">
                       <table class="table table-sm mb-0 wo-bom-table">
@@ -192,7 +194,7 @@
                             <th style="width: 70px;">Poz</th>
                             <th style="width: 210px;">Sifra</th>
                             <th>Opis</th>
-                            <th style="width: 120px;" class="text-end">Kolicina</th>
+                            <th style="width: 120px;" class="text-end">Zaliha</th>
                             <th style="width: 100px;" class="text-center">MJ</th>
                             <th style="width: 90px;" class="text-center">Tip</th>
                           </tr>
@@ -258,6 +260,22 @@
     --qr-text-soft: #cfd7ee;
     --qr-text-main: #e8edf9;
     --bom-control-height: calc(1.5em + 0.572rem + 2px);
+    --wo-scroll-track: rgba(216, 223, 236, 0.94);
+    --wo-scroll-thumb: rgba(128, 139, 164, 0.86);
+    --wo-scroll-thumb-hover: rgba(106, 118, 145, 0.9);
+    --wo-scroll-thumb-active: rgba(92, 104, 132, 0.94);
+    --wo-scroll-thumb-border: rgba(246, 248, 253, 0.88);
+  }
+
+  body.dark-layout #sirovina-scanner-modal,
+  body.semi-dark-layout #sirovina-scanner-modal,
+  .dark-layout #sirovina-scanner-modal,
+  .semi-dark-layout #sirovina-scanner-modal {
+    --wo-scroll-track: rgba(12, 18, 30, 0.92);
+    --wo-scroll-thumb: rgba(138, 148, 169, 0.86);
+    --wo-scroll-thumb-hover: rgba(160, 170, 190, 0.92);
+    --wo-scroll-thumb-active: rgba(176, 186, 206, 0.95);
+    --wo-scroll-thumb-border: rgba(11, 17, 29, 0.9);
   }
 
   #sirovina-scanner-modal .wo-bom-modal-shell {
@@ -413,6 +431,13 @@
     font-size: 0.86rem;
     color: #d4def8;
     white-space: nowrap;
+  }
+
+  #sirovina-scanner-modal .wo-bom-loading-more-note {
+    margin: -0.1rem 0 0.25rem;
+    font-size: 0.78rem;
+    color: #b4c0dd;
+    text-align: right;
   }
 
   #sirovina-scanner-modal .wo-bom-loading-overlay {
@@ -1036,7 +1061,7 @@
   #sirovina-scanner-modal .wo-bom-table-wrap,
   #sirovina-scanner-modal .wo-bom-quick-table-wrap {
     scrollbar-width: thin;
-    scrollbar-color: rgba(168, 176, 190, 0.75) rgba(16, 22, 35, 0.25);
+    scrollbar-color: var(--wo-scroll-thumb) var(--wo-scroll-track);
   }
 
   #sirovina-scanner-modal .wo-bom-table-wrap::-webkit-scrollbar,
@@ -1047,14 +1072,30 @@
 
   #sirovina-scanner-modal .wo-bom-table-wrap::-webkit-scrollbar-track,
   #sirovina-scanner-modal .wo-bom-quick-table-wrap::-webkit-scrollbar-track {
-    background: rgba(16, 22, 35, 0.25);
+    background: var(--wo-scroll-track);
     border-radius: 999px;
   }
 
   #sirovina-scanner-modal .wo-bom-table-wrap::-webkit-scrollbar-thumb,
   #sirovina-scanner-modal .wo-bom-quick-table-wrap::-webkit-scrollbar-thumb {
-    background: rgba(168, 176, 190, 0.82);
+    background: var(--wo-scroll-thumb);
     border-radius: 999px;
+    border: 1px solid var(--wo-scroll-thumb-border);
+  }
+
+  #sirovina-scanner-modal .wo-bom-table-wrap::-webkit-scrollbar-thumb:hover,
+  #sirovina-scanner-modal .wo-bom-quick-table-wrap::-webkit-scrollbar-thumb:hover {
+    background: var(--wo-scroll-thumb-hover);
+  }
+
+  #sirovina-scanner-modal .wo-bom-table-wrap::-webkit-scrollbar-thumb:active,
+  #sirovina-scanner-modal .wo-bom-quick-table-wrap::-webkit-scrollbar-thumb:active {
+    background: var(--wo-scroll-thumb-active);
+  }
+
+  #sirovina-scanner-modal .wo-bom-table-wrap::-webkit-scrollbar-corner,
+  #sirovina-scanner-modal .wo-bom-quick-table-wrap::-webkit-scrollbar-corner {
+    background: var(--wo-scroll-track);
   }
 
   #sirovina-scanner-modal .form-check-input {
@@ -1162,6 +1203,7 @@
     var allItemsHeadEl = document.getElementById('bom-all-items-head');
     var allItemsBodyEl = document.getElementById('bom-all-items-body');
     var allItemsTotalEl = document.getElementById('bom-all-total-count');
+    var allLoadingMoreNoteEl = document.getElementById('bom-all-loading-more-note');
     var allLoadingOverlay = document.getElementById('bom-all-loading-overlay');
     var allTableWrapEl = document.getElementById('bom-all-table-wrap');
     var scannerCardEl = modalEl.querySelector('.wo-bom-dummy-qr-card');
@@ -1201,6 +1243,10 @@
       allRequestSeq: 0,
       allSearchDebounce: null,
       prefillOperationsSeq: 0,
+      allTotalByType: {
+        materials: 0,
+        operations: 0
+      },
       allOffsetByType: {
         materials: 0,
         operations: 0
@@ -1216,7 +1262,8 @@
       selectedAllKeysByType: {
         materials: new Set(),
         operations: new Set()
-      }
+      },
+      materialStockByIdent: new Map()
     };
 
     function setStatus(text, tone) {
@@ -1364,6 +1411,7 @@
         acIdentChild: row.acIdentChild || '',
         acDescr: row.acDescr || '-',
         anGrossQty: Number(row.anGrossQty || 0),
+        stockQty: resolveKnownStock(row.acIdentChild || ''),
         acOperationType: row.acOperationType || '',
         acUM: row.acUM || 'AUTO'
       });
@@ -1373,6 +1421,20 @@
       var resolvedType = type === 'operations' ? 'operations' : 'materials';
       var resolvedComponentId = String(componentId || '').trim().toLowerCase();
       return resolvedType + '|' + resolvedComponentId;
+    }
+
+    function stockLookupKey(componentId) {
+      return String(componentId || '').trim().toLowerCase();
+    }
+
+    function resolveKnownStock(componentId) {
+      var key = stockLookupKey(componentId);
+      if (!key || !state.materialStockByIdent.has(key)) {
+        return 0;
+      }
+
+      var parsed = Number(state.materialStockByIdent.get(key));
+      return Number.isFinite(parsed) ? parsed : 0;
     }
 
     function selectedAllSet(type) {
@@ -1398,12 +1460,20 @@
         return;
       }
 
+      var stockQtyValue = resolvedType === 'materials'
+        ? Number(row.anGrossQty || 0)
+        : resolveKnownStock(componentId);
+      if (!Number.isFinite(stockQtyValue)) {
+        stockQtyValue = 0;
+      }
+
       state.quickSelections.set(key, {
         productId: 'all:' + resolvedType,
         anNo: Number(row.anNo || 0),
         acIdentChild: componentId,
         acDescr: row.acDescr || '-',
         anGrossQty: Number(row.anGrossQty || 0),
+        stockQty: stockQtyValue,
         acOperationType: row.acOperationType || (resolvedType === 'operations' ? 'O' : 'M'),
         acUM: row.acUM || 'AUTO'
       });
@@ -1453,7 +1523,7 @@
 
       var rows = selectedDetailedRows();
       if (!Array.isArray(rows) || rows.length === 0) {
-        quickComponentsBody.innerHTML = '<tr class="wo-bom-empty-row"><td colspan="5" class="text-center text-white-50 py-2">Nema odabranih komponenti.</td></tr>';
+        quickComponentsBody.innerHTML = '<tr class="wo-bom-empty-row"><td colspan="4" class="text-center text-white-50 py-2">Nema odabranih komponenti.</td></tr>';
         return;
       }
 
@@ -1461,7 +1531,6 @@
         var lineNo = row.anNo || 0;
         var componentId = row.acIdentChild || '';
         var descr = row.acDescr || '-';
-        var baseQty = Number(row.anGrossQty || 0);
         var operationType = row.acOperationType || '';
         var rowClass = isOperationType(operationType) ? ' class="wo-bom-quick-operation-row"' : '';
 
@@ -1470,7 +1539,6 @@
             '<td>' + lineNo + '</td>' +
             '<td class="fw-semibold">' + componentId + '</td>' +
             '<td class="wo-opis-cell">' + formatOpisCell(descr) + '</td>' +
-            '<td class="text-end">' + baseQty.toFixed(4).replace(/0+$/, '').replace(/\.$/, '') + '</td>' +
             '<td class="text-center">' + operationType + '</td>' +
           '</tr>';
       }).join('');
@@ -1517,6 +1585,14 @@
       allLoadingOverlay.setAttribute('aria-hidden', isLoading ? 'false' : 'true');
     }
 
+    function setAllLoadingMoreNotice(isVisible) {
+      if (!allLoadingMoreNoteEl) {
+        return;
+      }
+
+      allLoadingMoreNoteEl.classList.toggle('d-none', !isVisible);
+    }
+
     function formatQuantity(value) {
       var parsed = Number(value || 0);
       if (!Number.isFinite(parsed)) {
@@ -1528,6 +1604,15 @@
 
     function allTypeLabel() {
       return state.allType === 'operations' ? 'Operacije' : 'Materijali';
+    }
+
+    function allFoundCountValue(rows) {
+      if (state.allType === 'materials') {
+        return String(Math.max(0, Number(state.allTotalByType.materials || 0)));
+      }
+
+      var list = Array.isArray(rows) ? rows : [];
+      return String(list.length);
     }
 
     function allEndpointByType(type) {
@@ -1689,7 +1774,7 @@
             '<th style="width: 70px;">Poz</th>' +
             '<th style="width: 210px;">Sifra</th>' +
             '<th>Opis</th>' +
-            '<th style="width: 120px;" class="text-end">Kolicina</th>' +
+            '<th style="width: 120px;" class="text-end">Zaliha</th>' +
             '<th style="width: 100px;" class="text-center">MJ</th>' +
             '<th style="width: 90px;" class="text-center">Tip</th>' +
           '</tr>';
@@ -1698,7 +1783,7 @@
       if (!Array.isArray(rows) || rows.length === 0) {
         allItemsBodyEl.innerHTML = '<tr><td colspan="7" class="text-center text-white-50 py-2">Nema stavki za odabrani filter.</td></tr>';
         if (allItemsTotalEl) {
-          allItemsTotalEl.textContent = '0';
+          allItemsTotalEl.textContent = allFoundCountValue(rows);
         }
         return;
       }
@@ -1736,7 +1821,7 @@
 
       allItemsBodyEl.innerHTML = html;
       if (allItemsTotalEl) {
-        allItemsTotalEl.textContent = String(rows.length);
+        allItemsTotalEl.textContent = allFoundCountValue(rows);
       }
       scheduleLayoutSync();
     }
@@ -1763,7 +1848,9 @@
           return Promise.resolve();
         }
         state.allLoadingMoreByType.materials = true;
+        setAllLoadingMoreNotice(true);
       } else {
+        setAllLoadingMoreNotice(false);
         if (reset) {
           resetAllPaging(resolvedType);
           state.allRows = [];
@@ -1798,7 +1885,29 @@
             return;
           }
 
+          var totalAllRaw = payload && payload.meta ? payload.meta.total_all : null;
+          var totalAllParsed = Number(totalAllRaw);
+          if (resolvedType === 'materials' && Number.isFinite(totalAllParsed) && totalAllParsed >= 0) {
+            state.allTotalByType.materials = Math.floor(totalAllParsed);
+          }
+
           var incomingRows = Array.isArray(payload && payload.data) ? payload.data.slice(0, 100) : [];
+          if (resolvedType === 'materials') {
+            incomingRows.forEach(function (row) {
+              var ident = String(row && row.acIdentChild ? row.acIdentChild : '').trim();
+              if (!ident) {
+                return;
+              }
+
+              var stockValue = Number(row && row.anGrossQty ? row.anGrossQty : 0);
+              if (!Number.isFinite(stockValue)) {
+                stockValue = 0;
+              }
+
+              state.materialStockByIdent.set(stockLookupKey(ident), stockValue);
+            });
+          }
+
           if (append) {
             state.allRows = (state.allRows || []).concat(incomingRows);
           } else {
@@ -1827,9 +1936,11 @@
 
           if (append) {
             state.allLoadingMoreByType.materials = false;
+            setAllLoadingMoreNotice(false);
             return;
           }
 
+          setAllLoadingMoreNotice(false);
           setAllLoading(false);
         });
     }
@@ -2035,8 +2146,14 @@
     function buildFineAdjustRowsFromSelection() {
       return selectedDetailedRows()
         .map(function (row) {
-          var qty = Number(row.anGrossQty || 0);
-          var qtyDisplay = Number.isFinite(qty) ? qty : 0;
+          var planiranoQty = 0;
+          var zalihaQty = Number(row.stockQty);
+          if (!Number.isFinite(zalihaQty)) {
+            zalihaQty = resolveKnownStock(row.acIdentChild || '');
+          }
+          if (!Number.isFinite(zalihaQty)) {
+            zalihaQty = 0;
+          }
 
           return {
             alternativa: '0',
@@ -2045,10 +2162,11 @@
             opis: String(row.acDescr || '').trim(),
             slika: '-',
             napomena: '',
-            kolicina: String(qtyDisplay),
+            planirano: String(planiranoQty),
+            zaliha: String(zalihaQty),
             mj: String(row.acUM || 'AUTO').trim() || 'AUTO',
             serija: '',
-            normativna_osnova: String(qtyDisplay),
+            normativna_osnova: '0',
             aktivno: '1',
             zavrseno: '0',
             va: '',
@@ -2064,7 +2182,7 @@
       }
 
       if (!Array.isArray(state.fineAdjustRows) || state.fineAdjustRows.length === 0) {
-        fineAdjustBodyEl.innerHTML = '<tr><td colspan="15" class="text-center text-muted py-2">Nema odabranih stavki.</td></tr>';
+        fineAdjustBodyEl.innerHTML = '<tr><td colspan="16" class="text-center text-muted py-2">Nema odabranih stavki.</td></tr>';
         if (fineAdjustCountEl) {
           fineAdjustCountEl.textContent = 'Stavki: 0';
         }
@@ -2072,7 +2190,7 @@
       }
 
       var fields = [
-        'alternativa', 'pozicija', 'artikal', 'opis', 'slika', 'napomena', 'kolicina',
+        'alternativa', 'pozicija', 'artikal', 'opis', 'slika', 'napomena', 'planirano', 'zaliha',
         'mj', 'serija', 'normativna_osnova', 'aktivno', 'zavrseno', 'va', 'prim_klas', 'sek_klas'
       ];
 
@@ -2082,19 +2200,24 @@
             var rawMjValue = String(row[field] || '').trim().toUpperCase();
             var mjValue = (rawMjValue === 'AUTO' || rawMjValue === 'KG' || rawMjValue === 'MJ') ? rawMjValue : 'AUTO';
             return '' +
-              '<td><select class="form-select form-select-sm fine-adjust-input" data-row="' + rowIndex + '" data-field="mj">' +
+              '<td><select class="form-select form-select-sm fine-adjust-input fine-adjust-select" data-row="' + rowIndex + '" data-field="mj">' +
                 '<option value="AUTO"' + (mjValue === 'AUTO' ? ' selected' : '') + '>AUTO</option>' +
                 '<option value="KG"' + (mjValue === 'KG' ? ' selected' : '') + '>KG</option>' +
                 '<option value="MJ"' + (mjValue === 'MJ' ? ' selected' : '') + '>MJ</option>' +
               '</select></td>';
           }
 
+          if (field === 'zaliha') {
+            var readonlyValue = escapeHtml(row[field] || '0');
+            return '<td><input type="text" class="form-control form-control-sm fine-adjust-readonly" value="' + readonlyValue + '" readonly tabindex="-1"></td>';
+          }
+
           var value = escapeHtml(row[field] || '');
-          var inputType = (field === 'kolicina' || field === 'pozicija' || field === 'alternativa')
+          var inputType = (field === 'planirano' || field === 'pozicija' || field === 'alternativa')
             ? 'number'
             : 'text';
           var stepAttr = inputType === 'number' ? ' step="0.0001"' : '';
-          var minAttr = field === 'kolicina' ? ' min="0"' : '';
+          var minAttr = field === 'planirano' ? ' min="0"' : '';
 
           return '<td><input type="' + inputType + '" class="form-control form-control-sm fine-adjust-input" ' +
             'data-row="' + rowIndex + '" data-field="' + field + '" value="' + value + '"' + stepAttr + minAttr + '></td>';
@@ -2881,6 +3004,8 @@
       state.activeMode = 'product';
       state.allType = 'materials';
       state.allRows = [];
+      setAllLoadingMoreNotice(false);
+      state.allTotalByType.materials = 0;
       resetSelectionsForOpen();
       resetAllPaging('materials');
       resetAllPaging('operations');

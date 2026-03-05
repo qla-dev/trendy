@@ -110,6 +110,40 @@ class Material extends Model
         return $materials;
     }
 
+    public static function scannerTotalCount(array $materialsSets = []): int
+    {
+        $normalizedSets = array_values(array_filter(array_map(function ($value) {
+            return trim((string) $value);
+        }, $materialsSets), function ($value) {
+            return $value !== '';
+        }));
+
+        $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
+        $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
+
+        $query = DB::table($stockTable)
+            ->join($itemsTable, function ($join) {
+                $join->whereRaw("LTRIM(RTRIM(ISNULL(s.acIdent, ''))) = LTRIM(RTRIM(ISNULL(i.acIdent, '')))");
+            })
+            ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) <> ''");
+
+        if (!empty($normalizedSets)) {
+            $query->whereIn(
+                DB::raw("LTRIM(RTRIM(ISNULL(i.acSetOfItem, '')))"),
+                $normalizedSets
+            );
+        }
+
+        $grouped = $query
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) as material_code")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acName, ''))) as material_name")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as material_um")
+            ->groupBy('i.acIdent', 'i.acName', 'i.acUM')
+            ->havingRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) <> 0");
+
+        return (int) DB::query()->fromSub($grouped, 'm')->count();
+    }
+
     private static function applyLikeAny(Builder $query, array $columns, string $value): void
     {
         $value = trim($value);

@@ -88,12 +88,22 @@
   }
   .invoice-preview-wrapper {
     --wo-divider-color: #ebe9f1;
+    --wo-table-scroll-track: rgba(221, 227, 239, 0.94);
+    --wo-table-scroll-thumb: rgba(132, 143, 166, 0.86);
+    --wo-table-scroll-thumb-hover: rgba(108, 121, 147, 0.9);
+    --wo-table-scroll-thumb-active: rgba(94, 108, 136, 0.94);
+    --wo-table-scroll-thumb-border: rgba(246, 248, 253, 0.9);
   }
   body.dark-layout .invoice-preview-wrapper,
   body.semi-dark-layout .invoice-preview-wrapper,
   .dark-layout .invoice-preview-wrapper,
   .semi-dark-layout .invoice-preview-wrapper {
     --wo-divider-color: rgba(184, 190, 220, 0.22);
+    --wo-table-scroll-track: rgba(15, 22, 36, 0.92);
+    --wo-table-scroll-thumb: rgba(127, 139, 166, 0.86);
+    --wo-table-scroll-thumb-hover: rgba(151, 164, 191, 0.92);
+    --wo-table-scroll-thumb-active: rgba(167, 179, 205, 0.95);
+    --wo-table-scroll-thumb-border: rgba(14, 21, 35, 0.9);
   }
   .invoice-preview-wrapper hr.invoice-spacing {
     border-top-color: var(--wo-divider-color) !important;
@@ -299,6 +309,31 @@
   }
   .invoice-preview-wrapper .wo-sastavnica-table-wrap {
     position: relative;
+    scrollbar-width: thin;
+    scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
+    scrollbar-gutter: stable;
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap::-webkit-scrollbar-track {
+    background: var(--wo-table-scroll-track);
+    border-radius: 999px;
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap::-webkit-scrollbar-thumb {
+    background: var(--wo-table-scroll-thumb);
+    border-radius: 999px;
+    border: 1px solid var(--wo-table-scroll-thumb-border);
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap::-webkit-scrollbar-thumb:hover {
+    background: var(--wo-table-scroll-thumb-hover);
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap::-webkit-scrollbar-thumb:active {
+    background: var(--wo-table-scroll-thumb-active);
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap::-webkit-scrollbar-corner {
+    background: var(--wo-table-scroll-track);
   }
   .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col {
     position: sticky;
