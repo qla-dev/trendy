@@ -34,10 +34,12 @@ class Material extends Model
     public static function scannerList(
         string $search = '',
         int $limit = 100,
-        array $materialsSets = []
+        array $materialsSets = [],
+        int $offset = 0
     ): array
     {
         $resolvedLimit = self::resolveScannerLimit($limit);
+        $resolvedOffset = max(0, (int) $offset);
         $normalizedSets = array_values(array_filter(array_map(function ($value) {
             return trim((string) $value);
         }, $materialsSets), function ($value) {
@@ -67,8 +69,10 @@ class Material extends Model
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as material_um")
             ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as material_qty")
             ->groupBy('i.acIdent', 'i.acName', 'i.acUM')
+            ->havingRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) <> 0")
             ->orderByRaw("CASE WHEN LEFT($codeExpr, 1) LIKE '[A-Za-z]' THEN 0 WHEN LEFT($codeExpr, 1) LIKE '[0-9]' THEN 2 ELSE 1 END ASC")
             ->orderByRaw("UPPER($codeExpr) ASC")
+            ->offset($resolvedOffset)
             ->limit($resolvedLimit)
             ->get()
             ->map(function ($row) {
@@ -90,7 +94,7 @@ class Material extends Model
             $parsedQty = is_numeric((string) $rawQty) ? (float) $rawQty : 0.0;
 
             $materials[] = [
-                'anNo' => count($materials) + 1,
+                'anNo' => $resolvedOffset + count($materials) + 1,
                 'acIdentChild' => $materialCode !== '' ? $materialCode : $materialName,
                 'acDescr' => $materialName !== '' ? $materialName : ($materialCode !== '' ? $materialCode : '-'),
                 'acUM' => strtoupper(substr(trim((string) ($row['material_um'] ?? '')), 0, 3)),

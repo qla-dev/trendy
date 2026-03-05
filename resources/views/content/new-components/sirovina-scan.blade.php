@@ -27,15 +27,16 @@
 >
   <div class="modal-dialog modal-dialog-centered modal-xl">
     <div class="modal-content wo-bom-modal-content">
+      <div class="modal-header wo-bom-modal-header wo-bom-content-header">
+        <div class="w-100 text-center">
+          <h4 class="mb-0 text-white" id="sirovina-scanner-modal-label">
+            Planirana potrosnja za RN <span id="sirovina-rn-number">-</span>
+          </h4>
+          <p class="mb-0 wo-bom-modal-subtitle">Izaberite proizvod, zatim stavke sastavnice i unesite kolicinu.</p>
+        </div>
+      </div>
       <div class="modal-body p-0">
         <div class="wo-bom-modal-shell">
-          <div class="wo-bom-modal-header mb-0">
-            <h4 class="mb-0 text-white" id="sirovina-scanner-modal-label">
-              Planirana potrošnja za RN <span id="sirovina-rn-number">-</span>
-            </h4>
-            <p class="mb-0 wo-bom-modal-subtitle">Izaberite proizvod, zatim stavke sastavnice i unesite količinu.</p>
-          </div>
-
           <div class="row g-4 wo-bom-split-row">
             <div class="col-12 col-lg-6">
               <div class="wo-bom-card wo-bom-dummy-qr-card">
@@ -132,8 +133,8 @@
                   <p id="bom-error" class="small mb-0 text-danger d-none"></p>
                 </div>
                 <div class="wo-bom-table-section">
-                  <div class="wo-bom-table-head">
-                    <h6 class="wo-bom-section-title mt-1 mb-0">Sastavnice proizvoda</h6>
+                  <div class="wo-bom-table-head mt-1">
+                    <h6 class="wo-bom-section-title mb-0">Sastavnice proizvoda</h6>
                     <span class="wo-bom-table-found">Pronađeno: <strong id="bom-total-count">0</strong></span>
                   </div>
 
@@ -179,7 +180,7 @@
                       <span class="wo-bom-table-found">Pronadjeno: <strong id="bom-all-total-count">0</strong></span>
                     </div>
 
-                    <div class="table-responsive wo-bom-table-wrap wo-bom-all-table-wrap">
+                    <div class="table-responsive wo-bom-table-wrap wo-bom-all-table-wrap" id="bom-all-table-wrap">
                       <table class="table table-sm mb-0 wo-bom-table">
                         <thead id="bom-all-items-head">
                           <tr>
@@ -257,7 +258,7 @@
 
   #sirovina-scanner-modal .modal-dialog {
     max-width: 1400px;
-    margin: 1.75rem auto !important;
+    margin: 0;
   }
 
   #sirovina-scanner-modal .wo-bom-modal-shell {
@@ -274,6 +275,13 @@
     max-width: 1180px;
     width: 100%;
     text-align: center;
+  }
+
+  #sirovina-scanner-modal .wo-bom-content-header {
+    border-bottom: 0;
+    justify-content: center;
+    background: transparent;
+    padding: 0.95rem 1rem 0.45rem;
   }
 
   #sirovina-scanner-modal .wo-bom-split-row {
@@ -743,8 +751,10 @@
     margin-top: 0;
     border: 1px solid rgba(177, 189, 216, 0.22);
     border-radius: 8px;
-    overflow: hidden;
-    max-height: 220px;
+    overflow-x: auto;
+    overflow-y: auto;
+    height: 238px;
+    max-height: 238px;
     width: 100%;
   }
 
@@ -754,8 +764,8 @@
     border-radius: 8px;
     overflow-x: auto;
     overflow-y: auto;
-    height: 262px;
-    max-height: 262px;
+    height: 238px;
+    max-height: 238px;
     width: 100%;
   }
 
@@ -775,18 +785,51 @@
     border-bottom-color: rgba(170, 183, 214, 0.28);
   }
 
-  #sirovina-scanner-modal .wo-bom-table-wrap .wo-bom-table tbody td {
+  #sirovina-scanner-modal .wo-bom-table-wrap .wo-bom-table tbody td,
+  #sirovina-scanner-modal .wo-bom-quick-table-wrap .wo-bom-table tbody td {
     border-top-color: rgba(170, 183, 214, 0.14);
     vertical-align: middle;
-    height: 56px;
-    max-height: 56px;
+    min-height: 68px;
+    height: 68px;
+    max-height: 68px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  #sirovina-scanner-modal .wo-bom-table-wrap .wo-bom-table tbody tr:hover td {
+  #sirovina-scanner-modal .wo-bom-table-wrap .wo-bom-table tbody tr:hover td,
+  #sirovina-scanner-modal .wo-bom-quick-table-wrap .wo-bom-table tbody tr:hover td {
     background: rgba(255, 255, 255, 0.04);
+  }
+
+  #sirovina-scanner-modal .wo-opis-cell {
+    white-space: normal !important;
+    text-overflow: clip !important;
+    overflow: hidden;
+  }
+
+  #sirovina-scanner-modal .wo-opis-two-line {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+    min-height: 2.3em;
+    max-height: 2.3em;
+    overflow: hidden;
+  }
+
+  #sirovina-scanner-modal .wo-opis-two-line.is-double {
+    justify-content: space-between;
+  }
+
+  #sirovina-scanner-modal .wo-opis-two-line.is-single {
+    justify-content: center;
+  }
+
+  #sirovina-scanner-modal .wo-opis-two-line > span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   #sirovina-scanner-modal .wo-bom-modal-footer {
@@ -870,8 +913,8 @@
   }
 
   #sirovina-scanner-modal .wo-bom-all-table-wrap {
-    height: 262px;
-    max-height: 262px;
+    height: 238px;
+    max-height: 238px;
   }
 
   #sirovina-scanner-modal .form-control,
@@ -1123,6 +1166,7 @@
     var allItemsBodyEl = document.getElementById('bom-all-items-body');
     var allItemsTotalEl = document.getElementById('bom-all-total-count');
     var allLoadingOverlay = document.getElementById('bom-all-loading-overlay');
+    var allTableWrapEl = document.getElementById('bom-all-table-wrap');
 
     var confirmModalEl = document.getElementById('confirm-weight-modal');
     var confirmLabelEl = document.getElementById('scanned-material-name');
@@ -1155,6 +1199,18 @@
       allLoading: false,
       allRequestSeq: 0,
       allSearchDebounce: null,
+      allOffsetByType: {
+        materials: 0,
+        operations: 0
+      },
+      allHasMoreByType: {
+        materials: true,
+        operations: false
+      },
+      allLoadingMoreByType: {
+        materials: false,
+        operations: false
+      },
       selectedAllKeysByType: {
         materials: new Set(),
         operations: new Set()
@@ -1405,7 +1461,7 @@
           '<tr>' +
             '<td>' + lineNo + '</td>' +
             '<td class="fw-semibold">' + componentId + '</td>' +
-            '<td>' + descr + '</td>' +
+            '<td class="wo-opis-cell">' + formatOpisCell(descr) + '</td>' +
             '<td class="text-end">' + baseQty.toFixed(4).replace(/0+$/, '').replace(/\.$/, '') + '</td>' +
             '<td class="text-center">' + operationType + '</td>' +
           '</tr>';
@@ -1470,6 +1526,17 @@
       return type === 'operations' ? allOperationsUrl : allMaterialsUrl;
     }
 
+    function resetAllPaging(type) {
+      var resolvedType = type === 'operations' ? 'operations' : 'materials';
+      state.allOffsetByType[resolvedType] = 0;
+      state.allHasMoreByType[resolvedType] = resolvedType === 'materials';
+      state.allLoadingMoreByType[resolvedType] = false;
+    }
+
+    function canLoadMore(type) {
+      return type === 'materials' && Boolean(state.allHasMoreByType.materials);
+    }
+
     function syncAllSearchInputHeight() {
       return;
     }
@@ -1519,7 +1586,7 @@
       if (!fromPanel || !toPanel) {
         if (nextIsAll) {
           syncAllSearchInputHeight();
-          loadAllRows();
+          loadAllRows({ reset: true });
         }
         return;
       }
@@ -1528,7 +1595,7 @@
         if (nextIsAll) {
           syncAllSearchInputHeight();
           renderAllRows();
-          loadAllRows();
+          loadAllRows({ reset: true });
         }
         return;
       }
@@ -1552,7 +1619,7 @@
       if (nextIsAll) {
         syncAllSearchInputHeight();
         renderAllRows();
-        loadAllRows();
+        loadAllRows({ reset: true });
       }
     }
 
@@ -1593,7 +1660,7 @@
         var lineNo = Number(row && row.anNo ? row.anNo : (index + 1));
         var componentIdRaw = row && row.acIdentChild ? row.acIdentChild : '-';
         var code = escapeHtml(componentIdRaw);
-        var description = escapeHtml(row && row.acDescr ? row.acDescr : '-');
+        var description = row && row.acDescr ? row.acDescr : '-';
         var quantity = formatQuantity(row && row.anGrossQty ? row.anGrossQty : 0);
         var unit = escapeHtml(row && row.acUM ? row.acUM : '-');
         var typeValue = row && row.acOperationType ? row.acOperationType : (state.allType === 'operations' ? 'O' : 'M');
@@ -1613,7 +1680,7 @@
             '</td>' +
             '<td>' + lineNo + '</td>' +
             '<td class="fw-semibold">' + code + '</td>' +
-            '<td>' + description + '</td>' +
+            '<td class="wo-opis-cell">' + formatOpisCell(description) + '</td>' +
             '<td class="text-end">' + quantity + '</td>' +
             '<td class="text-center">' + unit + '</td>' +
             '<td class="text-center">' + type + '</td>' +
@@ -1626,23 +1693,48 @@
       }
     }
 
-    function loadAllRows() {
-      var endpoint = allEndpointByType(state.allType);
+    function loadAllRows(options) {
+      var settings = options || {};
+      var append = Boolean(settings.append);
+      var reset = settings.reset !== false;
+      var resolvedType = state.allType === 'operations' ? 'operations' : 'materials';
+      var endpoint = allEndpointByType(resolvedType);
 
       if (!endpoint) {
         state.allRows = [];
+        resetAllPaging(resolvedType);
         renderAllRows();
         return Promise.resolve();
       }
 
+      if (append) {
+        if (resolvedType !== 'materials') {
+          return Promise.resolve();
+        }
+        if (state.allLoadingMoreByType.materials || !canLoadMore('materials')) {
+          return Promise.resolve();
+        }
+        state.allLoadingMoreByType.materials = true;
+      } else {
+        if (reset) {
+          resetAllPaging(resolvedType);
+          state.allRows = [];
+          renderAllRows();
+          if (allTableWrapEl) {
+            allTableWrapEl.scrollTop = 0;
+          }
+        }
+        setAllLoading(true);
+      }
+
       state.allRequestSeq += 1;
       var requestSeq = state.allRequestSeq;
-      setAllLoading(true);
-
       var search = allSearchInput ? String(allSearchInput.value || '').trim() : '';
+      var currentOffset = append ? (state.allOffsetByType[resolvedType] || 0) : 0;
       var url = buildUrl(endpoint, {
         q: search,
-        limit: 100
+        limit: 100,
+        offset: currentOffset
       });
 
       return fetch(url, {
@@ -1654,26 +1746,64 @@
       })
         .then(parseResponse)
         .then(function (payload) {
-          if (requestSeq !== state.allRequestSeq) {
+          if (requestSeq !== state.allRequestSeq || resolvedType !== state.allType) {
             return;
           }
 
-          state.allRows = Array.isArray(payload && payload.data) ? payload.data.slice(0, 100) : [];
+          var incomingRows = Array.isArray(payload && payload.data) ? payload.data.slice(0, 100) : [];
+          if (append) {
+            state.allRows = (state.allRows || []).concat(incomingRows);
+          } else {
+            state.allRows = incomingRows;
+          }
+
+          state.allOffsetByType[resolvedType] = currentOffset + incomingRows.length;
+          state.allHasMoreByType[resolvedType] = resolvedType === 'materials' && incomingRows.length >= 100;
           renderAllRows();
         })
         .catch(function () {
+          if (requestSeq !== state.allRequestSeq || resolvedType !== state.allType) {
+            return;
+          }
+
+          if (!append) {
+            state.allRows = [];
+            resetAllPaging(resolvedType);
+            renderAllRows();
+          }
+        })
+        .finally(function () {
           if (requestSeq !== state.allRequestSeq) {
             return;
           }
 
-          state.allRows = [];
-          renderAllRows();
-        })
-        .finally(function () {
-          if (requestSeq === state.allRequestSeq) {
-            setAllLoading(false);
+          if (append) {
+            state.allLoadingMoreByType.materials = false;
+            return;
           }
+
+          setAllLoading(false);
         });
+    }
+
+    function maybeLoadMoreAllRows() {
+      if (!allTableWrapEl || state.activeMode !== 'materials' || state.allType !== 'materials') {
+        return;
+      }
+
+      if (state.allLoading || state.allLoadingMoreByType.materials || !canLoadMore('materials')) {
+        return;
+      }
+
+      var remaining = allTableWrapEl.scrollHeight - allTableWrapEl.scrollTop - allTableWrapEl.clientHeight;
+      if (remaining > 48) {
+        return;
+      }
+
+      loadAllRows({
+        append: true,
+        reset: false
+      });
     }
 
     function scheduleAllRowsLoad() {
@@ -1682,7 +1812,9 @@
       }
 
       state.allSearchDebounce = window.setTimeout(function () {
-        loadAllRows();
+        loadAllRows({
+          reset: true
+        });
       }, 200);
     }
 
@@ -1697,6 +1829,34 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    function formatOpisCell(value) {
+      var text = String(value === null || value === undefined ? '' : value).replace(/\s+/g, ' ').trim();
+      if (!text) {
+        text = '-';
+      }
+
+      var firstLine = text.slice(0, 20);
+      var secondLine = text.slice(20, 40);
+      if (text.length > 40) {
+        secondLine = secondLine.replace(/\s+$/, '') + '...';
+      }
+      var hasSecondLine = secondLine.length > 0;
+      var modeClass = hasSecondLine ? 'is-double' : 'is-single';
+
+      if (hasSecondLine) {
+        return '' +
+          '<span class="wo-opis-two-line ' + modeClass + '" title="' + escapeHtml(text) + '">' +
+            '<span>' + escapeHtml(firstLine) + '</span>' +
+            '<span>' + escapeHtml(secondLine) + '</span>' +
+          '</span>';
+      }
+
+      return '' +
+        '<span class="wo-opis-two-line ' + modeClass + '" title="' + escapeHtml(text) + '">' +
+          '<span>' + escapeHtml(firstLine) + '</span>' +
+        '</span>';
     }
 
     function buildFineAdjustRowsFromSelection() {
@@ -2037,7 +2197,7 @@
             '</td>' +
             '<td>' + lineNo + '</td>' +
             '<td class="fw-semibold">' + componentId + '</td>' +
-            '<td>' + descr + '</td>' +
+            '<td class="wo-opis-cell">' + formatOpisCell(descr) + '</td>' +
             '<td class="text-end">' + baseQty.toFixed(4).replace(/0+$/, '').replace(/\.$/, '') + '</td>' +
             '<td class="text-center">' + operationType + '</td>' +
           '</tr>';
@@ -2509,6 +2669,12 @@
       });
     }
 
+    if (allTableWrapEl) {
+      allTableWrapEl.addEventListener('scroll', function () {
+        maybeLoadMoreAllRows();
+      });
+    }
+
     window.sirovinaScannerProceedFromBarcode = function () {
       markProceedSource('barcode');
       openProceedFlow('barcode');
@@ -2535,6 +2701,8 @@
       state.activeMode = 'product';
       state.allType = 'materials';
       state.allRows = [];
+      resetAllPaging('materials');
+      resetAllPaging('operations');
 
       if (productModePanel) {
         productModePanel.classList.remove('d-none', 'wo-panel-exit', 'wo-panel-enter');
@@ -2549,6 +2717,10 @@
 
       if (allSearchInput) {
         allSearchInput.value = '';
+      }
+
+      if (allTableWrapEl) {
+        allTableWrapEl.scrollTop = 0;
       }
 
       updateModeButtons();
@@ -2625,3 +2797,4 @@
     });
   });
 </script>
+

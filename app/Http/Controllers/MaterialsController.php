@@ -37,10 +37,12 @@ class MaterialsController extends Controller
         try {
             $search = trim((string) $request->query('q', ''));
             $limit = $this->resolveLimit((int) $request->integer('limit', 100));
+            $offset = max(0, (int) $request->integer('offset', 0));
             $materials = Material::scannerList(
                 $search,
                 $limit,
-                self::MATERIALS_SETS
+                self::MATERIALS_SETS,
+                $offset
             );
 
             return response()->json([
@@ -48,6 +50,7 @@ class MaterialsController extends Controller
                 'meta' => [
                     'count' => count($materials),
                     'limit' => $limit,
+                    'offset' => $offset,
                     'search' => $search,
                 ],
             ]);
