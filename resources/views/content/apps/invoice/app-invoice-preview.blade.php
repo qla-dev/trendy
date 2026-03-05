@@ -1218,6 +1218,8 @@
   $priorityUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-update-priority', ['id' => $workOrderRouteId]) : '';
   $productsFetchUrl = $hasLoadedWorkOrder ? route('app-invoice-products', ['id' => $workOrderRouteId]) : '';
   $bomFetchUrl = $hasLoadedWorkOrder ? route('app-invoice-bom', ['id' => $workOrderRouteId]) : '';
+  $allMaterialsFetchUrl = $hasLoadedWorkOrder ? route('app-invoice-all-materials', ['id' => $workOrderRouteId]) : '';
+  $allOperationsFetchUrl = $hasLoadedWorkOrder ? route('app-invoice-all-operations', ['id' => $workOrderRouteId]) : '';
   $plannedConsumptionStoreUrl = $hasLoadedWorkOrder ? route('app-invoice-planned-consumption', ['id' => $workOrderRouteId]) : '';
   $plannedConsumptionRemoveUrl = $hasLoadedWorkOrder ? route('app-invoice-planned-consumption-remove', ['id' => $workOrderRouteId]) : '';
   $pageTitle = 'eNalog.app';
@@ -2454,6 +2456,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 @include('content.new-components.sirovina-scan', [
   'productsFetchUrl' => $productsFetchUrl,
   'bomFetchUrl' => $bomFetchUrl,
+  'allMaterialsFetchUrl' => $allMaterialsFetchUrl,
+  'allOperationsFetchUrl' => $allOperationsFetchUrl,
   'plannedConsumptionStoreUrl' => $plannedConsumptionStoreUrl,
   'defaultProductIdent' => trim((string) ($workOrder['sifra'] ?? '')),
   'defaultProductLabel' => trim((string) ($workOrder['sifra'] ?? '')) . (

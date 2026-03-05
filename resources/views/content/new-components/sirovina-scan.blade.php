@@ -1,6 +1,8 @@
 @php
   $productsEndpoint = (string) ($productsFetchUrl ?? '');
   $bomEndpoint = (string) ($bomFetchUrl ?? '');
+  $allMaterialsEndpoint = (string) ($allMaterialsFetchUrl ?? '');
+  $allOperationsEndpoint = (string) ($allOperationsFetchUrl ?? '');
   $plannedEndpoint = (string) ($plannedConsumptionStoreUrl ?? '');
   $defaultProduct = trim((string) ($defaultProductIdent ?? ''));
   $defaultProductLabel = trim((string) ($defaultProductLabel ?? ''));
@@ -16,6 +18,8 @@
   data-bs-keyboard="false"
   data-products-url="{{ $productsEndpoint }}"
   data-bom-url="{{ $bomEndpoint }}"
+  data-all-materials-url="{{ $allMaterialsEndpoint }}"
+  data-all-operations-url="{{ $allOperationsEndpoint }}"
   data-save-url="{{ $plannedEndpoint }}"
   data-default-product="{{ $defaultProduct }}"
   data-default-product-label="{{ $defaultProductLabel }}"
@@ -89,7 +93,33 @@
 
             <div class="col-12 col-lg-6 wo-bom-right-col">
               <div class="wo-bom-card wo-bom-main-card">
-                <div class="wo-bom-head-block">
+                <div class="wo-bom-field wo-bom-quick-last wo-bom-quick-persistent">
+                  <div class="wo-bom-quick-head">
+                    <label class="form-label wo-bom-section-title mb-50">Privremena sastavnica</label>
+                    <span class="wo-bom-quick-selected">Odabrano: <strong id="bom-selected-count">0</strong></span>
+                  </div>
+                  <div class="table-responsive wo-bom-quick-table-wrap">
+                    <table class="table table-sm mb-0 wo-bom-table wo-bom-quick-table">
+                      <thead>
+                        <tr>
+                          <th style="width: 80px;">Poz</th>
+                          <th style="width: 200px;">Komponenta</th>
+                          <th>Opis</th>
+                          <th style="width: 130px;" class="text-end">anGrossQty</th>
+                          <th style="width: 120px;" class="text-center">Tip</th>
+                        </tr>
+                      </thead>
+                      <tbody id="bom-quick-components-body">
+                        <tr>
+                          <td colspan="5" class="text-center text-white-50 py-2">Nema odabranih komponenti.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="wo-bom-mode-panel wo-panel-active" id="bom-mode-product-panel" data-mode-panel="product">
+                  <div class="wo-bom-head-block">
                   <div class="wo-bom-grid">
                     <div class="wo-bom-field">
                       <label class="form-label wo-bom-section-title mb-50" for="bom-product-select">Proizvod</label>
@@ -135,28 +165,53 @@
                   </div>
                 </div>
 
-                <div class="wo-bom-field wo-bom-quick-last">
-                  <div class="wo-bom-quick-head">
-                    <label class="form-label wo-bom-section-title mb-50">Privremena sastavnica</label>
-                    <span class="wo-bom-quick-selected">Odabrano: <strong id="bom-selected-count">0</strong></span>
+                </div>
+
+                <div class="wo-bom-mode-panel d-none" id="bom-mode-all-panel" data-mode-panel="all" aria-hidden="true">
+                  <div class="wo-bom-head-block mb-0">
+                    <div class="wo-bom-segment-switch" id="bom-all-type-switch" role="tablist" aria-label="Filter svih stavki">
+                      <button type="button" class="wo-bom-segment-btn is-active" data-all-type="materials" aria-selected="true">Materijali</button>
+                      <button type="button" class="wo-bom-segment-btn" data-all-type="operations" aria-selected="false">Operacije</button>
+                    </div>
                   </div>
-                  <div class="table-responsive wo-bom-quick-table-wrap">
-                    <table class="table table-sm mb-0 wo-bom-table wo-bom-quick-table">
-                      <thead>
-                        <tr>
-                          <th style="width: 80px;">Poz</th>
-                          <th style="width: 200px;">Komponenta</th>
-                          <th>Opis</th>
-                          <th style="width: 130px;" class="text-end">anGrossQty</th>
-                          <th style="width: 120px;" class="text-center">Tip</th>
-                        </tr>
-                      </thead>
-                      <tbody id="bom-quick-components-body">
-                        <tr>
-                          <td colspan="5" class="text-center text-white-50 py-2">Nema odabranih komponenti.</td>
-                        </tr>
-                      </tbody>
-                    </table>
+
+                  <div class="wo-bom-field mt-1">
+                    <label class="form-label wo-bom-section-title mb-50" for="bom-all-search-input">Pretraga</label>
+                    <input type="text" class="form-control form-control-sm" id="bom-all-search-input" placeholder="Unesite sifru ili naziv">
+                  </div>
+
+                  <div class="wo-bom-table-section mt-1">
+                    <div class="wo-bom-table-head">
+                      <h6 class="wo-bom-section-title mb-0" id="bom-all-title">Sve stavke - Materijali</h6>
+                      <span class="wo-bom-table-found">Pronadjeno: <strong id="bom-all-total-count">0</strong></span>
+                    </div>
+
+                    <div class="table-responsive wo-bom-table-wrap wo-bom-all-table-wrap">
+                      <table class="table table-sm mb-0 wo-bom-table">
+                        <thead id="bom-all-items-head">
+                          <tr>
+                            <th style="width: 70px;">#</th>
+                            <th style="width: 210px;">Sifra</th>
+                            <th>Opis</th>
+                            <th style="width: 120px;" class="text-end">Kolicina</th>
+                            <th style="width: 100px;" class="text-center">MJ</th>
+                            <th style="width: 90px;" class="text-center">Tip</th>
+                          </tr>
+                        </thead>
+                        <tbody id="bom-all-items-body">
+                          <tr>
+                            <td colspan="6" class="text-center text-white-50 py-2">Ucitajte stavke iz liste "Sve".</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div class="wo-bom-loading-overlay d-none" id="bom-all-loading-overlay" aria-hidden="true">
+                      <div class="wo-bom-loading-inner">
+                        <span class="spinner-border spinner-border-sm text-success" role="status" aria-hidden="true"></span>
+                        <span>Ucitavanje...</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -169,6 +224,11 @@
                 <button type="button" class="btn btn-success wo-scanner-open-fab" id="bom-open-quantity-btn" disabled>
                   <i class="fa fa-check me-50"></i> Nastavite
                 </button>
+              </div>
+
+              <div class="wo-bom-bottom-mode-switch" id="bom-mode-switcher" role="tablist" aria-label="Rezim prikaza">
+                <button type="button" class="wo-bom-bottom-mode-btn is-active" data-mode="product" aria-selected="true">Pretraga po proizvodu</button>
+                <button type="button" class="wo-bom-bottom-mode-btn" data-mode="all" aria-selected="false">Sve</button>
               </div>
             </div>
           </div>
@@ -266,6 +326,54 @@
     display: flex;
     flex-direction: column;
     gap: 1.35rem;
+  }
+
+  #sirovina-scanner-modal .wo-bom-right-col {
+    padding-bottom: max(5rem, calc(3.5rem + env(safe-area-inset-bottom))) !important;
+  }
+
+  #sirovina-scanner-modal .wo-bom-mode-panel {
+    width: 100%;
+    transition: opacity 0.24s ease, transform 0.24s ease;
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+
+  #sirovina-scanner-modal .wo-bom-mode-panel.wo-panel-enter {
+    opacity: 0;
+    transform: translateX(14px) scale(0.99);
+  }
+
+  #sirovina-scanner-modal .wo-bom-mode-panel.wo-panel-exit {
+    opacity: 0;
+    transform: translateX(-14px) scale(0.99);
+  }
+
+  #sirovina-scanner-modal .wo-bom-segment-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem;
+    border-radius: 999px;
+    border: 1px solid rgba(177, 189, 216, 0.24);
+    background: rgba(10, 16, 28, 0.72);
+    backdrop-filter: blur(5px);
+  }
+
+  #sirovina-scanner-modal .wo-bom-segment-btn {
+    border: 0;
+    border-radius: 999px;
+    padding: 0.35rem 0.9rem;
+    font-size: 0.78rem;
+    color: #d3ddf5;
+    background: transparent;
+    transition: all 0.2s ease;
+  }
+
+  #sirovina-scanner-modal .wo-bom-segment-btn.is-active {
+    color: #ffffff;
+    background: linear-gradient(135deg, rgba(56, 161, 131, 0.98), rgba(42, 136, 111, 0.98));
+    box-shadow: 0 8px 18px rgba(6, 8, 14, 0.34);
   }
 
   #sirovina-scanner-modal .wo-bom-main-card .wo-bom-grid,
@@ -596,6 +704,27 @@
     margin-top: 0;
   }
 
+  #sirovina-scanner-modal .wo-bom-quick-persistent {
+    position: relative;
+    padding-bottom: 0.8rem;
+    margin-bottom: 0.35rem;
+  }
+
+  #sirovina-scanner-modal .wo-bom-quick-persistent::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      rgba(177, 189, 216, 0.03),
+      rgba(177, 189, 216, 0.2),
+      rgba(177, 189, 216, 0.03)
+    );
+  }
+
   #sirovina-scanner-modal .wo-bom-quick-head {
     display: flex;
     align-items: center;
@@ -702,6 +831,43 @@
     border-radius: 10px;
     padding: 0.55rem 1.35rem 0.55rem 0.95rem;
     box-shadow: 0 8px 20px rgba(6, 8, 14, 0.45);
+  }
+
+  #sirovina-scanner-modal .wo-bom-bottom-mode-switch {
+    position: fixed;
+    left: 50%;
+    bottom: max(0.9rem, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    z-index: 1085;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem;
+    border-radius: 999px;
+    border: 1px solid rgba(179, 192, 220, 0.3);
+    background: rgba(10, 16, 28, 0.78);
+    backdrop-filter: blur(6px);
+    box-shadow: 0 12px 30px rgba(4, 7, 13, 0.45);
+  }
+
+  #sirovina-scanner-modal .wo-bom-bottom-mode-btn {
+    border: 0;
+    border-radius: 999px;
+    padding: 0.42rem 0.95rem;
+    min-width: 150px;
+    font-size: 0.78rem;
+    color: #d3ddf5;
+    background: transparent;
+    transition: all 0.22s ease;
+  }
+
+  #sirovina-scanner-modal .wo-bom-bottom-mode-btn.is-active {
+    color: #ffffff;
+    background: linear-gradient(135deg, rgba(56, 161, 131, 0.98), rgba(42, 136, 111, 0.98));
+  }
+
+  #sirovina-scanner-modal .wo-bom-all-table-wrap {
+    max-height: 530px;
   }
 
   #sirovina-scanner-modal .form-control,
@@ -846,6 +1012,10 @@
     #sirovina-scanner-modal .wo-bom-right-col {
       display: none !important;
     }
+
+    #sirovina-scanner-modal .wo-bom-bottom-mode-switch {
+      display: none !important;
+    }
   }
 
   @media (max-width: 767.98px) {
@@ -861,6 +1031,11 @@
 
     #sirovina-scanner-modal .wo-scanner-open-fab {
       padding: 0.5rem 1.15rem 0.5rem 0.82rem;
+    }
+
+    #sirovina-scanner-modal .wo-bom-bottom-mode-btn {
+      min-width: 120px;
+      padding: 0.38rem 0.75rem;
     }
 
     #sirovina-scanner-modal .wo-bom-modal-shell {
@@ -908,6 +1083,8 @@
 
     var productsUrl = modalEl.getAttribute('data-products-url') || '';
     var bomUrl = modalEl.getAttribute('data-bom-url') || '';
+    var allMaterialsUrl = modalEl.getAttribute('data-all-materials-url') || '';
+    var allOperationsUrl = modalEl.getAttribute('data-all-operations-url') || '';
     var saveUrl = modalEl.getAttribute('data-save-url') || '';
     var csrfToken = modalEl.getAttribute('data-csrf-token') || '';
     var defaultProduct = modalEl.getAttribute('data-default-product') || '';
@@ -923,6 +1100,18 @@
     var selectedCountEl = document.getElementById('bom-selected-count');
     var totalCountEl = document.getElementById('bom-total-count');
     var openQuantityBtn = document.getElementById('bom-open-quantity-btn');
+    var modeSwitcherEl = document.getElementById('bom-mode-switcher');
+    var modeButtons = modeSwitcherEl ? modeSwitcherEl.querySelectorAll('[data-mode]') : [];
+    var productModePanel = document.getElementById('bom-mode-product-panel');
+    var allModePanel = document.getElementById('bom-mode-all-panel');
+    var allTypeSwitchEl = document.getElementById('bom-all-type-switch');
+    var allTypeButtons = allTypeSwitchEl ? allTypeSwitchEl.querySelectorAll('[data-all-type]') : [];
+    var allSearchInput = document.getElementById('bom-all-search-input');
+    var allItemsTitleEl = document.getElementById('bom-all-title');
+    var allItemsHeadEl = document.getElementById('bom-all-items-head');
+    var allItemsBodyEl = document.getElementById('bom-all-items-body');
+    var allItemsTotalEl = document.getElementById('bom-all-total-count');
+    var allLoadingOverlay = document.getElementById('bom-all-loading-overlay');
 
     var confirmModalEl = document.getElementById('confirm-weight-modal');
     var confirmLabelEl = document.getElementById('scanned-material-name');
@@ -948,7 +1137,13 @@
       select2EventsBound: false,
       proceedSource: 'manual',
       fineAdjustRows: [],
-      saving: false
+      saving: false,
+      activeMode: 'product',
+      allType: 'materials',
+      allRows: [],
+      allLoading: false,
+      allRequestSeq: 0,
+      allSearchDebounce: null
     };
 
     function setStatus(text, tone) {
@@ -1182,6 +1377,213 @@
 
       bomLoadingOverlay.classList.toggle('d-none', !isLoading);
       bomLoadingOverlay.setAttribute('aria-hidden', isLoading ? 'false' : 'true');
+    }
+
+    function setAllLoading(isLoading) {
+      state.allLoading = Boolean(isLoading);
+
+      if (!allLoadingOverlay) {
+        return;
+      }
+
+      allLoadingOverlay.classList.toggle('d-none', !isLoading);
+      allLoadingOverlay.setAttribute('aria-hidden', isLoading ? 'false' : 'true');
+    }
+
+    function formatQuantity(value) {
+      var parsed = Number(value || 0);
+      if (!Number.isFinite(parsed)) {
+        return '0';
+      }
+
+      return parsed.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+    }
+
+    function allTypeLabel() {
+      return state.allType === 'operations' ? 'Operacije' : 'Materijali';
+    }
+
+    function allEndpointByType(type) {
+      return type === 'operations' ? allOperationsUrl : allMaterialsUrl;
+    }
+
+    function updateModeButtons() {
+      if (!modeButtons || modeButtons.length === 0) {
+        return;
+      }
+
+      Array.prototype.forEach.call(modeButtons, function (button) {
+        var mode = String(button.getAttribute('data-mode') || '').trim();
+        var isActive = mode === state.activeMode;
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+    }
+
+    function updateAllTypeButtons() {
+      if (!allTypeButtons || allTypeButtons.length === 0) {
+        return;
+      }
+
+      Array.prototype.forEach.call(allTypeButtons, function (button) {
+        var type = String(button.getAttribute('data-all-type') || '').trim();
+        var isActive = type === state.allType;
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+    }
+
+    function showModePanel(nextMode) {
+      var normalizedMode = nextMode === 'all' ? 'all' : 'product';
+      var fromPanel = state.activeMode === 'all' ? allModePanel : productModePanel;
+      var toPanel = normalizedMode === 'all' ? allModePanel : productModePanel;
+
+      if (!fromPanel || !toPanel || normalizedMode === state.activeMode) {
+        state.activeMode = normalizedMode;
+        updateModeButtons();
+        if (state.activeMode === 'all') {
+          loadAllRows();
+        }
+        return;
+      }
+
+      state.activeMode = normalizedMode;
+      updateModeButtons();
+
+      toPanel.classList.remove('d-none', 'wo-panel-exit');
+      toPanel.classList.add('wo-panel-enter');
+      toPanel.setAttribute('aria-hidden', 'false');
+
+      window.requestAnimationFrame(function () {
+        toPanel.classList.remove('wo-panel-enter');
+      });
+
+      fromPanel.classList.add('wo-panel-exit');
+
+      window.setTimeout(function () {
+        fromPanel.classList.add('d-none');
+        fromPanel.classList.remove('wo-panel-exit');
+        fromPanel.setAttribute('aria-hidden', 'true');
+      }, 230);
+
+      if (normalizedMode === 'all') {
+        loadAllRows();
+      }
+    }
+
+    function renderAllRows() {
+      if (!allItemsBodyEl) {
+        return;
+      }
+
+      var rows = Array.isArray(state.allRows) ? state.allRows : [];
+
+      if (allItemsTitleEl) {
+        allItemsTitleEl.textContent = 'Sve stavke - ' + allTypeLabel();
+      }
+
+      if (allItemsHeadEl) {
+        allItemsHeadEl.innerHTML = '' +
+          '<tr>' +
+            '<th style="width: 70px;">#</th>' +
+            '<th style="width: 210px;">Sifra</th>' +
+            '<th>Opis</th>' +
+            '<th style="width: 120px;" class="text-end">Kolicina</th>' +
+            '<th style="width: 100px;" class="text-center">MJ</th>' +
+            '<th style="width: 90px;" class="text-center">Tip</th>' +
+          '</tr>';
+      }
+
+      if (!Array.isArray(rows) || rows.length === 0) {
+        allItemsBodyEl.innerHTML = '<tr><td colspan="6" class="text-center text-white-50 py-2">Nema stavki za odabrani filter.</td></tr>';
+        if (allItemsTotalEl) {
+          allItemsTotalEl.textContent = '0';
+        }
+        return;
+      }
+
+      var html = rows.map(function (row, index) {
+        var code = escapeHtml(row && row.acIdentChild ? row.acIdentChild : '-');
+        var description = escapeHtml(row && row.acDescr ? row.acDescr : '-');
+        var quantity = formatQuantity(row && row.anGrossQty ? row.anGrossQty : 0);
+        var unit = escapeHtml(row && row.acUM ? row.acUM : '-');
+        var type = escapeHtml(row && row.acOperationType ? row.acOperationType : (state.allType === 'operations' ? 'O' : 'M'));
+
+        return '' +
+          '<tr>' +
+            '<td>' + (index + 1) + '</td>' +
+            '<td class="fw-semibold">' + code + '</td>' +
+            '<td>' + description + '</td>' +
+            '<td class="text-end">' + quantity + '</td>' +
+            '<td class="text-center">' + unit + '</td>' +
+            '<td class="text-center">' + type + '</td>' +
+          '</tr>';
+      }).join('');
+
+      allItemsBodyEl.innerHTML = html;
+      if (allItemsTotalEl) {
+        allItemsTotalEl.textContent = String(rows.length);
+      }
+    }
+
+    function loadAllRows() {
+      var endpoint = allEndpointByType(state.allType);
+
+      if (!endpoint) {
+        state.allRows = [];
+        renderAllRows();
+        return Promise.resolve();
+      }
+
+      state.allRequestSeq += 1;
+      var requestSeq = state.allRequestSeq;
+      setAllLoading(true);
+
+      var search = allSearchInput ? String(allSearchInput.value || '').trim() : '';
+      var url = buildUrl(endpoint, {
+        q: search,
+        limit: 100
+      });
+
+      return fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+        .then(parseResponse)
+        .then(function (payload) {
+          if (requestSeq !== state.allRequestSeq) {
+            return;
+          }
+
+          state.allRows = Array.isArray(payload && payload.data) ? payload.data.slice(0, 100) : [];
+          renderAllRows();
+        })
+        .catch(function () {
+          if (requestSeq !== state.allRequestSeq) {
+            return;
+          }
+
+          state.allRows = [];
+          renderAllRows();
+        })
+        .finally(function () {
+          if (requestSeq === state.allRequestSeq) {
+            setAllLoading(false);
+          }
+        });
+    }
+
+    function scheduleAllRowsLoad() {
+      if (state.allSearchDebounce) {
+        window.clearTimeout(state.allSearchDebounce);
+      }
+
+      state.allSearchDebounce = window.setTimeout(function () {
+        loadAllRows();
+      }, 200);
     }
 
     function markProceedSource(source) {
@@ -1942,6 +2344,38 @@
       });
     }
 
+    if (modeButtons && modeButtons.length > 0) {
+      Array.prototype.forEach.call(modeButtons, function (button) {
+        button.addEventListener('click', function () {
+          var mode = String(button.getAttribute('data-mode') || '').trim();
+          showModePanel(mode);
+        });
+      });
+    }
+
+    if (allTypeButtons && allTypeButtons.length > 0) {
+      Array.prototype.forEach.call(allTypeButtons, function (button) {
+        button.addEventListener('click', function () {
+          var nextType = String(button.getAttribute('data-all-type') || '').trim();
+          var normalizedType = nextType === 'operations' ? 'operations' : 'materials';
+
+          if (normalizedType === state.allType) {
+            return;
+          }
+
+          state.allType = normalizedType;
+          updateAllTypeButtons();
+          loadAllRows();
+        });
+      });
+    }
+
+    if (allSearchInput) {
+      allSearchInput.addEventListener('input', function () {
+        scheduleAllRowsLoad();
+      });
+    }
+
     window.sirovinaScannerProceedFromBarcode = function () {
       markProceedSource('barcode');
       openProceedFlow('barcode');
@@ -1965,6 +2399,29 @@
 
     modalEl.addEventListener('show.bs.modal', function () {
       markProceedSource('manual');
+      state.activeMode = 'product';
+      state.allType = 'materials';
+      state.allRows = [];
+
+      if (productModePanel) {
+        productModePanel.classList.remove('d-none', 'wo-panel-exit', 'wo-panel-enter');
+        productModePanel.setAttribute('aria-hidden', 'false');
+      }
+
+      if (allModePanel) {
+        allModePanel.classList.add('d-none');
+        allModePanel.classList.remove('wo-panel-exit', 'wo-panel-enter');
+        allModePanel.setAttribute('aria-hidden', 'true');
+      }
+
+      if (allSearchInput) {
+        allSearchInput.value = '';
+      }
+
+      updateModeButtons();
+      updateAllTypeButtons();
+      renderAllRows();
+
       var invoiceNumberNode = document.querySelector('.invoice-number');
       if (rnNumberEl) {
         rnNumberEl.textContent = invoiceNumberNode ? invoiceNumberNode.textContent.trim() : '-';
@@ -2019,6 +2476,13 @@
     modalEl.addEventListener('hidden.bs.modal', function () {
       showError('');
       setBomLoading(false);
+      setAllLoading(false);
+
+      if (state.allSearchDebounce) {
+        window.clearTimeout(state.allSearchDebounce);
+        state.allSearchDebounce = null;
+      }
+
       var backdrop = document.querySelector('.modal-backdrop');
       if (backdrop) {
         backdrop.classList.remove('sirovina-scanner-backdrop');

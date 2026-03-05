@@ -4,6 +4,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\LanguageController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AppsController;
+use App\Http\Controllers\MaterialsController;
+use App\Http\Controllers\OperationsController;
 use App\Http\Controllers\WorkOrderController;
 use App\Http\Controllers\UserInterfaceController;
 use App\Http\Controllers\CardsController;
@@ -64,6 +66,8 @@ Route::middleware('auth:web')->group(function () {
         Route::post('invoice/preview/{id}/priority', [WorkOrderController::class, 'updateInvoicePriority'])->name('app-invoice-update-priority');
         Route::get('invoice/preview/{id}/products', [WorkOrderController::class, 'workOrderProducts'])->name('app-invoice-products');
         Route::get('invoice/preview/{id}/bom', [WorkOrderController::class, 'workOrderBom'])->name('app-invoice-bom');
+        Route::get('invoice/preview/{id}/all-materials', [MaterialsController::class, 'scannerIndex'])->name('app-invoice-all-materials');
+        Route::get('invoice/preview/{id}/all-operations', [OperationsController::class, 'scannerIndex'])->name('app-invoice-all-operations');
         Route::post('invoice/preview/{id}/planned-consumption', [WorkOrderController::class, 'storePlannedConsumption'])->name('app-invoice-planned-consumption');
         Route::post('invoice/preview/{id}/planned-consumption/remove', [WorkOrderController::class, 'removePlannedConsumptionItem'])->name('app-invoice-planned-consumption-remove');
         Route::get('invoice/edit', [AppsController::class, 'invoice_edit'])->name('app-invoice-edit');
