@@ -4,24 +4,49 @@ $(function () {
   var tableElement = $('#material-barcode-table');
   var config = window.materialBarcodeGeneratorConfig || {};
   var dataUrl = (config.dataUrl || '').toString().trim();
+  var stockAdjustUrl = (config.stockAdjustUrl || '').toString().trim();
+  var canAdjustStock = !!config.canAdjustStock;
+  var csrfToken = $('meta[name="csrf-token"]').attr('content') || '';
   var modalElement = document.getElementById('material-barcode-modal');
   var modalNameElement = document.getElementById('material-barcode-modal-name');
   var modalCodeElement = document.getElementById('material-barcode-modal-code');
   var modalErrorElement = document.getElementById('material-barcode-modal-error');
   var modalPreviewElement = document.getElementById('material-barcode-modal-preview');
   var downloadButton = document.getElementById('material-barcode-download-btn');
+  var stockModalElement = document.getElementById('material-stock-modal');
+  var stockModalSubtitleElement = document.getElementById('material-stock-modal-subtitle');
+  var stockModalCodeElement = document.getElementById('material-stock-modal-code');
+  var stockModalNameElement = document.getElementById('material-stock-modal-name');
+  var stockModalUnitElement = document.getElementById('material-stock-modal-unit');
+  var stockModalWarehouseElement = document.getElementById('material-stock-modal-warehouse');
+  var stockModalCurrentElement = document.getElementById('material-stock-modal-current');
+  var stockModalDeltaElement = document.getElementById('material-stock-modal-delta');
+  var stockModalTargetInput = document.getElementById('material-stock-modal-target-input');
+  var stockModalSaveButton = document.getElementById('material-stock-modal-save-btn');
+  var stockModalErrorElement = document.getElementById('material-stock-modal-error');
+  var stockModalSuccessElement = document.getElementById('material-stock-modal-success');
   var currentSvgMarkup = '';
   var currentMaterialCode = '';
+  var activeStockMaterial = null;
+  var stockRequestInFlight = false;
   var tableLoadingRequestCount = 0;
   var overlaySafetyTimer = null;
   var hasCompletedInitialTableLoad = false;
-
-  var sortableColumnMap = {
-    0: 'material_code',
-    1: 'material_name',
-    2: 'material_um',
-    3: 'material_qty'
-  };
+  var dataTable;
+  var sortableColumnMap = canAdjustStock
+    ? {
+        0: 'material_code',
+        1: 'material_name',
+        2: 'material_um',
+        3: 'material_warehouse',
+        4: 'material_qty'
+      }
+    : {
+        0: 'material_code',
+        1: 'material_name',
+        2: 'material_um',
+        3: 'material_qty'
+      };
 
   var code39Patterns = {
     '0': 'nnnwwnwnn',
@@ -34,32 +59,32 @@ $(function () {
     '7': 'nnnwnnwnw',
     '8': 'wnnwnnwnn',
     '9': 'nnwwnnwnn',
-    'A': 'wnnnnwnnw',
-    'B': 'nnwnnwnnw',
-    'C': 'wnwnnwnnn',
-    'D': 'nnnnwwnnw',
-    'E': 'wnnnwwnnn',
-    'F': 'nnwnwwnnn',
-    'G': 'nnnnnwwnw',
-    'H': 'wnnnnwwnn',
-    'I': 'nnwnnwwnn',
-    'J': 'nnnnwwwnn',
-    'K': 'wnnnnnnww',
-    'L': 'nnwnnnnww',
-    'M': 'wnwnnnnwn',
-    'N': 'nnnnwnnww',
-    'O': 'wnnnwnnwn',
-    'P': 'nnwnwnnwn',
-    'Q': 'nnnnnnwww',
-    'R': 'wnnnnnwwn',
-    'S': 'nnwnnnwwn',
-    'T': 'nnnnwnwwn',
-    'U': 'wwnnnnnnw',
-    'V': 'nwwnnnnnw',
-    'W': 'wwwnnnnnn',
-    'X': 'nwnnwnnnw',
-    'Y': 'wwnnwnnnn',
-    'Z': 'nwwnwnnnn',
+    A: 'wnnnnwnnw',
+    B: 'nnwnnwnnw',
+    C: 'wnwnnwnnn',
+    D: 'nnnnwwnnw',
+    E: 'wnnnwwnnn',
+    F: 'nnwnwwnnn',
+    G: 'nnnnnwwnw',
+    H: 'wnnnnwwnn',
+    I: 'nnwnnwwnn',
+    J: 'nnnnwwwnn',
+    K: 'wnnnnnnww',
+    L: 'nnwnnnnww',
+    M: 'wnwnnnnwn',
+    N: 'nnnnwnnww',
+    O: 'wnnnwnnwn',
+    P: 'nnwnwnnwn',
+    Q: 'nnnnnnwww',
+    R: 'wnnnnnwwn',
+    S: 'nnwnnnwwn',
+    T: 'nnnnwnwwn',
+    U: 'wwnnnnnnw',
+    V: 'nwwnnnnnw',
+    W: 'wwwnnnnnn',
+    X: 'nwnnwnnnw',
+    Y: 'wwnnwnnnn',
+    Z: 'nwwnwnnnn',
     '-': 'nwnnnnwnw',
     '.': 'wwnnnnwnn',
     ' ': 'nwwnnnwnn',
@@ -83,6 +108,11 @@ $(function () {
       .replace(/'/g, '&apos;');
   }
 
+  function toFiniteNumber(value, fallbackValue) {
+    var numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : fallbackValue;
+  }
+
   function formatQuantity(value) {
     var numericValue = Number(value);
 
@@ -101,6 +131,34 @@ $(function () {
       minimumFractionDigits: 0,
       maximumFractionDigits: 3
     });
+  }
+
+  function formatSignedQuantity(value) {
+    var numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+      return '0';
+    }
+
+    if (numericValue > 0) {
+      return '+' + formatQuantity(numericValue);
+    }
+
+    return formatQuantity(numericValue);
+  }
+
+  function formatInputQuantity(value) {
+    var numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+      return '';
+    }
+
+    if (Math.abs(numericValue % 1) < 0.000001) {
+      return String(Math.trunc(numericValue));
+    }
+
+    return numericValue.toFixed(3).replace(/\.?0+$/, '');
   }
 
   function normalizeBarcodeValue(value) {
@@ -181,10 +239,10 @@ $(function () {
       var pattern = code39Patterns[character];
 
       if (!pattern) {
-        throw new Error('Barcode sadrži znak koji nije podrzan za SVG etiketu: ' + character);
+        throw new Error('Barcode sadrzi znak koji nije podrzan za SVG etiketu: ' + character);
       }
 
-      pattern.split('').forEach(function (unit, patternIndex) {
+      pattern.split('').forEach(function (unit) {
         width += unit === 'w' ? wide : narrow;
       });
 
@@ -218,9 +276,9 @@ $(function () {
       '<?xml version="1.0" encoding="UTF-8"?>',
       '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + (topPadding + barHeight + bottomPadding) + '" viewBox="0 0 ' + width + ' ' + (topPadding + barHeight + bottomPadding) + '" role="img" aria-label="' + escapeXml(codeLabel) + '">',
       '<rect width="100%" height="100%" fill="#ffffff" />',
-      '<text x="' + (width / 2) + '" y="18" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="' + labelSize + '" font-weight="600" fill="#1f2430">' + escapeXml(label) + '</text>',
+      '<text x="' + width / 2 + '" y="18" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="' + labelSize + '" font-weight="600" fill="#1f2430">' + escapeXml(label) + '</text>',
       rects.join(''),
-      '<text x="' + (width / 2) + '" y="' + (topPadding + barHeight + 22) + '" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" letter-spacing="1.2" fill="#1f2430">' + escapeXml(codeLabel) + '</text>',
+      '<text x="' + width / 2 + '" y="' + (topPadding + barHeight + 22) + '" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" letter-spacing="1.2" fill="#1f2430">' + escapeXml(codeLabel) + '</text>',
       '</svg>'
     ].join('');
   }
@@ -239,7 +297,7 @@ $(function () {
     }
 
     if (modalCodeElement) {
-      modalCodeElement.textContent = materialCode ? ('Barcode / šifra: ' + materialCode) : '-';
+      modalCodeElement.textContent = materialCode ? 'Barcode / sifra: ' + materialCode : '-';
     }
 
     if (downloadButton) {
@@ -305,7 +363,7 @@ $(function () {
       '<div class="invoice-table-loading-overlay" aria-hidden="true">' +
         '<div class="invoice-table-loading-overlay-content">' +
           '<div class="spinner-border invoice-table-loading-spinner" role="status" aria-hidden="true"></div>' +
-          '<div class="invoice-table-loading-message">Učitavanje rezultata</div>' +
+          '<div class="invoice-table-loading-message">Ucitavanje rezultata</div>' +
         '</div>' +
       '</div>'
     );
@@ -337,7 +395,6 @@ $(function () {
     }
 
     hostRect = hostElement.getBoundingClientRect();
-
     tableRect = tableNode.getBoundingClientRect();
     headerHeight = tableElement.find('thead').outerHeight() || 0;
     top = Math.max(0, tableRect.top - hostRect.top + headerHeight);
@@ -474,13 +531,213 @@ $(function () {
     }, 1000);
   }
 
-  if (!tableElement.length || !dataUrl) {
-    return;
+  function updateStockModalDetails(materialRow) {
+    var materialQty = toFiniteNumber(materialRow && materialRow.material_qty, 0);
+    var materialWarehouse = materialRow && materialRow.material_warehouse ? materialRow.material_warehouse : '';
+
+    if (stockModalSubtitleElement) {
+      stockModalSubtitleElement.textContent = 'Materijal: ' + (materialRow && materialRow.material_name ? materialRow.material_name : '-');
+    }
+
+    if (stockModalCodeElement) {
+      stockModalCodeElement.textContent = materialRow && materialRow.material_code ? materialRow.material_code : '-';
+    }
+
+    if (stockModalNameElement) {
+      stockModalNameElement.textContent = materialRow && materialRow.material_name ? materialRow.material_name : '-';
+    }
+
+    if (stockModalUnitElement) {
+      stockModalUnitElement.textContent = materialRow && materialRow.material_um ? materialRow.material_um : '-';
+    }
+
+    if (stockModalWarehouseElement) {
+      stockModalWarehouseElement.textContent = materialWarehouse || '-';
+    }
+
+    if (stockModalCurrentElement) {
+      stockModalCurrentElement.textContent = formatQuantity(materialQty);
+    }
   }
 
-  $(window).on('resize.materialBarcodeTableOverlay', function () {
-    updateTableLoadingOverlayBounds();
-  });
+  function clearStockMessages() {
+    if (stockModalErrorElement) {
+      stockModalErrorElement.classList.add('d-none');
+      stockModalErrorElement.textContent = '';
+    }
+
+    if (stockModalSuccessElement) {
+      stockModalSuccessElement.classList.add('d-none');
+      stockModalSuccessElement.textContent = '';
+    }
+  }
+
+  function setStockMessage(type, message) {
+    clearStockMessages();
+
+    if (type === 'success' && stockModalSuccessElement) {
+      stockModalSuccessElement.textContent = message;
+      stockModalSuccessElement.classList.remove('d-none');
+      return;
+    }
+
+    if (type === 'error' && stockModalErrorElement) {
+      stockModalErrorElement.textContent = message;
+      stockModalErrorElement.classList.remove('d-none');
+    }
+  }
+
+  function syncStockDeltaPreview() {
+    var currentQty = toFiniteNumber(activeStockMaterial && activeStockMaterial.material_qty, 0);
+    var nextQty = stockModalTargetInput ? Number(stockModalTargetInput.value) : NaN;
+    var deltaValue = Number.isFinite(nextQty) ? nextQty - currentQty : 0;
+
+    if (stockModalDeltaElement) {
+      stockModalDeltaElement.textContent = formatSignedQuantity(deltaValue);
+    }
+  }
+
+  function openStockModal(materialRow) {
+    var modalInstance;
+
+    if (!canAdjustStock || !stockModalElement || !window.bootstrap || !window.bootstrap.Modal || !materialRow) {
+      return;
+    }
+
+    activeStockMaterial = $.extend({}, materialRow);
+    clearStockMessages();
+    updateStockModalDetails(activeStockMaterial);
+
+    if (stockModalTargetInput) {
+      stockModalTargetInput.value = formatInputQuantity(activeStockMaterial.material_qty);
+    }
+
+    syncStockDeltaPreview();
+    modalInstance = window.bootstrap.Modal.getOrCreateInstance(stockModalElement);
+    modalInstance.show();
+  }
+
+  function resolveRowData(rowElement) {
+    var rowData = dataTable.row(rowElement).data();
+
+    if (!rowData && rowElement.hasClass('child')) {
+      rowData = dataTable.row(rowElement.prev()).data();
+    }
+
+    return rowData || null;
+  }
+
+  function resolveRowDataFromTrigger(triggerElement) {
+    return resolveRowData($(triggerElement).closest('tr'));
+  }
+
+  function extractAjaxErrorMessage(xhr, fallbackMessage) {
+    var responseJson = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+    var errors = responseJson && responseJson.errors ? responseJson.errors : null;
+    var firstErrorKey;
+
+    if (responseJson && responseJson.message) {
+      return responseJson.message;
+    }
+
+    if (errors) {
+      firstErrorKey = Object.keys(errors)[0];
+      if (firstErrorKey && errors[firstErrorKey] && errors[firstErrorKey][0]) {
+        return errors[firstErrorKey][0];
+      }
+    }
+
+    return fallbackMessage;
+  }
+
+  function submitStockAdjustment() {
+    var targetValueRaw;
+    var targetValue;
+    var requestHeaders = {
+      Accept: 'application/json'
+    };
+
+    if (!canAdjustStock || !stockAdjustUrl || !activeStockMaterial || stockRequestInFlight) {
+      return;
+    }
+
+    targetValueRaw = stockModalTargetInput ? $.trim(stockModalTargetInput.value || '') : '';
+    if (targetValueRaw === '') {
+      setStockMessage('error', 'Unesite novu vrijednost zalihe.');
+      return;
+    }
+
+    targetValue = Number(targetValueRaw);
+    if (!Number.isFinite(targetValue)) {
+      setStockMessage('error', 'Nova zaliha mora biti broj.');
+      return;
+    }
+
+    if (csrfToken) {
+      requestHeaders['X-CSRF-TOKEN'] = csrfToken;
+    }
+
+    stockRequestInFlight = true;
+    clearStockMessages();
+
+    if (stockModalSaveButton) {
+      stockModalSaveButton.disabled = true;
+    }
+
+    $.ajax({
+      url: stockAdjustUrl,
+      method: 'POST',
+      dataType: 'json',
+      contentType: 'application/json; charset=UTF-8',
+      headers: requestHeaders,
+      data: JSON.stringify({
+        adjust_mode: 'manual_materials_list',
+        items: [
+          {
+            material_code: activeStockMaterial.material_code || '',
+            warehouse: activeStockMaterial.material_warehouse || '',
+            new_stock_value: targetValue
+          }
+        ]
+      }),
+      success: function (response) {
+        var responseItems = response && response.data && Array.isArray(response.data.items) ? response.data.items : [];
+        var updatedItem = responseItems.length ? responseItems[0] : null;
+
+        activeStockMaterial.material_qty =
+          updatedItem && updatedItem.new_stock_value !== undefined
+            ? toFiniteNumber(updatedItem.new_stock_value, targetValue)
+            : targetValue;
+
+        if (updatedItem && updatedItem.warehouse !== undefined) {
+          activeStockMaterial.material_warehouse = (updatedItem.warehouse || '').toString().trim();
+        }
+
+        updateStockModalDetails(activeStockMaterial);
+
+        if (stockModalTargetInput) {
+          stockModalTargetInput.value = formatInputQuantity(activeStockMaterial.material_qty);
+        }
+
+        syncStockDeltaPreview();
+        setStockMessage('success', response && response.message ? response.message : 'Zaliha je uspjesno azurirana.');
+
+        if (dataTable) {
+          dataTable.ajax.reload(null, false);
+        }
+      },
+      error: function (xhr) {
+        setStockMessage('error', extractAjaxErrorMessage(xhr, 'Ne mogu azurirati zalihu.'));
+      },
+      complete: function () {
+        stockRequestInFlight = false;
+
+        if (stockModalSaveButton) {
+          stockModalSaveButton.disabled = false;
+        }
+      }
+    });
+  }
 
   function runTableRequest(requestData, callback, requestPayload, skipBeginLoading) {
     if (!skipBeginLoading) {
@@ -515,7 +772,15 @@ $(function () {
     });
   }
 
-  var dataTable = tableElement.DataTable({
+  if (!tableElement.length || !dataUrl) {
+    return;
+  }
+
+  $(window).on('resize.materialBarcodeTableOverlay', function () {
+    updateTableLoadingOverlayBounds();
+  });
+
+  dataTable = tableElement.DataTable({
     processing: false,
     serverSide: true,
     responsive: true,
@@ -540,47 +805,96 @@ $(function () {
 
       runTableRequest(requestData, callback, requestPayload, false);
     },
-    columns: [
-      { data: 'material_code' },
-      { data: 'material_name' },
-      { data: 'material_um' },
-      { data: 'material_qty' }
-    ],
-    columnDefs: [
-      {
-        targets: 0,
-        className: 'material-code-cell',
-        render: function (data) {
-          var value = (data || '').toString().trim();
-          return value ? escapeHtml(value) : '<span class="text-muted">-</span>';
+    columns: (function () {
+      var columns = [
+        { data: 'material_code' },
+        { data: 'material_name' },
+        { data: 'material_um' }
+      ];
+
+      if (canAdjustStock) {
+        columns.push({ data: 'material_warehouse' });
+      }
+
+      columns.push({ data: 'material_qty' });
+
+      if (canAdjustStock) {
+        columns.push({
+          data: null,
+          orderable: false,
+          searchable: false
+        });
+      }
+
+      return columns;
+    })(),
+    columnDefs: (function () {
+      var columnDefs = [
+        {
+          targets: 0,
+          className: 'material-code-cell',
+          render: function (data) {
+            var value = (data || '').toString().trim();
+            return value ? escapeHtml(value) : '<span class="text-muted">-</span>';
+          }
+        },
+        {
+          targets: 1,
+          render: function (data) {
+            var value = (data || '').toString().trim();
+            return value ? escapeHtml(value) : '<span class="text-muted">-</span>';
+          }
+        },
+        {
+          targets: 2,
+          className: 'material-unit-cell',
+          render: function (data) {
+            var value = (data || '').toString().trim();
+            return value ? escapeHtml(value) : '<span class="text-muted">-</span>';
+          }
         }
-      },
-      {
-        targets: 1,
-        render: function (data) {
-          var value = (data || '').toString().trim();
-          return value ? escapeHtml(value) : '<span class="text-muted">-</span>';
-        }
-      },
-      {
-        targets: 2,
-        className: 'material-unit-cell',
-        render: function (data) {
-          var value = (data || '').toString().trim();
-          return value ? escapeHtml(value) : '<span class="text-muted">-</span>';
-        }
-      },
-      {
-        targets: 3,
+      ];
+      var stockColumnIndex = canAdjustStock ? 4 : 3;
+
+      if (canAdjustStock) {
+        columnDefs.push({
+          targets: 3,
+          className: 'material-warehouse-cell',
+          render: function (data) {
+            var value = (data || '').toString().trim();
+            return value ? escapeHtml(value) : '<span class="text-muted">-</span>';
+          }
+        });
+      }
+
+      columnDefs.push({
+        targets: stockColumnIndex,
         className: 'text-end material-stock-cell',
         render: function (data) {
           return escapeHtml(formatQuantity(data));
         }
+      });
+
+      if (canAdjustStock) {
+        columnDefs.push({
+          targets: stockColumnIndex + 1,
+          className: 'text-end material-actions-cell',
+          render: function () {
+            return (
+              '<button type="button" class="btn btn-sm btn-outline-primary material-stock-adjust-btn">' +
+                '<i class="fa fa-edit"></i>' +
+                '<span>Prilagodi</span>' +
+              '</button>'
+            );
+          }
+        });
       }
-    ],
+
+      return columnDefs;
+    })(),
     language: {
       search: 'Pretraga:',
-      lengthMenu: 'Prikaži _MENU_ redova',
+      lengthMenu: 'Prikazi _MENU_ redova',
       info: 'Prikaz _START_ do _END_ od _TOTAL_ materijala',
       infoEmpty: 'Nema materijala za prikaz',
       infoFiltered: '(filtrirano od _MAX_ ukupno)',
@@ -589,7 +903,7 @@ $(function () {
       paginate: {
         first: 'Prva',
         last: 'Zadnja',
-        next: 'Sljedeća',
+        next: 'Sljedeca',
         previous: 'Prethodna'
       }
     }
@@ -598,14 +912,34 @@ $(function () {
   setInitialTableLoadingState(true);
   setInitialBottomControlsRowVisible(false);
 
-  tableElement.find('tbody').on('click', 'tr', function () {
+  tableElement.find('tbody').on('click', '.material-stock-adjust-btn', function (event) {
+    var rowData;
+
+    if (!canAdjustStock) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    rowData = resolveRowDataFromTrigger(this);
+
+    if (!rowData) {
+      return;
+    }
+
+    openStockModal(rowData);
+  });
+
+  tableElement.find('tbody').on('click', 'tr', function (event) {
     var rowElement = $(this);
-    var rowData = dataTable.row(rowElement).data();
+    var rowData;
     var modalInstance;
 
-    if (!rowData && rowElement.hasClass('child')) {
-      rowData = dataTable.row(rowElement.prev()).data();
+    if ($(event.target).closest('.material-stock-adjust-btn').length) {
+      return;
     }
+
+    rowData = resolveRowData(rowElement);
 
     if (!rowData || !modalElement || !window.bootstrap || !window.bootstrap.Modal) {
       return;
@@ -619,6 +953,22 @@ $(function () {
   if (downloadButton) {
     downloadButton.addEventListener('click', function () {
       downloadCurrentSvg();
+    });
+  }
+
+  if (stockModalTargetInput) {
+    stockModalTargetInput.addEventListener('input', syncStockDeltaPreview);
+    stockModalTargetInput.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        submitStockAdjustment();
+      }
+    });
+  }
+
+  if (stockModalSaveButton) {
+    stockModalSaveButton.addEventListener('click', function () {
+      submitStockAdjustment();
     });
   }
 
@@ -641,6 +991,50 @@ $(function () {
       }
 
       setEmptyPreview('Kliknite materijal u tabeli za pregled barcode etikete.');
+    });
+  }
+
+  if (stockModalElement) {
+    stockModalElement.addEventListener('hidden.bs.modal', function () {
+      activeStockMaterial = null;
+      stockRequestInFlight = false;
+      clearStockMessages();
+
+      if (stockModalSubtitleElement) {
+        stockModalSubtitleElement.textContent = '-';
+      }
+
+      if (stockModalCodeElement) {
+        stockModalCodeElement.textContent = '-';
+      }
+
+      if (stockModalNameElement) {
+        stockModalNameElement.textContent = '-';
+      }
+
+      if (stockModalUnitElement) {
+        stockModalUnitElement.textContent = '-';
+      }
+
+      if (stockModalWarehouseElement) {
+        stockModalWarehouseElement.textContent = '-';
+      }
+
+      if (stockModalCurrentElement) {
+        stockModalCurrentElement.textContent = '0';
+      }
+
+      if (stockModalDeltaElement) {
+        stockModalDeltaElement.textContent = '0';
+      }
+
+      if (stockModalTargetInput) {
+        stockModalTargetInput.value = '';
+      }
+
+      if (stockModalSaveButton) {
+        stockModalSaveButton.disabled = false;
+      }
     });
   }
 });

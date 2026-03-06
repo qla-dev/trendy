@@ -673,6 +673,10 @@
     background-color: #f8f8fc;
   }
 
+  .invoice-list-wrapper .invoice-list-table {
+    min-width: 1100px;
+  }
+
   .invoice-list-table tbody .invoice-table-loading-spacer-row > td {
     height: 250px;
     padding: 0 !important;
@@ -681,8 +685,56 @@
     background: transparent !important;
   }
 
+  .invoice-list-wrapper .card-datatable.table-responsive {
+    overflow-x: visible;
+  }
+
   .card-datatable.invoice-table-initial-loading .dataTables_wrapper > .row:last-child {
     display: none;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-'] {
+    padding-left: 0;
+    padding-right: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
+    scrollbar-gutter: stable;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-track {
+    background: var(--wo-table-scroll-track);
+    border-radius: 999px;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-thumb {
+    background: var(--wo-table-scroll-thumb);
+    border-radius: 999px;
+    border: 1px solid var(--wo-table-scroll-thumb-border);
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-thumb:hover {
+    background: var(--wo-table-scroll-thumb-hover);
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-thumb:active {
+    background: var(--wo-table-scroll-thumb-active);
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-corner {
+    background: var(--wo-table-scroll-track);
   }
 
   .invoice-table-overlay-host {

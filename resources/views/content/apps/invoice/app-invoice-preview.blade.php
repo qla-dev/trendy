@@ -1069,7 +1069,7 @@
     background: rgba(255, 255, 255, 0.12);
   }
   .swal2-popup.wo-swal-dark .wo-scan-swal-progress-fill {
-    background: #00cfe8;
+    background: #28c76f;
   }
   .dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,
   .semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,

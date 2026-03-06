@@ -63,6 +63,7 @@ class Material extends Model
             ->selectRaw("$codeExpr as material_code")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acName, ''))) as material_name")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as material_um")
+            ->selectRaw("MIN(LTRIM(RTRIM(ISNULL(s.acWarehouse, '')))) as material_warehouse")
             ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as material_qty")
             ->groupBy('i.acIdent', 'i.acName', 'i.acUM')
             ->havingRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) <> 0")
@@ -94,6 +95,7 @@ class Material extends Model
                 'acIdentChild' => $materialCode !== '' ? $materialCode : $materialName,
                 'acDescr' => $materialName !== '' ? $materialName : ($materialCode !== '' ? $materialCode : '-'),
                 'acUM' => strtoupper(substr(trim((string) ($row['material_um'] ?? '')), 0, 3)),
+                'acWarehouse' => trim((string) ($row['material_warehouse'] ?? '')),
                 'anGrossQty' => $parsedQty,
                 'acOperationType' => 'M',
             ];
@@ -129,6 +131,11 @@ class Material extends Model
                     ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(m.material_name, '')))) {$resolvedSortDir}")
                     ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(m.material_code, '')))) ASC");
                 break;
+            case 'material_warehouse':
+                $query
+                    ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(m.material_warehouse, '')))) {$resolvedSortDir}")
+                    ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(m.material_code, '')))) ASC");
+                break;
             case 'material_um':
                 $query
                     ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(m.material_um, '')))) {$resolvedSortDir}")
@@ -160,6 +167,7 @@ class Material extends Model
                     'material_code' => trim((string) ($row->material_code ?? '')),
                     'material_name' => trim((string) ($row->material_name ?? '')),
                     'material_um' => strtoupper(substr(trim((string) ($row->material_um ?? '')), 0, 3)),
+                    'material_warehouse' => trim((string) ($row->material_warehouse ?? '')),
                     'material_qty' => $materialQty,
                     'barcode_value' => trim((string) ($row->material_code ?? '')),
                 ];
@@ -564,6 +572,7 @@ class Material extends Model
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) as material_code")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acName, ''))) as material_name")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as material_um")
+            ->selectRaw("MIN(LTRIM(RTRIM(ISNULL(s.acWarehouse, '')))) as material_warehouse")
             ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as material_qty")
             ->groupBy('i.acIdent', 'i.acName', 'i.acUM');
     }

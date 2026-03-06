@@ -186,13 +186,6 @@ class MaterialsController extends Controller
         }
 
         $adjustMode = (string) ($validatedPayload['adjust_mode'] ?? 'api');
-        $username = strtolower(trim((string) ($request->user()->username ?? '')));
-
-        if ($adjustMode === 'manual_scanner' && $username !== 'kulasin.nedim') {
-            return response()->json([
-                'message' => 'Nemate dozvolu za rucno azuriranje zalihe preko skenera.',
-            ], 403);
-        }
 
         try {
             $results = Material::bulkAdjustStock(

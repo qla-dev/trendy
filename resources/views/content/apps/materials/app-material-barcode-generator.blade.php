@@ -8,6 +8,14 @@
 @endsection
 
 @section('page-style')
+@php
+  $canAdjustMaterialStock = strtolower((string) optional(auth()->user())->username) === 'kulasin.nedim';
+  $materialBarcodeGeneratorConfig = [
+      'dataUrl' => $barcodeTableUrl ?? route('app-barcode-generator-data'),
+      'stockAdjustUrl' => route('app-materials-stock-bulk-adjust'),
+      'canAdjustStock' => $canAdjustMaterialStock,
+  ];
+@endphp
 <style>
   .material-barcode-generator-wrapper {
     --wo-table-scroll-track: var(--app-scroll-track);
@@ -37,12 +45,20 @@
     background-color: #f8f8fc;
   }
 
+  .material-barcode-generator-wrapper .material-barcode-table {
+    min-width: {{ $canAdjustMaterialStock ? '980px' : '760px' }};
+  }
+
   .material-barcode-table tbody .material-barcode-loading-spacer-row > td {
     height: 180px;
     padding: 0 !important;
     border-top: 0 !important;
     border-bottom: 0 !important;
     background: transparent !important;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable.table-responsive {
+    overflow-x: visible;
   }
 
   .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child,
@@ -60,6 +76,50 @@
   .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:last-child > [class*='col-'] {
     padding-left: 0;
     padding-right: 0;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-'] {
+    padding-left: 0;
+    padding-right: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
+    scrollbar-gutter: stable;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-track {
+    background: var(--wo-table-scroll-track);
+    border-radius: 999px;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-thumb {
+    background: var(--wo-table-scroll-thumb);
+    border-radius: 999px;
+    border: 1px solid var(--wo-table-scroll-thumb-border);
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-thumb:hover {
+    background: var(--wo-table-scroll-thumb-hover);
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-thumb:active {
+    background: var(--wo-table-scroll-thumb-active);
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-corner {
+    background: var(--wo-table-scroll-track);
   }
 
   .material-barcode-generator-modal {
@@ -127,8 +187,72 @@
   }
 
   .material-barcode-table .material-stock-cell,
-  .material-barcode-table .material-unit-cell {
+  .material-barcode-table .material-unit-cell,
+  .material-barcode-table .material-warehouse-cell,
+  .material-barcode-table .material-actions-cell {
     white-space: nowrap;
+  }
+
+  .material-barcode-table .material-actions-cell {
+    width: 1%;
+  }
+
+  .material-stock-adjust-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .material-stock-modal .modal-content {
+    border-radius: 1rem;
+  }
+
+  .material-stock-modal-subtitle {
+    margin-top: 0.2rem;
+    font-size: 0.9rem;
+    color: #6e6b7b;
+  }
+
+  .material-stock-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1rem;
+  }
+
+  .material-stock-meta-item {
+    padding: 0.9rem 1rem;
+    border-radius: 0.85rem;
+    background: rgba(115, 103, 240, 0.06);
+  }
+
+  .material-stock-meta-label {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6e6b7b;
+  }
+
+  .material-stock-meta-value {
+    display: block;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+
+  .material-stock-form-block {
+    border-top: 1px solid rgba(71, 95, 123, 0.12);
+    padding-top: 1rem;
+  }
+
+  .material-stock-form-help {
+    margin-top: 0.45rem;
+    font-size: 0.88rem;
+    color: #6e6b7b;
   }
 
   .material-barcode-generator-wrapper .card-datatable {
@@ -229,6 +353,35 @@
     color: #f4f5fb;
   }
 
+  body.dark-layout .material-stock-modal-subtitle,
+  body.semi-dark-layout .material-stock-modal-subtitle,
+  .dark-layout .material-stock-modal-subtitle,
+  .semi-dark-layout .material-stock-modal-subtitle,
+  body.dark-layout .material-stock-meta-label,
+  body.semi-dark-layout .material-stock-meta-label,
+  .dark-layout .material-stock-meta-label,
+  .semi-dark-layout .material-stock-meta-label,
+  body.dark-layout .material-stock-form-help,
+  body.semi-dark-layout .material-stock-form-help,
+  .dark-layout .material-stock-form-help,
+  .semi-dark-layout .material-stock-form-help {
+    color: #b4bdd3;
+  }
+
+  body.dark-layout .material-stock-meta-item,
+  body.semi-dark-layout .material-stock-meta-item,
+  .dark-layout .material-stock-meta-item,
+  .semi-dark-layout .material-stock-meta-item {
+    background: rgba(115, 103, 240, 0.1);
+  }
+
+  body.dark-layout .material-stock-form-block,
+  body.semi-dark-layout .material-stock-form-block,
+  .dark-layout .material-stock-form-block,
+  .semi-dark-layout .material-stock-form-block {
+    border-top-color: rgba(214, 220, 236, 0.14);
+  }
+
   @media (max-width: 767.98px) {
     .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child,
     .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:last-child {
@@ -238,6 +391,10 @@
     .material-barcode-modal-preview {
       min-height: 210px;
       padding: 0.8rem;
+    }
+
+    .material-stock-meta-grid {
+      grid-template-columns: 1fr;
     }
   }
 </style>
@@ -259,12 +416,18 @@
             <th>Šifra</th>
             <th>Naziv</th>
             <th>MJ</th>
+            @if($canAdjustMaterialStock)
+              <th>SkladiÅ¡te</th>
+            @endif
             <th>Zaliha</th>
+            @if($canAdjustMaterialStock)
+              <th>Akcija</th>
+            @endif
           </tr>
         </thead>
         <tbody>
           <tr class="material-barcode-loading-spacer-row" aria-hidden="true">
-            <td colspan="4"></td>
+            <td colspan="{{ $canAdjustMaterialStock ? 6 : 4 }}"></td>
           </tr>
         </tbody>
       </table>
@@ -298,6 +461,9 @@
     </div>
   </div>
 </div>
+@if($canAdjustMaterialStock)
+  @include('content.new-components.confirm-stock')
+@endif
 @endsection
 
 @section('vendor-script')
@@ -309,9 +475,7 @@
 
 @section('page-script')
 <script>
-  window.materialBarcodeGeneratorConfig = @json([
-    'dataUrl' => $barcodeTableUrl ?? route('app-barcode-generator-data'),
-  ]);
+  window.materialBarcodeGeneratorConfig = @json($materialBarcodeGeneratorConfig);
 </script>
-<script src="{{asset('js/scripts/pages/app-material-barcode-generator.js?v=3')}}"></script>
+<script src="{{asset('js/scripts/pages/app-material-barcode-generator.js?v=4')}}"></script>
 @endsection
