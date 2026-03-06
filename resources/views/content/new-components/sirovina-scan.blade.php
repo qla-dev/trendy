@@ -60,7 +60,7 @@
                     <div class="qr-corner qr-corner-bottom-left"></div>
                     <div class="qr-corner qr-corner-bottom-right"></div>
                     <div class="qr-barcode-window"></div>
-                    <div class="qr-barcode-window-label">Barcode moze biti bilo gdje u okviru</div>
+                    <div class="qr-barcode-window-label">Barcode može biti bilo gdje u okviru</div>
 
                     <div class="qr-scan-line"></div>
 
@@ -2023,8 +2023,8 @@
             });
         })
         .catch(function (error) {
-          setScannerStatus('Postavi barcode bilo gdje u okviru i zadrzi fokus na etiketi.', 'warning');
-          showScannerError(error && error.message ? error.message : 'Barcode materijal nije pronaden.');
+          setScannerStatus('Postavi barcode bilo gdje u okviru i zadrži fokus na etiketi', 'warning');
+          showScannerError(error && error.message ? error.message : 'Barcode materijal nije pronađen');
         })
         .finally(function () {
           barcodeScannerBusy = false;
