@@ -40,11 +40,7 @@ class Material extends Model
     {
         $resolvedLimit = self::resolveScannerLimit($limit);
         $resolvedOffset = max(0, (int) $offset);
-        $normalizedSets = array_values(array_filter(array_map(function ($value) {
-            return trim((string) $value);
-        }, $materialsSets), function ($value) {
-            return $value !== '';
-        }));
+        $normalizedSets = self::normalizeMaterialsSets($materialsSets);
         $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
         $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
         $query = DB::table($stockTable)
@@ -110,13 +106,88 @@ class Material extends Model
         return $materials;
     }
 
+    public static function scannerFindByBarcode(string $barcode, array $materialsSets = []): ?array
+    {
+        $normalizedBarcode = self::normalizeScannerBarcode($barcode);
+
+        if ($normalizedBarcode === '') {
+            return null;
+        }
+
+        $normalizedSets = self::normalizeMaterialsSets($materialsSets);
+        $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
+        $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
+        $query = DB::table($itemsTable)
+            ->leftJoin($stockTable, function ($join) {
+                $join->whereRaw("LTRIM(RTRIM(ISNULL(s.acIdent, ''))) = LTRIM(RTRIM(ISNULL(i.acIdent, '')))");
+            })
+            ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) <> ''");
+
+        if (!empty($normalizedSets)) {
+            $query->whereIn(
+                DB::raw("LTRIM(RTRIM(ISNULL(i.acSetOfItem, '')))"),
+                $normalizedSets
+            );
+        }
+
+        $query->where(function (Builder $barcodeQuery) use ($normalizedBarcode) {
+            $barcodeQuery
+                ->whereRaw(self::normalizedBarcodeSql('i.acIdent') . ' = ?', [$normalizedBarcode])
+                ->orWhereRaw(self::normalizedBarcodeSql('i.acCode') . ' = ?', [$normalizedBarcode]);
+
+            if (ctype_digit($normalizedBarcode)) {
+                $numericBarcode = ltrim($normalizedBarcode, '0');
+                if ($numericBarcode === '') {
+                    $numericBarcode = '0';
+                }
+
+                $barcodeQuery
+                    ->orWhereRaw("CAST(ISNULL(i.anPLUCode, 0) as varchar(64)) = ?", [$numericBarcode])
+                    ->orWhereRaw("CAST(ISNULL(i.anPLUCode2, 0) as varchar(64)) = ?", [$numericBarcode])
+                    ->orWhereRaw("CAST(ISNULL(i.anQId, 0) as varchar(64)) = ?", [$numericBarcode]);
+            }
+        });
+
+        $row = $query
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) as material_code")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acName, ''))) as material_name")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as material_um")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acCode, ''))) as material_code_alt")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acSetOfItem, ''))) as material_set")
+            ->selectRaw("CAST(ISNULL(i.anQId, 0) as bigint) as material_qid")
+            ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as material_qty")
+            ->groupBy('i.acIdent', 'i.acName', 'i.acUM', 'i.acCode', 'i.acSetOfItem', 'i.anQId')
+            ->orderByRaw("CASE WHEN " . self::normalizedBarcodeSql('i.acIdent') . " = ? THEN 0 ELSE 1 END", [$normalizedBarcode])
+            ->orderByRaw("CASE WHEN " . self::normalizedBarcodeSql('i.acCode') . " = ? THEN 0 ELSE 1 END", [$normalizedBarcode])
+            ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(i.acIdent, '')))) ASC")
+            ->first();
+
+        if ($row === null) {
+            return null;
+        }
+
+        $materialQty = is_numeric((string) ($row->material_qty ?? null))
+            ? (float) $row->material_qty
+            : 0.0;
+
+        return [
+            'barcode' => trim((string) ($row->material_code ?? '')),
+            'barcode_field' => 'acIdent',
+            'material_code' => trim((string) ($row->material_code ?? '')),
+            'material_name' => trim((string) ($row->material_name ?? '')),
+            'material_um' => strtoupper(substr(trim((string) ($row->material_um ?? '')), 0, 3)),
+            'material_code_alt' => trim((string) ($row->material_code_alt ?? '')),
+            'material_set' => strtoupper(trim((string) ($row->material_set ?? ''))),
+            'material_qid' => is_numeric((string) ($row->material_qid ?? null))
+                ? (int) $row->material_qid
+                : null,
+            'material_qty' => $materialQty,
+        ];
+    }
+
     public static function scannerTotalCount(array $materialsSets = []): int
     {
-        $normalizedSets = array_values(array_filter(array_map(function ($value) {
-            return trim((string) $value);
-        }, $materialsSets), function ($value) {
-            return $value !== '';
-        }));
+        $normalizedSets = self::normalizeMaterialsSets($materialsSets);
 
         $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
         $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
@@ -162,6 +233,31 @@ class Material extends Model
                 $likeQuery->orWhere($column, 'like', '%' . $value . '%');
             }
         });
+    }
+
+    private static function normalizeMaterialsSets(array $materialsSets = []): array
+    {
+        return array_values(array_filter(array_map(function ($value) {
+            return trim((string) $value);
+        }, $materialsSets), function ($value) {
+            return $value !== '';
+        }));
+    }
+
+    private static function normalizeScannerBarcode(string $barcode): string
+    {
+        $value = strtoupper(trim($barcode));
+
+        if ($value === '') {
+            return '';
+        }
+
+        return preg_replace('/[^0-9A-Z]/', '', $value) ?? '';
+    }
+
+    private static function normalizedBarcodeSql(string $column): string
+    {
+        return "REPLACE(REPLACE(REPLACE(UPPER(LTRIM(RTRIM(ISNULL($column, '')))), '-', ''), ' ', ''), '/', '')";
     }
 
     private static function itemsTable(): string

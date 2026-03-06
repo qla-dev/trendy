@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Material;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -675,6 +676,87 @@ class WorkOrderController extends Controller
         }
     }
 
+    public function barcodeMaterialLookup(Request $request, string $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'barcode' => ['required', 'string', 'max:128'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravan barcode materijala.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $workOrderRow = $this->findWorkOrderRow($id);
+
+            if ($workOrderRow === null) {
+                return response()->json([
+                    'message' => 'Radni nalog nije pronađen.',
+                ], 404);
+            }
+
+            $barcode = trim((string) $validator->validated()['barcode']);
+            $workOrderKey = trim((string) $this->valueTrimmed($workOrderRow, ['acKey'], ''));
+
+            if ($workOrderKey === '') {
+                return response()->json([
+                    'message' => 'RN ključ nije pronađen.',
+                ], 422);
+            }
+
+            $material = Material::scannerFindByBarcode($barcode, self::MATERIALS_SETS);
+
+            if ($material === null) {
+                return response()->json([
+                    'message' => 'Materijal za skenirani barcode nije pronađen.',
+                ], 404);
+            }
+
+            $existingItem = $this->findExistingMaterialItemForWorkOrder(
+                $workOrderKey,
+                (string) ($material['material_code'] ?? ''),
+                (string) ($material['material_set'] ?? '')
+            );
+
+            return response()->json([
+                'data' => [
+                    'barcode' => (string) ($material['barcode'] ?? ''),
+                    'barcode_field' => (string) ($material['barcode_field'] ?? 'acIdent'),
+                    'material_code' => (string) ($material['material_code'] ?? ''),
+                    'material_name' => (string) ($material['material_name'] ?? ''),
+                    'material_um' => (string) ($material['material_um'] ?? ''),
+                    'material_set' => (string) ($material['material_set'] ?? ''),
+                    'material_qid' => $material['material_qid'] ?? null,
+                    'stock_qty' => (float) ($material['material_qty'] ?? 0),
+                    'action' => $existingItem === null ? 'insert' : 'update',
+                    'exists_on_work_order' => $existingItem !== null,
+                    'existing_item' => $existingItem === null ? null : [
+                        'qid' => $existingItem['anQId'] ?? null,
+                        'no' => $existingItem['anNo'] ?? null,
+                        'qty' => $this->workOrderItemQuantity($existingItem),
+                        'um' => trim((string) ($existingItem['acUM'] ?? '')),
+                    ],
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Barcode material lookup failed.', [
+                'id' => $id,
+                'barcode' => (string) $request->input('barcode', ''),
+                'connection' => config('database.default'),
+                'items_table' => $this->qualifiedItemTableName(),
+                'catalog_items_table' => Material::scannerSourceTable(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greška pri provjeri barcode materijala.',
+            ], 500);
+        }
+    }
+
     public function storePlannedConsumption(Request $request, string $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -682,6 +764,7 @@ class WorkOrderController extends Controller
             'quantity' => ['required', 'numeric', 'gt:0'],
             'quantity_unit' => ['nullable', 'string', 'in:AUTO,KG,MJ,RDS'],
             'description' => ['nullable', 'string', 'max:500'],
+            'save_mode' => ['nullable', 'string', 'in:manual,barcode'],
             'components' => ['required', 'array', 'min:1', 'max:100'],
             'components.*.acIdentChild' => ['required', 'string', 'max:64'],
             'components.*.anNo' => ['nullable', 'numeric'],
@@ -713,6 +796,7 @@ class WorkOrderController extends Controller
             $quantityFactor = (float) ($validated['quantity'] ?? 0);
             $quantityUnit = strtoupper(trim((string) ($validated['quantity_unit'] ?? 'AUTO')));
             $userDescription = trim((string) ($validated['description'] ?? ''));
+            $saveMode = strtolower(trim((string) ($validated['save_mode'] ?? 'manual')));
 
             if (trim($productId) === '') {
                 return response()->json([
@@ -877,6 +961,7 @@ class WorkOrderController extends Controller
                 'product_id' => $productId,
                 'quantity_factor' => $quantityFactor,
                 'quantity_unit' => $quantityUnit,
+                'save_mode' => $saveMode,
                 'description_present' => $userDescription !== '',
                 'description_length' => strlen($userDescription),
                 'requested_components_count' => count((array) ($validated['components'] ?? [])),
@@ -901,6 +986,7 @@ class WorkOrderController extends Controller
                 $userId,
                 $now,
                 $quantityUnit,
+                $saveMode,
                 $userDescription,
                 $hasNoteColumn,
                 $hasStatementColumn,
@@ -917,6 +1003,10 @@ class WorkOrderController extends Controller
                 if ($manualQIdInsert) {
                     $nextQId = ((int) ($this->newItemTableQuery()->where('acKey', $workOrderKey)->max('anQId') ?? 0)) + 1;
                 }
+
+                $existingMaterialItemsByIdent = $saveMode === 'barcode'
+                    ? $this->findExistingMaterialItemsForBarcodeSave($workOrderKey, $resolvedRows)
+                    : [];
 
                 $saved = [];
 
@@ -963,7 +1053,78 @@ class WorkOrderController extends Controller
                         continue;
                     }
 
-                    $statementMarker = $source === 'bom' ? 'PLANNED_BOM' : 'PLANNED_RAW';
+                    $componentKey = strtolower($componentId);
+                    $itemKind = $this->resolveItemKindForPreview(
+                        $operationType,
+                        (string) ($requestedRow['catalog_set'] ?? '')
+                    );
+
+                    if ($saveMode === 'barcode' && $itemKind === 'materials' && array_key_exists($componentKey, $existingMaterialItemsByIdent)) {
+                        $existingRow = $existingMaterialItemsByIdent[$componentKey];
+                        $existingQty = $this->workOrderItemQuantity($existingRow);
+                        $updatedQty = $existingQty + $plannedQty;
+                        $updatePayload = [
+                            'anPlanQty' => $updatedQty,
+                            'anQty' => $updatedQty,
+                            'anQty1' => $updatedQty,
+                            'adTimeChg' => $now,
+                            'anUserChg' => $userId,
+                        ];
+
+                        if ($resolvedUnit !== '' && trim((string) ($existingRow['acUM'] ?? '')) === '') {
+                            $updatePayload['acUM'] = $resolvedUnit;
+                        }
+
+                        if ($description !== '' && trim((string) ($existingRow['acDescr'] ?? '')) === '') {
+                            $updatePayload['acDescr'] = substr($description, 0, 80);
+                        }
+
+                        if ($hasNoteColumn && $userDescription !== '') {
+                            $updatePayload['acNote'] = substr($userDescription, 0, 4000);
+                        }
+
+                        if ($hasStatementColumn) {
+                            $updatePayload['acStatement'] = 'PLANNED_BARCODE_UPDATE';
+                        }
+
+                        $updateQuery = $this->newItemTableQuery()->where('acKey', $workOrderKey);
+
+                        if (array_key_exists('anQId', $existingRow) && $existingRow['anQId'] !== null) {
+                            $updateQuery->where('anQId', (int) $existingRow['anQId']);
+                        } elseif (array_key_exists('anNo', $existingRow) && $existingRow['anNo'] !== null) {
+                            $updateQuery->where('anNo', (int) $existingRow['anNo']);
+                        }
+
+                        $updateQuery->update($updatePayload);
+
+                        $existingMaterialItemsByIdent[$componentKey] = array_merge($existingRow, [
+                            'anPlanQty' => $updatedQty,
+                            'anQty' => $updatedQty,
+                            'anQty1' => $updatedQty,
+                            'acUM' => $updatePayload['acUM'] ?? ($existingRow['acUM'] ?? null),
+                            'acDescr' => $updatePayload['acDescr'] ?? ($existingRow['acDescr'] ?? null),
+                        ]);
+
+                        $saved[] = [
+                            'action' => 'updated',
+                            'source' => $source,
+                            'anNo' => $existingRow['anNo'] ?? null,
+                            'anQId' => $existingRow['anQId'] ?? null,
+                            'acIdent' => $componentId,
+                            'acDescr' => $description,
+                            'acUM' => $updatePayload['acUM'] ?? (trim((string) ($existingRow['acUM'] ?? '')) !== '' ? trim((string) ($existingRow['acUM'] ?? '')) : $resolvedUnit),
+                            'acOperationType' => $operationType,
+                            'anGrossQty' => $baseQty,
+                            'previous_anPlanQty' => $existingQty,
+                            'anPlanQty' => $updatedQty,
+                        ];
+
+                        continue;
+                    }
+
+                    $statementMarker = $saveMode === 'barcode'
+                        ? 'PLANNED_BARCODE'
+                        : ($source === 'bom' ? 'PLANNED_BOM' : 'PLANNED_RAW');
                     $insertPayload = [
                         'acKey' => $workOrderKey,
                         'anVariant' => $variant,
@@ -1003,6 +1164,7 @@ class WorkOrderController extends Controller
                     $this->newItemTableQuery()->insert($insertPayload);
 
                     $saved[] = [
+                        'action' => 'inserted',
                         'source' => $source,
                         'anNo' => $nextNo,
                         'anQId' => $nextQId,
@@ -1032,15 +1194,37 @@ class WorkOrderController extends Controller
                 ], 422);
             }
 
+            $updatedCount = count(array_filter($insertedRows, function (array $row) {
+                return (string) ($row['action'] ?? '') === 'updated';
+            }));
+            $insertedCount = count(array_filter($insertedRows, function (array $row) {
+                return (string) ($row['action'] ?? '') !== 'updated';
+            }));
+            $responseMessage = 'Planirana potrosnja je uspjesno sacuvana.';
+
+            if ($saveMode === 'barcode') {
+                if ($updatedCount > 0 && $insertedCount > 0) {
+                    $responseMessage = 'Barcode materijal je obraden. Azurirano: ' . $updatedCount . ', dodano: ' . $insertedCount . '.';
+                } elseif ($updatedCount > 0) {
+                    $responseMessage = 'Barcode materijal je uspjesno azuriran na radnom nalogu.';
+                } elseif ($insertedCount > 0) {
+                    $responseMessage = 'Barcode materijal je uspjesno dodan na radni nalog.';
+                }
+            }
+
             return response()->json([
                 'message' => 'Planirana potrošnja je uspjesno sacuvana.',
+                'message' => $responseMessage,
                 'data' => [
                     'work_order_id' => $id,
                     'work_order_key' => $workOrderKey,
                     'product_id' => $productId,
                     'quantity_factor' => $quantityFactor,
+                    'save_mode' => $saveMode,
                     'description' => $userDescription,
                     'saved_count' => count($insertedRows),
+                    'updated_count' => $updatedCount,
+                    'inserted_count' => $insertedCount,
                     'items' => $insertedRows,
                 ],
             ], 201);
@@ -1059,6 +1243,7 @@ class WorkOrderController extends Controller
                 'request_product_id' => (string) $request->input('product_id', ''),
                 'request_quantity' => $this->toFloatOrNull($request->input('quantity')),
                 'request_quantity_unit' => strtoupper(trim((string) $request->input('quantity_unit', 'AUTO'))),
+                'request_save_mode' => strtolower(trim((string) $request->input('save_mode', 'manual'))),
                 'request_description' => trim((string) $request->input('description', '')),
                 'request_components_count' => count((array) $request->input('components', [])),
             ]);
@@ -2196,6 +2381,120 @@ class WorkOrderController extends Controller
         }
 
         return array_values($materials);
+    }
+
+    private function findExistingMaterialItemForWorkOrder(
+        string $workOrderKey,
+        string $materialCode,
+        string $catalogSet = ''
+    ): ?array {
+        $matches = $this->findExistingMaterialItemsByCodes(
+            $workOrderKey,
+            [$materialCode],
+            [strtolower(trim($materialCode)) => strtoupper(trim($catalogSet))]
+        );
+
+        $key = strtolower(trim($materialCode));
+        return $matches[$key] ?? null;
+    }
+
+    private function findExistingMaterialItemsForBarcodeSave(string $workOrderKey, array $resolvedRows): array
+    {
+        $materialCodes = [];
+        $catalogSetsByCode = [];
+
+        foreach ($resolvedRows as $resolvedRow) {
+            $requestedRow = is_array($resolvedRow['requested'] ?? null) ? $resolvedRow['requested'] : [];
+            $materialCode = trim((string) ($requestedRow['acIdentChild'] ?? ''));
+            $catalogSet = strtoupper(trim((string) ($requestedRow['catalog_set'] ?? '')));
+
+            if ($materialCode === '') {
+                continue;
+            }
+
+            if ($this->resolveItemKindForPreview(
+                (string) ($requestedRow['acOperationType'] ?? ''),
+                $catalogSet
+            ) !== 'materials') {
+                continue;
+            }
+
+            $materialCodes[] = $materialCode;
+            $catalogSetsByCode[strtolower($materialCode)] = $catalogSet;
+        }
+
+        return $this->findExistingMaterialItemsByCodes($workOrderKey, $materialCodes, $catalogSetsByCode);
+    }
+
+    private function findExistingMaterialItemsByCodes(
+        string $workOrderKey,
+        array $materialCodes,
+        array $catalogSetsByCode = []
+    ): array {
+        $normalizedCodes = array_values(array_unique(array_filter(array_map(function ($value) {
+            return trim((string) $value);
+        }, $materialCodes), function ($value) {
+            return $value !== '';
+        })));
+
+        if ($workOrderKey === '' || empty($normalizedCodes)) {
+            return [];
+        }
+
+        $columns = $this->itemTableColumns();
+        if (!in_array('acKey', $columns, true) || !in_array('acIdent', $columns, true)) {
+            return [];
+        }
+
+        $query = $this->newItemTableQuery()
+            ->where('acKey', $workOrderKey)
+            ->whereIn('acIdent', $normalizedCodes);
+
+        foreach (['anNo', 'anQId', 'adTimeIns'] as $column) {
+            if (in_array($column, $columns, true)) {
+                $query->orderBy($column);
+            }
+        }
+
+        $rows = $query
+            ->get()
+            ->map(function ($row) {
+                return (array) $row;
+            })
+            ->values()
+            ->all();
+
+        if (empty($rows)) {
+            return [];
+        }
+
+        $matches = [];
+        foreach ($rows as $row) {
+            $materialCode = trim((string) ($row['acIdent'] ?? ''));
+            $materialKey = strtolower($materialCode);
+
+            if ($materialKey === '' || array_key_exists($materialKey, $matches)) {
+                continue;
+            }
+
+            $catalogSet = strtoupper(trim((string) ($catalogSetsByCode[$materialKey] ?? '')));
+            $itemKind = $this->resolveItemKindForPreview((string) ($row['acOperationType'] ?? ''), $catalogSet);
+
+            if ($itemKind !== 'materials') {
+                continue;
+            }
+
+            $matches[$materialKey] = $row;
+        }
+
+        return $matches;
+    }
+
+    private function workOrderItemQuantity(array $row): float
+    {
+        return (float) ($this->toFloatOrNull(
+            $row['anPlanQty'] ?? $row['anQty'] ?? $row['anQty1'] ?? 0
+        ) ?? 0);
     }
 
     private function fetchWorkOrderItemRows(string $workOrderKey): array
