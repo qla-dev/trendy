@@ -477,14 +477,42 @@
       errorEl.classList.add('d-none');
     }
 
-    function applyBackdrop() {
-      var backdrop = document.querySelector('.modal-backdrop');
-      if (!backdrop) {
-        return;
+    function activeBackdropNodes() {
+      var backdrops = Array.prototype.slice.call(document.querySelectorAll('.modal-backdrop'));
+      if (backdrops.length === 0) {
+        return [];
       }
-      backdrop.classList.add('qr-scanner-backdrop');
-      backdrop.style.backgroundColor = 'rgba(0, 0, 0, 0.985)';
-      backdrop.style.opacity = '1';
+
+      var shownBackdrops = backdrops.filter(function (node) {
+        return node.classList.contains('show');
+      });
+
+      return shownBackdrops.length > 0 ? shownBackdrops : backdrops;
+    }
+
+    function applyBackdrop() {
+      activeBackdropNodes().forEach(function (backdrop) {
+        backdrop.classList.add('qr-scanner-backdrop');
+        backdrop.style.backgroundColor = 'rgba(0, 0, 0, 0.985)';
+        backdrop.style.opacity = '1';
+      });
+    }
+
+    function clearBackdrop() {
+      activeBackdropNodes().forEach(function (backdrop) {
+        backdrop.classList.remove('qr-scanner-backdrop');
+        backdrop.style.backgroundColor = '';
+        backdrop.style.opacity = '';
+      });
+    }
+
+    function queueBackdropSync() {
+      window.requestAnimationFrame(function () {
+        applyBackdrop();
+      });
+      window.setTimeout(applyBackdrop, 0);
+      window.setTimeout(applyBackdrop, 40);
+      window.setTimeout(applyBackdrop, 120);
     }
 
     function applyMirrorState() {
@@ -744,14 +772,14 @@
     });
 
     modal.addEventListener('show.bs.modal', function () {
-      setTimeout(applyBackdrop, 40);
+      queueBackdropSync();
     });
 
     modal.addEventListener('shown.bs.modal', function () {
       redirecting = false;
       lastDecodedText = '';
       lastDecodedAt = 0;
-      applyBackdrop();
+      queueBackdropSync();
       startScanner();
     });
 
@@ -762,10 +790,7 @@
     modal.addEventListener('hidden.bs.modal', function () {
       setStatus('Skener je zaustavljen.');
       clearError();
-      var backdrop = document.querySelector('.modal-backdrop');
-      if (backdrop) {
-        backdrop.classList.remove('qr-scanner-backdrop');
-      }
+      clearBackdrop();
     });
   });
 </script>
