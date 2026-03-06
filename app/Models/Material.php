@@ -326,6 +326,198 @@ class Material extends Model
         return (int) DB::query()->fromSub($grouped, 'm')->count();
     }
 
+    public static function bulkAdjustStock(array $items, int $userId = 0, string $preferredWarehouse = ''): array
+    {
+        $normalizedItems = self::normalizeStockAdjustments($items);
+
+        if (empty($normalizedItems)) {
+            return [];
+        }
+
+        $stockTable = self::sourceSchema() . '.' . self::stockTable();
+        $normalizedPreferredWarehouse = trim($preferredWarehouse);
+
+        return DB::transaction(function () use ($normalizedItems, $userId, $stockTable, $normalizedPreferredWarehouse) {
+            $codes = array_values(array_unique(array_map(function (array $item) {
+                return (string) ($item['material_code'] ?? '');
+            }, $normalizedItems)));
+
+            $stockRows = DB::table($stockTable)
+                ->selectRaw("CAST(ISNULL(anQId, 0) as int) as stock_qid")
+                ->selectRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) as material_code")
+                ->selectRaw("LTRIM(RTRIM(ISNULL(acWarehouse, ''))) as warehouse")
+                ->selectRaw("CAST(ISNULL(anStock, 0) as float) as stock_qty")
+                ->whereIn(DB::raw("LTRIM(RTRIM(ISNULL(acIdent, '')))"), $codes)
+                ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(acIdent, '')))) ASC")
+                ->orderByRaw("CASE WHEN CAST(ISNULL(anStock, 0) as float) > 0 THEN 0 ELSE 1 END ASC")
+                ->orderByRaw("CAST(ISNULL(anStock, 0) as float) DESC")
+                ->orderBy('anQId')
+                ->get()
+                ->map(function ($row) {
+                    return (array) $row;
+                })
+                ->values()
+                ->all();
+
+            $rowsByCode = [];
+            foreach ($stockRows as $row) {
+                $codeKey = strtolower(trim((string) ($row['material_code'] ?? '')));
+                if ($codeKey === '') {
+                    continue;
+                }
+
+                if (!array_key_exists($codeKey, $rowsByCode)) {
+                    $rowsByCode[$codeKey] = [];
+                }
+
+                $rowsByCode[$codeKey][] = $row;
+            }
+
+            $defaultWarehouse = trim((string) DB::table($stockTable)->value('acWarehouse'));
+            $nextQId = null;
+            $updatesByQId = [];
+            $insertRows = [];
+            $results = [];
+            $now = now();
+
+            foreach ($normalizedItems as $item) {
+                $materialCode = trim((string) ($item['material_code'] ?? ''));
+                $codeKey = strtolower($materialCode);
+                $materialRows = $rowsByCode[$codeKey] ?? [];
+                $currentTotal = 0.0;
+
+                foreach ($materialRows as $materialRow) {
+                    $currentTotal += is_numeric((string) ($materialRow['stock_qty'] ?? null))
+                        ? (float) $materialRow['stock_qty']
+                        : 0.0;
+                }
+
+                $deltaValue = is_numeric((string) ($item['value'] ?? null))
+                    ? (float) $item['value']
+                    : null;
+                $hasNewStockValue = is_numeric((string) ($item['new_stock_value'] ?? null));
+                $targetTotal = $hasNewStockValue
+                    ? (float) $item['new_stock_value']
+                    : ($currentTotal - (float) ($deltaValue ?? 0));
+                $delta = $targetTotal - $currentTotal;
+                $warehouse = trim((string) ($item['warehouse'] ?? ''));
+
+                if (empty($materialRows)) {
+                    $resolvedWarehouse = $warehouse !== ''
+                        ? $warehouse
+                        : ($normalizedPreferredWarehouse !== '' ? $normalizedPreferredWarehouse : $defaultWarehouse);
+
+                    if ($resolvedWarehouse === '') {
+                        $results[] = [
+                            'action' => 'skipped',
+                            'material_code' => $materialCode,
+                            'value' => $deltaValue,
+                            'current_stock_value' => $currentTotal,
+                            'new_stock_value' => $targetTotal,
+                            'reason' => 'warehouse_missing',
+                        ];
+                        continue;
+                    }
+
+                    if (abs($targetTotal) <= 0.000001) {
+                        $results[] = [
+                            'action' => 'unchanged',
+                            'material_code' => $materialCode,
+                            'value' => $deltaValue,
+                            'current_stock_value' => $currentTotal,
+                            'new_stock_value' => $targetTotal,
+                            'warehouse' => $resolvedWarehouse,
+                        ];
+                        continue;
+                    }
+
+                    if ($nextQId === null) {
+                        $nextQId = ((int) (DB::table($stockTable)->max('anQId') ?? 0)) + 1;
+                    }
+
+                    $insertRows[] = [
+                        'acWarehouse' => $resolvedWarehouse,
+                        'acIdent' => $materialCode,
+                        'anStock' => $targetTotal,
+                        'anValue' => 0,
+                        'anLastPrice' => 0,
+                        'anReserved' => 0,
+                        'adTimeChg' => $now,
+                        'adTimeIns' => $now,
+                        'anUserIns' => $userId > 0 ? $userId : null,
+                        'anUserChg' => $userId > 0 ? $userId : null,
+                        'anMinStock' => -1,
+                        'anOptStock' => -1,
+                        'anMaxStock' => -1,
+                        'anQId' => $nextQId,
+                    ];
+
+                    $results[] = [
+                        'action' => 'inserted',
+                        'material_code' => $materialCode,
+                        'value' => $deltaValue,
+                        'current_stock_value' => $currentTotal,
+                        'new_stock_value' => $targetTotal,
+                        'stock_qid' => $nextQId,
+                        'warehouse' => $resolvedWarehouse,
+                    ];
+
+                    $nextQId++;
+                    continue;
+                }
+
+                $primaryRow = self::selectPrimaryStockRow(
+                    $materialRows,
+                    $warehouse !== '' ? $warehouse : $normalizedPreferredWarehouse
+                );
+
+                if ($primaryRow === null) {
+                    $results[] = [
+                        'action' => 'skipped',
+                        'material_code' => $materialCode,
+                        'value' => $deltaValue,
+                        'current_stock_value' => $currentTotal,
+                        'new_stock_value' => $targetTotal,
+                        'reason' => 'stock_row_missing',
+                    ];
+                    continue;
+                }
+
+                $primaryStock = is_numeric((string) ($primaryRow['stock_qty'] ?? null))
+                    ? (float) $primaryRow['stock_qty']
+                    : 0.0;
+                $updatedPrimaryStock = $primaryStock + $delta;
+                $stockQId = (int) ($primaryRow['stock_qid'] ?? 0);
+
+                if ($stockQId > 0 && abs($updatedPrimaryStock - $primaryStock) > 0.000001) {
+                    $updatesByQId[$stockQId] = $updatedPrimaryStock;
+                }
+
+                $results[] = [
+                    'action' => abs($updatedPrimaryStock - $primaryStock) > 0.000001 ? 'updated' : 'unchanged',
+                    'material_code' => $materialCode,
+                    'value' => $deltaValue,
+                    'current_stock_value' => $currentTotal,
+                    'new_stock_value' => $targetTotal,
+                    'stock_qid' => $stockQId > 0 ? $stockQId : null,
+                    'warehouse' => trim((string) ($primaryRow['warehouse'] ?? '')),
+                    'previous_row_stock_value' => $primaryStock,
+                    'row_stock_value' => $updatedPrimaryStock,
+                ];
+            }
+
+            if (!empty($updatesByQId)) {
+                self::bulkUpdateStockRows($updatesByQId, $userId, $now);
+            }
+
+            if (!empty($insertRows)) {
+                DB::table($stockTable)->insert($insertRows);
+            }
+
+            return $results;
+        });
+    }
+
     private static function applyLikeAny(Builder $query, array $columns, string $value): void
     {
         $value = trim($value);
@@ -383,6 +575,123 @@ class Material extends Model
         }, $materialsSets), function ($value) {
             return $value !== '';
         }));
+    }
+
+    private static function normalizeStockAdjustments(array $items): array
+    {
+        $normalized = [];
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $materialCode = trim((string) ($item['material_code'] ?? $item['code'] ?? $item['acIdent'] ?? ''));
+            if ($materialCode === '') {
+                continue;
+            }
+
+            $value = self::toNullableFloat($item['value'] ?? null);
+            $newStockValue = self::toNullableFloat($item['new_stock_value'] ?? $item['newStockValue'] ?? null);
+            if ($value === null && $newStockValue === null) {
+                continue;
+            }
+
+            $key = strtolower($materialCode);
+            if (!array_key_exists($key, $normalized)) {
+                $normalized[$key] = [
+                    'material_code' => $materialCode,
+                    'value' => $value,
+                    'new_stock_value' => $newStockValue,
+                    'warehouse' => trim((string) ($item['warehouse'] ?? '')),
+                ];
+                continue;
+            }
+
+            if ($value !== null) {
+                $normalized[$key]['value'] = (float) (($normalized[$key]['value'] ?? 0) + $value);
+            }
+
+            if ($newStockValue !== null) {
+                $normalized[$key]['new_stock_value'] = $newStockValue;
+            }
+
+            $warehouse = trim((string) ($item['warehouse'] ?? ''));
+            if ($warehouse !== '') {
+                $normalized[$key]['warehouse'] = $warehouse;
+            }
+        }
+
+        return array_values($normalized);
+    }
+
+    private static function selectPrimaryStockRow(array $rows, string $preferredWarehouse = ''): ?array
+    {
+        if (empty($rows)) {
+            return null;
+        }
+
+        $normalizedPreferredWarehouse = strtolower(trim($preferredWarehouse));
+        if ($normalizedPreferredWarehouse !== '') {
+            foreach ($rows as $row) {
+                $rowWarehouse = strtolower(trim((string) ($row['warehouse'] ?? '')));
+                if ($rowWarehouse === $normalizedPreferredWarehouse) {
+                    return $row;
+                }
+            }
+        }
+
+        return $rows[0] ?? null;
+    }
+
+    private static function bulkUpdateStockRows(array $updatesByQId, int $userId, $timestamp): void
+    {
+        if (empty($updatesByQId)) {
+            return;
+        }
+
+        $stockTable = self::sourceSchema() . '.' . self::stockTable();
+        $stockIds = array_map('intval', array_keys($updatesByQId));
+        sort($stockIds);
+
+        $caseParts = [];
+        $bindings = [];
+
+        foreach ($stockIds as $stockId) {
+            $caseParts[] = 'WHEN ' . $stockId . ' THEN ?';
+            $bindings[] = (float) $updatesByQId[$stockId];
+        }
+
+        $setParts = [
+            '[anStock] = CASE [anQId] ' . implode(' ', $caseParts) . ' ELSE [anStock] END',
+            '[adTimeChg] = ?',
+        ];
+        $bindings[] = $timestamp;
+
+        if ($userId > 0) {
+            $setParts[] = '[anUserChg] = ?';
+            $bindings[] = $userId;
+        }
+
+        DB::update(
+            'UPDATE ' . $stockTable . ' SET ' . implode(', ', $setParts) .
+            ' WHERE [anQId] IN (' . implode(', ', $stockIds) . ')',
+            $bindings
+        );
+    }
+
+    private static function toNullableFloat($value): ?float
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = trim((string) $value);
+        if ($normalized === '' || !is_numeric($normalized)) {
+            return null;
+        }
+
+        return (float) $normalized;
     }
 
     private static function normalizeScannerBarcode(string $barcode): string
