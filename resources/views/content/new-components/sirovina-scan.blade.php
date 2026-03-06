@@ -95,7 +95,7 @@
                     </div>
 
                     <div class="wo-qr-controls-row wo-qr-enhance-row">
-                      <div class="wo-qr-zoom-control d-none" id="sirovina-qr-zoom-wrap">
+                      <div class="wo-qr-zoom-control" id="sirovina-qr-zoom-wrap">
                         <label class="wo-qr-control-kicker mb-0" for="sirovina-qr-zoom-range">
                           Zoom <span id="sirovina-qr-zoom-value">1.0x</span>
                         </label>
@@ -110,7 +110,7 @@
                           disabled
                         >
                       </div>
-                      <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-subtle d-none" id="sirovina-qr-torch-btn">
+                      <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-subtle" id="sirovina-qr-torch-btn" disabled>
                         <i class="fa fa-lightbulb-o me-50"></i> Ukljuci svjetlo
                       </button>
                     </div>
@@ -252,21 +252,21 @@
 
               </div>
 
-              <div class="wo-bom-modal-footer">
-                <button type="button" class="btn btn-secondary wo-scanner-close-fab" data-bs-dismiss="modal" aria-label="Zatvori">
-                  <i class="fa fa-times me-50"></i> Zatvori
-                </button>
-                <button type="button" class="btn btn-success wo-scanner-open-fab" id="bom-open-quantity-btn" disabled>
-                  <i class="fa fa-check me-50"></i> Nastavite
-                </button>
-              </div>
-
               <div class="wo-bom-bottom-mode-switch" id="bom-mode-switcher" role="tablist" aria-label="Rezim prikaza">
                 <button type="button" class="wo-bom-bottom-mode-btn is-active" data-mode="product" aria-selected="true">Pretraga po proizvodu</button>
                 <button type="button" class="wo-bom-bottom-mode-btn" data-mode="materials" aria-selected="false">Svi materijali</button>
                 <button type="button" class="wo-bom-bottom-mode-btn" data-mode="operations" aria-selected="false">Sve operacije</button>
               </div>
             </div>
+          </div>
+
+          <div class="wo-bom-modal-footer">
+            <button type="button" class="btn btn-secondary wo-scanner-close-fab" data-bs-dismiss="modal" aria-label="Zatvori">
+              <i class="fa fa-times me-50"></i> Zatvori
+            </button>
+            <button type="button" class="btn btn-success wo-scanner-open-fab" id="bom-open-quantity-btn" disabled>
+              <i class="fa fa-check me-50"></i> Nastavite
+            </button>
           </div>
         </div>
       </div>
@@ -1245,6 +1245,10 @@
     #sirovina-scanner-modal .wo-bom-right-col {
       display: none !important;
     }
+
+    #sirovina-scanner-modal .wo-scanner-open-fab {
+      display: none !important;
+    }
   }
 
   @media (max-width: 991.98px) {
@@ -1496,26 +1500,17 @@
 
     function notify(icon, title, text) {
       if (window.Swal && typeof window.Swal.fire === 'function') {
-        var htmlElement = document.documentElement;
-        var bodyElement = document.body;
-        var htmlDataLayout = (htmlElement.getAttribute('data-layout') || '').toLowerCase();
-        var isDarkTheme =
-          htmlElement.classList.contains('dark-layout') ||
-          htmlElement.classList.contains('semi-dark-layout') ||
-          bodyElement.classList.contains('dark-layout') ||
-          bodyElement.classList.contains('semi-dark-layout') ||
-          htmlDataLayout.indexOf('dark-layout') !== -1 ||
-          htmlDataLayout.indexOf('semi-dark-layout') !== -1;
-        var popupClass = isDarkTheme ? 'wo-swal-dark' : '';
-
-        window.Swal.fire({
+        var options = {
           icon: icon,
           title: title,
-          text: text,
-          background: isDarkTheme ? '#283046' : undefined,
-          color: isDarkTheme ? '#eef4ff' : undefined,
-          customClass: popupClass ? { popup: popupClass } : undefined
-        });
+          text: text
+        };
+
+        if (typeof window.woSwalWithTheme === 'function') {
+          options = window.woSwalWithTheme(options);
+        }
+
+        window.Swal.fire(options);
         return;
       }
 
@@ -1653,10 +1648,6 @@
         barcodeZoomApplyTimer = null;
       }
 
-      if (scannerZoomWrap) {
-        scannerZoomWrap.classList.add('d-none');
-      }
-
       if (scannerZoomRange) {
         scannerZoomRange.disabled = true;
         scannerZoomRange.min = '1';
@@ -1668,7 +1659,7 @@
       updateScannerZoomLabel(1);
 
       if (scannerTorchBtn) {
-        scannerTorchBtn.classList.add('d-none');
+        scannerTorchBtn.disabled = true;
         scannerTorchBtn.classList.remove('wo-qr-btn-primary');
         scannerTorchBtn.classList.add('wo-qr-btn-subtle');
         scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> Ukljuci svjetlo';
@@ -1773,10 +1764,6 @@
       var zoomRange = scannerCapabilityRange(barcodeTrackCapabilities && barcodeTrackCapabilities.zoom);
       var zoomSetting = Number(barcodeTrackSettings && barcodeTrackSettings.zoom);
 
-      if (scannerZoomWrap) {
-        scannerZoomWrap.classList.toggle('d-none', !zoomRange);
-      }
-
       if (scannerZoomRange) {
         if (zoomRange) {
           scannerZoomRange.disabled = !barcodeScannerRunning;
@@ -1800,7 +1787,7 @@
 
       var torchSupported = scannerBooleanCapabilityEnabled(barcodeTrackCapabilities && barcodeTrackCapabilities.torch);
       if (scannerTorchBtn) {
-        scannerTorchBtn.classList.toggle('d-none', !torchSupported);
+        scannerTorchBtn.disabled = !torchSupported || !barcodeScannerRunning;
 
         if (torchSupported) {
           scannerTorchBtn.classList.toggle('wo-qr-btn-primary', barcodeTorchEnabled);
@@ -1808,6 +1795,10 @@
           scannerTorchBtn.innerHTML = barcodeTorchEnabled
             ? '<i class="fa fa-lightbulb-o me-50"></i> Ugasi svjetlo'
             : '<i class="fa fa-lightbulb-o me-50"></i> Ukljuci svjetlo';
+        } else {
+          scannerTorchBtn.classList.remove('wo-qr-btn-primary');
+          scannerTorchBtn.classList.add('wo-qr-btn-subtle');
+          scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> Ukljuci svjetlo';
         }
       }
     }

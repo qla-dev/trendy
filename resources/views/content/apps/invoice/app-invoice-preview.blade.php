@@ -2109,6 +2109,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       return resolvedOptions;
     }
 
+    window.woSwalWithTheme = swalWithTheme;
+
     if (scanLookupNotice && window.Swal && typeof window.Swal.fire === 'function') {
       var scanLookupTimerMs = 3000;
       Swal.fire(swalWithTheme({
@@ -2136,7 +2138,9 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           popup.appendChild(progress);
 
           window.requestAnimationFrame(function () {
-            fill.style.width = '100%';
+            window.requestAnimationFrame(function () {
+              fill.style.width = '100%';
+            });
           });
         }
       }));
