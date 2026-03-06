@@ -8,6 +8,10 @@
   $defaultProduct = trim((string) ($defaultProductIdent ?? ''));
   $defaultProductLabel = trim((string) ($defaultProductLabel ?? ''));
   $currentUser = auth()->user();
+  $allowManualStockAdjust = $currentUser
+    ? strtolower(trim((string) ($currentUser->username ?? ''))) === 'kulasin.nedim'
+    : false;
+  $stockAdjustWarehouse = trim((string) (($workOrder['magacin'] ?? '') ?: ''));
   $scannerRequiresManualCameraStart = $currentUser
     ? (method_exists($currentUser, 'isAdmin')
         ? (bool) $currentUser->isAdmin()
@@ -29,10 +33,13 @@
   data-all-operations-url="{{ $allOperationsEndpoint }}"
   data-barcode-lookup-url="{{ $barcodeMaterialLookupEndpoint }}"
   data-save-url="{{ $plannedEndpoint }}"
+  data-stock-adjust-url="{{ route('app-materials-stock-bulk-adjust') }}"
+  data-stock-adjust-warehouse="{{ $stockAdjustWarehouse }}"
   data-default-product="{{ $defaultProduct }}"
   data-default-product-label="{{ $defaultProductLabel }}"
   data-csrf-token="{{ csrf_token() }}"
   data-require-manual-camera-start="{{ $scannerRequiresManualCameraStart ? '1' : '0' }}"
+  data-allow-manual-stock-adjust="{{ $allowManualStockAdjust ? '1' : '0' }}"
 >
   <div class="modal-dialog modal-dialog-centered modal-xl mt-0">
     <div class="modal-content wo-bom-modal-content">
@@ -1355,10 +1362,13 @@
     var allOperationsUrl = modalEl.getAttribute('data-all-operations-url') || '';
     var barcodeLookupUrl = modalEl.getAttribute('data-barcode-lookup-url') || '';
     var saveUrl = modalEl.getAttribute('data-save-url') || '';
+    var stockAdjustUrl = modalEl.getAttribute('data-stock-adjust-url') || '';
+    var stockAdjustWarehouse = modalEl.getAttribute('data-stock-adjust-warehouse') || '';
     var csrfToken = modalEl.getAttribute('data-csrf-token') || '';
     var defaultProduct = modalEl.getAttribute('data-default-product') || '';
     var defaultProductLabel = modalEl.getAttribute('data-default-product-label') || '';
     var requireManualCameraStart = modalEl.getAttribute('data-require-manual-camera-start') === '1';
+    var allowManualStockAdjust = modalEl.getAttribute('data-allow-manual-stock-adjust') === '1';
 
     function isTabletViewport() {
       return window.matchMedia('(min-width: 768px) and (max-width: 1180px)').matches;
@@ -2443,6 +2453,209 @@
       return fullUrl.toString();
     }
 
+    function requestStockAdjustments(items, adjustMode) {
+      if (!stockAdjustUrl) {
+        return Promise.reject(new Error('API za azuriranje zalihe nije dostupna.'));
+      }
+
+      return fetch(stockAdjustUrl, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+          adjust_mode: adjustMode || 'api',
+          warehouse: stockAdjustWarehouse,
+          items: Array.isArray(items) ? items : []
+        })
+      }).then(parseResponse);
+    }
+
+    function applyLocalStockValue(materialCode, newStockValue) {
+      var key = stockLookupKey(materialCode);
+      var parsedValue = Number(newStockValue);
+
+      if (!key) {
+        return;
+      }
+
+      if (!Number.isFinite(parsedValue)) {
+        parsedValue = 0;
+      }
+
+      state.materialStockByIdent.set(key, parsedValue);
+
+      if (Array.isArray(state.allRows)) {
+        state.allRows.forEach(function (row) {
+          if (stockLookupKey(row && row.acIdentChild ? row.acIdentChild : '') !== key) {
+            return;
+          }
+
+          row.anGrossQty = parsedValue;
+        });
+      }
+
+      if (state.confirmContext && state.confirmContext.material && stockLookupKey(state.confirmContext.material.material_code || '') === key) {
+        state.confirmContext.material.stock_qty = parsedValue;
+
+        if (confirmMaterialStockQtyEl) {
+          confirmMaterialStockQtyEl.textContent = formatQuantity(parsedValue);
+        }
+      }
+
+      refreshQuickSelectionStocks(true);
+
+      if (state.activeMode === 'materials') {
+        renderAllRows();
+      }
+    }
+
+    function findBomRowDataByKey(rowKey, fallbackLineNo, fallbackComponentId) {
+      var matchedRow = Array.isArray(state.bomRows)
+        ? state.bomRows.find(function (row) {
+            return bomKey(row.anNo, row.acIdentChild) === rowKey;
+          })
+        : null;
+
+      if (matchedRow) {
+        return matchedRow;
+      }
+
+      if (!fallbackComponentId) {
+        return null;
+      }
+
+      return {
+        anNo: fallbackLineNo,
+        acIdentChild: fallbackComponentId,
+        acDescr: '-',
+        anGrossQty: resolveKnownStock(fallbackComponentId),
+        acOperationType: '',
+        acUM: 'AUTO'
+      };
+    }
+
+    function findAllRowDataByKey(rowType, rowKey, fallbackLineNo, fallbackComponentId) {
+      var matchedRow = Array.isArray(state.allRows)
+        ? state.allRows.find(function (row) {
+            return allItemKey(rowType, row && row.acIdentChild ? row.acIdentChild : '') === rowKey;
+          })
+        : null;
+
+      if (matchedRow) {
+        return matchedRow;
+      }
+
+      if (!fallbackComponentId) {
+        return null;
+      }
+
+      return {
+        anNo: fallbackLineNo,
+        acIdentChild: fallbackComponentId,
+        acDescr: '-',
+        anGrossQty: resolveKnownStock(fallbackComponentId),
+        acOperationType: rowType === 'operations' ? 'O' : 'M',
+        acUM: 'AUTO'
+      };
+    }
+
+    function openManualStockAdjustPrompt(rowData) {
+      var materialCode = String(rowData && rowData.acIdentChild ? rowData.acIdentChild : '').trim();
+      var materialName = String(rowData && rowData.acDescr ? rowData.acDescr : '').trim();
+
+      if (!allowManualStockAdjust || !materialCode) {
+        return;
+      }
+
+      ensureKnownStockForComponent(materialCode)
+        .then(function (currentStockValue) {
+          var currentStock = Number(currentStockValue);
+          if (!Number.isFinite(currentStock)) {
+            currentStock = 0;
+          }
+
+          var promptLabel = 'Nova zaliha za ' + materialCode;
+          if (materialName) {
+            promptLabel += ' - ' + materialName;
+          }
+          promptLabel += '\nTrenutna zaliha: ' + formatQuantity(currentStock);
+
+          var inputValue = window.prompt(promptLabel, formatQuantity(currentStock));
+          if (inputValue === null) {
+            return;
+          }
+
+          var parsedNewStock = Number(String(inputValue).trim().replace(',', '.'));
+          if (!Number.isFinite(parsedNewStock)) {
+            notify('warning', 'Neispravan unos', 'Unesite ispravnu brojcanu vrijednost zalihe.');
+            return;
+          }
+
+          requestStockAdjustments([
+            {
+              material_code: materialCode,
+              value: currentStock - parsedNewStock,
+              new_stock_value: parsedNewStock
+            }
+          ], 'manual_scanner')
+            .then(function (payload) {
+              var responseItems = payload && payload.data && Array.isArray(payload.data.items)
+                ? payload.data.items
+                : [];
+              var responseItem = responseItems.length > 0 ? responseItems[0] : null;
+              var resolvedNewStock = responseItem && Number.isFinite(Number(responseItem.new_stock_value))
+                ? Number(responseItem.new_stock_value)
+                : parsedNewStock;
+
+              applyLocalStockValue(materialCode, resolvedNewStock);
+              setStatus('Zaliha materijala je rucno azurirana.', 'success');
+              notify('success', 'Zaliha azurirana', materialCode + ': ' + formatQuantity(resolvedNewStock));
+            })
+            .catch(function (error) {
+              notify('error', 'Greska', error && error.message ? error.message : 'Azuriranje zalihe nije uspjelo.');
+            });
+        })
+        .catch(function () {
+          notify('error', 'Greska', 'Ne mogu ucitati trenutnu zalihu za odabrani materijal.');
+        });
+    }
+
+    function bindManualStockAdjust(bodyElement, rowResolver) {
+      if (!allowManualStockAdjust || !bodyElement || typeof rowResolver !== 'function') {
+        return;
+      }
+
+      bodyElement.addEventListener('click', function (event) {
+        if (!event.ctrlKey) {
+          return;
+        }
+
+        var row = event.target && typeof event.target.closest === 'function'
+          ? event.target.closest('tr')
+          : null;
+        if (!row || row.querySelector('td[colspan]')) {
+          return;
+        }
+
+        var rowData = rowResolver(row);
+        if (!rowData || isOperationType(rowData.acOperationType || '')) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === 'function') {
+          event.stopImmediatePropagation();
+        }
+
+        openManualStockAdjustPrompt(rowData);
+      }, true);
+    }
+
     function bomKey(lineNo, componentId) {
       return String(lineNo || 0) + '|' + String(componentId || '').trim().toLowerCase();
     }
@@ -2816,11 +3029,6 @@
       var planirano = parseDecimalValue(planiranoValue, 0);
       if (!Number.isFinite(planirano) || planirano < 0) {
         planirano = 0;
-      }
-
-      var zaliha = parseDecimalValue(zalihaValue, NaN);
-      if (Number.isFinite(zaliha) && zaliha >= 0 && planirano > zaliha) {
-        planirano = zaliha;
       }
 
       return planirano;
@@ -3445,16 +3653,9 @@
             : 'text';
           var stepAttr = inputType === 'number' ? ' step="0.0001"' : '';
           var minAttr = field === 'planirano' ? ' min="0"' : '';
-          var maxAttr = '';
-          if (field === 'planirano') {
-            var maxPlaniranoValue = parseDecimalValue(row && row.zaliha ? row.zaliha : 0, 0);
-            if (Number.isFinite(maxPlaniranoValue) && maxPlaniranoValue >= 0) {
-              maxAttr = ' max="' + escapeHtml(String(maxPlaniranoValue)) + '"';
-            }
-          }
 
           return '<td><input type="' + inputType + '" class="form-control form-control-sm fine-adjust-input" ' +
-            'data-row="' + rowIndex + '" data-field="' + field + '" value="' + value + '"' + stepAttr + minAttr + maxAttr + '></td>';
+            'data-row="' + rowIndex + '" data-field="' + field + '" value="' + value + '"' + stepAttr + minAttr + '></td>';
         }).join('');
 
         return '<tr data-row="' + rowIndex + '">' + cells + '</tr>';
@@ -4120,7 +4321,21 @@
 
     function handleSaveSuccess(payload) {
       var savedCount = payload && payload.data ? Number(payload.data.saved_count || 0) : 0;
+      var stockAdjustments = payload && payload.data && Array.isArray(payload.data.stock_adjustments)
+        ? payload.data.stock_adjustments
+        : [];
       var message = payload && payload.message ? payload.message : 'Planirana potrošnja je uspješno sačuvana.';
+
+      stockAdjustments.forEach(function (item) {
+        if (!item) {
+          return;
+        }
+
+        applyLocalStockValue(
+          item.material_code || item.code || item.acIdent || '',
+          item.new_stock_value
+        );
+      });
 
       notify('success', 'Uspjesno', message + ' (Stavki: ' + savedCount + ')');
       setStatus('Planirana potrošnja je uspješno sačuvana.', 'success');
@@ -4545,6 +4760,19 @@
     updateConfirmQuantityScreen();
 
     if (componentsBody) {
+      bindManualStockAdjust(componentsBody, function (row) {
+        var checkbox = row ? row.querySelector('.bom-component-checkbox') : null;
+        if (!checkbox) {
+          return null;
+        }
+
+        return findBomRowDataByKey(
+          String(checkbox.getAttribute('data-key') || '').trim(),
+          Number(checkbox.getAttribute('data-no') || 0),
+          String(checkbox.getAttribute('data-ident') || '').trim()
+        );
+      });
+
       bindSelectableRowClick(componentsBody, '.bom-component-checkbox');
 
       componentsBody.addEventListener('change', function (event) {
@@ -4597,6 +4825,24 @@
     }
 
     if (allItemsBodyEl) {
+      bindManualStockAdjust(allItemsBodyEl, function (row) {
+        var checkbox = row ? row.querySelector('.bom-all-item-checkbox') : null;
+        var rowType = checkbox && String(checkbox.getAttribute('data-type') || '').trim() === 'operations'
+          ? 'operations'
+          : 'materials';
+
+        if (!checkbox) {
+          return null;
+        }
+
+        return findAllRowDataByKey(
+          rowType,
+          String(checkbox.getAttribute('data-key') || '').trim(),
+          Number(checkbox.getAttribute('data-no') || 0),
+          String(checkbox.getAttribute('data-ident') || '').trim()
+        );
+      });
+
       bindSelectableRowClick(allItemsBodyEl, '.bom-all-item-checkbox');
 
       allItemsBodyEl.addEventListener('change', function (event) {

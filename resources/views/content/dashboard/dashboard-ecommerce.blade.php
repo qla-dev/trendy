@@ -442,7 +442,7 @@
   <div class="row match-height">
     <!-- Medal Card -->
       <!-- Developer Meetup Card -->
-  <div class="col-lg-4 col-md-6 col-12">
+  <div class="col-lg-4 col-md-4 col-12">
   <div class="card card-developer-meetup">
     <div class="meetup-img-wrapper rounded-top text-center">
       <img src="{{ asset('images/illustration/email.svg') }}" alt="CNC proizvodnja" height="170" />
@@ -532,7 +532,7 @@
     <!--/ Medal Card -->
 
     <!-- Statistics Card -->
-    <div class="col-xl-8 col-md-6 col-12">
+    <div class="col-xl-8 col-md-8 col-12">
       <div class="card card-statistics">
      
         <div class="card-body statistics-body">

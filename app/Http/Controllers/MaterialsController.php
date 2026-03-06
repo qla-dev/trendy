@@ -6,6 +6,7 @@ use App\Models\Material;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Throwable;
 
 class MaterialsController extends Controller
@@ -121,6 +122,107 @@ class MaterialsController extends Controller
         }
     }
 
+    public function bulkAdjustStock(Request $request): JsonResponse
+    {
+        $payload = $request->json()->all();
+
+        if (!is_array($payload) || empty($payload)) {
+            $payload = $request->all();
+        }
+
+        $itemsPayload = $this->resolveStockAdjustItemsPayload($payload);
+        $normalizedItems = array_values(array_filter(array_map(function ($item) {
+            if (!is_array($item)) {
+                return null;
+            }
+
+            return [
+                'material_code' => trim((string) ($item['material_code'] ?? $item['code'] ?? $item['acIdent'] ?? '')),
+                'value' => $item['value'] ?? null,
+                'new_stock_value' => $item['new_stock_value'] ?? $item['newStockValue'] ?? null,
+                'warehouse' => trim((string) ($item['warehouse'] ?? '')),
+            ];
+        }, $itemsPayload), function ($item) {
+            return is_array($item);
+        }));
+
+        $validatedPayload = [
+            'adjust_mode' => strtolower(trim((string) ($payload['adjust_mode'] ?? 'api'))),
+            'warehouse' => trim((string) ($payload['warehouse'] ?? '')),
+            'items' => $normalizedItems,
+        ];
+
+        $validator = Validator::make($validatedPayload, [
+            'adjust_mode' => ['nullable', 'string', 'max:32'],
+            'warehouse' => ['nullable', 'string', 'max:64'],
+            'items' => ['required', 'array', 'min:1', 'max:200'],
+            'items.*.material_code' => ['required', 'string', 'max:64'],
+            'items.*.value' => ['nullable', 'numeric'],
+            'items.*.new_stock_value' => ['nullable', 'numeric'],
+            'items.*.warehouse' => ['nullable', 'string', 'max:64'],
+        ]);
+
+        $validator->after(function ($validator) use ($validatedPayload) {
+            foreach ((array) ($validatedPayload['items'] ?? []) as $index => $item) {
+                $hasDelta = is_numeric((string) ($item['value'] ?? ''));
+                $hasTarget = is_numeric((string) ($item['new_stock_value'] ?? ''));
+
+                if ($hasDelta || $hasTarget) {
+                    continue;
+                }
+
+                $validator->errors()->add(
+                    'items.' . $index,
+                    'Svaka stavka mora imati value ili new_stock_value.'
+                );
+            }
+        });
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravni podaci za azuriranje zalihe.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $adjustMode = (string) ($validatedPayload['adjust_mode'] ?? 'api');
+        $username = strtolower(trim((string) ($request->user()->username ?? '')));
+
+        if ($adjustMode === 'manual_scanner' && $username !== 'kulasin.nedim') {
+            return response()->json([
+                'message' => 'Nemate dozvolu za rucno azuriranje zalihe preko skenera.',
+            ], 403);
+        }
+
+        try {
+            $results = Material::bulkAdjustStock(
+                (array) ($validatedPayload['items'] ?? []),
+                (int) ($request->user()->id ?? 0),
+                (string) ($validatedPayload['warehouse'] ?? '')
+            );
+
+            return response()->json([
+                'message' => 'Zaliha je uspjesno azurirana.',
+                'data' => [
+                    'count' => count($results),
+                    'items' => $results,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Materials bulk stock adjust failed.', [
+                'connection' => config('database.default'),
+                'table' => Material::scannerSourceTable(),
+                'adjust_mode' => $adjustMode,
+                'items_count' => count((array) ($validatedPayload['items'] ?? [])),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greska pri azuriranju zalihe.',
+            ], 500);
+        }
+    }
+
     private function resolveLimit(?int $requestedLimit = null): int
     {
         $limit = (int) ($requestedLimit ?? 100);
@@ -141,5 +243,31 @@ class MaterialsController extends Controller
         }
 
         return min($limit, 100);
+    }
+
+    private function resolveStockAdjustItemsPayload($payload): array
+    {
+        if (!is_array($payload) || empty($payload)) {
+            return [];
+        }
+
+        if (array_key_exists('items', $payload) && is_array($payload['items'])) {
+            return array_values($payload['items']);
+        }
+
+        if ($this->isSequentialArray($payload)) {
+            return array_values($payload);
+        }
+
+        return [$payload];
+    }
+
+    private function isSequentialArray(array $value): bool
+    {
+        if ($value === []) {
+            return true;
+        }
+
+        return array_keys($value) === range(0, count($value) - 1);
     }
 }

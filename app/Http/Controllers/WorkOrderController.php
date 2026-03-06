@@ -823,6 +823,7 @@ class WorkOrderController extends Controller
             }
 
             $workOrderKey = trim((string) $this->valueTrimmed($workOrderRow, ['acKey'], ''));
+            $preferredWarehouse = $this->resolveWorkOrderWarehouse($workOrderRow);
 
             if ($workOrderKey === '') {
                 return response()->json([
@@ -990,10 +991,11 @@ class WorkOrderController extends Controller
                 'has_statement_column' => $hasStatementColumn,
             ]);
 
-            $insertedRows = DB::transaction(function () use (
+            $saveResult = DB::transaction(function () use (
                 $resolvedRows,
                 $quantityFactor,
                 $workOrderKey,
+                $preferredWarehouse,
                 $variant,
                 $userId,
                 $now,
@@ -1126,8 +1128,10 @@ class WorkOrderController extends Controller
                             'acDescr' => $description,
                             'acUM' => $updatePayload['acUM'] ?? (trim((string) ($existingRow['acUM'] ?? '')) !== '' ? trim((string) ($existingRow['acUM'] ?? '')) : $resolvedUnit),
                             'acOperationType' => $operationType,
+                            'item_kind' => $itemKind,
                             'anGrossQty' => $baseQty,
                             'previous_anPlanQty' => $existingQty,
+                            'stock_consumed_qty' => $plannedQty,
                             'anPlanQty' => $updatedQty,
                         ];
 
@@ -1184,7 +1188,9 @@ class WorkOrderController extends Controller
                         'acDescr' => $description,
                         'acUM' => $resolvedUnit,
                         'acOperationType' => $operationType,
+                        'item_kind' => $itemKind,
                         'anGrossQty' => $baseQty,
+                        'stock_consumed_qty' => $plannedQty,
                         'anPlanQty' => $plannedQty,
                     ];
 
@@ -1197,8 +1203,29 @@ class WorkOrderController extends Controller
                     }
                 }
 
-                return $saved;
+                $stockAdjustmentResults = [];
+                $stockAdjustments = $this->buildPlannedConsumptionStockAdjustments($saved);
+
+                if (!empty($stockAdjustments)) {
+                    $stockAdjustmentResults = Material::bulkAdjustStock(
+                        $stockAdjustments,
+                        $userId,
+                        $preferredWarehouse
+                    );
+                }
+
+                return [
+                    'saved' => $saved,
+                    'stock_adjustments' => $stockAdjustmentResults,
+                ];
             });
+
+            $insertedRows = is_array($saveResult['saved'] ?? null)
+                ? $saveResult['saved']
+                : [];
+            $stockAdjustmentResults = is_array($saveResult['stock_adjustments'] ?? null)
+                ? $saveResult['stock_adjustments']
+                : [];
 
             if (empty($insertedRows)) {
                 return response()->json([
@@ -1237,6 +1264,8 @@ class WorkOrderController extends Controller
                     'saved_count' => count($insertedRows),
                     'updated_count' => $updatedCount,
                     'inserted_count' => $insertedCount,
+                    'stock_adjusted_count' => count($stockAdjustmentResults),
+                    'stock_adjustments' => $stockAdjustmentResults,
                     'items' => $insertedRows,
                 ],
             ], 201);
@@ -2507,6 +2536,52 @@ class WorkOrderController extends Controller
         return (float) ($this->toFloatOrNull(
             $row['anPlanQty'] ?? $row['anQty'] ?? $row['anQty1'] ?? 0
         ) ?? 0);
+    }
+
+    private function resolveWorkOrderWarehouse(array $workOrderRow): string
+    {
+        return trim((string) $this->valueTrimmed(
+            $workOrderRow,
+            ['acWarehouse', 'linked_document', 'acWarehouseFrom'],
+            ''
+        ));
+    }
+
+    private function buildPlannedConsumptionStockAdjustments(array $savedRows): array
+    {
+        $adjustmentsByCode = [];
+
+        foreach ($savedRows as $savedRow) {
+            $itemKind = strtolower(trim((string) ($savedRow['item_kind'] ?? '')));
+            if ($itemKind !== 'materials') {
+                continue;
+            }
+
+            $materialCode = trim((string) ($savedRow['acIdent'] ?? ''));
+            if ($materialCode === '') {
+                continue;
+            }
+
+            $consumedQty = (float) ($this->toFloatOrNull(
+                $savedRow['stock_consumed_qty'] ?? $savedRow['anPlanQty'] ?? null
+            ) ?? 0);
+
+            if ($consumedQty <= 0) {
+                continue;
+            }
+
+            $materialKey = strtolower($materialCode);
+            if (!array_key_exists($materialKey, $adjustmentsByCode)) {
+                $adjustmentsByCode[$materialKey] = [
+                    'material_code' => $materialCode,
+                    'value' => 0.0,
+                ];
+            }
+
+            $adjustmentsByCode[$materialKey]['value'] += $consumedQty;
+        }
+
+        return array_values($adjustmentsByCode);
     }
 
     private function fetchWorkOrderItemRows(string $workOrderKey): array

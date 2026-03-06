@@ -80,14 +80,14 @@
 <section class="invoice-list-wrapper">
   <!-- Main Title -->
   <div class="content-header row">
-    <div class="content-header-left col-md-9 col-12 mb-2">
+    <div class="content-header-left col-md-8 col-12 mb-2">
       <div class="row breadcrumbs-top">
         <div class="col-12">
           <h2 class="content-header-title float-start mb-0">Radni nalozi</h2>
         </div>
       </div>
     </div>
-    <div class="content-header-right text-md-end col-md-3 col-12 d-md-block d-none">
+    <div class="content-header-right text-md-end col-md-4 col-12 d-md-block d-none">
       <div class="mb-1 breadcrumb-right">
         <button type="button" class="btn btn-primary" id="btn-add">
           <i data-feather="plus" class="me-50"></i> Dodaj radni nalog
@@ -885,6 +885,18 @@
     border-color: rgba(255, 255, 255, 0.7);
     background-color: rgba(255, 255, 255, 0.08);
   }
+
+ @media (min-width: 768px) {
+  .invoice-list-wrapper .col-lg-6:first-child {
+    flex: 0 0 auto;
+    width: 30%;
+  }
+
+  .invoice-list-wrapper .col-lg-6:nth-child(2) {
+    flex: 0 0 auto;
+    width: 70%;
+  }
+}
 </style>
 @endsection
 
