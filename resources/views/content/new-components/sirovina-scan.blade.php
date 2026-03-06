@@ -275,6 +275,15 @@
 </div>
 
 <style>
+
+  
+  @media (min-width: 576px) and (max-width: 1180px) {
+    #sirovina-scanner-modal .modal-dialog {
+        max-width: 600px;
+        margin: 1.75rem auto;
+    }
+}
+
   .sirovina-scanner-backdrop {
     background-color: rgba(0, 0, 0, 0.95) !important;
     opacity: 1 !important;
@@ -1351,6 +1360,14 @@
     var defaultProductLabel = modalEl.getAttribute('data-default-product-label') || '';
     var requireManualCameraStart = modalEl.getAttribute('data-require-manual-camera-start') === '1';
 
+    function isTabletViewport() {
+      return window.matchMedia('(min-width: 768px) and (max-width: 1180px)').matches;
+    }
+
+    function requiresManualCameraStartForCurrentView() {
+      return requireManualCameraStart && !isTabletViewport();
+    }
+
     var rnNumberEl = document.getElementById('sirovina-rn-number');
     var statusEl = document.getElementById('bom-status');
     var errorEl = document.getElementById('bom-error');
@@ -2310,11 +2327,11 @@
     }
 
     function requestBarcodeScannerStart(unlockForAdmin) {
-      if (requireManualCameraStart && unlockForAdmin === true) {
+      if (requiresManualCameraStartForCurrentView() && unlockForAdmin === true) {
         barcodeManualStartUnlocked = true;
       }
 
-      if (requireManualCameraStart && !barcodeManualStartUnlocked) {
+      if (requiresManualCameraStartForCurrentView() && !barcodeManualStartUnlocked) {
         clearScannerError();
         setScannerStatus('Admin mora kliknuti Primijenite da pokrene kameru.', 'warning');
         return refreshScannerCameras().then(function () {
@@ -2342,11 +2359,11 @@
     }
 
     function restartBarcodeScanner(unlockForAdmin) {
-      if (requireManualCameraStart && unlockForAdmin === true) {
+      if (requiresManualCameraStartForCurrentView() && unlockForAdmin === true) {
         barcodeManualStartUnlocked = true;
       }
 
-      if (requireManualCameraStart && !barcodeManualStartUnlocked) {
+      if (requiresManualCameraStartForCurrentView() && !barcodeManualStartUnlocked) {
         clearScannerError();
         setScannerStatus('Admin mora kliknuti Primijenite da pokrene kameru.', 'warning');
         return refreshScannerCameras().then(function () {
@@ -4808,7 +4825,7 @@
       barcodeManualStartUnlocked = false;
       clearScannerError();
       setScannerStatus(
-        requireManualCameraStart
+        requiresManualCameraStartForCurrentView()
           ? 'Još uvijek nije dostupno.'
           : 'Dozvoli pristup kameri i pokreni skeniranje barcodova.' ,
       );
@@ -4852,7 +4869,7 @@
       syncAllSearchInputHeight();
       scheduleLayoutSync();
 
-      if (requireManualCameraStart) {
+      if (requiresManualCameraStartForCurrentView()) {
         refreshScannerCameras();
         setScannerStatus('Još uvijek nije dostupno', 'warning');
       } else {

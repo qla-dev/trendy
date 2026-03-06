@@ -60,6 +60,7 @@
 </div>
 
 <style>
+
   #fine-adjust-bom-modal {
     --wo-scroll-track: rgba(12, 18, 30, 0.92);
     --wo-scroll-thumb: rgba(138, 148, 169, 0.86);
