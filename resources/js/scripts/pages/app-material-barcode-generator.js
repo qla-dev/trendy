@@ -180,7 +180,7 @@ $(function () {
       var pattern = code39Patterns[character];
 
       if (!pattern) {
-        throw new Error('Barcode sadrzi znak koji nije podrzan za SVG etiketu: ' + character);
+        throw new Error('Barcode sadrži znak koji nije podrzan za SVG etiketu: ' + character);
       }
 
       pattern.split('').forEach(function (unit, patternIndex) {
@@ -238,7 +238,7 @@ $(function () {
     }
 
     if (modalCodeElement) {
-      modalCodeElement.textContent = materialCode ? ('Barcode / sifra: ' + materialCode) : '-';
+      modalCodeElement.textContent = materialCode ? ('Barcode / šifra: ' + materialCode) : '-';
     }
 
     if (downloadButton) {
