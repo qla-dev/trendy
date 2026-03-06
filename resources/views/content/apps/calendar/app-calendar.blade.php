@@ -307,7 +307,7 @@
             </div>
             <div class="mb-1 d-flex">
               <button type="submit" class="btn btn-primary add-event-btn me-1">Dodaj</button>
-              <button type="button" class="btn btn-outline-secondary btn-cancel" data-bs-dismiss="modal">Otkazi</button>
+              <button type="button" class="btn btn-outline-secondary btn-cancel" data-bs-dismiss="modal">Otkaži</button>
               <button type="submit" class="btn btn-primary update-event-btn d-none me-1">Ažuriraj</button>
               <button class="btn btn-outline-danger btn-delete-event d-none">Obrisi</button>
             </div>

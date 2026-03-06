@@ -2569,7 +2569,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           icon: 'warning',
           showCancelButton: true,
           confirmButtonText: 'Ukloni',
-          cancelButtonText: 'Otkazi',
+          cancelButtonText: 'Otkaži',
           customClass: {
             confirmButton: 'btn btn-danger',
             cancelButton: 'btn btn-outline-secondary ms-1'
