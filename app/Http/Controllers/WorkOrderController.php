@@ -728,8 +728,20 @@ class WorkOrderController extends Controller
                     'material_code' => (string) ($material['material_code'] ?? ''),
                     'material_name' => (string) ($material['material_name'] ?? ''),
                     'material_um' => (string) ($material['material_um'] ?? ''),
+                    'material_code_alt' => (string) ($material['material_code_alt'] ?? ''),
                     'material_set' => (string) ($material['material_set'] ?? ''),
+                    'material_supplier' => (string) ($material['material_supplier'] ?? ''),
                     'material_qid' => $material['material_qid'] ?? null,
+                    'material_buy_price' => $material['material_buy_price'] ?? null,
+                    'material_buy_price_display' => $this->formatMetaMoney($this->toFloatOrNull($material['material_buy_price'] ?? null)),
+                    'material_price' => $material['material_price'] ?? null,
+                    'material_price_display' => $this->formatMetaMoney($this->toFloatOrNull($material['material_price'] ?? null)),
+                    'material_vat_rate' => $material['material_vat_rate'] ?? null,
+                    'material_vat_display' => $this->formatMetaPercent($this->toFloatOrNull($material['material_vat_rate'] ?? null)),
+                    'material_delivery_deadline' => $material['material_delivery_deadline'] ?? null,
+                    'material_delivery_deadline_display' => $this->formatMetaDays($material['material_delivery_deadline'] ?? null),
+                    'material_changed_at' => (string) ($material['material_changed_at'] ?? ''),
+                    'material_changed_display' => $this->formatMetaDate($material['material_changed_at'] ?? null),
                     'stock_qty' => (float) ($material['material_qty'] ?? 0),
                     'action' => $existingItem === null ? 'insert' : 'update',
                     'exists_on_work_order' => $existingItem !== null,
@@ -4542,6 +4554,35 @@ class WorkOrderController extends Controller
         return $formatted;
     }
 
+    private function formatMetaMoney(?float $value, string $currency = 'KM'): string
+    {
+        if ($value === null) {
+            return '-';
+        }
+
+        return $this->formatMetaNumber($value, 2) . ' ' . strtoupper(trim($currency));
+    }
+
+    private function formatMetaPercent(?float $value): string
+    {
+        if ($value === null) {
+            return '-';
+        }
+
+        return $this->formatMetaNumber($value, 2) . '%';
+    }
+
+    private function formatMetaDays(mixed $value): string
+    {
+        $days = (int) ($this->toFloatOrNull($value) ?? 0);
+
+        if ($days <= 0) {
+            return '-';
+        }
+
+        return $days . ' dana';
+    }
+
     private function formatMetaDateTime(mixed $value): string
     {
         if ($value === null || $value === '') {
@@ -4558,6 +4599,23 @@ class WorkOrderController extends Controller
             }
 
             return $dateTime->format('d.m.Y H:i');
+        } catch (Throwable $exception) {
+            return '-';
+        }
+    }
+
+    private function formatMetaDate(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '-';
+        }
+
+        try {
+            $dateTime = $value instanceof \DateTimeInterface
+                ? Carbon::instance($value)
+                : Carbon::parse((string) $value);
+
+            return $dateTime->format('d.m.Y');
         } catch (Throwable $exception) {
             return '-';
         }

@@ -313,6 +313,11 @@
     scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
     scrollbar-gutter: stable;
   }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap > .table {
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
   .invoice-preview-wrapper .wo-sastavnica-table-wrap::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -1283,6 +1288,13 @@
   $barcodeMaterialLookupUrl = $hasLoadedWorkOrder ? route('app-invoice-barcode-material', ['id' => $workOrderRouteId]) : '';
   $plannedConsumptionStoreUrl = $hasLoadedWorkOrder ? route('app-invoice-planned-consumption', ['id' => $workOrderRouteId]) : '';
   $plannedConsumptionRemoveUrl = $hasLoadedWorkOrder ? route('app-invoice-planned-consumption-remove', ['id' => $workOrderRouteId]) : '';
+  $canPrepareMaterial = $hasLoadedWorkOrder
+    && $productsFetchUrl !== ''
+    && $bomFetchUrl !== ''
+    && $allMaterialsFetchUrl !== ''
+    && $allOperationsFetchUrl !== ''
+    && $barcodeMaterialLookupUrl !== ''
+    && $plannedConsumptionStoreUrl !== '';
   $pageTitle = 'eNalog.app';
   if ($hasLoadedWorkOrder) {
     $titleIdentifier = $invoiceNumberDisplay !== '-' ? $invoiceNumberDisplay : $displayValue($workOrderRouteId);
@@ -1820,11 +1832,11 @@
             </div>
             <div class="invoice-actions-divider wo-sidebar-qr-divider"></div>
           @endif
-          <button class="btn btn-primary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#qr-scanner-modal">
+          <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#qr-scanner-modal">
             <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog
           </button>
-          <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#sirovina-scanner-modal">
-            <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Pripremi materijal
+          <button class="btn btn-primary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#sirovina-scanner-modal" @if (!$canPrepareMaterial) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
+            <i class="fa fa-barcode me-50" style="font-size: 20px;"></i> Pripremi materijal
           </button>
           <div class="invoice-actions-divider"></div>
           <button id="wo-status-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $statusToneClass }}" data-bs-toggle="modal" data-bs-target="#change-status-modal" @if (!$hasLoadedWorkOrder) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>

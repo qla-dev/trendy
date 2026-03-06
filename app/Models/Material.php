@@ -232,9 +232,28 @@ class Material extends Model
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as material_um")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acCode, ''))) as material_code_alt")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acSetOfItem, ''))) as material_set")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acSupplier, ''))) as material_supplier")
             ->selectRaw("CAST(ISNULL(i.anQId, 0) as bigint) as material_qid")
+            ->selectRaw("CAST(ISNULL(i.anBuyPrice, 0) as float) as material_buy_price")
+            ->selectRaw("CAST(ISNULL(i.anPrice, 0) as float) as material_price")
+            ->selectRaw("CAST(ISNULL(i.anVAT, 0) as float) as material_vat_rate")
+            ->selectRaw("CAST(ISNULL(i.anDeliveryDeadline, 0) as int) as material_delivery_deadline")
+            ->selectRaw("CONVERT(varchar(19), i.adTimeChg, 120) as material_changed_at")
             ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as material_qty")
-            ->groupBy('i.acIdent', 'i.acName', 'i.acUM', 'i.acCode', 'i.acSetOfItem', 'i.anQId')
+            ->groupBy(
+                'i.acIdent',
+                'i.acName',
+                'i.acUM',
+                'i.acCode',
+                'i.acSetOfItem',
+                'i.acSupplier',
+                'i.anQId',
+                'i.anBuyPrice',
+                'i.anPrice',
+                'i.anVAT',
+                'i.anDeliveryDeadline',
+                'i.adTimeChg'
+            )
             ->orderByRaw("CASE WHEN " . self::normalizedBarcodeSql('i.acIdent') . " = ? THEN 0 ELSE 1 END", [$normalizedBarcode])
             ->orderByRaw("CASE WHEN " . self::normalizedBarcodeSql('i.acCode') . " = ? THEN 0 ELSE 1 END", [$normalizedBarcode])
             ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(i.acIdent, '')))) ASC")
@@ -256,9 +275,23 @@ class Material extends Model
             'material_um' => strtoupper(substr(trim((string) ($row->material_um ?? '')), 0, 3)),
             'material_code_alt' => trim((string) ($row->material_code_alt ?? '')),
             'material_set' => strtoupper(trim((string) ($row->material_set ?? ''))),
+            'material_supplier' => trim((string) ($row->material_supplier ?? '')),
             'material_qid' => is_numeric((string) ($row->material_qid ?? null))
                 ? (int) $row->material_qid
                 : null,
+            'material_buy_price' => is_numeric((string) ($row->material_buy_price ?? null))
+                ? (float) $row->material_buy_price
+                : null,
+            'material_price' => is_numeric((string) ($row->material_price ?? null))
+                ? (float) $row->material_price
+                : null,
+            'material_vat_rate' => is_numeric((string) ($row->material_vat_rate ?? null))
+                ? (float) $row->material_vat_rate
+                : null,
+            'material_delivery_deadline' => is_numeric((string) ($row->material_delivery_deadline ?? null))
+                ? (int) $row->material_delivery_deadline
+                : null,
+            'material_changed_at' => trim((string) ($row->material_changed_at ?? '')),
             'material_qty' => $materialQty,
         ];
     }

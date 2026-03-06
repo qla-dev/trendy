@@ -83,6 +83,7 @@
     --qr-surface-dark: rgba(18, 22, 33, 0.82);
     --qr-text-soft: #cfd7ee;
     --qr-text-main: #e8edf9;
+    --wo-qr-control-height: 2.55rem;
   }
 
   #qr-scanner-modal .qr-scanner-frame {
@@ -263,8 +264,8 @@
   }
 
   #qr-scanner-modal .wo-qr-camera-icon {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: var(--wo-qr-control-height);
+    height: var(--wo-qr-control-height);
     border-radius: 8px;
     border: 1px solid rgba(177, 189, 216, 0.26);
     background: rgba(255, 255, 255, 0.035);
@@ -277,10 +278,13 @@
 
   #qr-scanner-modal .wo-qr-camera-row .form-select {
     flex: 1 1 auto;
+    height: var(--wo-qr-control-height);
+    min-height: var(--wo-qr-control-height);
   }
 
   #qr-scanner-modal .form-select {
-    min-height: 2.3rem;
+    height: var(--wo-qr-control-height);
+    min-height: var(--wo-qr-control-height);
     background-color: rgba(16, 22, 35, 0.85);
     color: var(--qr-text-main);
     border-color: rgba(168, 179, 204, 0.34);
@@ -301,7 +305,8 @@
   }
 
   #qr-scanner-modal .wo-qr-btn {
-    min-height: 2.3rem;
+    height: var(--wo-qr-control-height);
+    min-height: var(--wo-qr-control-height);
     border-radius: 8px;
     padding: 0.42rem 0.85rem;
     font-weight: 600;
@@ -587,7 +592,7 @@
           }
           return { id: null, error: 'Neispravan QR format. Ocekivan je link na radni nalog.' };
         } catch (e) {
-          return { id: null, error: 'QR ne sadrzi validan URL radnog naloga.' };
+          return { id: null, error: 'QR ne sadrži validan URL radnog naloga.' };
         }
       }
 

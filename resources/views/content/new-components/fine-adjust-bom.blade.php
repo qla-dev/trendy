@@ -157,6 +157,12 @@
     scrollbar-gutter: stable;
   }
 
+  #fine-adjust-bom-modal .fine-adjust-bom-table-wrap > .table {
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
   #fine-adjust-bom-modal .fine-adjust-bom-table-wrap::-webkit-scrollbar {
     width: 8px;
     height: 8px;

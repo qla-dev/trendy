@@ -111,7 +111,7 @@
                         >
                       </div>
                       <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-subtle" id="sirovina-qr-torch-btn" disabled>
-                        <i class="fa fa-lightbulb-o me-50"></i> Uključi svjetlo
+                        <i class="fa fa-lightbulb-o me-50"></i> Uključite svjetlo
                       </button>
                     </div>
 
@@ -294,6 +294,7 @@
     --qr-text-soft: #cfd7ee;
     --qr-text-main: #e8edf9;
     --bom-control-height: calc(1.5em + 0.572rem + 2px);
+    --wo-qr-control-height: 2.55rem;
     --wo-scroll-track: rgba(12, 18, 30, 0.92);
     --wo-scroll-thumb: rgba(138, 148, 169, 0.86);
     --wo-scroll-thumb-hover: rgba(160, 170, 190, 0.92);
@@ -745,8 +746,8 @@
   }
 
   #sirovina-scanner-modal .wo-qr-camera-icon {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: var(--wo-qr-control-height);
+    height: var(--wo-qr-control-height);
     border-radius: 8px;
     border: 1px solid rgba(177, 189, 216, 0.26);
     background: rgba(255, 255, 255, 0.035);
@@ -759,10 +760,13 @@
 
   #sirovina-scanner-modal .wo-qr-camera-row .form-select {
     flex: 1 1 auto;
+    height: var(--wo-qr-control-height);
+    min-height: var(--wo-qr-control-height);
   }
 
   #sirovina-scanner-modal .wo-qr-btn {
-    min-height: 2.3rem;
+    height: var(--wo-qr-control-height);
+    min-height: var(--wo-qr-control-height);
     border-radius: 8px;
     padding: 0.42rem 0.85rem;
     font-weight: 600;
@@ -784,16 +788,16 @@
   }
 
   #sirovina-scanner-modal .wo-qr-btn-primary {
-    border: 1px solid rgba(168, 176, 190, 0.5);
-    background-color: rgba(168, 176, 190, 0.12);
-    color: #eef3ff;
+    border: 1px solid rgba(74, 179, 148, 0.5);
+    background-color: rgba(74, 179, 148, 0.12);
+    color: #dbfff2;
     min-width: 7.4rem;
   }
 
   #sirovina-scanner-modal .wo-qr-btn-primary:hover,
   #sirovina-scanner-modal .wo-qr-btn-primary:focus {
-    border-color: rgba(168, 176, 190, 0.75);
-    background-color: rgba(168, 176, 190, 0.2);
+    border-color: rgba(74, 179, 148, 0.75);
+    background-color: rgba(74, 179, 148, 0.2);
     color: #ffffff;
   }
 
@@ -890,6 +894,9 @@
 
   #sirovina-scanner-modal .wo-bom-table {
     color: #e8edfb;
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
   }
 
   #sirovina-scanner-modal .wo-bom-table thead th {
@@ -1073,6 +1080,11 @@
     border-color: rgba(168, 179, 204, 0.34);
   }
 
+  #sirovina-scanner-modal .form-select {
+    height: var(--wo-qr-control-height);
+    min-height: var(--wo-qr-control-height);
+  }
+
   #sirovina-scanner-modal .form-control::placeholder {
     color: #9fb0d6;
   }
@@ -1226,6 +1238,21 @@
     cursor: pointer;
   }
 
+  #sirovina-scanner-modal .form-check-label,
+  #sirovina-scanner-modal .wo-bom-segment-btn,
+  #sirovina-scanner-modal .wo-bom-bottom-mode-btn {
+    cursor: pointer;
+  }
+
+  #sirovina-scanner-modal .wo-bom-table-wrap tbody tr:not(.wo-bom-empty-row),
+  #sirovina-scanner-modal .wo-bom-all-table-wrap tbody tr:not(.wo-bom-empty-row),
+  #sirovina-scanner-modal .wo-bom-table-wrap tbody tr:not(.wo-bom-empty-row) > td,
+  #sirovina-scanner-modal .wo-bom-all-table-wrap tbody tr:not(.wo-bom-empty-row) > td,
+  #sirovina-scanner-modal .bom-component-checkbox,
+  #sirovina-scanner-modal .bom-all-item-checkbox {
+    cursor: pointer;
+  }
+
   #sirovina-scanner-modal .form-check-input:checked {
     background-color: #7a8698;
     border-color: #7a8698;
@@ -1363,16 +1390,28 @@
 
     var confirmModalEl = document.getElementById('confirm-weight-modal');
     var confirmLabelEl = document.getElementById('scanned-material-name');
+    var confirmMaterialCodeWrapEl = document.getElementById('confirm-material-code-wrap');
     var confirmDetailsWrapEl = document.getElementById('confirm-material-details-wrap');
     var confirmHelpTextEl = document.getElementById('confirm-weight-help-text');
     var confirmMaterialCodeEl = document.getElementById('confirm-material-code');
+    var confirmMaterialSetEl = document.getElementById('confirm-material-set');
     var confirmMaterialTitleEl = document.getElementById('confirm-material-title');
     var confirmMaterialUnitEl = document.getElementById('confirm-material-unit');
+    var confirmMaterialQidEl = document.getElementById('confirm-material-qid');
     var confirmMaterialCurrentQtyEl = document.getElementById('confirm-material-current-qty');
+    var confirmMaterialRnLineEl = document.getElementById('confirm-material-rn-line');
     var confirmMaterialStockQtyEl = document.getElementById('confirm-material-stock-qty');
+    var confirmMaterialDeadlineEl = document.getElementById('confirm-material-deadline');
+    var confirmMaterialUpdatedAtEl = document.getElementById('confirm-material-updated-at');
     var confirmMaterialActionEl = document.getElementById('confirm-material-action-indicator');
     var quantityInput = document.getElementById('weight-input');
     var quantityUnitSelect = document.getElementById('weight-unit-select');
+    var confirmScreenValueEl = document.getElementById('confirm-weight-screen-value');
+    var confirmScreenUnitEl = document.getElementById('confirm-weight-screen-unit');
+    var confirmUnitSwitchEl = document.getElementById('confirm-weight-unit-switch');
+    var confirmUnitButtons = confirmUnitSwitchEl ? confirmUnitSwitchEl.querySelectorAll('.confirm-weight-unit-btn') : [];
+    var confirmKeypadEl = document.getElementById('confirm-weight-keypad');
+    var confirmBackspaceBtn = document.getElementById('confirm-weight-backspace-btn');
     var confirmSaveBtn = document.getElementById('confirm-add-sirovina-btn');
     var fineAdjustModalEl = document.getElementById('fine-adjust-bom-modal');
     var fineAdjustBodyEl = document.getElementById('fine-adjust-bom-body');
@@ -1456,6 +1495,155 @@
       confirmSelectionRows: [],
       confirmContext: null
     };
+
+    function normalizeQuantityInputValue(rawValue) {
+      var value = String(rawValue == null ? '' : rawValue)
+        .replace(/,/g, '.')
+        .replace(/[^0-9.]/g, '');
+
+      if (value === '') {
+        return '';
+      }
+
+      var dotSeen = false;
+      var cleaned = '';
+
+      for (var index = 0; index < value.length; index++) {
+        var char = value.charAt(index);
+
+        if (char === '.') {
+          if (dotSeen) {
+            continue;
+          }
+
+          dotSeen = true;
+          cleaned += char;
+          continue;
+        }
+
+        cleaned += char;
+      }
+
+      if (cleaned.charAt(0) === '.') {
+        cleaned = '0' + cleaned;
+      }
+
+      var parts = cleaned.split('.');
+      var integerPart = (parts[0] || '0').replace(/^0+(?=\d)/, '');
+
+      if (parts.length > 1) {
+        return integerPart + '.' + parts[1];
+      }
+
+      return integerPart;
+    }
+
+    function formatQuantityScreenValue(rawValue) {
+      var normalized = normalizeQuantityInputValue(rawValue);
+      return normalized || '0';
+    }
+
+    function resolveConfirmScreenUnitLabel() {
+      var selectedUnit = quantityUnitSelect ? String(quantityUnitSelect.value || 'AUTO').trim().toUpperCase() : 'AUTO';
+      var sourceUnit = state && state.confirmContext && state.confirmContext.material
+        ? String(state.confirmContext.material.material_um || '').trim().toUpperCase()
+        : '';
+
+      if (selectedUnit === 'AUTO' && sourceUnit) {
+        return 'AUTO / ' + sourceUnit;
+      }
+
+      return selectedUnit;
+    }
+
+    function syncConfirmUnitButtons() {
+      var activeUnit = quantityUnitSelect ? String(quantityUnitSelect.value || 'AUTO').trim().toUpperCase() : 'AUTO';
+
+      if (confirmUnitButtons && confirmUnitButtons.length) {
+        Array.prototype.forEach.call(confirmUnitButtons, function (button) {
+          var buttonUnit = String(button.getAttribute('data-unit') || '').trim().toUpperCase();
+          button.classList.toggle('is-active', buttonUnit === activeUnit);
+        });
+      }
+
+      if (confirmScreenUnitEl) {
+        confirmScreenUnitEl.textContent = resolveConfirmScreenUnitLabel();
+      }
+    }
+
+    function updateConfirmQuantityScreen() {
+      if (confirmScreenValueEl) {
+        confirmScreenValueEl.textContent = formatQuantityScreenValue(quantityInput ? quantityInput.value : '');
+      }
+
+      syncConfirmUnitButtons();
+    }
+
+    function setQuantityInputValue(nextValue) {
+      var normalized = (nextValue === '' || nextValue == null)
+        ? ''
+        : normalizeQuantityInputValue(nextValue);
+
+      if (quantityInput) {
+        quantityInput.value = normalized;
+      }
+
+      updateConfirmQuantityScreen();
+    }
+
+    function setQuantityUnitValue(nextUnit) {
+      var allowedUnits = ['AUTO', 'KG', 'MJ', 'RDS'];
+      var normalized = String(nextUnit || 'AUTO').trim().toUpperCase();
+
+      if (allowedUnits.indexOf(normalized) === -1) {
+        normalized = 'AUTO';
+      }
+
+      if (quantityUnitSelect) {
+        quantityUnitSelect.value = normalized;
+      }
+
+      syncConfirmUnitButtons();
+    }
+
+    function appendQuantityInputToken(token) {
+      var current = quantityInput ? String(quantityInput.value || '') : '';
+      var next = current;
+
+      if (token === '.') {
+        if (current.indexOf('.') === -1) {
+          next = current ? current + '.' : '0.';
+        }
+      } else if (token === '00') {
+        if (!current) {
+          next = '0';
+        } else if (current !== '0') {
+          next = current + '00';
+        }
+      } else if (/^\d+$/.test(token)) {
+        if (!current || current === '0') {
+          next = token === '0' ? '0' : token;
+        } else {
+          next = current + token;
+        }
+      }
+
+      setQuantityInputValue(next);
+    }
+
+    function backspaceQuantityInputValue() {
+      var current = quantityInput ? String(quantityInput.value || '') : '';
+
+      if (!current) {
+        return;
+      }
+
+      setQuantityInputValue(current.slice(0, -1));
+    }
+
+    function clearQuantityInputValue() {
+      setQuantityInputValue('');
+    }
 
     function setStatus(text, tone) {
       if (!statusEl) {
@@ -1698,7 +1886,7 @@
         scannerTorchBtn.disabled = true;
         scannerTorchBtn.classList.remove('wo-qr-btn-primary');
         scannerTorchBtn.classList.add('wo-qr-btn-subtle');
-        scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> Ukljui svjetlo';
+        scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> Uključite svjetlo';
       }
     }
 
@@ -1830,11 +2018,11 @@
           scannerTorchBtn.classList.toggle('wo-qr-btn-subtle', !barcodeTorchEnabled);
           scannerTorchBtn.innerHTML = barcodeTorchEnabled
             ? '<i class="fa fa-lightbulb-o me-50"></i> Ugasi svjetlo'
-            : '<i class="fa fa-lightbulb-o me-50"></i> Uključi svjetlo';
+            : '<i class="fa fa-lightbulb-o me-50"></i> Uključite svjetlo';
         } else {
           scannerTorchBtn.classList.remove('wo-qr-btn-primary');
           scannerTorchBtn.classList.add('wo-qr-btn-subtle');
-          scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> Uključi svjetlo';
+          scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> Uključite svjetlo';
         }
       }
     }
@@ -2014,10 +2202,10 @@
       var selectedRow = buildBarcodeSelectionRow(materialPayload);
 
       if (!selectedRow.acIdentChild) {
-        throw new Error('Materijal za skenirani barcode nije pronaden.');
+        throw new Error('Materijal za skenirani barcode nije pronađen');
       }
 
-      setScannerStatus('Materijal pronaden. Otvaram potvrdu tezine...', 'success');
+      setScannerStatus('Materijal pronađen. Otvara se modal za potvrdu težine...', 'success');
       clearScannerError();
       markProceedSource('barcode');
       openQuantityModal([selectedRow], {
@@ -2080,7 +2268,7 @@
 
       clearScannerError();
       resetScannerEnhancementControls();
-      setScannerStatus('Pokrecem kameru...');
+      setScannerStatus('Kamera se pokreće...');
 
       if (!barcodeScanner) {
         barcodeScanner = new Html5Qrcode('sirovina-qr-scanner-region');
@@ -2108,7 +2296,7 @@
             applyScannerMirrorState();
             captureScannerTrackState();
             return applyScannerAutoEnhancements().then(function () {
-              setScannerStatus('Postavi barcode bilo gdje u okviru i drzi etiketu 10-20 cm od kamere.');
+              setScannerStatus('Postavi barcode bilo gdje u okviru i drži etiketu 10-20 cm od kamere.');
             });
           });
         })
@@ -3673,7 +3861,7 @@
       }
 
       if (!Number.isFinite(quantity) || quantity <= 0) {
-        notify('warning', 'Neispravna kolicina', 'Unesite kolicinu vecu od 0.');
+        notify('warning', 'Neispravna kolicina', 'Unesite količinu vecću od 0');
         return null;
       }
 
@@ -3817,7 +4005,7 @@
         confirmMaterialActionEl.classList.toggle('is-update', action === 'update');
         confirmMaterialActionEl.textContent = action === 'update'
           ? 'Postojeća stavka na RN ce biti ažurirana novom tezinom.'
-          : 'Materijal ne postoji na RN i bit ce dodan kao nova stavka sastavnice.';
+          : 'Materijal ne postoji na RN i bit će dodan kao nova stavka sastavnice.';
       }
       if (confirmHelpTextEl) {
         confirmHelpTextEl.textContent = action === 'update'
@@ -4046,6 +4234,298 @@
         '<i class="fa fa-check me-50"></i> Potvrdi i dodaj na RN'
       );
     }
+
+    function resetConfirmContext() {
+      state.confirmSelectionRows = [];
+      state.confirmContext = null;
+
+      if (confirmDetailsWrapEl) {
+        confirmDetailsWrapEl.classList.add('d-none');
+      }
+
+      if (confirmMaterialCodeWrapEl) {
+        confirmMaterialCodeWrapEl.classList.add('d-none');
+      }
+
+      if (confirmMaterialTitleEl) {
+        confirmMaterialTitleEl.textContent = '-';
+      }
+
+      if (confirmMaterialSetEl) {
+        confirmMaterialSetEl.textContent = '-';
+      }
+
+      if (confirmMaterialQidEl) {
+        confirmMaterialQidEl.textContent = '-';
+      }
+
+      if (confirmMaterialRnLineEl) {
+        confirmMaterialRnLineEl.textContent = '-';
+      }
+
+      if (confirmMaterialDeadlineEl) {
+        confirmMaterialDeadlineEl.textContent = '-';
+      }
+
+      if (confirmMaterialUpdatedAtEl) {
+        confirmMaterialUpdatedAtEl.textContent = '-';
+      }
+
+      if (confirmMaterialActionEl) {
+        confirmMaterialActionEl.classList.add('d-none');
+        confirmMaterialActionEl.classList.remove('is-update');
+        confirmMaterialActionEl.textContent = 'Dodat ce novu stavku na radni nalog.';
+      }
+
+      if (confirmHelpTextEl) {
+        confirmHelpTextEl.textContent = 'Unesi faktor kolicine za planiranu potrosnju.';
+      }
+
+      setQuantityInputValue('1');
+      setQuantityUnitValue('AUTO');
+
+      if (confirmSaveBtn) {
+        confirmSaveBtn.innerHTML = confirmSaveIdleHtml;
+      }
+    }
+
+    function resolveConfirmButtonHtml(context) {
+      var subtitle = 'Sacuvaj';
+
+      if (context && context.mode === 'barcode') {
+        subtitle = context.action === 'update' ? 'Ažuriraj' : 'Dodaj';
+      }
+
+      return '<span class="confirm-weight-ok-label">OK</span><span class="confirm-weight-ok-subtitle">' + subtitle + '</span>';
+    }
+
+    function applyConfirmContext(selectedRowsInput, context) {
+      var selected = Array.isArray(selectedRowsInput) ? selectedRowsInput.map(function (row) {
+        return Object.assign({}, row);
+      }) : [];
+      var resolvedContext = context && typeof context === 'object'
+        ? Object.assign({}, context)
+        : { mode: 'manual' };
+
+      state.confirmSelectionRows = selected;
+      state.confirmContext = resolvedContext;
+
+      if (confirmLabelEl) {
+        if (resolvedContext.mode === 'barcode') {
+          confirmLabelEl.textContent = String(
+            (resolvedContext.material && resolvedContext.material.material_name)
+              || (selected[0] && (selected[0].acDescr || selected[0].acIdentChild))
+              || 'Skenirani materijal'
+          );
+        } else {
+          confirmLabelEl.textContent = selected.length + ' komponenti';
+        }
+      }
+
+      if (resolvedContext.mode !== 'barcode') {
+        if (confirmDetailsWrapEl) {
+          confirmDetailsWrapEl.classList.add('d-none');
+        }
+
+        if (confirmMaterialCodeWrapEl) {
+          confirmMaterialCodeWrapEl.classList.add('d-none');
+        }
+
+        if (confirmMaterialActionEl) {
+          confirmMaterialActionEl.classList.add('d-none');
+        }
+
+        if (confirmHelpTextEl) {
+          confirmHelpTextEl.textContent = 'Unesi faktor kolicine za planiranu potrosnju.';
+        }
+
+        setQuantityUnitValue('AUTO');
+
+        if (confirmSaveBtn) {
+          confirmSaveBtn.innerHTML = confirmSaveIdleHtml;
+        }
+
+        updateConfirmQuantityScreen();
+        return;
+      }
+
+      var material = resolvedContext.material || {};
+      var existingItem = material.existing_item || null;
+      var action = resolvedContext.action === 'update' ? 'update' : 'insert';
+
+      if (confirmDetailsWrapEl) {
+        confirmDetailsWrapEl.classList.remove('d-none');
+      }
+
+      if (confirmMaterialCodeWrapEl) {
+        confirmMaterialCodeWrapEl.classList.remove('d-none');
+      }
+
+      if (confirmMaterialCodeEl) {
+        confirmMaterialCodeEl.textContent = String(material.material_code || '-');
+      }
+
+      if (confirmMaterialSetEl) {
+        confirmMaterialSetEl.textContent = String(material.material_set || '-');
+      }
+
+      if (confirmMaterialTitleEl) {
+        confirmMaterialTitleEl.textContent = String(material.material_name || '-');
+      }
+
+      if (confirmMaterialUnitEl) {
+        confirmMaterialUnitEl.textContent = String(material.material_um || '-');
+      }
+
+      if (confirmMaterialQidEl) {
+        confirmMaterialQidEl.textContent = String(material.material_qid || '-');
+      }
+
+      if (confirmMaterialCurrentQtyEl) {
+        confirmMaterialCurrentQtyEl.textContent = formatQuantity(existingItem && existingItem.qty ? existingItem.qty : 0);
+      }
+
+      if (confirmMaterialRnLineEl) {
+        confirmMaterialRnLineEl.textContent = existingItem && existingItem.no ? String(existingItem.no) : '-';
+      }
+
+      if (confirmMaterialStockQtyEl) {
+        confirmMaterialStockQtyEl.textContent = formatQuantity(material.stock_qty || 0);
+      }
+
+      if (confirmMaterialDeadlineEl) {
+        confirmMaterialDeadlineEl.textContent = String(material.material_delivery_deadline_display || '-');
+      }
+
+      if (confirmMaterialUpdatedAtEl) {
+        confirmMaterialUpdatedAtEl.textContent = String(material.material_changed_display || '-');
+      }
+
+      if (confirmMaterialActionEl) {
+        confirmMaterialActionEl.classList.remove('d-none');
+        confirmMaterialActionEl.classList.toggle('is-update', action === 'update');
+        confirmMaterialActionEl.textContent = action === 'update'
+          ? 'Postojeća stavka na RN biće ažurirana novom težinom.'
+          : 'Materijal ne postoji na RN i biće dodan kao nova stavka sastavnice';
+      }
+
+      if (confirmHelpTextEl) {
+        confirmHelpTextEl.textContent = action === 'update'
+          ? 'Prilagodite količinu i mjernu jedinicu koja se dopisuje na postojeci materijal RN'
+          : 'Unesite količinu i mjernu jedinicu skeniranog materijala koji se dodaje na RN';
+      }
+
+      setQuantityUnitValue(resolveBarcodeQuantityUnit(material));
+
+      if (confirmSaveBtn) {
+        confirmSaveBtn.innerHTML = resolveConfirmButtonHtml(resolvedContext);
+      }
+
+      updateConfirmQuantityScreen();
+    }
+
+    function openQuantityModal(preselectedRows, context) {
+      var selected = Array.isArray(preselectedRows) ? preselectedRows : selectedRows();
+
+      if (selected.length === 0) {
+        setStatus('Izaberite barem jednu komponentu.', 'warning');
+        return;
+      }
+
+      if (!confirmModalEl || !window.bootstrap || !window.bootstrap.Modal) {
+        notify('error', 'Modal nije dostupan', 'Ne mogu otvoriti unos kolicine.');
+        return;
+      }
+
+      applyConfirmContext(selected, context);
+      setQuantityInputValue('1');
+
+      var confirmModal = window.bootstrap.Modal.getOrCreateInstance(confirmModalEl);
+      confirmModal.show();
+    }
+
+    function savePlannedConsumption() {
+      var selected = currentConfirmRows();
+      var rawQuantityValue = quantityInput ? normalizeQuantityInputValue(quantityInput.value || '') : '';
+      var quantity = rawQuantityValue ? Number(rawQuantityValue) : 0;
+      var quantityUnit = quantityUnitSelect ? String(quantityUnitSelect.value || 'AUTO').toUpperCase() : 'AUTO';
+
+      if (!(quantity > 0)) {
+        notify('warning', 'Nedostaje količina', 'Unesite količinu preko tastature na ekranu.');
+        return;
+      }
+
+      submitPlannedConsumption(
+        selected,
+        quantity,
+        quantityUnit,
+        '',
+        confirmSaveBtn,
+        resolveConfirmButtonHtml(state.confirmContext)
+      );
+    }
+
+    if (confirmKeypadEl) {
+      confirmKeypadEl.addEventListener('click', function (event) {
+        var target = event.target ? event.target.closest('[data-keypad-value], [data-keypad-action]') : null;
+
+        if (!target) {
+          return;
+        }
+
+        var action = String(target.getAttribute('data-keypad-action') || '').trim().toLowerCase();
+        var value = String(target.getAttribute('data-keypad-value') || '');
+
+        if (action === 'clear') {
+          clearQuantityInputValue();
+          return;
+        }
+
+        if (value !== '') {
+          appendQuantityInputToken(value);
+        }
+      });
+    }
+
+    if (confirmBackspaceBtn) {
+      confirmBackspaceBtn.addEventListener('click', function () {
+        backspaceQuantityInputValue();
+      });
+    }
+
+    if (confirmUnitSwitchEl) {
+      confirmUnitSwitchEl.addEventListener('click', function (event) {
+        var button = event.target ? event.target.closest('.confirm-weight-unit-btn') : null;
+
+        if (!button) {
+          return;
+        }
+
+        setQuantityUnitValue(button.getAttribute('data-unit') || 'AUTO');
+      });
+    }
+
+    if (quantityUnitSelect) {
+      quantityUnitSelect.addEventListener('change', function () {
+        syncConfirmUnitButtons();
+      });
+    }
+
+    if (quantityInput) {
+      ['keydown', 'keypress', 'paste', 'beforeinput', 'mousedown', 'mouseup', 'touchstart', 'focus'].forEach(function (eventName) {
+        quantityInput.addEventListener(eventName, function (event) {
+          if (eventName === 'focus' && typeof quantityInput.blur === 'function') {
+            quantityInput.blur();
+          }
+
+          if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+          }
+        });
+      });
+    }
+
+    updateConfirmQuantityScreen();
 
     if (componentsBody) {
       bindSelectableRowClick(componentsBody, '.bom-component-checkbox');
