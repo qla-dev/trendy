@@ -529,7 +529,7 @@ document.addEventListener('DOMContentLoaded', function () {
     allDayText: 'Cijeli dan',
     noEventsContent: 'Nema zapisa za prikaz',
     moreLinkText: function (amount) {
-      return '+ jos ' + amount;
+      return '+ još ' + amount;
     },
     dayHeaderContent: function (args) {
       return dayNamesShort[args.date.getDay()];

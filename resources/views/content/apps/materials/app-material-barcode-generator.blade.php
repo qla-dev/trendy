@@ -37,11 +37,23 @@
     background-color: #f8f8fc;
   }
 
+  .material-barcode-table tbody .material-barcode-loading-spacer-row > td {
+    height: 180px;
+    padding: 0 !important;
+    border-top: 0 !important;
+    border-bottom: 0 !important;
+    background: transparent !important;
+  }
+
   .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child,
   .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:last-child {
     margin-left: 0;
     margin-right: 0;
     padding: 1rem 1rem 0.95rem;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable.material-barcode-initial-loading .dataTables_wrapper > .row:last-child {
+    display: none;
   }
 
   .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-'],
@@ -240,7 +252,7 @@
       </div>
     @endif
 
-    <div class="card-datatable table-responsive">
+    <div class="card-datatable table-responsive material-barcode-initial-loading">
       <table class="table material-barcode-table" id="material-barcode-table">
         <thead>
           <tr>
@@ -250,6 +262,11 @@
             <th>Zaliha</th>
           </tr>
         </thead>
+        <tbody>
+          <tr class="material-barcode-loading-spacer-row" aria-hidden="true">
+            <td colspan="4"></td>
+          </tr>
+        </tbody>
       </table>
     </div>
   </div>
@@ -296,5 +313,5 @@
     'dataUrl' => $barcodeTableUrl ?? route('app-barcode-generator-data'),
   ]);
 </script>
-<script src="{{asset('js/scripts/pages/app-material-barcode-generator.js')}}"></script>
+<script src="{{asset('js/scripts/pages/app-material-barcode-generator.js?v=3')}}"></script>
 @endsection

@@ -263,7 +263,7 @@
         {{ $error }}
       </div>
     @endif
-    <div class="card-datatable table-responsive">
+    <div class="card-datatable table-responsive invoice-table-initial-loading">
       <table class="invoice-list-table table">
         <thead>
           <tr>
@@ -278,6 +278,11 @@
             <th>Prioritet</th>
           </tr>
         </thead>
+        <tbody>
+          <tr class="invoice-table-loading-spacer-row" aria-hidden="true">
+            <td colspan="9"></td>
+          </tr>
+        </tbody>
       </table>
     </div>
   </div>
@@ -457,6 +462,21 @@
     font-weight: 700;
     color: #5e5873;
     line-height: 1;
+  }
+
+  @media (max-width: 1147.98px) {
+    .status-cards-wrapper {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+
+    .status-card {
+      flex: 0 0 152px;
+      min-width: 152px;
+    }
   }
 
   .status-badge {
@@ -651,6 +671,18 @@
 
   .invoice-list-table.table tbody tr:hover > * {
     background-color: #f8f8fc;
+  }
+
+  .invoice-list-table tbody .invoice-table-loading-spacer-row > td {
+    height: 250px;
+    padding: 0 !important;
+    border-top: 0 !important;
+    border-bottom: 0 !important;
+    background: transparent !important;
+  }
+
+  .card-datatable.invoice-table-initial-loading .dataTables_wrapper > .row:last-child {
+    display: none;
   }
 
   .invoice-table-overlay-host {
@@ -868,5 +900,5 @@
 @endsection
 
 @section('page-script')
-<script src="{{asset('js/scripts/pages/app-invoice-list.js')}}"></script>
+<script src="{{asset('js/scripts/pages/app-invoice-list.js?v=5')}}"></script>
 @endsection

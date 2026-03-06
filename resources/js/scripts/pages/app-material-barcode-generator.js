@@ -14,6 +14,7 @@ $(function () {
   var currentMaterialCode = '';
   var tableLoadingRequestCount = 0;
   var overlaySafetyTimer = null;
+  var hasCompletedInitialTableLoad = false;
 
   var sortableColumnMap = {
     0: 'material_code',
@@ -316,42 +317,74 @@ $(function () {
     var overlayHost = tableElement.closest('.card-datatable');
     var overlay = overlayHost.find('.invoice-table-loading-overlay').first();
     var hostElement = overlayHost.get(0);
+    var tableNode = tableElement.get(0);
     var bodyElement = tableElement.find('tbody').get(0);
     var hostRect;
     var bodyRect;
+    var spacerRowRect;
     var tableRect;
     var headerHeight;
     var top;
     var left;
     var width;
     var height;
+    var minimumBodyHeight = 120;
+    var spacerRowElement;
+    var spacerRowApplied = false;
 
-    if (!overlay.length || !hostElement || !bodyElement) {
+    if (!overlay.length || !hostElement || !tableNode) {
       return;
     }
 
     hostRect = hostElement.getBoundingClientRect();
-    bodyRect = bodyElement.getBoundingClientRect();
 
-    top = bodyRect.top - hostRect.top;
-    left = bodyRect.left - hostRect.left;
-    width = bodyRect.width;
-    height = bodyRect.height;
+    tableRect = tableNode.getBoundingClientRect();
+    headerHeight = tableElement.find('thead').outerHeight() || 0;
+    top = Math.max(0, tableRect.top - hostRect.top + headerHeight);
+    left = Math.max(0, tableRect.left - hostRect.left);
+    width = Math.max(0, tableRect.width);
+    height = Math.max(minimumBodyHeight, tableRect.height - headerHeight);
 
-    if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
-      tableRect = tableElement.get(0).getBoundingClientRect();
-      headerHeight = tableElement.find('thead').outerHeight() || 0;
-      top = Math.max(0, tableRect.top - hostRect.top + headerHeight);
-      left = Math.max(0, tableRect.left - hostRect.left);
-      width = Math.max(0, tableRect.width);
-      height = Math.max(120, tableRect.height - headerHeight);
+    if (bodyElement) {
+      spacerRowElement = bodyElement.querySelector('.material-barcode-loading-spacer-row');
+      bodyRect = bodyElement.getBoundingClientRect();
+
+      if (spacerRowElement) {
+        spacerRowRect = spacerRowElement.getBoundingClientRect();
+
+        if (
+          Number.isFinite(spacerRowRect.width) &&
+          spacerRowRect.width > 0 &&
+          Number.isFinite(spacerRowRect.height) &&
+          spacerRowRect.height > 0
+        ) {
+          top = spacerRowRect.top - hostRect.top;
+          left = spacerRowRect.left - hostRect.left;
+          width = spacerRowRect.width;
+          height = spacerRowRect.height;
+          spacerRowApplied = true;
+        }
+      }
+
+      if (
+        !spacerRowApplied &&
+        Number.isFinite(bodyRect.width) &&
+        bodyRect.width > 0 &&
+        Number.isFinite(bodyRect.height) &&
+        bodyRect.height > 0
+      ) {
+        top = bodyRect.top - hostRect.top;
+        left = bodyRect.left - hostRect.left;
+        width = bodyRect.width;
+        height = bodyRect.height;
+      }
     }
 
     overlay.css({
       top: Math.max(0, top) + 'px',
       left: Math.max(0, left) + 'px',
       width: Math.max(0, width) + 'px',
-      height: Math.max(120, height) + 'px'
+      height: Math.max(minimumBodyHeight, height) + 'px'
     });
   }
 
@@ -364,6 +397,38 @@ $(function () {
 
     updateTableLoadingOverlayBounds();
     overlay.addClass('is-visible').attr('aria-hidden', 'false');
+    window.requestAnimationFrame(updateTableLoadingOverlayBounds);
+    window.setTimeout(updateTableLoadingOverlayBounds, 0);
+  }
+
+  function setInitialBottomControlsRowVisible(visible) {
+    var wrapper = tableElement.closest('.dataTables_wrapper');
+    var bottomRow;
+
+    if (!wrapper.length) {
+      return;
+    }
+
+    bottomRow = wrapper.children('.row').eq(2);
+    if (!bottomRow.length) {
+      return;
+    }
+
+    bottomRow.css('display', visible ? '' : 'none');
+  }
+
+  function setInitialTableLoadingState(active) {
+    var overlayHost = tableElement.closest('.card-datatable');
+
+    if (!overlayHost.length) {
+      return;
+    }
+
+    if (active && hasCompletedInitialTableLoad) {
+      return;
+    }
+
+    overlayHost.toggleClass('material-barcode-initial-loading', !!active);
   }
 
   function hideTableLoadingOverlay(force) {
@@ -390,6 +455,9 @@ $(function () {
     tableLoadingRequestCount = Math.max(0, tableLoadingRequestCount - 1);
 
     if (tableLoadingRequestCount === 0) {
+      hasCompletedInitialTableLoad = true;
+      setInitialTableLoadingState(false);
+      setInitialBottomControlsRowVisible(true);
       hideTableLoadingOverlay(true);
     }
   }
@@ -414,6 +482,39 @@ $(function () {
     updateTableLoadingOverlayBounds();
   });
 
+  function runTableRequest(requestData, callback, requestPayload, skipBeginLoading) {
+    if (!skipBeginLoading) {
+      beginTableLoadingRequest();
+    }
+
+    $.ajax({
+      url: dataUrl,
+      method: 'GET',
+      dataType: 'json',
+      data: requestPayload,
+      success: function (response) {
+        callback({
+          draw: requestData.draw,
+          recordsTotal: response.recordsTotal || 0,
+          recordsFiltered: response.recordsFiltered || 0,
+          data: response.data || []
+        });
+      },
+      error: function () {
+        callback({
+          draw: requestData.draw,
+          recordsTotal: 0,
+          recordsFiltered: 0,
+          data: []
+        });
+      },
+      complete: function () {
+        finishTableLoadingRequest();
+        scheduleOverlaySafetyHide();
+      }
+    });
+  }
+
   var dataTable = tableElement.DataTable({
     processing: false,
     serverSide: true,
@@ -426,44 +527,18 @@ $(function () {
       var firstOrder = requestData.order && requestData.order.length ? requestData.order[0] : null;
       var orderColumnIndex = firstOrder && firstOrder.column !== undefined ? parseInt(firstOrder.column, 10) : NaN;
       var sortBy = Number.isInteger(orderColumnIndex) ? sortableColumnMap[orderColumnIndex] || 'material_code' : 'material_code';
-
-      beginTableLoadingRequest();
-
-      $.ajax({
-        url: dataUrl,
-        method: 'GET',
-        dataType: 'json',
-        data: {
-          draw: requestData.draw,
-          start: requestData.start || 0,
-          length: requestData.length || 25,
-          sort_by: sortBy,
-          sort_dir: firstOrder && firstOrder.dir === 'desc' ? 'desc' : 'asc',
-          search: {
-            value: requestData.search && requestData.search.value ? requestData.search.value : ''
-          }
-        },
-        success: function (response) {
-          callback({
-            draw: requestData.draw,
-            recordsTotal: response.recordsTotal || 0,
-            recordsFiltered: response.recordsFiltered || 0,
-            data: response.data || []
-          });
-        },
-        error: function () {
-          callback({
-            draw: requestData.draw,
-            recordsTotal: 0,
-            recordsFiltered: 0,
-            data: []
-          });
-        },
-        complete: function () {
-          finishTableLoadingRequest();
-          scheduleOverlaySafetyHide();
+      var requestPayload = {
+        draw: requestData.draw,
+        start: requestData.start || 0,
+        length: requestData.length || 25,
+        sort_by: sortBy,
+        sort_dir: firstOrder && firstOrder.dir === 'desc' ? 'desc' : 'asc',
+        search: {
+          value: requestData.search && requestData.search.value ? requestData.search.value : ''
         }
-      });
+      };
+
+      runTableRequest(requestData, callback, requestPayload, false);
     },
     columns: [
       { data: 'material_code' },
@@ -519,6 +594,9 @@ $(function () {
       }
     }
   });
+
+  setInitialTableLoadingState(true);
+  setInitialBottomControlsRowVisible(false);
 
   tableElement.find('tbody').on('click', 'tr', function () {
     var rowElement = $(this);

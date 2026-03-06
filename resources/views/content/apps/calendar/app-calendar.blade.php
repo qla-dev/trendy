@@ -323,7 +323,7 @@
 
 @section('vendor-script')
   <!-- Vendor js files -->
-  <script src="{{ asset(mix('vendors/js/calendar/fullcalendar.min.js')) }}"></script>
+  <script src="{{ asset(mix('vendors/js/calendar/fullcalendar.min.js?v=2')) }}"></script>
   <script src="{{ asset(mix('vendors/js/extensions/moment.min.js')) }}"></script>
   <script src="{{ asset(mix('vendors/js/forms/select/select2.full.min.js')) }}"></script>
   <script src="{{ asset(mix('vendors/js/forms/validation/jquery.validate.min.js')) }}"></script>

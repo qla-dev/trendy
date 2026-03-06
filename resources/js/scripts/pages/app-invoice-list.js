@@ -236,6 +236,13 @@ $(function () {
     return priorityLabel || normalizedPriorityValue;
   }
 
+  function getPriorityTableDisplayValue(priorityValue) {
+    return (priorityValue || '')
+      .toString()
+      .trim()
+      .replace(/\s+prioritet\s*$/i, '');
+  }
+
   function escapeHtml(value) {
     return $('<div/>').text(value === null || value === undefined ? '' : String(value)).html();
   }
@@ -409,6 +416,7 @@ $(function () {
     var moneyColumnIndex = 5;
     var moneyColumnVisible = null;
     var tableLoadingRequestCount = 0;
+    var hasCompletedInitialTableLoad = false;
     var searchDebounceTimer = null;
     var searchOverlaySafetyTimer = null;
     var sortableColumnMap = {
@@ -467,6 +475,36 @@ $(function () {
         .attr('aria-hidden', isBusy ? 'false' : 'true');
     }
 
+    function setInitialBottomControlsRowVisible(visible) {
+      var wrapper = dtInvoiceTable.closest('.dataTables_wrapper');
+      var bottomRow;
+
+      if (!wrapper.length) {
+        return;
+      }
+
+      bottomRow = wrapper.children('.row').eq(2);
+      if (!bottomRow.length) {
+        return;
+      }
+
+      bottomRow.css('display', visible ? '' : 'none');
+    }
+
+    function setInitialTableLoadingState(active) {
+      var overlayHost = dtInvoiceTable.closest('.card-datatable');
+
+      if (!overlayHost.length) {
+        return;
+      }
+
+      if (active && hasCompletedInitialTableLoad) {
+        return;
+      }
+
+      overlayHost.toggleClass('invoice-table-initial-loading', !!active);
+    }
+
     function ensureTableLoadingOverlay() {
       var overlayHost = dtInvoiceTable.closest('.card-datatable');
 
@@ -498,6 +536,7 @@ $(function () {
       var overlayHost = dtInvoiceTable.closest('.card-datatable');
       var overlay = overlayHost.find('.invoice-table-loading-overlay').first();
       var hostElement = overlayHost.get(0);
+      var tableElement = dtInvoiceTable.get(0);
       var bodyElement = dtInvoiceTable.find('tbody').get(0);
       var top;
       var left;
@@ -505,35 +544,66 @@ $(function () {
       var height;
       var hostRect;
       var bodyRect;
+      var spacerRowRect;
       var tableRect;
       var headerHeight;
+      var minimumBodyHeight = 120;
+      var spacerRowElement;
+      var spacerRowApplied = false;
 
-      if (!overlay.length || !hostElement || !bodyElement) {
+      if (!overlay.length || !hostElement || !tableElement) {
         return;
       }
 
       hostRect = hostElement.getBoundingClientRect();
-      bodyRect = bodyElement.getBoundingClientRect();
 
-      top = bodyRect.top - hostRect.top;
-      left = bodyRect.left - hostRect.left;
-      width = bodyRect.width;
-      height = bodyRect.height;
+      tableRect = tableElement.getBoundingClientRect();
+      headerHeight = dtInvoiceTable.find('thead').outerHeight() || 0;
+      top = Math.max(0, tableRect.top - hostRect.top + headerHeight);
+      left = Math.max(0, tableRect.left - hostRect.left);
+      width = Math.max(0, tableRect.width);
+      height = Math.max(minimumBodyHeight, tableRect.height - headerHeight);
 
-      if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
-        tableRect = dtInvoiceTable.get(0).getBoundingClientRect();
-        headerHeight = dtInvoiceTable.find('thead').outerHeight() || 0;
-        top = Math.max(0, tableRect.top - hostRect.top + headerHeight);
-        left = Math.max(0, tableRect.left - hostRect.left);
-        width = Math.max(0, tableRect.width);
-        height = Math.max(120, tableRect.height - headerHeight);
+      if (bodyElement) {
+        spacerRowElement = bodyElement.querySelector('.invoice-table-loading-spacer-row');
+        bodyRect = bodyElement.getBoundingClientRect();
+
+        if (spacerRowElement) {
+          spacerRowRect = spacerRowElement.getBoundingClientRect();
+
+          if (
+            Number.isFinite(spacerRowRect.width) &&
+            spacerRowRect.width > 0 &&
+            Number.isFinite(spacerRowRect.height) &&
+            spacerRowRect.height > 0
+          ) {
+            top = spacerRowRect.top - hostRect.top;
+            left = spacerRowRect.left - hostRect.left;
+            width = spacerRowRect.width;
+            height = spacerRowRect.height;
+            spacerRowApplied = true;
+          }
+        }
+
+        if (
+          !spacerRowApplied &&
+          Number.isFinite(bodyRect.width) &&
+          bodyRect.width > 0 &&
+          Number.isFinite(bodyRect.height) &&
+          bodyRect.height > 0
+        ) {
+          top = bodyRect.top - hostRect.top;
+          left = bodyRect.left - hostRect.left;
+          width = bodyRect.width;
+          height = bodyRect.height;
+        }
       }
 
       overlay.css({
         top: Math.max(0, top) + 'px',
         left: Math.max(0, left) + 'px',
         width: Math.max(0, width) + 'px',
-        height: Math.max(120, height) + 'px'
+        height: Math.max(minimumBodyHeight, height) + 'px'
       });
     }
 
@@ -546,6 +616,8 @@ $(function () {
 
       updateTableLoadingOverlayBounds();
       overlay.addClass('is-visible').attr('aria-hidden', 'false');
+      window.requestAnimationFrame(updateTableLoadingOverlayBounds);
+      window.setTimeout(updateTableLoadingOverlayBounds, 0);
       setQuickSearchHeaderLoading(true);
     }
 
@@ -574,6 +646,9 @@ $(function () {
       tableLoadingRequestCount = Math.max(0, tableLoadingRequestCount - 1);
 
       if (tableLoadingRequestCount === 0) {
+        hasCompletedInitialTableLoad = true;
+        setInitialTableLoadingState(false);
+        setInitialBottomControlsRowVisible(true);
         hideTableLoadingOverlay(true);
       }
     }
@@ -594,6 +669,46 @@ $(function () {
       updateTableLoadingOverlayBounds();
     });
 
+    function runInvoiceTableRequest(requestData, callback, params, skipBeginLoading) {
+      if (!skipBeginLoading) {
+        beginTableLoadingRequest();
+      }
+
+      $.ajax({
+        url: workOrdersApi,
+        method: 'GET',
+        dataType: 'json',
+        data: params,
+        success: function (response) {
+          updateStatusCards(response.statusStats || {});
+          var showMoneyColumn = !!(response.meta && response.meta.has_money_values);
+
+          if (moneyColumnVisible !== showMoneyColumn && dtInvoice && typeof dtInvoice.column === 'function') {
+            dtInvoice.column(moneyColumnIndex).visible(showMoneyColumn, false);
+            moneyColumnVisible = showMoneyColumn;
+          }
+
+          callback({
+            draw: requestData.draw,
+            recordsTotal: response.meta && response.meta.total ? response.meta.total : 0,
+            recordsFiltered: response.meta && response.meta.filtered_total ? response.meta.filtered_total : 0,
+            data: response.data || []
+          });
+        },
+        error: function () {
+          callback({
+            draw: requestData.draw,
+            recordsTotal: 0,
+            recordsFiltered: 0,
+            data: []
+          });
+        },
+        complete: function () {
+          finishTableLoadingRequest();
+        }
+      });
+    }
+
     var dtInvoice = dtInvoiceTable.DataTable({
       processing: true,
       serverSide: true,
@@ -601,8 +716,6 @@ $(function () {
       lengthMenu: [10, 25, 50],
       autoWidth: false,
       ajax: function (requestData, callback) {
-        beginTableLoadingRequest();
-
         var page = Math.floor(requestData.start / requestData.length) + 1;
         var firstOrder = requestData.order && requestData.order.length ? requestData.order[0] : null;
         var orderColumnIndex = firstOrder && firstOrder.column !== undefined ? parseInt(firstOrder.column, 10) : NaN;
@@ -620,39 +733,7 @@ $(function () {
           params.sort_dir = '';
         }
 
-        $.ajax({
-          url: workOrdersApi,
-          method: 'GET',
-          dataType: 'json',
-          data: params,
-          success: function (response) {
-            updateStatusCards(response.statusStats || {});
-            var showMoneyColumn = !!(response.meta && response.meta.has_money_values);
-
-            if (moneyColumnVisible !== showMoneyColumn && dtInvoice && typeof dtInvoice.column === 'function') {
-              dtInvoice.column(moneyColumnIndex).visible(showMoneyColumn, false);
-              moneyColumnVisible = showMoneyColumn;
-            }
-
-            callback({
-              draw: requestData.draw,
-              recordsTotal: response.meta && response.meta.total ? response.meta.total : 0,
-              recordsFiltered: response.meta && response.meta.filtered_total ? response.meta.filtered_total : 0,
-              data: response.data || []
-            });
-          },
-          error: function () {
-            callback({
-              draw: requestData.draw,
-              recordsTotal: 0,
-              recordsFiltered: 0,
-              data: []
-            });
-          },
-          complete: function () {
-            finishTableLoadingRequest();
-          }
-        });
+        runInvoiceTableRequest(requestData, callback, params, false);
       },
       columns: [
         { data: 'id' },
@@ -840,6 +921,7 @@ $(function () {
           width: '80px',
           render: function (data, type, full) {
             var priority = full['prioritet'];
+            var priorityDisplay = getPriorityTableDisplayValue(priority);
             var badgeClass = 'badge-light-secondary';
             var textColor = '';
             var normalizedPriority = (priority || '').toString().toLowerCase();
@@ -881,7 +963,7 @@ $(function () {
               ' ' +
               textColor +
               '" text-capitalized> ' +
-              priority +
+              priorityDisplay +
               ' </span>'
             );
           }
@@ -1009,6 +1091,9 @@ $(function () {
 
       window.location.href = buildInvoicePreviewUrl(rowData.id, 'invoice_list');
     });
+
+    setInitialTableLoadingState(true);
+    setInitialBottomControlsRowVisible(false);
 
     var filtersBody = $('#filters-body');
     var toggleFiltersBtn = $('#btn-toggle-filters');
