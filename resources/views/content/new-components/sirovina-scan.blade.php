@@ -46,7 +46,7 @@
       </div>
       <div class="modal-body p-0">
         <div class="wo-bom-modal-shell">
-          <div class="row g-4 align-items-stretch pb-5">
+          <div class="row g-4 align-items-stretch">
             <div class="col-12 col-lg-4 wo-bom-scanner-col">
               <div class="wo-bom-card wo-bom-dummy-qr-card">
                 <h5 class="text-white mb-1">Skenirajte BARCODE artikla</h5>
