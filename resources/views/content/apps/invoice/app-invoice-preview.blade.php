@@ -1268,6 +1268,10 @@
     'email' => $displayValue($recipientRaw['email'] ?? null),
   ];
   $workOrderMeta = $workOrderMeta ?? [];
+  $currentUser = auth()->user();
+  $isBasicUserRole = $currentUser && strtolower((string) ($currentUser->role ?? '')) === 'user';
+  $showSastavnicaActions = !$isBasicUserRole;
+  $sastavnicaEmptyColspan = $showSastavnicaActions ? 16 : 15;
   $workOrderMetaHighlights = $workOrderMeta['highlights'] ?? [];
   $workOrderMetaKpis = $workOrderMeta['kpis'] ?? [];
   $workOrderMetaTimeline = $workOrderMeta['timeline'] ?? [];
@@ -1580,7 +1584,9 @@
                       <th class="py-1 text-center">VA</th>
                       <th class="py-1 text-center">Prim.klas</th>
                       <th class="py-1 text-center">Sek.klas</th>
-                      <th class="py-1 text-center wo-sastavnica-action-col">Akcija</th>
+                      @if($showSastavnicaActions)
+                        <th class="py-1 text-center wo-sastavnica-action-col">Akcija</th>
+                      @endif
                     </tr>
                   </thead>
                   <tbody>
@@ -1601,32 +1607,34 @@
                         <td class="py-1">{{ $displayValue($item['va'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($item['prim_klas'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($item['sek_klas'] ?? null) }}</td>
-                        <td class="py-1 text-center wo-sastavnica-action-col">
-                          <div class="d-inline-flex align-items-center gap-50">
-                            <button
-                              type="button"
-                              class="btn btn-sm btn-outline-primary wo-edit-sastavnica-btn"
-                              title="Uredi stavku (uskoro)"
-                            >
-                              <i class="fa fa-pencil"></i>
-                            </button>
-                            @if((bool) ($item['can_remove'] ?? false))
+                        @if($showSastavnicaActions)
+                          <td class="py-1 text-center wo-sastavnica-action-col">
+                            <div class="d-inline-flex align-items-center gap-50">
                               <button
                                 type="button"
-                                class="btn btn-sm btn-outline-danger wo-remove-sastavnica-btn"
-                                data-item-id="{{ $displayValue($item['qid'] ?? null) }}"
-                                data-item-no="{{ $displayValue($item['no'] ?? null) }}"
-                                title="Ukloni iz radnog naloga"
+                                class="btn btn-sm btn-outline-primary wo-edit-sastavnica-btn"
+                                title="Uredi stavku (uskoro)"
                               >
-                                <i class="fa fa-trash"></i>
+                                <i class="fa fa-pencil"></i>
                               </button>
-                            @endif
-                          </div>
-                        </td>
+                              @if((bool) ($item['can_remove'] ?? false))
+                                <button
+                                  type="button"
+                                  class="btn btn-sm btn-outline-danger wo-remove-sastavnica-btn"
+                                  data-item-id="{{ $displayValue($item['qid'] ?? null) }}"
+                                  data-item-no="{{ $displayValue($item['no'] ?? null) }}"
+                                  title="Ukloni iz radnog naloga"
+                                >
+                                  <i class="fa fa-trash"></i>
+                                </button>
+                              @endif
+                            </div>
+                          </td>
+                        @endif
                       </tr>
                     @empty
                       <tr>
-                        <td colspan="16" class="text-center text-muted py-2">Nema stavki za ovaj radni nalog.</td>
+                        <td colspan="{{ $sastavnicaEmptyColspan }}" class="text-center text-muted py-2">Nema stavki za ovaj radni nalog.</td>
                       </tr>
                     @endforelse
                   </tbody>
@@ -2302,7 +2310,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       }
 
       var emptyRow = document.createElement('tr');
-      emptyRow.innerHTML = '<td colspan="16" class="text-center text-muted py-2">Nema stavki za ovaj radni nalog.</td>';
+      emptyRow.innerHTML = '<td colspan="{{ $sastavnicaEmptyColspan }}" class="text-center text-muted py-2">Nema stavki za ovaj radni nalog.</td>';
       body.appendChild(emptyRow);
     }
 

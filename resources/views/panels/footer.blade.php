@@ -14,8 +14,8 @@
     width: auto;
     display: inline-block;
     vertical-align: middle;
-    transform: scaleX(0.9);
     transform-origin: center;
+    margin-bottom: 5px;
   }
 
   .footer-qla-link .footer-qla-logo-dark {
