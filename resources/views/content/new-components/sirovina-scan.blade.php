@@ -111,7 +111,7 @@
                         >
                       </div>
                       <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-subtle" id="sirovina-qr-torch-btn" disabled>
-                        <i class="fa fa-lightbulb-o me-50"></i> Ukljuci svjetlo
+                        <i class="fa fa-lightbulb-o me-50"></i> Uključi svjetlo
                       </button>
                     </div>
 
@@ -1662,7 +1662,7 @@
         scannerTorchBtn.disabled = true;
         scannerTorchBtn.classList.remove('wo-qr-btn-primary');
         scannerTorchBtn.classList.add('wo-qr-btn-subtle');
-        scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> Ukljuci svjetlo';
+        scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> Ukljui svjetlo';
       }
     }
 
@@ -1794,11 +1794,11 @@
           scannerTorchBtn.classList.toggle('wo-qr-btn-subtle', !barcodeTorchEnabled);
           scannerTorchBtn.innerHTML = barcodeTorchEnabled
             ? '<i class="fa fa-lightbulb-o me-50"></i> Ugasi svjetlo'
-            : '<i class="fa fa-lightbulb-o me-50"></i> Ukljuci svjetlo';
+            : '<i class="fa fa-lightbulb-o me-50"></i> Uključi svjetlo';
         } else {
           scannerTorchBtn.classList.remove('wo-qr-btn-primary');
           scannerTorchBtn.classList.add('wo-qr-btn-subtle');
-          scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> Ukljuci svjetlo';
+          scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> Uključi svjetlo';
         }
       }
     }
@@ -3702,7 +3702,7 @@
       }
 
       if (context.action === 'update') {
-        return '<i class="fa fa-refresh me-2"></i> Azuriraj postojecu stavku';
+        return '<i class="fa fa-refresh me-2"></i> Ažuriraj postojecu stavku';
       }
 
       return '<i class="fa fa-plus me-2"></i> Dodaj materijal na RN';
@@ -3780,13 +3780,13 @@
       if (confirmMaterialActionEl) {
         confirmMaterialActionEl.classList.toggle('is-update', action === 'update');
         confirmMaterialActionEl.textContent = action === 'update'
-          ? 'Postojeca stavka na RN ce biti azurirana novom tezinom.'
-          : 'Materijal ne postoji na RN i bit ce dodan kao nova stavka.';
+          ? 'Postojeća stavka na RN ce biti ažurirana novom tezinom.'
+          : 'Materijal ne postoji na RN i bit ce dodan kao nova stavka sastavnice.';
       }
       if (confirmHelpTextEl) {
         confirmHelpTextEl.textContent = action === 'update'
-          ? 'Unesi tezinu koja se dopisuje na postojeci materijal.'
-          : 'Unesi tezinu skeniranog materijala koji se dodaje na RN.';
+          ? 'Prilagodite količinu i mjernu jedinicu koja se dopisuje na postojeći materijal RN.'
+          : 'Unesite količinu i mjernu jedinicu skeniranog materijala koji se dodaje na RN.';
       }
       if (quantityUnitSelect) {
         quantityUnitSelect.value = resolveBarcodeQuantityUnit(material);

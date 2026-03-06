@@ -1204,11 +1204,11 @@ class WorkOrderController extends Controller
 
             if ($saveMode === 'barcode') {
                 if ($updatedCount > 0 && $insertedCount > 0) {
-                    $responseMessage = 'Barcode materijal je obraden. Azurirano: ' . $updatedCount . ', dodano: ' . $insertedCount . '.';
+                    $responseMessage = 'Barcode materijal je obrađen. Ažurirano: ' . $updatedCount . ', dodano: ' . $insertedCount . '.';
                 } elseif ($updatedCount > 0) {
-                    $responseMessage = 'Barcode materijal je uspjesno azuriran na radnom nalogu.';
+                    $responseMessage = 'Barcode materijal je uspjesno ažuriran na radnom nalogu.';
                 } elseif ($insertedCount > 0) {
-                    $responseMessage = 'Barcode materijal je uspjesno dodan na radni nalog.';
+                    $responseMessage = 'Barcode materijal je uspješno dodan na radni nalog.';
                 }
             }
 
