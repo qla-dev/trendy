@@ -179,6 +179,7 @@
 
 <style>
   #confirm-weight-modal {
+    --confirm-meta-row-gap: clamp(0.7rem, 1.15vh, 1rem);
     --confirm-shell-bg:
       radial-gradient(circle at top left, rgba(76, 108, 168, 0.2), transparent 32%),
       radial-gradient(circle at top right, rgba(92, 225, 194, 0.14), transparent 24%),
@@ -390,7 +391,8 @@
   #confirm-weight-modal .confirm-material-meta-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
+    row-gap: var(--confirm-meta-row-gap);
+    column-gap: 1rem;
     align-content: space-between;
     flex: 1 1 auto;
     min-height: 100%;
@@ -763,17 +765,23 @@
   }
 
   @media (orientation: portrait) {
+    #confirm-weight-modal {
+      --confirm-meta-row-gap: clamp(0.4rem, 0.85vh, 0.82rem);
+    }
+
     #confirm-weight-modal .modal-dialog {
       max-width: none;
       width: 100vw;
       height: 100vh;
+      max-height: 100vh;
       margin: 0;
       min-height: 100vh;
       align-items: stretch;
     }
 
     #confirm-weight-modal .modal-content {
-      min-height: 100vh;
+      min-height: 100%;
+      max-height: 100%;
       border-radius: 0;
       border-left: 0;
       border-right: 0;
@@ -816,6 +824,20 @@
 
     #confirm-weight-modal .confirm-weight-screen-delete {
       min-height: 9rem;
+    }
+  }
+
+  @supports (height: 100dvh) {
+    @media (orientation: portrait) {
+      #confirm-weight-modal {
+        --confirm-meta-row-gap: clamp(0.4rem, 0.85dvh, 0.82rem);
+      }
+
+      #confirm-weight-modal .modal-dialog {
+        height: 100dvh;
+        max-height: 100dvh;
+        min-height: 100dvh;
+      }
     }
   }
 
