@@ -4329,7 +4329,7 @@
 
       if (requireManualCameraStart) {
         refreshScannerCameras();
-        setScannerStatus('Klikni Primijenite da admin kamera starta barcode skeniranje.', 'warning');
+        setScannerStatus('Još uvijek nije dostupno', 'warning');
       } else {
         requestBarcodeScannerStart(false);
       }
