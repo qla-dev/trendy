@@ -2403,7 +2403,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           cancelButtonText: 'Otkaži',
           customClass: {
             confirmButton: 'btn btn-primary',
-            cancelButton: 'btn btn-outline-secondary ms-1'
+            cancelButton: 'btn btn-danger ms-1'
           },
           buttonsStyling: false
         })).then(function (result) {
@@ -2472,7 +2472,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           cancelButtonText: 'Otkaži',
           customClass: {
             confirmButton: 'btn btn-primary',
-            cancelButton: 'btn btn-outline-secondary ms-1'
+            cancelButton: 'btn btn-danger ms-1'
           },
           buttonsStyling: false
         })).then(function (result) {
@@ -2580,7 +2580,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           cancelButtonText: 'Otkaži',
           customClass: {
             confirmButton: 'btn btn-danger',
-            cancelButton: 'btn btn-outline-secondary ms-1'
+            cancelButton: 'btn btn-danger ms-1'
           },
           buttonsStyling: false
         })).then(function (result) {

@@ -10,10 +10,10 @@
   $statusAliases = [
     'novo' => 'planiran',
     'u toku' => 'u radu',
-    'djelimicno zavrseno' => 'djelimicno zavrsen',
-    'djelimično završeno' => 'djelimicno zavrsen',
-    'zavrseno' => 'zavrsen',
-    'završeno' => 'zavrsen',
+    'djelimično zavrseno' => 'djelimično zavrsen',
+    'djelimično zavrsen' => 'djelimično zavrsen',
+    'završeno' => 'završen',
+    'završen' => 'završen',
   ];
 
   if (array_key_exists($normalizedCurrentStatus, $statusAliases)) {
@@ -29,7 +29,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
       </div>
       <div class="modal-body">
-        <p class="text-muted mb-1">Odaberite novi status radnog naloga.</p>
+        <p class="text mb-1">Odaberite novi status radnog naloga.</p>
         <select class="form-select" id="wo-status-select">
           @php
             $statusOptions = [
@@ -51,10 +51,10 @@
             </option>
           @endforeach
         </select>
-        <small class="text-muted d-block mt-75">Odabir će biti sačuvan nakon potvrde.</small>
+        <small class="text d-block mt-75">Odabir ce biti sačuvan nakon potvrde.</small>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Otkaži</button>
+        <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Otkaži</button>
         <button type="button" class="btn btn-primary" id="wo-status-save-btn" data-default-label="Sačuvaj">Sačuvaj</button>
       </div>
     </div>

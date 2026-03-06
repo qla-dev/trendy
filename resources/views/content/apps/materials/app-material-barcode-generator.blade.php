@@ -453,7 +453,7 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zatvori</button>
+        <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Zatvori</button>
         <button type="button" class="btn btn-primary" id="material-barcode-download-btn" disabled>
           <i class="fa fa-download me-50"></i> Preuzmi SVG
         </button>

@@ -163,7 +163,7 @@
               <button type="button" class="confirm-weight-key confirm-weight-key--digit" data-keypad-value="9">9</button>
               <button type="button" class="confirm-weight-key confirm-weight-key--ok" id="confirm-add-sirovina-btn">
                 <span class="confirm-weight-ok-label">OK</span>
-                <span class="confirm-weight-ok-subtitle">Sacuvaj</span>
+                <span class="confirm-weight-ok-subtitle">Sačuvaj</span>
               </button>
 
               <button type="button" class="confirm-weight-key confirm-weight-key--digit" data-keypad-value="0">0</button>

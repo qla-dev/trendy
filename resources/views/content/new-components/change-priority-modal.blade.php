@@ -15,7 +15,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
       </div>
       <div class="modal-body">
-        <p class="text-muted mb-1">Odaberite novi prioritet radnog naloga.</p>
+        <p class="text mb-1">Odaberite novi prioritet radnog naloga.</p>
         <select class="form-select" id="wo-priority-select">
           @php
             $priorityOptions = [
@@ -40,10 +40,10 @@
             </option>
           @endforeach
         </select>
-        <small class="text-muted d-block mt-75">Odabir će biti sačuvan nakon potvrde.</small>
+        <small class="d-block mt-75">Odabir ce biti sačuvan nakon potvrde.</small>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Otkaži</button>
+        <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Otkaži</button>
         <button type="button" class="btn btn-primary" id="wo-priority-save-btn" data-default-label="Sačuvaj">Sačuvaj</button>
       </div>
     </div>

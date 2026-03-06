@@ -48,7 +48,7 @@
       </div>
 
       <div class="modal-footer fine-adjust-bom-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+        <button type="button" class="btn btn-danger" data-bs-dismiss="modal">
           <i class="fa fa-times me-50"></i> Odustani
         </button>
         <button type="button" class="btn btn-success" id="fine-adjust-save-btn">

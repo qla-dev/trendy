@@ -55,7 +55,7 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zatvori</button>
+        <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Zatvori</button>
         <button type="button" class="btn btn-primary" id="material-stock-modal-save-btn">
           <i class="fa fa-save me-50"></i> Sačuvaj zalihu
         </button>

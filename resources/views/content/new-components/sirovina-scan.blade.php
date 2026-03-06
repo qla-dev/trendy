@@ -1448,7 +1448,7 @@
     var layoutSyncRaf = null;
     var confirmSaveIdleHtml = confirmSaveBtn
       ? confirmSaveBtn.innerHTML
-      : '<i class="fa fa-check me-2"></i> Sacuvaj planiranu potrosnju';
+      : '<i class="fa fa-check me-2"></i> Sačuvaj planiranu potršnju';
     var barcodeScanner = null;
     var barcodeScannerRunning = false;
     var barcodeScannerBusy = false;
@@ -4337,7 +4337,27 @@
         );
       });
 
-      notify('success', 'Uspjesno', message + ' (Stavki: ' + savedCount + ')');
+      var itemsLine = 'Broj stavki: ' + savedCount;
+      var successHtml = (
+        '<span style="display:block;">' + escapeHtml(message) + '</span>' +
+        '<span style="display:block;margin-top:0.45rem;">' + escapeHtml(itemsLine) + '</span>'
+      );
+
+      if (window.Swal && typeof window.Swal.fire === 'function') {
+        var successOptions = {
+          icon: 'success',
+          title: 'Uspješno',
+          html: successHtml
+        };
+
+        if (typeof window.woSwalWithTheme === 'function') {
+          successOptions = window.woSwalWithTheme(successOptions);
+        }
+
+        window.Swal.fire(successOptions);
+      } else {
+        notify('success', 'Uspješno', message + ' ' + itemsLine);
+      }
       setStatus('Planirana potrošnja je uspješno sačuvana.', 'success');
       resetConfirmContext();
       hideModalIfOpen(confirmModalEl);
@@ -4522,7 +4542,7 @@
     }
 
     function resolveConfirmButtonHtml(context) {
-      var subtitle = 'Sacuvaj';
+      var subtitle = 'Sačuvaj';
 
       if (context && context.mode === 'barcode') {
         subtitle = context.action === 'update' ? 'Ažuriraj' : 'Dodaj';
