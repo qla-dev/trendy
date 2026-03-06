@@ -13,12 +13,65 @@
 <link rel="stylesheet" href="{{asset('css/base/pages/app-invoice-list.css')}}">
 <link rel="stylesheet" href="{{asset('css/base/plugins/forms/pickers/form-flat-pickr.css')}}">
 <style>
+  .invoice-list-wrapper {
+    --wo-table-scroll-track: var(--app-scroll-track);
+    --wo-table-scroll-thumb: var(--app-scroll-thumb-flat);
+    --wo-table-scroll-thumb-hover: var(--app-scroll-thumb-flat-hover);
+    --wo-table-scroll-thumb-active: var(--app-scroll-thumb-flat-active);
+    --wo-table-scroll-thumb-border: var(--app-scroll-thumb-border);
+  }
+
+  body.dark-layout .invoice-list-wrapper,
+  body.semi-dark-layout .invoice-list-wrapper,
+  .dark-layout .invoice-list-wrapper,
+  .semi-dark-layout .invoice-list-wrapper {
+    --wo-table-scroll-track: var(--app-scroll-track);
+    --wo-table-scroll-thumb: var(--app-scroll-thumb-flat);
+    --wo-table-scroll-thumb-hover: var(--app-scroll-thumb-flat-hover);
+    --wo-table-scroll-thumb-active: var(--app-scroll-thumb-flat-active);
+    --wo-table-scroll-thumb-border: var(--app-scroll-thumb-border);
+  }
+
   .content-header {
     margin-top: -6px;
     margin-bottom: 4px;
   }
   .content-header-title {
     margin-top: 5px;
+  }
+
+  .invoice-list-wrapper .card-datatable {
+    scrollbar-width: thin;
+    scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
+    scrollbar-gutter: stable;
+  }
+
+  .invoice-list-wrapper .card-datatable::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .invoice-list-wrapper .card-datatable::-webkit-scrollbar-track {
+    background: var(--wo-table-scroll-track);
+    border-radius: 999px;
+  }
+
+  .invoice-list-wrapper .card-datatable::-webkit-scrollbar-thumb {
+    background: var(--wo-table-scroll-thumb);
+    border-radius: 999px;
+    border: 1px solid var(--wo-table-scroll-thumb-border);
+  }
+
+  .invoice-list-wrapper .card-datatable::-webkit-scrollbar-thumb:hover {
+    background: var(--wo-table-scroll-thumb-hover);
+  }
+
+  .invoice-list-wrapper .card-datatable::-webkit-scrollbar-thumb:active {
+    background: var(--wo-table-scroll-thumb-active);
+  }
+
+  .invoice-list-wrapper .card-datatable::-webkit-scrollbar-corner {
+    background: var(--wo-table-scroll-track);
   }
 </style>
 @endsection

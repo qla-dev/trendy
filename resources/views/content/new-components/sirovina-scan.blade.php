@@ -1517,6 +1517,42 @@
       window.alert(title + ': ' + text);
     }
 
+    function shouldIgnoreSelectableRowClick(target) {
+      if (!target || typeof target.closest !== 'function') {
+        return true;
+      }
+
+      return Boolean(target.closest('input, button, a, select, textarea, label'));
+    }
+
+    function bindSelectableRowClick(bodyElement, checkboxSelector) {
+      if (!bodyElement) {
+        return;
+      }
+
+      bodyElement.addEventListener('click', function (event) {
+        var target = event.target;
+        var row;
+        var checkbox;
+
+        if (shouldIgnoreSelectableRowClick(target)) {
+          return;
+        }
+
+        row = target.closest('tr');
+        if (!row || row.querySelector('td[colspan]')) {
+          return;
+        }
+
+        checkbox = row.querySelector(checkboxSelector);
+        if (!checkbox || checkbox.disabled) {
+          return;
+        }
+
+        checkbox.click();
+      });
+    }
+
     function setScannerStatus(text, tone) {
       if (!scannerStatusEl) {
         return;
@@ -4012,6 +4048,8 @@
     }
 
     if (componentsBody) {
+      bindSelectableRowClick(componentsBody, '.bom-component-checkbox');
+
       componentsBody.addEventListener('change', function (event) {
         var target = event.target;
 
@@ -4062,6 +4100,8 @@
     }
 
     if (allItemsBodyEl) {
+      bindSelectableRowClick(allItemsBodyEl, '.bom-all-item-checkbox');
+
       allItemsBodyEl.addEventListener('change', function (event) {
         var target = event.target;
 

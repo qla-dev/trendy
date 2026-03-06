@@ -158,6 +158,7 @@ return [
     "Radni nalozi" => "Radni nalozi",
     "Upravljanje nalozima" => "Upravljanje nalozima",
     "Skeniraj radni nalog" => "Skeniraj nalog",
+    "Barcode generator" => "Barcode generator",
     "View" => "Pregled",
     "Edit" => "Uredi",
     "Account Settings" => "Postavke Računa",

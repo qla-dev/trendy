@@ -25,7 +25,7 @@
       overflow-x: auto;
       overflow-y: hidden;
       scrollbar-width: thin;
-      scrollbar-color: rgba(132, 142, 168, 0.72) rgba(228, 232, 241, 0.8);
+      scrollbar-color: var(--app-scroll-thumb-flat) var(--app-scroll-track);
       scrollbar-gutter: stable;
     }
 
@@ -34,19 +34,19 @@
     }
 
     .dashboard-workorders-scroll::-webkit-scrollbar-track {
-      background: rgba(228, 232, 241, 0.8);
+      background: var(--app-scroll-track);
       border-radius: 999px;
     }
 
     .dashboard-workorders-scroll::-webkit-scrollbar-thumb {
-      background: linear-gradient(180deg, rgba(130, 141, 168, 0.95) 0%, rgba(108, 119, 147, 0.95) 100%);
+      background: linear-gradient(180deg, var(--app-scroll-thumb-start) 0%, var(--app-scroll-thumb-end) 100%);
       border-radius: 999px;
-      border: 2px solid rgba(228, 232, 241, 0.95);
+      border: 2px solid var(--app-scroll-thumb-border);
       min-width: 28px;
     }
 
     .dashboard-workorders-scroll::-webkit-scrollbar-thumb:hover {
-      background: linear-gradient(180deg, rgba(113, 126, 156, 1) 0%, rgba(94, 108, 139, 1) 100%);
+      background: linear-gradient(180deg, var(--app-scroll-thumb-hover-start) 0%, var(--app-scroll-thumb-hover-end) 100%);
     }
 
     .dashboard-workorders-table thead th {
@@ -314,25 +314,25 @@
 
     .dark-layout .dashboard-workorders-scroll,
     .semi-dark-layout .dashboard-workorders-scroll {
-      scrollbar-color: rgba(170, 182, 213, 0.85) rgba(50, 58, 82, 0.95);
+      scrollbar-color: var(--app-scroll-thumb-flat) var(--app-scroll-track);
     }
 
     .dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-track,
     .semi-dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-track {
-      background: rgba(50, 58, 82, 0.95);
+      background: var(--app-scroll-track);
       border-radius: 999px;
     }
 
     .dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-thumb,
     .semi-dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-thumb {
-      background: linear-gradient(180deg, rgba(178, 188, 217, 0.92) 0%, rgba(147, 160, 192, 0.92) 100%);
+      background: linear-gradient(180deg, var(--app-scroll-thumb-start) 0%, var(--app-scroll-thumb-end) 100%);
       border-radius: 999px;
-      border: 2px solid rgba(50, 58, 82, 0.98);
+      border: 2px solid var(--app-scroll-thumb-border);
     }
 
     .dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-thumb:hover,
     .semi-dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-thumb:hover {
-      background: linear-gradient(180deg, rgba(195, 205, 232, 0.98) 0%, rgba(164, 177, 207, 0.98) 100%);
+      background: linear-gradient(180deg, var(--app-scroll-thumb-hover-start) 0%, var(--app-scroll-thumb-hover-end) 100%);
     }
 
     .dark-layout .dashboard-workorders-table > :not(caption) > * > *,

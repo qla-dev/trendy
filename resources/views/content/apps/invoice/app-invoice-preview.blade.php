@@ -88,22 +88,22 @@
   }
   .invoice-preview-wrapper {
     --wo-divider-color: #ebe9f1;
-    --wo-table-scroll-track: rgba(221, 227, 239, 0.94);
-    --wo-table-scroll-thumb: rgba(132, 143, 166, 0.86);
-    --wo-table-scroll-thumb-hover: rgba(108, 121, 147, 0.9);
-    --wo-table-scroll-thumb-active: rgba(94, 108, 136, 0.94);
-    --wo-table-scroll-thumb-border: rgba(246, 248, 253, 0.9);
+    --wo-table-scroll-track: var(--app-scroll-track);
+    --wo-table-scroll-thumb: var(--app-scroll-thumb-flat);
+    --wo-table-scroll-thumb-hover: var(--app-scroll-thumb-flat-hover);
+    --wo-table-scroll-thumb-active: var(--app-scroll-thumb-flat-active);
+    --wo-table-scroll-thumb-border: var(--app-scroll-thumb-border);
   }
   body.dark-layout .invoice-preview-wrapper,
   body.semi-dark-layout .invoice-preview-wrapper,
   .dark-layout .invoice-preview-wrapper,
   .semi-dark-layout .invoice-preview-wrapper {
     --wo-divider-color: rgba(184, 190, 220, 0.22);
-    --wo-table-scroll-track: rgba(15, 22, 36, 0.92);
-    --wo-table-scroll-thumb: rgba(127, 139, 166, 0.86);
-    --wo-table-scroll-thumb-hover: rgba(151, 164, 191, 0.92);
-    --wo-table-scroll-thumb-active: rgba(167, 179, 205, 0.95);
-    --wo-table-scroll-thumb-border: rgba(14, 21, 35, 0.9);
+    --wo-table-scroll-track: var(--app-scroll-track);
+    --wo-table-scroll-thumb: var(--app-scroll-thumb-flat);
+    --wo-table-scroll-thumb-hover: var(--app-scroll-thumb-flat-hover);
+    --wo-table-scroll-thumb-active: var(--app-scroll-thumb-flat-active);
+    --wo-table-scroll-thumb-border: var(--app-scroll-thumb-border);
   }
   .invoice-preview-wrapper hr.invoice-spacing {
     border-top-color: var(--wo-divider-color) !important;

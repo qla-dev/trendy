@@ -27,6 +27,12 @@
       "slug": "app-invoice-preview"
     },
     {
+      "name": "Barcode generator",
+      "icon": "tag",
+      "url": "app/barcode-generator",
+      "slug": "app-barcode-generator"
+    },
+    {
       "navheader": "Administracija",
       "slug": ""
     },

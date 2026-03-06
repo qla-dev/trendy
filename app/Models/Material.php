@@ -106,6 +106,84 @@ class Material extends Model
         return $materials;
     }
 
+    public static function barcodeGeneratorList(
+        string $search = '',
+        int $limit = 25,
+        array $materialsSets = [],
+        int $offset = 0,
+        string $sortBy = 'material_code',
+        string $sortDir = 'asc'
+    ): array {
+        $resolvedLimit = self::resolveScannerLimit($limit);
+        $resolvedOffset = max(0, (int) $offset);
+        $resolvedSortDir = strtolower(trim($sortDir)) === 'desc' ? 'desc' : 'asc';
+        $query = DB::query()->fromSub(
+            self::barcodeGeneratorBaseQuery($search, $materialsSets),
+            'm'
+        );
+
+        switch (trim($sortBy)) {
+            case 'material_name':
+                $query
+                    ->orderByRaw("CASE WHEN LTRIM(RTRIM(ISNULL(m.material_name, ''))) = '' THEN 1 ELSE 0 END ASC")
+                    ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(m.material_name, '')))) {$resolvedSortDir}")
+                    ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(m.material_code, '')))) ASC");
+                break;
+            case 'material_um':
+                $query
+                    ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(m.material_um, '')))) {$resolvedSortDir}")
+                    ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(m.material_code, '')))) ASC");
+                break;
+            case 'material_qty':
+                $query
+                    ->orderBy('material_qty', $resolvedSortDir)
+                    ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(m.material_code, '')))) ASC");
+                break;
+            case 'material_code':
+            default:
+                $query
+                    ->orderByRaw("CASE WHEN LEFT(LTRIM(RTRIM(ISNULL(m.material_code, ''))), 1) LIKE '[A-Za-z]' THEN 0 WHEN LEFT(LTRIM(RTRIM(ISNULL(m.material_code, ''))), 1) LIKE '[0-9]' THEN 2 ELSE 1 END ASC")
+                    ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(m.material_code, '')))) {$resolvedSortDir}");
+                break;
+        }
+
+        return $query
+            ->offset($resolvedOffset)
+            ->limit($resolvedLimit)
+            ->get()
+            ->map(function ($row) {
+                $materialQty = is_numeric((string) ($row->material_qty ?? null))
+                    ? (float) $row->material_qty
+                    : 0.0;
+
+                return [
+                    'material_code' => trim((string) ($row->material_code ?? '')),
+                    'material_name' => trim((string) ($row->material_name ?? '')),
+                    'material_um' => strtoupper(substr(trim((string) ($row->material_um ?? '')), 0, 3)),
+                    'material_qty' => $materialQty,
+                    'barcode_value' => trim((string) ($row->material_code ?? '')),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    public static function barcodeGeneratorTotalCount(array $materialsSets = []): int
+    {
+        return (int) DB::query()
+            ->fromSub(self::barcodeGeneratorBaseQuery('', $materialsSets), 'm')
+            ->count();
+    }
+
+    public static function barcodeGeneratorFilteredCount(
+        string $search = '',
+        array $materialsSets = []
+    ): int {
+        return (int) DB::query()
+            ->fromSub(self::barcodeGeneratorBaseQuery($search, $materialsSets), 'm')
+            ->count();
+    }
+
     public static function scannerFindByBarcode(string $barcode, array $materialsSets = []): ?array
     {
         $normalizedBarcode = self::normalizeScannerBarcode($barcode);
@@ -233,6 +311,36 @@ class Material extends Model
                 $likeQuery->orWhere($column, 'like', '%' . $value . '%');
             }
         });
+    }
+
+    private static function barcodeGeneratorBaseQuery(
+        string $search = '',
+        array $materialsSets = []
+    ): Builder {
+        $normalizedSets = self::normalizeMaterialsSets($materialsSets);
+        $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
+        $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
+        $query = DB::table($itemsTable)
+            ->leftJoin($stockTable, function ($join) {
+                $join->whereRaw("LTRIM(RTRIM(ISNULL(s.acIdent, ''))) = LTRIM(RTRIM(ISNULL(i.acIdent, '')))");
+            })
+            ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) <> ''");
+
+        if (!empty($normalizedSets)) {
+            $query->whereIn(
+                DB::raw("LTRIM(RTRIM(ISNULL(i.acSetOfItem, '')))"),
+                $normalizedSets
+            );
+        }
+
+        self::applyLikeAny($query, ['i.acIdent', 'i.acName', 'i.acCode'], $search);
+
+        return $query
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) as material_code")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acName, ''))) as material_name")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as material_um")
+            ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as material_qty")
+            ->groupBy('i.acIdent', 'i.acName', 'i.acUM');
     }
 
     private static function normalizeMaterialsSets(array $materialsSets = []): array

@@ -71,6 +71,8 @@ Route::middleware('auth:web')->group(function () {
         Route::get('invoice/preview/{id}/barcode-material', [WorkOrderController::class, 'barcodeMaterialLookup'])->name('app-invoice-barcode-material');
         Route::post('invoice/preview/{id}/planned-consumption', [WorkOrderController::class, 'storePlannedConsumption'])->name('app-invoice-planned-consumption');
         Route::post('invoice/preview/{id}/planned-consumption/remove', [WorkOrderController::class, 'removePlannedConsumptionItem'])->name('app-invoice-planned-consumption-remove');
+        Route::get('barcode-generator', [MaterialsController::class, 'barcodeGenerator'])->name('app-barcode-generator');
+        Route::get('barcode-generator/data', [MaterialsController::class, 'barcodeGeneratorData'])->name('app-barcode-generator-data');
         Route::get('invoice/edit', [AppsController::class, 'invoice_edit'])->name('app-invoice-edit');
         Route::get('invoice/add', [AppsController::class, 'invoice_add'])->name('app-invoice-add');
         Route::get('invoice/print/{id?}', [WorkOrderController::class, 'invoicePrint'])->name('app-invoice-print');

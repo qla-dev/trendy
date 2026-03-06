@@ -37,6 +37,8 @@ class MenuServiceProvider extends ServiceProvider
         $self = $this;
         \View::composer('*', function ($view) use ($verticalMenuData, $horizontalMenuData, $self) {
             $verticalMenuCopy = json_decode(json_encode($verticalMenuData));
+            $verticalMenuCopy = $self->filterAdminOnlyMenuItems($verticalMenuCopy);
+
             if (Auth::check() && Auth::user()->hasRole('user')) {
                 $verticalMenuCopy = $self->filterMenuForUserRole($verticalMenuCopy);
             }
@@ -84,6 +86,30 @@ class MenuServiceProvider extends ServiceProvider
         }
 
         $menuData->menu = $filteredMenu;
+        return $menuData;
+    }
+
+    private function filterAdminOnlyMenuItems($menuData)
+    {
+        if (!isset($menuData->menu) || empty($menuData->menu)) {
+            return $menuData;
+        }
+
+        $isAdmin = Auth::check()
+            && (
+                method_exists(Auth::user(), 'isAdmin')
+                    ? Auth::user()->isAdmin()
+                    : (Auth::user()->role ?? null) === 'admin'
+            );
+
+        if ($isAdmin) {
+            return $menuData;
+        }
+
+        $menuData->menu = array_values(array_filter($menuData->menu, function ($menu) {
+            return !isset($menu->slug) || $menu->slug !== 'app-barcode-generator';
+        }));
+
         return $menuData;
     }
 }

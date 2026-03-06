@@ -149,6 +149,7 @@ return [
     "File Manager" => "DateimanagerFile ManagerFile Manager",
     "Pricing" => "Preisgestaltung",
     "Kanban" => "Kanban",
+    "Barcode generator" => "Barcode generator",
     "Preview" => "Vorschau",
     "Add" => "Hinzufügen",
     "Blog" => "Blog",

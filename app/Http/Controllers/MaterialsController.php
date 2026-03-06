@@ -70,12 +70,74 @@ class MaterialsController extends Controller
         }
     }
 
+    public function barcodeGenerator()
+    {
+        $pageConfigs = ['pageHeader' => false];
+
+        return view('content.apps.materials.app-material-barcode-generator', [
+            'pageConfigs' => $pageConfigs,
+            'barcodeTableUrl' => route('app-barcode-generator-data'),
+        ]);
+    }
+
+    public function barcodeGeneratorData(Request $request): JsonResponse
+    {
+        try {
+            $draw = (int) $request->input('draw', 0);
+            $start = max(0, (int) $request->integer('start', 0));
+            $length = $request->filled('length')
+                ? (int) $request->input('length')
+                : (int) $request->integer('limit', 25);
+            $limit = $this->resolveTableLimit($length);
+            $search = trim((string) data_get($request->all(), 'search.value', $request->input('search', '')));
+            $sortBy = trim((string) $request->input('sort_by', 'material_code'));
+            $sortDir = trim((string) $request->input('sort_dir', 'asc'));
+
+            $materials = Material::barcodeGeneratorList(
+                $search,
+                $limit,
+                self::MATERIALS_SETS,
+                $start,
+                $sortBy,
+                $sortDir
+            );
+
+            return response()->json([
+                'draw' => $draw,
+                'data' => $materials,
+                'recordsTotal' => Material::barcodeGeneratorTotalCount(self::MATERIALS_SETS),
+                'recordsFiltered' => Material::barcodeGeneratorFilteredCount($search, self::MATERIALS_SETS),
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Materials barcode generator list failed.', [
+                'connection' => config('database.default'),
+                'table' => Material::scannerSourceTable(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greska pri ucitavanju materijala za barcode generator.',
+            ], 500);
+        }
+    }
+
     private function resolveLimit(?int $requestedLimit = null): int
     {
         $limit = (int) ($requestedLimit ?? 100);
 
         if ($limit < 1) {
             return 100;
+        }
+
+        return min($limit, 100);
+    }
+
+    private function resolveTableLimit(?int $requestedLimit = null): int
+    {
+        $limit = (int) ($requestedLimit ?? 25);
+
+        if ($limit < 1) {
+            return 25;
         }
 
         return min($limit, 100);
