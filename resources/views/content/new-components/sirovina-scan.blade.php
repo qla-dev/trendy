@@ -1496,11 +1496,25 @@
 
     function notify(icon, title, text) {
       if (window.Swal && typeof window.Swal.fire === 'function') {
-        var resolvedIcon = icon === 'success' ? 'info' : icon;
+        var htmlElement = document.documentElement;
+        var bodyElement = document.body;
+        var htmlDataLayout = (htmlElement.getAttribute('data-layout') || '').toLowerCase();
+        var isDarkTheme =
+          htmlElement.classList.contains('dark-layout') ||
+          htmlElement.classList.contains('semi-dark-layout') ||
+          bodyElement.classList.contains('dark-layout') ||
+          bodyElement.classList.contains('semi-dark-layout') ||
+          htmlDataLayout.indexOf('dark-layout') !== -1 ||
+          htmlDataLayout.indexOf('semi-dark-layout') !== -1;
+        var popupClass = isDarkTheme ? 'wo-swal-dark' : '';
+
         window.Swal.fire({
-          icon: resolvedIcon,
+          icon: icon,
           title: title,
-          text: text
+          text: text,
+          background: isDarkTheme ? '#283046' : undefined,
+          color: isDarkTheme ? '#eef4ff' : undefined,
+          customClass: popupClass ? { popup: popupClass } : undefined
         });
         return;
       }
