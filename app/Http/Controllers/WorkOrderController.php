@@ -15,6 +15,8 @@ use Throwable;
 
 class WorkOrderController extends Controller
 {
+    private const SCAN_CREATE_DOC_TYPE = '6000';
+    private const SCAN_CREATE_SEQUENCE_LENGTH = 7;
     private const MATERIALS_SETS = [
         '011',
         '020',
@@ -40,6 +42,8 @@ class WorkOrderController extends Controller
 
     private ?array $deliveryPriorityMap = null;
     private ?array $orderTableColumnsCache = null;
+    private ?array $tableNonInsertableColumnsCache = null;
+    private ?array $tableStringLengthMapCache = null;
     private array $linkedOrderCache = [];
 
     public function invoiceList()
@@ -63,7 +67,7 @@ class WorkOrderController extends Controller
                 'pageConfigs' => $pageConfigs,
                 'radniNalozi' => [],
                 'statusStats' => $this->emptyStatusStats(),
-                'error' => 'Greska pri ucitavanju radnih naloga iz baze.',
+                'error' => 'Greška pri učitavanju radnih naloga iz baze.',
             ]);
         }
     }
@@ -262,7 +266,289 @@ class WorkOrderController extends Controller
             ]);
 
             return redirect()->route('app-invoice-list')
-                ->with('error', 'Greska pri ucitavanju print prikaza radnog naloga.');
+                ->with('error', 'Greška pri učitavanju print prikaza radnog naloga.');
+        }
+    }
+
+    public function scanLookup(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'identifier' => ['required', 'string', 'max:255'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravan QR sadrzaj.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $identifier = trim((string) $validator->validated()['identifier']);
+
+        try {
+            $workOrder = $this->findMappedWorkOrder($identifier, true);
+
+            if ($workOrder !== null) {
+                $routeId = trim((string) ($workOrder['id'] ?? $workOrder['broj_naloga'] ?? $identifier));
+                $workOrderNumber = $this->formatWorkOrderNumberForCalendar((string) ($workOrder['broj_naloga'] ?? $routeId));
+
+                return response()->json([
+                    'data' => [
+                        'status' => 'existing',
+                        'message' => 'Da li želite otvoriti RN broj ' . $workOrderNumber . '?',
+                        'work_order' => [
+                            'id' => $routeId,
+                            'number' => $workOrderNumber,
+                            'broj_narudzbe' => (string) ($workOrder['broj_narudzbe'] ?? ''),
+                            'poz' => (string) ($workOrder['broj_pozicije_narudzbe'] ?? ''),
+                            'sifra' => (string) ($workOrder['sifra'] ?? ''),
+                            'naziv' => (string) ($workOrder['naziv'] ?? ''),
+                            'preview_url' => route('app-invoice-preview', [
+                                'id' => $routeId,
+                                'scan' => 1,
+                            ]),
+                        ],
+                    ],
+                ]);
+            }
+
+            $orderLocator = $this->parseOrderLocatorIdentifier($identifier);
+
+            if ($orderLocator === null) {
+                return response()->json([
+                    'message' => 'Radni nalog nije pronađen za skenirani QR kod.',
+                ], 404);
+            }
+
+            $orderRow = $this->findOrderRowByLocator(
+                (string) ($orderLocator['order_number'] ?? ''),
+                (int) ($orderLocator['order_position'] ?? 0),
+                array_key_exists('product_code', $orderLocator)
+                    ? (string) ($orderLocator['product_code'] ?? '')
+                    : null
+            );
+
+            if ($orderRow === null) {
+                return response()->json([
+                    'message' => 'Ne postoji ni radni nalog ni narudzba za skenirane parametre.',
+                ], 404);
+            }
+
+            $orderContext = $this->buildOrderLocatorContext($orderRow, $orderLocator);
+            $numberContext = $this->generateNextWorkOrderNumber(Carbon::now());
+
+            return response()->json([
+                'data' => [
+                    'status' => 'create_available',
+                    'message' => 'Da li želite kreirati RN broj ' . $numberContext['next_display'] . '?',
+                    'order' => [
+                        'narudzba_kljuc' => (string) ($orderContext['order_key'] ?? ''),
+                        'broj_narudzbe' => (string) ($orderContext['order_number'] ?? ''),
+                        'poz' => (string) ($orderContext['order_position'] ?? ''),
+                        'sifra' => (string) ($orderContext['product_code'] ?? ''),
+                        'naziv' => (string) ($orderContext['product_name'] ?? ''),
+                        'kupac' => (string) ($orderContext['client_name'] ?? ''),
+                    ],
+                    'last_work_order' => [
+                        'number' => (string) ($numberContext['last_display'] ?? ''),
+                        'number_raw' => (string) ($numberContext['last_raw'] ?? ''),
+                    ],
+                    'next_work_order' => [
+                        'number' => (string) ($numberContext['next_display'] ?? ''),
+                        'number_raw' => (string) ($numberContext['next_raw'] ?? ''),
+                    ],
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order scan lookup failed.', [
+                'identifier' => $identifier,
+                'connection' => config('database.default'),
+                'work_orders_table' => $this->qualifiedTableName(),
+                'orders_table' => $this->qualifiedOrderTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greska pri provjeri skeniranog QR koda.',
+            ], 500);
+        }
+    }
+
+    public function createFromScan(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'identifier' => ['required', 'string', 'max:255'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravan QR sadrzaj.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $identifier = trim((string) $validator->validated()['identifier']);
+        $orderLocator = $this->parseOrderLocatorIdentifier($identifier);
+        $debugContext = [
+            'identifier' => $identifier,
+            'order_locator' => $orderLocator,
+        ];
+
+        if ($orderLocator === null) {
+            return response()->json([
+                'message' => 'Kreiranje RN je moguce samo za QR sa narudzbom, pozicijom i sifrom.',
+            ], 422);
+        }
+
+        try {
+            $result = DB::transaction(function () use ($request, $orderLocator, $identifier, &$debugContext) {
+                $existingRow = $this->findWorkOrderRowByOrderLocator(
+                    (string) ($orderLocator['order_number'] ?? ''),
+                    (int) ($orderLocator['order_position'] ?? 0),
+                    array_key_exists('product_code', $orderLocator)
+                        ? (string) ($orderLocator['product_code'] ?? '')
+                        : null
+                );
+
+                if ($existingRow !== null) {
+                    $debugContext['existing_row_identifier'] = [
+                        'acRefNo1' => $existingRow['acRefNo1'] ?? null,
+                        'acKey' => $existingRow['acKey'] ?? null,
+                        'anNo' => $existingRow['anNo'] ?? null,
+                    ];
+
+                    return [
+                        'status' => 'existing',
+                        'row' => $existingRow,
+                    ];
+                }
+
+                $orderRow = $this->findOrderRowByLocator(
+                    (string) ($orderLocator['order_number'] ?? ''),
+                    (int) ($orderLocator['order_position'] ?? 0),
+                    array_key_exists('product_code', $orderLocator)
+                        ? (string) ($orderLocator['product_code'] ?? '')
+                        : null
+                );
+
+                if ($orderRow === null) {
+                    throw new \RuntimeException('Narudžba za skenirane parametre nije pronađena.');
+                }
+
+                $orderContext = $this->buildOrderLocatorContext($orderRow, $orderLocator);
+                $numberContext = $this->generateNextWorkOrderNumber(Carbon::now());
+                $debugContext['resolved_order_context'] = $orderContext;
+                $debugContext['resolved_order_row'] = $orderRow;
+                $debugContext['number_context'] = $numberContext;
+                $payload = $this->buildWorkOrderInsertPayloadFromOrder(
+                    $orderRow,
+                    $orderContext,
+                    $numberContext,
+                    $request->user()
+                );
+                $debugContext['insert_payload'] = $payload;
+
+                if (empty($payload)) {
+                    throw new \RuntimeException('Nije pripremljen payload za kreiranje RN.');
+                }
+
+                Log::info('Prepared work order insert payload from scan.', [
+                    'identifier' => $identifier,
+                    'order_locator' => $orderLocator,
+                    'resolved_order_context' => $orderContext,
+                    'number_context' => $numberContext,
+                    'insert_payload' => $payload,
+                ]);
+
+                $this->newTableQuery()->insert($payload);
+
+                $lookupIdentifier = (string) ($payload['acRefNo1'] ?? ($payload['acKey'] ?? $numberContext['next_display']));
+                $debugContext['lookup_identifier_after_insert'] = $lookupIdentifier;
+                $createdRow = $this->findWorkOrderRow($lookupIdentifier);
+
+                if ($createdRow === null) {
+                    $createdRow = $this->findWorkOrderRowByOrderLocator(
+                        (string) ($orderLocator['order_number'] ?? ''),
+                        (int) ($orderLocator['order_position'] ?? 0),
+                        array_key_exists('product_code', $orderLocator)
+                            ? (string) ($orderLocator['product_code'] ?? '')
+                            : null
+                    );
+                }
+
+                if ($createdRow === null) {
+                    throw new \RuntimeException('RN je kreiran, ali ga nije moguce ponovo ucitati.');
+                }
+
+                return [
+                    'status' => 'created',
+                    'row' => $createdRow,
+                ];
+            }, 3);
+
+            $mapped = $this->mapRow((array) $result['row'], false, [], true);
+            $routeId = trim((string) ($mapped['id'] ?? $mapped['broj_naloga'] ?? ''));
+            $workOrderNumber = $this->formatWorkOrderNumberForCalendar((string) ($mapped['broj_naloga'] ?? $routeId));
+            $created = (string) ($result['status'] ?? '') === 'created';
+
+            return response()->json([
+                'message' => $created
+                    ? 'Radni nalog je uspjesno kreiran.'
+                    : 'Radni nalog vec postoji i bice otvoren.',
+                'data' => [
+                    'status' => $created ? 'created' : 'existing',
+                    'created' => $created,
+                    'work_order' => [
+                        'id' => $routeId,
+                        'number' => $workOrderNumber,
+                        'broj_narudzbe' => (string) ($mapped['broj_narudzbe'] ?? ''),
+                        'poz' => (string) ($mapped['broj_pozicije_narudzbe'] ?? ''),
+                        'sifra' => (string) ($mapped['sifra'] ?? ''),
+                        'naziv' => (string) ($mapped['naziv'] ?? ''),
+                        'preview_url' => route('app-invoice-preview', [
+                            'id' => $routeId,
+                            'scan' => 1,
+                        ]),
+                    ],
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            $exceptionMessages = [];
+            $currentException = $exception;
+
+            while ($currentException !== null && count($exceptionMessages) < 5) {
+                $exceptionMessages[] = $currentException->getMessage();
+                $currentException = $currentException->getPrevious();
+            }
+
+            Log::error('Work order create from scan failed.', [
+                'identifier' => $identifier,
+                'connection' => config('database.default'),
+                'work_orders_table' => $this->qualifiedTableName(),
+                'orders_table' => $this->qualifiedOrderTableName(),
+                'exception_class' => get_class($exception),
+                'exception_file' => $exception->getFile(),
+                'exception_line' => $exception->getLine(),
+                'message' => $exception->getMessage(),
+                'exception_messages' => $exceptionMessages,
+                'debug_context' => $debugContext,
+            ]);
+
+            $statusCode = str_contains(strtolower($exception->getMessage()), 'narudzba') ? 404 : 500;
+            $response = [
+                'message' => $statusCode === 404
+                    ? 'Narudzba za skenirane parametre nije pronadjena.'
+                    : 'Greska pri kreiranju radnog naloga iz narudzbe.',
+            ];
+
+            if (config('app.debug')) {
+                $response['debug'] = [
+                    'messages' => $exceptionMessages,
+                    'context' => $debugContext,
+                ];
+            }
+
+            return response()->json($response, $statusCode);
         }
     }
 
@@ -616,7 +902,7 @@ class WorkOrderController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri ucitavanju proizvoda.',
+                'message' => 'Greška pri učitavanju proizvoda.',
             ], 500);
         }
     }
@@ -671,7 +957,7 @@ class WorkOrderController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri ucitavanju BOM strukture.',
+                'message' => 'Greška pri učitavanju BOM strukture.',
             ], 500);
         }
     }
@@ -2823,6 +3109,416 @@ class WorkOrderController extends Controller
         }
     }
 
+    private function findOrderRowByLocator(
+        string $normalizedOrderNumber,
+        int $orderPosition,
+        ?string $normalizedProductCode = null
+    ): ?array {
+        if ($normalizedOrderNumber === '') {
+            return null;
+        }
+
+        try {
+            $orderColumns = $this->orderTableColumns();
+            $orderNumberColumns = $this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']);
+            $orderPositionColumns = $this->existingColumns($orderColumns, ['anLnkNo', 'anLineNo', 'anItemNo', 'anPosition', 'anPos', 'anPosNo']);
+            $orderProductColumns = $this->existingColumns($orderColumns, ['acIdent', 'product_code', 'acCode']);
+
+            if (empty($orderNumberColumns)) {
+                return null;
+            }
+
+            $query = $this->newOrderTableQuery()
+                ->where(function (Builder $orderNumberQuery) use ($orderNumberColumns, $normalizedOrderNumber) {
+                    foreach ($orderNumberColumns as $index => $orderNumberColumn) {
+                        $normalizedExpression = $this->normalizedIdentifierExpression($orderNumberQuery, $orderNumberColumn);
+                        $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
+                        $orderNumberQuery->{$method}("$normalizedExpression = ?", [$normalizedOrderNumber]);
+                    }
+                });
+
+            if (!empty($orderPositionColumns)) {
+                $query->where(function (Builder $positionQuery) use ($orderPositionColumns, $orderPosition) {
+                    foreach ($orderPositionColumns as $index => $orderPositionColumn) {
+                        $method = $index === 0 ? 'where' : 'orWhere';
+                        $positionQuery->{$method}($orderPositionColumn, $orderPosition);
+                    }
+                });
+            }
+
+            if ($normalizedProductCode !== null && $normalizedProductCode !== '' && !empty($orderProductColumns)) {
+                $query->where(function (Builder $productQuery) use ($orderProductColumns, $normalizedProductCode) {
+                    foreach ($orderProductColumns as $index => $orderProductColumn) {
+                        $normalizedExpression = $this->normalizedIdentifierExpression($productQuery, $orderProductColumn);
+                        $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
+                        $productQuery->{$method}("$normalizedExpression = ?", [$normalizedProductCode]);
+                    }
+                });
+            }
+
+            foreach (['adDate', 'adDateIns', 'adTimeIns', 'anNo', 'anQId'] as $orderByColumn) {
+                if (in_array($orderByColumn, $orderColumns, true)) {
+                    $query->orderByDesc($orderByColumn);
+                }
+            }
+
+            $row = $query->first();
+
+            return $row ? (array) $row : null;
+        } catch (Throwable $exception) {
+            Log::warning('Unable to resolve order row for scanned work order QR.', [
+                'connection' => config('database.default'),
+                'orders_table' => $this->qualifiedOrderTableName(),
+                'order_number' => $normalizedOrderNumber,
+                'order_position' => $orderPosition,
+                'product_code' => $normalizedProductCode,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function buildOrderLocatorContext(array $orderRow, array $orderLocator): array
+    {
+        $normalizedProductCode = trim((string) ($orderLocator['product_code'] ?? ''));
+        $catalogRow = $normalizedProductCode !== ''
+            ? $this->findCatalogItemByNormalizedCode($normalizedProductCode)
+            : [];
+        $productCode = (string) $this->valueTrimmed($orderRow, ['acIdent', 'product_code', 'acCode'], '');
+
+        if ($productCode === '') {
+            $productCode = trim((string) ($catalogRow['acIdent'] ?? $normalizedProductCode));
+        }
+
+        $productName = (string) $this->valueTrimmed($orderRow, ['acName', 'acDescr', 'title'], '');
+
+        if ($productName === '') {
+            $productName = trim((string) ($catalogRow['acName'] ?? ''));
+        }
+
+        return [
+            'order_key' => trim((string) $this->valueTrimmed($orderRow, ['acKey'], '')),
+            'order_number' => $this->resolveOrderDisplayNumber($orderRow, (string) ($orderLocator['order_number'] ?? '')),
+            'order_position' => (int) ($orderLocator['order_position'] ?? 0),
+            'product_code' => $productCode,
+            'product_name' => $productName,
+            'client_name' => (string) $this->valueTrimmed($orderRow, ['acConsignee', 'acReceiver', 'acPartner', 'client_name'], ''),
+            'catalog' => $catalogRow,
+        ];
+    }
+
+    private function resolveOrderDisplayNumber(array $orderRow, string $fallbackNormalizedOrderNumber): string
+    {
+        foreach (['acKeyView', 'acRefNo1', 'acKey'] as $candidateColumn) {
+            if (!array_key_exists($candidateColumn, $orderRow)) {
+                continue;
+            }
+
+            $candidateValue = trim((string) ($orderRow[$candidateColumn] ?? ''));
+
+            if ($candidateValue === '') {
+                continue;
+            }
+
+            if ($this->normalizeComparableIdentifier($candidateValue) === $fallbackNormalizedOrderNumber) {
+                return $candidateValue;
+            }
+        }
+
+        $displayNumber = trim((string) $this->valueTrimmed($orderRow, ['acKeyView', 'acRefNo1', 'acKey'], ''));
+
+        return $displayNumber !== '' ? $displayNumber : $fallbackNormalizedOrderNumber;
+    }
+
+    private function findCatalogItemByNormalizedCode(string $normalizedProductCode): array
+    {
+        if ($normalizedProductCode === '') {
+            return [];
+        }
+
+        try {
+            $query = $this->newCatalogItemsTableQuery()
+                ->select(['acIdent', 'acName', 'acUM', 'acSetOfItem']);
+            $normalizedExpression = $this->normalizedIdentifierExpression($query, 'acIdent');
+            $row = $query
+                ->whereRaw("$normalizedExpression = ?", [$normalizedProductCode])
+                ->first();
+
+            return $row ? (array) $row : [];
+        } catch (Throwable $exception) {
+            Log::warning('Unable to resolve catalog item for scanned work order QR.', [
+                'connection' => config('database.default'),
+                'catalog_items_table' => $this->qualifiedCatalogItemsTableName(),
+                'product_code' => $normalizedProductCode,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [];
+        }
+    }
+
+    private function generateNextWorkOrderNumber(Carbon $now): array
+    {
+        $columns = $this->tableColumns();
+        $identifierColumn = $this->firstExistingColumn($columns, ['acRefNo1', 'acKey']);
+        $yearPrefix = $now->format('y');
+        $prefix = $yearPrefix . self::SCAN_CREATE_DOC_TYPE;
+        $sequenceLength = self::SCAN_CREATE_SEQUENCE_LENGTH;
+        $lastRaw = '';
+        $lastDisplay = '';
+        $lastSequence = 0;
+
+        if ($identifierColumn !== null) {
+            $query = $this->newTableQuery()->select([$identifierColumn]);
+            $normalizedExpression = $this->normalizedIdentifierExpression($query, $identifierColumn);
+            $query->whereRaw("$normalizedExpression LIKE ?", [$prefix . '%']);
+            $this->applyWorkOrderIdentifierOrdering($query, $columns, 'desc');
+            $lastRow = $query->first();
+
+            if ($lastRow !== null) {
+                $lastRaw = trim((string) ($lastRow->{$identifierColumn} ?? ''));
+                $lastDigits = preg_replace('/\D+/', '', $lastRaw);
+                $lastDigits = is_string($lastDigits) ? $lastDigits : '';
+
+                if ($lastDigits !== '' && str_starts_with($lastDigits, $prefix)) {
+                    $suffixDigits = substr($lastDigits, strlen($prefix));
+                    $suffixDigits = is_string($suffixDigits) ? $suffixDigits : '';
+                    $lastSequence = (int) substr($suffixDigits, 0, $sequenceLength);
+                    $lastDisplay = $this->formatWorkOrderNumberForCalendar($lastRaw);
+                }
+            }
+        }
+
+        $nextSequence = $lastSequence + 1;
+        $nextRaw = $prefix . str_pad((string) $nextSequence, $sequenceLength, '0', STR_PAD_LEFT);
+
+        return [
+            'year_prefix' => $yearPrefix,
+            'doc_type' => self::SCAN_CREATE_DOC_TYPE,
+            'last_raw' => $lastRaw,
+            'last_display' => $lastDisplay,
+            'next_raw' => $nextRaw,
+            'next_display' => $this->formatWorkOrderNumberForCalendar($nextRaw),
+            'next_sequence' => $nextSequence,
+        ];
+    }
+
+    private function buildWorkOrderInsertPayloadFromOrder(
+        array $orderRow,
+        array $orderContext,
+        array $numberContext,
+        mixed $user = null
+    ): array {
+        $columns = $this->tableColumns();
+        $nonInsertableColumns = $this->tableNonInsertableColumns();
+        $excludedCopyColumns = [
+            'id',
+            'acKey',
+            'acKeyView',
+            'acRefNo1',
+            'acLnkKey',
+            'acLnkKeyView',
+            'anLnkNo',
+            'anNo',
+            'anQId',
+            'acDocType',
+            'acDocTypeView',
+            'acIdent',
+            'acCode',
+            'product_code',
+            'acName',
+            'acDescr',
+            'title',
+            'acStatusMF',
+            'acStatus',
+            'status',
+            'adDate',
+            'adDateIns',
+            'adTimeIns',
+            'created_at',
+            'updated_at',
+        ];
+        $payload = [];
+
+        foreach ($columns as $column) {
+            if (!array_key_exists($column, $orderRow)) {
+                continue;
+            }
+
+            if (in_array($column, $nonInsertableColumns, true) || in_array($column, $excludedCopyColumns, true)) {
+                continue;
+            }
+
+            $payload[$column] = $orderRow[$column];
+        }
+
+        $now = Carbon::now();
+        $priorityLabel = (string) ($this->deliveryPriorityMap()[5] ?? '5 - Uobicajeni prioritet');
+        $productCode = trim((string) ($orderContext['product_code'] ?? ''));
+        $productName = trim((string) ($orderContext['product_name'] ?? ''));
+        $orderNumber = trim((string) ($orderContext['order_number'] ?? ''));
+        $orderKey = trim((string) ($orderContext['order_key'] ?? ''));
+        $username = is_object($user) ? trim((string) ($user->username ?? $user->name ?? '')) : '';
+        $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
+
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acKey', (string) ($numberContext['next_raw'] ?? ''));
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acKeyView', (string) ($numberContext['next_display'] ?? ''));
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acRefNo1', (string) ($numberContext['next_display'] ?? ''));
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acDocType', self::SCAN_CREATE_DOC_TYPE);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acDocTypeView', self::SCAN_CREATE_DOC_TYPE);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acLnkKey', $orderKey);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acLnkKeyView', $orderNumber !== '' ? $orderNumber : $orderKey);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anLnkNo', (int) ($orderContext['order_position'] ?? 0));
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acIdent', $productCode);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acCode', $productCode);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'product_code', $productCode);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acName', $productName);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acDescr', $productName, false);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'title', $productName, false);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adDate', $now);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adDateIns', $now);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adTimeIns', $now);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'created_at', $now);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'updated_at', $now);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acStatusMF', 'O');
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acStatus', 'O');
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'status', 'Otvoren');
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anPriority', 5, false);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acPriority', $priorityLabel, false);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'priority', $priorityLabel, false);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'abActive', 1, false);
+
+        if ($userId > 0) {
+            $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'created_by', $userId, false);
+            $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'updated_by', $userId, false);
+        }
+
+        if ($username !== '') {
+            $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acUser', $username, false);
+            $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'user_name', $username, false);
+        }
+
+        $nextAnNo = $this->nextTableIntegerValue('anNo');
+        if ($nextAnNo !== null) {
+            $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anNo', $nextAnNo);
+        }
+
+        $nextQId = $this->nextTableIntegerValue('anQId');
+        if ($nextQId !== null) {
+            $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anQId', $nextQId);
+        }
+
+        $note = 'Kreirano iz QR skena narudzbe ' . ($orderNumber !== '' ? $orderNumber : $orderKey);
+        if (!empty($orderContext['order_position'])) {
+            $note .= ' / poz ' . $orderContext['order_position'];
+        }
+        if ($productCode !== '') {
+            $note .= ' / sifra ' . $productCode;
+        }
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acNote', $note, false);
+
+        return $payload;
+    }
+
+    private function nextTableIntegerValue(string $column): ?int
+    {
+        $columns = $this->tableColumns();
+
+        if (!in_array($column, $columns, true) || in_array($column, $this->tableNonInsertableColumns(), true)) {
+            return null;
+        }
+
+        try {
+            return ((int) ($this->newTableQuery()->max($column) ?? 0)) + 1;
+        } catch (Throwable $exception) {
+            Log::warning('Unable to resolve next integer value for work order column.', [
+                'connection' => config('database.default'),
+                'table' => $this->qualifiedTableName(),
+                'column' => $column,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function setInsertColumnValue(
+        array &$payload,
+        array $columns,
+        array $nonInsertableColumns,
+        string $column,
+        mixed $value,
+        bool $overwrite = true
+    ): void {
+        if ($value === null || !in_array($column, $columns, true) || in_array($column, $nonInsertableColumns, true)) {
+            return;
+        }
+
+        if (is_string($value) && trim($value) === '') {
+            return;
+        }
+
+        if (!$overwrite && $this->payloadHasValue($payload, $column)) {
+            return;
+        }
+
+        if (is_string($value)) {
+            $value = $this->fitStringToWorkOrderColumn($column, $value);
+
+            if (trim($value) === '') {
+                return;
+            }
+        }
+
+        $payload[$column] = $value;
+    }
+
+    private function payloadHasValue(array $payload, string $column): bool
+    {
+        if (!array_key_exists($column, $payload)) {
+            return false;
+        }
+
+        $value = $payload[$column];
+
+        if ($value === null) {
+            return false;
+        }
+
+        if (is_string($value)) {
+            return trim($value) !== '';
+        }
+
+        return true;
+    }
+
+    private function fitStringToWorkOrderColumn(string $column, string $value): string
+    {
+        $maxLength = $this->tableStringLength($column);
+
+        if ($maxLength === null || $maxLength < 1) {
+            return $value;
+        }
+
+        if (strlen($value) <= $maxLength) {
+            return $value;
+        }
+
+        $trimmed = substr($value, 0, $maxLength);
+
+        Log::info('Trimmed work order insert value to fit column length.', [
+            'table' => $this->qualifiedTableName(),
+            'column' => $column,
+            'original_length' => strlen($value),
+            'max_length' => $maxLength,
+            'original_value' => $value,
+            'trimmed_value' => $trimmed,
+        ]);
+
+        return $trimmed;
+    }
+
     private function normalizeComparableIdentifier(string $value): string
     {
         $normalized = preg_replace('/[^A-Z0-9]+/', '', strtoupper(trim($value)));
@@ -4430,6 +5126,91 @@ class WorkOrderController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    private function tableStringLength(string $column): ?int
+    {
+        $map = $this->tableStringLengthMap();
+
+        return array_key_exists($column, $map) ? $map[$column] : null;
+    }
+
+    private function tableStringLengthMap(): array
+    {
+        if ($this->tableStringLengthMapCache !== null) {
+            return $this->tableStringLengthMapCache;
+        }
+
+        try {
+            $this->tableStringLengthMapCache = DB::table('INFORMATION_SCHEMA.COLUMNS')
+                ->where('TABLE_SCHEMA', $this->tableSchema())
+                ->where('TABLE_NAME', $this->tableName())
+                ->whereNotNull('CHARACTER_MAXIMUM_LENGTH')
+                ->pluck('CHARACTER_MAXIMUM_LENGTH', 'COLUMN_NAME')
+                ->mapWithKeys(function ($length, $columnName) {
+                    $normalizedLength = is_numeric($length) ? (int) $length : null;
+
+                    if ($normalizedLength === null || $normalizedLength < 1) {
+                        return [];
+                    }
+
+                    return [
+                        (string) $columnName => $normalizedLength,
+                    ];
+                })
+                ->all();
+        } catch (Throwable $exception) {
+            Log::warning('Unable to resolve work order string column lengths.', [
+                'connection' => config('database.default'),
+                'table' => $this->qualifiedTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            $this->tableStringLengthMapCache = [];
+        }
+
+        return $this->tableStringLengthMapCache;
+    }
+
+    private function tableNonInsertableColumns(): array
+    {
+        if ($this->tableNonInsertableColumnsCache !== null) {
+            return $this->tableNonInsertableColumnsCache;
+        }
+
+        if (DB::getDriverName() !== 'sqlsrv') {
+            $this->tableNonInsertableColumnsCache = [];
+
+            return $this->tableNonInsertableColumnsCache;
+        }
+
+        try {
+            $this->tableNonInsertableColumnsCache = DB::table('sys.columns as c')
+                ->join('sys.tables as t', 'c.object_id', '=', 't.object_id')
+                ->join('sys.schemas as s', 't.schema_id', '=', 's.schema_id')
+                ->where('s.name', $this->tableSchema())
+                ->where('t.name', $this->tableName())
+                ->where(function (Builder $query) {
+                    $query->where('c.is_identity', 1)
+                        ->orWhere('c.is_computed', 1);
+                })
+                ->pluck('c.name')
+                ->map(function ($columnName) {
+                    return (string) $columnName;
+                })
+                ->values()
+                ->all();
+        } catch (Throwable $exception) {
+            Log::warning('Unable to resolve work order non-insertable columns.', [
+                'connection' => config('database.default'),
+                'table' => $this->qualifiedTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            $this->tableNonInsertableColumnsCache = [];
+        }
+
+        return $this->tableNonInsertableColumnsCache;
     }
 
     private function itemTableColumns(): array

@@ -66,7 +66,7 @@ class MaterialsController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri ucitavanju materijala.',
+                'message' => 'Greška pri učitavanju materijala.',
             ], 500);
         }
     }
@@ -117,7 +117,7 @@ class MaterialsController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri ucitavanju materijala za barcode generator.',
+                'message' => 'Greška pri učitavanju materijala za barcode generator.',
             ], 500);
         }
     }

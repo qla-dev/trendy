@@ -1,5 +1,7 @@
 @php
   $workOrderPreviewPathPattern = route('app-invoice-preview', ['id' => '__WORK_ORDER_ID__'], false);
+  $workOrderScanLookupUrl = route('app-invoice-scan-lookup');
+  $workOrderScanCreateUrl = route('app-invoice-scan-create');
 @endphp
 
 <!-- QR Scanner Modal for Work Order -->
@@ -440,6 +442,9 @@
     var cameraSelect = document.getElementById('qr-camera-select');
     var cameraApplyBtn = document.getElementById('qr-camera-apply-btn');
     var previewPathPattern = @json($workOrderPreviewPathPattern);
+    var scanLookupUrl = @json($workOrderScanLookupUrl);
+    var scanCreateUrl = @json($workOrderScanCreateUrl);
+    var csrfToken = @json(csrf_token());
 
     var scanner = null;
     var scannerRunning = false;
@@ -560,16 +565,27 @@
         return null;
       }
 
+      var parsedToken = {
+        identifier: rawOrderNumber + ';' + String(integerPosition),
+        details: {
+          broj_narudzbe: rawOrderNumber,
+          poz: String(integerPosition),
+          sifra: ''
+        }
+      };
+
       if (parts.length === 3) {
         var normalizedProductCode = rawProductCode.replace(/[^0-9A-Za-z]+/g, '').toUpperCase();
         if (!normalizedProductCode) {
           return null;
         }
 
-        return normalizedOrderNumber + ';' + String(integerPosition) + ';' + normalizedProductCode;
+        parsedToken.identifier = rawOrderNumber + ';' + String(integerPosition) + ';' + rawProductCode;
+        parsedToken.details.sifra = rawProductCode;
+        return parsedToken;
       }
 
-      return normalizedOrderNumber + ';' + String(integerPosition);
+      return parsedToken;
     }
 
     function parseWorkOrderIdFromQr(rawText) {
@@ -580,7 +596,7 @@
 
       var orderLocator = parseOrderLocatorToken(text);
       if (orderLocator) {
-        return { id: orderLocator, error: null };
+        return { id: orderLocator.identifier, error: null, scanMeta: orderLocator.details || null };
       }
 
       if (/^https?:\/\//i.test(text)) {
@@ -588,7 +604,7 @@
           var parsedUrl = new URL(text);
           var idFromUrl = extractWorkOrderIdFromPath(parsedUrl.pathname);
           if (idFromUrl) {
-            return { id: idFromUrl, error: null };
+            return { id: idFromUrl, error: null, scanMeta: null };
           }
           return { id: null, error: 'Neispravan QR format. Ocekivan je link na radni nalog.' };
         } catch (e) {
@@ -599,7 +615,7 @@
       var pathLike = text.startsWith('/') ? text : ('/' + text);
       var idFromPath = extractWorkOrderIdFromPath(pathLike);
       if (idFromPath) {
-        return { id: idFromPath, error: null };
+        return { id: idFromPath, error: null, scanMeta: null };
       }
 
       return { id: null, error: 'Neispravan QR format. Koristi brojNarudzbe;pozicija;sifraProizvoda ili link na radni nalog.' };
@@ -610,6 +626,262 @@
       var targetUrl = new URL(path, window.location.origin);
       targetUrl.searchParams.set('scan', '1');
       return targetUrl.toString();
+    }
+
+    function swalWithProjectTheme(options) {
+      if (typeof window.woSwalWithTheme === 'function') {
+        return window.woSwalWithTheme(options || {});
+      }
+
+      return options || {};
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function buildScanSummaryHtml(context, extraHtml) {
+      var details = [];
+      var brojNarudzbe = context && context.broj_narudzbe ? String(context.broj_narudzbe) : '';
+      var poz = context && context.poz ? String(context.poz) : '';
+      var sifra = context && context.sifra ? String(context.sifra) : '';
+      var naziv = context && context.naziv ? String(context.naziv) : '';
+
+      if (brojNarudzbe) {
+        details.push('<div><span class="fw-bolder">Broj narudžbe:</span> ' + escapeHtml(brojNarudzbe) + '</div>');
+      }
+      if (poz) {
+        details.push('<div><span class="fw-bolder">Poz:</span> ' + escapeHtml(poz) + '</div>');
+      }
+      if (sifra) {
+        details.push('<div><span class="fw-bolder">Šifra:</span> ' + escapeHtml(sifra) + '</div>');
+      }
+      if (naziv) {
+        details.push('<div><span class="fw-bolder">Naziv:</span> ' + escapeHtml(naziv) + '</div>');
+      }
+
+      return [
+        '<div class="text-start mt-1">',
+        extraHtml || '',
+        '<div class="small lh-lg">',
+        details.join(''),
+        '</div>',
+        '</div>'
+      ].join('');
+    }
+
+    function mergeScanContext(primaryContext, fallbackContext) {
+      var primary = primaryContext && typeof primaryContext === 'object' ? primaryContext : {};
+      var fallback = fallbackContext && typeof fallbackContext === 'object' ? fallbackContext : {};
+
+      return {
+        broj_narudzbe: primary.broj_narudzbe || fallback.broj_narudzbe || '',
+        poz: primary.poz || fallback.poz || '',
+        sifra: primary.sifra || fallback.sifra || '',
+        naziv: primary.naziv || fallback.naziv || ''
+      };
+    }
+
+    async function requestJson(url, options) {
+      var response = await fetch(url, options || {});
+      var data = null;
+
+      try {
+        data = await response.json();
+      } catch (e) {
+        data = null;
+      }
+
+      if (!response.ok) {
+        var errorMessage = data && data.message ? data.message : 'Neuspjesan odgovor servera.';
+
+        if (data && data.debug && Array.isArray(data.debug.messages) && data.debug.messages.length > 0) {
+          errorMessage += ' [' + data.debug.messages[0] + ']';
+        }
+
+        var error = new Error(errorMessage);
+        error.response = data;
+        throw error;
+      }
+
+      return data || {};
+    }
+
+    async function lookupScannedWorkOrder(identifier) {
+      var lookupTarget = new URL(scanLookupUrl, window.location.origin);
+      lookupTarget.searchParams.set('identifier', identifier);
+
+      return requestJson(lookupTarget.toString(), {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin'
+      });
+    }
+
+    async function createWorkOrderFromScan(identifier) {
+      return requestJson(scanCreateUrl, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          identifier: identifier
+        })
+      });
+    }
+
+    async function resumeScannerAfterPrompt() {
+      redirecting = false;
+      lastDecodedText = '';
+      lastDecodedAt = 0;
+      clearError();
+      setStatus('Usmjeri kameru prema QR kodu radnog naloga.');
+
+      if (!modal.classList.contains('show')) {
+        return;
+      }
+
+      await startScanner();
+    }
+
+    async function showScanError(message) {
+      if (window.Swal && typeof window.Swal.fire === 'function') {
+        await Swal.fire(swalWithProjectTheme({
+          title: 'Skeniranje nije uspjelo',
+          text: message || 'Ne mogu obraditi skenirani QR kod.',
+          icon: 'error',
+          confirmButtonText: 'Ponovno skeniranje',
+          customClass: {
+            confirmButton: 'btn btn-danger'
+          },
+          buttonsStyling: false
+        }));
+      }
+
+      await resumeScannerAfterPrompt();
+      showError(message || 'Ne mogu obraditi skenirani QR kod.');
+    }
+
+    async function promptForExistingWorkOrder(payload, scanMeta) {
+      var workOrder = payload && payload.work_order ? payload.work_order : {};
+      var previewUrl = workOrder.preview_url || toWorkOrderPreviewUrl(workOrder.id || '');
+      var scanSummary = mergeScanContext(scanMeta, workOrder);
+      var result = await Swal.fire(swalWithProjectTheme({
+        title: 'RN pronadjen',
+        html: buildScanSummaryHtml(workOrder, '<p class="mb-1">Da li želite otvoriti RN broj <strong>' + escapeHtml(workOrder.number || '') + '</strong>?</p>'),
+        icon: 'question',
+        showCancelButton: true,
+        reverseButtons: true,
+        confirmButtonText: 'Otvori RN',
+        cancelButtonText: 'Ponovno skeniranje',
+        customClass: {
+          confirmButton: 'btn btn-success ms-1',
+          cancelButton: 'btn btn-danger'
+        },
+        buttonsStyling: false
+      }));
+
+      if (result.isConfirmed) {
+        setStatus('Otvaram radni nalog...', 'success');
+        window.location.assign(previewUrl);
+        return;
+      }
+
+      await resumeScannerAfterPrompt();
+    }
+
+    async function promptToCreateWorkOrder(identifier, payload, scanMeta) {
+      var order = payload && payload.order ? payload.order : {};
+      var nextWorkOrder = payload && payload.next_work_order ? payload.next_work_order : {};
+      var lastWorkOrder = payload && payload.last_work_order ? payload.last_work_order : {};
+      var scanSummary = mergeScanContext(scanMeta, order);
+      var extraHtml = '<h2 class="mb-1">Da li želite kreirati RN broj <br><strong>' + escapeHtml(nextWorkOrder.number || '') + '</strong>?</h2>';
+
+
+      var result = await Swal.fire(swalWithProjectTheme({
+        title: 'RN nije pronađen',
+        html: buildScanSummaryHtml(order, extraHtml),
+        icon: 'question',
+        showCancelButton: true,
+        reverseButtons: true,
+        confirmButtonText: 'Kreiraj RN',
+        cancelButtonText: 'Ponovno skeniranje',
+        customClass: {
+          confirmButton: 'btn btn-success ms-1',
+          cancelButton: 'btn btn-danger'
+        },
+        buttonsStyling: false
+      }));
+
+      if (!result.isConfirmed) {
+        await resumeScannerAfterPrompt();
+        return;
+      }
+
+      Swal.fire(swalWithProjectTheme({
+        title: 'Kreiram RN ' + escapeHtml(nextWorkOrder.number || ''),
+        text: 'Prepisujem podatke sa narudzbe i otvaram radni nalog...',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: function () {
+          Swal.showLoading();
+        }
+      }));
+
+      try {
+        var createResponse = await createWorkOrderFromScan(identifier);
+        var createdWorkOrder = createResponse && createResponse.data && createResponse.data.work_order
+          ? createResponse.data.work_order
+          : {};
+        var previewUrl = createdWorkOrder.preview_url || toWorkOrderPreviewUrl(createdWorkOrder.id || '');
+
+        setStatus('Radni nalog je spreman. Otvaram...', 'success');
+        window.location.assign(previewUrl);
+      } catch (error) {
+        if (window.Swal && typeof window.Swal.close === 'function') {
+          Swal.close();
+        }
+
+        await showScanError(error && error.message ? error.message : 'Ne mogu kreirati radni nalog iz skena.');
+      }
+    }
+
+    async function handleScanLookup(identifier, lookupResponse, scanMeta) {
+      var payload = lookupResponse && lookupResponse.data ? lookupResponse.data : {};
+
+      if (!window.Swal || typeof window.Swal.fire !== 'function') {
+        if (payload.status === 'existing' && payload.work_order && payload.work_order.preview_url) {
+          window.location.assign(payload.work_order.preview_url);
+          return;
+        }
+
+        throw new Error('SweetAlert nije dostupan za potvrdu skeniranog naloga.');
+      }
+
+      if (payload.status === 'existing') {
+        await promptForExistingWorkOrder(payload, scanMeta);
+        return;
+      }
+
+      if (payload.status === 'create_available') {
+        await promptToCreateWorkOrder(identifier, payload, scanMeta);
+        return;
+      }
+
+      throw new Error(payload.message || 'Skenirani QR nije moguce obraditi.');
     }
 
     function renderCameraOptions() {
@@ -681,13 +953,19 @@
       }
 
       clearError();
-      setStatus('QR prepoznat. Otvaram radni nalog...', 'success');
+      setStatus('QR prepoznat. Provjeravam radni nalog i narudžbu...', 'success');
       redirecting = true;
-
-      var targetUrl = toWorkOrderPreviewUrl(parsed.id);
-      stopScanner().finally(function () {
-        window.location.assign(targetUrl);
-      });
+      stopScanner()
+        .then(function () {
+          return lookupScannedWorkOrder(parsed.id);
+        })
+        .then(function (lookupResponse) {
+          return handleScanLookup(parsed.id, lookupResponse);
+        })
+        .catch(function (error) {
+          console.error(error);
+          showScanError(error && error.message ? error.message : 'Ne mogu obraditi skenirani QR kod.');
+        });
     }
 
     async function startScanner() {

@@ -36,7 +36,7 @@ class OperationsController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri ucitavanju operacija.',
+                'message' => 'Greška pri učitavanju operacija.',
             ], 500);
         }
     }

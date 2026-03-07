@@ -269,12 +269,12 @@
               </select>
             </div>
             <div class="mb-1 position-relative">
-              <label for="start-date" class="form-label">Datum pocetka</label>
-              <input type="text" class="form-control" id="start-date" name="start-date" placeholder="Datum pocetka" />
+              <label for="start-date" class="form-label">Datum početka</label>
+              <input type="text" class="form-control" id="start-date" name="start-date" placeholder="Datum početka" />
             </div>
             <div class="mb-1 position-relative">
-              <label for="end-date" class="form-label">Datum zavrsetka</label>
-              <input type="text" class="form-control" id="end-date" name="end-date" placeholder="Datum zavrsetka" />
+              <label for="end-date" class="form-label">Datum završetka</label>
+              <input type="text" class="form-control" id="end-date" name="end-date" placeholder="Datum završetka" />
             </div>
             <div class="mb-1">
               <div class="form-check form-switch">

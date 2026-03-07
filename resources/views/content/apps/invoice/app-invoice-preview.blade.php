@@ -72,6 +72,7 @@
     border-radius: 999px;
   }
   .invoice-actions .btn {
+    height: 40px;
     color: #5e5873;
   }
   .invoice-actions .btn i {

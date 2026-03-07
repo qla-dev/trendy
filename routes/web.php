@@ -61,6 +61,8 @@ Route::middleware('auth:web')->group(function () {
         Route::get('calendar', [AppsController::class, 'calendarApp'])->name('app-calendar');
         Route::get('kanban', [AppsController::class, 'kanbanApp'])->name('app-kanban');
         Route::get('invoice/list', [WorkOrderController::class, 'invoiceList'])->name('app-invoice-list');
+        Route::get('invoice/scan/lookup', [WorkOrderController::class, 'scanLookup'])->name('app-invoice-scan-lookup');
+        Route::post('invoice/scan/create', [WorkOrderController::class, 'createFromScan'])->name('app-invoice-scan-create');
         Route::get('invoice/preview/{id?}', [WorkOrderController::class, 'invoicePreview'])->name('app-invoice-preview');
         Route::post('invoice/preview/{id}/status', [WorkOrderController::class, 'updateInvoiceStatus'])->name('app-invoice-update-status');
         Route::post('invoice/preview/{id}/priority', [WorkOrderController::class, 'updateInvoicePriority'])->name('app-invoice-update-priority');
