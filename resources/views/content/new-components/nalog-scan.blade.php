@@ -861,19 +861,17 @@
 
     async function handleScanLookup(identifier, lookupResponse, scanMeta) {
       var payload = lookupResponse && lookupResponse.data ? lookupResponse.data : {};
+      var existingWorkOrder = payload && payload.work_order ? payload.work_order : {};
+      var existingPreviewUrl = existingWorkOrder.preview_url || toWorkOrderPreviewUrl(existingWorkOrder.id || '');
 
-      if (!window.Swal || typeof window.Swal.fire !== 'function') {
-        if (payload.status === 'existing' && payload.work_order && payload.work_order.preview_url) {
-          window.location.assign(payload.work_order.preview_url);
-          return;
-        }
-
-        throw new Error('SweetAlert nije dostupan za potvrdu skeniranog naloga.');
+      if (payload.status === 'existing' && existingPreviewUrl) {
+        setStatus('Otvaram radni nalog...', 'success');
+        window.location.assign(existingPreviewUrl);
+        return;
       }
 
-      if (payload.status === 'existing') {
-        await promptForExistingWorkOrder(payload, scanMeta);
-        return;
+      if (!window.Swal || typeof window.Swal.fire !== 'function') {
+        throw new Error('SweetAlert nije dostupan za potvrdu skeniranog naloga.');
       }
 
       if (payload.status === 'create_available') {

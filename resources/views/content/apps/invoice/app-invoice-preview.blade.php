@@ -346,7 +346,8 @@
     right: 0;
     z-index: 2;
     background-color: #ffffff;
-    box-shadow: -10px 0 12px -12px rgba(34, 41, 47, 0.45);
+    box-shadow: none;
+    border-left: 1px solid var(--wo-divider-color);
   }
   .invoice-preview-wrapper #sastavnica-table thead .wo-sastavnica-action-col {
     z-index: 3;

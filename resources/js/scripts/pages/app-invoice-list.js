@@ -17,6 +17,10 @@ $(function () {
     invoiceAdd = 'app-invoice-add.html',
     invoiceEdit = 'app-invoice-edit.html',
     workOrdersApi = 'api/work-orders';
+  var invoiceListConfig = window.invoiceListConfig || {};
+  var canDeleteWorkOrders = !!invoiceListConfig.canDeleteWorkOrders;
+  var deleteWorkOrderUrlTemplate = (invoiceListConfig.deleteUrlTemplate || '').toString().trim();
+  var csrfToken = $('meta[name="csrf-token"]').attr('content') || '';
 
   if ($('body').attr('data-framework') === 'laravel') {
     assetPath = $('body').attr('data-asset-path');
@@ -36,6 +40,16 @@ $(function () {
     }
 
     return baseUrl + '?source=' + encodeURIComponent(normalizedSource);
+  }
+
+  function buildDeleteWorkOrderUrl(routeId) {
+    var normalizedRouteId = encodeURIComponent((routeId || '').toString().trim());
+
+    if (!deleteWorkOrderUrlTemplate || !normalizedRouteId) {
+      return '';
+    }
+
+    return deleteWorkOrderUrlTemplate.replace('__WORK_ORDER__', normalizedRouteId);
   }
 
   function getFilters(currentStatusFilter) {
@@ -245,6 +259,68 @@ $(function () {
 
   function escapeHtml(value) {
     return $('<div/>').text(value === null || value === undefined ? '' : String(value)).html();
+  }
+
+  function extractAjaxErrorMessage(xhr, fallbackMessage) {
+    var responseJson = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+    var errors = responseJson && responseJson.errors ? responseJson.errors : null;
+    var firstErrorKey;
+
+    if (responseJson && responseJson.message) {
+      return responseJson.message;
+    }
+
+    if (errors) {
+      firstErrorKey = Object.keys(errors)[0];
+
+      if (firstErrorKey && errors[firstErrorKey] && errors[firstErrorKey][0]) {
+        return errors[firstErrorKey][0];
+      }
+    }
+
+    return fallbackMessage;
+  }
+
+  function showDeleteFeedback(icon, title, text) {
+    if (window.Swal && typeof window.Swal.fire === 'function') {
+      window.Swal.fire({
+        icon: icon,
+        title: title,
+        text: text,
+        customClass: {
+          confirmButton: 'btn btn-primary'
+        },
+        buttonsStyling: false
+      });
+      return;
+    }
+
+    window.alert(text || title || '');
+  }
+
+  function requestDeleteConfirmation(displayNumber) {
+    var message = 'Obrisati radni nalog ' + displayNumber + '?';
+
+    if (window.Swal && typeof window.Swal.fire === 'function') {
+      return window.Swal.fire({
+        title: 'Obrisati radni nalog?',
+        html: '<div class="small">Ova akcija je trajna.<br><strong>' + escapeHtml(displayNumber) + '</strong></div>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Obriši',
+        cancelButtonText: 'Odustani',
+        customClass: {
+          confirmButton: 'btn btn-danger',
+          cancelButton: 'btn btn-outline-secondary ms-1'
+        },
+        buttonsStyling: false,
+        reverseButtons: true
+      });
+    }
+
+    return Promise.resolve({
+      isConfirmed: window.confirm(message)
+    });
   }
 
   function updateStatusCards(statusStats) {
@@ -665,6 +741,62 @@ $(function () {
       }, 1000);
     }
 
+    function deleteWorkOrder(rowData) {
+      var routeId = rowData && (rowData.id || rowData.broj_naloga);
+      var displayNumber = formatWorkOrderNumber(rowData && (rowData.broj_naloga_prikaz || rowData.broj_naloga || routeId));
+      var deleteUrl = buildDeleteWorkOrderUrl(routeId);
+      var requestHeaders = {
+        Accept: 'application/json'
+      };
+
+      if (!canDeleteWorkOrders || !deleteUrl) {
+        return;
+      }
+
+      if (csrfToken) {
+        requestHeaders['X-CSRF-TOKEN'] = csrfToken;
+      }
+
+      beginTableLoadingRequest();
+
+      $.ajax({
+        url: deleteUrl,
+        method: 'DELETE',
+        dataType: 'json',
+        headers: requestHeaders,
+        success: function (response) {
+          showDeleteFeedback('success', 'Radni nalog obrisan', response && response.message ? response.message : ('RN ' + displayNumber + ' je obrisan.'));
+
+          if (dtInvoice && typeof dtInvoice.ajax === 'object' && typeof dtInvoice.ajax.reload === 'function') {
+            dtInvoice.ajax.reload(null, false);
+          }
+        },
+        error: function (xhr) {
+          showDeleteFeedback('error', 'Brisanje nije uspjelo', extractAjaxErrorMessage(xhr, 'Ne mogu obrisati radni nalog.'));
+        },
+        complete: function () {
+          finishTableLoadingRequest();
+        }
+      });
+    }
+
+    function handleDeleteAction(rowData) {
+      var routeId = rowData && (rowData.id || rowData.broj_naloga);
+      var displayNumber = formatWorkOrderNumber(rowData && (rowData.broj_naloga_prikaz || rowData.broj_naloga || routeId));
+
+      if (!canDeleteWorkOrders || !routeId) {
+        return;
+      }
+
+      requestDeleteConfirmation(displayNumber).then(function (result) {
+        if (!result || !result.isConfirmed) {
+          return;
+        }
+
+        deleteWorkOrder(rowData);
+      });
+    }
+
     $(window).on('resize.invoiceTableOverlay', function () {
       updateTableLoadingOverlayBounds();
     });
@@ -735,18 +867,31 @@ $(function () {
 
         runInvoiceTableRequest(requestData, callback, params, false);
       },
-      columns: [
-        { data: 'id' },
-        { data: 'broj_narudzbe' },
-        { data: 'naziv' },
-        { data: 'sifra' },
-        { data: 'klijent' },
-        { data: 'vrednost' },
-        { data: 'datum_kreiranja' },
-        { data: 'status' },
-        { data: 'prioritet' }
-      ],
-      columnDefs: [
+      columns: (function () {
+        var columns = [
+          { data: 'id' },
+          { data: 'broj_narudzbe' },
+          { data: 'naziv' },
+          { data: 'sifra' },
+          { data: 'klijent' },
+          { data: 'vrednost' },
+          { data: 'datum_kreiranja' },
+          { data: 'status' },
+          { data: 'prioritet' }
+        ];
+
+        if (canDeleteWorkOrders) {
+          columns.push({
+            data: null,
+            orderable: false,
+            searchable: false
+          });
+        }
+
+        return columns;
+      })(),
+      columnDefs: (function () {
+        var columnDefs = [
         {
           targets: [1, 2, 3, 5, 6],
           orderable: false
@@ -968,7 +1113,25 @@ $(function () {
             );
           }
         }
-      ],
+        ];
+
+        if (canDeleteWorkOrders) {
+          columnDefs.push({
+            targets: 9,
+            className: 'text-center align-middle',
+            width: '70px',
+            render: function () {
+              return (
+                '<button type="button" class="wo-delete-action" data-bs-toggle="tooltip" data-bs-placement="top" title="Obriši RN">' +
+                  '<i data-feather="trash-2"></i>' +
+                '</button>'
+              );
+            }
+          });
+        }
+
+        return columnDefs;
+      })(),
       ordering: true,
       order: [[0, 'desc']],
       orderMulti: false,
@@ -1071,6 +1234,24 @@ $(function () {
           feather.replace();
         }
       }
+    });
+
+    dtInvoiceTable.find('tbody').on('click', '.wo-delete-action', function (event) {
+      var rowData;
+
+      if (!canDeleteWorkOrders) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      rowData = dtInvoice.row($(this).closest('tr')).data();
+
+      if (!rowData) {
+        return;
+      }
+
+      handleDeleteAction(rowData);
     });
 
     dtInvoiceTable.find('tbody').on('click', 'tr', function (event) {

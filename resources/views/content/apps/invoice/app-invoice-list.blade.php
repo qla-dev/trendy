@@ -2,6 +2,14 @@
 
 @section('title', 'Lista Radnih Naloga')
 
+@php
+  $canDeleteWorkOrders = (bool) ($canDeleteWorkOrders ?? false);
+  $invoiceListConfig = [
+      'canDeleteWorkOrders' => $canDeleteWorkOrders,
+      'deleteUrlTemplate' => (string) ($destroyWorkOrderUrlTemplate ?? ''),
+  ];
+@endphp
+
 @section('vendor-style')
 <link rel="stylesheet" href="{{asset('vendors/css/tables/datatable/dataTables.bootstrap5.min.css')}}">
 <link rel="stylesheet" href="{{asset('vendors/css/tables/datatable/extensions/dataTables.checkboxes.css')}}">
@@ -276,11 +284,14 @@
             <th class="text-truncate">Datum Kreiranja</th>
             <th>Status</th>
             <th>Prioritet</th>
+            @if($canDeleteWorkOrders)
+              <th>Akcija</th>
+            @endif
           </tr>
         </thead>
         <tbody>
           <tr class="invoice-table-loading-spacer-row" aria-hidden="true">
-            <td colspan="9"></td>
+            <td colspan="{{ $canDeleteWorkOrders ? 10 : 9 }}"></td>
           </tr>
         </tbody>
       </table>
@@ -292,6 +303,7 @@
 <script>
   window.radniNaloziData = @json($radniNalozi ?? []);
   window.statusStats = @json($statusStats ?? []);
+  window.invoiceListConfig = @json($invoiceListConfig);
 </script>
 
 <!-- Status Cards Styles -->
@@ -665,7 +677,8 @@
 
   .invoice-list-table tbody tr td a,
   .invoice-list-table tbody tr td button,
-  .invoice-list-table tbody tr td .wo-eye-action {
+  .invoice-list-table tbody tr td .wo-eye-action,
+  .invoice-list-table tbody tr td .wo-delete-action {
     cursor: pointer;
   }
 
@@ -674,7 +687,7 @@
   }
 
   .invoice-list-wrapper .invoice-list-table {
-    min-width: 1100px;
+    min-width: {{ $canDeleteWorkOrders ? '1180px' : '1100px' }};
   }
 
   .invoice-list-table tbody .invoice-table-loading-spacer-row > td {
@@ -813,6 +826,40 @@
     box-shadow: 0 0 0 0.2rem rgba(66, 82, 110, 0.18);
   }
 
+  .wo-delete-action {
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(234, 84, 85, 0.45);
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #ea5455;
+    background-color: transparent;
+    transition: all 0.2s ease;
+  }
+
+  .wo-delete-action svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .wo-delete-action svg * {
+    stroke: currentColor;
+  }
+
+  .wo-delete-action:hover,
+  .wo-delete-action:focus {
+    color: #fff;
+    border-color: #ea5455;
+    background-color: rgba(234, 84, 85, 0.92);
+  }
+
+  .wo-delete-action:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(234, 84, 85, 0.18);
+  }
+
   div.dataTables_wrapper div.dataTables_filter {
     text-align: right;
     float: right;
@@ -938,6 +985,21 @@
     background-color: rgba(255, 255, 255, 0.08);
   }
 
+  .dark-layout .wo-delete-action,
+  .semi-dark-layout .wo-delete-action {
+    border-color: rgba(234, 84, 85, 0.45);
+    color: #ff8f90;
+  }
+
+  .dark-layout .wo-delete-action:hover,
+  .dark-layout .wo-delete-action:focus,
+  .semi-dark-layout .wo-delete-action:hover,
+  .semi-dark-layout .wo-delete-action:focus {
+    color: #fff;
+    border-color: rgba(234, 84, 85, 0.9);
+    background-color: rgba(234, 84, 85, 0.92);
+  }
+
  @media (min-width: 768px) {
   .invoice-list-wrapper .col-lg-6:first-child {
     flex: 0 0 auto;
@@ -964,5 +1026,5 @@
 @endsection
 
 @section('page-script')
-<script src="{{asset('js/scripts/pages/app-invoice-list.js?v=5')}}"></script>
+<script src="{{asset('js/scripts/pages/app-invoice-list.js?v=6')}}"></script>
 @endsection

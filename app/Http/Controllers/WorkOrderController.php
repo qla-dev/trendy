@@ -15,8 +15,8 @@ use Throwable;
 
 class WorkOrderController extends Controller
 {
-    private const SCAN_CREATE_DOC_TYPE = '6000';
-    private const SCAN_CREATE_SEQUENCE_LENGTH = 7;
+    private const DEFAULT_SCAN_CREATE_DOC_TYPE = '6000';
+    private const DEFAULT_SCAN_CREATE_SEQUENCE_LENGTH = 7;
     private const MATERIALS_SETS = [
         '011',
         '020',
@@ -49,12 +49,16 @@ class WorkOrderController extends Controller
     public function invoiceList()
     {
         $pageConfigs = ['pageHeader' => false];
+        $canDeleteWorkOrders = $this->canDeleteWorkOrders(auth()->user());
+        $destroyWorkOrderUrlTemplate = route('app-invoice-destroy', ['id' => '__WORK_ORDER__']);
 
         try {
             return view('/content/apps/invoice/app-invoice-list', [
                 'pageConfigs' => $pageConfigs,
                 'radniNalozi' => [],
                 'statusStats' => $this->fetchStatusStats(),
+                'canDeleteWorkOrders' => $canDeleteWorkOrders,
+                'destroyWorkOrderUrlTemplate' => $destroyWorkOrderUrlTemplate,
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order list query failed.', [
@@ -67,6 +71,8 @@ class WorkOrderController extends Controller
                 'pageConfigs' => $pageConfigs,
                 'radniNalozi' => [],
                 'statusStats' => $this->emptyStatusStats(),
+                'canDeleteWorkOrders' => $canDeleteWorkOrders,
+                'destroyWorkOrderUrlTemplate' => $destroyWorkOrderUrlTemplate,
                 'error' => 'Greška pri učitavanju radnih naloga iz baze.',
             ]);
         }
@@ -335,7 +341,10 @@ class WorkOrderController extends Controller
             }
 
             $orderContext = $this->buildOrderLocatorContext($orderRow, $orderLocator);
-            $numberContext = $this->generateNextWorkOrderNumber(Carbon::now());
+            $numberContext = $this->generateNextWorkOrderNumber(
+                Carbon::now(),
+                (string) ($orderContext['doc_type'] ?? '')
+            );
 
             return response()->json([
                 'data' => [
@@ -436,7 +445,10 @@ class WorkOrderController extends Controller
                 }
 
                 $orderContext = $this->buildOrderLocatorContext($orderRow, $orderLocator);
-                $numberContext = $this->generateNextWorkOrderNumber(Carbon::now());
+                $numberContext = $this->generateNextWorkOrderNumber(
+                    Carbon::now(),
+                    (string) ($orderContext['doc_type'] ?? '')
+                );
                 $debugContext['resolved_order_context'] = $orderContext;
                 $debugContext['resolved_order_row'] = $orderRow;
                 $debugContext['number_context'] = $numberContext;
@@ -725,6 +737,146 @@ class WorkOrderController extends Controller
 
             return response()->json([
                 'message' => 'Greška pri ažuriranju prioriteta.',
+            ], 500);
+        }
+    }
+
+    public function destroyInvoice(Request $request, string $id): JsonResponse
+    {
+        if (!$this->canDeleteWorkOrders($request->user())) {
+            return response()->json([
+                'message' => 'Nemate dozvolu za brisanje radnog naloga.',
+            ], 403);
+        }
+
+        try {
+            $workOrderRow = $this->findWorkOrderRow($id);
+
+            if ($workOrderRow === null) {
+                return response()->json([
+                    'message' => 'Radni nalog nije pronadjen.',
+                ], 404);
+            }
+
+            $workOrderKey = trim((string) $this->valueTrimmed($workOrderRow, ['acKey'], ''));
+
+            if ($workOrderKey === '') {
+                return response()->json([
+                    'message' => 'RN kljuc nije pronadjen.',
+                ], 422);
+            }
+
+            $deletedCounts = DB::transaction(function () use ($workOrderRow, $workOrderKey) {
+                $deleted = [
+                    'item_resources' => 0,
+                    'reg_operations' => 0,
+                    'items' => 0,
+                    'work_orders' => 0,
+                ];
+
+                $itemColumns = $this->itemTableColumns();
+                $itemRows = [];
+                $itemQIds = [];
+
+                if (in_array('acKey', $itemColumns, true)) {
+                    $itemRows = $this->newItemTableQuery()
+                        ->where('acKey', $workOrderKey)
+                        ->get()
+                        ->map(function ($row) {
+                            return (array) $row;
+                        })
+                        ->values()
+                        ->all();
+
+                    $itemQIds = array_values(array_filter(array_map(function (array $row) {
+                        $itemQId = $row['anQId'] ?? null;
+
+                        return is_numeric((string) $itemQId) ? (int) $itemQId : null;
+                    }, $itemRows), function ($itemQId) {
+                        return $itemQId !== null;
+                    }));
+                }
+
+                $itemResourcesColumns = $this->itemResourcesTableColumns();
+                $itemResourceQIdColumn = $this->firstExistingColumn($itemResourcesColumns, ['anWOExItemQId', 'anItemQId', 'anQIdItem']);
+                $itemResourceLinkColumn = $this->firstExistingColumn($itemResourcesColumns, ['acKey', 'acWOKey', 'acDocKey', 'acLnkKey']);
+
+                if ($itemResourceQIdColumn !== null && !empty($itemQIds)) {
+                    $deleted['item_resources'] = $this->newItemResourcesTableQuery()
+                        ->whereIn($itemResourceQIdColumn, $itemQIds)
+                        ->delete();
+                } elseif ($itemResourceLinkColumn !== null) {
+                    $deleted['item_resources'] = $this->newItemResourcesTableQuery()
+                        ->where($itemResourceLinkColumn, $workOrderKey)
+                        ->delete();
+                }
+
+                $regOperationsColumns = $this->regOperationsTableColumns();
+                $regOperationsLinkColumn = $this->firstExistingColumn($regOperationsColumns, ['acKey', 'acWOKey', 'acDocKey', 'acLnkKey']);
+
+                if ($regOperationsLinkColumn !== null) {
+                    $deleted['reg_operations'] = $this->newRegOperationsTableQuery()
+                        ->where($regOperationsLinkColumn, $workOrderKey)
+                        ->delete();
+                }
+
+                if (in_array('acKey', $itemColumns, true)) {
+                    $deleted['items'] = $this->newItemTableQuery()
+                        ->where('acKey', $workOrderKey)
+                        ->delete();
+                }
+
+                $workOrderDeleteColumn = $this->firstExistingColumn($this->tableColumns(), ['acKey', 'acRefNo1']);
+
+                if ($workOrderDeleteColumn === null) {
+                    throw new \RuntimeException('Kolona za brisanje RN nije pronadjena.');
+                }
+
+                $workOrderDeleteValue = trim((string) ($workOrderRow[$workOrderDeleteColumn] ?? $workOrderKey));
+                $deleted['work_orders'] = $this->newTableQuery()
+                    ->where($workOrderDeleteColumn, $workOrderDeleteValue)
+                    ->delete();
+
+                if ($deleted['work_orders'] < 1) {
+                    throw new \RuntimeException('Radni nalog nije obrisan.');
+                }
+
+                return $deleted;
+            }, 3);
+
+            Log::info('Work order deleted from invoice list.', [
+                'id' => $id,
+                'work_order_key' => $workOrderKey,
+                'deleted_counts' => $deletedCounts,
+                'user_id' => (int) ($request->user()->id ?? 0),
+                'username' => (string) ($request->user()->username ?? ''),
+            ]);
+
+            return response()->json([
+                'message' => 'Radni nalog je obrisan.',
+                'data' => [
+                    'id' => $id,
+                    'work_order_key' => $workOrderKey,
+                    'deleted_counts' => $deletedCounts,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order delete failed.', [
+                'id' => $id,
+                'connection' => config('database.default'),
+                'table' => $this->qualifiedTableName(),
+                'items_table' => $this->qualifiedItemTableName(),
+                'item_resources_table' => $this->qualifiedItemResourcesTableName(),
+                'reg_operations_table' => $this->qualifiedRegOperationsTableName(),
+                'message' => $exception->getMessage(),
+                'exception_class' => get_class($exception),
+                'exception_code' => (string) $exception->getCode(),
+                'line' => $exception->getLine(),
+                'file' => $exception->getFile(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greska pri brisanju radnog naloga.',
             ], 500);
         }
     }
@@ -3203,9 +3355,17 @@ class WorkOrderController extends Controller
             'order_position' => (int) ($orderLocator['order_position'] ?? 0),
             'product_code' => $productCode,
             'product_name' => $productName,
+            'doc_type' => $this->resolveScanCreateDocType($orderRow),
             'client_name' => (string) $this->valueTrimmed($orderRow, ['acConsignee', 'acReceiver', 'acPartner', 'client_name'], ''),
             'catalog' => $catalogRow,
         ];
+    }
+
+    private function resolveScanCreateDocType(array $orderRow): string
+    {
+        $docType = trim((string) $this->valueTrimmed($orderRow, ['acDocType'], self::DEFAULT_SCAN_CREATE_DOC_TYPE));
+
+        return $docType !== '' ? $docType : self::DEFAULT_SCAN_CREATE_DOC_TYPE;
     }
 
     private function resolveOrderDisplayNumber(array $orderRow, string $fallbackNormalizedOrderNumber): string
@@ -3258,13 +3418,14 @@ class WorkOrderController extends Controller
         }
     }
 
-    private function generateNextWorkOrderNumber(Carbon $now): array
+    private function generateNextWorkOrderNumber(Carbon $now, string $docType = ''): array
     {
         $columns = $this->tableColumns();
         $identifierColumn = $this->firstExistingColumn($columns, ['acRefNo1', 'acKey']);
         $yearPrefix = $now->format('y');
-        $prefix = $yearPrefix . self::SCAN_CREATE_DOC_TYPE;
-        $sequenceLength = self::SCAN_CREATE_SEQUENCE_LENGTH;
+        $resolvedDocType = trim($docType) !== '' ? trim($docType) : self::DEFAULT_SCAN_CREATE_DOC_TYPE;
+        $prefix = $yearPrefix . $resolvedDocType;
+        $sequenceLength = $this->resolveScanCreateSequenceLength($yearPrefix, $resolvedDocType);
         $lastRaw = '';
         $lastDisplay = '';
         $lastSequence = 0;
@@ -3295,13 +3456,28 @@ class WorkOrderController extends Controller
 
         return [
             'year_prefix' => $yearPrefix,
-            'doc_type' => self::SCAN_CREATE_DOC_TYPE,
+            'doc_type' => $resolvedDocType,
             'last_raw' => $lastRaw,
             'last_display' => $lastDisplay,
             'next_raw' => $nextRaw,
             'next_display' => $this->formatWorkOrderNumberForCalendar($nextRaw),
             'next_sequence' => $nextSequence,
         ];
+    }
+
+    private function resolveScanCreateSequenceLength(string $yearPrefix, string $docType): int
+    {
+        $identifierLength = $this->tableStringLength('acKey');
+
+        if ($identifierLength !== null) {
+            $calculatedLength = $identifierLength - strlen($yearPrefix) - strlen($docType);
+
+            if ($calculatedLength > 0) {
+                return $calculatedLength;
+            }
+        }
+
+        return self::DEFAULT_SCAN_CREATE_SEQUENCE_LENGTH;
     }
 
     private function buildWorkOrderInsertPayloadFromOrder(
@@ -3359,14 +3535,15 @@ class WorkOrderController extends Controller
         $productName = trim((string) ($orderContext['product_name'] ?? ''));
         $orderNumber = trim((string) ($orderContext['order_number'] ?? ''));
         $orderKey = trim((string) ($orderContext['order_key'] ?? ''));
+        $docType = trim((string) ($numberContext['doc_type'] ?? ($orderContext['doc_type'] ?? $this->resolveScanCreateDocType($orderRow))));
         $username = is_object($user) ? trim((string) ($user->username ?? $user->name ?? '')) : '';
         $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
 
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acKey', (string) ($numberContext['next_raw'] ?? ''));
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acKeyView', (string) ($numberContext['next_display'] ?? ''));
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acRefNo1', (string) ($numberContext['next_display'] ?? ''));
-        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acDocType', self::SCAN_CREATE_DOC_TYPE);
-        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acDocTypeView', self::SCAN_CREATE_DOC_TYPE);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acDocType', $docType);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acDocTypeView', $docType);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acLnkKey', $orderKey);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acLnkKeyView', $orderNumber !== '' ? $orderNumber : $orderKey);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anLnkNo', (int) ($orderContext['order_position'] ?? 0));
@@ -5747,6 +5924,13 @@ class WorkOrderController extends Controller
     private function qualifiedCatalogItemsTableName(): string
     {
         return $this->tableSchema() . '.' . $this->catalogItemsTableName();
+    }
+
+    private function canDeleteWorkOrders(mixed $user = null): bool
+    {
+        $username = is_object($user) ? trim((string) ($user->username ?? $user->name ?? '')) : '';
+
+        return strtolower($username) === 'kulasin.nedim';
     }
 
     private function emptyInvoicePreviewResponse(array $pageConfigs, ?string $invoiceNumber = null)
