@@ -3579,9 +3579,18 @@ class WorkOrderController extends Controller
             'acStatusMF',
             'acStatus',
             'status',
+            'acCreateFrom',
             'adDate',
+            'adLnkDate',
             'adDateIns',
             'adTimeIns',
+            'adTimeChg',
+            'adSchedStartTime',
+            'adSchedEndTime',
+            'adDeliveryDeadline',
+            'adDateOut',
+            'anUserIns',
+            'anUserChg',
             'created_at',
             'updated_at',
         ];
@@ -3606,8 +3615,13 @@ class WorkOrderController extends Controller
         $orderNumber = trim((string) ($orderContext['order_number'] ?? ''));
         $orderKey = trim((string) ($orderContext['order_key'] ?? ''));
         $docType = $this->resolveRequestedScanCreateDocType($numberContext['doc_type'] ?? self::DEFAULT_SCAN_CREATE_DOC_TYPE);
+        $dayStart = $now->copy()->startOfDay();
+        $plannedStart = $now->copy();
+        $plannedEnd = $now->copy()->endOfDay();
         $username = is_object($user) ? trim((string) ($user->username ?? $user->name ?? '')) : '';
         $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
+        $resolvedUnit = $this->resolveScanCreateWorkOrderUnit($orderRow, $orderContext);
+        $resolvedQuantity = $this->resolveScanCreateWorkOrderQuantity($orderRow);
 
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acKey', (string) ($numberContext['next_raw'] ?? ''));
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acKeyView', (string) ($numberContext['next_display'] ?? ''));
@@ -3623,20 +3637,38 @@ class WorkOrderController extends Controller
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acName', $productName);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acDescr', $productName, false);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'title', $productName, false);
-        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adDate', $now);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adDate', $dayStart);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adLnkDate', $dayStart);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adDateIns', $now);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adTimeIns', $now);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adTimeChg', $now);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adSchedStartTime', $plannedStart);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adSchedEndTime', $plannedEnd);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adDeliveryDeadline', $plannedEnd);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'created_at', $now);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'updated_at', $now);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acStatusMF', 'O');
-        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acStatus', 'O');
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acStatus', 'N');
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'status', 'Otvoren');
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acCreateFrom', 'N');
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anPriority', 5, false);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acPriority', $priorityLabel, false);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'priority', $priorityLabel, false);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'abActive', 1, false);
 
+        if ($resolvedUnit !== '') {
+            $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acUM', $resolvedUnit);
+        }
+
+        if ($resolvedQuantity !== null) {
+            $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anPlanQty', $resolvedQuantity);
+            $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anQty', $resolvedQuantity, false);
+            $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anQty1', $resolvedQuantity, false);
+        }
+
         if ($userId > 0) {
+            $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anUserIns', $userId);
+            $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anUserChg', $userId);
             $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'created_by', $userId, false);
             $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'updated_by', $userId, false);
         }
@@ -3646,10 +3678,7 @@ class WorkOrderController extends Controller
             $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'user_name', $username, false);
         }
 
-        $nextAnNo = $this->nextTableIntegerValue('anNo');
-        if ($nextAnNo !== null) {
-            $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anNo', $nextAnNo);
-        }
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anNo', 0);
 
         $nextQId = $this->nextTableIntegerValue('anQId');
         if ($nextQId !== null) {
@@ -3666,6 +3695,36 @@ class WorkOrderController extends Controller
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acNote', $note, false);
 
         return $payload;
+    }
+
+    private function resolveScanCreateWorkOrderUnit(array $orderRow, array $orderContext): string
+    {
+        $orderUnit = strtoupper(substr((string) $this->valueTrimmed($orderRow, ['acUM', 'acUM1', 'acUnit'], ''), 0, 3));
+
+        if ($orderUnit !== '') {
+            return $orderUnit;
+        }
+
+        $catalogUnit = strtoupper(substr(trim((string) ($orderContext['catalog']['acUM'] ?? '')), 0, 3));
+
+        return $catalogUnit;
+    }
+
+    private function resolveScanCreateWorkOrderQuantity(array $orderRow): ?float
+    {
+        foreach (['anPlanQty', 'anQty', 'anQty1', 'anQtySeries', 'anOrdQty', 'anQuantity'] as $column) {
+            $resolvedValue = $this->toFloatOrNull($orderRow[$column] ?? null);
+
+            if ($resolvedValue === null) {
+                continue;
+            }
+
+            if (abs($resolvedValue) > 0.000001) {
+                return $resolvedValue;
+            }
+        }
+
+        return null;
     }
 
     private function nextTableIntegerValue(string $column): ?int
