@@ -642,7 +642,7 @@
                 @endforelse
               </div>
             </div>
-            <p class="text-center text-muted mb-50" id="work-orders-total-subtitle">Tekuća godina</p>
+            <p class="text-center text mb-50" id="work-orders-total-subtitle">Tekuća godina</p>
             <h2 class="mb-25" id="work-orders-total-primary">0 naloga</h2>
             <div class="d-flex justify-content-center">
               <span class="fw-bolder me-25" id="work-orders-total-compare-label">Poređenje:</span>
@@ -735,7 +735,7 @@
                     $digits = preg_replace('/\D+/', '', $rawNumber);
                     $displayNumber = $rawNumber;
                     if (is_string($digits) && strlen($digits) === 13) {
-                      $displayNumber = substr($digits, 0, 2) . '-' . substr($digits, 2, 5) . '-' . substr($digits, 7);
+                      $displayNumber = substr($digits, 0, 2) . '-' . substr($digits, 2, 4) . '-' . substr($digits, 6);
                     }
                     $rawOrderNumber = trim((string) ($order->order_number ?? $order->order_key ?? ''));
                     $orderDigits = preg_replace('/\D+/', '', $rawOrderNumber);

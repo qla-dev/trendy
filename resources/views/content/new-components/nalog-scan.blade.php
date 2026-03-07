@@ -397,7 +397,149 @@
     transform: scaleX(-1);
   }
 
+  .wo-scan-create-rn-swal .wo-scan-create-head {
+    margin-bottom: 1rem;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-copy {
+    font-size: 1rem;
+    font-weight: 600;
+    color: inherit;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-next-number {
+    margin-top: 0.35rem;
+    font-size: clamp(1.5rem, 4vw, 2.1rem);
+    line-height: 1.05;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-doc-card {
+    margin: 0 0 1rem;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-doc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-doc-label {
+    font-size: 0.74rem;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: #8f9ab4;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-doc-switch {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.32rem;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    background: rgba(15, 23, 42, 0.06);
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-doc-option {
+    flex: 1 1 50%;
+    min-width: 0;
+    border: 0;
+    border-radius: 999px;
+    padding: 0.8rem 1rem;
+    background: transparent;
+    color: inherit;
+    font-size: 0.98rem;
+    font-weight: 700;
+    line-height: 1;
+    transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-doc-option:hover,
+  .wo-scan-create-rn-swal .wo-scan-create-doc-option:focus {
+    opacity: 0.9;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-doc-option.is-active {
+    background: linear-gradient(135deg, rgba(76, 189, 158, 0.26), rgba(53, 141, 118, 0.22));
+    color: #f4fffb;
+    box-shadow: inset 0 0 0 1px rgba(111, 255, 214, 0.18);
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-last {
+    color: #8f9ab4;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .wo-scan-create-loading-swal .wo-scan-create-loading-title {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    text-align: center;
+  }
+
+  .wo-scan-create-loading-swal .wo-scan-create-loading-title-main {
+    font-size: 1.05rem;
+    line-height: 1.2;
+    font-weight: 700;
+  }
+
+  .wo-scan-create-loading-swal .wo-scan-create-loading-title-number {
+    display: inline-block;
+    font-size: clamp(1.65rem, 4vw, 2.15rem);
+    line-height: 1.08;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .wo-scan-create-loading-swal .wo-scan-create-loading-copy {
+    margin-top: 0.9rem;
+    text-align: center;
+  }
+
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-doc-switch,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-doc-switch {
+    border-color: rgba(170, 183, 212, 0.24);
+    background: rgba(12, 17, 28, 0.8);
+  }
+
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-doc-option,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-doc-option {
+    color: #dfe7fb;
+  }
+
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-doc-option.is-active,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-doc-option.is-active {
+    background: linear-gradient(135deg, rgba(74, 179, 148, 0.34), rgba(33, 98, 82, 0.52));
+    color: #f4fffb;
+  }
+
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-doc-label,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-doc-label,
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-last,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-last {
+    color: #9fb0d6;
+  }
+
   @media (max-width: 575.98px) {
+    .wo-scan-create-rn-swal .wo-scan-create-doc-head {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .wo-scan-create-rn-swal .wo-scan-create-last {
+      text-align: left;
+      white-space: normal;
+    }
+
     #qr-scanner-modal .wo-scanner-close-fab {
       top: max(0.75rem, env(safe-area-inset-top));
       left: max(0.75rem, env(safe-area-inset-left));
@@ -645,12 +787,12 @@
         .replace(/'/g, '&#039;');
     }
 
-    function buildScanSummaryHtml(context, extraHtml) {
-      var details = [];
-      var brojNarudzbe = context && context.broj_narudzbe ? String(context.broj_narudzbe) : '';
-      var poz = context && context.poz ? String(context.poz) : '';
-      var sifra = context && context.sifra ? String(context.sifra) : '';
-      var naziv = context && context.naziv ? String(context.naziv) : '';
+  function buildScanDetailRowsHtml(context) {
+    var details = [];
+    var brojNarudzbe = context && context.broj_narudzbe ? String(context.broj_narudzbe) : '';
+    var poz = context && context.poz ? String(context.poz) : '';
+    var sifra = context && context.sifra ? String(context.sifra) : '';
+    var naziv = context && context.naziv ? String(context.naziv) : '';
 
       if (brojNarudzbe) {
         details.push('<div><span class="fw-bolder">Broj narudžbe:</span> ' + escapeHtml(brojNarudzbe) + '</div>');
@@ -665,14 +807,140 @@
         details.push('<div><span class="fw-bolder">Naziv:</span> ' + escapeHtml(naziv) + '</div>');
       }
 
+      return details.join('');
+    }
+
+    function buildScanSummaryHtml(context, extraHtml) {
       return [
         '<div class="text-start mt-1">',
         extraHtml || '',
         '<div class="small lh-lg">',
-        details.join(''),
+        buildScanDetailRowsHtml(context),
         '</div>',
         '</div>'
       ].join('');
+    }
+
+    function normalizeCreateDocTypePayload(payload) {
+      var rawOptions = payload && payload.doc_type_options && typeof payload.doc_type_options === 'object'
+        ? payload.doc_type_options
+        : {};
+      var resolvedOptions = {};
+
+      ['6000', '6001'].forEach(function (docType) {
+        var option = rawOptions[docType] && typeof rawOptions[docType] === 'object' ? rawOptions[docType] : {};
+
+        resolvedOptions[docType] = {
+          value: docType,
+          label: option.label || docType,
+          next_work_order: option.next_work_order && typeof option.next_work_order === 'object'
+            ? option.next_work_order
+            : {},
+          last_work_order: option.last_work_order && typeof option.last_work_order === 'object'
+            ? option.last_work_order
+            : {}
+        };
+      });
+
+      return {
+        selected: rawOptions[payload && payload.doc_type ? String(payload.doc_type) : '']
+          ? String(payload.doc_type)
+          : '6000',
+        options: resolvedOptions
+      };
+    }
+
+    function getCreateDocTypeOption(docTypeState, docType) {
+      var state = docTypeState && typeof docTypeState === 'object' ? docTypeState : { options: {} };
+      var options = state.options && typeof state.options === 'object' ? state.options : {};
+
+      return options[docType] || options['6000'] || {
+        value: '6000',
+        label: '6000',
+        next_work_order: {},
+        last_work_order: {}
+      };
+    }
+
+    function buildCreateWorkOrderPromptHtml(order, docTypeState) {
+      var selectedOption = getCreateDocTypeOption(docTypeState, docTypeState.selected);
+      var nextWorkOrder = selectedOption.next_work_order || {};
+      var lastWorkOrder = selectedOption.last_work_order || {};
+
+      return [
+        '<div class="text-start mt-1">',
+        '<div class="wo-scan-create-head">',
+        '<div class="wo-scan-create-copy">Da li želite kreirati RN broj</div>',
+        '<div class="wo-scan-create-next-number" id="wo-scan-create-next-number">' + escapeHtml(nextWorkOrder.number || '') + '?</div>',
+        '</div>',
+        '<div class="wo-scan-create-doc-card">',
+        '<div class="wo-scan-create-doc-head">',
+        '<div class="wo-scan-create-doc-label">Vrsta dokumenta</div>',
+        '<div class="wo-scan-create-last small" id="wo-scan-create-last"><span class="fw-bolder">Zadnji RN:</span> ' + escapeHtml(lastWorkOrder.number || '-') + '</div>',
+        '</div>',
+        '<div class="wo-scan-create-doc-switch" role="tablist" aria-label="Vrsta dokumenta">',
+        Object.keys(docTypeState.options || {}).map(function (docType) {
+          var option = docTypeState.options[docType] || {};
+          var activeClass = docType === docTypeState.selected ? ' is-active' : '';
+
+          return '<button type="button" class="wo-scan-create-doc-option' + activeClass + '" data-doc-type="' + escapeHtml(docType) + '" aria-pressed="' + (docType === docTypeState.selected ? 'true' : 'false') + '">' + escapeHtml(option.label || docType) + '</button>';
+        }).join(''),
+        '</div>',
+        '</div>',
+        '<div class="small lh-lg">',
+        buildScanDetailRowsHtml(order),
+        '</div>',
+        '</div>'
+      ].join('');
+    }
+
+    function syncCreateWorkOrderPrompt(popup, docTypeState, docType) {
+      var selectedOption = getCreateDocTypeOption(docTypeState, docType);
+      var nextWorkOrder = selectedOption.next_work_order || {};
+      var lastWorkOrder = selectedOption.last_work_order || {};
+      var nextNumberEl = popup ? popup.querySelector('#wo-scan-create-next-number') : null;
+      var lastWorkOrderEl = popup ? popup.querySelector('#wo-scan-create-last') : null;
+
+      Array.prototype.forEach.call(
+        popup ? popup.querySelectorAll('.wo-scan-create-doc-option') : [],
+        function (button) {
+          var isActive = button.getAttribute('data-doc-type') === docType;
+          button.classList.toggle('is-active', isActive);
+          button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        }
+      );
+
+      if (nextNumberEl) {
+        nextNumberEl.textContent = nextWorkOrder.number || '';
+      }
+
+      if (lastWorkOrderEl) {
+        lastWorkOrderEl.innerHTML = '<span class="fw-bolder">Zadnji RN:</span> ' + escapeHtml(lastWorkOrder.number || '-');
+      }
+    }
+
+    function bindCreateDocTypeSwitch(popup, docTypeState, onChange) {
+      syncCreateWorkOrderPrompt(popup, docTypeState, docTypeState.selected);
+
+      Array.prototype.forEach.call(
+        popup ? popup.querySelectorAll('.wo-scan-create-doc-option') : [],
+        function (button) {
+          button.addEventListener('click', function () {
+            var nextDocType = button.getAttribute('data-doc-type') || '';
+
+            if (!docTypeState.options || !docTypeState.options[nextDocType]) {
+              return;
+            }
+
+            docTypeState.selected = nextDocType;
+            syncCreateWorkOrderPrompt(popup, docTypeState, nextDocType);
+
+            if (typeof onChange === 'function') {
+              onChange(nextDocType, docTypeState.options[nextDocType]);
+            }
+          });
+        }
+      );
     }
 
     function mergeScanContext(primaryContext, fallbackContext) {
@@ -726,7 +994,7 @@
       });
     }
 
-    async function createWorkOrderFromScan(identifier) {
+    async function createWorkOrderFromScan(identifier, docType) {
       return requestJson(scanCreateUrl, {
         method: 'POST',
         headers: {
@@ -737,7 +1005,8 @@
         },
         credentials: 'same-origin',
         body: JSON.stringify({
-          identifier: identifier
+          identifier: identifier,
+          doc_type: docType || '6000'
         })
       });
     }
@@ -802,12 +1071,12 @@
       await resumeScannerAfterPrompt();
     }
 
-    async function promptToCreateWorkOrder(identifier, payload, scanMeta) {
+    async function promptToCreateWorkOrderLegacy(identifier, payload, scanMeta) {
       var order = payload && payload.order ? payload.order : {};
       var nextWorkOrder = payload && payload.next_work_order ? payload.next_work_order : {};
       var lastWorkOrder = payload && payload.last_work_order ? payload.last_work_order : {};
       var scanSummary = mergeScanContext(scanMeta, order);
-      var extraHtml = '<h2 class="mb-1">Da li želite kreirati RN broj <br><strong>' + escapeHtml(nextWorkOrder.number || '') + '</strong>?</h2>';
+      var extraHtml = '<h2 class="mb-1">Da li želite kreirati RN broj <br><strong>' + escapeHtml(nextWorkOrder.number || '') + '?</strong></h2>';
 
 
       var result = await Swal.fire(swalWithProjectTheme({
@@ -831,18 +1100,109 @@
       }
 
       Swal.fire(swalWithProjectTheme({
-        title: 'Kreiram RN ' + escapeHtml(nextWorkOrder.number || ''),
-        text: 'Prepisujem podatke sa narudzbe i otvaram radni nalog...',
+        html: [
+          '<div class="wo-scan-create-loading-title">',
+          '<div class="wo-scan-create-loading-title-main">Kreiram</div>',
+          '<div class="wo-scan-create-loading-title-number">RN ' + escapeHtml(nextWorkOrder.number || '') + '</div>',
+          '</div>',
+          '<div class="wo-scan-create-loading-copy">Prepisujem podatke sa narudzbe i otvaram radni nalog...</div>'
+        ].join(''),
         allowOutsideClick: false,
         allowEscapeKey: false,
         showConfirmButton: false,
+        customClass: {
+          popup: 'wo-scan-create-loading-swal'
+        },
         didOpen: function () {
           Swal.showLoading();
+          var loader = Swal.getLoader();
+          if (loader) {
+            loader.style.borderColor = 'rgba(40, 199, 111, 0.18)';
+            loader.style.borderTopColor = '#28c76f';
+            loader.style.borderRightColor = '#28c76f';
+          }
         }
       }));
 
       try {
         var createResponse = await createWorkOrderFromScan(identifier);
+        var createdWorkOrder = createResponse && createResponse.data && createResponse.data.work_order
+          ? createResponse.data.work_order
+          : {};
+        var previewUrl = createdWorkOrder.preview_url || toWorkOrderPreviewUrl(createdWorkOrder.id || '');
+
+        setStatus('Radni nalog je spreman. Otvaram...', 'success');
+        window.location.assign(previewUrl);
+      } catch (error) {
+        if (window.Swal && typeof window.Swal.close === 'function') {
+          Swal.close();
+        }
+
+        await showScanError(error && error.message ? error.message : 'Ne mogu kreirati radni nalog iz skena.');
+      }
+    }
+
+    async function promptToCreateWorkOrder(identifier, payload, scanMeta) {
+      var order = payload && payload.order ? payload.order : {};
+      var docTypeState = normalizeCreateDocTypePayload(payload);
+      var selectedDocType = docTypeState.selected;
+
+      var result = await Swal.fire(swalWithProjectTheme({
+        title: 'RN nije pronađen',
+        html: buildCreateWorkOrderPromptHtml(order, docTypeState),
+        icon: 'question',
+        showCancelButton: true,
+        reverseButtons: true,
+        confirmButtonText: 'Kreiraj RN',
+        cancelButtonText: 'Ponovno skeniranje',
+        customClass: {
+          popup: 'wo-scan-create-rn-swal',
+          confirmButton: 'btn btn-success ms-1',
+          cancelButton: 'btn btn-danger'
+        },
+        buttonsStyling: false,
+        didOpen: function (popup) {
+          bindCreateDocTypeSwitch(popup, docTypeState, function (nextDocType) {
+            selectedDocType = nextDocType;
+          });
+        }
+      }));
+
+      if (!result.isConfirmed) {
+        await resumeScannerAfterPrompt();
+        return;
+      }
+
+      var selectedDocTypeOption = getCreateDocTypeOption(docTypeState, selectedDocType);
+      var selectedNextWorkOrder = selectedDocTypeOption.next_work_order || {};
+
+      Swal.fire(swalWithProjectTheme({
+        html: [
+          '<div class="wo-scan-create-loading-title">',
+          '<div class="wo-scan-create-loading-title-main">Kreiram</div>',
+          '<div class="wo-scan-create-loading-title-number">RN ' + escapeHtml(selectedNextWorkOrder.number || '') + '</div>',
+          '</div>',
+          '<div class="wo-scan-create-loading-copy">Prepisujem podatke sa narudžbe i otvaram radni nalog...</div>'
+        ].join(''),
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        customClass: {
+          popup: 'wo-scan-create-loading-swal'
+        },
+        didOpen: function () {
+          Swal.showLoading();
+          var loader = Swal.getLoader();
+          if (loader) {
+            loader.style.borderColor = 'rgba(40, 199, 111, 0.18)';
+            loader.style.borderTopColor = '#28c76f';
+            loader.style.borderRightColor = '#28c76f';
+          }
+        }
+      }));
+
+      try {
+        var createResponse = await createWorkOrderFromScan(identifier, selectedDocType);
         var createdWorkOrder = createResponse && createResponse.data && createResponse.data.work_order
           ? createResponse.data.work_order
           : {};

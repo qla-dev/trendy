@@ -9,10 +9,12 @@
 
 @section('page-style')
 @php
+  $canSeeMaterialWarehouse = strtolower((string) optional(auth()->user())->role) === 'admin';
   $canAdjustMaterialStock = strtolower((string) optional(auth()->user())->username) === 'kulasin.nedim';
   $materialBarcodeGeneratorConfig = [
       'dataUrl' => $barcodeTableUrl ?? route('app-barcode-generator-data'),
       'stockAdjustUrl' => route('app-materials-stock-bulk-adjust'),
+      'canSeeWarehouse' => $canSeeMaterialWarehouse,
       'canAdjustStock' => $canAdjustMaterialStock,
   ];
 @endphp
@@ -46,7 +48,7 @@
   }
 
   .material-barcode-generator-wrapper .material-barcode-table {
-    min-width: {{ $canAdjustMaterialStock ? '980px' : '760px' }};
+    min-width: {{ $canAdjustMaterialStock ? '980px' : ($canSeeMaterialWarehouse ? '860px' : '760px') }};
   }
 
   .material-barcode-table tbody .material-barcode-loading-spacer-row > td {
@@ -416,8 +418,8 @@
             <th>Šifra</th>
             <th>Naziv</th>
             <th>MJ</th>
-            @if($canAdjustMaterialStock)
-              <th>SkladiÅ¡te</th>
+            @if($canSeeMaterialWarehouse)
+              <th>Skladište</th>
             @endif
             <th>Zaliha</th>
             @if($canAdjustMaterialStock)
@@ -427,7 +429,7 @@
         </thead>
         <tbody>
           <tr class="material-barcode-loading-spacer-row" aria-hidden="true">
-            <td colspan="{{ $canAdjustMaterialStock ? 6 : 4 }}"></td>
+            <td colspan="{{ $canAdjustMaterialStock ? 6 : ($canSeeMaterialWarehouse ? 5 : 4) }}"></td>
           </tr>
         </tbody>
       </table>
@@ -477,5 +479,5 @@
 <script>
   window.materialBarcodeGeneratorConfig = @json($materialBarcodeGeneratorConfig);
 </script>
-<script src="{{asset('js/scripts/pages/app-material-barcode-generator.js?v=4')}}"></script>
+<script src="{{asset('js/scripts/pages/app-material-barcode-generator.js?v=5')}}"></script>
 @endsection

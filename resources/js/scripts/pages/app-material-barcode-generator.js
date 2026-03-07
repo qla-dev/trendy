@@ -5,6 +5,7 @@ $(function () {
   var config = window.materialBarcodeGeneratorConfig || {};
   var dataUrl = (config.dataUrl || '').toString().trim();
   var stockAdjustUrl = (config.stockAdjustUrl || '').toString().trim();
+  var canSeeWarehouse = !!config.canSeeWarehouse;
   var canAdjustStock = !!config.canAdjustStock;
   var csrfToken = $('meta[name="csrf-token"]').attr('content') || '';
   var modalElement = document.getElementById('material-barcode-modal');
@@ -33,7 +34,7 @@ $(function () {
   var overlaySafetyTimer = null;
   var hasCompletedInitialTableLoad = false;
   var dataTable;
-  var sortableColumnMap = canAdjustStock
+  var sortableColumnMap = canSeeWarehouse
     ? {
         0: 'material_code',
         1: 'material_name',
@@ -812,7 +813,7 @@ $(function () {
         { data: 'material_um' }
       ];
 
-      if (canAdjustStock) {
+      if (canSeeWarehouse) {
         columns.push({ data: 'material_warehouse' });
       }
 
@@ -854,9 +855,9 @@ $(function () {
           }
         }
       ];
-      var stockColumnIndex = canAdjustStock ? 4 : 3;
+      var stockColumnIndex = canSeeWarehouse ? 4 : 3;
 
-      if (canAdjustStock) {
+      if (canSeeWarehouse) {
         columnDefs.push({
           targets: 3,
           className: 'material-warehouse-cell',
@@ -894,7 +895,7 @@ $(function () {
     })(),
     language: {
       search: 'Pretraga:',
-      lengthMenu: 'Prikazi _MENU_ redova',
+      lengthMenu: 'Prikaži _MENU_ materijala',
       info: 'Prikaz _START_ do _END_ od _TOTAL_ materijala',
       infoEmpty: 'Nema materijala za prikaz',
       infoFiltered: '(filtrirano od _MAX_ ukupno)',

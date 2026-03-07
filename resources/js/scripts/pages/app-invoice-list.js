@@ -74,8 +74,8 @@ $(function () {
     kupac: 'Kupac',
     primatelj: 'Primatelj',
     proizvod: 'Proizvod',
-    plan_pocetak_od: 'Plan. pocetak od',
-    plan_pocetak_do: 'Plan. pocetak do',
+    plan_pocetak_od: 'Plan. početak od',
+    plan_pocetak_do: 'Plan. početak do',
     plan_kraj_od: 'Plan. kraj od',
     plan_kraj_do: 'Plan. kraj do',
     datum_od: 'Datum od',
@@ -336,14 +336,10 @@ $(function () {
       return 'N/A';
     }
 
-    if (rawValue.indexOf('-') !== -1) {
-      return rawValue;
-    }
-
     var digits = rawValue.replace(/\D/g, '');
 
     if (digits.length === 13) {
-      return digits.slice(0, 2) + '-' + digits.slice(2, 7) + '-' + digits.slice(7);
+      return digits.slice(0, 2) + '-' + digits.slice(2, 6) + '-' + digits.slice(6);
     }
 
     return rawValue;
@@ -497,6 +493,7 @@ $(function () {
     var searchOverlaySafetyTimer = null;
     var sortableColumnMap = {
       0: 'id',
+      6: 'datum_kreiranja',
       4: 'klijent',
       7: 'status',
       8: 'prioritet'
@@ -567,6 +564,46 @@ $(function () {
       bottomRow.css('display', visible ? '' : 'none');
     }
 
+    function ensureTableBodyScrollContainer() {
+      var wrapper = dtInvoiceTable.closest('.dataTables_wrapper');
+      var bodyRow;
+      var bodyCell;
+      var scrollHost;
+
+      if (!wrapper.length) {
+        return dtInvoiceTable.parent();
+      }
+
+      bodyRow = wrapper.children('.row').eq(1);
+      bodyCell = bodyRow.children("[class*='col-']").first();
+
+      if (!bodyCell.length) {
+        return dtInvoiceTable.parent();
+      }
+
+      bodyCell.addClass('invoice-table-body-cell');
+      scrollHost = bodyCell.children('.invoice-table-body-scroll').first();
+
+      if (scrollHost.length) {
+        return scrollHost;
+      }
+
+      scrollHost = $('<div class="invoice-table-body-scroll"></div>');
+      dtInvoiceTable.before(scrollHost);
+      scrollHost.append(dtInvoiceTable);
+
+      if (scrollHost.length && scrollHost.get(0)) {
+        scrollHost.get(0).scrollLeft = 0;
+      }
+
+      return scrollHost;
+    }
+
+    function resolveTableOverlayHost() {
+      ensureTableBodyScrollContainer();
+      return dtInvoiceTable.closest('.card-datatable');
+    }
+
     function setInitialTableLoadingState(active) {
       var overlayHost = dtInvoiceTable.closest('.card-datatable');
 
@@ -582,7 +619,7 @@ $(function () {
     }
 
     function ensureTableLoadingOverlay() {
-      var overlayHost = dtInvoiceTable.closest('.card-datatable');
+      var overlayHost = resolveTableOverlayHost();
 
       if (!overlayHost.length) {
         return null;
@@ -609,7 +646,7 @@ $(function () {
     }
 
     function updateTableLoadingOverlayBounds() {
-      var overlayHost = dtInvoiceTable.closest('.card-datatable');
+      var overlayHost = resolveTableOverlayHost();
       var overlay = overlayHost.find('.invoice-table-loading-overlay').first();
       var hostElement = overlayHost.get(0);
       var tableElement = dtInvoiceTable.get(0);
@@ -673,6 +710,11 @@ $(function () {
           width = bodyRect.width;
           height = bodyRect.height;
         }
+      }
+
+      if (hostElement && (hostElement.clientWidth || hostRect.width)) {
+        left = 0;
+        width = hostElement.clientWidth || hostRect.width;
       }
 
       overlay.css({
@@ -893,7 +935,7 @@ $(function () {
       columnDefs: (function () {
         var columnDefs = [
         {
-          targets: [1, 2, 3, 5, 6],
+          targets: [1, 2, 3, 5],
           orderable: false
         },
         {
@@ -1133,7 +1175,7 @@ $(function () {
         return columnDefs;
       })(),
       ordering: true,
-      order: [[0, 'desc']],
+      order: [[6, 'desc']],
       orderMulti: false,
       dom:
         '<"row d-flex justify-content-between align-items-center m-1"' +

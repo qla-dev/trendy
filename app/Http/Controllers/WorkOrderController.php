@@ -16,6 +16,7 @@ use Throwable;
 class WorkOrderController extends Controller
 {
     private const DEFAULT_SCAN_CREATE_DOC_TYPE = '6000';
+    private const SCAN_CREATE_DOC_TYPES = ['6000', '6001'];
     private const DEFAULT_SCAN_CREATE_SEQUENCE_LENGTH = 7;
     private const MATERIALS_SETS = [
         '011',
@@ -180,7 +181,7 @@ class WorkOrderController extends Controller
                 'workOrderMeta' => $workOrderMeta,
                 'sender' => $sender,
                 'recipient' => $recipient,
-                'invoiceNumber' => (string) ($workOrder['broj_naloga'] ?? ''),
+                'invoiceNumber' => $this->formatWorkOrderNumberForCalendar((string) ($workOrder['broj_naloga'] ?? '')),
                 'issueDate' => $this->displayDate($workOrder['datum_kreiranja'] ?? null),
                 'plannedStartDate' => $this->formatMetaDateTime($this->value($raw, ['adSchedStartTime'], null)),
                 'dueDate' => $this->displayDate($workOrder['datum_zavrsetka'] ?? null),
@@ -341,14 +342,27 @@ class WorkOrderController extends Controller
             }
 
             $orderContext = $this->buildOrderLocatorContext($orderRow, $orderLocator);
-            $numberContext = $this->generateNextWorkOrderNumber(
-                Carbon::now(),
-                (string) ($orderContext['doc_type'] ?? '')
-            );
+            $docTypeOptions = $this->buildScanCreateDocTypeOptions(Carbon::now());
+            $defaultDocType = $this->resolveRequestedScanCreateDocType(self::DEFAULT_SCAN_CREATE_DOC_TYPE);
+            $defaultDocTypeOption = $docTypeOptions[$defaultDocType] ?? reset($docTypeOptions) ?: [];
+            $defaultLastWorkOrder = is_array($defaultDocTypeOption['last_work_order'] ?? null)
+                ? $defaultDocTypeOption['last_work_order']
+                : [];
+            $defaultNextWorkOrder = is_array($defaultDocTypeOption['next_work_order'] ?? null)
+                ? $defaultDocTypeOption['next_work_order']
+                : [];
+            $numberContext = [
+                'last_display' => (string) ($defaultLastWorkOrder['number'] ?? ''),
+                'last_raw' => (string) ($defaultLastWorkOrder['number_raw'] ?? ''),
+                'next_display' => (string) ($defaultNextWorkOrder['number'] ?? ''),
+                'next_raw' => (string) ($defaultNextWorkOrder['number_raw'] ?? ''),
+            ];
 
             return response()->json([
                 'data' => [
                     'status' => 'create_available',
+                    'doc_type' => $defaultDocType,
+                    'doc_type_options' => $docTypeOptions,
                     'message' => 'Da li želite kreirati RN broj ' . $numberContext['next_display'] . '?',
                     'order' => [
                         'narudzba_kljuc' => (string) ($orderContext['order_key'] ?? ''),
@@ -387,6 +401,7 @@ class WorkOrderController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'identifier' => ['required', 'string', 'max:255'],
+            'doc_type' => ['nullable', 'string', 'max:4'],
         ]);
 
         if ($validator->fails()) {
@@ -397,9 +412,19 @@ class WorkOrderController extends Controller
         }
 
         $identifier = trim((string) $validator->validated()['identifier']);
+        $requestedDocType = trim((string) ($validator->validated()['doc_type'] ?? ''));
+
+        if ($requestedDocType !== '' && !in_array($requestedDocType, self::SCAN_CREATE_DOC_TYPES, true)) {
+            return response()->json([
+                'message' => 'Neispravna vrsta dokumenta za kreiranje RN.',
+            ], 422);
+        }
+
+        $selectedDocType = $this->resolveRequestedScanCreateDocType($requestedDocType);
         $orderLocator = $this->parseOrderLocatorIdentifier($identifier);
         $debugContext = [
             'identifier' => $identifier,
+            'doc_type' => $selectedDocType,
             'order_locator' => $orderLocator,
         ];
 
@@ -410,7 +435,7 @@ class WorkOrderController extends Controller
         }
 
         try {
-            $result = DB::transaction(function () use ($request, $orderLocator, $identifier, &$debugContext) {
+            $result = DB::transaction(function () use ($request, $orderLocator, $identifier, $selectedDocType, &$debugContext) {
                 $existingRow = $this->findWorkOrderRowByOrderLocator(
                     (string) ($orderLocator['order_number'] ?? ''),
                     (int) ($orderLocator['order_position'] ?? 0),
@@ -447,7 +472,7 @@ class WorkOrderController extends Controller
                 $orderContext = $this->buildOrderLocatorContext($orderRow, $orderLocator);
                 $numberContext = $this->generateNextWorkOrderNumber(
                     Carbon::now(),
-                    (string) ($orderContext['doc_type'] ?? '')
+                    $selectedDocType
                 );
                 $debugContext['resolved_order_context'] = $orderContext;
                 $debugContext['resolved_order_row'] = $orderRow;
@@ -1429,11 +1454,14 @@ class WorkOrderController extends Controller
                 'has_statement_column' => $hasStatementColumn,
             ]);
 
+            $workOrderColumns = $this->tableColumns();
             $saveResult = DB::transaction(function () use (
                 $resolvedRows,
                 $quantityFactor,
                 $workOrderKey,
                 $preferredWarehouse,
+                $workOrderRow,
+                $workOrderColumns,
                 $variant,
                 $userId,
                 $now,
@@ -1652,9 +1680,23 @@ class WorkOrderController extends Controller
                     );
                 }
 
+                $statusTransition = [
+                    'changed' => false,
+                ];
+
+                if ($this->savedRowsContainMaterialConsumption($saved)) {
+                    $statusTransition = $this->transitionWorkOrderStatusAfterConsumption(
+                        $workOrderRow,
+                        $workOrderColumns,
+                        $userId,
+                        $now
+                    );
+                }
+
                 return [
                     'saved' => $saved,
                     'stock_adjustments' => $stockAdjustmentResults,
+                    'status_transition' => $statusTransition,
                 ];
             });
 
@@ -1664,6 +1706,9 @@ class WorkOrderController extends Controller
             $stockAdjustmentResults = is_array($saveResult['stock_adjustments'] ?? null)
                 ? $saveResult['stock_adjustments']
                 : [];
+            $statusTransition = is_array($saveResult['status_transition'] ?? null)
+                ? $saveResult['status_transition']
+                : ['changed' => false];
 
             if (empty($insertedRows)) {
                 return response()->json([
@@ -1704,6 +1749,7 @@ class WorkOrderController extends Controller
                     'inserted_count' => $insertedCount,
                     'stock_adjusted_count' => count($stockAdjustmentResults),
                     'stock_adjustments' => $stockAdjustmentResults,
+                    'status_transition' => $statusTransition,
                     'items' => $insertedRows,
                 ],
             ], 201);
@@ -2612,14 +2658,10 @@ class WorkOrderController extends Controller
             return 'N/A';
         }
 
-        if (str_contains($rawValue, '-')) {
-            return $rawValue;
-        }
-
         $digits = preg_replace('/\D+/', '', $rawValue);
 
         if (strlen($digits) === 13) {
-            return substr($digits, 0, 2) . '-' . substr($digits, 2, 5) . '-' . substr($digits, 7);
+            return substr($digits, 0, 2) . '-' . substr($digits, 2, 4) . '-' . substr($digits, 6);
         }
 
         return $rawValue;
@@ -3355,17 +3397,45 @@ class WorkOrderController extends Controller
             'order_position' => (int) ($orderLocator['order_position'] ?? 0),
             'product_code' => $productCode,
             'product_name' => $productName,
-            'doc_type' => $this->resolveScanCreateDocType($orderRow),
             'client_name' => (string) $this->valueTrimmed($orderRow, ['acConsignee', 'acReceiver', 'acPartner', 'client_name'], ''),
             'catalog' => $catalogRow,
         ];
     }
 
-    private function resolveScanCreateDocType(array $orderRow): string
+    private function resolveRequestedScanCreateDocType(mixed $value): string
     {
-        $docType = trim((string) $this->valueTrimmed($orderRow, ['acDocType'], self::DEFAULT_SCAN_CREATE_DOC_TYPE));
+        $docType = trim((string) $value);
 
-        return $docType !== '' ? $docType : self::DEFAULT_SCAN_CREATE_DOC_TYPE;
+        if ($docType === '') {
+            return self::DEFAULT_SCAN_CREATE_DOC_TYPE;
+        }
+
+        return in_array($docType, self::SCAN_CREATE_DOC_TYPES, true)
+            ? $docType
+            : self::DEFAULT_SCAN_CREATE_DOC_TYPE;
+    }
+
+    private function buildScanCreateDocTypeOptions(Carbon $now): array
+    {
+        $options = [];
+
+        foreach (self::SCAN_CREATE_DOC_TYPES as $docType) {
+            $numberContext = $this->generateNextWorkOrderNumber($now, $docType);
+            $options[$docType] = [
+                'value' => $docType,
+                'label' => $docType,
+                'last_work_order' => [
+                    'number' => (string) ($numberContext['last_display'] ?? ''),
+                    'number_raw' => (string) ($numberContext['last_raw'] ?? ''),
+                ],
+                'next_work_order' => [
+                    'number' => (string) ($numberContext['next_display'] ?? ''),
+                    'number_raw' => (string) ($numberContext['next_raw'] ?? ''),
+                ],
+            ];
+        }
+
+        return $options;
     }
 
     private function resolveOrderDisplayNumber(array $orderRow, string $fallbackNormalizedOrderNumber): string
@@ -3423,7 +3493,7 @@ class WorkOrderController extends Controller
         $columns = $this->tableColumns();
         $identifierColumn = $this->firstExistingColumn($columns, ['acRefNo1', 'acKey']);
         $yearPrefix = $now->format('y');
-        $resolvedDocType = trim($docType) !== '' ? trim($docType) : self::DEFAULT_SCAN_CREATE_DOC_TYPE;
+        $resolvedDocType = $this->resolveRequestedScanCreateDocType($docType);
         $prefix = $yearPrefix . $resolvedDocType;
         $sequenceLength = $this->resolveScanCreateSequenceLength($yearPrefix, $resolvedDocType);
         $lastRaw = '';
@@ -3535,7 +3605,7 @@ class WorkOrderController extends Controller
         $productName = trim((string) ($orderContext['product_name'] ?? ''));
         $orderNumber = trim((string) ($orderContext['order_number'] ?? ''));
         $orderKey = trim((string) ($orderContext['order_key'] ?? ''));
-        $docType = trim((string) ($numberContext['doc_type'] ?? ($orderContext['doc_type'] ?? $this->resolveScanCreateDocType($orderRow))));
+        $docType = $this->resolveRequestedScanCreateDocType($numberContext['doc_type'] ?? self::DEFAULT_SCAN_CREATE_DOC_TYPE);
         $username = is_object($user) ? trim((string) ($user->username ?? $user->name ?? '')) : '';
         $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
 
@@ -5120,6 +5190,21 @@ class WorkOrderController extends Controller
             );
         }
 
+        if ($sortBy === 'datum_kreiranja') {
+            $hasDateOrdering = false;
+
+            foreach (['adDate', 'adDateIns', 'adTimeIns', 'anNo'] as $column) {
+                if (!in_array($column, $columns, true)) {
+                    continue;
+                }
+
+                $query->orderBy($column, $direction);
+                $hasDateOrdering = true;
+            }
+
+            return $hasDateOrdering;
+        }
+
         return false;
     }
 
@@ -5173,6 +5258,7 @@ class WorkOrderController extends Controller
 
         return match ($normalized) {
             'id', '#', 'broj', 'broj_naloga', 'work_order_number' => 'id',
+            'datum_kreiranja', 'datum', 'datum_kreiranja_rn', 'created_at', 'created_date' => 'datum_kreiranja',
             'klijent', 'kupac', 'client' => 'klijent',
             'status' => 'status',
             'prioritet', 'priority' => 'prioritet',
@@ -5228,6 +5314,99 @@ class WorkOrderController extends Controller
             'zavrsen', 'zavrseno' => 'Z',
             default => null,
         };
+    }
+
+    private function savedRowsContainMaterialConsumption(array $savedRows): bool
+    {
+        foreach ($savedRows as $savedRow) {
+            if (!is_array($savedRow)) {
+                continue;
+            }
+
+            $itemKind = strtolower(trim((string) ($savedRow['item_kind'] ?? '')));
+            $consumedQty = $this->toFloatOrNull($savedRow['stock_consumed_qty'] ?? null) ?? 0.0;
+
+            if ($itemKind === 'materials' && abs($consumedQty) > 0.000001) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function transitionWorkOrderStatusAfterConsumption(array &$row, array $columns, int $userId, Carbon $now): array
+    {
+        $statusColumns = $this->existingColumns($columns, ['acStatusMF', 'acStatus', 'status']);
+
+        if (empty($statusColumns)) {
+            return [
+                'changed' => false,
+                'reason' => 'missing_status_columns',
+            ];
+        }
+
+        $currentStatusValue = '';
+        foreach ($statusColumns as $statusColumn) {
+            if (!array_key_exists($statusColumn, $row)) {
+                continue;
+            }
+
+            $candidateValue = trim((string) ($row[$statusColumn] ?? ''));
+            if ($candidateValue === '') {
+                continue;
+            }
+
+            $currentStatusValue = $candidateValue;
+            break;
+        }
+
+        $currentResolvedStatus = $this->resolveStatus($currentStatusValue);
+        $currentBucket = (string) ($currentResolvedStatus['bucket'] ?? '');
+        $currentLabel = (string) ($currentResolvedStatus['label'] ?? $currentStatusValue);
+
+        if ($currentBucket !== 'otvoren') {
+            return [
+                'changed' => false,
+                'reason' => 'status_not_otvoren',
+                'from' => $currentLabel,
+                'to' => 'U radu',
+            ];
+        }
+
+        $updates = [];
+        foreach ($statusColumns as $statusColumn) {
+            $updates[$statusColumn] = $this->resolveStatusStorageValue('U radu', $row, $statusColumn);
+        }
+
+        if (in_array('adTimeChg', $columns, true)) {
+            $updates['adTimeChg'] = $now;
+        }
+
+        if (in_array('anUserChg', $columns, true)) {
+            $updates['anUserChg'] = $userId;
+        }
+
+        if ($this->rowAlreadyHasUpdates($row, $updates)) {
+            return [
+                'changed' => false,
+                'reason' => 'already_in_target_state',
+                'from' => $currentLabel,
+                'to' => 'U radu',
+            ];
+        }
+
+        $changed = $this->updateWorkOrderRow($row, $updates);
+
+        if ($changed) {
+            $row = array_merge($row, $updates);
+        }
+
+        return [
+            'changed' => $changed,
+            'reason' => $changed ? 'updated' : 'update_failed',
+            'from' => $currentLabel,
+            'to' => 'U radu',
+        ];
     }
 
     private function rowAlreadyHasUpdates(array $row, array $updates): bool

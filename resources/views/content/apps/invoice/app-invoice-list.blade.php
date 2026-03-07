@@ -706,6 +706,49 @@
     display: none;
   }
 
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:last-child {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:last-child > div:first-child {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:last-child > div:last-child {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+    margin-left: auto !important;
+    justify-content: flex-end !important;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:last-child .dataTables_paginate {
+    display: flex !important;
+    width: auto !important;
+    justify-content: flex-end !important;
+    margin-left: auto !important;
+    text-align: right !important;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:last-child .dataTables_paginate .pagination {
+    margin-left: auto !important;
+    justify-content: flex-end !important;
+  }
+
+  .invoice-list-wrapper .card-datatable .pagination {
+    margin-bottom: 1rem !important;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_info {
+    padding-top: 0 !important;
+  }
+
   .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) {
     margin-left: 0;
     margin-right: 0;
@@ -714,39 +757,57 @@
   .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-'] {
     padding-left: 0;
     padding-right: 0;
+    overflow: visible;
+  }
+
+  .invoice-list-wrapper .invoice-table-body-scroll {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
     scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
-    scrollbar-gutter: stable;
   }
 
-  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar {
+  .invoice-list-wrapper .invoice-table-body-cell {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    overflow: visible !important;
+  }
+
+  .invoice-list-wrapper .invoice-table-body-scroll::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
 
-  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-track {
+  .invoice-list-wrapper .invoice-table-body-scroll::-webkit-scrollbar-track {
     background: var(--wo-table-scroll-track);
     border-radius: 999px;
   }
 
-  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-thumb {
+  .invoice-list-wrapper .invoice-table-body-scroll::-webkit-scrollbar-thumb {
     background: var(--wo-table-scroll-thumb);
     border-radius: 999px;
     border: 1px solid var(--wo-table-scroll-thumb-border);
   }
 
-  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-thumb:hover {
+  .invoice-list-wrapper .invoice-table-body-scroll::-webkit-scrollbar-thumb:hover {
     background: var(--wo-table-scroll-thumb-hover);
   }
 
-  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-thumb:active {
+  .invoice-list-wrapper .invoice-table-body-scroll::-webkit-scrollbar-thumb:active {
     background: var(--wo-table-scroll-thumb-active);
   }
 
-  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-corner {
+  .invoice-list-wrapper .invoice-table-body-scroll::-webkit-scrollbar-corner {
     background: var(--wo-table-scroll-track);
   }
 
@@ -762,7 +823,7 @@
     background: rgba(255, 255, 255, 0.74);
     backdrop-filter: blur(1px);
     z-index: 9;
-    pointer-events: all;
+    pointer-events: none;
   }
 
   .invoice-table-loading-overlay.is-visible {
@@ -969,6 +1030,7 @@
     color: #fff;
   }
 
+
   .dark-layout .wo-eye-action,
   .semi-dark-layout .wo-eye-action {
     color: #d6dcec;
@@ -1003,12 +1065,12 @@
  @media (min-width: 768px) {
   .invoice-list-wrapper .col-lg-6:first-child {
     flex: 0 0 auto;
-    width: 30%;
+    width: 25%;
   }
 
   .invoice-list-wrapper .col-lg-6:nth-child(2) {
     flex: 0 0 auto;
-    width: 70%;
+    width: 75%;
   }
 }
 </style>
@@ -1026,5 +1088,5 @@
 @endsection
 
 @section('page-script')
-<script src="{{asset('js/scripts/pages/app-invoice-list.js?v=6')}}"></script>
+<script src="{{asset('js/scripts/pages/app-invoice-list.js?v=11')}}"></script>
 @endsection

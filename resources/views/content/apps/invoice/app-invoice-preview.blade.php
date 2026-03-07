@@ -1201,17 +1201,13 @@
   $showPreviewQr = $hasLoadedWorkOrder;
   $invoiceNumber = $invoiceNumber ?? '';
   $invoiceNumberDisplay = $invoiceNumber;
-  if (
-    is_string($invoiceNumberDisplay) &&
-    $invoiceNumberDisplay !== '' &&
-    !str_contains($invoiceNumberDisplay, '-')
-  ) {
+  if (is_string($invoiceNumberDisplay) && $invoiceNumberDisplay !== '') {
     $invoiceDigits = preg_replace('/\D+/', '', $invoiceNumberDisplay);
     if (is_string($invoiceDigits) && strlen($invoiceDigits) === 13) {
       $invoiceNumberDisplay =
         substr($invoiceDigits, 0, 2) . '-' .
-        substr($invoiceDigits, 2, 5) . '-' .
-        substr($invoiceDigits, 7);
+        substr($invoiceDigits, 2, 4) . '-' .
+        substr($invoiceDigits, 6);
     }
   }
   $displayValue = static function ($value): string {
