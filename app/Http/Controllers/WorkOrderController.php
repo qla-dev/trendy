@@ -1880,7 +1880,7 @@ class WorkOrderController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Stavka je obrisana.',
+                'message' => 'Stavka je uklonjena sa sastavnice ovog radnog naloga',
                 'data' => [
                     'work_order_id' => $id,
                     'work_order_key' => $workOrderKey,

@@ -30,7 +30,7 @@
       </div>
       <div class="modal-body">
         <p class="text mb-1">Odaberite novi status radnog naloga.</p>
-        <select class="form-select" id="wo-status-select">
+        <select class="form-select" id="wo-status-select" style="cursor: pointer;">
           @php
             $statusOptions = [
               'Planiran',
@@ -46,7 +46,7 @@
             @php
               $normalizedOptionStatus = $normalizeStatus($statusOption);
             @endphp
-            <option value="{{ $statusOption }}" {{ $normalizedCurrentStatus === $normalizedOptionStatus ? 'selected' : '' }}>
+            <option value="{{ $statusOption }}" {{ $normalizedCurrentStatus === $normalizedOptionStatus ? 'selected' : '' }} style="cursor: pointer;">
               {{ $statusOption }}
             </option>
           @endforeach

@@ -16,7 +16,7 @@
       </div>
       <div class="modal-body">
         <p class="text mb-1">Odaberite novi prioritet radnog naloga.</p>
-        <select class="form-select" id="wo-priority-select">
+        <select class="form-select" id="wo-priority-select" style="cursor: pointer;">
           @php
             $priorityOptions = [
               '1 - Visoki prioritet',
@@ -35,7 +35,7 @@
                 ? $currentPriorityCode === $priorityOptionCode
                 : strcasecmp($currentPriority, $priorityOption) === 0;
             @endphp
-            <option value="{{ $priorityOption }}" {{ $isPrioritySelected ? 'selected' : '' }}>
+            <option value="{{ $priorityOption }}" {{ $isPrioritySelected ? 'selected' : '' }} style="cursor: pointer;">
               {{ $priorityOption }}
             </option>
           @endforeach

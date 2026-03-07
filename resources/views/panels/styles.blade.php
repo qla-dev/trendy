@@ -164,4 +164,11 @@
   .ps__rail-y:hover > .ps__thumb-y {
     width: 9px;
   }
+
+  .swal2-styled.swal2-confirm:focus,
+  .swal2-styled.swal2-cancel:focus,
+  .swal2-styled.swal2-deny:focus,
+  .swal2-styled.swal2-default-outline:focus {
+    box-shadow: none !important;
+  }
 </style>
