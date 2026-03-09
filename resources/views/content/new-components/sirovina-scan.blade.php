@@ -48,7 +48,7 @@
           <h4 class="mb-0 text-white" id="sirovina-scanner-modal-label">
             Planiraj novu potrošnju za RN <span id="sirovina-rn-number">-</span>
           </h4>
-          <p class="mb-0 wo-bom-modal-subtitle">Izaberite proizvod ili materijal i operacije pojediačno za privremenu sastavnicu. Stavke će biti dodane kao nove, te će postojeće ostati kakvi jesu.</p>
+          <p class="mb-0 wo-bom-modal-subtitle">Izaberite materijal i operacije za privremenu sastavnicu</p>
         </div>
       </div>
       <div class="modal-body p-0">
@@ -3422,7 +3422,7 @@
       state.prefillOperationsSeq += 1;
       var requestSeq = state.prefillOperationsSeq;
       var operationsSet = selectedAllSet('operations');
-      var prefillOperationCodes = new Set(['op10', 'op50', 'op60', 'op90']);
+      var prefillOperationCodes = new Set(['op10', 'op30']);
       operationsSet.clear();
 
       if (!allOperationsUrl) {
@@ -3599,14 +3599,7 @@
             napomena: '',
             planirano: String(planiranoQty),
             zaliha: String(zalihaQty),
-            mj: String(row.acUM || 'AUTO').trim() || 'AUTO',
-            serija: '',
-            normativna_osnova: '0',
-            aktivno: '1',
-            zavrseno: '0',
-            va: '',
-            prim_klas: '',
-            sek_klas: ''
+            mj: String(row.acUM || 'AUTO').trim() || 'AUTO'
           };
         });
     }
@@ -3617,7 +3610,7 @@
       }
 
       if (!Array.isArray(state.fineAdjustRows) || state.fineAdjustRows.length === 0) {
-        fineAdjustBodyEl.innerHTML = '<tr><td colspan="16" class="text-center text-muted py-2">Nema odabranih stavki.</td></tr>';
+        fineAdjustBodyEl.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-2">Nema odabranih stavki.</td></tr>';
         if (fineAdjustCountEl) {
           fineAdjustCountEl.textContent = 'Stavki: 0';
         }
@@ -3626,7 +3619,7 @@
 
       var fields = [
         'alternativa', 'pozicija', 'artikal', 'opis', 'slika', 'napomena', 'planirano', 'zaliha',
-        'mj', 'serija', 'normativna_osnova', 'aktivno', 'zavrseno', 'va', 'prim_klas', 'sek_klas'
+        'mj'
       ];
 
       var html = state.fineAdjustRows.map(function (row, rowIndex) {
@@ -4105,6 +4098,7 @@
     function resetConfirmContext() {
       state.confirmSelectionRows = [];
       state.confirmContext = null;
+      state.proceedSource = 'manual';
 
       if (confirmDetailsWrapEl) {
         confirmDetailsWrapEl.classList.add('d-none');
@@ -4300,7 +4294,7 @@
       }
 
       var source = forcedSource || state.proceedSource;
-      if (source === 'barcode') {
+      if (source === 'barcode' && state.confirmContext && state.confirmContext.mode === 'barcode') {
         openQuantityModal(selected, state.confirmContext || { mode: 'barcode', action: 'insert' });
         return;
       }
@@ -4490,6 +4484,7 @@
     function resetConfirmContext() {
       state.confirmSelectionRows = [];
       state.confirmContext = null;
+      state.proceedSource = 'manual';
 
       if (confirmDetailsWrapEl) {
         confirmDetailsWrapEl.classList.add('d-none');
@@ -5052,10 +5047,12 @@
         var shouldResume = modalStillVisible && !state.saving;
 
         if (!shouldResume) {
+          markProceedSource('manual');
           resetConfirmContext();
           return;
         }
 
+        markProceedSource('manual');
         resetConfirmContext();
         window.setTimeout(function () {
           requestBarcodeScannerStart(false);

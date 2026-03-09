@@ -29,18 +29,11 @@
                 <th class="text-center">Planirano</th>
                 <th class="text-center">Zaliha</th>
                 <th class="text-center">MJ</th>
-                <th class="text-center">Serija</th>
-                <th class="text-center">nor.os.</th>
-                <th class="text-center">Aktivno</th>
-                <th class="text-center">Zavrs...</th>
-                <th class="text-center">VA</th>
-                <th class="text-center">Prim.klas</th>
-                <th class="text-center">Sek.klas</th>
               </tr>
             </thead>
             <tbody id="fine-adjust-bom-body">
               <tr>
-                <td colspan="16" class="text-center text-muted py-2">Nema odabranih stavki.</td>
+                <td colspan="9" class="text-center text-muted py-2">Nema odabranih stavki.</td>
               </tr>
             </tbody>
           </table>

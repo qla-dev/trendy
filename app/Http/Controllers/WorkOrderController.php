@@ -6166,9 +6166,15 @@ class WorkOrderController extends Controller
 
     private function canDeleteWorkOrders(mixed $user = null): bool
     {
-        $username = is_object($user) ? trim((string) ($user->username ?? $user->name ?? '')) : '';
+        if (!is_object($user)) {
+            return false;
+        }
 
-        return strtolower($username) === 'kulasin.nedim';
+        if (method_exists($user, 'isAdmin')) {
+            return (bool) $user->isAdmin();
+        }
+
+        return strtolower(trim((string) ($user->role ?? ''))) === 'admin';
     }
 
     private function emptyInvoicePreviewResponse(array $pageConfigs, ?string $invoiceNumber = null)
