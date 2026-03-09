@@ -290,6 +290,7 @@
   
   @media (min-width: 576px) and (max-width: 1180px) {
     #sirovina-scanner-modal .modal-dialog {
+        max-width: 95%;
         margin: 1.75rem auto;
     }
 }
