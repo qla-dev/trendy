@@ -1282,7 +1282,7 @@
     background-color: unset!important;
   }
 
-  @media (min-width: 768px) and (max-width: 1180px) {
+  @media (min-width: 768px) and (max-width: 1180px) and (orientation: portrait) {
     #sirovina-scanner-modal .wo-bom-scanner-col {
       flex: 0 0 100%;
       max-width: 100%;

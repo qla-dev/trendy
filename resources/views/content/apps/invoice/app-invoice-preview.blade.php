@@ -1268,6 +1268,11 @@
   $workOrderMeta = $workOrderMeta ?? [];
   $currentUser = auth()->user();
   $isBasicUserRole = $currentUser && strtolower((string) ($currentUser->role ?? '')) === 'user';
+  $isAdminUser = $currentUser
+    ? (method_exists($currentUser, 'isAdmin')
+        ? (bool) $currentUser->isAdmin()
+        : strtolower((string) ($currentUser->role ?? '')) === 'admin')
+    : false;
   $showSastavnicaActions = !$isBasicUserRole;
   $sastavnicaEmptyColspan = $showSastavnicaActions ? 16 : 15;
   $workOrderMetaHighlights = $workOrderMeta['highlights'] ?? [];
@@ -1290,6 +1295,9 @@
   $barcodeMaterialLookupUrl = $hasLoadedWorkOrder ? route('app-invoice-barcode-material', ['id' => $workOrderRouteId]) : '';
   $plannedConsumptionStoreUrl = $hasLoadedWorkOrder ? route('app-invoice-planned-consumption', ['id' => $workOrderRouteId]) : '';
   $plannedConsumptionRemoveUrl = $hasLoadedWorkOrder ? route('app-invoice-planned-consumption-remove', ['id' => $workOrderRouteId]) : '';
+  $destroyWorkOrderUrl = ($hasLoadedWorkOrder && $isAdminUser)
+    ? route('app-invoice-destroy', ['id' => $workOrderRouteId])
+    : '';
   $canPrepareMaterial = $hasLoadedWorkOrder
     && $productsFetchUrl !== ''
     && $bomFetchUrl !== ''
@@ -1852,6 +1860,17 @@
             <span id="wo-priority-label">{{ $priorityDisplayLabel === '-' ? 'Prioritet -' : $priorityDisplayLabel }}</span>
           </button>
           <div class="invoice-actions-divider"></div>
+          @if($isAdminUser)
+            <button
+              id="wo-delete-order-btn"
+              class="btn btn-danger w-100 mb-75 d-flex justify-content-center align-items-center"
+              type="button"
+              data-delete-url="{{ $destroyWorkOrderUrl }}"
+              @if (!$hasLoadedWorkOrder || $destroyWorkOrderUrl === '') disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif
+            >
+              <i class="fa fa-trash me-50" style="margin-top: 1px;"></i> Izbriši nalog
+            </button>
+          @endif
           <button class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" onclick="alert('Uskoro')">
             <i class="fa fa-cube me-50" style="margin-top: 2px;"></i> Dodaj materijal
           </button>
@@ -2032,6 +2051,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var priorityLabel = document.getElementById('wo-priority-label');
     var statusTriggerButton = document.getElementById('wo-status-trigger-btn');
     var priorityTriggerButton = document.getElementById('wo-priority-trigger-btn');
+    var deleteWorkOrderButton = document.getElementById('wo-delete-order-btn');
     var statusModalElement = document.getElementById('change-status-modal');
     var priorityModalElement = document.getElementById('change-priority-modal');
     var sastavnicaTable = document.getElementById('sastavnica-table');
@@ -2210,6 +2230,27 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           'X-Requested-With': 'XMLHttpRequest'
         },
         body: JSON.stringify(payload || {})
+      }).then(function (response) {
+        return response.json().catch(function () {
+          return {};
+        }).then(function (body) {
+          if (!response.ok) {
+            throw new Error(extractErrorMessage(body, fallbackMessage));
+          }
+
+          return body;
+        });
+      });
+    }
+
+    function requestDelete(url, fallbackMessage) {
+      return fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': mutationConfig.csrfToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        }
       }).then(function (response) {
         return response.json().catch(function () {
           return {};
@@ -2507,6 +2548,61 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
             .finally(function () {
               setActionButtonLoading(prioritySaveButton, false);
             });
+        });
+      });
+    }
+
+    if (deleteWorkOrderButton && window.Swal && typeof window.Swal.fire === 'function') {
+      deleteWorkOrderButton.addEventListener('click', function () {
+        var deleteUrl = String(deleteWorkOrderButton.getAttribute('data-delete-url') || '').trim();
+
+        if (!deleteUrl) {
+          return;
+        }
+
+        Swal.fire(swalWithTheme({
+          title: 'Izbrisati nalog?',
+          text: 'Ova akcija je trajna i obrisat će radni nalog iz sistema.',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Izbriši',
+          cancelButtonText: 'Otkaži',
+          customClass: {
+            confirmButton: 'btn btn-danger',
+            cancelButton: 'btn btn-outline-danger ms-1'
+          },
+          buttonsStyling: false,
+          showLoaderOnConfirm: true,
+          preConfirm: function () {
+            return requestDelete(deleteUrl, 'Brisanje naloga nije uspjelo.')
+              .catch(function (error) {
+                Swal.showValidationMessage(
+                  error && error.message ? error.message : 'Brisanje naloga nije uspjelo.'
+                );
+              });
+          },
+          allowOutsideClick: function () {
+            return !Swal.isLoading();
+          }
+        })).then(function (result) {
+          if (!result.isConfirmed) {
+            return;
+          }
+
+          return Swal.fire(swalWithTheme({
+            icon: 'success',
+            title: 'Nalog je izbrisan',
+            timer: 900,
+            showConfirmButton: false
+          })).then(function () {
+            window.location.href = @json(url('/app/invoice/preview'));
+          });
+        }).catch(function (error) {
+          Swal.fire(swalWithTheme({
+            icon: 'error',
+            title: 'Brisanje nije uspjelo',
+            text: error && error.message ? error.message : 'Brisanje naloga nije uspjelo.'
+          }));
         });
       });
     }
