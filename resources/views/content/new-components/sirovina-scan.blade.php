@@ -12,6 +12,9 @@
     ? strtolower(trim((string) ($currentUser->username ?? ''))) === 'kulasin.nedim'
     : false;
   $stockAdjustWarehouse = trim((string) (($workOrder['magacin'] ?? '') ?: ''));
+  $scannerCompactRoleLayout = $currentUser
+    ? strtolower((string) ($currentUser->role ?? '')) === 'user'
+    : false;
   $scannerRequiresManualCameraStart = $currentUser
     ? (method_exists($currentUser, 'isAdmin')
         ? (bool) $currentUser->isAdmin()
@@ -40,6 +43,7 @@
   data-csrf-token="{{ csrf_token() }}"
   data-require-manual-camera-start="{{ $scannerRequiresManualCameraStart ? '1' : '0' }}"
   data-allow-manual-stock-adjust="{{ $allowManualStockAdjust ? '1' : '0' }}"
+  data-compact-layout="{{ $scannerCompactRoleLayout ? '1' : '0' }}"
 >
   <div class="modal-dialog modal-dialog-centered modal-xl mt-0">
     <div class="modal-content wo-bom-modal-content">
@@ -1292,6 +1296,17 @@
     #sirovina-scanner-modal .wo-scanner-open-fab {
       display: none !important;
     }
+  }
+
+  #sirovina-scanner-modal[data-compact-layout="1"] .wo-bom-scanner-col {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+
+  #sirovina-scanner-modal[data-compact-layout="1"] .wo-bom-ipad-hidden-col,
+  #sirovina-scanner-modal[data-compact-layout="1"] .wo-bom-right-col,
+  #sirovina-scanner-modal[data-compact-layout="1"] .wo-scanner-open-fab {
+    display: none !important;
   }
 
   @media (max-width: 991.98px) {
