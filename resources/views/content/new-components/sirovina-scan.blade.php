@@ -2964,7 +2964,7 @@
             '<td class="fw-semibold">' + componentId + '</td>' +
             '<td class="wo-opis-cell">' + formatOpisCell(descr) + '</td>' +
             '<td class="text-end">' + (isStockLoading
-              ? '<span class="wo-zaliha-loading" aria-label="Ucitavanje zalihe"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span></span>'
+              ? '<span class="wo-zaliha-loading" aria-label="Učitavanje zalihe"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span></span>'
               : formatQuantity(stockQty)
             ) + '</td>' +
             '<td class="text-center">' + operationType + '</td>' +
@@ -4007,7 +4007,7 @@
         state.selectedKeys.clear();
         renderBomRows();
         setBomLoading(false);
-        setStatus('Izaberite proizvod prije ucitavanja sastavnice.', 'warning');
+        setStatus('Izaberite proizvod prije učitavanja sastavnice.', 'warning');
         return Promise.resolve();
       }
 

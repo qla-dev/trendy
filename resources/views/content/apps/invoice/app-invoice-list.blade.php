@@ -285,7 +285,7 @@
             <th>Status</th>
             <th>Prioritet</th>
             @if($canDeleteWorkOrders)
-              <th>Akcija</th>
+              <th class="wo-invoice-list-action-col">Akcija</th>
             @endif
           </tr>
         </thead>
@@ -686,6 +686,24 @@
     background-color: #f8f8fc;
   }
 
+  .invoice-list-wrapper .invoice-list-table .wo-invoice-list-action-col {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background-color: #ffffff;
+    box-shadow: none;
+    border-left: 1px solid #ebe9f1;
+  }
+
+  .invoice-list-wrapper .invoice-list-table thead .wo-invoice-list-action-col {
+    z-index: 3;
+    background-color: #f8f8fa;
+  }
+
+  .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > .wo-invoice-list-action-col {
+    background-color: #f8f8fc;
+  }
+
   .invoice-list-wrapper .invoice-list-table {
     min-width: {{ $canDeleteWorkOrders ? '1180px' : '1100px' }};
   }
@@ -992,6 +1010,28 @@
   .semi-dark-layout .invoice-list-table.table tbody tr:hover > * {
     background-color: #36405a !important;
     color: #fff !important;
+  }
+
+  body.dark-layout .invoice-list-wrapper .invoice-list-table .wo-invoice-list-action-col,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table .wo-invoice-list-action-col,
+  .dark-layout .invoice-list-wrapper .invoice-list-table .wo-invoice-list-action-col,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table .wo-invoice-list-action-col {
+    background-color: #283046;
+    border-left-color: rgba(184, 190, 220, 0.22);
+  }
+
+  body.dark-layout .invoice-list-wrapper .invoice-list-table thead .wo-invoice-list-action-col,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table thead .wo-invoice-list-action-col,
+  .dark-layout .invoice-list-wrapper .invoice-list-table thead .wo-invoice-list-action-col,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table thead .wo-invoice-list-action-col {
+    background-color: #2f3854;
+  }
+
+  body.dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > .wo-invoice-list-action-col,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > .wo-invoice-list-action-col,
+  .dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > .wo-invoice-list-action-col,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > .wo-invoice-list-action-col {
+    background-color: #36405a !important;
   }
 
   .dark-layout .invoice-table-loading-overlay,

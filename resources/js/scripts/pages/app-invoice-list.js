@@ -1160,7 +1160,7 @@ $(function () {
         if (canDeleteWorkOrders) {
           columnDefs.push({
             targets: 9,
-            className: 'text-center align-middle',
+            className: 'text-center align-middle wo-invoice-list-action-col',
             width: '70px',
             render: function () {
               return (
