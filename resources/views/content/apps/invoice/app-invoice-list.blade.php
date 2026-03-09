@@ -704,6 +704,27 @@
     background-color: #f8f8fc;
   }
 
+  @if($canDeleteWorkOrders)
+  .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  .invoice-list-wrapper .invoice-list-table tbody tr > td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background-color: #ffffff;
+    box-shadow: none;
+    border-left: 1px solid #ebe9f1;
+  }
+
+  .invoice-list-wrapper .invoice-list-table thead tr > th:last-child {
+    z-index: 3;
+    background-color: #f8f8fa;
+  }
+
+  .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > td:last-child {
+    background-color: #f8f8fc;
+  }
+  @endif
+
   .invoice-list-wrapper .invoice-list-table {
     min-width: {{ $canDeleteWorkOrders ? '1180px' : '1100px' }};
   }
@@ -1033,6 +1054,34 @@
   .semi-dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > .wo-invoice-list-action-col {
     background-color: #36405a !important;
   }
+
+  @if($canDeleteWorkOrders)
+  body.dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  body.dark-layout .invoice-list-wrapper .invoice-list-table tbody tr > td:last-child,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table tbody tr > td:last-child,
+  .dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  .dark-layout .invoice-list-wrapper .invoice-list-table tbody tr > td:last-child,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table tbody tr > td:last-child {
+    background-color: #283046;
+    border-left-color: rgba(184, 190, 220, 0.22);
+  }
+
+  body.dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  .dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child {
+    background-color: #2f3854;
+  }
+
+  body.dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > td:last-child,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > td:last-child,
+  .dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > td:last-child,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > td:last-child {
+    background-color: #36405a !important;
+  }
+  @endif
 
   .dark-layout .invoice-table-loading-overlay,
   .semi-dark-layout .invoice-table-loading-overlay {
