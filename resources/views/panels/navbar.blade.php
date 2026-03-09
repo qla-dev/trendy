@@ -100,9 +100,14 @@
           @endif
           </span>
         </div>
+        @php
+          $navbarAvatarImage = strtolower((string) optional(Auth::user())->username) === 'admin'
+            ? 'avatar-s-22.jpg'
+            : 'avatar-s-11.jpg';
+        @endphp
         <span class="avatar">
           <img class="round"
-            src="{{ asset('images/portrait/small/avatar-s-11.jpg') }}"
+            src="{{ asset('images/portrait/small/' . $navbarAvatarImage) }}"
             alt="avatar" height="40" width="40">
           <span class="avatar-status-online"></span>
         </span>
