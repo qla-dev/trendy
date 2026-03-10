@@ -4,7 +4,7 @@
       <div class="modal-header">
         <div>
           <h5 class="modal-title mb-0" id="material-create-modal-label">Dodaj novi materijal</h5>
-          <div class="material-stock-modal-subtitle" id="material-create-modal-subtitle">Kreiraj novi katalog materijal i pocetnu zalihu.</div>
+          <div class="material-stock-modal-subtitle" id="material-create-modal-subtitle">Kreiraj novi katalog materijal i početnu zalihu.</div>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
       </div>
@@ -14,7 +14,7 @@
 
         <div class="material-create-form-grid">
           <div class="material-create-field-card">
-            <label class="form-label" for="material-create-code-input">Sifra</label>
+            <label class="form-label" for="material-create-code-input">Šifra</label>
             <input type="text" class="form-control" id="material-create-code-input" maxlength="64" autocomplete="off">
           </div>
           <div class="material-create-field-card">
@@ -31,7 +31,7 @@
             </select>
           </div>
           <div class="material-create-field-card">
-            <label class="form-label" for="material-create-warehouse-input">Skladiste</label>
+            <label class="form-label" for="material-create-warehouse-input">Skladište</label>
             <select class="form-select" id="material-create-warehouse-input">
               <option value="">Odaberite skladiste</option>
               @foreach(($stockWarehouseOptions ?? []) as $warehouseName)
@@ -40,7 +40,7 @@
             </select>
           </div>
           <div class="material-create-field-card">
-            <label class="form-label" for="material-create-stock-input">Pocetna zaliha</label>
+            <label class="form-label" for="material-create-stock-input">Početna zaliha</label>
             <input type="number" class="form-control" id="material-create-stock-input" step="0.001" inputmode="decimal" autocomplete="off">
           </div>
           <div class="material-create-field-card">
@@ -54,13 +54,13 @@
         </div>
 
         <div class="material-create-help" id="material-create-help-text">
-          Novi materijal ce biti upisan u katalog, a pocetna zaliha ce odmah biti evidentirana na odabranom skladistu.
+          Novi materijal ce biti upisan u katalog, a početna zaliha ce odmah biti evidentirana na odabranom skladistu.
         </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Zatvori</button>
         <button type="button" class="btn btn-primary" id="material-create-modal-save-btn">
-          <i class="fa fa-plus me-50"></i> Sacuvaj materijal
+          <i class="fa fa-plus me-50"></i> Sačuvaj materijal
         </button>
       </div>
     </div>

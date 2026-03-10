@@ -38,7 +38,6 @@ $(function () {
   var createModalSubtitleElement = document.getElementById('material-create-modal-subtitle');
   var createModalHelpElement = document.getElementById('material-create-help-text');
   var createModalOpenButton = document.getElementById('material-create-open-btn');
-  var warehouseFilterInput = document.getElementById('material-warehouse-filter');
   var createModalCodeInput = document.getElementById('material-create-code-input');
   var createModalNameInput = document.getElementById('material-create-name-input');
   var createModalUnitInput = document.getElementById('material-create-unit-input');
@@ -193,39 +192,6 @@ $(function () {
     }
 
     return numericValue.toFixed(3).replace(/\.?0+$/, '');
-  }
-
-  function ensureSelectOption(selectElement, optionValue, emptyLabel) {
-    var normalizedValue;
-    var optionElement;
-
-    if (!selectElement) {
-      return;
-    }
-
-    normalizedValue = (optionValue || '').toString().trim();
-
-    if (!normalizedValue) {
-      selectElement.value = '';
-      return;
-    }
-
-    optionElement = Array.prototype.find.call(selectElement.options || [], function (optionNode) {
-      return ((optionNode && optionNode.value) || '').toString().trim() === normalizedValue;
-    });
-
-    if (!optionElement) {
-      optionElement = document.createElement('option');
-      optionElement.value = normalizedValue;
-      optionElement.textContent = normalizedValue || emptyLabel || '-';
-      selectElement.appendChild(optionElement);
-    }
-
-    selectElement.value = normalizedValue;
-  }
-
-  function getWarehouseFilterValue() {
-    return warehouseFilterInput ? $.trim(warehouseFilterInput.value || '') : '';
   }
 
   function normalizeBarcodeValue(value) {
@@ -875,11 +841,11 @@ $(function () {
     }
 
     if (createModalUnitInput) {
-      ensureSelectOption(createModalUnitInput, rowData ? (rowData.material_um || '') : '', 'MJ');
+      createModalUnitInput.value = rowData ? (rowData.material_um || '') : '';
     }
 
     if (createModalWarehouseInput) {
-      ensureSelectOption(createModalWarehouseInput, rowData ? (rowData.material_warehouse || '') : '', 'Skladiste');
+      createModalWarehouseInput.value = rowData ? (rowData.material_warehouse || '') : '';
     }
 
     if (createModalStockInput) {
@@ -940,15 +906,8 @@ $(function () {
       material_qty: createModalStockInput ? $.trim(createModalStockInput.value || '0') : '0'
     };
 
-    if (!payload.material_code || !payload.material_name || !payload.material_um || !payload.material_warehouse) {
-      var errorText = 'Šifra, naziv, MJ i skladište su obavezni.';
-      if (window.Swal && typeof window.Swal.fire === 'function') {
-        window.Swal.fire({
-          icon: 'error',
-          title: 'Neispravan unos',
-          text: errorText,
-        });
-      }
+    if (!payload.material_code || !payload.material_name || !payload.material_um) {
+      setCreateMessage('error', 'Šifra, naziv i MJ su obavezni.');
       return;
     }
 
@@ -971,24 +930,6 @@ $(function () {
       createModalSaveButton.disabled = true;
     }
 
-    function translateBackendMessage(message) {
-      var normalized = (message || '').toString().toLowerCase();
-
-      if (normalized.indexOf('sifra') !== -1 && normalized.indexOf('postoji') !== -1) {
-        return 'Šifra već postoji.';
-      }
-
-      if (normalized.indexOf('already exists') !== -1) {
-        return 'Uneseni materijal već postoji.';
-      }
-
-      if (normalized.indexOf('required') !== -1) {
-        return 'Obavezno polje nije popunjeno.';
-      }
-
-      return message || 'Greška pri dodavanju materijala.';
-    }
-
     $.ajax({
       url: createUrl,
       method: 'POST',
@@ -997,17 +938,7 @@ $(function () {
       headers: requestHeaders,
       data: JSON.stringify(payload),
       success: function (response) {
-        var successMessage = response && response.message ? response.message : 'Materijal je uspješno dodan.';
-        setCreateMessage('success', successMessage);
-        if (window.Swal && typeof window.Swal.fire === 'function') {
-          window.Swal.fire({
-            icon: 'success',
-            title: 'Uspjeh',
-            text: successMessage,
-            timer: 1200,
-            showConfirmButton: false,
-          });
-        }
+        setCreateMessage('success', response && response.message ? response.message : 'Materijal je uspješno dodan.');
 
         if (dataTable) {
           dataTable.ajax.reload(null, false);
@@ -1019,16 +950,7 @@ $(function () {
         }, 600);
       },
       error: function (xhr) {
-        var message = translateBackendMessage(extractAjaxErrorMessage(xhr, 'Ne mogu dodati novi materijal.'));
-        setCreateMessage('error', message);
-
-        if (window.Swal && typeof window.Swal.fire === 'function') {
-          window.Swal.fire({
-            icon: 'error',
-            title: 'Greška',
-            text: message,
-          });
-        }
+        setCreateMessage('error', extractAjaxErrorMessage(xhr, 'Ne mogu dodati novi materijal.'));
       },
       complete: function () {
         createRequestInFlight = false;
@@ -1146,10 +1068,10 @@ $(function () {
       title: 'Obrisati materijal?',
       html: buildMaterialDeleteHtml(materialRow),
       showCancelButton: true,
-      confirmButtonText: 'Izbriši',
-      cancelButtonText: 'Otkaži',
+      confirmButtonText: 'Izbrisi',
+      cancelButtonText: 'Otkazi',
       customClass: {
-        confirmButton: 'btn btn-danger me-1',
+        confirmButton: 'btn btn-danger',
         cancelButton: 'btn btn-outline-danger'
       },
       buttonsStyling: false
@@ -1219,7 +1141,6 @@ $(function () {
         length: requestData.length || 25,
         sort_by: sortBy,
         sort_dir: firstOrder && firstOrder.dir === 'desc' ? 'desc' : 'asc',
-        warehouse: getWarehouseFilterValue(),
         search: {
           value: requestData.search && requestData.search.value ? requestData.search.value : ''
         }
@@ -1304,17 +1225,11 @@ $(function () {
           render: function (data, type, row) {
             var actionsHtml = '<div class="material-actions-group">';
 
-            actionsHtml +=
-              '<button type="button" class="btn btn-sm btn-outline-primary material-action-btn material-barcode-preview-btn">' +
-                '<i class="fa fa-barcode"></i>' +
-                '<span>Barcode</span>' +
-              '</button>';
-
             if (canAdjustStock) {
               actionsHtml +=
                 '<button type="button" class="btn btn-sm btn-outline-primary material-action-btn material-stock-adjust-btn">' +
                   '<i class="fa fa-database"></i>' +
-                  '<span>Skladište</span>' +
+                  '<span>Skladiste</span>' +
                 '</button>';
             }
 
@@ -1381,23 +1296,6 @@ $(function () {
     openStockModal(rowData);
   });
 
-  tableElement.find('tbody').on('click', '.material-barcode-preview-btn', function (event) {
-    var rowData;
-    var modalInstance;
-
-    event.preventDefault();
-    event.stopPropagation();
-    rowData = resolveRowDataFromTrigger(this);
-
-    if (!rowData || !modalElement || !window.bootstrap || !window.bootstrap.Modal) {
-      return;
-    }
-
-    renderMaterialBarcode(rowData);
-    modalInstance = window.bootstrap.Modal.getOrCreateInstance(modalElement);
-    modalInstance.show();
-  });
-
   tableElement.find('tbody').on('click', '.material-copy-btn', function (event) {
     var rowData;
 
@@ -1439,22 +1337,13 @@ $(function () {
     var rowData;
     var modalInstance;
 
-    if ($(event.target).closest('.material-stock-adjust-btn, .material-barcode-preview-btn, .material-copy-btn, .material-delete-btn').length) {
+    if ($(event.target).closest('.material-stock-adjust-btn, .material-copy-btn, .material-delete-btn').length) {
       return;
     }
 
     rowData = resolveRowData(rowElement);
 
-    if (!rowData) {
-      return;
-    }
-
-    if (canAdjustStock && stockModalElement && window.bootstrap && window.bootstrap.Modal) {
-      openStockModal(rowData);
-      return;
-    }
-
-    if (!modalElement || !window.bootstrap || !window.bootstrap.Modal) {
+    if (!rowData || !modalElement || !window.bootstrap || !window.bootstrap.Modal) {
       return;
     }
 
@@ -1488,14 +1377,6 @@ $(function () {
   if (createModalOpenButton) {
     createModalOpenButton.addEventListener('click', function () {
       openCreateMaterialModal(null);
-    });
-  }
-
-  if (warehouseFilterInput) {
-    warehouseFilterInput.addEventListener('change', function () {
-      if (dataTable) {
-        dataTable.ajax.reload(null, true);
-      }
     });
   }
 
