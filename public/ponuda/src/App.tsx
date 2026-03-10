@@ -99,7 +99,7 @@ const ProcessStep = ({ icon: Icon, title, subtitle, description, isLast }: { ico
 
 export default function App() {
   const [activeStep, setActiveStep] = useState(0);
-  const ponudaPdfUrl = new URL('../assets/ponuda-pdf.pdf', import.meta.url).href;
+  const ponudaPdfUrl = new URL('../assets/ponuda-qla-dev_trendy.pdf', import.meta.url).href;
   const predracunPdfUrl = new URL('../assets/predracun-qla-dev_trendy.pdf', import.meta.url).href;
 
   const steps = [
@@ -158,7 +158,7 @@ export default function App() {
                 href={ponudaPdfUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                download="ponuda-pdf.pdf"
+                download="ponuda-qla-dev_trendy.pdf"
                 className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-all flex items-center gap-2 cursor-pointer relative z-[100]"
               >
                 <FileText className="w-3.5 h-3.5" />
