@@ -2720,6 +2720,7 @@
         anNo: row.anNo || 0,
         acIdentChild: row.acIdentChild || '',
         acDescr: row.acDescr || '-',
+        napomena: row.napomena || '',
         anGrossQty: Number(row.anGrossQty || 0),
         stockQty: resolveKnownStock(row.acIdentChild || ''),
         acOperationType: row.acOperationType || '',
@@ -2883,6 +2884,7 @@
         anNo: Number(row.anNo || 0),
         acIdentChild: componentId,
         acDescr: row.acDescr || '-',
+        napomena: row.napomena || '',
         anGrossQty: Number(row.anGrossQty || 0),
         stockQty: stockQtyValue,
         acOperationType: row.acOperationType || (resolvedType === 'operations' ? 'O' : 'M'),
@@ -2915,6 +2917,7 @@
           acIdentChild: row.acIdentChild,
           anNo: row.anNo,
           acDescr: row.acDescr || '',
+          napomena: row.napomena || '',
           acUM: row.acUM || 'AUTO',
           acUMSource: row.acUM || '',
           acOperationType: row.acOperationType || ''
@@ -3591,6 +3594,162 @@
         '</span>';
     }
 
+    function inferFineAdjustMaterialMode(row) {
+      var sourceText = [
+        row && row.artikal,
+        row && row.opis,
+        row && row.napomena,
+        row && row.acIdentChild,
+        row && row.acDescr
+      ].join(' ').toLowerCase();
+
+      if (/(^|[^a-z])alu([^a-z]|$)|alumin/.test(sourceText)) {
+        return 'aluminum';
+      }
+
+      return 'steel';
+    }
+
+    function parseFineAdjustGeometryText(source) {
+      var normalized = String(source === null || source === undefined ? '' : source)
+        .replace(/,/g, '.')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (!normalized || normalized === '-') {
+        return null;
+      }
+
+      var fiMatch = normalized.match(/(?:fi|ø|φ)\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
+      if (fiMatch) {
+        return {
+          type: 'round',
+          diameter: parseDecimalValue(fiMatch[1], 0),
+          length: parseDecimalValue(fiMatch[2], 0),
+          label: 'Fi ' + fiMatch[1] + ' x ' + fiMatch[2] + ' mm'
+        };
+      }
+
+      var rectangularMatch = normalized.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
+      if (rectangularMatch) {
+        return {
+          type: 'rectangular',
+          thickness: parseDecimalValue(rectangularMatch[1], 0),
+          width: parseDecimalValue(rectangularMatch[2], 0),
+          length: parseDecimalValue(rectangularMatch[3], 0),
+          label: rectangularMatch[1] + ' x ' + rectangularMatch[2] + ' x ' + rectangularMatch[3] + ' mm'
+        };
+      }
+
+      return null;
+    }
+
+    function resolveFineAdjustGeometry(row) {
+      var candidates = [
+        row && row.opis,
+        row && row.artikal,
+        row && row.acDescr,
+        row && row.acIdentChild,
+        row && row.napomena
+      ];
+
+      for (var index = 0; index < candidates.length; index += 1) {
+        var geometry = parseFineAdjustGeometryText(candidates[index]);
+        if (geometry) {
+          return geometry;
+        }
+      }
+
+      return null;
+    }
+
+    function calculateFineAdjustBgSummary(row) {
+      var mode = row && row.materialMode === 'aluminum' ? 'aluminum' : 'steel';
+      var modeLabel = mode === 'aluminum' ? 'Alumijum' : '\u010Celik';
+      var density = mode === 'aluminum' ? 2800 : 7800;
+      var quantityFactor = Math.max(0, parseDecimalValue(row && row.planirano ? row.planirano : 0, 0));
+      var geometry = resolveFineAdjustGeometry(row);
+      var unitWeight = 0;
+      var totalWeight = 0;
+
+      if (!geometry) {
+        return {
+          mode: mode,
+          density: density,
+          geometry: null,
+          unitWeight: 0,
+          totalWeight: 0,
+          note: modeLabel + ' BG: nema prepoznatih dimenzija za izracun'
+        };
+      }
+
+      if (geometry.type === 'round') {
+        unitWeight = Math.PI * Math.pow(geometry.diameter / 2, 2) * geometry.length * density / 1000000000;
+      } else {
+        unitWeight = geometry.thickness * geometry.width * geometry.length * density / 1000000000;
+      }
+
+      if (!Number.isFinite(unitWeight) || unitWeight < 0) {
+        unitWeight = 0;
+      }
+
+      totalWeight = unitWeight * quantityFactor;
+
+      return {
+        mode: mode,
+        density: density,
+        geometry: geometry,
+        unitWeight: unitWeight,
+        totalWeight: totalWeight,
+        note: modeLabel +
+          ' BG: ' + formatQuantity(totalWeight) + ' kg' +
+          ' | 1 kom: ' + formatQuantity(unitWeight) + ' kg' +
+          ' | Planirano: ' + formatQuantity(quantityFactor) +
+          ' | ' + geometry.label
+      };
+    }
+
+    function syncFineAdjustComputedRow(row) {
+      if (!row || typeof row !== 'object') {
+        return row;
+      }
+
+      row.materialMode = row.materialMode === 'aluminum' ? 'aluminum' : inferFineAdjustMaterialMode(row);
+      row.bgSummary = calculateFineAdjustBgSummary(row);
+      row.napomena = row.bgSummary && row.bgSummary.note ? row.bgSummary.note : '';
+
+      return row;
+    }
+
+    function syncFineAdjustRowUi(rowIndex) {
+      var row = Array.isArray(state.fineAdjustRows) ? state.fineAdjustRows[rowIndex] : null;
+      var rowEl = fineAdjustBodyEl ? fineAdjustBodyEl.querySelector('tr[data-row="' + rowIndex + '"]') : null;
+
+      if (!row || !rowEl) {
+        return;
+      }
+
+      syncFineAdjustComputedRow(row);
+
+      var noteInputEl = rowEl.querySelector('.fine-adjust-input[data-field="napomena"]');
+      var notePreviewEl = rowEl.querySelector('.fine-adjust-note-preview');
+      var toggleWrapEl = rowEl.querySelector('.fine-adjust-material-toggle');
+      var mode = row.materialMode === 'aluminum' ? 'aluminum' : 'steel';
+
+      if (noteInputEl) {
+        noteInputEl.value = String(row.napomena || '');
+      }
+
+      if (notePreviewEl) {
+        notePreviewEl.textContent = String(row.napomena || '-');
+      }
+
+      if (toggleWrapEl) {
+        toggleWrapEl.classList.toggle('is-aluminum', mode === 'aluminum');
+        toggleWrapEl.classList.toggle('is-steel', mode === 'steel');
+      }
+    }
+
     function buildFineAdjustRowsFromSelection() {
       return selectedDetailedRows()
         .map(function (row) {
@@ -3611,11 +3770,15 @@
             acOperationType: String(row.acOperationType || '').trim(),
             acUMSource: String(row.acUM || '').trim(),
             slika: '-',
-            napomena: '',
+            napomena: String(row.napomena || '').trim(),
             planirano: String(planiranoQty),
             zaliha: String(zalihaQty),
-            mj: String(row.acUM || 'AUTO').trim() || 'AUTO'
+            mj: String(row.acUM || 'AUTO').trim() || 'AUTO',
+            materialMode: inferFineAdjustMaterialMode(row)
           };
+        })
+        .map(function (row) {
+          return syncFineAdjustComputedRow(row);
         });
     }
 
@@ -3639,6 +3802,27 @@
 
       var html = state.fineAdjustRows.map(function (row, rowIndex) {
         var cells = fields.map(function (field) {
+          if (field === 'napomena') {
+            syncFineAdjustComputedRow(row);
+            var noteValue = escapeHtml(row[field] || '');
+            var mode = row.materialMode === 'aluminum' ? 'aluminum' : 'steel';
+
+            return '' +
+              '<td class="fine-adjust-note-cell">' +
+                '<div class="fine-adjust-note-stack">' +
+                  '<div class="fine-adjust-material-toggle ' + (mode === 'aluminum' ? 'is-aluminum' : 'is-steel') + '">' +
+                    '<span class="fine-adjust-material-label is-aluminum"><i class="fa fa-cubes"></i><span>Alumijum</span></span>' +
+                    '<button type="button" class="fine-adjust-material-switch" data-row="' + rowIndex + '" aria-label="Prebaci materijal izmedu Alumijuma i \u010Celika">' +
+                      '<span class="fine-adjust-material-switch-thumb"></span>' +
+                    '</button>' +
+                    '<span class="fine-adjust-material-label is-steel"><i class="fa fa-industry"></i><span>\u010Celik</span></span>' +
+                  '</div>' +
+                  '<div class="fine-adjust-note-preview">' + (noteValue || '-') + '</div>' +
+                  '<input type="hidden" class="fine-adjust-input" data-row="' + rowIndex + '" data-field="napomena" value="' + noteValue + '">' +
+                '</div>' +
+              '</td>';
+          }
+
           if (field === 'mj') {
             var rawMjValue = String(row[field] || '').trim().toUpperCase();
             var mjValue = (rawMjValue === 'AUTO' || rawMjValue === 'KG' || rawMjValue === 'MJ') ? rawMjValue : 'AUTO';
@@ -4471,7 +4655,8 @@
           acUM: normalizedUnit,
           acUMSource: normalizedSourceUnit,
           acOperationType: normalizedOperationType,
-          anPlanQty: normalizedPlanirano
+          anPlanQty: normalizedPlanirano,
+          napomena: String((row && row.napomena) || '').trim()
         });
       });
 
@@ -4952,23 +5137,58 @@
         }
 
         var field = String(target.getAttribute('data-field') || '').trim();
-        if (field !== 'planirano') {
-          return;
-        }
-
         var rowIndex = Number(target.getAttribute('data-row') || -1);
         if (!Number.isFinite(rowIndex) || rowIndex < 0) {
           return;
         }
 
         var row = Array.isArray(state.fineAdjustRows) ? state.fineAdjustRows[rowIndex] : null;
-        var zalihaValue = row ? row.zaliha : 0;
-        var clamped = clampPlaniranoToZaliha(target.value, zalihaValue);
-        var current = parseDecimalValue(target.value, 0);
-
-        if (clamped !== current) {
-          target.value = formatQuantity(clamped);
+        if (!row) {
+          return;
         }
+
+        if (field === 'planirano') {
+          var zalihaValue = row ? row.zaliha : 0;
+          var clamped = clampPlaniranoToZaliha(target.value, zalihaValue);
+          var current = parseDecimalValue(target.value, 0);
+
+          if (clamped !== current) {
+            target.value = formatQuantity(clamped);
+          }
+
+          row.planirano = String(target.value || '').trim();
+          syncFineAdjustRowUi(rowIndex);
+          return;
+        }
+
+        if (field === 'artikal' || field === 'opis') {
+          row[field] = String(target.value || '').trim();
+          syncFineAdjustRowUi(rowIndex);
+        }
+      });
+
+      fineAdjustBodyEl.addEventListener('click', function (event) {
+        var toggleButton = event.target && event.target.closest
+          ? event.target.closest('.fine-adjust-material-switch')
+          : null;
+        if (!toggleButton) {
+          return;
+        }
+
+        event.preventDefault();
+
+        var rowIndex = Number(toggleButton.getAttribute('data-row') || -1);
+        if (!Number.isFinite(rowIndex) || rowIndex < 0) {
+          return;
+        }
+
+        var row = Array.isArray(state.fineAdjustRows) ? state.fineAdjustRows[rowIndex] : null;
+        if (!row) {
+          return;
+        }
+
+        row.materialMode = row.materialMode === 'aluminum' ? 'steel' : 'aluminum';
+        syncFineAdjustRowUi(rowIndex);
       });
     }
 

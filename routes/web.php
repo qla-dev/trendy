@@ -74,6 +74,10 @@ Route::middleware('auth:web')->group(function () {
         Route::get('invoice/preview/{id}/barcode-material', [WorkOrderController::class, 'barcodeMaterialLookup'])->name('app-invoice-barcode-material');
         Route::post('invoice/preview/{id}/planned-consumption', [WorkOrderController::class, 'storePlannedConsumption'])->name('app-invoice-planned-consumption');
         Route::post('invoice/preview/{id}/planned-consumption/remove', [WorkOrderController::class, 'removePlannedConsumptionItem'])->name('app-invoice-planned-consumption-remove');
+        Route::get('stock', [MaterialsController::class, 'stockIndex'])->name('app-stock');
+        Route::get('stock/data', [MaterialsController::class, 'stockData'])->name('app-stock-data');
+        Route::post('materials', [MaterialsController::class, 'storeMaterial'])->name('app-materials-store');
+        Route::delete('materials', [MaterialsController::class, 'destroyMaterial'])->name('app-materials-destroy');
         Route::get('barcode-generator', [MaterialsController::class, 'barcodeGenerator'])->name('app-barcode-generator');
         Route::get('barcode-generator/data', [MaterialsController::class, 'barcodeGeneratorData'])->name('app-barcode-generator-data');
         Route::post('materials/stock/bulk-adjust', [MaterialsController::class, 'bulkAdjustStock'])->name('app-materials-stock-bulk-adjust');

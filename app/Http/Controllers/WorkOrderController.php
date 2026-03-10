@@ -1244,6 +1244,7 @@ class WorkOrderController extends Controller
             'components.*.acIdentChild' => ['required', 'string', 'max:64'],
             'components.*.anNo' => ['nullable', 'numeric'],
             'components.*.acDescr' => ['nullable', 'string', 'max:200'],
+            'components.*.napomena' => ['nullable', 'string', 'max:4000'],
             'components.*.acUM' => ['nullable', 'string', 'max:8'],
             'components.*.acUMSource' => ['nullable', 'string', 'max:8'],
             'components.*.acOperationType' => ['nullable', 'string', 'max:8'],
@@ -1498,7 +1499,9 @@ class WorkOrderController extends Controller
                     $componentId = trim((string) ($requestedRow['acIdentChild'] ?? ($bomRow['acIdentChild'] ?? '')));
                     $descriptionFromRequested = trim((string) ($requestedRow['acDescr'] ?? ''));
                     $descriptionFromBom = trim((string) ($bomRow['acDescr'] ?? ''));
+                    $componentNote = trim((string) ($requestedRow['napomena'] ?? ''));
                     $description = $descriptionFromRequested !== '' ? $descriptionFromRequested : $descriptionFromBom;
+                    $resolvedNote = $componentNote !== '' ? $componentNote : $userDescription;
                     $operationType = strtoupper(substr(trim((string) ($requestedRow['acOperationType'] ?? '')), 0, 1));
                     if ($operationType === '') {
                         $operationType = strtoupper(substr(trim((string) ($bomRow['acOperationType'] ?? '')), 0, 1));
@@ -1559,8 +1562,8 @@ class WorkOrderController extends Controller
                             $updatePayload['acDescr'] = substr($description, 0, 80);
                         }
 
-                        if ($hasNoteColumn && $userDescription !== '') {
-                            $updatePayload['acNote'] = substr($userDescription, 0, 4000);
+                        if ($hasNoteColumn && $resolvedNote !== '') {
+                            $updatePayload['acNote'] = substr($resolvedNote, 0, 4000);
                         }
 
                         if ($hasStatementColumn) {
@@ -1592,6 +1595,7 @@ class WorkOrderController extends Controller
                             'anQId' => $existingRow['anQId'] ?? null,
                             'acIdent' => $componentId,
                             'acDescr' => $description,
+                            'acNote' => $resolvedNote,
                             'acUM' => $updatePayload['acUM'] ?? (trim((string) ($existingRow['acUM'] ?? '')) !== '' ? trim((string) ($existingRow['acUM'] ?? '')) : $resolvedUnit),
                             'acOperationType' => $operationType,
                             'item_kind' => $itemKind,
@@ -1624,7 +1628,7 @@ class WorkOrderController extends Controller
                     ];
 
                     if ($hasNoteColumn) {
-                        $insertPayload['acNote'] = $userDescription === '' ? null : substr($userDescription, 0, 4000);
+                        $insertPayload['acNote'] = $resolvedNote === '' ? null : substr($resolvedNote, 0, 4000);
                     }
 
                     if ($hasStatementColumn) {
@@ -1652,6 +1656,7 @@ class WorkOrderController extends Controller
                         'anQId' => $nextQId,
                         'acIdent' => $componentId,
                         'acDescr' => $description,
+                        'acNote' => $resolvedNote,
                         'acUM' => $resolvedUnit,
                         'acOperationType' => $operationType,
                         'item_kind' => $itemKind,
@@ -3685,7 +3690,7 @@ class WorkOrderController extends Controller
             $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anQId', $nextQId);
         }
 
-        $note = 'Kreirano iz QR skena narudzbe ' . ($orderNumber !== '' ? $orderNumber : $orderKey);
+        $note = 'Kreirano iz preko eNalog.app preko QR skena narudžbe ' . ($orderNumber !== '' ? $orderNumber : $orderKey);
         if (!empty($orderContext['order_position'])) {
             $note .= ' / poz ' . $orderContext['order_position'];
         }

@@ -27,12 +27,6 @@
       "slug": "app-invoice-preview"
     },
     {
-      "name": "Barcode generator",
-      "icon": "tag",
-      "url": "app/barcode-generator",
-      "slug": "app-barcode-generator"
-    },
-    {
       "navheader": "Administracija",
       "slug": ""
     },
@@ -61,13 +55,13 @@
     {
       "name": "Pregled zaliha",
       "icon": "layers",
-      "url": "inventory/soon",
-      "slug": ""
+      "url": "app/stock",
+      "slug": "app-stock"
     },
     {
       "name": "Kreiranje rezervi",
       "icon": "shield",
-      "url": "inventory/soon",
+      "url": "app/stock?open=create-material",
       "slug": ""
     },
     {

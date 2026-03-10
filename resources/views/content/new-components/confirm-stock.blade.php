@@ -14,28 +14,40 @@
 
         <div class="material-stock-meta-grid">
           <div class="material-stock-meta-item">
-            <span class="material-stock-meta-label">Šifra</span>
-            <span class="material-stock-meta-value" id="material-stock-modal-code">-</span>
+            <div class="material-stock-surface-card">
+              <span class="material-stock-meta-label">Šifra</span>
+              <span class="material-stock-meta-value" id="material-stock-modal-code">-</span>
+            </div>
           </div>
           <div class="material-stock-meta-item">
-            <span class="material-stock-meta-label">Naziv</span>
-            <span class="material-stock-meta-value" id="material-stock-modal-name">-</span>
+            <div class="material-stock-surface-card">
+              <span class="material-stock-meta-label">Naziv</span>
+              <span class="material-stock-meta-value" id="material-stock-modal-name">-</span>
+            </div>
           </div>
           <div class="material-stock-meta-item">
-            <span class="material-stock-meta-label">MJ</span>
-            <span class="material-stock-meta-value" id="material-stock-modal-unit">-</span>
+            <div class="material-stock-surface-card">
+              <span class="material-stock-meta-label">MJ</span>
+              <span class="material-stock-meta-value" id="material-stock-modal-unit">-</span>
+            </div>
           </div>
           <div class="material-stock-meta-item">
-            <span class="material-stock-meta-label">Skladište</span>
-            <span class="material-stock-meta-value" id="material-stock-modal-warehouse">-</span>
+            <div class="material-stock-surface-card">
+              <span class="material-stock-meta-label">Skladište</span>
+              <span class="material-stock-meta-value" id="material-stock-modal-warehouse">-</span>
+            </div>
           </div>
           <div class="material-stock-meta-item">
-            <span class="material-stock-meta-label">Trenutna zaliha</span>
-            <span class="material-stock-meta-value" id="material-stock-modal-current">0</span>
+            <div class="material-stock-surface-card">
+              <span class="material-stock-meta-label">Trenutna zaliha</span>
+              <span class="material-stock-meta-value" id="material-stock-modal-current">0</span>
+            </div>
           </div>
           <div class="material-stock-meta-item">
-            <span class="material-stock-meta-label">Promjena</span>
-            <span class="material-stock-meta-value" id="material-stock-modal-delta">0</span>
+            <div class="material-stock-surface-card">
+              <span class="material-stock-meta-label">Promjena</span>
+              <span class="material-stock-meta-value" id="material-stock-modal-delta">0</span>
+            </div>
           </div>
         </div>
 

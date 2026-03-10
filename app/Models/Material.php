@@ -6,10 +6,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class Material extends Model
 {
     use HasFactory;
+
+    private static ?array $catalogItemColumnsCache = null;
+    private static ?array $catalogItemNonInsertableColumnsCache = null;
 
     protected $fillable = [
         'work_order_id',
@@ -113,13 +117,14 @@ class Material extends Model
         array $materialsSets = [],
         int $offset = 0,
         string $sortBy = 'material_code',
-        string $sortDir = 'asc'
+        string $sortDir = 'asc',
+        string $warehouseFilter = ''
     ): array {
         $resolvedLimit = self::resolveScannerLimit($limit);
         $resolvedOffset = max(0, (int) $offset);
         $resolvedSortDir = strtolower(trim($sortDir)) === 'desc' ? 'desc' : 'asc';
         $query = DB::query()->fromSub(
-            self::barcodeGeneratorBaseQuery($search, $materialsSets),
+            self::barcodeGeneratorBaseQuery($search, $materialsSets, $warehouseFilter),
             'm'
         );
 
@@ -166,6 +171,7 @@ class Material extends Model
                     'material_code' => trim((string) ($row->material_code ?? '')),
                     'material_name' => trim((string) ($row->material_name ?? '')),
                     'material_um' => strtoupper(substr(trim((string) ($row->material_um ?? '')), 0, 3)),
+                    'material_set' => trim((string) ($row->material_set ?? '')),
                     'material_warehouse' => trim((string) ($row->material_warehouse ?? '')),
                     'material_qty' => $materialQty,
                     'barcode_value' => trim((string) ($row->material_code ?? '')),
@@ -175,20 +181,88 @@ class Material extends Model
             ->all();
     }
 
-    public static function barcodeGeneratorTotalCount(array $materialsSets = []): int
+    public static function barcodeGeneratorTotalCount(
+        array $materialsSets = [],
+        string $warehouseFilter = ''
+    ): int
     {
         return (int) DB::query()
-            ->fromSub(self::barcodeGeneratorBaseQuery('', $materialsSets), 'm')
+            ->fromSub(self::barcodeGeneratorBaseQuery('', $materialsSets, $warehouseFilter), 'm')
             ->count();
     }
 
     public static function barcodeGeneratorFilteredCount(
         string $search = '',
-        array $materialsSets = []
+        array $materialsSets = [],
+        string $warehouseFilter = ''
     ): int {
         return (int) DB::query()
-            ->fromSub(self::barcodeGeneratorBaseQuery($search, $materialsSets), 'm')
+            ->fromSub(self::barcodeGeneratorBaseQuery($search, $materialsSets, $warehouseFilter), 'm')
             ->count();
+    }
+
+    public static function stockWarehouseOptions(array $materialsSets = []): array
+    {
+        $normalizedSets = self::normalizeMaterialsSets($materialsSets);
+        $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
+        $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
+        $query = DB::table($stockTable)
+            ->join($itemsTable, function ($join) {
+                $join->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) = LTRIM(RTRIM(ISNULL(s.acIdent, '')))");
+            })
+            ->whereRaw("LTRIM(RTRIM(ISNULL(s.acWarehouse, ''))) <> ''")
+            ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) <> ''");
+
+        if (!empty($normalizedSets)) {
+            $query->whereIn(
+                DB::raw("LTRIM(RTRIM(ISNULL(i.acSetOfItem, '')))"),
+                $normalizedSets
+            );
+        }
+
+        return $query
+            ->selectRaw("LTRIM(RTRIM(ISNULL(s.acWarehouse, ''))) as warehouse_name")
+            ->groupBy('s.acWarehouse')
+            ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(s.acWarehouse, '')))) ASC")
+            ->pluck('warehouse_name')
+            ->map(function ($value) {
+                return trim((string) $value);
+            })
+            ->filter(function ($value) {
+                return $value !== '';
+            })
+            ->values()
+            ->all();
+    }
+
+    public static function materialUnitOptions(array $materialsSets = []): array
+    {
+        $normalizedSets = self::normalizeMaterialsSets($materialsSets);
+        $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
+        $query = DB::table($itemsTable)
+            ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) <> ''")
+            ->whereRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) <> ''");
+
+        if (!empty($normalizedSets)) {
+            $query->whereIn(
+                DB::raw("LTRIM(RTRIM(ISNULL(i.acSetOfItem, '')))"),
+                $normalizedSets
+            );
+        }
+
+        return $query
+            ->selectRaw("UPPER(LTRIM(RTRIM(ISNULL(i.acUM, '')))) as material_um")
+            ->groupBy('i.acUM')
+            ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(i.acUM, '')))) ASC")
+            ->pluck('material_um')
+            ->map(function ($value) {
+                return strtoupper(substr(trim((string) $value), 0, 3));
+            })
+            ->filter(function ($value) {
+                return $value !== '';
+            })
+            ->values()
+            ->all();
     }
 
     public static function scannerFindByBarcode(string $barcode, array $materialsSets = []): ?array
@@ -379,7 +453,6 @@ class Material extends Model
             }
 
             $defaultWarehouse = trim((string) DB::table($stockTable)->value('acWarehouse'));
-            $nextQId = null;
             $updatesByQId = [];
             $insertRows = [];
             $results = [];
@@ -436,10 +509,6 @@ class Material extends Model
                         continue;
                     }
 
-                    if ($nextQId === null) {
-                        $nextQId = ((int) (DB::table($stockTable)->max('anQId') ?? 0)) + 1;
-                    }
-
                     $insertRows[] = [
                         'acWarehouse' => $resolvedWarehouse,
                         'acIdent' => $materialCode,
@@ -454,7 +523,6 @@ class Material extends Model
                         'anMinStock' => -1,
                         'anOptStock' => -1,
                         'anMaxStock' => -1,
-                        'anQId' => $nextQId,
                     ];
 
                     $results[] = [
@@ -463,11 +531,9 @@ class Material extends Model
                         'value' => $deltaValue,
                         'current_stock_value' => $currentTotal,
                         'new_stock_value' => $targetTotal,
-                        'stock_qid' => $nextQId,
+                        'stock_qid' => null,
                         'warehouse' => $resolvedWarehouse,
                     ];
-
-                    $nextQId++;
                     continue;
                 }
 
@@ -523,6 +589,161 @@ class Material extends Model
         });
     }
 
+    public static function createCatalogMaterial(array $payload, int $userId = 0): array
+    {
+        $materialCode = trim((string) ($payload['material_code'] ?? ''));
+        $materialName = trim((string) ($payload['material_name'] ?? ''));
+        $materialUnit = strtoupper(substr(trim((string) ($payload['material_um'] ?? '')), 0, 3));
+        $materialWarehouse = trim((string) ($payload['material_warehouse'] ?? $payload['warehouse'] ?? ''));
+        $materialSet = trim((string) ($payload['material_set'] ?? '011'));
+        $materialQty = self::toNullableFloat($payload['material_qty'] ?? $payload['stock_qty'] ?? null) ?? 0.0;
+
+        if ($materialCode === '' || $materialName === '' || $materialUnit === '') {
+            throw new \InvalidArgumentException('Materijal mora imati šifru, naziv i MJ.');
+        }
+
+        $itemsTable = self::sourceSchema() . '.' . self::itemsTable();
+        $catalogColumns = self::catalogItemColumns();
+        $nonInsertableColumns = self::catalogItemNonInsertableColumns();
+        $now = now();
+
+        return DB::transaction(function () use (
+            $itemsTable,
+            $materialCode,
+            $materialName,
+            $materialUnit,
+            $materialWarehouse,
+            $materialSet,
+            $materialQty,
+            $userId,
+            $catalogColumns,
+            $nonInsertableColumns,
+            $now
+        ) {
+            $exists = DB::table($itemsTable)
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$materialCode])
+                ->exists();
+
+            if ($exists) {
+                throw new \RuntimeException('Materijal sa ovom šifrom već postoji.');
+            }
+
+            $nextQId = array_key_exists('anQId', $catalogColumns)
+                ? ((int) (DB::table($itemsTable)->max('anQId') ?? 0)) + 1
+                : null;
+
+            $preferredValues = [
+                'acIdent' => $materialCode,
+                'acCode' => $materialCode,
+                'acName' => $materialName,
+                'acUM' => $materialUnit,
+                'acSetOfItem' => $materialSet,
+                'anQId' => $nextQId,
+                'anPLUCode' => 0,
+                'anPLUCode2' => 0,
+                'anBuyPrice' => 0,
+                'anPrice' => 0,
+                'anVAT' => 0,
+                'anDeliveryDeadline' => 0,
+                'anUserIns' => $userId > 0 ? $userId : 0,
+                'anUserChg' => $userId > 0 ? $userId : 0,
+                'adTimeIns' => $now,
+                'adTimeChg' => $now,
+            ];
+
+            $insertPayload = [];
+
+            foreach ($catalogColumns as $columnName => $columnMeta) {
+                if (isset($nonInsertableColumns[$columnName])) {
+                    continue;
+                }
+
+                if (array_key_exists($columnName, $preferredValues)) {
+                    $insertValue = $preferredValues[$columnName];
+                } elseif (($columnMeta['nullable'] ?? true) || ($columnMeta['default'] ?? null) !== null) {
+                    continue;
+                } else {
+                    $insertValue = self::defaultValueForColumnMeta($columnMeta, $now, $userId);
+                }
+
+                if (is_string($insertValue)) {
+                    $maxLength = (int) ($columnMeta['max_length'] ?? 0);
+                    if ($maxLength > 0) {
+                        $insertValue = mb_substr($insertValue, 0, $maxLength);
+                    }
+                }
+
+                $insertPayload[$columnName] = $insertValue;
+            }
+
+            DB::table($itemsTable)->insert($insertPayload);
+
+            $stockAdjustments = self::bulkAdjustStock([
+                [
+                    'material_code' => $materialCode,
+                    'warehouse' => $materialWarehouse,
+                    'new_stock_value' => $materialQty,
+                ],
+            ], $userId, $materialWarehouse);
+
+            return [
+                'material_code' => $materialCode,
+                'material_name' => $materialName,
+                'material_um' => $materialUnit,
+                'material_set' => $materialSet,
+                'material_warehouse' => $materialWarehouse,
+                'material_qty' => $materialQty,
+                'barcode_value' => $materialCode,
+                'stock_adjustments' => $stockAdjustments,
+            ];
+        });
+    }
+
+    public static function deleteCatalogMaterial(string $materialCode): array
+    {
+        $materialCode = trim($materialCode);
+
+        if ($materialCode === '') {
+            throw new \InvalidArgumentException('Materijal mora imati šifru za brisanje.');
+        }
+
+        $itemsTable = self::sourceSchema() . '.' . self::itemsTable();
+        $stockTable = self::sourceSchema() . '.' . self::stockTable();
+
+        return DB::transaction(function () use ($itemsTable, $stockTable, $materialCode) {
+            $materialRow = DB::table($itemsTable)
+                ->selectRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) as material_code")
+                ->selectRaw("LTRIM(RTRIM(ISNULL(acName, ''))) as material_name")
+                ->selectRaw("LTRIM(RTRIM(ISNULL(acUM, ''))) as material_um")
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$materialCode])
+                ->first();
+
+            if ($materialRow === null) {
+                throw new \RuntimeException('Materijal sa ovom šifrom nije pronađen.');
+            }
+
+            $deletedStockRows = DB::table($stockTable)
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$materialCode])
+                ->delete();
+
+            $deletedItemRows = DB::table($itemsTable)
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$materialCode])
+                ->delete();
+
+            if ($deletedItemRows < 1) {
+                throw new \RuntimeException('Materijal nije moguće obrisati.');
+            }
+
+            return [
+                'material_code' => trim((string) ($materialRow->material_code ?? '')),
+                'material_name' => trim((string) ($materialRow->material_name ?? '')),
+                'material_um' => trim((string) ($materialRow->material_um ?? '')),
+                'deleted_stock_rows' => (int) $deletedStockRows,
+                'deleted_item_rows' => (int) $deletedItemRows,
+            ];
+        });
+    }
+
     private static function applyLikeAny(Builder $query, array $columns, string $value): void
     {
         $value = trim($value);
@@ -545,9 +766,11 @@ class Material extends Model
 
     private static function barcodeGeneratorBaseQuery(
         string $search = '',
-        array $materialsSets = []
+        array $materialsSets = [],
+        string $warehouseFilter = ''
     ): Builder {
         $normalizedSets = self::normalizeMaterialsSets($materialsSets);
+        $normalizedWarehouseFilter = trim($warehouseFilter);
         $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
         $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
         $query = DB::table($itemsTable)
@@ -563,15 +786,23 @@ class Material extends Model
             );
         }
 
+        if ($normalizedWarehouseFilter !== '') {
+            $query->whereRaw(
+                "LTRIM(RTRIM(ISNULL(s.acWarehouse, ''))) = ?",
+                [$normalizedWarehouseFilter]
+            );
+        }
+
         self::applyLikeAny($query, ['i.acIdent', 'i.acName', 'i.acCode'], $search);
 
         return $query
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) as material_code")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acName, ''))) as material_name")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as material_um")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acSetOfItem, ''))) as material_set")
             ->selectRaw("MIN(LTRIM(RTRIM(ISNULL(s.acWarehouse, '')))) as material_warehouse")
             ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as material_qty")
-            ->groupBy('i.acIdent', 'i.acName', 'i.acUM');
+            ->groupBy('i.acIdent', 'i.acName', 'i.acUM', 'i.acSetOfItem');
     }
 
     private static function normalizeMaterialsSets(array $materialsSets = []): array
@@ -709,6 +940,93 @@ class Material extends Model
         }
 
         return preg_replace('/[^0-9A-Z]/', '', $value) ?? '';
+    }
+
+    private static function catalogItemColumns(): array
+    {
+        if (self::$catalogItemColumnsCache !== null) {
+            return self::$catalogItemColumnsCache;
+        }
+
+        self::$catalogItemColumnsCache = DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->select('COLUMN_NAME', 'DATA_TYPE', 'CHARACTER_MAXIMUM_LENGTH', 'IS_NULLABLE', 'COLUMN_DEFAULT')
+            ->where('TABLE_SCHEMA', self::sourceSchema())
+            ->where('TABLE_NAME', self::itemsTable())
+            ->orderBy('ORDINAL_POSITION')
+            ->get()
+            ->mapWithKeys(function ($row) {
+                return [
+                    (string) $row->COLUMN_NAME => [
+                        'type' => strtolower((string) ($row->DATA_TYPE ?? '')),
+                        'max_length' => is_numeric((string) ($row->CHARACTER_MAXIMUM_LENGTH ?? null))
+                            ? (int) $row->CHARACTER_MAXIMUM_LENGTH
+                            : null,
+                        'nullable' => strtoupper((string) ($row->IS_NULLABLE ?? 'YES')) === 'YES',
+                        'default' => $row->COLUMN_DEFAULT,
+                    ],
+                ];
+            })
+            ->all();
+
+        return self::$catalogItemColumnsCache;
+    }
+
+    private static function catalogItemNonInsertableColumns(): array
+    {
+        if (self::$catalogItemNonInsertableColumnsCache !== null) {
+            return self::$catalogItemNonInsertableColumnsCache;
+        }
+
+        self::$catalogItemNonInsertableColumnsCache = DB::table('sys.columns as c')
+            ->join('sys.tables as t', 'c.object_id', '=', 't.object_id')
+            ->join('sys.schemas as s', 't.schema_id', '=', 's.schema_id')
+            ->where('s.name', self::sourceSchema())
+            ->where('t.name', self::itemsTable())
+            ->where(function ($query) {
+                $query
+                    ->where('c.is_identity', 1)
+                    ->orWhere('c.is_computed', 1)
+                    ->orWhere('c.generated_always_type', '<>', 0);
+            })
+            ->pluck('c.name')
+            ->map(function ($value) {
+                return (string) $value;
+            })
+            ->flip()
+            ->all();
+
+        return self::$catalogItemNonInsertableColumnsCache;
+    }
+
+    private static function defaultValueForColumnMeta(array $columnMeta, $timestamp, int $userId = 0): mixed
+    {
+        $dataType = strtolower((string) ($columnMeta['type'] ?? ''));
+
+        if (in_array($dataType, ['char', 'nchar', 'varchar', 'nvarchar', 'text', 'ntext'], true)) {
+            return '';
+        }
+
+        if (in_array($dataType, ['int', 'bigint', 'smallint', 'tinyint', 'decimal', 'numeric', 'float', 'real', 'money', 'smallmoney'], true)) {
+            return 0;
+        }
+
+        if ($dataType === 'bit') {
+            return 0;
+        }
+
+        if (in_array($dataType, ['date', 'datetime', 'datetime2', 'smalldatetime', 'time'], true)) {
+            return $timestamp;
+        }
+
+        if ($dataType === 'uniqueidentifier') {
+            return (string) Str::uuid();
+        }
+
+        if (in_array($dataType, ['binary', 'varbinary', 'image', 'timestamp', 'rowversion'], true)) {
+            return null;
+        }
+
+        return $userId > 0 ? $userId : null;
     }
 
     private static function normalizedBarcodeSql(string $column): string

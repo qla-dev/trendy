@@ -1871,9 +1871,15 @@
               <i class="fa fa-trash me-50" style="margin-top: 1px;"></i> Izbriši nalog
             </button>
           @endif
-          <button class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" onclick="alert('Uskoro')">
-            <i class="fa fa-cube me-50" style="margin-top: 2px;"></i> Dodaj materijal
-          </button>
+          @if($isAdminUser)
+            <a class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center" href="{{ route('app-stock', ['open' => 'create-material']) }}">
+              <i class="fa fa-cube me-50" style="margin-top: 2px;"></i> Dodaj materijal
+            </a>
+          @else
+            <button class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" onclick="alert('Uskoro')">
+              <i class="fa fa-cube me-50" style="margin-top: 2px;"></i> Dodaj materijal
+            </button>
+          @endif
           <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" onclick="alert('Uskoro')">
             <i class="fa fa-cog me-50" style="margin-top: 2px;"></i> Dodaj operaciju
           </button>

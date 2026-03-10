@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class MaterialsController extends Controller
@@ -32,6 +33,8 @@ class MaterialsController extends Controller
         '13X',
         'H1',
     ];
+
+    private const DEFAULT_MATERIAL_SET = '011';
 
     public function scannerIndex(Request $request, string $id): JsonResponse
     {
@@ -71,17 +74,31 @@ class MaterialsController extends Controller
         }
     }
 
-    public function barcodeGenerator()
+    public function stockIndex(Request $request)
     {
         $pageConfigs = ['pageHeader' => false];
+        $canCreateMaterial = $this->canCreateMaterial($request->user());
+        $canDeleteMaterial = $this->canDeleteMaterial($request->user());
+        $shouldAutoOpenCreate = strtolower(trim((string) $request->query('open', ''))) === 'create-material';
+        $warehouseOptions = Material::stockWarehouseOptions(self::MATERIALS_SETS);
+        $unitOptions = Material::materialUnitOptions(self::MATERIALS_SETS);
 
-        return view('content.apps.materials.app-material-barcode-generator', [
+        return view('content.apps.materials.app-material', [
             'pageConfigs' => $pageConfigs,
-            'barcodeTableUrl' => route('app-barcode-generator-data'),
+            'stockTableUrl' => route('app-stock-data'),
+            'stockCreateUrl' => route('app-materials-store'),
+            'stockDeleteUrl' => route('app-materials-destroy'),
+            'canCreateMaterial' => $canCreateMaterial,
+            'canDeleteMaterial' => $canDeleteMaterial,
+            'shouldAutoOpenCreateMaterial' => $canCreateMaterial && $shouldAutoOpenCreate,
+            'materialSetOptions' => self::MATERIALS_SETS,
+            'stockWarehouseOptions' => $warehouseOptions,
+            'materialUnitOptions' => $unitOptions,
+            'defaultMaterialSet' => self::DEFAULT_MATERIAL_SET,
         ]);
     }
 
-    public function barcodeGeneratorData(Request $request): JsonResponse
+    public function stockData(Request $request): JsonResponse
     {
         try {
             $draw = (int) $request->input('draw', 0);
@@ -93,6 +110,7 @@ class MaterialsController extends Controller
             $search = trim((string) data_get($request->all(), 'search.value', $request->input('search', '')));
             $sortBy = trim((string) $request->input('sort_by', 'material_code'));
             $sortDir = trim((string) $request->input('sort_dir', 'asc'));
+            $warehouseFilter = trim((string) $request->input('warehouse', ''));
 
             $materials = Material::barcodeGeneratorList(
                 $search,
@@ -100,14 +118,15 @@ class MaterialsController extends Controller
                 self::MATERIALS_SETS,
                 $start,
                 $sortBy,
-                $sortDir
+                $sortDir,
+                $warehouseFilter
             );
 
             return response()->json([
                 'draw' => $draw,
                 'data' => $materials,
-                'recordsTotal' => Material::barcodeGeneratorTotalCount(self::MATERIALS_SETS),
-                'recordsFiltered' => Material::barcodeGeneratorFilteredCount($search, self::MATERIALS_SETS),
+                'recordsTotal' => Material::barcodeGeneratorTotalCount(self::MATERIALS_SETS, $warehouseFilter),
+                'recordsFiltered' => Material::barcodeGeneratorFilteredCount($search, self::MATERIALS_SETS, $warehouseFilter),
             ]);
         } catch (Throwable $exception) {
             Log::error('Materials barcode generator list failed.', [
@@ -119,6 +138,134 @@ class MaterialsController extends Controller
             return response()->json([
                 'message' => 'Greška pri učitavanju materijala za barcode generator.',
             ], 500);
+        }
+    }
+
+    public function barcodeGenerator()
+    {
+        return redirect()->route('app-stock');
+    }
+
+    public function barcodeGeneratorData(Request $request): JsonResponse
+    {
+        return $this->stockData($request);
+    }
+
+    public function storeMaterial(Request $request): JsonResponse
+    {
+        if (!$this->canCreateMaterial($request->user())) {
+            return response()->json([
+                'message' => 'Nemate dozvolu za dodavanje novog materijala.',
+            ], 403);
+        }
+
+        $warehouseOptions = Material::stockWarehouseOptions(self::MATERIALS_SETS);
+        $unitOptions = Material::materialUnitOptions(self::MATERIALS_SETS);
+        $unitRules = ['required', 'string', 'max:3'];
+        $warehouseRules = ['required', 'string', 'max:64'];
+
+        if (!empty($unitOptions)) {
+            $unitRules[] = Rule::in($unitOptions);
+        }
+
+        if (!empty($warehouseOptions)) {
+            $warehouseRules[] = Rule::in($warehouseOptions);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'material_code' => ['required', 'string', 'max:64'],
+            'material_name' => ['required', 'string', 'max:255'],
+            'material_um' => $unitRules,
+            'material_warehouse' => $warehouseRules,
+            'material_qty' => ['nullable', 'numeric'],
+            'material_set' => ['nullable', 'string', Rule::in(self::MATERIALS_SETS)],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravni podaci za novi materijal.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+
+        try {
+            $material = Material::createCatalogMaterial([
+                'material_code' => trim((string) ($validated['material_code'] ?? '')),
+                'material_name' => trim((string) ($validated['material_name'] ?? '')),
+                'material_um' => strtoupper(substr(trim((string) ($validated['material_um'] ?? '')), 0, 3)),
+                'material_warehouse' => trim((string) ($validated['material_warehouse'] ?? '')),
+                'material_qty' => $validated['material_qty'] ?? 0,
+                'material_set' => trim((string) ($validated['material_set'] ?? self::DEFAULT_MATERIAL_SET)),
+            ], (int) ($request->user()->id ?? 0));
+
+            return response()->json([
+                'message' => 'Materijal je uspješno dodan.',
+                'data' => $material,
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Material create failed.', [
+                'connection' => config('database.default'),
+                'table' => Material::scannerSourceTable(),
+                'material_code' => trim((string) ($validated['material_code'] ?? '')),
+                'message' => $exception->getMessage(),
+            ]);
+
+            $isUserFacingException = $exception instanceof \RuntimeException || $exception instanceof \InvalidArgumentException;
+
+            return response()->json([
+                'message' => $isUserFacingException
+                    ? $exception->getMessage()
+                    : 'Greška pri dodavanju novog materijala.',
+            ], $isUserFacingException ? 422 : 500);
+        }
+    }
+
+    public function destroyMaterial(Request $request): JsonResponse
+    {
+        if (!$this->canDeleteMaterial($request->user())) {
+            return response()->json([
+                'message' => 'Nemate dozvolu za brisanje materijala.',
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'material_code' => ['required', 'string', 'max:64'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravni podaci za brisanje materijala.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+        $materialCode = trim((string) ($validated['material_code'] ?? ''));
+
+        try {
+            $result = Material::deleteCatalogMaterial($materialCode);
+
+            return response()->json([
+                'message' => 'Materijal je uspješno obrisan.',
+                'data' => $result,
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Material delete failed.', [
+                'connection' => config('database.default'),
+                'table' => Material::scannerSourceTable(),
+                'material_code' => $materialCode,
+                'message' => $exception->getMessage(),
+            ]);
+
+            $isUserFacingException = $exception instanceof \RuntimeException || $exception instanceof \InvalidArgumentException;
+
+            return response()->json([
+                'message' => $isUserFacingException
+                    ? $exception->getMessage()
+                    : 'Greška pri brisanju materijala.',
+            ], $isUserFacingException ? 422 : 500);
         }
     }
 
@@ -262,5 +409,23 @@ class MaterialsController extends Controller
         }
 
         return array_keys($value) === range(0, count($value) - 1);
+    }
+
+    private function canCreateMaterial(mixed $user = null): bool
+    {
+        if (!is_object($user)) {
+            return false;
+        }
+
+        if (method_exists($user, 'isAdmin')) {
+            return (bool) $user->isAdmin();
+        }
+
+        return strtolower(trim((string) ($user->role ?? ''))) === 'admin';
+    }
+
+    private function canDeleteMaterial(mixed $user = null): bool
+    {
+        return $this->canCreateMaterial($user);
     }
 }

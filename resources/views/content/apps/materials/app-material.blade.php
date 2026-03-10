@@ -1,24 +1,57 @@
 @extends('layouts/contentLayoutMaster')
 
-@section('title', 'Barcode Generator')
+@section('title', 'Pregled zaliha')
 
 @section('vendor-style')
 <link rel="stylesheet" href="{{asset('vendors/css/tables/datatable/dataTables.bootstrap5.min.css')}}">
 <link rel="stylesheet" href="{{asset('vendors/css/tables/datatable/responsive.bootstrap5.min.css')}}">
+<link rel="stylesheet" href="{{asset('vendors/css/extensions/sweetalert2.min.css')}}">
 @endsection
 
 @section('page-style')
 @php
   $canSeeMaterialWarehouse = strtolower((string) optional(auth()->user())->role) === 'admin';
   $canAdjustMaterialStock = strtolower((string) optional(auth()->user())->username) === 'kulasin.nedim';
+  $canCreateMaterial = (bool) ($canCreateMaterial ?? false);
+  $canDeleteMaterial = (bool) ($canDeleteMaterial ?? false);
+  $canCopyMaterial = $canCreateMaterial;
+  $canManageMaterialActions = $canAdjustMaterialStock || $canCopyMaterial || $canDeleteMaterial;
   $materialBarcodeGeneratorConfig = [
-      'dataUrl' => $barcodeTableUrl ?? route('app-barcode-generator-data'),
+      'dataUrl' => $stockTableUrl ?? route('app-stock-data'),
       'stockAdjustUrl' => route('app-materials-stock-bulk-adjust'),
+      'createUrl' => $stockCreateUrl ?? route('app-materials-store'),
+      'deleteUrl' => $stockDeleteUrl ?? route('app-materials-destroy'),
       'canSeeWarehouse' => $canSeeMaterialWarehouse,
       'canAdjustStock' => $canAdjustMaterialStock,
+      'canCreateMaterial' => $canCreateMaterial,
+      'canCopyMaterial' => $canCopyMaterial,
+      'canDeleteMaterial' => $canDeleteMaterial,
+      'autoOpenCreateMaterial' => (bool) ($shouldAutoOpenCreateMaterial ?? false),
+      'defaultMaterialSet' => (string) ($defaultMaterialSet ?? '011'),
   ];
 @endphp
 <style>
+  .content-header {
+    margin-top: -6px;
+    margin-bottom: 4px;
+  }
+
+  .content-header-title {
+    margin-top: 5px;
+  }
+
+  .material-header-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .material-warehouse-filter {
+    min-width: 240px;
+  }
+
   .material-barcode-generator-wrapper {
     --wo-table-scroll-track: var(--app-scroll-track);
     --wo-table-scroll-thumb: var(--app-scroll-thumb-flat);
@@ -48,7 +81,7 @@
   }
 
   .material-barcode-generator-wrapper .material-barcode-table {
-    min-width: {{ $canAdjustMaterialStock ? '980px' : ($canSeeMaterialWarehouse ? '860px' : '760px') }};
+    min-width: {{ $canManageMaterialActions ? '1140px' : ($canSeeMaterialWarehouse ? '860px' : '760px') }};
   }
 
   .material-barcode-table tbody .material-barcode-loading-spacer-row > td {
@@ -205,8 +238,31 @@
     gap: 0.4rem;
   }
 
+  .material-actions-group {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.45rem;
+    flex-wrap: nowrap;
+  }
+
+  .material-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+  }
+
   .material-stock-modal .modal-content {
     border-radius: 1rem;
+  }
+
+  .material-stock-surface-card,
+  .material-create-field-card {
+    padding: 0.95rem 1rem;
+    border-radius: 0.85rem;
+    border: 1px solid rgba(71, 95, 123, 0.12);
+    background: rgba(71, 95, 123, 0.04);
   }
 
   .material-stock-modal-subtitle {
@@ -223,9 +279,9 @@
   }
 
   .material-stock-meta-item {
-    padding: 0.9rem 1rem;
-    border-radius: 0.85rem;
-    background: rgba(115, 103, 240, 0.06);
+    padding: 0;
+    border: 0;
+    background: transparent;
   }
 
   .material-stock-meta-label {
@@ -249,6 +305,43 @@
   .material-stock-form-block {
     border-top: 1px solid rgba(71, 95, 123, 0.12);
     padding-top: 1rem;
+  }
+
+  .material-create-modal .modal-content {
+    border-radius: 1rem;
+  }
+
+  .material-create-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+  }
+
+  .material-create-field-card .form-label {
+    margin-bottom: 0.45rem;
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6e6b7b;
+  }
+
+  .material-create-field-card .form-control {
+    background-color: transparent;
+  }
+
+  .material-create-field-card .form-select {
+    background-color: transparent;
+    background-repeat: no-repeat;
+    background-position: right 0.9rem center;
+    background-size: 16px 12px;
+  }
+
+  .material-create-help {
+    margin-top: 0.9rem;
+    font-size: 0.88rem;
+    color: #6e6b7b;
   }
 
   .material-stock-form-help {
@@ -374,7 +467,7 @@
   body.semi-dark-layout .material-stock-meta-item,
   .dark-layout .material-stock-meta-item,
   .semi-dark-layout .material-stock-meta-item {
-    background: rgba(115, 103, 240, 0.1);
+    background: transparent;
   }
 
   body.dark-layout .material-stock-form-block,
@@ -384,7 +477,40 @@
     border-top-color: rgba(214, 220, 236, 0.14);
   }
 
+  body.dark-layout .material-stock-surface-card,
+  body.semi-dark-layout .material-stock-surface-card,
+  .dark-layout .material-stock-surface-card,
+  .semi-dark-layout .material-stock-surface-card,
+  body.dark-layout .material-create-field-card,
+  body.semi-dark-layout .material-create-field-card,
+  .dark-layout .material-create-field-card,
+  .semi-dark-layout .material-create-field-card {
+    border-color: rgba(214, 220, 236, 0.12);
+    background: rgba(214, 220, 236, 0.05);
+  }
+
+  body.dark-layout .material-create-field-card .form-label,
+  body.semi-dark-layout .material-create-field-card .form-label,
+  .dark-layout .material-create-field-card .form-label,
+  .semi-dark-layout .material-create-field-card .form-label,
+  body.dark-layout .material-create-help,
+  body.semi-dark-layout .material-create-help,
+  .dark-layout .material-create-help,
+  .semi-dark-layout .material-create-help {
+    color: #b4bdd3;
+  }
+
   @media (max-width: 767.98px) {
+    .material-header-actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .material-warehouse-filter {
+      min-width: 0;
+      width: 100%;
+    }
+
     .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child,
     .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:last-child {
       padding: 0.85rem 0.85rem 0.8rem;
@@ -398,12 +524,49 @@
     .material-stock-meta-grid {
       grid-template-columns: 1fr;
     }
+
+    .material-create-form-grid {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
 @endsection
 
 @section('content')
 <section class="material-barcode-generator-wrapper">
+  <div class="content-header row">
+    <div class="content-header-left col-md-8 col-12 mb-2">
+      <div class="row breadcrumbs-top">
+        <div class="col-12">
+          <h2 class="content-header-title float-start mb-0">Pregled zaliha</h2>
+        </div>
+      </div>
+    </div>
+    <div class="content-header-right text-md-end col-md-4 col-12">
+      @if(!empty($stockWarehouseOptions) || $canCreateMaterial)
+        <div class="mb-1 breadcrumb-right">
+          <div class="material-header-actions">
+            @if(!empty($stockWarehouseOptions))
+              <div class="material-warehouse-filter">
+                <select class="form-select" id="material-warehouse-filter">
+                  <option value="">Filtriraj po skladistu</option>
+                  @foreach(($stockWarehouseOptions ?? []) as $warehouseName)
+                    <option value="{{ $warehouseName }}">{{ $warehouseName }}</option>
+                  @endforeach
+                </select>
+              </div>
+            @endif
+            @if($canCreateMaterial)
+              <button type="button" class="btn btn-primary" id="material-create-open-btn">
+                <i data-feather="plus" class="me-50"></i> Dodaj novi materijal
+              </button>
+            @endif
+          </div>
+        </div>
+      @endif
+    </div>
+  </div>
+
   <div class="card">
     @if(isset($error))
       <div class="alert alert-danger mb-0">
@@ -422,14 +585,14 @@
               <th>Skladište</th>
             @endif
             <th>Zaliha</th>
-            @if($canAdjustMaterialStock)
+            @if($canManageMaterialActions)
               <th>Akcija</th>
             @endif
           </tr>
         </thead>
         <tbody>
           <tr class="material-barcode-loading-spacer-row" aria-hidden="true">
-            <td colspan="{{ $canAdjustMaterialStock ? 6 : ($canSeeMaterialWarehouse ? 5 : 4) }}"></td>
+            <td colspan="{{ $canManageMaterialActions ? 6 : ($canSeeMaterialWarehouse ? 5 : 4) }}"></td>
           </tr>
         </tbody>
       </table>
@@ -466,6 +629,9 @@
 @if($canAdjustMaterialStock)
   @include('content.new-components.confirm-stock')
 @endif
+@if($canCreateMaterial)
+  @include('content.new-components.create-stock-material')
+@endif
 @endsection
 
 @section('vendor-script')
@@ -473,11 +639,12 @@
 <script src="{{asset('vendors/js/tables/datatable/dataTables.bootstrap5.min.js')}}"></script>
 <script src="{{asset('vendors/js/tables/datatable/dataTables.responsive.min.js')}}"></script>
 <script src="{{asset('vendors/js/tables/datatable/responsive.bootstrap5.js')}}"></script>
+<script src="{{asset('vendors/js/extensions/sweetalert2.all.min.js')}}"></script>
 @endsection
 
 @section('page-script')
 <script>
   window.materialBarcodeGeneratorConfig = @json($materialBarcodeGeneratorConfig);
 </script>
-<script src="{{asset('js/scripts/pages/app-material-barcode-generator.js?v=5')}}"></script>
+<script src="{{asset('js/scripts/pages/app-material.js?v=8')}}"></script>
 @endsection

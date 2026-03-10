@@ -206,14 +206,115 @@
     color: #dfe8ff;
     min-width: 120px;
     min-height: 68px;
-    height: 68px;
-    max-height: 68px;
-    vertical-align: middle;
+    height: auto;
+    max-height: none;
+    vertical-align: top;
   }
 
   #fine-adjust-bom-modal table tbody td[colspan] {
     height: auto;
     max-height: none;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-note-cell {
+    min-width: 360px;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-note-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    min-width: 300px;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-note-preview {
+    min-height: 46px;
+    padding: 0.55rem 0.75rem;
+    border-radius: 12px;
+    border: 1px solid rgba(108, 129, 173, 0.28);
+    background: rgba(9, 18, 36, 0.74);
+    color: #dfe8ff;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    white-space: normal;
+    word-break: break-word;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-material-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: nowrap;
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-material-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: rgba(191, 208, 244, 0.58);
+    transition: color 0.18s ease, opacity 0.18s ease;
+    white-space: nowrap;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-material-label i {
+    font-size: 0.8rem;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-material-toggle.is-aluminum .fine-adjust-material-label.is-aluminum {
+    color: #7fe5ff;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-material-toggle.is-steel .fine-adjust-material-label.is-steel {
+    color: #ffd27e;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-material-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    width: 58px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid rgba(129, 154, 203, 0.34);
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(69, 171, 206, 0.35), rgba(38, 63, 112, 0.62));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-material-switch:hover,
+  #fine-adjust-bom-modal .fine-adjust-material-switch:focus {
+    border-color: rgba(169, 193, 236, 0.58);
+    box-shadow: 0 0 0 0.12rem rgba(92, 225, 194, 0.14);
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-material-toggle.is-steel .fine-adjust-material-switch {
+    background: linear-gradient(135deg, rgba(182, 132, 58, 0.38), rgba(70, 80, 106, 0.62));
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-material-switch-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #c2fbff, #79dfff);
+    box-shadow: 0 6px 14px rgba(9, 17, 32, 0.28);
+    transition: transform 0.2s ease, background 0.2s ease;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-material-toggle.is-steel .fine-adjust-material-switch-thumb {
+    transform: translateX(26px);
+    background: linear-gradient(135deg, #ffe4a7, #ffc970);
   }
 
   #fine-adjust-bom-modal .fine-adjust-input {
