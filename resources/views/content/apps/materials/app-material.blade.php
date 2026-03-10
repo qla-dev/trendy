@@ -610,7 +610,7 @@
             @if(!empty($stockWarehouseOptions))
               <div class="material-warehouse-filter">
                 <select class="form-select" id="material-warehouse-filter">
-                  <option value="">Filtriraj po skladistu</option>
+                  <option value="">Filtriraj po skladištu</option>
                   @foreach(($stockWarehouseOptions ?? []) as $warehouseName)
                     <option value="{{ $warehouseName }}">{{ $warehouseName }}</option>
                   @endforeach
