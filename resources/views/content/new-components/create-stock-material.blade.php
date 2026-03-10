@@ -54,7 +54,7 @@
         </div>
 
         <div class="material-create-help" id="material-create-help-text">
-          Novi materijal ce biti upisan u katalog, a početna zaliha ce odmah biti evidentirana na odabranom skladistu.
+          Novi materijal ce biti upisan u katalog, a početna zaliha ce odmah biti evidentirana na odabranom skladištu.
         </div>
       </div>
       <div class="modal-footer">
