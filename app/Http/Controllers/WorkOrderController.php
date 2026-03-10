@@ -528,6 +528,11 @@ class WorkOrderController extends Controller
             $workOrderNumber = $this->formatWorkOrderNumberForCalendar((string) ($mapped['broj_naloga'] ?? $routeId));
             $created = (string) ($result['status'] ?? '') === 'created';
 
+            $this->attachSastavnicaToWorkOrder(
+                $routeId,
+                trim((string) ($mapped['sifra'] ?? $mapped['acIdent'] ?? $mapped['product_code'] ?? ''))
+            );
+
             return response()->json([
                 'message' => $created
                     ? 'Radni nalog je uspjesno kreiran.'
@@ -586,6 +591,62 @@ class WorkOrderController extends Controller
             }
 
             return response()->json($response, $statusCode);
+        }
+    }
+
+    private function attachSastavnicaToWorkOrder(string $workOrderId, string $productCode): void
+    {
+        $workOrderId = trim($workOrderId);
+        $productCode = trim($productCode);
+
+        if ($workOrderId === '' || $productCode === '') {
+            return;
+        }
+
+        try {
+            $bomRows = $this->fetchBomComponentsByProduct($productCode, $this->bomLimit());
+
+            if (empty($bomRows)) {
+                return;
+            }
+
+            $components = array_values(array_filter(array_map(function ($bomRow) {
+                $componentId = trim((string) ($bomRow['acIdentChild'] ?? ''));
+
+                if ($componentId === '') {
+                    return null;
+                }
+
+                return [
+                    'acIdentChild' => $componentId,
+                    'anNo' => (int) ($bomRow['anNo'] ?? 0),
+                    'acDescr' => trim((string) ($bomRow['acDescr'] ?? '')),
+                    'acUM' => trim((string) ($bomRow['acUM'] ?? '')),
+                    'acOperationType' => trim((string) ($bomRow['acOperationType'] ?? '')),
+                    'anPlanQty' => (float) ($bomRow['anGrossQty'] ?? 0),
+                ];
+            }, $bomRows)));
+
+            if (empty($components)) {
+                return;
+            }
+
+            $request = Request::create('', 'POST', [
+                'product_id' => $productCode,
+                'quantity' => 1,
+                'quantity_unit' => 'AUTO',
+                'description' => 'Automatski preuzeta sastavnica',
+                'save_mode' => 'manual',
+                'components' => $components,
+            ]);
+
+            $this->storePlannedConsumption($request, $workOrderId);
+        } catch (Throwable $exception) {
+            Log::warning('Nije uspjelo formiranje sastavnice za RN.', [
+                'work_order_id' => $workOrderId,
+                'product_code' => $productCode,
+                'message' => $exception->getMessage(),
+            ]);
         }
     }
 
