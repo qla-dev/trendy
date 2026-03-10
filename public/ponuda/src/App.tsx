@@ -99,6 +99,8 @@ const ProcessStep = ({ icon: Icon, title, subtitle, description, isLast }: { ico
 
 export default function App() {
   const [activeStep, setActiveStep] = useState(0);
+  const ponudaPdfUrl = new URL('../assets/ponuda-pdf.pdf', import.meta.url).href;
+  const predracunPdfUrl = new URL('../assets/predracun-qla-dev_trendy.pdf', import.meta.url).href;
 
   const steps = [
     { icon: Database, label: "Skladište" },
@@ -151,18 +153,28 @@ export default function App() {
             <a href="#mobilna" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Mobilna App</a>
             <div className="h-6 w-px bg-slate-200" />
             <span className="text-sm font-bold text-slate-900">Ukupno: 9.800 KM</span>
-            <button 
-              onClick={() => {
-                // Ensure print is called on the main window
-                setTimeout(() => {
-                  window.print();
-                }, 100);
-              }}
-              className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-all flex items-center gap-2 print:hidden cursor-pointer relative z-[100]"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              Preuzmi PDF
-            </button>
+            <div className="flex items-center gap-3 print:hidden">
+              <a
+                href={ponudaPdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                download="ponuda-pdf.pdf"
+                className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-all flex items-center gap-2 cursor-pointer relative z-[100]"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Preuzmi ponudu
+              </a>
+              <a
+                href={predracunPdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                download="predracun-qla-dev_trendy.pdf"
+                className="px-4 py-2 bg-white border border-slate-200 text-slate-900 text-xs font-bold rounded-xl hover:border-slate-400 transition-all flex items-center gap-2 cursor-pointer relative z-[100]"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Preuzmi predračun
+              </a>
+            </div>
           </div>
         </div>
       </nav>
