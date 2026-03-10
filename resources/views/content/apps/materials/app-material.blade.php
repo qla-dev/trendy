@@ -707,5 +707,5 @@
 <script>
   window.materialBarcodeGeneratorConfig = @json($materialBarcodeGeneratorConfig);
 </script>
-<script src="{{asset('js/scripts/pages/app-material.js?v=8')}}"></script>
+<script src="{{asset('js/scripts/pages/app-material.js?v=10')}}"></script>
 @endsection
