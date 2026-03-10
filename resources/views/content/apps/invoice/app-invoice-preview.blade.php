@@ -1603,7 +1603,11 @@
                         <td class="py-1">{{ $displayValue($item['artikal'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($item['opis'] ?? null) }}</td>
                         <td class="py-1 text-center"><span class="text-muted">-</span></td>
-                        <td class="py-1">{{ $displayValue($item['napomena'] ?? null) }}</td>
+                        @php
+                          $itemNote = trim((string) ($item['napomena'] ?? ''));
+                          $itemNoteDisplay = $itemNote !== '' ? (Illuminate\Support\Str::limit($itemNote, 20, '..')) : '-';
+                        @endphp
+                        <td class="py-1" title="{{ $itemNote }}">{{ $itemNoteDisplay }}</td>
                         <td class="py-1">{{ $displayValue($item['kolicina'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($item['mj'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($item['serija'] ?? null) }}</td>
@@ -1704,7 +1708,11 @@
                         <td class="py-1">{{ $displayValue($operation['pozicija'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($operation['operacija'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($operation['naziv'] ?? null) }}</td>
-                        <td class="py-1">{{ $displayValue($operation['napomena'] ?? null) }}</td>
+                        @php
+                          $operationNote = trim((string) ($operation['napomena'] ?? ''));
+                          $operationNoteDisplay = $operationNote !== '' ? Illuminate\Support\Str::limit($operationNote, 20, '..') : '-';
+                        @endphp
+                        <td class="py-1" title="{{ $operationNote }}">{{ $operationNoteDisplay }}</td>
                         <td class="py-1">{{ $displayValue($operation['mj'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($operation['mj_vrij'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($operation['normativna_osnova'] ?? null) }}</td>

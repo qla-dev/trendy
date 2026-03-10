@@ -1382,11 +1382,20 @@ class WorkOrderController extends Controller
                 $manualUnit = $manualUnitRaw === 'AUTO' ? '' : strtoupper(substr($manualUnitRaw, 0, 3));
                 $manualUnitSourceRaw = strtoupper(trim((string) ($component['acUMSource'] ?? '')));
                 $manualUnitSource = $manualUnitSourceRaw === 'AUTO' ? '' : strtoupper(substr($manualUnitSourceRaw, 0, 3));
+                $componentNote = trim((string) ($component['napomena'] ?? ''));
+
+                Log::info('normalize- planned consumption component', [
+                    'componentId' => $componentId,
+                    'lineNo' => $lineNo,
+                    'napomena' => $componentNote,
+                    'origin' => 'storePlannedConsumption',
+                ]);
 
                 $normalizedComponents[] = [
                     'acIdentChild' => $componentId,
                     'anNo' => $lineNo,
                     'acDescr' => trim((string) ($component['acDescr'] ?? '')),
+                    'napomena' => $componentNote,
                     'acUM' => $manualUnit,
                     'acUMSource' => $manualUnitSource,
                     'acOperationType' => $manualOperationType,
@@ -1430,6 +1439,7 @@ class WorkOrderController extends Controller
                     'acIdentChild' => $componentId,
                     'anNo' => (int) ($component['anNo'] ?? 0),
                     'acDescr' => $componentDescription,
+                    'napomena' => trim((string) ($component['napomena'] ?? '')),
                     'acUM' => $componentUnit,
                     'acOperationType' => $this->resolveOperationTypeForSave(
                         (string) ($component['acOperationType'] ?? ''),
@@ -1561,11 +1571,20 @@ class WorkOrderController extends Controller
                     $bomRow = is_array($resolvedRow['bom'] ?? null) ? $resolvedRow['bom'] : [];
 
                     $componentId = trim((string) ($requestedRow['acIdentChild'] ?? ($bomRow['acIdentChild'] ?? '')));
+                    $lineNo = (int) (($requestedRow['anNo'] ?? $bomRow['anNo'] ?? 0));
                     $descriptionFromRequested = trim((string) ($requestedRow['acDescr'] ?? ''));
                     $descriptionFromBom = trim((string) ($bomRow['acDescr'] ?? ''));
                     $componentNote = trim((string) ($requestedRow['napomena'] ?? ''));
                     $description = $descriptionFromRequested !== '' ? $descriptionFromRequested : $descriptionFromBom;
                     $resolvedNote = $componentNote !== '' ? $componentNote : $userDescription;
+
+                    Log::info('save-planned-consumption resolved component note', [
+                        'componentId' => $componentId,
+                        'lineNo' => $lineNo,
+                        'componentNote' => $componentNote,
+                        'resolvedNote' => $resolvedNote,
+                        'source' => $source,
+                    ]);
                     $operationType = strtoupper(substr(trim((string) ($requestedRow['acOperationType'] ?? '')), 0, 1));
                     if ($operationType === '') {
                         $operationType = strtoupper(substr(trim((string) ($bomRow['acOperationType'] ?? '')), 0, 1));
@@ -1791,7 +1810,7 @@ class WorkOrderController extends Controller
             $insertedCount = count(array_filter($insertedRows, function (array $row) {
                 return (string) ($row['action'] ?? '') !== 'updated';
             }));
-            $responseMessage = 'Planirana potrosnja je uspjesno sacuvana.';
+            $responseMessage = 'Planirana potrosnja je uspjesno sačuvana.';
 
             if ($saveMode === 'barcode') {
                 if ($updatedCount > 0 && $insertedCount > 0) {
@@ -1804,7 +1823,7 @@ class WorkOrderController extends Controller
             }
 
             return response()->json([
-                'message' => 'Planirana potrošnja je uspjesno sacuvana.',
+                'message' => 'Planirana potrošnja je uspjesno sačuvana.',
                 'message' => $responseMessage,
                 'data' => [
                     'work_order_id' => $id,

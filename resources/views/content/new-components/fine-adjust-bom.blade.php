@@ -205,45 +205,130 @@
     border-color: rgba(186, 194, 210, 0.16) !important;
   }
 
+  #fine-adjust-bom-modal table tbody tr {
+    height: 54px;
+    min-height: 54px;
+    max-height: 54px;
+  }
+
   #fine-adjust-bom-modal table tbody td {
     color: #dfe8ff;
     min-width: 120px;
-    min-height: 68px;
-    height: auto;
-    max-height: none;
-    vertical-align: top;
+    min-height: 54px;
+    height: 54px;
+    max-height: 54px;
+    vertical-align: middle;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  #fine-adjust-bom-modal table tbody td .fine-adjust-note-stack,
+  #fine-adjust-bom-modal table tbody td .fine-adjust-input,
+  #fine-adjust-bom-modal table tbody td .fine-adjust-readonly {
+    height: 54px;
+    min-height: 54px;
+    max-height: 54px;
   }
 
   #fine-adjust-bom-modal table tbody td[colspan] {
     height: auto;
     max-height: none;
+    white-space: normal;
   }
 
   #fine-adjust-bom-modal .fine-adjust-note-cell {
-    min-width: 360px;
+    min-width: 480px;
+    max-width: 640px;
+    width: 100%;
   }
 
   #fine-adjust-bom-modal .fine-adjust-note-stack {
     display: flex;
-    align-items: center;
-    gap: 0.55rem;
+    align-items: stretch;
+    gap: 0;
     min-width: 300px;
+    min-height: 72px;
+    height: 72px;
+    border: 1px solid rgba(108, 129, 173, 0.28);
+    border-radius: 0.375rem;
+    overflow: hidden;
+    background: rgba(9, 18, 36, 0.18);
+  }
+  #fine-adjust-bom-modal .fine-adjust-note-preview,
+  #fine-adjust-bom-modal .fine-adjust-note-input {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
+    height: 100%;
+    white-space: normal;
+    padding: 0.35rem 0.55rem;
+    box-sizing: border-box;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-note-input {
+    border: none;
+    background: transparent;
+    color: #dfe8ff;
+    min-height: 100%;
+    padding: 0;
+  }
+  #fine-adjust-bom-modal .fine-adjust-material-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: nowrap;
+    width: 210px;
+    min-height: 100%;
+    padding: 0.35rem 0.65rem;
+    border-right: none;
+    background: rgba(15, 23, 41, 0.48);
+    box-shadow: none;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-material-toggle.is-aluminum .fine-adjust-material-label.is-aluminum,
+  #fine-adjust-bom-modal .fine-adjust-material-toggle.is-steel .fine-adjust-material-label.is-steel {
+    color: inherit;
   }
 
   #fine-adjust-bom-modal .fine-adjust-note-preview {
-    min-height: 46px;
+    flex: 1;
+    min-height: 72px;
+    height: 72px;
     padding: 0.55rem 0.75rem;
-    border-radius: 12px;
-    border: 1px solid rgba(108, 129, 173, 0.28);
-    background: rgba(9, 18, 36, 0.74);
+    border-radius: 0;
+    border: none;
+    background: rgba(9, 18, 36, 0.32);
     color: #dfe8ff;
     font-size: 0.82rem;
     line-height: 1.35;
     white-space: normal;
     word-break: break-word;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
-    flex: 1 1 55%;
+    box-shadow: none;
     min-width: 220px;
+  }
+    flex: 1;
+    min-height: 72px;
+    height: 72px;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0;
+    border: none;
+    background: rgba(9, 18, 36, 0.60);
+    color: #dfe8ff;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    white-space: normal;
+    word-break: break-word;
+    box-shadow: none;
+    min-width: 220px;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-material-toggle {
+    background: rgba(14, 23, 43, 0.84);
+    box-shadow: inset 0 0 0 1px rgba(108, 129, 173, 0.28);
   }
 
   #fine-adjust-bom-modal .fine-adjust-material-toggle {
@@ -324,10 +409,38 @@
 
   #fine-adjust-bom-modal .fine-adjust-input {
     min-width: 110px;
-    height: 36px;
+    height: 72px;
     background: rgba(9, 18, 36, 0.86);
     color: #e8f0ff;
     border-color: rgba(123, 153, 210, 0.35);
+    border-radius: 0.375rem;
+    line-height: 1.4;
+    padding: 0.5rem 0.75rem;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-note-stack {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-width: 300px;
+    min-height: 72px;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-note-preview {
+    flex: 1;
+    min-height: 72px;
+    height: 72px;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0;
+    border: none;
+    background: rgba(9, 18, 36, 0.32);
+    color: #dfe8ff;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    white-space: normal;
+    word-break: break-word;
+    box-shadow: none;
+    min-width: 220px;
   }
 
   #fine-adjust-bom-modal .fine-adjust-select {
@@ -344,10 +457,13 @@
 
   #fine-adjust-bom-modal .fine-adjust-readonly {
     min-width: 110px;
-    height: 36px;
+    height: 72px;
+    min-height: 72px;
+    max-height: 72px;
     background: rgba(13, 22, 39, 0.66);
     color: #b6c7eb;
     border-color: rgba(98, 120, 162, 0.32);
+    border-radius: 0.375rem;
     pointer-events: none;
   }
 

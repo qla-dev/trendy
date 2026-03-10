@@ -3712,7 +3712,7 @@
           geometry: null,
           unitWeight: 0,
           totalWeight: 0,
-          note: modeLabel + ' BG: nema prepoznatih dimenzija za izracun'
+          note: 'Unesite visinu, širinu i dužinu i planiranu količinu za automatski izračun težine.'
         };
       }
 
@@ -3749,7 +3749,16 @@
 
       row.materialMode = row.materialMode === 'aluminum' ? 'aluminum' : inferFineAdjustMaterialMode(row);
       row.bgSummary = calculateFineAdjustBgSummary(row);
-      row.napomena = row.bgSummary && row.bgSummary.note ? row.bgSummary.note : '';
+
+      var computedNote = row.bgSummary && row.bgSummary.note ? String(row.bgSummary.note) : '';
+      var currentNote = String(row.napomena || '').trim();
+
+      if (!currentNote || currentNote === row._computedNapomena || currentNote === '' ) {
+        currentNote = computedNote;
+      }
+
+      row._computedNapomena = computedNote;
+      row.napomena = currentNote;
 
       return row;
     }
@@ -3765,16 +3774,21 @@
       syncFineAdjustComputedRow(row);
 
       var noteInputEl = rowEl.querySelector('.fine-adjust-input[data-field="napomena"]');
-      var notePreviewEl = rowEl.querySelector('.fine-adjust-note-preview');
       var toggleWrapEl = rowEl.querySelector('.fine-adjust-material-toggle');
       var mode = row.materialMode === 'aluminum' ? 'aluminum' : 'steel';
 
       if (noteInputEl) {
-        noteInputEl.value = String(row.napomena || '');
-      }
+        var hint = 'Unesite visinu, širinu i dužinu i planiranu količinu za automatski izračun težine.';
+        var computed = row.bgSummary && row.bgSummary.note ? String(row.bgSummary.note) : '';
 
-      if (notePreviewEl) {
-        notePreviewEl.textContent = String(row.napomena || '-');
+        if (!row.napomena || row.napomena === row._computedNapomena) {
+          noteInputEl.value = (row.napomena || computed || '').trim();
+        } else {
+          noteInputEl.value = row.napomena;
+        }
+
+        noteInputEl.placeholder = hint;
+        noteInputEl.title = noteInputEl.value || hint;
       }
 
       var dim1InputEl = rowEl.querySelector('.fine-adjust-input[data-field="dim1"]');
@@ -3881,8 +3895,7 @@
                     '</button>' +
                     '<span class="fine-adjust-material-label is-steel"><i class="fa fa-industry"></i><span>\u010Celik</span></span>' +
                   '</div>' +
-                  '<div class="fine-adjust-note-preview">' + (noteValue || '-') + '</div>' +
-                  '<input type="hidden" class="fine-adjust-input" data-row="' + rowIndex + '" data-field="napomena" value="' + noteValue + '">' +
+                  '<input type="text" class="form-control form-control-sm fine-adjust-input fine-adjust-note-input" data-row="' + rowIndex + '" data-field="napomena" value="' + noteValue + '" placeholder="Unesite visinu, širinu i dužinu i planiranu količinu" />' +
                 '</div>' +
               '</td>';
           }
@@ -4717,6 +4730,16 @@
           : normalizedSourceUnit;
 
         var normalizedPlanirano = clampPlaniranoToZaliha(planiranoValue, zalihaValue);
+        var placeholderNote = 'Unesite visinu, širinu i dužinu i planiranu količinu za automatski izračun težine.';
+        var napomenaValue = String((row && row.napomena) || '').trim();
+
+        if (napomenaValue === placeholderNote) {
+          napomenaValue = '0';
+        }
+
+        if (napomenaValue === '' && row && row.bgSummary && row.bgSummary.note === placeholderNote) {
+          napomenaValue = '0';
+        }
 
         unique.set(key, {
           acIdentChild: componentId,
@@ -4729,7 +4752,7 @@
           acUMSource: normalizedSourceUnit,
           acOperationType: normalizedOperationType,
           anPlanQty: normalizedPlanirano,
-          napomena: String((row && row.napomena) || '').trim()
+          napomena: napomenaValue
         });
       });
 
