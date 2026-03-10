@@ -3648,6 +3648,36 @@
     }
 
     function resolveFineAdjustGeometry(row) {
+      if (row && row.dim1 && row.dim2 && row.dim3) {
+        var d1 = parseDecimalValue(row.dim1, 0);
+        var d2 = parseDecimalValue(row.dim2, 0);
+        var d3 = parseDecimalValue(row.dim3, 0);
+
+        if (d1 > 0 && d2 > 0 && d3 > 0) {
+          return {
+            type: 'rectangular',
+            thickness: d1,
+            width: d2,
+            length: d3,
+            label: d1 + ' x ' + d2 + ' x ' + d3 + ' mm'
+          };
+        }
+      }
+
+      if (row && row.dim1 && row.dim2 && !row.dim3) {
+        var dia = parseDecimalValue(row.dim1, 0);
+        var len = parseDecimalValue(row.dim2, 0);
+
+        if (dia > 0 && len > 0) {
+          return {
+            type: 'round',
+            diameter: dia,
+            length: len,
+            label: 'Fi ' + dia + ' x ' + len + ' mm'
+          };
+        }
+      }
+
       var candidates = [
         row && row.opis,
         row && row.artikal,
@@ -3747,6 +3777,20 @@
         notePreviewEl.textContent = String(row.napomena || '-');
       }
 
+      var dim1InputEl = rowEl.querySelector('.fine-adjust-input[data-field="dim1"]');
+      var dim2InputEl = rowEl.querySelector('.fine-adjust-input[data-field="dim2"]');
+      var dim3InputEl = rowEl.querySelector('.fine-adjust-input[data-field="dim3"]');
+
+      if (dim1InputEl) {
+        dim1InputEl.value = String(row.dim1 || '');
+      }
+      if (dim2InputEl) {
+        dim2InputEl.value = String(row.dim2 || '');
+      }
+      if (dim3InputEl) {
+        dim3InputEl.value = String(row.dim3 || '');
+      }
+
       if (toggleWrapEl) {
         toggleWrapEl.classList.toggle('is-aluminum', mode === 'aluminum');
         toggleWrapEl.classList.toggle('is-steel', mode === 'steel');
@@ -3765,11 +3809,29 @@
             zalihaQty = 0;
           }
 
+          var parsedGeometry = resolveFineAdjustGeometry(row);
+          var dim1 = '';
+          var dim2 = '';
+          var dim3 = '';
+
+          if (parsedGeometry && parsedGeometry.type === 'rect') {
+            dim1 = parsedGeometry.thickness ? String(parsedGeometry.thickness) : '';
+            dim2 = parsedGeometry.width ? String(parsedGeometry.width) : '';
+            dim3 = parsedGeometry.length ? String(parsedGeometry.length) : '';
+          } else if (parsedGeometry && parsedGeometry.type === 'round') {
+            dim1 = parsedGeometry.diameter ? String(parsedGeometry.diameter) : '';
+            dim2 = parsedGeometry.length ? String(parsedGeometry.length) : '';
+            dim3 = '';
+          }
+
           return {
             alternativa: '0',
             pozicija: String(row.anNo || 0),
             artikal: String(row.acIdentChild || '').trim(),
             opis: String(row.acDescr || '').trim(),
+            dim1: dim1,
+            dim2: dim2,
+            dim3: dim3,
             acOperationType: String(row.acOperationType || '').trim(),
             acUMSource: String(row.acUM || '').trim(),
             slika: '-',
@@ -3791,7 +3853,7 @@
       }
 
       if (!Array.isArray(state.fineAdjustRows) || state.fineAdjustRows.length === 0) {
-        fineAdjustBodyEl.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-2">Nema odabranih stavki.</td></tr>';
+        fineAdjustBodyEl.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-2">Nema odabranih stavki.</td></tr>';
         if (fineAdjustCountEl) {
           fineAdjustCountEl.textContent = 'Stavki: 0';
         }
@@ -3799,8 +3861,7 @@
       }
 
       var fields = [
-        'alternativa', 'pozicija', 'artikal', 'opis', 'slika', 'napomena', 'planirano', 'zaliha',
-        'mj'
+        'alternativa', 'pozicija', 'artikal', 'opis', 'slika', 'dim1', 'dim2', 'dim3', 'napomena', 'planirano', 'zaliha', 'mj'
       ];
 
       var html = state.fineAdjustRows.map(function (row, rowIndex) {
@@ -3840,6 +3901,12 @@
           if (field === 'zaliha') {
             var readonlyValue = escapeHtml(row[field] || '0');
             return '<td><input type="text" class="form-control form-control-sm fine-adjust-readonly" value="' + readonlyValue + '" readonly tabindex="-1"></td>';
+          }
+
+          if (field === 'dim1' || field === 'dim2' || field === 'dim3') {
+            var dimensionValue = escapeHtml(row[field] || '');
+            return '<td><input type="number" class="form-control form-control-sm fine-adjust-input" ' +
+              'data-row="' + rowIndex + '" data-field="' + field + '" value="' + dimensionValue + '" step="0.01" min="0"></td>';
           }
 
           var value = escapeHtml(row[field] || '');
@@ -4655,6 +4722,9 @@
           acIdentChild: componentId,
           anNo: lineNo,
           acDescr: opis,
+          dim1: String((row && row.dim1) || '').trim(),
+          dim2: String((row && row.dim2) || '').trim(),
+          dim3: String((row && row.dim3) || '').trim(),
           acUM: normalizedUnit,
           acUMSource: normalizedSourceUnit,
           acOperationType: normalizedOperationType,
@@ -5164,9 +5234,16 @@
           return;
         }
 
-        if (field === 'artikal' || field === 'opis') {
+        if (field === 'artikal' || field === 'opis' || field === 'dim1' || field === 'dim2' || field === 'dim3') {
           row[field] = String(target.value || '').trim();
           syncFineAdjustRowUi(rowIndex);
+          return;
+        }
+
+        if (field === 'mj') {
+          row.mj = String(target.value || '').trim().toUpperCase();
+          syncFineAdjustRowUi(rowIndex);
+          return;
         }
       });
 

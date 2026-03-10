@@ -20,12 +20,15 @@
           <table class="table table-sm mb-0 align-middle" id="fine-adjust-bom-table">
             <thead>
               <tr>
-                <th class="text-center">Alternat...</th>
+                <th class="text-center">Alternativno</th>
                 <th class="text-center">Pozicija</th>
                 <th class="text-center">Artikal</th>
                 <th class="text-center">Opis</th>
                 <th class="text-center">Slika</th>
-                <th class="text-center">Napo...</th>
+                <th class="text-center">Visina</th>
+                <th class="text-center">Širina</th>
+                <th class="text-center">Debljina</th>
+                <th class="text-center">Napomena</th>
                 <th class="text-center">Planirano</th>
                 <th class="text-center">Zaliha</th>
                 <th class="text-center">MJ</th>
@@ -33,7 +36,7 @@
             </thead>
             <tbody id="fine-adjust-bom-body">
               <tr>
-                <td colspan="9" class="text-center text-muted py-2">Nema odabranih stavki.</td>
+                <td colspan="12" class="text-center text-muted py-2">Nema odabranih stavki.</td>
               </tr>
             </tbody>
           </table>
@@ -222,7 +225,7 @@
 
   #fine-adjust-bom-modal .fine-adjust-note-stack {
     display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: 0.55rem;
     min-width: 300px;
   }
@@ -239,6 +242,8 @@
     white-space: normal;
     word-break: break-word;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    flex: 1 1 55%;
+    min-width: 220px;
   }
 
   #fine-adjust-bom-modal .fine-adjust-material-toggle {
