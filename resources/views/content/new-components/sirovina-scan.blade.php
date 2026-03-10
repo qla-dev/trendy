@@ -8,9 +8,12 @@
   $defaultProduct = trim((string) ($defaultProductIdent ?? ''));
   $defaultProductLabel = trim((string) ($defaultProductLabel ?? ''));
   $currentUser = auth()->user();
-  $allowManualStockAdjust = $currentUser
-    ? strtolower(trim((string) ($currentUser->username ?? ''))) === 'kulasin.nedim'
+  $isAdminUser = $currentUser
+    ? (method_exists($currentUser, 'isAdmin')
+        ? (bool) $currentUser->isAdmin()
+        : strtolower((string) ($currentUser->role ?? '')) === 'admin')
     : false;
+  $allowManualStockAdjust = $isAdminUser;
   $stockAdjustWarehouse = trim((string) (($workOrder['magacin'] ?? '') ?: ''));
   $scannerCompactRoleLayout = $currentUser
     ? strtolower((string) ($currentUser->role ?? '')) === 'user'

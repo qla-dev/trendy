@@ -631,6 +631,9 @@ class WorkOrderController extends Controller
             $resolvedStatusValue = $this->resolveStatusStorageValue($selectedStatus, $row, $statusColumn);
             $updates = [$statusColumn => $resolvedStatusValue];
 
+            // Do not override planned start / entry time when updating status
+            unset($updates['adSchedStartTime'], $updates['adTimeIns']);
+
             if ($this->rowAlreadyHasUpdates($row, $updates)) {
                 return response()->json([
                     'message' => 'Status je već postavljen na odabranu vrijednost.',

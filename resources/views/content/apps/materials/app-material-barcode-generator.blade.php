@@ -46,20 +46,6 @@
     margin-top: 5px;
   }
 
-  .material-header-actions {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.75rem;
-    flex-wrap: nowrap;
-    width: 100%;
-  }
-
-  .material-warehouse-filter {
-    min-width: 260px;
-    flex: 1 1 260px;
-  }
-
   .material-barcode-generator-wrapper {
     --wo-table-scroll-track: var(--app-scroll-track);
     --wo-table-scroll-thumb: var(--app-scroll-thumb-flat);
@@ -250,56 +236,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.3rem;
+    gap: 0.45rem;
     flex-wrap: nowrap;
-  }
-
-  .material-action-btn {
-    min-width: 85px;
-  }
-
-  .material-action-btn.material-barcode-preview-btn {
-    border-color: #1e88e5 !important;
-    color: #1e88e5 !important;
-    background-color: transparent !important;
-  }
-
-  .material-action-btn.material-barcode-preview-btn:hover {
-    background-color: rgba(30, 136, 229, 0.1) !important;
-  }
-
-  .material-action-btn.material-stock-adjust-btn {
-    border-color: #28c76f !important;
-    color: #28c76f !important;
-    background-color: transparent !important;
-  }
-
-  .material-action-btn.material-stock-adjust-btn:hover {
-    background-color: rgba(40, 199, 111, 0.1) !important;
-  }
-
-  .material-action-btn.material-copy-btn {
-    border-color: #6e6b7b !important;
-    color: #6e6b7b !important;
-    background-color: transparent !important;
-  }
-
-  .material-action-btn.material-copy-btn:hover {
-    background-color: rgba(110, 107, 123, 0.1) !important;
-  }
-
-  .material-action-btn.material-delete-btn {
-    border-color: #ea5455 !important;
-    color: #ea5455 !important;
-    background-color: transparent !important;
-  }
-
-  .material-action-btn.material-delete-btn:hover {
-    background-color: rgba(234, 84, 85, 0.1) !important;
-  }
-
-  .material-actions-group {
-    gap: 0.65rem;
   }
 
   .material-action-btn {
@@ -383,20 +321,9 @@
     color: #6e6b7b;
   }
 
-  .material-create-field-card .form-control {
-    background-color: transparent;
-  }
-
+  .material-create-field-card .form-control,
   .material-create-field-card .form-select {
-    background-color: transparent;
-    background-repeat: no-repeat;
-    background-position: right 0.9rem center;
-    background-size: 16px 12px;
-    cursor: pointer;
-  }
-
-  .material-create-field-card .form-select option {
-    cursor: pointer;
+    background: transparent;
   }
 
   .material-create-help {
@@ -562,16 +489,6 @@
   }
 
   @media (max-width: 767.98px) {
-    .material-header-actions {
-      width: 100%;
-      justify-content: flex-start;
-    }
-
-    .material-warehouse-filter {
-      min-width: 0;
-      width: 100%;
-    }
-
     .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child,
     .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:last-child {
       padding: 0.85rem 0.85rem 0.8rem;
@@ -596,33 +513,19 @@
 @section('content')
 <section class="material-barcode-generator-wrapper">
   <div class="content-header row">
-    <div class="content-header-left col-md-3 col-lg-6 col-12 mb-2">
+    <div class="content-header-left col-md-8 col-12 mb-2">
       <div class="row breadcrumbs-top">
         <div class="col-12">
           <h2 class="content-header-title float-start mb-0">Pregled zaliha</h2>
         </div>
       </div>
     </div>
-    <div class="content-header-right text-md-end col-md-9 col-lg-6 col-12">
-      @if(!empty($stockWarehouseOptions) || $canCreateMaterial)
+    <div class="content-header-right text-md-end col-md-4 col-12 d-md-block d-none">
+      @if($canCreateMaterial)
         <div class="mb-1 breadcrumb-right">
-          <div class="material-header-actions">
-            @if(!empty($stockWarehouseOptions))
-              <div class="material-warehouse-filter">
-                <select class="form-select" id="material-warehouse-filter">
-                  <option value="">Filtriraj po skladistu</option>
-                  @foreach(($stockWarehouseOptions ?? []) as $warehouseName)
-                    <option value="{{ $warehouseName }}">{{ $warehouseName }}</option>
-                  @endforeach
-                </select>
-              </div>
-            @endif
-            @if($canCreateMaterial)
-              <button type="button" class="btn btn-primary" id="material-create-open-btn">
-                <i data-feather="plus" class="me-50"></i> Dodaj novi materijal
-              </button>
-            @endif
-          </div>
+          <button type="button" class="btn btn-primary" id="material-create-open-btn">
+            <i data-feather="plus" class="me-50"></i> Dodaj novi materijal
+          </button>
         </div>
       @endif
     </div>
@@ -707,5 +610,5 @@
 <script>
   window.materialBarcodeGeneratorConfig = @json($materialBarcodeGeneratorConfig);
 </script>
-<script src="{{asset('js/scripts/pages/app-material.js?v=8')}}"></script>
+<script src="{{asset('js/scripts/pages/app-material-barcode-generator.js?v=7')}}"></script>
 @endsection
