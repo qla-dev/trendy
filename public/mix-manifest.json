@@ -118,7 +118,7 @@
     "/js/scripts/pages/app-invoice-print.js": "/js/scripts/pages/app-invoice-print.js",
     "/js/scripts/pages/app-invoice.js": "/js/scripts/pages/app-invoice.js",
     "/js/scripts/pages/app-kanban.js": "/js/scripts/pages/app-kanban.js",
-    "/js/scripts/pages/app-material-barcode-generator.js": "/js/scripts/pages/app-material-barcode-generator.js?v=3",
+    "/js/scripts/pages/app-material-barcode-generator.js": "/js/scripts/pages/app-material-barcode-generator.js",
     "/js/scripts/pages/app-material.js": "/js/scripts/pages/app-material.js",
     "/js/scripts/pages/app-todo.js": "/js/scripts/pages/app-todo.js",
     "/js/scripts/pages/app-user-list.js": "/js/scripts/pages/app-user-list.js",

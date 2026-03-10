@@ -39,6 +39,7 @@ $(function () {
   var createModalHelpElement = document.getElementById('material-create-help-text');
   var createModalOpenButton = document.getElementById('material-create-open-btn');
   var warehouseFilterInput = document.getElementById('material-warehouse-filter');
+  var bulkDownloadButton = null;
   var createModalCodeInput = document.getElementById('material-create-code-input');
   var createModalNameInput = document.getElementById('material-create-name-input');
   var createModalUnitInput = document.getElementById('material-create-unit-input');
@@ -55,17 +56,20 @@ $(function () {
   var stockRequestInFlight = false;
   var createRequestInFlight = false;
   var deleteRequestInFlight = false;
+  var bulkDownloadInFlight = false;
   var tableLoadingRequestCount = 0;
   var overlaySafetyTimer = null;
   var hasCompletedInitialTableLoad = false;
+  var lastTableRecordsFiltered = 0;
   var dataTable;
+  var bulkDownloadButtonDefaultHtml = '<i class="fa fa-download me-50"></i> Preuzmi sve etikete';
   var defaultCreateModalTitle = createModalTitleElement ? createModalTitleElement.textContent : 'Dodaj novi materijal';
   var defaultCreateModalSubtitle = createModalSubtitleElement
     ? createModalSubtitleElement.textContent
     : 'Kreiraj novi katalog materijal i početnu zalihu.';
   var defaultCreateModalHelp = createModalHelpElement
     ? createModalHelpElement.textContent
-    : 'Novi materijal ce biti upisan u katalog, a pocetna zaliha ce odmah biti evidentirana na odabranom skladistu.';
+    : 'Novi materijal ce biti upisan u katalog, a početna zaliha ce odmah biti evidentirana na odabranom skladištu.';
   var defaultCreateModalSaveHtml = createModalSaveButton ? createModalSaveButton.innerHTML : '';
   var sortableColumnMap = canSeeWarehouse
     ? {
@@ -226,6 +230,141 @@ $(function () {
 
   function getWarehouseFilterValue() {
     return warehouseFilterInput ? $.trim(warehouseFilterInput.value || '') : '';
+  }
+
+  function resolveSortMeta(orderData) {
+    var firstOrder = orderData && orderData.length ? orderData[0] : null;
+    var orderColumnIndex = NaN;
+    var sortDir = 'asc';
+
+    if (firstOrder) {
+      if (firstOrder.column !== undefined) {
+        orderColumnIndex = parseInt(firstOrder.column, 10);
+        sortDir = firstOrder.dir === 'desc' ? 'desc' : 'asc';
+      } else {
+        orderColumnIndex = parseInt(firstOrder[0], 10);
+        sortDir = firstOrder[1] === 'desc' ? 'desc' : 'asc';
+      }
+    }
+
+    return {
+      sortBy: Number.isInteger(orderColumnIndex) ? sortableColumnMap[orderColumnIndex] || 'material_code' : 'material_code',
+      sortDir: sortDir
+    };
+  }
+
+  function buildTableRequestPayload(requestData, overrides) {
+    var overrideValues = overrides || {};
+    var sortMeta = overrideValues.sortMeta || resolveSortMeta(requestData && requestData.order ? requestData.order : []);
+    var startValue = overrideValues.start !== undefined ? overrideValues.start : requestData && requestData.start ? requestData.start : 0;
+    var lengthValue = overrideValues.length !== undefined ? overrideValues.length : requestData && requestData.length ? requestData.length : 25;
+    var searchValue = overrideValues.searchValue !== undefined
+      ? overrideValues.searchValue
+      : requestData && requestData.search && requestData.search.value
+        ? requestData.search.value
+        : '';
+    var warehouseValue = overrideValues.warehouse !== undefined ? overrideValues.warehouse : getWarehouseFilterValue();
+
+    return {
+      draw: requestData && requestData.draw ? requestData.draw : 0,
+      start: startValue,
+      length: lengthValue,
+      sort_by: sortMeta.sortBy,
+      sort_dir: sortMeta.sortDir,
+      warehouse: warehouseValue,
+      search: {
+        value: searchValue
+      }
+    };
+  }
+
+  function createBulkDownloadButton() {
+    var button = document.createElement('button');
+
+    button.type = 'button';
+    button.id = 'material-bulk-download-btn';
+    button.className = 'btn material-action-btn material-barcode-preview-btn material-bulk-download-btn d-none';
+    button.disabled = true;
+    button.innerHTML = bulkDownloadButtonDefaultHtml;
+    button.addEventListener('click', function () {
+      downloadAllFilteredLabels();
+    });
+
+    return button;
+  }
+
+  function ensureBulkDownloadButton() {
+    var wrapper = tableElement.closest('.dataTables_wrapper');
+    var firstRow;
+    var leftColumn;
+    var lengthContainer;
+    var inlineControls;
+
+    if (!wrapper.length) {
+      return null;
+    }
+
+    if (!bulkDownloadButton) {
+      bulkDownloadButton = createBulkDownloadButton();
+    }
+
+    firstRow = wrapper.children('.row').first();
+    leftColumn = firstRow.children('[class*="col-"]').first();
+
+    if (!leftColumn.length) {
+      return bulkDownloadButton;
+    }
+
+    lengthContainer = leftColumn.find('.dataTables_length').first();
+
+    if (!lengthContainer.length) {
+      return bulkDownloadButton;
+    }
+
+    inlineControls = leftColumn.find('.material-table-inline-controls').first();
+
+    if (!inlineControls.length) {
+      inlineControls = $('<div class="material-table-inline-controls"></div>');
+      lengthContainer.before(inlineControls);
+    }
+
+    if (!inlineControls.find('.dataTables_length').length) {
+      inlineControls.append(lengthContainer);
+    }
+
+    if (!inlineControls.find('#material-bulk-download-btn').length) {
+      inlineControls.append(bulkDownloadButton);
+    }
+
+    return bulkDownloadButton;
+  }
+
+  function setBulkDownloadButtonLoadingState(active) {
+    var button = ensureBulkDownloadButton();
+
+    if (!button) {
+      return;
+    }
+
+    if (active) {
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm me-50" role="status" aria-hidden="true"></span> Priprema ZIP-a';
+      return;
+    }
+
+    button.innerHTML = bulkDownloadButtonDefaultHtml;
+  }
+
+  function updateBulkDownloadButtonState() {
+    var button = ensureBulkDownloadButton();
+    var hasWarehouseFilter = !!getWarehouseFilterValue();
+
+    if (!button) {
+      return;
+    }
+
+    button.classList.toggle('d-none', !hasWarehouseFilter);
+    button.disabled = bulkDownloadInFlight || !hasWarehouseFilter || lastTableRecordsFiltered < 1;
   }
 
   function normalizeBarcodeValue(value) {
@@ -389,26 +528,36 @@ $(function () {
     }
   }
 
-  function downloadCurrentSvg() {
-    var blob;
+  function triggerBlobDownload(blob, fileName) {
     var objectUrl;
     var link;
+
+    if (!blob) {
+      return;
+    }
+
+    objectUrl = window.URL.createObjectURL(blob);
+    link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    window.setTimeout(function () {
+      window.URL.revokeObjectURL(objectUrl);
+    }, 150);
+  }
+
+  function downloadCurrentSvg() {
+    var blob;
 
     if (!currentSvgMarkup) {
       return;
     }
 
     blob = new Blob([currentSvgMarkup], { type: 'image/svg+xml;charset=utf-8' });
-    objectUrl = window.URL.createObjectURL(blob);
-    link = document.createElement('a');
-    link.href = objectUrl;
-    link.download = sanitizeFileName(currentMaterialCode) + '.svg';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.setTimeout(function () {
-      window.URL.revokeObjectURL(objectUrl);
-    }, 150);
+    triggerBlobDownload(blob, sanitizeFileName(currentMaterialCode) + '.svg');
   }
 
   function ensureTableLoadingOverlay() {
@@ -717,6 +866,213 @@ $(function () {
     return fallbackMessage;
   }
 
+  function showBulkDownloadAlert(icon, title, text) {
+    if (window.Swal && typeof window.Swal.fire === 'function') {
+      window.Swal.fire({
+        icon: icon,
+        title: title,
+        text: text,
+        confirmButtonText: 'U redu',
+        customClass: {
+          confirmButton: icon === 'error' ? 'btn btn-danger' : icon === 'warning' ? 'btn btn-warning' : 'btn btn-primary'
+        },
+        buttonsStyling: false
+      });
+      return;
+    }
+
+    window.alert(text);
+  }
+
+  function fetchMaterialBatch(requestPayload) {
+    return new Promise(function (resolve, reject) {
+      $.ajax({
+        url: dataUrl,
+        method: 'GET',
+        dataType: 'json',
+        data: requestPayload,
+        success: function (response) {
+          resolve(response || {});
+        },
+        error: function (xhr) {
+          reject(new Error(extractAjaxErrorMessage(xhr, 'Ne mogu ucitati filtrirane materijale za etikete.')));
+        }
+      });
+    });
+  }
+
+  function fetchAllFilteredMaterials(snapshot) {
+    var collectedRows = [];
+    var expectedTotal = snapshot && snapshot.expectedTotal ? snapshot.expectedTotal : 0;
+    var batchSize = 100;
+
+    function loadBatch(offset) {
+      return fetchMaterialBatch(
+        buildTableRequestPayload(
+          {
+            draw: 0,
+            start: offset,
+            length: batchSize,
+            search: {
+              value: snapshot.searchValue
+            },
+            order: [[snapshot.orderColumnIndex, snapshot.sortDir]]
+          },
+          {
+            start: offset,
+            length: batchSize,
+            searchValue: snapshot.searchValue,
+            warehouse: snapshot.warehouse,
+            sortMeta: {
+              sortBy: snapshot.sortBy,
+              sortDir: snapshot.sortDir
+            }
+          }
+        )
+      ).then(function (response) {
+        var rows = Array.isArray(response.data) ? response.data : [];
+        var responseTotal = Number(response.recordsFiltered);
+
+        if (expectedTotal < 1) {
+          expectedTotal = Number.isFinite(responseTotal) && responseTotal > 0 ? responseTotal : rows.length;
+        }
+
+        collectedRows = collectedRows.concat(rows);
+
+        if (!rows.length || collectedRows.length >= expectedTotal) {
+          return collectedRows.slice(0, expectedTotal || collectedRows.length);
+        }
+
+        return loadBatch(offset + rows.length);
+      });
+    }
+
+    return loadBatch(0);
+  }
+
+  function createZipFileName(warehouseName) {
+    return 'etikete-' + sanitizeFileName(warehouseName || 'skladiste') + '.zip';
+  }
+
+  function resolveUniqueZipEntryName(baseName, usedNames) {
+    var normalizedBaseName = sanitizeFileName(baseName || 'barcode-etiketa');
+    var candidate = normalizedBaseName;
+    var suffix = 2;
+
+    while (usedNames[candidate]) {
+      candidate = normalizedBaseName + '-' + suffix;
+      suffix += 1;
+    }
+
+    usedNames[candidate] = true;
+
+    return candidate;
+  }
+
+  function buildLabelsZip(materialRows) {
+    var zip;
+    var usedNames = {};
+    var addedCount = 0;
+    var skippedCount = 0;
+
+    if (!window.JSZip) {
+      return Promise.reject(new Error('ZIP biblioteka nije dostupna na stranici.'));
+    }
+
+    if (!Array.isArray(materialRows) || !materialRows.length) {
+      return Promise.reject(new Error('Nema materijala za preuzimanje etiketa.'));
+    }
+
+    zip = new window.JSZip();
+
+    materialRows.forEach(function (row) {
+      var materialCode = row && row.material_code ? row.material_code : row && row.barcode_value ? row.barcode_value : '';
+      var materialName = row && row.material_name ? row.material_name : '';
+      var svgMarkup;
+      var zipEntryName;
+
+      try {
+        svgMarkup = buildBarcodeSvg(materialCode, materialName);
+        zipEntryName = resolveUniqueZipEntryName(materialCode || materialName, usedNames);
+        zip.file(zipEntryName + '.svg', svgMarkup);
+        addedCount += 1;
+      } catch (error) {
+        skippedCount += 1;
+      }
+    });
+
+    if (!addedCount) {
+      return Promise.reject(new Error('Nijedna etiketa nije mogla biti generisana za odabrano skladište.'));
+    }
+
+    return zip.generateAsync({ type: 'blob' }).then(function (blob) {
+      return {
+        blob: blob,
+        addedCount: addedCount,
+        skippedCount: skippedCount
+      };
+    });
+  }
+
+  function downloadAllFilteredLabels() {
+    var warehouseValue = getWarehouseFilterValue();
+    var currentOrder = dataTable && typeof dataTable.order === 'function' ? dataTable.order() : [];
+    var sortMeta = resolveSortMeta(currentOrder);
+    var snapshot;
+
+    if (bulkDownloadInFlight) {
+      return;
+    }
+
+    if (!warehouseValue) {
+      showBulkDownloadAlert('warning', 'Odaberite skladište', 'Bulk preuzimanje etiketa je dostupno tek nakon filtera po skladištu.');
+      return;
+    }
+
+    if (lastTableRecordsFiltered < 1) {
+      showBulkDownloadAlert('warning', 'Nema rezultata', 'Za odabrano skladište trenutno nema materijala za preuzimanje etiketa.');
+      return;
+    }
+
+    snapshot = {
+      warehouse: warehouseValue,
+      searchValue: dataTable && typeof dataTable.search === 'function' ? dataTable.search() : '',
+      sortBy: sortMeta.sortBy,
+      sortDir: sortMeta.sortDir,
+      orderColumnIndex: currentOrder && currentOrder.length ? parseInt(currentOrder[0][0], 10) : 0,
+      expectedTotal: lastTableRecordsFiltered
+    };
+
+    bulkDownloadInFlight = true;
+    setBulkDownloadButtonLoadingState(true);
+    updateBulkDownloadButtonState();
+
+    fetchAllFilteredMaterials(snapshot)
+      .then(function (materialRows) {
+        return buildLabelsZip(materialRows);
+      })
+      .then(function (result) {
+        var resultMessage = 'Preuzeto ' + result.addedCount + ' etiketa za skladište "' + snapshot.warehouse + '".';
+
+        triggerBlobDownload(result.blob, createZipFileName(snapshot.warehouse));
+
+        if (result.skippedCount > 0) {
+          resultMessage += ' Preskoceno: ' + result.skippedCount + '.';
+          showBulkDownloadAlert('warning', 'ZIP je pripremljen', resultMessage);
+          return;
+        }
+
+        showBulkDownloadAlert('success', 'ZIP je pripremljen', resultMessage);
+      }, function (error) {
+        showBulkDownloadAlert('error', 'Preuzimanje nije uspjelo', error && error.message ? error.message : 'Ne mogu pripremiti ZIP sa etiketama.');
+      })
+      .then(function () {
+        bulkDownloadInFlight = false;
+        setBulkDownloadButtonLoadingState(false);
+        updateBulkDownloadButtonState();
+      });
+  }
+
   function submitStockAdjustment() {
     var targetValueRaw;
     var targetValue;
@@ -842,19 +1198,19 @@ $(function () {
 
     if (createModalSubtitleElement) {
       createModalSubtitleElement.textContent = isCopyMode
-        ? 'Prefill podaci su ucitani. Promijenite sifru prije cuvanja kopije.'
+        ? 'Prefill podaci su učitani. Promijenite šifru prije sačuvanja kopije.'
         : defaultCreateModalSubtitle;
     }
 
     if (createModalHelpElement) {
       createModalHelpElement.textContent = isCopyMode
-        ? 'Kopija koristi podatke odabranog materijala i po potrebi novu pocetnu zalihu.'
+        ? 'Kopija koristi podatke odabranog materijala i po potrebi novu početnu zalihu.'
         : defaultCreateModalHelp;
     }
 
     if (createModalSaveButton) {
       createModalSaveButton.innerHTML = isCopyMode
-        ? '<i class="fa fa-copy me-50"></i> Sacuvaj kopiju'
+        ? '<i class="fa fa-copy me-50"></i> Sačuvaj kopiju'
         : defaultCreateModalSaveHtml;
     }
   }
@@ -879,7 +1235,7 @@ $(function () {
     }
 
     if (createModalWarehouseInput) {
-      ensureSelectOption(createModalWarehouseInput, rowData ? (rowData.material_warehouse || '') : '', 'Skladiste');
+      ensureSelectOption(createModalWarehouseInput, rowData ? (rowData.material_warehouse || '') : '', 'Skladište');
     }
 
     if (createModalStockInput) {
@@ -1171,6 +1527,14 @@ $(function () {
       dataType: 'json',
       data: requestPayload,
       success: function (response) {
+        lastTableRecordsFiltered = Number(response && response.recordsFiltered);
+
+        if (!Number.isFinite(lastTableRecordsFiltered) || lastTableRecordsFiltered < 0) {
+          lastTableRecordsFiltered = Array.isArray(response && response.data) ? response.data.length : 0;
+        }
+
+        updateBulkDownloadButtonState();
+
         callback({
           draw: requestData.draw,
           recordsTotal: response.recordsTotal || 0,
@@ -1179,6 +1543,9 @@ $(function () {
         });
       },
       error: function () {
+        lastTableRecordsFiltered = 0;
+        updateBulkDownloadButtonState();
+
         callback({
           draw: requestData.draw,
           recordsTotal: 0,
@@ -1209,21 +1576,16 @@ $(function () {
     lengthMenu: [10, 25, 50, 100],
     searchDelay: 250,
     order: [[0, 'asc']],
+    initComplete: function () {
+      ensureBulkDownloadButton();
+      updateBulkDownloadButtonState();
+    },
+    drawCallback: function () {
+      ensureBulkDownloadButton();
+      updateBulkDownloadButtonState();
+    },
     ajax: function (requestData, callback) {
-      var firstOrder = requestData.order && requestData.order.length ? requestData.order[0] : null;
-      var orderColumnIndex = firstOrder && firstOrder.column !== undefined ? parseInt(firstOrder.column, 10) : NaN;
-      var sortBy = Number.isInteger(orderColumnIndex) ? sortableColumnMap[orderColumnIndex] || 'material_code' : 'material_code';
-      var requestPayload = {
-        draw: requestData.draw,
-        start: requestData.start || 0,
-        length: requestData.length || 25,
-        sort_by: sortBy,
-        sort_dir: firstOrder && firstOrder.dir === 'desc' ? 'desc' : 'asc',
-        warehouse: getWarehouseFilterValue(),
-        search: {
-          value: requestData.search && requestData.search.value ? requestData.search.value : ''
-        }
-      };
+      var requestPayload = buildTableRequestPayload(requestData);
 
       runTableRequest(requestData, callback, requestPayload, false);
     },
@@ -1354,7 +1716,7 @@ $(function () {
       paginate: {
         first: 'Prva',
         last: 'Zadnja',
-        next: 'Sljedeca',
+        next: 'Sljedeća',
         previous: 'Prethodna'
       }
     }
@@ -1493,6 +1855,9 @@ $(function () {
 
   if (warehouseFilterInput) {
     warehouseFilterInput.addEventListener('change', function () {
+      lastTableRecordsFiltered = 0;
+      updateBulkDownloadButtonState();
+
       if (dataTable) {
         dataTable.ajax.reload(null, true);
       }

@@ -60,6 +60,22 @@
     flex: 1 1 260px;
   }
 
+  .material-table-inline-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .material-table-inline-controls .dataTables_length {
+    margin-bottom: 0;
+  }
+
+  .material-bulk-download-btn {
+    white-space: nowrap;
+    margin-top: 5px!important;
+  }
+
   .material-barcode-generator-wrapper {
     --wo-table-scroll-track: var(--app-scroll-track);
     --wo-table-scroll-thumb: var(--app-scroll-thumb-flat);
@@ -589,6 +605,16 @@
     .material-create-form-grid {
       grid-template-columns: 1fr;
     }
+
+    .material-table-inline-controls {
+      width: 100%;
+      align-items: stretch;
+    }
+
+    .material-bulk-download-btn {
+      width: 100%;
+      justify-content: center;
+    }
   }
 </style>
 @endsection
@@ -610,7 +636,7 @@
             @if(!empty($stockWarehouseOptions))
               <div class="material-warehouse-filter">
                 <select class="form-select" id="material-warehouse-filter">
-                  <option value="">Filtriraj po skladištu</option>
+                  <option value="">Sva skladišta</option>
                   @foreach(($stockWarehouseOptions ?? []) as $warehouseName)
                     <option value="{{ $warehouseName }}">{{ $warehouseName }}</option>
                   @endforeach
@@ -700,6 +726,7 @@
 <script src="{{asset('vendors/js/tables/datatable/dataTables.bootstrap5.min.js')}}"></script>
 <script src="{{asset('vendors/js/tables/datatable/dataTables.responsive.min.js')}}"></script>
 <script src="{{asset('vendors/js/tables/datatable/responsive.bootstrap5.js')}}"></script>
+<script src="{{ asset(mix('vendors/js/tables/datatable/jszip.min.js')) }}"></script>
 <script src="{{asset('vendors/js/extensions/sweetalert2.all.min.js')}}"></script>
 @endsection
 
@@ -707,5 +734,5 @@
 <script>
   window.materialBarcodeGeneratorConfig = @json($materialBarcodeGeneratorConfig);
 </script>
-<script src="{{asset('js/scripts/pages/app-material.js?v=10')}}"></script>
+<script src="{{asset('js/scripts/pages/app-material.js?v=12')}}"></script>
 @endsection
