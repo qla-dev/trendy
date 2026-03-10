@@ -41,10 +41,10 @@ class Material extends Model
         $resolvedLimit = self::resolveScannerLimit($limit);
         $resolvedOffset = max(0, (int) $offset);
         $normalizedSets = self::normalizeMaterialsSets($materialsSets);
-        $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
         $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
-        $query = DB::table($stockTable)
-            ->join($itemsTable, function ($join) {
+        $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
+        $query = DB::table($itemsTable)
+            ->leftJoin($stockTable, function ($join) {
                 $join->whereRaw("LTRIM(RTRIM(ISNULL(s.acIdent, ''))) = LTRIM(RTRIM(ISNULL(i.acIdent, '')))");
             })
             ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) <> ''");
@@ -66,7 +66,6 @@ class Material extends Model
             ->selectRaw("MIN(LTRIM(RTRIM(ISNULL(s.acWarehouse, '')))) as material_warehouse")
             ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as material_qty")
             ->groupBy('i.acIdent', 'i.acName', 'i.acUM')
-            ->havingRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) <> 0")
             ->orderByRaw("CASE WHEN LEFT($codeExpr, 1) LIKE '[A-Za-z]' THEN 0 WHEN LEFT($codeExpr, 1) LIKE '[0-9]' THEN 2 ELSE 1 END ASC")
             ->orderByRaw("UPPER($codeExpr) ASC")
             ->offset($resolvedOffset)
@@ -308,11 +307,10 @@ class Material extends Model
     {
         $normalizedSets = self::normalizeMaterialsSets($materialsSets);
 
-        $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
         $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
-
-        $query = DB::table($stockTable)
-            ->join($itemsTable, function ($join) {
+        $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
+        $query = DB::table($itemsTable)
+            ->leftJoin($stockTable, function ($join) {
                 $join->whereRaw("LTRIM(RTRIM(ISNULL(s.acIdent, ''))) = LTRIM(RTRIM(ISNULL(i.acIdent, '')))");
             })
             ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) <> ''");
@@ -328,8 +326,7 @@ class Material extends Model
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) as material_code")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acName, ''))) as material_name")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as material_um")
-            ->groupBy('i.acIdent', 'i.acName', 'i.acUM')
-            ->havingRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) <> 0");
+            ->groupBy('i.acIdent', 'i.acName', 'i.acUM');
 
         return (int) DB::query()->fromSub($grouped, 'm')->count();
     }
