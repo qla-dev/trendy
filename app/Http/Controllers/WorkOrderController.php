@@ -530,7 +530,8 @@ class WorkOrderController extends Controller
 
             $this->attachSastavnicaToWorkOrder(
                 $routeId,
-                trim((string) ($mapped['sifra'] ?? $mapped['acIdent'] ?? $mapped['product_code'] ?? ''))
+                trim((string) ($mapped['sifra'] ?? $mapped['acIdent'] ?? $mapped['product_code'] ?? '')),
+                $created
             );
 
             return response()->json([
@@ -594,7 +595,11 @@ class WorkOrderController extends Controller
         }
     }
 
-    private function attachSastavnicaToWorkOrder(string $workOrderId, string $productCode): void
+    private function attachSastavnicaToWorkOrder(
+        string $workOrderId,
+        string $productCode,
+        bool $suppressStatusTransition = false
+    ): void
     {
         $workOrderId = trim($workOrderId);
         $productCode = trim($productCode);
@@ -644,6 +649,7 @@ class WorkOrderController extends Controller
                 'save_mode' => 'manual',
                 'components' => $components,
             ]);
+            $request->attributes->set('suppress_status_transition', $suppressStatusTransition);
 
             $this->storePlannedConsumption($request, $workOrderId);
         } catch (Throwable $exception) {
@@ -1401,6 +1407,7 @@ class WorkOrderController extends Controller
             $quantityUnit = strtoupper(trim((string) ($validated['quantity_unit'] ?? 'AUTO')));
             $userDescription = trim((string) ($validated['description'] ?? ''));
             $saveMode = strtolower(trim((string) ($validated['save_mode'] ?? 'manual')));
+            $suppressStatusTransition = (bool) $request->attributes->get('suppress_status_transition', false);
 
             if (trim($productId) === '') {
                 return response()->json([
@@ -1836,13 +1843,18 @@ class WorkOrderController extends Controller
                     'changed' => false,
                 ];
 
-                if ($this->savedRowsContainMaterialConsumption($saved)) {
+                if ($this->savedRowsContainMaterialConsumption($saved) && !$suppressStatusTransition) {
                     $statusTransition = $this->transitionWorkOrderStatusAfterConsumption(
                         $workOrderRow,
                         $workOrderColumns,
                         $userId,
                         $now
                     );
+                } elseif ($this->savedRowsContainMaterialConsumption($saved) && $suppressStatusTransition) {
+                    $statusTransition = [
+                        'changed' => false,
+                        'reason' => 'suppressed_for_fresh_create',
+                    ];
                 }
 
                 return [
