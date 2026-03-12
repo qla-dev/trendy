@@ -610,6 +610,11 @@ class WorkOrderController extends Controller
                 return;
             }
 
+            $headerPlannedQty = $this->sumSastavnicaHeaderQuantity($bomRows);
+            if ($headerPlannedQty !== null) {
+                $this->syncWorkOrderHeaderQuantityFromSastavnica($workOrderId, $headerPlannedQty);
+            }
+
             $components = array_values(array_filter(array_map(function ($bomRow) {
                 $componentId = trim((string) ($bomRow['acIdentChild'] ?? ''));
 
@@ -648,6 +653,65 @@ class WorkOrderController extends Controller
                 'message' => $exception->getMessage(),
             ]);
         }
+    }
+
+    private function sumSastavnicaHeaderQuantity(array $bomRows): ?float
+    {
+        $totalQty = 0.0;
+        $hasQty = false;
+
+        foreach ($bomRows as $bomRow) {
+            if (!is_array($bomRow)) {
+                continue;
+            }
+
+            $componentId = trim((string) ($bomRow['acIdentChild'] ?? ''));
+            if ($componentId === '') {
+                continue;
+            }
+
+            $itemKind = $this->resolveItemKindForPreview(
+                (string) ($bomRow['acOperationType'] ?? ''),
+                ''
+            );
+
+            if ($itemKind === 'operations') {
+                continue;
+            }
+
+            $componentQty = (float) ($this->toFloatOrNull($bomRow['anGrossQty'] ?? null) ?? 0.0);
+            if ($componentQty <= 0) {
+                continue;
+            }
+
+            $totalQty += $componentQty;
+            $hasQty = true;
+        }
+
+        return $hasQty ? $totalQty : null;
+    }
+
+    private function syncWorkOrderHeaderQuantityFromSastavnica(string $workOrderId, float $plannedQty): void
+    {
+        $workOrderRow = $this->findWorkOrderRow($workOrderId);
+        if ($workOrderRow === null) {
+            return;
+        }
+
+        $columns = $this->tableColumns();
+        $updates = [];
+
+        foreach (['anPlanQty', 'anQty', 'anQty1'] as $quantityColumn) {
+            if (in_array($quantityColumn, $columns, true)) {
+                $updates[$quantityColumn] = $plannedQty;
+            }
+        }
+
+        if (empty($updates) || $this->rowAlreadyHasUpdates($workOrderRow, $updates)) {
+            return;
+        }
+
+        $this->updateWorkOrderRow($workOrderRow, $updates);
     }
 
     public function updateInvoiceStatus(Request $request, string $id): JsonResponse
