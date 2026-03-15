@@ -250,10 +250,14 @@
     min-width: 300px;
     min-height: 72px;
     height: 72px;
-    border: 1px solid rgba(108, 129, 173, 0.28);
+    border: 1px solid rgba(123, 153, 210, 0.35);
     border-radius: 0.375rem;
     overflow: hidden;
-    background: rgba(9, 18, 36, 0.18);
+    background: rgba(9, 18, 36, 0.86);
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-note-stack.is-material-hidden {
+    background: rgba(9, 18, 36, 0.86);
   }
   #fine-adjust-bom-modal .fine-adjust-note-preview,
   #fine-adjust-bom-modal .fine-adjust-note-input {
@@ -275,6 +279,13 @@
     color: #dfe8ff;
     min-height: 100%;
     padding: 0;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-note-stack.is-material-hidden .fine-adjust-note-input {
+    flex: 1 1 auto;
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    background: rgba(9, 18, 36, 0.32);
   }
   #fine-adjust-bom-modal .fine-adjust-material-toggle {
     display: inline-flex;
@@ -465,6 +476,102 @@
     border-color: rgba(98, 120, 162, 0.32);
     border-radius: 0.375rem;
     pointer-events: none;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-plan-cell {
+    min-width: 230px;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-plan-stack {
+    position: relative;
+    min-width: 190px;
+    min-height: 54px;
+    height: 54px;
+    max-height: 54px;
+    overflow: hidden;
+    border-radius: 0.375rem;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-plan-input {
+    position: relative;
+    z-index: 1;
+    min-height: 54px;
+    height: 54px;
+    max-height: 54px;
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: 54px;
+    transition: padding 0.2s ease, line-height 0.2s ease;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-plan-stack.has-hint .fine-adjust-plan-input {
+    padding-top: 0.35rem;
+    padding-bottom: 1.2rem;
+    line-height: 1.4;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-plan-hint {
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.3rem;
+    min-height: 0;
+    padding: 0;
+    color: rgba(191, 208, 244, 0.72);
+    font-size: 0.6rem;
+    line-height: 1.1;
+    text-align: left;
+    white-space: normal;
+    word-break: break-word;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-plan-stack.has-hint .fine-adjust-plan-hint {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-note-stack.is-locked {
+    border-color: rgba(255, 201, 112, 0.78);
+    box-shadow: inset 0 0 0 1px rgba(255, 201, 112, 0.22);
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-note-stack.is-locked.is-aluminum {
+    border-color: rgba(127, 229, 255, 0.82);
+    box-shadow: inset 0 0 0 1px rgba(127, 229, 255, 0.24);
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-note-input.is-locked,
+  #fine-adjust-bom-modal .fine-adjust-plan-input.is-locked {
+    background: rgba(34, 28, 18, 0.72);
+    border-color: rgba(255, 201, 112, 0.78);
+    color: #ffe4af;
+    box-shadow: inset 0 0 0 1px rgba(255, 201, 112, 0.18);
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-note-stack.is-locked.is-aluminum .fine-adjust-note-input.is-locked,
+  #fine-adjust-bom-modal .fine-adjust-plan-stack.is-locked.is-aluminum .fine-adjust-plan-input.is-locked {
+    background: rgba(18, 34, 50, 0.76);
+    border-color: rgba(127, 229, 255, 0.82);
+    color: #a9f0ff;
+    box-shadow: inset 0 0 0 1px rgba(127, 229, 255, 0.2);
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-note-input.is-locked[readonly],
+  #fine-adjust-bom-modal .fine-adjust-plan-input.is-locked[readonly] {
+    cursor: not-allowed;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-plan-hint.is-locked {
+    color: #ffd27e;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-plan-stack.is-locked.is-aluminum .fine-adjust-plan-hint.is-locked {
+    color: #7fe5ff;
   }
 
   #fine-adjust-bom-modal .fine-adjust-input:focus {

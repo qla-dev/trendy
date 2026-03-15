@@ -3055,6 +3055,30 @@
       return planirano;
     }
 
+    function hasFineAdjustCompleteDimensions(row) {
+      var dim1 = parseDecimalValue(row && row.dim1 ? row.dim1 : 0, 0);
+      var dim2 = parseDecimalValue(row && row.dim2 ? row.dim2 : 0, 0);
+      var dim3 = parseDecimalValue(row && row.dim3 ? row.dim3 : 0, 0);
+
+      return dim1 > 0 && dim2 > 0 && dim3 > 0;
+    }
+
+    function formatFineAdjustDimensionValue(value) {
+      return formatQuantity(parseDecimalValue(value, 0));
+    }
+
+    function buildFineAdjustRawNote(row) {
+      if (!hasFineAdjustCompleteDimensions(row)) {
+        return '';
+      }
+
+      return [
+        formatFineAdjustDimensionValue(row.dim1),
+        formatFineAdjustDimensionValue(row.dim2),
+        formatFineAdjustDimensionValue(row.dim3)
+      ].join('x');
+    }
+
     function allTypeLabel() {
       return state.allType === 'operations' ? 'Operacije' : 'Materijali';
     }
@@ -3811,10 +3835,196 @@
       }
     }
 
+    function calculateFineAdjustBgSummary(row) {
+      var mode = row && row.materialMode === 'aluminum' ? 'aluminum' : 'steel';
+      var modeLabel = mode === 'aluminum' ? 'Alumijum' : '\u010Celik';
+      var density = mode === 'aluminum' ? 2800 : 7800;
+      var geometry = resolveFineAdjustGeometry(row);
+      var rawNote = buildFineAdjustRawNote(row);
+      var isLocked = hasFineAdjustCompleteDimensions(row) && geometry && geometry.type === 'rectangular';
+      var unitWeight = 0;
+      var calculationText = '';
+
+      if (!isLocked) {
+        return {
+          mode: mode,
+          density: density,
+          geometry: geometry,
+          unitWeight: 0,
+          totalWeight: 0,
+          note: rawNote,
+          calculatedPlanirano: '',
+          calculationText: calculationText,
+          isLocked: false
+        };
+      }
+
+      unitWeight = geometry.thickness * geometry.width * geometry.length * density / 1000000000;
+
+      if (!Number.isFinite(unitWeight) || unitWeight < 0) {
+        unitWeight = 0;
+      }
+
+      calculationText =
+        formatQuantity(geometry.thickness) +
+        ' x ' + formatQuantity(geometry.width) +
+        ' x ' + formatQuantity(geometry.length) +
+        ' x ' + density +
+        ' / 1e9 = ' + formatQuantity(unitWeight) + ' kg';
+
+      return {
+        mode: mode,
+        density: density,
+        geometry: geometry,
+        unitWeight: unitWeight,
+        totalWeight: unitWeight,
+        note: rawNote,
+        calculatedPlanirano: formatQuantity(unitWeight),
+        calculationText: calculationText,
+        isLocked: true
+      };
+    }
+
+    function syncFineAdjustComputedRow(row) {
+      if (!row || typeof row !== 'object') {
+        return row;
+      }
+
+      row.materialMode = row.materialMode === 'aluminum' ? 'aluminum' : inferFineAdjustMaterialMode(row);
+      var previousAutoNote = String(row._computedNapomena || '').trim();
+      var previousAutoPlanirano = String(row._computedPlanirano || '').trim();
+      var previousLockState = row._fineAdjustLocked === true;
+      row.bgSummary = calculateFineAdjustBgSummary(row);
+
+      var computedNote = row.bgSummary && row.bgSummary.note ? String(row.bgSummary.note).trim() : '';
+      var computedPlanirano = row.bgSummary && row.bgSummary.calculatedPlanirano
+        ? String(row.bgSummary.calculatedPlanirano).trim()
+        : '';
+      var isLocked = Boolean(row.bgSummary && row.bgSummary.isLocked);
+      var currentNote = String(row.napomena || '').trim();
+      var currentPlanirano = String(row.planirano || '').trim();
+
+      if (isLocked) {
+        currentNote = computedNote;
+        currentPlanirano = computedPlanirano;
+
+        if (!row.mj || String(row.mj).trim().toUpperCase() === 'AUTO') {
+          row.mj = 'KG';
+        }
+      } else {
+        if (previousLockState && currentNote === previousAutoNote) {
+          currentNote = '';
+        }
+
+        if (previousLockState && currentPlanirano === previousAutoPlanirano) {
+          currentPlanirano = '';
+        }
+      }
+
+      if (!isLocked && currentPlanirano === '') {
+        currentPlanirano = '0';
+      }
+
+      row._computedNapomena = computedNote;
+      row._computedPlanirano = computedPlanirano;
+      row._fineAdjustLocked = isLocked;
+      row.napomena = currentNote;
+      row.planirano = currentPlanirano;
+
+      return row;
+    }
+
+    function syncFineAdjustRowUi(rowIndex) {
+      var row = Array.isArray(state.fineAdjustRows) ? state.fineAdjustRows[rowIndex] : null;
+      var rowEl = fineAdjustBodyEl ? fineAdjustBodyEl.querySelector('tr[data-row="' + rowIndex + '"]') : null;
+
+      if (!row || !rowEl) {
+        return;
+      }
+
+      syncFineAdjustComputedRow(row);
+
+      var noteInputEl = rowEl.querySelector('.fine-adjust-input[data-field="napomena"]');
+      var noteStackEl = rowEl.querySelector('.fine-adjust-note-stack');
+      var planInputEl = rowEl.querySelector('.fine-adjust-input[data-field="planirano"]');
+      var planStackEl = rowEl.querySelector('.fine-adjust-plan-stack');
+      var planHintEl = rowEl.querySelector('.fine-adjust-plan-hint');
+      var toggleWrapEl = rowEl.querySelector('.fine-adjust-material-toggle');
+      var mode = row.materialMode === 'aluminum' ? 'aluminum' : 'steel';
+      var isLocked = row._fineAdjustLocked === true;
+      var showMaterialToggle = hasFineAdjustCompleteDimensions(row);
+      var calculationText = row.bgSummary && row.bgSummary.calculationText
+        ? String(row.bgSummary.calculationText)
+        : '';
+
+      if (noteInputEl) {
+        if (!isLocked) {
+          var liveNoteValue = String(noteInputEl.value || '').trim();
+          if (liveNoteValue !== '' && liveNoteValue !== String(row.napomena || '').trim()) {
+            row.napomena = liveNoteValue;
+          }
+        }
+
+        noteInputEl.value = String(row.napomena || '').trim();
+        noteInputEl.placeholder = isLocked ? '' : 'Unesite napomenu';
+        noteInputEl.title = noteInputEl.value || noteInputEl.placeholder;
+        noteInputEl.readOnly = isLocked;
+        noteInputEl.classList.toggle('is-locked', isLocked);
+      }
+
+      if (noteStackEl) {
+        noteStackEl.classList.toggle('is-locked', isLocked);
+        noteStackEl.classList.toggle('is-material-hidden', !showMaterialToggle);
+        noteStackEl.classList.toggle('is-aluminum', mode === 'aluminum');
+        noteStackEl.classList.toggle('is-steel', mode === 'steel');
+      }
+
+      var dim1InputEl = rowEl.querySelector('.fine-adjust-input[data-field="dim1"]');
+      var dim2InputEl = rowEl.querySelector('.fine-adjust-input[data-field="dim2"]');
+      var dim3InputEl = rowEl.querySelector('.fine-adjust-input[data-field="dim3"]');
+
+      if (dim1InputEl) {
+        dim1InputEl.value = String(row.dim1 || '');
+      }
+      if (dim2InputEl) {
+        dim2InputEl.value = String(row.dim2 || '');
+      }
+      if (dim3InputEl) {
+        dim3InputEl.value = String(row.dim3 || '');
+      }
+
+      if (planInputEl) {
+        planInputEl.value = String(row.planirano || '').trim();
+        planInputEl.placeholder = '';
+        planInputEl.title = calculationText;
+        planInputEl.readOnly = isLocked;
+        planInputEl.classList.toggle('is-locked', isLocked);
+      }
+
+      if (planStackEl) {
+        planStackEl.classList.toggle('has-hint', calculationText !== '');
+        planStackEl.classList.toggle('is-locked', isLocked);
+        planStackEl.classList.toggle('is-aluminum', mode === 'aluminum');
+        planStackEl.classList.toggle('is-steel', mode === 'steel');
+      }
+
+      if (planHintEl) {
+        planHintEl.textContent = calculationText;
+        planHintEl.title = calculationText;
+        planHintEl.classList.toggle('is-locked', isLocked);
+      }
+
+      if (toggleWrapEl) {
+        toggleWrapEl.classList.toggle('d-none', !showMaterialToggle);
+        toggleWrapEl.classList.toggle('is-aluminum', mode === 'aluminum');
+        toggleWrapEl.classList.toggle('is-steel', mode === 'steel');
+      }
+    }
+
     function buildFineAdjustRowsFromSelection() {
       return selectedDetailedRows()
         .map(function (row) {
-          var planiranoQty = 0;
+          var planiranoQty = '';
           var zalihaQty = Number(row.stockQty);
           if (!Number.isFinite(zalihaQty)) {
             zalihaQty = resolveKnownStock(row.acIdentChild || '');
@@ -3828,7 +4038,7 @@
           var dim2 = '';
           var dim3 = '';
 
-          if (parsedGeometry && parsedGeometry.type === 'rect') {
+          if (parsedGeometry && parsedGeometry.type === 'rectangular') {
             dim1 = parsedGeometry.thickness ? String(parsedGeometry.thickness) : '';
             dim2 = parsedGeometry.width ? String(parsedGeometry.width) : '';
             dim3 = parsedGeometry.length ? String(parsedGeometry.length) : '';
@@ -3974,6 +4184,157 @@
             rowData.zaliha
           )
         );
+
+        rows.push(rowData);
+      });
+
+      return rows;
+    }
+
+    function renderFineAdjustRows() {
+      if (!fineAdjustBodyEl) {
+        return;
+      }
+
+      if (!Array.isArray(state.fineAdjustRows) || state.fineAdjustRows.length === 0) {
+        fineAdjustBodyEl.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-2">Nema odabranih stavki.</td></tr>';
+        if (fineAdjustCountEl) {
+          fineAdjustCountEl.textContent = 'Stavki: 0';
+        }
+        return;
+      }
+
+      var fields = [
+        'alternativa', 'pozicija', 'artikal', 'opis', 'slika', 'dim1', 'dim2', 'dim3', 'napomena', 'planirano', 'zaliha', 'mj'
+      ];
+
+      var html = state.fineAdjustRows.map(function (row, rowIndex) {
+        syncFineAdjustComputedRow(row);
+
+        var cells = fields.map(function (field) {
+          if (field === 'napomena') {
+            var noteValue = escapeHtml(row[field] || '');
+            var mode = row.materialMode === 'aluminum' ? 'aluminum' : 'steel';
+            var noteLocked = row._fineAdjustLocked === true;
+            var showMaterialToggle = hasFineAdjustCompleteDimensions(row);
+
+            return '' +
+              '<td class="fine-adjust-note-cell">' +
+                '<div class="fine-adjust-note-stack' + (noteLocked ? ' is-locked' : '') + (showMaterialToggle ? '' : ' is-material-hidden') + '">' +
+                  '<div class="fine-adjust-material-toggle ' + (mode === 'aluminum' ? 'is-aluminum' : 'is-steel') + (showMaterialToggle ? '' : ' d-none') + '">' +
+                    '<span class="fine-adjust-material-label is-aluminum"><i class="fa fa-cubes"></i><span>Alumijum</span></span>' +
+                    '<button type="button" class="fine-adjust-material-switch" data-row="' + rowIndex + '" aria-label="Prebaci materijal izmedu Alumijuma i \u010Celika">' +
+                      '<span class="fine-adjust-material-switch-thumb"></span>' +
+                    '</button>' +
+                    '<span class="fine-adjust-material-label is-steel"><i class="fa fa-industry"></i><span>\u010Celik</span></span>' +
+                  '</div>' +
+                  '<input type="text" class="form-control form-control-sm fine-adjust-input fine-adjust-note-input' + (noteLocked ? ' is-locked' : '') + '" data-row="' + rowIndex + '" data-field="napomena" value="' + noteValue + '" placeholder="' + (noteLocked ? '' : 'Unesite napomenu') + '"' + (noteLocked ? ' readonly' : '') + ' />' +
+                '</div>' +
+              '</td>';
+          }
+
+          if (field === 'mj') {
+            var rawMjValue = String(row[field] || '').trim().toUpperCase();
+            var mjValue = (rawMjValue === 'AUTO' || rawMjValue === 'KG' || rawMjValue === 'MJ') ? rawMjValue : 'AUTO';
+            return '' +
+              '<td><select class="form-select form-select-sm fine-adjust-input fine-adjust-select" data-row="' + rowIndex + '" data-field="mj">' +
+                '<option value="AUTO"' + (mjValue === 'AUTO' ? ' selected' : '') + '>AUTO</option>' +
+                '<option value="KG"' + (mjValue === 'KG' ? ' selected' : '') + '>KG</option>' +
+                '<option value="MJ"' + (mjValue === 'MJ' ? ' selected' : '') + '>MJ</option>' +
+              '</select></td>';
+          }
+
+          if (field === 'zaliha') {
+            var readonlyValue = escapeHtml(row[field] || '0');
+            return '<td><input type="text" class="form-control form-control-sm fine-adjust-readonly" value="' + readonlyValue + '" readonly tabindex="-1"></td>';
+          }
+
+          if (field === 'dim1' || field === 'dim2' || field === 'dim3') {
+            var dimensionValue = escapeHtml(row[field] || '');
+            return '<td><input type="number" class="form-control form-control-sm fine-adjust-input" ' +
+              'data-row="' + rowIndex + '" data-field="' + field + '" value="' + dimensionValue + '" step="0.01" min="0"></td>';
+          }
+
+          if (field === 'planirano') {
+            var planValue = escapeHtml(row[field] || '0');
+            var planLocked = row._fineAdjustLocked === true;
+            var planHint = escapeHtml(
+              row && row.bgSummary && row.bgSummary.calculationText
+                ? String(row.bgSummary.calculationText)
+                : ''
+            );
+
+            return '' +
+              '<td class="fine-adjust-plan-cell">' +
+                '<div class="fine-adjust-plan-stack' + (planLocked ? ' is-locked' : '') + (planHint ? ' has-hint' : '') + '">' +
+                  '<input type="number" class="form-control form-control-sm fine-adjust-input fine-adjust-plan-input' + (planLocked ? ' is-locked' : '') + '" ' +
+                    'data-row="' + rowIndex + '" data-field="planirano" value="' + planValue + '" step="0.0001" min="0" placeholder="" title="' + planHint + '"' + (planLocked ? ' readonly' : '') + '>' +
+                  '<div class="fine-adjust-plan-hint' + (planLocked ? ' is-locked' : '') + '" title="' + planHint + '">' + planHint + '</div>' +
+                '</div>' +
+              '</td>';
+          }
+
+          var value = escapeHtml(row[field] || '');
+          var inputType = (field === 'pozicija' || field === 'alternativa')
+            ? 'number'
+            : 'text';
+          var stepAttr = inputType === 'number' ? ' step="0.0001"' : '';
+
+          return '<td><input type="' + inputType + '" class="form-control form-control-sm fine-adjust-input" ' +
+            'data-row="' + rowIndex + '" data-field="' + field + '" value="' + value + '"' + stepAttr + '></td>';
+        }).join('');
+
+        return '<tr data-row="' + rowIndex + '">' + cells + '</tr>';
+      }).join('');
+
+      fineAdjustBodyEl.innerHTML = html;
+
+      state.fineAdjustRows.forEach(function (unusedRow, rowIndex) {
+        syncFineAdjustRowUi(rowIndex);
+      });
+
+      if (fineAdjustCountEl) {
+        fineAdjustCountEl.textContent = 'Stavki: ' + state.fineAdjustRows.length;
+      }
+    }
+
+    function collectFineAdjustRowsFromDom() {
+      if (!fineAdjustBodyEl) {
+        return [];
+      }
+
+      var rows = [];
+      var rowElements = fineAdjustBodyEl.querySelectorAll('tr[data-row]');
+
+      rowElements.forEach(function (rowEl) {
+        var rowIndex = Number(rowEl.getAttribute('data-row') || 0);
+        var existingRow = Array.isArray(state.fineAdjustRows) ? state.fineAdjustRows[rowIndex] : null;
+        var rowData = existingRow && typeof existingRow === 'object'
+          ? Object.assign({}, existingRow)
+          : {};
+        var inputs = rowEl.querySelectorAll('.fine-adjust-input[data-field]');
+
+        inputs.forEach(function (inputEl) {
+          var field = String(inputEl.getAttribute('data-field') || '').trim();
+          if (!field) {
+            return;
+          }
+
+          rowData[field] = String(inputEl.value || '').trim();
+        });
+
+        syncFineAdjustComputedRow(rowData);
+
+        if (String(rowData.planirano || '').trim() !== '') {
+          rowData.planirano = String(
+            clampPlaniranoToZaliha(
+              rowData.planirano,
+              rowData.zaliha
+            )
+          );
+        } else {
+          rowData.planirano = '';
+        }
 
         rows.push(rowData);
       });
@@ -4375,6 +4736,217 @@
           components: selectedComponents
         })
       }).then(parseResponse);
+    }
+
+    function saveFineAdjustedConsumption() {
+      var editedRows = collectFineAdjustRowsFromDom();
+      state.fineAdjustRows = editedRows.slice();
+
+      var unique = new Map();
+      editedRows.forEach(function (row) {
+        var componentId = String((row && row.artikal) || '').trim();
+        var lineNo = Number((row && row.pozicija) || 0);
+        var opis = String((row && row.opis) || '').trim();
+        var unitValue = String((row && row.mj) || '').trim().toUpperCase();
+        var sourceUnitValue = String((row && row.acUMSource) || '').trim().toUpperCase();
+        var operationTypeValue = String((row && row.acOperationType) || '').trim().toUpperCase();
+        var planiranoRawValue = String((row && row.planirano) || '').trim();
+        var planiranoValue = parseDecimalValue(planiranoRawValue, 0);
+        var zalihaValue = parseDecimalValue((row && row.zaliha) || 0, 0);
+
+        if (!componentId || !Number.isFinite(lineNo)) {
+          return;
+        }
+
+        var key = bomKey(lineNo, componentId);
+        var normalizedOperationType = (operationTypeValue === 'M' || operationTypeValue === 'O')
+          ? operationTypeValue
+          : '';
+
+        var normalizedSourceUnit = sourceUnitValue === 'AUTO'
+          ? ''
+          : sourceUnitValue.slice(0, 3);
+
+        var normalizedUnit = (unitValue === 'KG' || unitValue === 'MJ')
+          ? unitValue
+          : normalizedSourceUnit;
+
+        unique.set(key, {
+          acIdentChild: componentId,
+          anNo: lineNo,
+          acDescr: opis,
+          dim1: String((row && row.dim1) || '').trim(),
+          dim2: String((row && row.dim2) || '').trim(),
+          dim3: String((row && row.dim3) || '').trim(),
+          acUM: normalizedUnit,
+          acUMSource: normalizedSourceUnit,
+          acOperationType: normalizedOperationType,
+          anPlanQty: planiranoRawValue === ''
+            ? null
+            : clampPlaniranoToZaliha(planiranoValue, zalihaValue),
+          napomena: String((row && row.napomena) || '').trim()
+        });
+      });
+
+      var selected = Array.from(unique.values());
+      var quantity = 1;
+      var unitSet = new Set(
+        editedRows.map(function (row) {
+          var value = String((row && row.mj) || '').trim().toUpperCase();
+          return (value === 'AUTO' || value === 'KG' || value === 'MJ') ? value : 'AUTO';
+        })
+      );
+      var quantityUnit = unitSet.size === 1 ? Array.from(unitSet)[0] : 'AUTO';
+      var description = '';
+
+      submitPlannedConsumption(
+        selected,
+        quantity,
+        quantityUnit,
+        description,
+        fineAdjustSaveBtn,
+        '<i class="fa fa-check me-50"></i> Potvrdi i dodaj na RN'
+      );
+    }
+
+    function saveFineAdjustedConsumption() {
+      var editedRows = collectFineAdjustRowsFromDom();
+      state.fineAdjustRows = editedRows.slice();
+
+      var unique = new Map();
+      editedRows.forEach(function (row) {
+        var componentId = String((row && row.artikal) || '').trim();
+        var lineNo = Number((row && row.pozicija) || 0);
+        var opis = String((row && row.opis) || '').trim();
+        var unitValue = String((row && row.mj) || '').trim().toUpperCase();
+        var sourceUnitValue = String((row && row.acUMSource) || '').trim().toUpperCase();
+        var operationTypeValue = String((row && row.acOperationType) || '').trim().toUpperCase();
+        var planiranoRawValue = String((row && row.planirano) || '').trim();
+        var zalihaValue = parseDecimalValue((row && row.zaliha) || 0, 0);
+
+        if (!componentId || !Number.isFinite(lineNo)) {
+          return;
+        }
+
+        var key = bomKey(lineNo, componentId);
+        var normalizedOperationType = (operationTypeValue === 'M' || operationTypeValue === 'O')
+          ? operationTypeValue
+          : '';
+
+        var normalizedSourceUnit = sourceUnitValue === 'AUTO'
+          ? ''
+          : sourceUnitValue.slice(0, 3);
+
+        var normalizedUnit = (unitValue === 'KG' || unitValue === 'MJ')
+          ? unitValue
+          : normalizedSourceUnit;
+
+        unique.set(key, {
+          acIdentChild: componentId,
+          anNo: lineNo,
+          acDescr: opis,
+          dim1: String((row && row.dim1) || '').trim(),
+          dim2: String((row && row.dim2) || '').trim(),
+          dim3: String((row && row.dim3) || '').trim(),
+          acUM: normalizedUnit,
+          acUMSource: normalizedSourceUnit,
+          acOperationType: normalizedOperationType,
+          anPlanQty: planiranoRawValue === ''
+            ? null
+            : clampPlaniranoToZaliha(planiranoRawValue, zalihaValue),
+          napomena: String((row && row.napomena) || '').trim()
+        });
+      });
+
+      var selected = Array.from(unique.values());
+      var quantity = 1;
+      var unitSet = new Set(
+        editedRows.map(function (row) {
+          var value = String((row && row.mj) || '').trim().toUpperCase();
+          return (value === 'AUTO' || value === 'KG' || value === 'MJ') ? value : 'AUTO';
+        })
+      );
+      var quantityUnit = unitSet.size === 1 ? Array.from(unitSet)[0] : 'AUTO';
+      var description = '';
+
+      submitPlannedConsumption(
+        selected,
+        quantity,
+        quantityUnit,
+        description,
+        fineAdjustSaveBtn,
+        '<i class="fa fa-check me-50"></i> Potvrdi i dodaj na RN'
+      );
+    }
+
+    function saveFineAdjustedConsumption() {
+      var editedRows = collectFineAdjustRowsFromDom();
+      state.fineAdjustRows = editedRows.slice();
+
+      var unique = new Map();
+      editedRows.forEach(function (row) {
+        var componentId = String((row && row.artikal) || '').trim();
+        var lineNo = Number((row && row.pozicija) || 0);
+        var opis = String((row && row.opis) || '').trim();
+        var unitValue = String((row && row.mj) || '').trim().toUpperCase();
+        var sourceUnitValue = String((row && row.acUMSource) || '').trim().toUpperCase();
+        var operationTypeValue = String((row && row.acOperationType) || '').trim().toUpperCase();
+        var planiranoRawValue = String((row && row.planirano) || '').trim();
+        var zalihaValue = parseDecimalValue((row && row.zaliha) || 0, 0);
+
+        if (!componentId || !Number.isFinite(lineNo)) {
+          return;
+        }
+
+        var key = bomKey(lineNo, componentId);
+        var normalizedOperationType = (operationTypeValue === 'M' || operationTypeValue === 'O')
+          ? operationTypeValue
+          : '';
+
+        var normalizedSourceUnit = sourceUnitValue === 'AUTO'
+          ? ''
+          : sourceUnitValue.slice(0, 3);
+
+        var normalizedUnit = (unitValue === 'KG' || unitValue === 'MJ')
+          ? unitValue
+          : normalizedSourceUnit;
+
+        unique.set(key, {
+          acIdentChild: componentId,
+          anNo: lineNo,
+          acDescr: opis,
+          dim1: String((row && row.dim1) || '').trim(),
+          dim2: String((row && row.dim2) || '').trim(),
+          dim3: String((row && row.dim3) || '').trim(),
+          acUM: normalizedUnit,
+          acUMSource: normalizedSourceUnit,
+          acOperationType: normalizedOperationType,
+          anPlanQty: planiranoRawValue === ''
+            ? null
+            : clampPlaniranoToZaliha(planiranoRawValue, zalihaValue),
+          napomena: String((row && row.napomena) || '').trim()
+        });
+      });
+
+      var selected = Array.from(unique.values());
+      var quantity = 1;
+      var unitSet = new Set(
+        editedRows.map(function (row) {
+          var value = String((row && row.mj) || '').trim().toUpperCase();
+          return (value === 'AUTO' || value === 'KG' || value === 'MJ') ? value : 'AUTO';
+        })
+      );
+      var quantityUnit = unitSet.size === 1 ? Array.from(unitSet)[0] : 'AUTO';
+      var description = '';
+
+      submitPlannedConsumption(
+        selected,
+        quantity,
+        quantityUnit,
+        description,
+        fineAdjustSaveBtn,
+        '<i class="fa fa-check me-50"></i> Potvrdi i dodaj na RN'
+      );
     }
 
     function resetConfirmContext() {
@@ -5200,6 +5772,76 @@
       });
     }
 
+    function saveFineAdjustedConsumption() {
+      var editedRows = collectFineAdjustRowsFromDom();
+      state.fineAdjustRows = editedRows.slice();
+
+      var unique = new Map();
+      editedRows.forEach(function (row) {
+        var componentId = String((row && row.artikal) || '').trim();
+        var lineNo = Number((row && row.pozicija) || 0);
+        var opis = String((row && row.opis) || '').trim();
+        var unitValue = String((row && row.mj) || '').trim().toUpperCase();
+        var sourceUnitValue = String((row && row.acUMSource) || '').trim().toUpperCase();
+        var operationTypeValue = String((row && row.acOperationType) || '').trim().toUpperCase();
+        var planiranoRawValue = String((row && row.planirano) || '').trim();
+        var zalihaValue = parseDecimalValue((row && row.zaliha) || 0, 0);
+
+        if (!componentId || !Number.isFinite(lineNo)) {
+          return;
+        }
+
+        var key = bomKey(lineNo, componentId);
+        var normalizedOperationType = (operationTypeValue === 'M' || operationTypeValue === 'O')
+          ? operationTypeValue
+          : '';
+
+        var normalizedSourceUnit = sourceUnitValue === 'AUTO'
+          ? ''
+          : sourceUnitValue.slice(0, 3);
+
+        var normalizedUnit = (unitValue === 'KG' || unitValue === 'MJ')
+          ? unitValue
+          : normalizedSourceUnit;
+
+        unique.set(key, {
+          acIdentChild: componentId,
+          anNo: lineNo,
+          acDescr: opis,
+          dim1: String((row && row.dim1) || '').trim(),
+          dim2: String((row && row.dim2) || '').trim(),
+          dim3: String((row && row.dim3) || '').trim(),
+          acUM: normalizedUnit,
+          acUMSource: normalizedSourceUnit,
+          acOperationType: normalizedOperationType,
+          anPlanQty: planiranoRawValue === ''
+            ? null
+            : clampPlaniranoToZaliha(planiranoRawValue, zalihaValue),
+          napomena: String((row && row.napomena) || '').trim()
+        });
+      });
+
+      var selected = Array.from(unique.values());
+      var quantity = 1;
+      var unitSet = new Set(
+        editedRows.map(function (row) {
+          var value = String((row && row.mj) || '').trim().toUpperCase();
+          return (value === 'AUTO' || value === 'KG' || value === 'MJ') ? value : 'AUTO';
+        })
+      );
+      var quantityUnit = unitSet.size === 1 ? Array.from(unitSet)[0] : 'AUTO';
+      var description = '';
+
+      submitPlannedConsumption(
+        selected,
+        quantity,
+        quantityUnit,
+        description,
+        fineAdjustSaveBtn,
+        '<i class="fa fa-check me-50"></i> Potvrdi i dodaj na RN'
+      );
+    }
+
     if (productSelect && !hasSelect2()) {
       productSelect.addEventListener('change', function () {
         markProceedSource('manual');
@@ -5244,6 +5886,11 @@
         }
 
         if (field === 'planirano') {
+          if (row._fineAdjustLocked === true) {
+            syncFineAdjustRowUi(rowIndex);
+            return;
+          }
+
           var zalihaValue = row ? row.zaliha : 0;
           var clamped = clampPlaniranoToZaliha(target.value, zalihaValue);
           var current = parseDecimalValue(target.value, 0);
@@ -5254,6 +5901,11 @@
 
           row.planirano = String(target.value || '').trim();
           syncFineAdjustRowUi(rowIndex);
+          return;
+        }
+
+        if (field === 'napomena') {
+          row.napomena = String(target.value || '').trim();
           return;
         }
 
