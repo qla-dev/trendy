@@ -345,6 +345,29 @@ $(function () {
     return rawValue;
   }
 
+  function formatQuantityValue(value) {
+    var normalizedValue = value;
+
+    if (normalizedValue === null || normalizedValue === undefined || normalizedValue === '') {
+      return '';
+    }
+
+    if (typeof normalizedValue === 'string') {
+      normalizedValue = normalizedValue.trim().replace(',', '.');
+    }
+
+    var numericValue = Number(normalizedValue);
+
+    if (!Number.isFinite(numericValue)) {
+      return (value || '').toString().trim();
+    }
+
+    return numericValue
+      .toFixed(3)
+      .replace(/\.?0+$/, '')
+      .replace('.', ',');
+  }
+
   function trimProductName(value, maxLength) {
     var normalizedValue = (value || '').toString().trim();
     var limit = Number(maxLength) || 5;
@@ -485,16 +508,15 @@ $(function () {
   // datatable
   if (dtInvoiceTable.length) {
     var currentStatusFilter = null;
-    var moneyColumnIndex = 5;
-    var moneyColumnVisible = null;
     var tableLoadingRequestCount = 0;
     var hasCompletedInitialTableLoad = false;
     var searchDebounceTimer = null;
     var searchOverlaySafetyTimer = null;
     var sortableColumnMap = {
       0: 'id',
+      4: 'kolicina',
+      5: 'klijent',
       6: 'datum_kreiranja',
-      4: 'klijent',
       7: 'status',
       8: 'prioritet'
     };
@@ -855,12 +877,6 @@ $(function () {
         data: params,
         success: function (response) {
           updateStatusCards(response.statusStats || {});
-          var showMoneyColumn = !!(response.meta && response.meta.has_money_values);
-
-          if (moneyColumnVisible !== showMoneyColumn && dtInvoice && typeof dtInvoice.column === 'function') {
-            dtInvoice.column(moneyColumnIndex).visible(showMoneyColumn, false);
-            moneyColumnVisible = showMoneyColumn;
-          }
 
           callback({
             draw: requestData.draw,
@@ -915,8 +931,8 @@ $(function () {
           { data: 'broj_narudzbe' },
           { data: 'naziv' },
           { data: 'sifra' },
+          { data: 'kolicina' },
           { data: 'klijent' },
-          { data: 'vrednost' },
           { data: 'datum_kreiranja' },
           { data: 'status' },
           { data: 'prioritet' }
@@ -935,7 +951,7 @@ $(function () {
       columnDefs: (function () {
         var columnDefs = [
         {
-          targets: [1, 2, 3, 5],
+          targets: [1, 2, 3],
           orderable: false
         },
         {
@@ -1009,6 +1025,29 @@ $(function () {
         },
         {
           targets: 4,
+          className: 'align-middle',
+          width: '110px',
+          render: function (data, type, full) {
+            var quantity = formatQuantityValue(full['kolicina']);
+            var quantityUnit = (full['mj'] || '').toString().trim();
+
+            if (!quantity) {
+              return '<span class="d-none">0</span><span class="text-muted">-</span>';
+            }
+
+            return (
+              '<span class="d-none">' +
+              quantity.replace(',', '.') +
+              '</span>' +
+              '<span class="text-nowrap fw-semibold">' +
+              escapeHtml(quantity) +
+              (quantityUnit ? ' <small class="text-muted">' + escapeHtml(quantityUnit) + '</small>' : '') +
+              '</span>'
+            );
+          }
+        },
+        {
+          targets: 5,
           width: '270px',
           render: function (data, type, full) {
             var name = full['klijent'] || 'N/A',
@@ -1051,24 +1090,6 @@ $(function () {
               '</div>' +
               '</div>'
             );
-          }
-        },
-        {
-          targets: 5,
-          width: '73px',
-          render: function (data, type, full) {
-            var total = full['vrednost'];
-            var numericTotal = Number(total);
-            var hasValue = total !== null && total !== '' && Number.isFinite(numericTotal);
-
-            if (!hasValue) {
-              return '<span class="d-none">0</span>-';
-            }
-
-            var currency = (full['valuta'] || '').toString().trim();
-            var formatted = currency ? currency + ' ' + numericTotal : numericTotal;
-
-            return '<span class="d-none">' + numericTotal + '</span>' + formatted;
           }
         },
         {

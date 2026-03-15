@@ -6,6 +6,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AppsController;
 use App\Http\Controllers\MaterialsController;
 use App\Http\Controllers\OperationsController;
+use App\Http\Controllers\ProductsController;
 use App\Http\Controllers\WorkOrderController;
 use App\Http\Controllers\UserInterfaceController;
 use App\Http\Controllers\CardsController;
@@ -67,7 +68,7 @@ Route::middleware('auth:web')->group(function () {
         Route::get('invoice/preview/{id?}', [WorkOrderController::class, 'invoicePreview'])->name('app-invoice-preview');
         Route::post('invoice/preview/{id}/status', [WorkOrderController::class, 'updateInvoiceStatus'])->name('app-invoice-update-status');
         Route::post('invoice/preview/{id}/priority', [WorkOrderController::class, 'updateInvoicePriority'])->name('app-invoice-update-priority');
-        Route::get('invoice/preview/{id}/products', [WorkOrderController::class, 'workOrderProducts'])->name('app-invoice-products');
+        Route::get('invoice/preview/{id}/products', [ProductsController::class, 'scannerIndex'])->name('app-invoice-products');
         Route::get('invoice/preview/{id}/bom', [WorkOrderController::class, 'workOrderBom'])->name('app-invoice-bom');
         Route::get('invoice/preview/{id}/all-materials', [MaterialsController::class, 'scannerIndex'])->name('app-invoice-all-materials');
         Route::get('invoice/preview/{id}/all-operations', [OperationsController::class, 'scannerIndex'])->name('app-invoice-all-operations');

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Material;
+use App\Models\Product;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,6 +44,7 @@ class WorkOrderController extends Controller
 
     private ?array $deliveryPriorityMap = null;
     private ?array $orderTableColumnsCache = null;
+    private ?array $orderItemTableColumnsCache = null;
     private ?array $tableNonInsertableColumnsCache = null;
     private ?array $tableStringLengthMapCache = null;
     private array $linkedOrderCache = [];
@@ -1617,7 +1619,8 @@ class WorkOrderController extends Controller
                 $hasNoteColumn,
                 $hasStatementColumn,
                 $manualNoInsert,
-                $manualQIdInsert
+                $manualQIdInsert,
+                $suppressStatusTransition
             ) {
                 $nextNo = null;
                 $nextQId = null;
@@ -3537,6 +3540,82 @@ class WorkOrderController extends Controller
         }
     }
 
+    private function findOrderItemRowByOrderContext(array $orderContext): ?array
+    {
+        $normalizedOrderKey = $this->normalizeComparableIdentifier((string) ($orderContext['order_key'] ?? ''));
+
+        if ($normalizedOrderKey === '') {
+            $normalizedOrderKey = $this->normalizeComparableIdentifier((string) ($orderContext['order_number'] ?? ''));
+        }
+
+        if ($normalizedOrderKey === '') {
+            return null;
+        }
+
+        $orderPosition = (int) ($orderContext['order_position'] ?? 0);
+        $normalizedProductCode = $this->normalizeComparableIdentifier((string) ($orderContext['product_code'] ?? ''));
+
+        try {
+            $orderItemColumns = $this->orderItemTableColumns();
+            $orderKeyColumns = $this->existingColumns($orderItemColumns, ['acKey', 'acLnkKey', 'acOrderKey', 'order_key']);
+            $orderPositionColumns = $this->existingColumns($orderItemColumns, ['anNo', 'anLineNo', 'anItemNo', 'anPosition', 'anPos', 'anPosNo']);
+            $orderProductColumns = $this->existingColumns($orderItemColumns, ['acIdent', 'product_code', 'acCode']);
+
+            if (empty($orderKeyColumns)) {
+                return null;
+            }
+
+            $query = $this->newOrderItemTableQuery()
+                ->where(function (Builder $orderKeyQuery) use ($orderKeyColumns, $normalizedOrderKey) {
+                    foreach ($orderKeyColumns as $index => $orderKeyColumn) {
+                        $normalizedExpression = $this->normalizedIdentifierExpression($orderKeyQuery, $orderKeyColumn);
+                        $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
+                        $orderKeyQuery->{$method}("$normalizedExpression = ?", [$normalizedOrderKey]);
+                    }
+                });
+
+            if ($orderPosition > 0 && !empty($orderPositionColumns)) {
+                $query->where(function (Builder $positionQuery) use ($orderPositionColumns, $orderPosition) {
+                    foreach ($orderPositionColumns as $index => $orderPositionColumn) {
+                        $method = $index === 0 ? 'where' : 'orWhere';
+                        $positionQuery->{$method}($orderPositionColumn, $orderPosition);
+                    }
+                });
+            }
+
+            if ($normalizedProductCode !== '' && !empty($orderProductColumns)) {
+                $query->where(function (Builder $productQuery) use ($orderProductColumns, $normalizedProductCode) {
+                    foreach ($orderProductColumns as $index => $orderProductColumn) {
+                        $normalizedExpression = $this->normalizedIdentifierExpression($productQuery, $orderProductColumn);
+                        $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
+                        $productQuery->{$method}("$normalizedExpression = ?", [$normalizedProductCode]);
+                    }
+                });
+            }
+
+            foreach (['adDate', 'adDateIns', 'adTimeIns', 'anNo', 'anQId'] as $orderByColumn) {
+                if (in_array($orderByColumn, $orderItemColumns, true)) {
+                    $query->orderByDesc($orderByColumn);
+                }
+            }
+
+            $row = $query->first();
+
+            return $row ? (array) $row : null;
+        } catch (Throwable $exception) {
+            Log::warning('Unable to resolve order item row for scanned work order QR.', [
+                'connection' => config('database.default'),
+                'order_items_table' => $this->qualifiedOrderItemTableName(),
+                'order_key' => $normalizedOrderKey,
+                'order_position' => $orderPosition,
+                'product_code' => $normalizedProductCode,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
     private function buildOrderLocatorContext(array $orderRow, array $orderLocator): array
     {
         $normalizedProductCode = trim((string) ($orderLocator['product_code'] ?? ''));
@@ -3632,14 +3711,23 @@ class WorkOrderController extends Controller
         }
 
         try {
-            $query = $this->newCatalogItemsTableQuery()
-                ->select(['acIdent', 'acName', 'acUM', 'acSetOfItem']);
+            $catalogProduct = Product::findCatalogProduct($normalizedProductCode);
+
+            if ($catalogProduct === null) {
+                return [];
+            }
+
+            $query = $this->newCatalogItemsTableQuery();
             $normalizedExpression = $this->normalizedIdentifierExpression($query, 'acIdent');
             $row = $query
                 ->whereRaw("$normalizedExpression = ?", [$normalizedProductCode])
                 ->first();
 
-            return $row ? (array) $row : [];
+            if ($row === null) {
+                return $catalogProduct;
+            }
+
+            return array_merge($catalogProduct, (array) $row);
         } catch (Throwable $exception) {
             Log::warning('Unable to resolve catalog item for scanned work order QR.', [
                 'connection' => config('database.default'),
@@ -3785,7 +3873,7 @@ class WorkOrderController extends Controller
         $username = is_object($user) ? trim((string) ($user->username ?? $user->name ?? '')) : '';
         $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
         $resolvedUnit = $this->resolveScanCreateWorkOrderUnit($orderRow, $orderContext);
-        $resolvedQuantity = $this->resolveScanCreateWorkOrderQuantity($orderRow);
+        $resolvedQuantity = $this->resolveScanCreateWorkOrderQuantity($orderRow, $orderContext);
 
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acKey', (string) ($numberContext['next_raw'] ?? ''));
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acKeyView', (string) ($numberContext['next_display'] ?? ''));
@@ -3874,17 +3962,41 @@ class WorkOrderController extends Controller
         return $catalogUnit;
     }
 
-    private function resolveScanCreateWorkOrderQuantity(array $orderRow): ?float
+    private function resolveScanCreateWorkOrderQuantity(array $orderRow, array $orderContext = []): ?float
     {
-        foreach (['anPlanQty', 'anQty', 'anQty1', 'anQtySeries', 'anOrdQty', 'anQuantity'] as $column) {
-            $resolvedValue = $this->toFloatOrNull($orderRow[$column] ?? null);
+        $orderItemRow = $this->findOrderItemRowByOrderContext($orderContext);
 
-            if ($resolvedValue === null) {
-                continue;
+        if (is_array($orderItemRow)) {
+            foreach (['anQty', 'anQtyDispDoc', 'anQtyConverted', 'anQty1', 'anPlanQty'] as $column) {
+                $resolvedValue = $this->toFloatOrNull($orderItemRow[$column] ?? null);
+
+                if ($resolvedValue === null) {
+                    continue;
+                }
+
+                if (abs($resolvedValue) > 0.000001) {
+                    return $resolvedValue;
+                }
             }
+        }
 
-            if (abs($resolvedValue) > 0.000001) {
-                return $resolvedValue;
+        $normalizedProductCode = $this->normalizeComparableIdentifier((string) ($orderContext['product_code'] ?? ''));
+
+        if ($normalizedProductCode !== '') {
+            $catalogRow = $this->findCatalogItemByNormalizedCode($normalizedProductCode);
+
+            if (!empty($catalogRow)) {
+                foreach (['anQty', 'anQty1', 'anPlanQty', 'anOrdQty', 'anQuantity', 'anDefQty', 'anDefaultQty', 'anStock'] as $column) {
+                    $resolvedValue = $this->toFloatOrNull($catalogRow[$column] ?? null);
+
+                    if ($resolvedValue === null) {
+                        continue;
+                    }
+
+                    if (abs($resolvedValue) > 0.000001) {
+                        return $resolvedValue;
+                    }
+                }
             }
         }
 
@@ -4028,6 +4140,8 @@ class WorkOrderController extends Controller
         $orderKey = trim((string) ($linkedOrder['order_key'] ?? $orderLinkKey));
         $orderNumber = trim((string) ($linkedOrder['order_number'] ?? $orderKey));
         $orderPosition = $this->valueTrimmed($row, ['anLnkNo'], null);
+        $quantity = $this->normalizeNullableNumber($this->value($row, ['anPlanQty', 'anQty', 'anQty1'], null));
+        $unit = (string) $this->valueTrimmed($row, ['acUM'], '');
 
         $mapped = [
             'responsive_id' => '',
@@ -4048,6 +4162,8 @@ class WorkOrderController extends Controller
             'broj_narudzbe' => $orderNumber,
             'narudzba_kljuc' => $orderKey,
             'broj_pozicije_narudzbe' => $orderPosition,
+            'kolicina' => $quantity,
+            'mj' => $unit,
         ];
 
         if ($includeRaw) {
@@ -5413,6 +5529,14 @@ class WorkOrderController extends Controller
             );
         }
 
+        if ($sortBy === 'kolicina') {
+            return $this->applyOrderByFirstNonEmptyNumeric(
+                $query,
+                $this->existingColumns($columns, ['anPlanQty', 'anQty', 'anQty1']),
+                $direction
+            );
+        }
+
         if ($sortBy === 'datum_kreiranja') {
             $hasDateOrdering = false;
 
@@ -5446,6 +5570,27 @@ class WorkOrderController extends Controller
         }, $candidateColumns);
 
         $query->orderByRaw('COALESCE(' . implode(', ', $coalesceParts) . ') ' . $direction);
+
+        return true;
+    }
+
+    private function applyOrderByFirstNonEmptyNumeric(Builder $query, array $candidateColumns, string $direction): bool
+    {
+        if (empty($candidateColumns)) {
+            return false;
+        }
+
+        $direction = strtolower($direction);
+        $direction = in_array($direction, ['asc', 'desc'], true) ? $direction : 'desc';
+        $grammar = $query->getGrammar();
+        $coalesceParts = array_map(function ($column) use ($grammar) {
+            $wrappedColumn = $grammar->wrap((string) $column);
+            return "TRY_CAST($wrappedColumn AS FLOAT)";
+        }, $candidateColumns);
+        $numericExpression = 'COALESCE(' . implode(', ', $coalesceParts) . ')';
+
+        $query->orderByRaw("CASE WHEN $numericExpression IS NULL THEN 1 ELSE 0 END ASC");
+        $query->orderByRaw("$numericExpression $direction");
 
         return true;
     }
@@ -5485,6 +5630,7 @@ class WorkOrderController extends Controller
             'klijent', 'kupac', 'client' => 'klijent',
             'status' => 'status',
             'prioritet', 'priority' => 'prioritet',
+            'kolicina', 'količina', 'qty', 'quantity' => 'kolicina',
             default => '',
         };
     }
@@ -5803,6 +5949,25 @@ class WorkOrderController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    private function orderItemTableColumns(): array
+    {
+        if ($this->orderItemTableColumnsCache !== null) {
+            return $this->orderItemTableColumnsCache;
+        }
+
+        $this->orderItemTableColumnsCache = DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->where('TABLE_SCHEMA', $this->tableSchema())
+            ->where('TABLE_NAME', $this->orderItemTableName())
+            ->pluck('COLUMN_NAME')
+            ->map(function ($columnName) {
+                return (string) $columnName;
+            })
+            ->values()
+            ->all();
+
+        return $this->orderItemTableColumnsCache;
     }
 
     private function orderTableColumns(): array
@@ -6235,6 +6400,11 @@ class WorkOrderController extends Controller
         return DB::table($this->qualifiedOrderTableName());
     }
 
+    private function newOrderItemTableQuery(): Builder
+    {
+        return DB::table($this->qualifiedOrderItemTableName());
+    }
+
     private function newCatalogItemsTableQuery(): Builder
     {
         return DB::table($this->qualifiedCatalogItemsTableName());
@@ -6288,6 +6458,11 @@ class WorkOrderController extends Controller
         return (string) config('workorders.orders_table', 'tHE_Order');
     }
 
+    private function orderItemTableName(): string
+    {
+        return (string) config('workorders.order_items_table', 'tHE_OrderItem');
+    }
+
     private function catalogItemsTableName(): string
     {
         return (string) config('workorders.catalog_items_table', 'tHE_SetItem');
@@ -6321,6 +6496,11 @@ class WorkOrderController extends Controller
     private function qualifiedOrderTableName(): string
     {
         return $this->tableSchema() . '.' . $this->orderTableName();
+    }
+
+    private function qualifiedOrderItemTableName(): string
+    {
+        return $this->tableSchema() . '.' . $this->orderItemTableName();
     }
 
     private function qualifiedCatalogItemsTableName(): string

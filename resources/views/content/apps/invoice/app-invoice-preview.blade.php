@@ -386,6 +386,17 @@
     padding: 0.85rem 1rem;
     margin-bottom: 0.85rem;
   }
+  .wo-product-hero-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+  }
+  .wo-product-hero-main {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
   .wo-product-kicker {
     display: block;
     font-size: 0.72rem;
@@ -435,6 +446,44 @@
     letter-spacing: 0.02em;
     line-height: 1;
     color: #28c76f;
+  }
+  .wo-product-qty {
+    margin-left: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: flex-start;
+    text-align: right;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .wo-product-qty-label {
+    font-size: 0.64rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: #6e6b7b;
+    line-height: 1;
+    margin-bottom: 0.3rem;
+  }
+  .wo-product-qty-metric {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 0.35rem;
+  }
+  .wo-product-qty-value {
+    font-size: 1.35rem;
+    line-height: 1;
+    font-weight: 800;
+    color: #5e5873;
+    letter-spacing: 0.01em;
+  }
+  .wo-product-qty-unit {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #6e6b7b;
+    letter-spacing: 0.04em;
   }
   .wo-chip-shell {
     border: 1px solid #ebe9f1;
@@ -801,6 +850,24 @@
   body.dark-layout .wo-product-code-value {
     color: #28c76f;
     text-shadow: 0 0 10px rgba(40, 199, 111, 0.18);
+  }
+  body.dark-layout .wo-product-qty-label,
+  body.semi-dark-layout .wo-product-qty-label,
+  .dark-layout .invoice-preview-wrapper .wo-product-qty-label,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-qty-label {
+    color: #c1c5d8;
+  }
+  body.dark-layout .wo-product-qty-value,
+  body.semi-dark-layout .wo-product-qty-value,
+  .dark-layout .invoice-preview-wrapper .wo-product-qty-value,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-qty-value {
+    color: #f1f3f9;
+  }
+  body.dark-layout .wo-product-qty-unit,
+  body.semi-dark-layout .wo-product-qty-unit,
+  .dark-layout .invoice-preview-wrapper .wo-product-qty-unit,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-qty-unit {
+    color: #c1c5d8;
   }
   body.dark-layout .wo-progress-shell {
     background: transparent;
@@ -1185,6 +1252,14 @@
       min-width: 0;
       width: 100%;
     }
+    .wo-product-hero-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .wo-product-qty {
+      width: 100%;
+      align-items: flex-end;
+    }
     .wo-kpi-shell .wo-kpi-grid {
       grid-template-columns: 1fr;
     }
@@ -1221,6 +1296,25 @@
     }
 
     return trim((string) $value) !== '' ? (string) $value : '-';
+  };
+  $displayNumber = static function ($value, int $precision = 3): string {
+    if ($value === null || $value === '') {
+      return '-';
+    }
+
+    if (!is_numeric((string) $value)) {
+      $trimmedValue = trim((string) $value);
+      return $trimmedValue !== '' ? $trimmedValue : '-';
+    }
+
+    $formatted = number_format((float) $value, $precision, '.', '');
+    $formatted = rtrim(rtrim($formatted, '0'), '.');
+
+    if ($formatted === '-0') {
+      return '0';
+    }
+
+    return str_replace('.', ',', $formatted);
   };
 
   $invoiceNumberDisplay = $displayValue($invoiceNumberDisplay);
@@ -1369,6 +1463,8 @@
   }
   $workOrderProductName = $displayValue($workOrderProductName);
   $workOrderProductCode = $displayValue($workOrderProductCode);
+  $workOrderQuantityDisplay = $displayNumber($workOrder['kolicina'] ?? null);
+  $workOrderQuantityUnit = $displayValue($workOrder['mj'] ?? null);
   $statusDisplayLabel = $displayValue($workOrder['status'] ?? null);
   $priorityDisplayLabel = $displayValue($workOrder['prioritet'] ?? null);
   $statusToneClass = 'secondary';
@@ -1485,14 +1581,29 @@
         @if($workOrderProductName !== '' || $workOrderProductCode !== '')
           <div class="card-body invoice-padding pt-2 pb-0">
             <div class="wo-product-hero">
-              <span class="wo-product-kicker">Naziv proizvoda</span>
-              <span class="wo-product-title">{{ $displayValue($workOrderProductName) }}</span>
-              @if($workOrderProductCode !== '')
-                <span class="wo-product-code-accent" aria-label="Šifra proizvoda">
-                  <span class="wo-product-code-label">Šifra proizvoda</span>
-                  <span class="wo-product-code-value">{{ $displayValue($workOrderProductCode) }}</span>
-                </span>
-              @endif
+              <div class="wo-product-hero-row">
+                <div class="wo-product-hero-main">
+                  <span class="wo-product-kicker">Naziv proizvoda</span>
+                  <span class="wo-product-title">{{ $displayValue($workOrderProductName) }}</span>
+                  @if($workOrderProductCode !== '')
+                    <span class="wo-product-code-accent" aria-label="Šifra proizvoda">
+                      <span class="wo-product-code-label">Šifra proizvoda</span>
+                      <span class="wo-product-code-value">{{ $displayValue($workOrderProductCode) }}</span>
+                    </span>
+                  @endif
+                </div>
+                @if($workOrderQuantityDisplay !== '-')
+                  <div class="wo-product-qty" aria-label="Količina proizvoda">
+                    <span class="wo-product-qty-label">Količina</span>
+                    <span class="wo-product-qty-metric">
+                      <span class="wo-product-qty-value">{{ $workOrderQuantityDisplay }}</span>
+                      @if($workOrderQuantityUnit !== '-')
+                        <span class="wo-product-qty-unit">{{ $workOrderQuantityUnit }}</span>
+                      @endif
+                    </span>
+                  </div>
+                @endif
+              </div>
             </div>
           </div>
         @endif

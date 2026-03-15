@@ -10,6 +10,7 @@ return [
     'reg_operations_table' => env('WORK_ORDER_REG_OPER_TABLE', 'tHF_WOExRegOper'),
     'product_structure_table' => env('WORK_ORDER_PRODUCT_STRUCTURE_TABLE', 'tHF_SetPrSt'),
     'orders_table' => env('WORK_ORDER_ORDERS_TABLE', 'tHE_Order'),
+    'order_items_table' => env('WORK_ORDER_ORDER_ITEMS_TABLE', 'tHE_OrderItem'),
     'default_limit' => 10,
     'max_limit' => 100,
     'bom_limit' => 100,

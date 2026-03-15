@@ -279,9 +279,9 @@
             <th>Narudžba</th>
             <th>Naziv</th>
             <th>Šifra</th>
+            <th>Qty</th>
             <th>Klijent</th>
-            <th>Ukupno</th>
-            <th class="text-truncate">Datum Kreiranja</th>
+            <th class="text-truncate">Datum</th>
             <th>Status</th>
             <th>Prioritet</th>
             @if($canDeleteWorkOrders)
@@ -1177,5 +1177,5 @@
 @endsection
 
 @section('page-script')
-<script src="{{asset('js/scripts/pages/app-invoice-list.js?v=11')}}"></script>
+<script src="{{asset('js/scripts/pages/app-invoice-list.js?v=12')}}"></script>
 @endsection

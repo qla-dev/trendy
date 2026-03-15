@@ -64,7 +64,7 @@ function format_cell_value(mixed $value): string
 }
 
 $schema = normalize_identifier((string) request_value('schema', 'dbo'), 'dbo');
-$table = normalize_identifier((string) request_value('table', 'tHF_WOEx'), 'tHF_WOEx');
+$table = normalize_identifier((string) request_value('table', 'tHE_Order'), 'tHE_Order');
 $top = max(1, min(50, (int) request_value('top', '10')));
 $requestedOrderBy = normalize_identifier((string) request_value('order_by', 'adDate'), 'adDate');
 $columnFilter = trim((string) request_value('columns', ''));
