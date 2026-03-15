@@ -515,6 +515,30 @@
   .wo-timeline-pane .timeline {
     margin-bottom: 0;
   }
+  .wo-note-pane {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+  .wo-note-readonly {
+    min-height: 220px;
+    border: 1px solid var(--wo-divider-color);
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(245, 247, 250, 0.9) 0%, #fff 100%);
+    padding: 1rem 1.1rem;
+    color: #5e5873;
+    font-size: 0.95rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .wo-note-empty {
+    border: 1px dashed var(--wo-divider-color);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    color: #6e6b7b;
+    font-size: 0.95rem;
+    background: rgba(245, 247, 250, 0.55);
+  }
   .wo-timeline-pane .timeline .timeline-item .timeline-event {
     min-height: 3rem;
     padding-bottom: 0.75rem;
@@ -867,6 +891,22 @@
   body.semi-dark-layout .wo-product-qty-unit,
   .dark-layout .invoice-preview-wrapper .wo-product-qty-unit,
   .semi-dark-layout .invoice-preview-wrapper .wo-product-qty-unit {
+    color: #c1c5d8;
+  }
+  body.dark-layout .wo-note-readonly,
+  body.semi-dark-layout .wo-note-readonly,
+  .dark-layout .invoice-preview-wrapper .wo-note-readonly,
+  .semi-dark-layout .invoice-preview-wrapper .wo-note-readonly {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: #444e6e;
+    color: #f1f3f9;
+  }
+  body.dark-layout .wo-note-empty,
+  body.semi-dark-layout .wo-note-empty,
+  .dark-layout .invoice-preview-wrapper .wo-note-empty,
+  .semi-dark-layout .invoice-preview-wrapper .wo-note-empty {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: #444e6e;
     color: #c1c5d8;
   }
   body.dark-layout .wo-progress-shell {
@@ -1376,6 +1416,9 @@
   $workOrderMetaFlags = $workOrderMeta['flags'] ?? [];
   $workOrderMetaProgress = $workOrderMeta['progress'] ?? ['label' => 'Realizacija', 'percent' => 0, 'display' => '0 %'];
   $workOrderMetaProgressPercent = max(0, min(100, (float) ($workOrderMetaProgress['percent'] ?? 0)));
+  $workOrderNote = trim((string) ($workOrder['napomena_rn'] ?? ''));
+  $normalizedWorkOrderNote = preg_replace("/\r\n?/", "\n", $workOrderNote);
+  $workOrderNote = is_string($normalizedWorkOrderNote) ? $normalizedWorkOrderNote : $workOrderNote;
   $workOrderRouteId = trim((string) ($workOrder['id'] ?? $invoiceNumber ?? ''));
   if ($workOrderRouteId === '') {
     $workOrderRouteId = trim((string) ($invoiceNumber ?? ''));
@@ -1664,6 +1707,11 @@
               </button>
             </li>
             <li class="nav-item">
+              <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#tab-napomena" aria-controls="tab-napomena" aria-selected="false">
+                <i class="fa fa-sticky-note-o me-50"></i> Napomena
+              </button>
+            </li>
+            <li class="nav-item">
               <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#tab-kpi" aria-controls="tab-kpi" aria-selected="false">
                 <i class="fa fa-line-chart me-50"></i> KPI
               </button>
@@ -1838,6 +1886,16 @@
                     @endforelse
                   </tbody>
                 </table>
+              </div>
+            </div>
+            <!-- Napomena Tab -->
+            <div class="tab-pane fade" id="tab-napomena" role="tabpanel">
+              <div class="wo-subtle-tabs-pane wo-note-pane">
+                @if($workOrderNote !== '')
+                  <div class="wo-note-readonly" role="textbox" aria-readonly="true">{{ $workOrderNote }}</div>
+                @else
+                  <div class="wo-note-empty">Nema napomene za ovaj radni nalog.</div>
+                @endif
               </div>
             </div>
             <!-- KPI Tab -->

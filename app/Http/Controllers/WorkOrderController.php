@@ -4142,6 +4142,7 @@ class WorkOrderController extends Controller
         $orderPosition = $this->valueTrimmed($row, ['anLnkNo'], null);
         $quantity = $this->normalizeNullableNumber($this->value($row, ['anPlanQty', 'anQty', 'anQty1'], null));
         $unit = (string) $this->valueTrimmed($row, ['acUM'], '');
+        $note = $this->resolveWorkOrderNote($row);
 
         $mapped = [
             'responsive_id' => '',
@@ -4150,6 +4151,7 @@ class WorkOrderController extends Controller
             'naziv' => (string) $this->value($row, ['acName', 'acDescr', 'title'], 'Radni nalog'),
             'sifra' => (string) $this->valueTrimmed($row, ['acIdent', 'product_code', 'acCode'], ''),
             'opis' => (string) $this->value($row, ['acNote', 'acStatement', 'acDescr', 'description'], ''),
+            'napomena_rn' => $note,
             'status' => $status,
             'prioritet' => $priority,
             'datum_kreiranja' => $createdDate,
@@ -4171,6 +4173,11 @@ class WorkOrderController extends Controller
         }
 
         return $mapped;
+    }
+
+    private function resolveWorkOrderNote(array $row): string
+    {
+        return (string) $this->valueTrimmed($row, ['acNote', 'description'], '');
     }
 
     private function buildWorkOrderMetadata(
