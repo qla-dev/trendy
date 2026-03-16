@@ -4694,10 +4694,11 @@
         });
     }
 
-    function savePlannedConsumptionRequest(selectedComponents, quantity, quantityUnit, description, saveMode) {
+    function savePlannedConsumptionRequest(selectedComponents, quantity, quantityUnit, description, saveMode, triggerStatusTransition) {
       var productId = (productSelect && productSelect.value) ? productSelect.value : '';
       var resolvedDescription = typeof description === 'string' ? String(description).trim() : '';
       var resolvedSaveMode = saveMode === 'barcode' ? 'barcode' : 'manual';
+      var resolvedTriggerStatusTransition = triggerStatusTransition !== false;
 
       if (!saveUrl) {
         notify('error', 'Nedostaje endpoint', 'Snimanje planirane potrosnje nije dostupno.');
@@ -4732,6 +4733,7 @@
           quantity: quantity,
           quantity_unit: quantityUnit,
           save_mode: resolvedSaveMode,
+          trigger_status_transition: resolvedTriggerStatusTransition,
           description: resolvedDescription,
           components: selectedComponents
         })
@@ -5221,12 +5223,15 @@
         return;
       }
 
+      var triggerStatusTransition = !!(confirmModalEl && confirmModalEl.classList.contains('show'));
+
       var request = savePlannedConsumptionRequest(
         selectedComponents,
         quantity,
         quantityUnit,
         description,
-        currentConfirmMode()
+        currentConfirmMode(),
+        triggerStatusTransition
       );
       if (!request || typeof request.then !== 'function') {
         return;

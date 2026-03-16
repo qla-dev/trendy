@@ -1376,6 +1376,7 @@ class WorkOrderController extends Controller
             'quantity_unit' => ['nullable', 'string', 'in:AUTO,KG,MJ,RDS'],
             'description' => ['nullable', 'string', 'max:500'],
             'save_mode' => ['nullable', 'string', 'in:manual,barcode'],
+            'trigger_status_transition' => ['sometimes', 'boolean'],
             'components' => ['required', 'array', 'min:1', 'max:100'],
             'components.*.acIdentChild' => ['required', 'string', 'max:64'],
             'components.*.anNo' => ['nullable', 'numeric'],
@@ -1410,6 +1411,10 @@ class WorkOrderController extends Controller
             $userDescription = trim((string) ($validated['description'] ?? ''));
             $saveMode = strtolower(trim((string) ($validated['save_mode'] ?? 'manual')));
             $suppressStatusTransition = (bool) $request->attributes->get('suppress_status_transition', false);
+            $triggerStatusTransition = array_key_exists('trigger_status_transition', $validated)
+                ? (bool) $validated['trigger_status_transition']
+                : true;
+            $shouldTransitionStatus = $triggerStatusTransition && !$suppressStatusTransition;
 
             if (trim($productId) === '') {
                 return response()->json([
@@ -1586,6 +1591,9 @@ class WorkOrderController extends Controller
                 'quantity_factor' => $quantityFactor,
                 'quantity_unit' => $quantityUnit,
                 'save_mode' => $saveMode,
+                'trigger_status_transition' => $triggerStatusTransition,
+                'effective_status_transition' => $shouldTransitionStatus,
+                'suppressed_status_transition' => $suppressStatusTransition,
                 'description_present' => $userDescription !== '',
                 'description_length' => strlen($userDescription),
                 'requested_components_count' => count((array) ($validated['components'] ?? [])),
@@ -1620,7 +1628,8 @@ class WorkOrderController extends Controller
                 $hasStatementColumn,
                 $manualNoInsert,
                 $manualQIdInsert,
-                $suppressStatusTransition
+                $suppressStatusTransition,
+                $shouldTransitionStatus
             ) {
                 $nextNo = null;
                 $nextQId = null;
@@ -1846,17 +1855,19 @@ class WorkOrderController extends Controller
                     'changed' => false,
                 ];
 
-                if ($this->savedRowsContainMaterialConsumption($saved) && !$suppressStatusTransition) {
+                if ($this->savedRowsContainMaterialConsumption($saved) && $shouldTransitionStatus) {
                     $statusTransition = $this->transitionWorkOrderStatusAfterConsumption(
                         $workOrderRow,
                         $workOrderColumns,
                         $userId,
                         $now
                     );
-                } elseif ($this->savedRowsContainMaterialConsumption($saved) && $suppressStatusTransition) {
+                } elseif ($this->savedRowsContainMaterialConsumption($saved) && !$shouldTransitionStatus) {
                     $statusTransition = [
                         'changed' => false,
-                        'reason' => 'suppressed_for_fresh_create',
+                        'reason' => $suppressStatusTransition
+                            ? 'suppressed_for_fresh_create'
+                            : 'disabled_for_request_context',
                     ];
                 }
 
@@ -1910,6 +1921,8 @@ class WorkOrderController extends Controller
                     'product_id' => $productId,
                     'quantity_factor' => $quantityFactor,
                     'save_mode' => $saveMode,
+                    'trigger_status_transition' => $triggerStatusTransition,
+                    'effective_status_transition' => $shouldTransitionStatus,
                     'description' => $userDescription,
                     'saved_count' => count($insertedRows),
                     'updated_count' => $updatedCount,
@@ -1936,6 +1949,7 @@ class WorkOrderController extends Controller
                 'request_quantity' => $this->toFloatOrNull($request->input('quantity')),
                 'request_quantity_unit' => strtoupper(trim((string) $request->input('quantity_unit', 'AUTO'))),
                 'request_save_mode' => strtolower(trim((string) $request->input('save_mode', 'manual'))),
+                'request_trigger_status_transition' => $request->input('trigger_status_transition'),
                 'request_description' => trim((string) $request->input('description', '')),
                 'request_components_count' => count((array) $request->input('components', [])),
             ]);
