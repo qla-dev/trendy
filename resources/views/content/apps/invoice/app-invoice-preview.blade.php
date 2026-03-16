@@ -1431,6 +1431,7 @@
   $allOperationsFetchUrl = $hasLoadedWorkOrder ? route('app-invoice-all-operations', ['id' => $workOrderRouteId]) : '';
   $barcodeMaterialLookupUrl = $hasLoadedWorkOrder ? route('app-invoice-barcode-material', ['id' => $workOrderRouteId]) : '';
   $plannedConsumptionStoreUrl = $hasLoadedWorkOrder ? route('app-invoice-planned-consumption', ['id' => $workOrderRouteId]) : '';
+  $plannedConsumptionUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-planned-consumption-update', ['id' => $workOrderRouteId]) : '';
   $plannedConsumptionRemoveUrl = $hasLoadedWorkOrder ? route('app-invoice-planned-consumption-remove', ['id' => $workOrderRouteId]) : '';
   $destroyWorkOrderUrl = ($hasLoadedWorkOrder && $isAdminUser)
     ? route('app-invoice-destroy', ['id' => $workOrderRouteId])
@@ -1782,7 +1783,15 @@
                               <button
                                 type="button"
                                 class="btn btn-sm btn-outline-primary wo-edit-sastavnica-btn"
-                                title="Uredi stavku (uskoro)"
+                                data-item-id="{{ trim((string) ($item['qid'] ?? '')) }}"
+                                data-item-no="{{ trim((string) ($item['no'] ?? '')) }}"
+                                data-item-position="{{ trim((string) ($item['pozicija'] ?? '')) }}"
+                                data-item-code="{{ trim((string) ($item['artikal'] ?? '')) }}"
+                                data-item-description="{{ trim((string) ($item['opis'] ?? '')) }}"
+                                data-item-note="{{ trim((string) ($item['napomena'] ?? '')) }}"
+                                data-item-quantity="{{ trim((string) ($item['kolicina'] ?? '')) }}"
+                                data-item-unit="{{ trim((string) ($item['mj'] ?? '')) }}"
+                                title="Uredi stavku"
                               >
                                 <i class="fa fa-pencil"></i>
                               </button>
@@ -2222,6 +2231,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var mutationConfig = {
       statusUrl: @json($statusUpdateUrl),
       priorityUrl: @json($priorityUpdateUrl),
+      plannedConsumptionUpdateUrl: @json($plannedConsumptionUpdateUrl),
       plannedConsumptionRemoveUrl: @json($plannedConsumptionRemoveUrl),
       csrfToken: @json(csrf_token())
     };
@@ -2237,9 +2247,19 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var deleteWorkOrderButton = document.getElementById('wo-delete-order-btn');
     var statusModalElement = document.getElementById('change-status-modal');
     var priorityModalElement = document.getElementById('change-priority-modal');
+    var editSastavnicaModalElement = document.getElementById('edit-sastavnica-item-modal');
     var sastavnicaTable = document.getElementById('sastavnica-table');
     var materijaliTable = document.getElementById('materijali-table');
     var operacijaTable = document.getElementById('operacija-table');
+    var editSastavnicaError = document.getElementById('edit-sastavnica-item-error');
+    var editSastavnicaCodeInput = document.getElementById('edit-sastavnica-item-code');
+    var editSastavnicaPositionInput = document.getElementById('edit-sastavnica-item-position');
+    var editSastavnicaDescriptionInput = document.getElementById('edit-sastavnica-item-description');
+    var editSastavnicaQuantityInput = document.getElementById('edit-sastavnica-item-quantity');
+    var editSastavnicaUnitInput = document.getElementById('edit-sastavnica-item-unit');
+    var editSastavnicaNoteInput = document.getElementById('edit-sastavnica-item-note');
+    var editSastavnicaSaveButton = document.getElementById('edit-sastavnica-item-save-btn');
+    var activeSastavnicaEditContext = null;
 
     var onScroll = function () {
       sidebar.classList.toggle('invoice-actions-scrolled', window.scrollY > 80);
@@ -2373,8 +2393,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       }
 
       if (isLoading) {
-        if (!button.dataset.defaultLabel) {
-          button.dataset.defaultLabel = (button.textContent || '').trim();
+        if (!button.dataset.defaultHtml) {
+          button.dataset.defaultHtml = button.innerHTML;
         }
 
         button.disabled = true;
@@ -2383,7 +2403,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       }
 
       button.disabled = false;
-      button.textContent = button.dataset.defaultLabel || 'Sačuvaj';
+      button.innerHTML = button.dataset.defaultHtml || button.dataset.defaultLabel || 'Sačuvaj';
     }
 
     function extractErrorMessage(payload, fallbackMessage) {
@@ -2554,6 +2574,213 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       var emptyRow = document.createElement('tr');
       emptyRow.innerHTML = '<td colspan="' + String(colspan) + '" class="text-center text-muted py-2">' + String(message || '') + '</td>';
       body.appendChild(emptyRow);
+    }
+
+    function showModal(modalElement) {
+      if (!modalElement || !window.bootstrap || !window.bootstrap.Modal) {
+        return;
+      }
+
+      window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    }
+
+    function clearEditSastavnicaError() {
+      if (!editSastavnicaError) {
+        return;
+      }
+
+      editSastavnicaError.textContent = '';
+      editSastavnicaError.classList.add('d-none');
+    }
+
+    function setEditSastavnicaError(message) {
+      if (!editSastavnicaError) {
+        return;
+      }
+
+      editSastavnicaError.textContent = String(message || 'Ažuriranje stavke nije uspjelo.');
+      editSastavnicaError.classList.remove('d-none');
+    }
+
+    function displaySastavnicaCellValue(value) {
+      var normalizedValue = value === null || typeof value === 'undefined'
+        ? ''
+        : String(value).trim();
+
+      return normalizedValue === '' ? '-' : normalizedValue;
+    }
+
+    function formatSastavnicaQuantity(value) {
+      var normalizedValue = value === null || typeof value === 'undefined'
+        ? ''
+        : String(value).trim();
+
+      if (!normalizedValue) {
+        return '-';
+      }
+
+      var parsedValue = Number(normalizedValue.replace(',', '.'));
+      if (!Number.isFinite(parsedValue)) {
+        return displaySastavnicaCellValue(value);
+      }
+
+      var formattedValue = parsedValue.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+      return formattedValue === '-0' ? '0' : formattedValue;
+    }
+
+    function truncateSastavnicaNote(value) {
+      var normalizedValue = value === null || typeof value === 'undefined'
+        ? ''
+        : String(value).trim();
+
+      if (normalizedValue.length <= 20) {
+        return normalizedValue || '-';
+      }
+
+      return normalizedValue.slice(0, 18) + '..';
+    }
+
+    function openEditSastavnicaModal(button) {
+      if (!button || !editSastavnicaModalElement) {
+        return;
+      }
+
+      var row = button.closest('tr');
+      if (!row) {
+        return;
+      }
+
+      activeSastavnicaEditContext = {
+        button: button,
+        row: row,
+        itemId: String(button.getAttribute('data-item-id') || '').trim(),
+        itemNo: String(button.getAttribute('data-item-no') || '').trim()
+      };
+
+      clearEditSastavnicaError();
+
+      if (editSastavnicaCodeInput) {
+        editSastavnicaCodeInput.value = String(button.getAttribute('data-item-code') || '').trim();
+      }
+
+      if (editSastavnicaPositionInput) {
+        editSastavnicaPositionInput.value = String(button.getAttribute('data-item-position') || '').trim();
+      }
+
+      if (editSastavnicaDescriptionInput) {
+        editSastavnicaDescriptionInput.value = String(button.getAttribute('data-item-description') || '').trim();
+      }
+
+      if (editSastavnicaQuantityInput) {
+        editSastavnicaQuantityInput.value = String(button.getAttribute('data-item-quantity') || '').trim();
+      }
+
+      if (editSastavnicaUnitInput) {
+        editSastavnicaUnitInput.value = String(button.getAttribute('data-item-unit') || '').trim().toUpperCase();
+      }
+
+      if (editSastavnicaNoteInput) {
+        editSastavnicaNoteInput.value = String(button.getAttribute('data-item-note') || '').trim();
+      }
+
+      showModal(editSastavnicaModalElement);
+    }
+
+    function applyUpdatedSastavnicaRow(row, triggerButton, item) {
+      if (!row || !item) {
+        return;
+      }
+
+      var cells = row.children || [];
+      var description = String(item.opis || '').trim();
+      var note = String(item.napomena || '').trim();
+      var quantity = formatSastavnicaQuantity(item.kolicina);
+      var unit = String(item.mj || '').trim().toUpperCase();
+
+      if (cells.length > 3) {
+        cells[3].textContent = displaySastavnicaCellValue(description);
+      }
+
+      if (cells.length > 5) {
+        cells[5].textContent = truncateSastavnicaNote(note);
+        cells[5].setAttribute('title', note);
+      }
+
+      if (cells.length > 6) {
+        cells[6].textContent = quantity;
+      }
+
+      if (cells.length > 7) {
+        cells[7].textContent = displaySastavnicaCellValue(unit);
+      }
+
+      if (triggerButton) {
+        triggerButton.setAttribute('data-item-description', description);
+        triggerButton.setAttribute('data-item-note', note);
+        triggerButton.setAttribute('data-item-quantity', quantity === '-' ? '' : quantity);
+        triggerButton.setAttribute('data-item-unit', unit);
+      }
+    }
+
+    function saveEditedSastavnicaItem() {
+      if (!activeSastavnicaEditContext) {
+        return;
+      }
+
+      if (!mutationConfig.plannedConsumptionUpdateUrl) {
+        setEditSastavnicaError('Endpoint za ažuriranje nije dostupan.');
+        return;
+      }
+
+      var itemIdRaw = String(activeSastavnicaEditContext.itemId || '').trim();
+      var itemNoRaw = String(activeSastavnicaEditContext.itemNo || '').trim();
+      var parsedQuantity = Number(String(editSastavnicaQuantityInput && editSastavnicaQuantityInput.value ? editSastavnicaQuantityInput.value : '').trim().replace(',', '.'));
+
+      if (!itemIdRaw && !itemNoRaw) {
+        setEditSastavnicaError('Stavku nije moguće identifikovati za ažuriranje.');
+        return;
+      }
+
+      if (!Number.isFinite(parsedQuantity) || parsedQuantity < 0) {
+        setEditSastavnicaError('Količina mora biti broj veći ili jednak nuli.');
+        return;
+      }
+
+      clearEditSastavnicaError();
+      setActionButtonLoading(editSastavnicaSaveButton, true);
+
+      requestMutation(mutationConfig.plannedConsumptionUpdateUrl, {
+        item_id: itemIdRaw ? Number(itemIdRaw) : null,
+        item_no: itemNoRaw ? Number(itemNoRaw) : null,
+        opis: editSastavnicaDescriptionInput ? String(editSastavnicaDescriptionInput.value || '').trim() : '',
+        napomena: editSastavnicaNoteInput ? String(editSastavnicaNoteInput.value || '').trim() : '',
+        kolicina: parsedQuantity,
+      }, 'Ažuriranje stavke nije uspjelo.')
+        .then(function (response) {
+          var item = response && response.data && response.data.item
+            ? response.data.item
+            : {
+                opis: editSastavnicaDescriptionInput ? String(editSastavnicaDescriptionInput.value || '').trim() : '',
+                napomena: editSastavnicaNoteInput ? String(editSastavnicaNoteInput.value || '').trim() : '',
+                kolicina: parsedQuantity,
+                mj: editSastavnicaUnitInput ? String(editSastavnicaUnitInput.value || '').trim().toUpperCase() : ''
+              };
+
+          applyUpdatedSastavnicaRow(activeSastavnicaEditContext.row, activeSastavnicaEditContext.button, item);
+          hideModal(editSastavnicaModalElement);
+
+          Swal.fire(swalWithTheme({
+            icon: 'success',
+            title: 'Stavka ažurirana',
+            text: response && response.message ? response.message : 'Stavka sastavnice je uspješno ažurirana.'
+          }));
+        })
+        .catch(function (error) {
+          setEditSastavnicaError(error && error.message ? error.message : 'Ažuriranje stavke nije uspjelo.');
+        })
+        .finally(function () {
+          setActionButtonLoading(editSastavnicaSaveButton, false);
+        });
     }
 
     function removeLinkedRowsFromTabs(positionValue, componentCodeValue) {
@@ -2790,10 +3017,25 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       });
     }
 
+    if (editSastavnicaModalElement) {
+      editSastavnicaModalElement.addEventListener('hidden.bs.modal', function () {
+        clearEditSastavnicaError();
+        activeSastavnicaEditContext = null;
+      });
+    }
+
+    if (editSastavnicaSaveButton) {
+      editSastavnicaSaveButton.addEventListener('click', function () {
+        saveEditedSastavnicaItem();
+      });
+    }
+
     if (sastavnicaTable) {
       sastavnicaTable.addEventListener('click', function (event) {
         var editButton = event.target.closest('.wo-edit-sastavnica-btn');
         if (editButton) {
+          openEditSastavnicaModal(editButton);
+          return;
           Swal.fire(swalWithTheme({
             icon: 'info',
             title: 'Uskoro',
@@ -2906,6 +3148,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 {{-- Include QR Scanner Modals --}}
 @include('content.new-components.change-status-modal', ['currentStatus' => $statusDisplayLabel])
 @include('content.new-components.change-priority-modal', ['currentPriority' => $priorityDisplayLabel])
+@include('content.new-components.edit-sastavnica-item-modal')
 @include('content.new-components.nalog-scan')
 @include('content.new-components.sirovina-scan', [
   'productsFetchUrl' => $productsFetchUrl,

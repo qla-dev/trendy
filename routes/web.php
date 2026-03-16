@@ -74,6 +74,7 @@ Route::middleware('auth:web')->group(function () {
         Route::get('invoice/preview/{id}/all-operations', [OperationsController::class, 'scannerIndex'])->name('app-invoice-all-operations');
         Route::get('invoice/preview/{id}/barcode-material', [WorkOrderController::class, 'barcodeMaterialLookup'])->name('app-invoice-barcode-material');
         Route::post('invoice/preview/{id}/planned-consumption', [WorkOrderController::class, 'storePlannedConsumption'])->name('app-invoice-planned-consumption');
+        Route::post('invoice/preview/{id}/planned-consumption/update', [WorkOrderController::class, 'updatePlannedConsumptionItem'])->name('app-invoice-planned-consumption-update');
         Route::post('invoice/preview/{id}/planned-consumption/remove', [WorkOrderController::class, 'removePlannedConsumptionItem'])->name('app-invoice-planned-consumption-remove');
         Route::get('stock', [MaterialsController::class, 'stockIndex'])->name('app-stock');
         Route::get('stock/data', [MaterialsController::class, 'stockData'])->name('app-stock-data');

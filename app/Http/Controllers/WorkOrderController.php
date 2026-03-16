@@ -2090,6 +2090,185 @@ class WorkOrderController extends Controller
         }
     }
 
+    public function updatePlannedConsumptionItem(Request $request, string $id): JsonResponse
+    {
+        $hasDescriptionInput = $request->exists('opis');
+        $hasNoteInput = $request->exists('napomena');
+        $hasQuantityInput = $request->exists('kolicina');
+        $hasUnitInput = $request->exists('mj');
+
+        if (!$hasDescriptionInput && !$hasNoteInput && !$hasQuantityInput && !$hasUnitInput) {
+            return response()->json([
+                'message' => 'Nije dostavljeno nijedno polje za ažuriranje stavke.',
+            ], 422);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'item_id' => ['nullable', 'numeric'],
+            'item_no' => ['nullable', 'numeric'],
+            'opis' => ['nullable', 'string', 'max:80'],
+            'napomena' => ['nullable', 'string', 'max:4000'],
+            'kolicina' => ['nullable', 'numeric', 'min:0'],
+            'mj' => ['nullable', 'string', 'max:8'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravni podaci za ažuriranje stavke.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $workOrderRow = $this->findWorkOrderRow($id);
+
+            if ($workOrderRow === null) {
+                return response()->json([
+                    'message' => 'Radni nalog nije pronađen.',
+                ], 404);
+            }
+
+            $columns = $this->itemTableColumns();
+            $workOrderKey = trim((string) $this->valueTrimmed($workOrderRow, ['acKey'], ''));
+
+            if ($workOrderKey === '') {
+                return response()->json([
+                    'message' => 'RN ključ nije pronađen.',
+                ], 422);
+            }
+
+            if (!in_array('acKey', $columns, true)) {
+                return response()->json([
+                    'message' => 'Tabela stavki nema RN ključ.',
+                ], 500);
+            }
+
+            $validated = $validator->validated();
+            $itemId = $this->toFloatOrNull($validated['item_id'] ?? null);
+            $itemNo = $this->toFloatOrNull($validated['item_no'] ?? null);
+
+            if ($itemId === null && $itemNo === null) {
+                return response()->json([
+                    'message' => 'Nedostaje identifikator stavke za ažuriranje.',
+                ], 422);
+            }
+
+            $itemRow = $this->findWorkOrderItemRow($workOrderKey, $columns, $itemId, $itemNo);
+
+            if ($itemRow === null) {
+                return response()->json([
+                    'message' => 'Stavka nije pronađena.',
+                ], 404);
+            }
+
+            $fieldUpdates = [];
+
+            if ($hasDescriptionInput && in_array('acDescr', $columns, true)) {
+                $description = trim((string) ($validated['opis'] ?? ''));
+                $fieldUpdates['acDescr'] = $description === '' ? null : substr($description, 0, 80);
+            }
+
+            if ($hasNoteInput && in_array('acNote', $columns, true)) {
+                $fieldUpdates['acNote'] = $this->resolvePlannedConsumptionNoteForSave(
+                    (string) ($validated['napomena'] ?? ''),
+                    (string) ($itemRow['acNote'] ?? '')
+                );
+            }
+
+            if ($hasQuantityInput) {
+                $quantityColumns = $this->existingColumns($columns, ['anPlanQty', 'anQty', 'anQty1']);
+                $quantityValue = max(0, (float) ($this->toFloatOrNull($validated['kolicina'] ?? 0) ?? 0));
+
+                foreach ($quantityColumns as $quantityColumn) {
+                    $fieldUpdates[$quantityColumn] = $quantityValue;
+                }
+            }
+
+            if ($hasUnitInput && in_array('acUM', $columns, true)) {
+                $unit = strtoupper(substr(trim((string) ($validated['mj'] ?? '')), 0, 3));
+                $fieldUpdates['acUM'] = $unit === '' ? null : $unit;
+            }
+
+            if (empty($fieldUpdates)) {
+                return response()->json([
+                    'message' => 'Nijedno traženo polje nije dostupno za ažuriranje stavke.',
+                ], 422);
+            }
+
+            if ($this->rowAlreadyHasUpdates($itemRow, $fieldUpdates)) {
+                return response()->json([
+                    'message' => 'Stavka je već na odabranim vrijednostima.',
+                    'data' => [
+                        'work_order_id' => $id,
+                        'work_order_key' => $workOrderKey,
+                        'item' => $this->mapItemRow($itemRow),
+                        'changed' => false,
+                    ],
+                ]);
+            }
+
+            $updates = $fieldUpdates;
+            $userId = (int) (auth()->id() ?? 0);
+            $now = Carbon::now();
+
+            if (in_array('adTimeChg', $columns, true)) {
+                $updates['adTimeChg'] = $now;
+            }
+
+            if ($userId > 0 && in_array('anUserChg', $columns, true)) {
+                $updates['anUserChg'] = $userId;
+            }
+
+            $updated = $this->updateWorkOrderItemRow($itemRow, $updates);
+
+            if (!$updated) {
+                return response()->json([
+                    'message' => 'Stavka nije ažurirana.',
+                ], 500);
+            }
+
+            $updatedRow = $this->findWorkOrderItemRow($workOrderKey, $columns, $itemId, $itemNo);
+            $mappedItem = $this->mapItemRow($updatedRow ?? array_merge($itemRow, $fieldUpdates));
+
+            Log::info('Work order item updated.', [
+                'id' => $id,
+                'work_order_key' => $workOrderKey,
+                'item_id' => $mappedItem['qid'] ?? $itemId,
+                'item_no' => $mappedItem['no'] ?? $itemNo,
+                'ac_ident' => $mappedItem['artikal'] ?? '',
+                'updated_fields' => array_keys($fieldUpdates),
+                'user_id' => $userId,
+            ]);
+
+            return response()->json([
+                'message' => 'Stavka sastavnice je uspješno ažurirana.',
+                'data' => [
+                    'work_order_id' => $id,
+                    'work_order_key' => $workOrderKey,
+                    'item' => $mappedItem,
+                    'changed' => true,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order item update failed.', [
+                'id' => $id,
+                'connection' => config('database.default'),
+                'items_table' => $this->qualifiedItemTableName(),
+                'message' => $exception->getMessage(),
+                'exception_class' => get_class($exception),
+                'exception_code' => (string) $exception->getCode(),
+                'line' => $exception->getLine(),
+                'file' => $exception->getFile(),
+                'request_item_id' => $this->toFloatOrNull($request->input('item_id')),
+                'request_item_no' => $this->toFloatOrNull($request->input('item_no')),
+            ]);
+
+            return response()->json([
+                'message' => 'Greška pri ažuriranju stavke planirane potrošnje.',
+            ], 500);
+        }
+    }
+
     private function resolveWorkOrderProducts(array $workOrderRow, string $search = '', string $selectedIdent = ''): array
     {
         $limit = $this->bomLimit();
@@ -3268,6 +3447,29 @@ class WorkOrderController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    private function findWorkOrderItemRow(string $workOrderKey, array $columns, ?float $itemId, ?float $itemNo): ?array
+    {
+        if ($workOrderKey === '' || !in_array('acKey', $columns, true)) {
+            return null;
+        }
+
+        $query = $this->newItemTableQuery()->where('acKey', $workOrderKey);
+        $hasQId = in_array('anQId', $columns, true);
+        $hasNo = in_array('anNo', $columns, true);
+
+        if ($itemId !== null && $hasQId) {
+            $query->where('anQId', (int) $itemId);
+        } elseif ($itemNo !== null && $hasNo) {
+            $query->where('anNo', (int) $itemNo);
+        } else {
+            return null;
+        }
+
+        $row = $query->first();
+
+        return $row ? (array) $row : null;
     }
 
     private function findMappedWorkOrder(string $id, bool $includeRaw = false): ?array
@@ -4584,6 +4786,25 @@ class WorkOrderController extends Controller
         return $trimmedNote;
     }
 
+    private function resolvePlannedConsumptionNoteForSave(string $note, string $existingRawNote = ''): ?string
+    {
+        $trimmedNote = trim($note);
+
+        if ($trimmedNote === '') {
+            return null;
+        }
+
+        $trimmedExistingNote = trim($existingRawNote);
+
+        foreach (['PLANNED_BOM|', 'PLANNED_RAW|'] as $markerPrefix) {
+            if (Str::startsWith($trimmedExistingNote, $markerPrefix)) {
+                return substr($markerPrefix . $trimmedNote, 0, 4000);
+            }
+        }
+
+        return substr($trimmedNote, 0, 4000);
+    }
+
     private function mapItemResourceRow(array $row): array
     {
         return [
@@ -5840,6 +6061,43 @@ class WorkOrderController extends Controller
         $hasIdentity = false;
 
         foreach (['acRefNo1', 'acKey', 'anNo', 'id'] as $identityColumn) {
+            if (!array_key_exists($identityColumn, $row)) {
+                continue;
+            }
+
+            $identityValue = $row[$identityColumn];
+
+            if ($identityValue === null || (is_string($identityValue) && trim($identityValue) === '')) {
+                continue;
+            }
+
+            $query->where($identityColumn, $identityValue);
+            $hasIdentity = true;
+        }
+
+        if (!$hasIdentity) {
+            return false;
+        }
+
+        return $query->update($updates) > 0;
+    }
+
+    private function updateWorkOrderItemRow(array $row, array $updates): bool
+    {
+        if (empty($updates)) {
+            return false;
+        }
+
+        $workOrderKey = trim((string) ($row['acKey'] ?? ''));
+
+        if ($workOrderKey === '') {
+            return false;
+        }
+
+        $query = $this->newItemTableQuery()->where('acKey', $workOrderKey);
+        $hasIdentity = false;
+
+        foreach (['anQId', 'anNo', 'id'] as $identityColumn) {
             if (!array_key_exists($identityColumn, $row)) {
                 continue;
             }
