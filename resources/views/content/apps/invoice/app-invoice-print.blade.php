@@ -360,7 +360,7 @@
             <th>Opis</th>
             <th>Slika</th>
             <th>Napomena</th>
-            <th>Kolicina</th>
+            <th>Količina</th>
             <th>MJ</th>
             <th>Serija</th>
             <th>Normativna osnova</th>
@@ -409,7 +409,7 @@
             <th>Pozicija</th>
             <th>Materijal</th>
             <th>Naziv</th>
-            <th>Kolicina</th>
+            <th>Količina</th>
             <th>Napomena</th>
           </tr>
         </thead>

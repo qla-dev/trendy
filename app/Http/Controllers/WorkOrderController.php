@@ -373,6 +373,10 @@ class WorkOrderController extends Controller
                         'sifra' => (string) ($orderContext['product_code'] ?? ''),
                         'naziv' => (string) ($orderContext['product_name'] ?? ''),
                         'kupac' => (string) ($orderContext['client_name'] ?? ''),
+                        'kolicina' => $this->normalizeNullableNumber($orderContext['quantity'] ?? null),
+                        'mj' => (string) ($orderContext['unit'] ?? ''),
+                        'catalog_item_missing' => (bool) ($orderContext['catalog_item_missing'] ?? false),
+                        'catalog_item_notice' => (string) ($orderContext['catalog_item_notice'] ?? ''),
                     ],
                     'last_work_order' => [
                         'number' => (string) ($numberContext['last_display'] ?? ''),
@@ -404,6 +408,7 @@ class WorkOrderController extends Controller
         $validator = Validator::make($request->all(), [
             'identifier' => ['required', 'string', 'max:255'],
             'doc_type' => ['nullable', 'string', 'max:4'],
+            'quantity' => ['nullable', 'numeric', 'gt:0'],
         ]);
 
         if ($validator->fails()) {
@@ -415,6 +420,7 @@ class WorkOrderController extends Controller
 
         $identifier = trim((string) $validator->validated()['identifier']);
         $requestedDocType = trim((string) ($validator->validated()['doc_type'] ?? ''));
+        $requestedQuantity = $this->toFloatOrNull($validator->validated()['quantity'] ?? null);
 
         if ($requestedDocType !== '' && !in_array($requestedDocType, self::SCAN_CREATE_DOC_TYPES, true)) {
             return response()->json([
@@ -427,6 +433,7 @@ class WorkOrderController extends Controller
         $debugContext = [
             'identifier' => $identifier,
             'doc_type' => $selectedDocType,
+            'requested_quantity' => $requestedQuantity,
             'order_locator' => $orderLocator,
         ];
 
@@ -437,7 +444,7 @@ class WorkOrderController extends Controller
         }
 
         try {
-            $result = DB::transaction(function () use ($request, $orderLocator, $identifier, $selectedDocType, &$debugContext) {
+            $result = DB::transaction(function () use ($request, $orderLocator, $identifier, $selectedDocType, $requestedQuantity, &$debugContext) {
                 $existingRow = $this->findWorkOrderRowByOrderLocator(
                     (string) ($orderLocator['order_number'] ?? ''),
                     (int) ($orderLocator['order_position'] ?? 0),
@@ -476,14 +483,24 @@ class WorkOrderController extends Controller
                     Carbon::now(),
                     $selectedDocType
                 );
+                $catalogEnsureResult = $this->ensureCatalogItemForScanCreate(
+                    $orderContext,
+                    $orderRow,
+                    $request->user()
+                );
+                $orderContext = is_array($catalogEnsureResult['order_context'] ?? null)
+                    ? $catalogEnsureResult['order_context']
+                    : $orderContext;
                 $debugContext['resolved_order_context'] = $orderContext;
                 $debugContext['resolved_order_row'] = $orderRow;
                 $debugContext['number_context'] = $numberContext;
+                $debugContext['catalog_item_created'] = (bool) ($catalogEnsureResult['created'] ?? false);
                 $payload = $this->buildWorkOrderInsertPayloadFromOrder(
                     $orderRow,
                     $orderContext,
                     $numberContext,
-                    $request->user()
+                    $request->user(),
+                    $requestedQuantity
                 );
                 $debugContext['insert_payload'] = $payload;
 
@@ -530,11 +547,14 @@ class WorkOrderController extends Controller
             $workOrderNumber = $this->formatWorkOrderNumberForCalendar((string) ($mapped['broj_naloga'] ?? $routeId));
             $created = (string) ($result['status'] ?? '') === 'created';
 
-            $this->attachSastavnicaToWorkOrder(
-                $routeId,
-                trim((string) ($mapped['sifra'] ?? $mapped['acIdent'] ?? $mapped['product_code'] ?? '')),
-                $created
-            );
+            if ($created) {
+                $this->attachSastavnicaToWorkOrder(
+                    $routeId,
+                    trim((string) ($mapped['sifra'] ?? $mapped['acIdent'] ?? $mapped['product_code'] ?? '')),
+                    true,
+                    $this->toFloatOrNull($mapped['kolicina'] ?? null)
+                );
+            }
 
             return response()->json([
                 'message' => $created
@@ -543,6 +563,7 @@ class WorkOrderController extends Controller
                 'data' => [
                     'status' => $created ? 'created' : 'existing',
                     'created' => $created,
+                    'catalog_item_created' => (bool) ($debugContext['catalog_item_created'] ?? false),
                     'work_order' => [
                         'id' => $routeId,
                         'number' => $workOrderNumber,
@@ -600,7 +621,8 @@ class WorkOrderController extends Controller
     private function attachSastavnicaToWorkOrder(
         string $workOrderId,
         string $productCode,
-        bool $suppressStatusTransition = false
+        bool $suppressStatusTransition = false,
+        ?float $quantityFactor = null
     ): void
     {
         $workOrderId = trim($workOrderId);
@@ -617,9 +639,12 @@ class WorkOrderController extends Controller
                 return;
             }
 
-            $headerPlannedQty = $this->sumSastavnicaHeaderQuantity($bomRows);
-            if ($headerPlannedQty !== null) {
-                $this->syncWorkOrderHeaderQuantityFromSastavnica($workOrderId, $headerPlannedQty);
+            $resolvedQuantityFactor = $quantityFactor !== null && $quantityFactor > 0
+                ? $quantityFactor
+                : 1.0;
+
+            if ($resolvedQuantityFactor > 0) {
+                $this->syncWorkOrderHeaderQuantityFromSastavnica($workOrderId, $resolvedQuantityFactor);
             }
 
             $components = array_values(array_filter(array_map(function ($bomRow) {
@@ -635,7 +660,6 @@ class WorkOrderController extends Controller
                     'acDescr' => trim((string) ($bomRow['acDescr'] ?? '')),
                     'acUM' => trim((string) ($bomRow['acUM'] ?? '')),
                     'acOperationType' => trim((string) ($bomRow['acOperationType'] ?? '')),
-                    'anPlanQty' => (float) ($bomRow['anGrossQty'] ?? 0),
                 ];
             }, $bomRows)));
 
@@ -645,7 +669,7 @@ class WorkOrderController extends Controller
 
             $request = Request::create('', 'POST', [
                 'product_id' => $productCode,
-                'quantity' => 1,
+                'quantity' => $resolvedQuantityFactor,
                 'quantity_unit' => 'AUTO',
                 'description' => 'Automatski preuzeta sastavnica',
                 'save_mode' => 'manual',
@@ -1424,7 +1448,7 @@ class WorkOrderController extends Controller
 
             if ($quantityFactor <= 0) {
                 return response()->json([
-                    'message' => 'Kolicina mora biti veca od 0.',
+                    'message' => 'Količina mora biti veca od 0.',
                 ], 422);
             }
 
@@ -3838,10 +3862,14 @@ class WorkOrderController extends Controller
         $catalogRow = $normalizedProductCode !== ''
             ? $this->findCatalogItemByNormalizedCode($normalizedProductCode)
             : [];
-        $productCode = (string) $this->valueTrimmed($orderRow, ['acIdent', 'product_code', 'acCode'], '');
+        $productCode = trim((string) ($catalogRow['acIdent'] ?? ''));
 
         if ($productCode === '') {
-            $productCode = trim((string) ($catalogRow['acIdent'] ?? $normalizedProductCode));
+            $productCode = (string) $this->valueTrimmed($orderRow, ['acIdent', 'product_code', 'acCode'], '');
+        }
+
+        if ($productCode === '') {
+            $productCode = $normalizedProductCode;
         }
 
         $productName = (string) $this->valueTrimmed($orderRow, ['acName', 'acDescr', 'title'], '');
@@ -3850,7 +3878,7 @@ class WorkOrderController extends Controller
             $productName = trim((string) ($catalogRow['acName'] ?? ''));
         }
 
-        return [
+        $context = [
             'order_key' => trim((string) $this->valueTrimmed($orderRow, ['acKey'], '')),
             'order_number' => $this->resolveOrderDisplayNumber($orderRow, (string) ($orderLocator['order_number'] ?? '')),
             'order_position' => (int) ($orderLocator['order_position'] ?? 0),
@@ -3858,6 +3886,81 @@ class WorkOrderController extends Controller
             'product_name' => $productName,
             'client_name' => (string) $this->valueTrimmed($orderRow, ['acConsignee', 'acReceiver', 'acPartner', 'client_name'], ''),
             'catalog' => $catalogRow,
+            'catalog_item_missing' => $productCode !== '' && empty($catalogRow),
+        ];
+        $context['unit'] = $this->resolveScanCreateWorkOrderUnit($orderRow, $context);
+        $context['quantity'] = $this->resolveScanCreateWorkOrderQuantity($orderRow, $context);
+        $context['catalog_item_notice'] = $context['catalog_item_missing']
+            ? 'Sifra artikla nije pronadjena u sifrarniku. Prilikom kreiranja RN bice automatski kreirana osnovna stavka artikla.'
+            : '';
+
+        return $context;
+    }
+
+    private function ensureCatalogItemForScanCreate(
+        array $orderContext,
+        array $orderRow,
+        mixed $user = null
+    ): array {
+        $productCode = trim((string) ($orderContext['product_code'] ?? ''));
+
+        if ($productCode === '') {
+            return [
+                'created' => false,
+                'order_context' => $orderContext,
+            ];
+        }
+
+        $normalizedProductCode = $this->normalizeComparableIdentifier($productCode);
+        $catalogRow = $normalizedProductCode !== ''
+            ? $this->findCatalogItemByNormalizedCode($normalizedProductCode)
+            : [];
+
+        if (!empty($catalogRow)) {
+            $orderContext['catalog'] = $catalogRow;
+            $orderContext['catalog_item_missing'] = false;
+            $orderContext['catalog_item_notice'] = '';
+
+            if (trim((string) ($orderContext['product_name'] ?? '')) === '') {
+                $orderContext['product_name'] = trim((string) ($catalogRow['acName'] ?? $productCode));
+            }
+
+            $orderContext['unit'] = $this->resolveScanCreateWorkOrderUnit($orderRow, $orderContext);
+
+            return [
+                'created' => false,
+                'order_context' => $orderContext,
+            ];
+        }
+
+        $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
+        $ensureResult = Product::ensureCatalogProduct([
+            'product_code' => $productCode,
+            'product_name' => trim((string) ($orderContext['product_name'] ?? '')),
+            'product_um' => $this->resolveScanCreateWorkOrderUnit($orderRow, $orderContext),
+            'product_set' => trim((string) ($orderContext['catalog']['acSetOfItem'] ?? $this->valueTrimmed($orderRow, ['acSetOfItem'], ''))),
+        ], $userId);
+
+        $catalogRow = is_array($ensureResult['row'] ?? null)
+            ? (array) ($ensureResult['row'] ?? [])
+            : [];
+
+        if (empty($catalogRow) && $normalizedProductCode !== '') {
+            $catalogRow = $this->findCatalogItemByNormalizedCode($normalizedProductCode);
+        }
+
+        $orderContext['catalog'] = $catalogRow;
+        $orderContext['catalog_item_missing'] = empty($catalogRow);
+        $orderContext['catalog_item_notice'] = '';
+        $orderContext['unit'] = $this->resolveScanCreateWorkOrderUnit($orderRow, $orderContext);
+
+        if (trim((string) ($orderContext['product_name'] ?? '')) === '') {
+            $orderContext['product_name'] = trim((string) ($catalogRow['acName'] ?? $productCode));
+        }
+
+        return [
+            'created' => (bool) ($ensureResult['created'] ?? false),
+            'order_context' => $orderContext,
         ];
     }
 
@@ -3927,23 +4030,23 @@ class WorkOrderController extends Controller
         }
 
         try {
-            $catalogProduct = Product::findCatalogProduct($normalizedProductCode);
-
-            if ($catalogProduct === null) {
-                return [];
-            }
-
             $query = $this->newCatalogItemsTableQuery();
             $normalizedExpression = $this->normalizedIdentifierExpression($query, 'acIdent');
             $row = $query
                 ->whereRaw("$normalizedExpression = ?", [$normalizedProductCode])
                 ->first();
+            $catalogRow = $row === null ? [] : (array) $row;
+            $catalogProduct = Product::findCatalogProduct($normalizedProductCode);
 
-            if ($row === null) {
+            if ($catalogProduct === null) {
+                return $catalogRow;
+            }
+
+            if (empty($catalogRow)) {
                 return $catalogProduct;
             }
 
-            return array_merge($catalogProduct, (array) $row);
+            return array_merge($catalogProduct, $catalogRow);
         } catch (Throwable $exception) {
             Log::warning('Unable to resolve catalog item for scanned work order QR.', [
                 'connection' => config('database.default'),
@@ -4022,7 +4125,8 @@ class WorkOrderController extends Controller
         array $orderRow,
         array $orderContext,
         array $numberContext,
-        mixed $user = null
+        mixed $user = null,
+        ?float $requestedQuantity = null
     ): array {
         $columns = $this->tableColumns();
         $nonInsertableColumns = $this->tableNonInsertableColumns();
@@ -4089,7 +4193,9 @@ class WorkOrderController extends Controller
         $username = is_object($user) ? trim((string) ($user->username ?? $user->name ?? '')) : '';
         $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
         $resolvedUnit = $this->resolveScanCreateWorkOrderUnit($orderRow, $orderContext);
-        $resolvedQuantity = $this->resolveScanCreateWorkOrderQuantity($orderRow, $orderContext);
+        $resolvedQuantity = $requestedQuantity !== null && $requestedQuantity > 0
+            ? $requestedQuantity
+            : $this->resolveScanCreateWorkOrderQuantity($orderRow, $orderContext);
 
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acKey', (string) ($numberContext['next_raw'] ?? ''));
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acKeyView', (string) ($numberContext['next_display'] ?? ''));

@@ -6,10 +6,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class Product extends Model
 {
     use HasFactory;
+
+    private static ?array $catalogItemColumnsCache = null;
+    private static ?array $catalogItemNonInsertableColumnsCache = null;
 
     protected $fillable = [
         'work_order_id',
@@ -86,6 +90,98 @@ class Product extends Model
             ->first();
 
         return $row === null ? null : self::mapScannerRow((array) $row, 'selected');
+    }
+
+    public static function ensureCatalogProduct(array $attributes, int $userId = 0): array
+    {
+        $productCode = trim((string) ($attributes['product_code'] ?? $attributes['acIdent'] ?? ''));
+
+        if ($productCode === '') {
+            throw new \InvalidArgumentException('Product code is required.');
+        }
+
+        $productName = trim((string) ($attributes['product_name'] ?? $attributes['acName'] ?? ''));
+        $productUnit = strtoupper(substr(trim((string) ($attributes['product_um'] ?? $attributes['acUM'] ?? '')), 0, 3));
+        $productSet = strtoupper(trim((string) ($attributes['product_set'] ?? $attributes['acSetOfItem'] ?? '')));
+        $now = now();
+        $itemsTable = self::sourceSchema() . '.' . self::itemsTable();
+        $existingRow = DB::table($itemsTable)
+            ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
+            ->first();
+
+        if ($existingRow !== null) {
+            return [
+                'created' => false,
+                'row' => (array) $existingRow,
+            ];
+        }
+
+        $catalogColumns = self::catalogItemColumns();
+        $nonInsertableColumns = self::catalogItemNonInsertableColumns();
+
+        if (empty($catalogColumns)) {
+            throw new \RuntimeException('Catalog item columns could not be resolved.');
+        }
+
+        $nextQId = array_key_exists('anQId', $catalogColumns)
+            ? ((int) (DB::table($itemsTable)->max('anQId') ?? 0)) + 1
+            : null;
+        $preferredValues = [
+            'acIdent' => $productCode,
+            'acCode' => $productCode,
+            'acName' => $productName !== '' ? $productName : $productCode,
+            'acUM' => $productUnit,
+            'acSetOfItem' => $productSet,
+            'anQId' => $nextQId,
+            'anPLUCode' => 0,
+            'anPLUCode2' => 0,
+            'anBuyPrice' => 0,
+            'anPrice' => 0,
+            'anVAT' => 0,
+            'anDeliveryDeadline' => 0,
+            'anUserIns' => $userId > 0 ? $userId : 0,
+            'anUserChg' => $userId > 0 ? $userId : 0,
+            'adTimeIns' => $now,
+            'adTimeChg' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ];
+        $insertPayload = [];
+
+        foreach ($catalogColumns as $columnName => $columnMeta) {
+            if (isset($nonInsertableColumns[$columnName])) {
+                continue;
+            }
+
+            if (array_key_exists($columnName, $preferredValues)) {
+                $insertValue = $preferredValues[$columnName];
+            } elseif (($columnMeta['nullable'] ?? true) || ($columnMeta['default'] ?? null) !== null) {
+                continue;
+            } else {
+                $insertValue = self::defaultValueForColumnMeta($columnMeta, $now, $userId);
+            }
+
+            if (is_string($insertValue)) {
+                $maxLength = (int) ($columnMeta['max_length'] ?? 0);
+
+                if ($maxLength > 0) {
+                    $insertValue = mb_substr($insertValue, 0, $maxLength);
+                }
+            }
+
+            $insertPayload[$columnName] = $insertValue;
+        }
+
+        DB::table($itemsTable)->insert($insertPayload);
+
+        $createdRow = DB::table($itemsTable)
+            ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
+            ->first();
+
+        return [
+            'created' => true,
+            'row' => $createdRow !== null ? (array) $createdRow : $insertPayload,
+        ];
     }
 
     private static function baseScannerQuery(string $search = ''): Builder
@@ -195,5 +291,92 @@ class Product extends Model
     private static function sourceSchema(): string
     {
         return (string) config('workorders.schema', 'dbo');
+    }
+
+    private static function catalogItemColumns(): array
+    {
+        if (self::$catalogItemColumnsCache !== null) {
+            return self::$catalogItemColumnsCache;
+        }
+
+        self::$catalogItemColumnsCache = DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->select('COLUMN_NAME', 'DATA_TYPE', 'CHARACTER_MAXIMUM_LENGTH', 'IS_NULLABLE', 'COLUMN_DEFAULT')
+            ->where('TABLE_SCHEMA', self::sourceSchema())
+            ->where('TABLE_NAME', self::itemsTable())
+            ->orderBy('ORDINAL_POSITION')
+            ->get()
+            ->mapWithKeys(function ($row) {
+                return [
+                    (string) $row->COLUMN_NAME => [
+                        'type' => strtolower((string) ($row->DATA_TYPE ?? '')),
+                        'max_length' => is_numeric((string) ($row->CHARACTER_MAXIMUM_LENGTH ?? null))
+                            ? (int) $row->CHARACTER_MAXIMUM_LENGTH
+                            : null,
+                        'nullable' => strtoupper((string) ($row->IS_NULLABLE ?? 'YES')) === 'YES',
+                        'default' => $row->COLUMN_DEFAULT,
+                    ],
+                ];
+            })
+            ->all();
+
+        return self::$catalogItemColumnsCache;
+    }
+
+    private static function catalogItemNonInsertableColumns(): array
+    {
+        if (self::$catalogItemNonInsertableColumnsCache !== null) {
+            return self::$catalogItemNonInsertableColumnsCache;
+        }
+
+        self::$catalogItemNonInsertableColumnsCache = DB::table('sys.columns as c')
+            ->join('sys.tables as t', 'c.object_id', '=', 't.object_id')
+            ->join('sys.schemas as s', 't.schema_id', '=', 's.schema_id')
+            ->where('s.name', self::sourceSchema())
+            ->where('t.name', self::itemsTable())
+            ->where(function ($query) {
+                $query
+                    ->where('c.is_identity', 1)
+                    ->orWhere('c.is_computed', 1)
+                    ->orWhere('c.generated_always_type', '<>', 0);
+            })
+            ->pluck('c.name')
+            ->map(function ($value) {
+                return (string) $value;
+            })
+            ->flip()
+            ->all();
+
+        return self::$catalogItemNonInsertableColumnsCache;
+    }
+
+    private static function defaultValueForColumnMeta(array $columnMeta, $timestamp, int $userId = 0): mixed
+    {
+        $dataType = strtolower((string) ($columnMeta['type'] ?? ''));
+
+        if (in_array($dataType, ['char', 'nchar', 'varchar', 'nvarchar', 'text', 'ntext'], true)) {
+            return '';
+        }
+
+        if (in_array($dataType, ['int', 'bigint', 'smallint', 'tinyint', 'decimal', 'numeric', 'float', 'real', 'money', 'smallmoney'], true)) {
+            return 0;
+        }
+
+        if ($dataType === 'bit') {
+            return 0;
+        }
+
+        if (in_array($dataType, ['date', 'datetime', 'datetime2', 'smalldatetime', 'time'], true)) {
+            return $timestamp;
+        }
+
+        if ($dataType === 'uniqueidentifier') {
+            return (string) Str::uuid();
+        }
+
+        if (in_array($dataType, ['binary', 'varbinary', 'image', 'timestamp', 'rowversion'], true)) {
+            return null;
+        }
+
+        return $userId > 0 ? $userId : null;
     }
 }

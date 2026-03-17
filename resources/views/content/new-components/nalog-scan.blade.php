@@ -478,6 +478,96 @@
     white-space: nowrap;
   }
 
+  .wo-scan-create-rn-swal .wo-scan-create-qty-card,
+  .wo-scan-create-rn-swal .wo-scan-create-notice {
+    padding: 0.9rem 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    background: rgba(15, 23, 42, 0.05);
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-notice {
+    margin: 0 0 1rem;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-qty-card {
+    margin: 0.85rem 0 1rem;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-qty-label,
+  .wo-scan-create-rn-swal .wo-scan-create-notice-title {
+    display: block;
+    margin-bottom: 0.55rem;
+    font-size: 0.74rem;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: #8f9ab4;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-qty-label {
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+    text-transform: none;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-qty-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-qty-input {
+    width: 100%;
+    margin: 0;
+    height: 3rem;
+    border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.26);
+    padding: 0.72rem 0.9rem;
+    background: rgba(255, 255, 255, 0.92);
+    color: #334155;
+    font-size: 1.05rem;
+    font-weight: 700;
+    box-shadow: none;
+    pointer-events: auto;
+    user-select: text;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-qty-input:focus {
+    outline: none;
+    border-color: rgba(74, 179, 148, 0.62);
+    box-shadow: 0 0 0 0.18rem rgba(74, 179, 148, 0.12);
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-qty-unit {
+    flex: 0 0 auto;
+    min-width: 3.5rem;
+    padding: 0.7rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    background: rgba(255, 255, 255, 0.78);
+    color: #475569;
+    font-size: 0.88rem;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-notice {
+    border-color: rgba(245, 158, 11, 0.22);
+    background: rgba(245, 158, 11, 0.08);
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-notice-title {
+    color: #b45309;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-notice-copy {
+    margin: 0;
+    color: #6b4f14;
+    line-height: 1.45;
+  }
+
   .wo-scan-create-loading-swal .wo-scan-create-loading-title {
     display: flex;
     flex-direction: column;
@@ -529,6 +619,41 @@
     color: #9fb0d6;
   }
 
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-qty-card,
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-notice,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-qty-card,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-notice {
+    border-color: rgba(170, 183, 212, 0.24);
+    background: rgba(12, 17, 28, 0.78);
+  }
+
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-notice,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-notice {
+    border-color: rgba(245, 158, 11, 0.28);
+    background: rgba(146, 64, 14, 0.2);
+  }
+
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-qty-label,
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-notice-title,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-qty-label,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-notice-title {
+    color: #d7e0f7;
+  }
+
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-qty-input,
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-qty-unit,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-qty-input,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-qty-unit {
+    border-color: rgba(170, 183, 212, 0.24);
+    background: rgba(15, 23, 42, 0.84);
+    color: #e5edf9;
+  }
+
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-notice-copy,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-notice-copy {
+    color: #fbd38d;
+  }
+
   @media (max-width: 575.98px) {
     .wo-scan-create-rn-swal .wo-scan-create-doc-head {
       flex-direction: column;
@@ -538,6 +663,15 @@
     .wo-scan-create-rn-swal .wo-scan-create-last {
       text-align: left;
       white-space: normal;
+    }
+
+    .wo-scan-create-rn-swal .wo-scan-create-qty-wrap {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .wo-scan-create-rn-swal .wo-scan-create-qty-unit {
+      min-width: 0;
     }
 
     #qr-scanner-modal .wo-scanner-close-fab {
@@ -793,19 +927,26 @@
     var poz = context && context.poz ? String(context.poz) : '';
     var sifra = context && context.sifra ? String(context.sifra) : '';
     var naziv = context && context.naziv ? String(context.naziv) : '';
+    var kolicina = context && context.kolicina != null ? String(context.kolicina) : '';
+    var mj = context && context.mj ? String(context.mj) : '';
 
       if (brojNarudzbe) {
         details.push('<div><span class="fw-bolder">Broj narudžbe:</span> ' + escapeHtml(brojNarudzbe) + '</div>');
       }
       if (poz) {
-        details.push('<div><span class="fw-bolder">Poz:</span> ' + escapeHtml(poz) + '</div>');
+        details.push('<div><span class="fw-bolder">Pozicija na narudžbi:</span> ' + escapeHtml(poz) + '</div>');
+      }
+      
+      if (kolicina) {
+        details.push('<div><span class="fw-bolder">Količina narudžbe:</span> ' + escapeHtml(kolicina) + (mj ? ' ' + escapeHtml(mj) : '') + '</div>');
       }
       if (sifra) {
-        details.push('<div><span class="fw-bolder">Šifra:</span> ' + escapeHtml(sifra) + '</div>');
+        details.push('<div><span class="fw-bolder">Šifra proizvoda:</span> ' + escapeHtml(sifra) + '</div>');
       }
       if (naziv) {
-        details.push('<div><span class="fw-bolder">Naziv:</span> ' + escapeHtml(naziv) + '</div>');
+        details.push('<div><span class="fw-bolder">Naziv proizvoda:</span> ' + escapeHtml(naziv) + '</div>');
       }
+
 
       return details.join('');
     }
@@ -819,6 +960,41 @@
         '</div>',
         '</div>'
       ].join('');
+    }
+
+    function formatPromptQuantityValue(value) {
+      if (value == null || value === '') {
+        return '1';
+      }
+
+      var normalized = String(value).replace(',', '.').trim();
+      var parsed = Number(normalized);
+
+      if (!isFinite(parsed) || parsed <= 0) {
+        return '1';
+      }
+
+      if (Math.abs(parsed - Math.round(parsed)) < 0.000001) {
+        return String(Math.round(parsed));
+      }
+
+      return parsed.toFixed(3).replace(/\.?0+$/, '');
+    }
+
+    function parsePromptQuantityValue(value) {
+      var normalized = String(value == null ? '' : value).replace(',', '.').trim();
+
+      if (!normalized) {
+        return null;
+      }
+
+      var parsed = Number(normalized);
+
+      if (!isFinite(parsed) || parsed <= 0) {
+        return null;
+      }
+
+      return parsed;
     }
 
     function normalizeCreateDocTypePayload(payload) {
@@ -866,6 +1042,18 @@
       var selectedOption = getCreateDocTypeOption(docTypeState, docTypeState.selected);
       var nextWorkOrder = selectedOption.next_work_order || {};
       var lastWorkOrder = selectedOption.last_work_order || {};
+      var quantityValue = formatPromptQuantityValue(order && order.kolicina != null ? order.kolicina : '');
+      var quantityUnit = order && order.mj ? String(order.mj) : '';
+      var catalogNotice = order && order.catalog_item_missing
+        ? [
+            '<div class="wo-scan-create-notice">',
+            '<div class="wo-scan-create-notice-title">Artikal ce biti kreiran</div>',
+            '<p class="wo-scan-create-notice-copy">',
+            escapeHtml(order.catalog_item_notice || ('Sifra ' + String(order && order.sifra ? order.sifra : '') + ' nije pronadjena u sifrarniku. Prilikom kreiranja RN bice automatski kreirana osnovna stavka artikla.')),
+            '</p>',
+            '</div>'
+          ].join('')
+        : '';
 
       return [
         '<div class="text-start mt-1">',
@@ -889,6 +1077,14 @@
         '</div>',
         '<div class="small lh-lg">',
         buildScanDetailRowsHtml(order),
+        '</div>',
+        catalogNotice,
+        '<div class="wo-scan-create-qty-card">',
+        '<label class="wo-scan-create-qty-label" for="wo-scan-create-quantity">Količina koja će se prebaciti na RN</label>',
+        '<div class="wo-scan-create-qty-wrap">',
+        '<input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" class="wo-scan-create-qty-input" id="wo-scan-create-quantity" value="' + escapeHtml(quantityValue) + '">',
+        quantityUnit ? '<div class="wo-scan-create-qty-unit">' + escapeHtml(quantityUnit) + '</div>' : '',
+        '</div>',
         '</div>',
         '</div>'
       ].join('');
@@ -951,7 +1147,9 @@
         broj_narudzbe: primary.broj_narudzbe || fallback.broj_narudzbe || '',
         poz: primary.poz || fallback.poz || '',
         sifra: primary.sifra || fallback.sifra || '',
-        naziv: primary.naziv || fallback.naziv || ''
+        naziv: primary.naziv || fallback.naziv || '',
+        kolicina: primary.kolicina != null ? primary.kolicina : (fallback.kolicina != null ? fallback.kolicina : ''),
+        mj: primary.mj || fallback.mj || ''
       };
     }
 
@@ -994,7 +1192,7 @@
       });
     }
 
-    async function createWorkOrderFromScan(identifier, docType) {
+    async function createWorkOrderFromScan(identifier, docType, quantity) {
       return requestJson(scanCreateUrl, {
         method: 'POST',
         headers: {
@@ -1006,7 +1204,8 @@
         credentials: 'same-origin',
         body: JSON.stringify({
           identifier: identifier,
-          doc_type: docType || '6000'
+          doc_type: docType || '6000',
+          quantity: quantity
         })
       });
     }
@@ -1149,6 +1348,7 @@
 
       var result = await Swal.fire(swalWithProjectTheme({
         title: 'RN nije pronađen',
+        target: modal,
         html: buildCreateWorkOrderPromptHtml(order, docTypeState),
         icon: 'question',
         showCancelButton: true,
@@ -1161,10 +1361,36 @@
           cancelButton: 'btn btn-danger'
         },
         buttonsStyling: false,
+        focusConfirm: false,
+        preConfirm: function () {
+          var popup = Swal.getPopup();
+          var quantityInput = popup ? popup.querySelector('#wo-scan-create-quantity') : null;
+          var resolvedQuantity = parsePromptQuantityValue(quantityInput ? quantityInput.value : '');
+
+          if (resolvedQuantity === null) {
+            Swal.showValidationMessage('Unesite kolicinu vecu od 0.');
+            return false;
+          }
+
+          return {
+            quantity: resolvedQuantity
+          };
+        },
         didOpen: function (popup) {
           bindCreateDocTypeSwitch(popup, docTypeState, function (nextDocType) {
             selectedDocType = nextDocType;
           });
+
+          var quantityInput = popup ? popup.querySelector('#wo-scan-create-quantity') : null;
+          if (quantityInput) {
+            window.setTimeout(function () {
+              quantityInput.focus();
+              var inputLength = quantityInput.value ? quantityInput.value.length : 0;
+              if (typeof quantityInput.setSelectionRange === 'function') {
+                quantityInput.setSelectionRange(inputLength, inputLength);
+              }
+            }, 0);
+          }
         }
       }));
 
@@ -1175,6 +1401,10 @@
 
       var selectedDocTypeOption = getCreateDocTypeOption(docTypeState, selectedDocType);
       var selectedNextWorkOrder = selectedDocTypeOption.next_work_order || {};
+      var selectedQuantity = result && result.value ? result.value.quantity : parsePromptQuantityValue(order && order.kolicina != null ? order.kolicina : '');
+      var loadingCopy = order && order.catalog_item_missing
+        ? 'Kreiram RN, dopunjavam šifrarnik artikala i otvaram radni nalog...'
+        : 'Prepisujem podatke sa naruddžbe i otvaram radni nalog...';
 
       Swal.fire(swalWithProjectTheme({
         html: [
@@ -1183,7 +1413,7 @@
           '<div class="wo-scan-create-loading-title-number">RN ' + escapeHtml(selectedNextWorkOrder.number || '') + '</div>',
           '</div>',
           '<div class="wo-scan-create-loading-copy">Prepisujem podatke sa narudžbe i otvaram radni nalog...</div>'
-        ].join(''),
+        ].join('').replace(/<div class="wo-scan-create-loading-copy">[\s\S]*?<\/div>/, '<div class="wo-scan-create-loading-copy">' + escapeHtml(loadingCopy) + '</div>'),
         allowOutsideClick: false,
         allowEscapeKey: false,
         showConfirmButton: false,
@@ -1202,7 +1432,7 @@
       }));
 
       try {
-        var createResponse = await createWorkOrderFromScan(identifier, selectedDocType);
+        var createResponse = await createWorkOrderFromScan(identifier, selectedDocType, selectedQuantity);
         var createdWorkOrder = createResponse && createResponse.data && createResponse.data.work_order
           ? createResponse.data.work_order
           : {};
