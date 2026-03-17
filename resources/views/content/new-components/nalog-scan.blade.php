@@ -929,6 +929,12 @@
     var naziv = context && context.naziv ? String(context.naziv) : '';
     var kolicina = context && context.kolicina != null ? String(context.kolicina) : '';
     var mj = context && context.mj ? String(context.mj) : '';
+    var datumIsporuke = context && (context.datum_isporuke_display || context.datum_isporuke)
+      ? String(context.datum_isporuke_display || context.datum_isporuke)
+      : '';
+    var datumIzradeRn = context && (context.datum_izrade_rn_display || context.datum_izrade_rn)
+      ? String(context.datum_izrade_rn_display || context.datum_izrade_rn)
+      : '';
 
       if (brojNarudzbe) {
         details.push('<div><span class="fw-bolder">Broj narudžbe:</span> ' + escapeHtml(brojNarudzbe) + '</div>');
@@ -936,9 +942,15 @@
       if (poz) {
         details.push('<div><span class="fw-bolder">Pozicija na narudžbi:</span> ' + escapeHtml(poz) + '</div>');
       }
-      
+            
       if (kolicina) {
         details.push('<div><span class="fw-bolder">Količina narudžbe:</span> ' + escapeHtml(kolicina) + (mj ? ' ' + escapeHtml(mj) : '') + '</div>');
+      }
+      if (datumIsporuke) {
+        details.push('<div><span class="fw-bolder">Datum isporuke narudžbe:</span> ' + escapeHtml(datumIsporuke) + '</div>');
+      }
+      if (datumIzradeRn) {
+        details.push('<div><span class="fw-bolder">Projektovani datum izrade RN:</span> ' + escapeHtml(datumIzradeRn) + '</div>');
       }
       if (sifra) {
         details.push('<div><span class="fw-bolder">Šifra proizvoda:</span> ' + escapeHtml(sifra) + '</div>');
@@ -1149,7 +1161,11 @@
         sifra: primary.sifra || fallback.sifra || '',
         naziv: primary.naziv || fallback.naziv || '',
         kolicina: primary.kolicina != null ? primary.kolicina : (fallback.kolicina != null ? fallback.kolicina : ''),
-        mj: primary.mj || fallback.mj || ''
+        mj: primary.mj || fallback.mj || '',
+        datum_isporuke: primary.datum_isporuke || fallback.datum_isporuke || '',
+        datum_isporuke_display: primary.datum_isporuke_display || fallback.datum_isporuke_display || '',
+        datum_izrade_rn: primary.datum_izrade_rn || fallback.datum_izrade_rn || '',
+        datum_izrade_rn_display: primary.datum_izrade_rn_display || fallback.datum_izrade_rn_display || ''
       };
     }
 

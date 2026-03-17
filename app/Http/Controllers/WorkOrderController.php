@@ -375,6 +375,10 @@ class WorkOrderController extends Controller
                         'kupac' => (string) ($orderContext['client_name'] ?? ''),
                         'kolicina' => $this->normalizeNullableNumber($orderContext['quantity'] ?? null),
                         'mj' => (string) ($orderContext['unit'] ?? ''),
+                        'datum_isporuke' => (string) ($orderContext['delivery_date'] ?? ''),
+                        'datum_isporuke_display' => (string) ($orderContext['delivery_date_display'] ?? ''),
+                        'datum_izrade_rn' => (string) ($orderContext['projected_issue_date'] ?? ''),
+                        'datum_izrade_rn_display' => (string) ($orderContext['projected_issue_date_display'] ?? ''),
                         'catalog_item_missing' => (bool) ($orderContext['catalog_item_missing'] ?? false),
                         'catalog_item_notice' => (string) ($orderContext['catalog_item_notice'] ?? ''),
                     ],
@@ -3888,6 +3892,11 @@ class WorkOrderController extends Controller
             'catalog' => $catalogRow,
             'catalog_item_missing' => $productCode !== '' && empty($catalogRow),
         ];
+        $dateContext = $this->resolveScanCreateDateContext($orderRow, $context);
+        $context['delivery_date'] = $dateContext['delivery_date'];
+        $context['delivery_date_display'] = $dateContext['delivery_date_display'];
+        $context['projected_issue_date'] = $dateContext['projected_issue_date'];
+        $context['projected_issue_date_display'] = $dateContext['projected_issue_date_display'];
         $context['unit'] = $this->resolveScanCreateWorkOrderUnit($orderRow, $context);
         $context['quantity'] = $this->resolveScanCreateWorkOrderQuantity($orderRow, $context);
         $context['catalog_item_notice'] = $context['catalog_item_missing']
@@ -3895,6 +3904,91 @@ class WorkOrderController extends Controller
             : '';
 
         return $context;
+    }
+
+    private function resolveScanCreateDateContext(array $orderRow, array $orderContext): array
+    {
+        $datePlan = $this->resolveScanCreateDatePlan($orderRow, $orderContext);
+        $deliveryDate = $datePlan['delivery_date'] instanceof Carbon
+            ? $datePlan['delivery_date']->copy()->startOfDay()
+            : null;
+        $projectedIssueDate = $deliveryDate !== null && $datePlan['projected_issue_date'] instanceof Carbon
+            ? $datePlan['projected_issue_date']->copy()->startOfDay()
+            : null;
+
+        return [
+            'delivery_date' => $deliveryDate?->format('Y-m-d'),
+            'delivery_date_display' => $deliveryDate?->format('d.m.Y') ?? '',
+            'projected_issue_date' => $projectedIssueDate?->format('Y-m-d'),
+            'projected_issue_date_display' => $projectedIssueDate?->format('d.m.Y') ?? '',
+        ];
+    }
+
+    private function resolveScanCreateDatePlan(array $orderRow, array $orderContext): array
+    {
+        $now = Carbon::now();
+        $deliveryDate = $this->resolveScanCreateDeliveryDateCarbon($orderRow, $orderContext);
+        $deliveryDay = $deliveryDate?->copy()->startOfDay();
+        $projectedIssueDate = $deliveryDay !== null
+            ? $deliveryDay->copy()->subDays(14)->startOfDay()
+            : $now->copy()->startOfDay();
+
+        return [
+            'delivery_date' => $deliveryDay,
+            'projected_issue_date' => $projectedIssueDate,
+            'scheduled_start' => $projectedIssueDate->copy()->setTime(8, 0, 0),
+            'scheduled_end' => $deliveryDay !== null
+                ? $deliveryDay->copy()->endOfDay()
+                : $now->copy()->endOfDay(),
+        ];
+    }
+
+    private function resolveScanCreateDeliveryDateCarbon(array $orderRow, array $orderContext): ?Carbon
+    {
+        $dateColumns = [
+            'adDeliveryDeadline',
+            'adDateOut',
+            'adDueDate',
+            'adDeliveryDate',
+            'adShipDate',
+            'adDateShip',
+            'delivery_date',
+            'due_date',
+        ];
+
+        $resolvedOrderDate = $this->resolveFirstAvailableDateFromRow($orderRow, $dateColumns);
+        if ($resolvedOrderDate !== null) {
+            return $resolvedOrderDate;
+        }
+
+        $orderItemRow = $this->findOrderItemRowByOrderContext($orderContext);
+        if (!is_array($orderItemRow)) {
+            return null;
+        }
+
+        return $this->resolveFirstAvailableDateFromRow($orderItemRow, $dateColumns);
+    }
+
+    private function resolveFirstAvailableDateFromRow(array $row, array $columns): ?Carbon
+    {
+        foreach ($columns as $column) {
+            if (!array_key_exists($column, $row)) {
+                continue;
+            }
+
+            $normalizedDate = $this->normalizeDate($row[$column]);
+            if ($normalizedDate === null) {
+                continue;
+            }
+
+            try {
+                return Carbon::parse($normalizedDate)->startOfDay();
+            } catch (Throwable $exception) {
+                continue;
+            }
+        }
+
+        return null;
     }
 
     private function ensureCatalogItemForScanCreate(
@@ -4187,15 +4281,22 @@ class WorkOrderController extends Controller
         $orderNumber = trim((string) ($orderContext['order_number'] ?? ''));
         $orderKey = trim((string) ($orderContext['order_key'] ?? ''));
         $docType = $this->resolveRequestedScanCreateDocType($numberContext['doc_type'] ?? self::DEFAULT_SCAN_CREATE_DOC_TYPE);
-        $dayStart = $now->copy()->startOfDay();
-        $plannedStart = $now->copy();
-        $plannedEnd = $now->copy()->endOfDay();
         $username = is_object($user) ? trim((string) ($user->username ?? $user->name ?? '')) : '';
         $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
         $resolvedUnit = $this->resolveScanCreateWorkOrderUnit($orderRow, $orderContext);
         $resolvedQuantity = $requestedQuantity !== null && $requestedQuantity > 0
             ? $requestedQuantity
             : $this->resolveScanCreateWorkOrderQuantity($orderRow, $orderContext);
+        $datePlan = $this->resolveScanCreateDatePlan($orderRow, $orderContext);
+        $dayStart = $datePlan['projected_issue_date'] instanceof Carbon
+            ? $datePlan['projected_issue_date']->copy()->startOfDay()
+            : $now->copy()->startOfDay();
+        $plannedStart = $datePlan['scheduled_start'] instanceof Carbon
+            ? $datePlan['scheduled_start']->copy()
+            : $dayStart->copy();
+        $plannedEnd = $datePlan['scheduled_end'] instanceof Carbon
+            ? $datePlan['scheduled_end']->copy()
+            : $now->copy()->endOfDay();
 
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acKey', (string) ($numberContext['next_raw'] ?? ''));
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acKeyView', (string) ($numberContext['next_display'] ?? ''));
@@ -4219,6 +4320,7 @@ class WorkOrderController extends Controller
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adSchedStartTime', $plannedStart);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adSchedEndTime', $plannedEnd);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adDeliveryDeadline', $plannedEnd);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adDateOut', $plannedEnd);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'created_at', $now);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'updated_at', $now);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acStatusMF', 'O');
