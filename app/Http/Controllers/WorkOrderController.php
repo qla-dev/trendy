@@ -4309,9 +4309,7 @@ class WorkOrderController extends Controller
             ? $requestedQuantity
             : $this->resolveScanCreateWorkOrderQuantity($orderRow, $orderContext);
         $datePlan = $this->resolveScanCreateDatePlan($orderRow, $orderContext);
-        $dayStart = $datePlan['projected_issue_date'] instanceof Carbon
-            ? $datePlan['projected_issue_date']->copy()->startOfDay()
-            : $now->copy()->startOfDay();
+        $dayStart = $now->copy()->startOfDay();
         $plannedStart = $datePlan['scheduled_start'] instanceof Carbon
             ? $datePlan['scheduled_start']->copy()
             : $dayStart->copy();
