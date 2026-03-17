@@ -14,6 +14,8 @@ class Product extends Model
 
     private static ?array $catalogItemColumnsCache = null;
     private static ?array $catalogItemNonInsertableColumnsCache = null;
+    private static ?array $productStructureColumnsCache = null;
+    private static ?array $productStructureNonInsertableColumnsCache = null;
 
     protected $fillable = [
         'work_order_id',
@@ -184,6 +186,149 @@ class Product extends Model
         ];
     }
 
+    public static function ensureCatalogProductStructure(
+        string $productCode,
+        array $components,
+        float $quantityFactor = 1.0,
+        int $userId = 0
+    ): array {
+        $productCode = trim($productCode);
+
+        if ($productCode === '') {
+            throw new \InvalidArgumentException('Product code is required for structure creation.');
+        }
+
+        $normalizedComponents = array_values(array_filter(array_map(function ($component, $index) use ($quantityFactor) {
+            if (!is_array($component)) {
+                return null;
+            }
+
+            $componentCode = trim((string) ($component['acIdentChild'] ?? ''));
+            if ($componentCode === '') {
+                return null;
+            }
+
+            $lineNo = self::toIntOrNull($component['anNo'] ?? null);
+            $plannedQty = self::toFloatOrNull($component['anPlanQty'] ?? null);
+            $resolvedComponentQty = $plannedQty !== null
+                ? max(0.0, $plannedQty)
+                : max(0.0, $quantityFactor);
+            $grossQty = $quantityFactor > 0
+                ? ($resolvedComponentQty / $quantityFactor)
+                : $resolvedComponentQty;
+
+            return [
+                'acIdentChild' => $componentCode,
+                'acDescr' => trim((string) ($component['acDescr'] ?? '')),
+                'acUM' => strtoupper(substr(trim((string) ($component['acUM'] ?? '')), 0, 3)),
+                'acOperationType' => strtoupper(substr(trim((string) ($component['acOperationType'] ?? '')), 0, 1)),
+                'anNo' => $lineNo !== null && $lineNo > 0 ? $lineNo : ($index + 1),
+                'anGrossQty' => $grossQty,
+            ];
+        }, $components, array_keys($components)), static function ($component) {
+            return is_array($component);
+        }));
+
+        if (empty($normalizedComponents)) {
+            return [
+                'created' => false,
+                'count' => 0,
+            ];
+        }
+
+        $structureTable = self::sourceSchema() . '.' . self::productStructureTable();
+        $structureColumns = self::productStructureColumns();
+        $nonInsertableColumns = self::productStructureNonInsertableColumns();
+
+        if (empty($structureColumns)) {
+            throw new \RuntimeException('Product structure columns could not be resolved.');
+        }
+
+        return DB::transaction(function () use (
+            $structureTable,
+            $structureColumns,
+            $nonInsertableColumns,
+            $productCode,
+            $normalizedComponents,
+            $userId
+        ) {
+            $exists = DB::table($structureTable)
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
+                ->exists();
+
+            if ($exists) {
+                return [
+                    'created' => false,
+                    'count' => 0,
+                ];
+            }
+
+            $now = now();
+            $nextQId = array_key_exists('anQId', $structureColumns) && !isset($nonInsertableColumns['anQId'])
+                ? ((int) (DB::table($structureTable)->max('anQId') ?? 0)) + 1
+                : null;
+            $rowsToInsert = [];
+
+            foreach ($normalizedComponents as $index => $component) {
+                $preferredValues = [
+                    'acIdent' => $productCode,
+                    'acIdentChild' => (string) ($component['acIdentChild'] ?? ''),
+                    'acDescr' => (string) ($component['acDescr'] ?? ''),
+                    'acUM' => (string) ($component['acUM'] ?? ''),
+                    'acOperationType' => (string) ($component['acOperationType'] ?? ''),
+                    'anNo' => (int) ($component['anNo'] ?? ($index + 1)),
+                    'anQId' => $nextQId !== null ? ($nextQId + $index) : null,
+                    'anGrossQty' => (float) ($component['anGrossQty'] ?? 0),
+                    'anQty' => (float) ($component['anGrossQty'] ?? 0),
+                    'anNormQty' => (float) ($component['anGrossQty'] ?? 0),
+                    'anPlanQty' => (float) ($component['anGrossQty'] ?? 0),
+                    'anUserIns' => $userId > 0 ? $userId : 0,
+                    'anUserChg' => $userId > 0 ? $userId : 0,
+                    'adTimeIns' => $now,
+                    'adTimeChg' => $now,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+                $insertPayload = [];
+
+                foreach ($structureColumns as $columnName => $columnMeta) {
+                    if (isset($nonInsertableColumns[$columnName])) {
+                        continue;
+                    }
+
+                    if (array_key_exists($columnName, $preferredValues)) {
+                        $insertValue = $preferredValues[$columnName];
+                    } elseif (($columnMeta['nullable'] ?? true) || ($columnMeta['default'] ?? null) !== null) {
+                        continue;
+                    } else {
+                        $insertValue = self::defaultValueForColumnMeta($columnMeta, $now, $userId);
+                    }
+
+                    if (is_string($insertValue)) {
+                        $maxLength = (int) ($columnMeta['max_length'] ?? 0);
+
+                        if ($maxLength > 0) {
+                            $insertValue = mb_substr($insertValue, 0, $maxLength);
+                        }
+                    }
+
+                    $insertPayload[$columnName] = $insertValue;
+                }
+
+                $rowsToInsert[] = $insertPayload;
+            }
+
+            if (!empty($rowsToInsert)) {
+                DB::table($structureTable)->insert($rowsToInsert);
+            }
+
+            return [
+                'created' => !empty($rowsToInsert),
+                'count' => count($rowsToInsert),
+            ];
+        });
+    }
+
     private static function baseScannerQuery(string $search = ''): Builder
     {
         $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
@@ -275,6 +420,96 @@ class Product extends Model
     private static function productStructureTable(): string
     {
         return (string) config('workorders.product_structure_table', 'tHF_SetPrSt');
+    }
+
+    private static function productStructureColumns(): array
+    {
+        if (self::$productStructureColumnsCache !== null) {
+            return self::$productStructureColumnsCache;
+        }
+
+        self::$productStructureColumnsCache = DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->select('COLUMN_NAME', 'DATA_TYPE', 'CHARACTER_MAXIMUM_LENGTH', 'IS_NULLABLE', 'COLUMN_DEFAULT')
+            ->where('TABLE_SCHEMA', self::sourceSchema())
+            ->where('TABLE_NAME', self::productStructureTable())
+            ->orderBy('ORDINAL_POSITION')
+            ->get()
+            ->mapWithKeys(function ($row) {
+                return [
+                    (string) $row->COLUMN_NAME => [
+                        'type' => strtolower((string) ($row->DATA_TYPE ?? '')),
+                        'max_length' => is_numeric((string) ($row->CHARACTER_MAXIMUM_LENGTH ?? null))
+                            ? (int) $row->CHARACTER_MAXIMUM_LENGTH
+                            : null,
+                        'nullable' => strtoupper((string) ($row->IS_NULLABLE ?? 'YES')) === 'YES',
+                        'default' => $row->COLUMN_DEFAULT,
+                    ],
+                ];
+            })
+            ->all();
+
+        return self::$productStructureColumnsCache;
+    }
+
+    private static function productStructureNonInsertableColumns(): array
+    {
+        if (self::$productStructureNonInsertableColumnsCache !== null) {
+            return self::$productStructureNonInsertableColumnsCache;
+        }
+
+        self::$productStructureNonInsertableColumnsCache = DB::table('sys.columns as c')
+            ->join('sys.tables as t', 'c.object_id', '=', 't.object_id')
+            ->join('sys.schemas as s', 't.schema_id', '=', 's.schema_id')
+            ->where('s.name', self::sourceSchema())
+            ->where('t.name', self::productStructureTable())
+            ->where(function ($query) {
+                $query
+                    ->where('c.is_identity', 1)
+                    ->orWhere('c.is_computed', 1)
+                    ->orWhere('c.generated_always_type', '<>', 0);
+            })
+            ->pluck('c.name')
+            ->map(function ($value) {
+                return (string) $value;
+            })
+            ->flip()
+            ->all();
+
+        return self::$productStructureNonInsertableColumnsCache;
+    }
+
+    private static function toFloatOrNull(mixed $value): ?float
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (float) $value;
+        }
+
+        if (is_string($value)) {
+            $normalized = trim(str_replace(',', '.', $value));
+
+            if ($normalized === '' || !is_numeric($normalized)) {
+                return null;
+            }
+
+            return (float) $normalized;
+        }
+
+        if (is_numeric((string) $value)) {
+            return (float) $value;
+        }
+
+        return null;
+    }
+
+    private static function toIntOrNull(mixed $value): ?int
+    {
+        $floatValue = self::toFloatOrNull($value);
+
+        return $floatValue === null ? null : (int) $floatValue;
     }
 
     private static function resolveScannerLimit(?int $requestedLimit = null): int

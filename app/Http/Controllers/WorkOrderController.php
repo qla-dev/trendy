@@ -1438,6 +1438,8 @@ class WorkOrderController extends Controller
             $quantityUnit = strtoupper(trim((string) ($validated['quantity_unit'] ?? 'AUTO')));
             $userDescription = trim((string) ($validated['description'] ?? ''));
             $saveMode = strtolower(trim((string) ($validated['save_mode'] ?? 'manual')));
+            $productStructureCreated = false;
+            $productStructureCreatedCount = 0;
             $suppressStatusTransition = (bool) $request->attributes->get('suppress_status_transition', false);
             $triggerStatusTransition = array_key_exists('trigger_status_transition', $validated)
                 ? (bool) $validated['trigger_status_transition']
@@ -1556,6 +1558,21 @@ class WorkOrderController extends Controller
                 ];
             }, $normalizedComponents);
 
+            if ($saveMode === 'manual' && empty($bomRows)) {
+                $structureEnsureResult = Product::ensureCatalogProductStructure(
+                    $productId,
+                    $normalizedComponents,
+                    $quantityFactor,
+                    (int) (auth()->id() ?? 0)
+                );
+                $productStructureCreated = (bool) ($structureEnsureResult['created'] ?? false);
+                $productStructureCreatedCount = (int) ($structureEnsureResult['count'] ?? 0);
+
+                if ($productStructureCreated) {
+                    $bomRows = $this->fetchBomComponentsByProduct($productId, $this->bomLimit());
+                }
+            }
+
             $bomRowsByKey = [];
             foreach ($bomRows as $row) {
                 $lineNo = (int) ($this->toFloatOrNull($row['anNo'] ?? null) ?? 0);
@@ -1628,6 +1645,8 @@ class WorkOrderController extends Controller
                 'selected_components_count' => count($resolvedRows),
                 'bom_matched_components_count' => $bomMatchedCount,
                 'raw_manual_components_count' => $manualRawCount,
+                'product_structure_created' => $productStructureCreated,
+                'product_structure_created_count' => $productStructureCreatedCount,
                 'variant' => $variant,
                 'user_id' => $userId,
                 'items_table' => $this->qualifiedItemTableName(),
@@ -1955,6 +1974,8 @@ class WorkOrderController extends Controller
                     'saved_count' => count($insertedRows),
                     'updated_count' => $updatedCount,
                     'inserted_count' => $insertedCount,
+                    'product_structure_created' => $productStructureCreated,
+                    'product_structure_created_count' => $productStructureCreatedCount,
                     'stock_adjusted_count' => count($stockAdjustmentResults),
                     'stock_adjustments' => $stockAdjustmentResults,
                     'status_transition' => $statusTransition,
