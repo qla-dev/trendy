@@ -4023,7 +4023,7 @@
 
     function buildFineAdjustRowsFromSelection() {
       return selectedDetailedRows()
-        .map(function (row) {
+        .map(function (row, index) {
           var planiranoQty = '';
           var zalihaQty = Number(row.stockQty);
           if (!Number.isFinite(zalihaQty)) {
@@ -4050,7 +4050,7 @@
 
           return {
             alternativa: '0',
-            pozicija: String(row.anNo || 0),
+            pozicija: String(index + 1),
             artikal: String(row.acIdentChild || '').trim(),
             opis: String(row.acDescr || '').trim(),
             dim1: dim1,

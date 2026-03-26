@@ -2004,7 +2004,7 @@ class WorkOrderController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri snimanju planirane potrosnje.',
+                'message' => 'Greška pri snimanju planirane potrosnje.',
             ], 500);
         }
     }

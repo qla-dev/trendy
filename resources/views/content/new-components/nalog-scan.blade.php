@@ -1396,17 +1396,6 @@
           bindCreateDocTypeSwitch(popup, docTypeState, function (nextDocType) {
             selectedDocType = nextDocType;
           });
-
-          var quantityInput = popup ? popup.querySelector('#wo-scan-create-quantity') : null;
-          if (quantityInput) {
-            window.setTimeout(function () {
-              quantityInput.focus();
-              var inputLength = quantityInput.value ? quantityInput.value.length : 0;
-              if (typeof quantityInput.setSelectionRange === 'function') {
-                quantityInput.setSelectionRange(inputLength, inputLength);
-              }
-            }, 0);
-          }
         }
       }));
 
