@@ -2573,6 +2573,17 @@ class WorkOrderController extends Controller
             'acNote',
         ]);
 
+        if (empty($selectColumns)) {
+            $selectColumns = [
+                'acIdentChild',
+                'acDescr',
+                'acUM',
+                'anGrossQty',
+                'acOperationType',
+                'anNo',
+            ];
+        }
+
         $query = $this->newProductStructureTableQuery()
             ->select($selectColumns)
             ->where('acIdent', $productId)
