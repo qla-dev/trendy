@@ -662,6 +662,7 @@ class WorkOrderController extends Controller
                     'acIdentChild' => $componentId,
                     'anNo' => (int) ($bomRow['anNo'] ?? 0),
                     'acDescr' => trim((string) ($bomRow['acDescr'] ?? '')),
+                    'napomena' => trim((string) ($bomRow['napomena'] ?? '')),
                     'acUM' => trim((string) ($bomRow['acUM'] ?? '')),
                     'acOperationType' => trim((string) ($bomRow['acOperationType'] ?? '')),
                 ];
@@ -1626,7 +1627,7 @@ class WorkOrderController extends Controller
             $identityColumns = $this->itemTableIdentityColumns();
             $manualNoInsert = in_array('anNo', $itemColumns, true) && !in_array('anNo', $identityColumns, true);
             $manualQIdInsert = in_array('anQId', $itemColumns, true) && !in_array('anQId', $identityColumns, true);
-            $hasNoteColumn = in_array('acNote', $itemColumns, true);
+            $itemNoteColumn = $this->workOrderItemNoteColumn($itemColumns);
             $hasStatementColumn = in_array('acStatement', $itemColumns, true);
 
             Log::info('Planned consumption save started.', [
@@ -1653,7 +1654,7 @@ class WorkOrderController extends Controller
                 'identity_columns' => $identityColumns,
                 'manual_anNo_insert' => $manualNoInsert,
                 'manual_anQId_insert' => $manualQIdInsert,
-                'has_note_column' => $hasNoteColumn,
+                'item_note_column' => $itemNoteColumn,
                 'has_statement_column' => $hasStatementColumn,
             ]);
 
@@ -1671,7 +1672,7 @@ class WorkOrderController extends Controller
                 $quantityUnit,
                 $saveMode,
                 $userDescription,
-                $hasNoteColumn,
+                $itemNoteColumn,
                 $hasStatementColumn,
                 $manualNoInsert,
                 $manualQIdInsert,
@@ -1705,13 +1706,17 @@ class WorkOrderController extends Controller
                     $descriptionFromRequested = trim((string) ($requestedRow['acDescr'] ?? ''));
                     $descriptionFromBom = trim((string) ($bomRow['acDescr'] ?? ''));
                     $componentNote = trim((string) ($requestedRow['napomena'] ?? ''));
+                    $bomNote = trim((string) ($bomRow['napomena'] ?? ''));
                     $description = $descriptionFromRequested !== '' ? $descriptionFromRequested : $descriptionFromBom;
-                    $resolvedNote = $componentNote !== '' ? $componentNote : $userDescription;
+                    $resolvedNote = $componentNote !== ''
+                        ? $componentNote
+                        : ($bomNote !== '' ? $bomNote : $userDescription);
 
                     Log::info('save-planned-consumption resolved component note', [
                         'componentId' => $componentId,
                         'lineNo' => $lineNo,
                         'componentNote' => $componentNote,
+                        'bomNote' => $bomNote,
                         'resolvedNote' => $resolvedNote,
                         'source' => $source,
                     ]);
@@ -1775,8 +1780,16 @@ class WorkOrderController extends Controller
                             $updatePayload['acDescr'] = substr($description, 0, 80);
                         }
 
-                        if ($hasNoteColumn && $resolvedNote !== '') {
-                            $updatePayload['acNote'] = substr($resolvedNote, 0, 4000);
+                        if ($itemNoteColumn !== null && $resolvedNote !== '') {
+                            $resolvedSavedNote = $this->resolveWorkOrderItemNoteForSave(
+                                $resolvedNote,
+                                $itemNoteColumn,
+                                $existingRow
+                            );
+
+                            if ($resolvedSavedNote !== null) {
+                                $updatePayload[$itemNoteColumn] = $resolvedSavedNote;
+                            }
                         }
 
                         if ($hasStatementColumn) {
@@ -1840,8 +1853,11 @@ class WorkOrderController extends Controller
                         'anUserChg' => $userId,
                     ];
 
-                    if ($hasNoteColumn) {
-                        $insertPayload['acNote'] = $resolvedNote === '' ? null : substr($resolvedNote, 0, 4000);
+                    if ($itemNoteColumn !== null) {
+                        $insertPayload[$itemNoteColumn] = $this->resolveWorkOrderItemNoteForSave(
+                            $resolvedNote,
+                            $itemNoteColumn
+                        );
                     }
 
                     if ($hasStatementColumn) {
@@ -2217,10 +2233,13 @@ class WorkOrderController extends Controller
                 $fieldUpdates['acDescr'] = $description === '' ? null : substr($description, 0, 80);
             }
 
-            if ($hasNoteInput && in_array('acNote', $columns, true)) {
-                $fieldUpdates['acNote'] = $this->resolvePlannedConsumptionNoteForSave(
+            $itemNoteColumn = $this->workOrderItemNoteColumn($columns);
+
+            if ($hasNoteInput && $itemNoteColumn !== null) {
+                $fieldUpdates[$itemNoteColumn] = $this->resolveWorkOrderItemNoteForSave(
                     (string) ($validated['napomena'] ?? ''),
-                    (string) ($itemRow['acNote'] ?? '')
+                    $itemNoteColumn,
+                    $itemRow
                 );
             }
 
@@ -2542,16 +2561,20 @@ class WorkOrderController extends Controller
     private function fetchBomComponentsByProduct(string $productId, ?int $limit = null): array
     {
         $resolvedLimit = max(1, (int) ($limit ?? $this->bomLimit()));
+        $structureColumns = $this->productStructureTableColumns();
+        $selectColumns = $this->existingColumns($structureColumns, [
+            'acIdentChild',
+            'acDescr',
+            'acUM',
+            'anGrossQty',
+            'acOperationType',
+            'anNo',
+            'acFieldSE',
+            'acNote',
+        ]);
 
         $query = $this->newProductStructureTableQuery()
-            ->select([
-                'acIdentChild',
-                'acDescr',
-                'acUM',
-                'anGrossQty',
-                'acOperationType',
-                'anNo',
-            ])
+            ->select($selectColumns)
             ->where('acIdent', $productId)
             ->orderBy('anNo')
             ->limit($resolvedLimit);
@@ -2563,14 +2586,7 @@ class WorkOrderController extends Controller
 
             if ($trimmedProduct !== '' && $trimmedProduct !== $productId) {
                 $rows = $this->newProductStructureTableQuery()
-                    ->select([
-                        'acIdentChild',
-                        'acDescr',
-                        'acUM',
-                        'anGrossQty',
-                        'acOperationType',
-                        'anNo',
-                    ])
+                    ->select($selectColumns)
                     ->whereRaw('LTRIM(RTRIM(acIdent)) = ?', [$trimmedProduct])
                     ->orderBy('anNo')
                     ->limit($resolvedLimit)
@@ -2580,13 +2596,18 @@ class WorkOrderController extends Controller
 
         return $rows
             ->map(function ($row) {
+                $rowData = (array) $row;
+
                 return [
-                    'acIdentChild' => trim((string) ($row->acIdentChild ?? '')),
-                    'acDescr' => trim((string) ($row->acDescr ?? '')),
-                    'acUM' => strtoupper(substr(trim((string) ($row->acUM ?? '')), 0, 3)),
-                    'anGrossQty' => $this->toFloatOrNull($row->anGrossQty ?? null) ?? 0.0,
-                    'acOperationType' => trim((string) ($row->acOperationType ?? '')),
-                    'anNo' => (int) ($this->toFloatOrNull($row->anNo ?? null) ?? 0),
+                    'acIdentChild' => trim((string) ($rowData['acIdentChild'] ?? '')),
+                    'acDescr' => trim((string) ($rowData['acDescr'] ?? '')),
+                    'napomena' => $this->plannedConsumptionDisplayNote(
+                        (string) $this->valueTrimmed($rowData, ['acFieldSE', 'acNote'], '')
+                    ),
+                    'acUM' => strtoupper(substr(trim((string) ($rowData['acUM'] ?? '')), 0, 3)),
+                    'anGrossQty' => $this->toFloatOrNull($rowData['anGrossQty'] ?? null) ?? 0.0,
+                    'acOperationType' => trim((string) ($rowData['acOperationType'] ?? '')),
+                    'anNo' => (int) ($this->toFloatOrNull($rowData['anNo'] ?? null) ?? 0),
                 ];
             })
             ->values()
@@ -4819,8 +4840,7 @@ class WorkOrderController extends Controller
     {
         $taskState = strtoupper(trim((string) $this->value($row, ['acTaskState'], '')));
         $isFinished = in_array($taskState, ['F', 'Z', 'C', 'D'], true);
-        $note = (string) $this->value($row, ['acNote'], '');
-        $displayNote = $this->plannedConsumptionDisplayNote($note);
+        $displayNote = $this->workOrderItemDisplayNote($row);
         $itemId = $this->value($row, ['anQId', 'anNo'], null);
         $itemQid = $this->value($row, ['anQId'], null);
         $itemNo = $this->value($row, ['anNo'], null);
@@ -4842,7 +4862,7 @@ class WorkOrderController extends Controller
             'normativna_osnova' => $this->normalizeNumber($this->value($row, ['anQtyBase', 'anQtyBase3'], 0)),
             'aktivno' => ((int) $this->value($row, ['anActive'], 0)) === 1 ? 'Da' : 'Ne',
             'zavrseno' => $isFinished ? 'Da' : 'Ne',
-            'va' => (string) $this->value($row, ['acFieldSA', 'acFieldSE'], ''),
+            'va' => (string) $this->value($row, ['acFieldSA'], ''),
             'prim_klas' => (string) $this->value($row, ['acFieldSB'], ''),
             'sek_klas' => (string) $this->value($row, ['acFieldSC'], ''),
             'can_remove' => $canRemove,
@@ -5032,6 +5052,43 @@ class WorkOrderController extends Controller
         return substr($trimmedNote, 0, 4000);
     }
 
+    private function workOrderItemNoteColumn(array $columns): ?string
+    {
+        return $this->firstExistingColumn($columns, ['acFieldSE', 'acNote']);
+    }
+
+    private function workOrderItemDisplayNote(array $row): string
+    {
+        return $this->plannedConsumptionDisplayNote(
+            (string) $this->valueTrimmed($row, ['acFieldSE', 'acNote'], '')
+        );
+    }
+
+    private function resolveWorkOrderItemNoteForSave(
+        string $note,
+        ?string $noteColumn,
+        array $existingRow = []
+    ): ?string {
+        if ($noteColumn === null) {
+            return null;
+        }
+
+        if ($noteColumn === 'acFieldSE') {
+            $trimmedNote = trim($note);
+
+            if ($trimmedNote === '') {
+                return null;
+            }
+
+            return substr($trimmedNote, 0, 2000);
+        }
+
+        return $this->resolvePlannedConsumptionNoteForSave(
+            $note,
+            (string) ($existingRow['acNote'] ?? '')
+        );
+    }
+
     private function mapItemResourceRow(array $row): array
     {
         return [
@@ -5056,7 +5113,7 @@ class WorkOrderController extends Controller
             'naziv' => (string) $this->valueTrimmed($row, ['acDescr', 'acName', 'acIdent'], ''),
             'kolicina' => $this->normalizeNumber($this->valueTrimmed($row, ['anQty', 'anPlanQty', 'anNormQty'], 0)),
             'mj' => (string) $this->valueTrimmed($row, ['acUM'], ''),
-            'napomena' => $this->plannedConsumptionDisplayNote((string) $this->valueTrimmed($row, ['acNote'], '')),
+            'napomena' => $this->workOrderItemDisplayNote($row),
         ];
     }
 
@@ -5083,7 +5140,7 @@ class WorkOrderController extends Controller
         $timeUnit = strtoupper((string) $this->valueTrimmed($row, ['acUMTime'], ''));
         $mjVrij = $timeUnit === 'H' ? 'Sat' : (string) $this->valueTrimmed($row, ['acUMTime'], '');
         $normative = $this->normalizeNumber($this->valueTrimmed($row, ['anBatch', 'anQtyBase', 'anQtyBase3'], 0));
-        $va = (string) $this->valueTrimmed($row, ['acFieldSE', 'acFieldSA', 'acFieldSB'], '');
+        $va = (string) $this->valueTrimmed($row, ['acFieldSA'], '');
 
         if ($va === '') {
             $va = 'OPR';
@@ -5095,7 +5152,7 @@ class WorkOrderController extends Controller
             'pozicija' => (string) $this->valueTrimmed($row, ['anNo'], ''),
             'operacija' => (string) $this->valueTrimmed($row, ['acIdent'], ''),
             'naziv' => (string) $this->valueTrimmed($row, ['acDescr', 'acName', 'acIdent'], ''),
-            'napomena' => $this->plannedConsumptionDisplayNote((string) $this->valueTrimmed($row, ['acNote'], '')),
+            'napomena' => $this->workOrderItemDisplayNote($row),
             'mj' => (string) $this->valueTrimmed($row, ['acUM'], ''),
             'mj_vrij' => $mjVrij,
             'normativna_osnova' => $normative,
@@ -6449,6 +6506,19 @@ class WorkOrderController extends Controller
         return DB::table('INFORMATION_SCHEMA.COLUMNS')
             ->where('TABLE_SCHEMA', $this->tableSchema())
             ->where('TABLE_NAME', $this->itemTableName())
+            ->pluck('COLUMN_NAME')
+            ->map(function ($columnName) {
+                return (string) $columnName;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function productStructureTableColumns(): array
+    {
+        return DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->where('TABLE_SCHEMA', $this->tableSchema())
+            ->where('TABLE_NAME', $this->productStructureTableName())
             ->pluck('COLUMN_NAME')
             ->map(function ($columnName) {
                 return (string) $columnName;

@@ -220,6 +220,7 @@ class Product extends Model
             return [
                 'acIdentChild' => $componentCode,
                 'acDescr' => trim((string) ($component['acDescr'] ?? '')),
+                'napomena' => trim((string) ($component['napomena'] ?? '')),
                 'acUM' => strtoupper(substr(trim((string) ($component['acUM'] ?? '')), 0, 3)),
                 'acOperationType' => strtoupper(substr(trim((string) ($component['acOperationType'] ?? '')), 0, 1)),
                 'anNo' => $lineNo !== null && $lineNo > 0 ? $lineNo : ($index + 1),
@@ -252,6 +253,7 @@ class Product extends Model
             $normalizedComponents,
             $userId
         ) {
+            $noteColumn = self::firstExistingColumn(array_keys($structureColumns), ['acFieldSE', 'acNote']);
             $exists = DB::table($structureTable)
                 ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
                 ->exists();
@@ -289,6 +291,15 @@ class Product extends Model
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];
+
+                if ($noteColumn !== null) {
+                    $componentNote = trim((string) ($component['napomena'] ?? ''));
+
+                    if ($componentNote !== '') {
+                        $preferredValues[$noteColumn] = $componentNote;
+                    }
+                }
+
                 $insertPayload = [];
 
                 foreach ($structureColumns as $columnName => $columnMeta) {
@@ -613,5 +624,16 @@ class Product extends Model
         }
 
         return $userId > 0 ? $userId : null;
+    }
+
+    private static function firstExistingColumn(array $columns, array $candidates): ?string
+    {
+        foreach ($candidates as $candidate) {
+            if (in_array($candidate, $columns, true)) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 }
