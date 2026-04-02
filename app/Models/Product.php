@@ -293,11 +293,7 @@ class Product extends Model
                 ];
 
                 if ($noteColumn !== null) {
-                    $componentNote = trim((string) ($component['napomena'] ?? ''));
-
-                    if ($componentNote !== '') {
-                        $preferredValues[$noteColumn] = $componentNote;
-                    }
+                    $preferredValues[$noteColumn] = trim((string) ($component['napomena'] ?? ''));
                 }
 
                 $insertPayload = [];

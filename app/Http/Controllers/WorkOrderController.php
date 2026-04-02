@@ -2019,8 +2019,11 @@ class WorkOrderController extends Controller
                 'request_components_count' => count((array) $request->input('components', [])),
             ]);
 
+            $errorDetail = $this->clientFacingExceptionDetail($exception);
+
             return response()->json([
-                'message' => 'Greška pri snimanju planirane potrosnje.',
+                'message' => 'Greška pri snimanju planirane potrošnje.',
+                'detail' => $errorDetail !== '' ? $errorDetail : null,
             ], 500);
         }
     }
@@ -5098,6 +5101,44 @@ class WorkOrderController extends Controller
             $note,
             (string) ($existingRow['acNote'] ?? '')
         );
+    }
+
+    private function clientFacingExceptionDetail(Throwable $exception): string
+    {
+        $details = [];
+        $current = $exception;
+
+        while ($current !== null && count($details) < 3) {
+            $message = $this->sanitizeClientFacingExceptionMessage($current->getMessage());
+
+            if ($message !== '' && !in_array($message, $details, true)) {
+                $details[] = $message;
+            }
+
+            $current = $current->getPrevious();
+        }
+
+        return implode("\n", $details);
+    }
+
+    private function sanitizeClientFacingExceptionMessage(string $message): string
+    {
+        $normalized = trim($message);
+
+        if ($normalized === '') {
+            return '';
+        }
+
+        $normalized = preg_replace('/\s+\(SQL:.*$/s', '', $normalized) ?? $normalized;
+
+        if (preg_match('/\[SQL Server\](.+)$/s', $normalized, $matches)) {
+            $normalized = trim((string) ($matches[1] ?? ''));
+        }
+
+        $normalized = preg_replace('/^SQLSTATE\[[^\]]+\]:\s*/', '', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
+
+        return Str::limit(trim($normalized), 600);
     }
 
     private function mapItemResourceRow(array $row): array
