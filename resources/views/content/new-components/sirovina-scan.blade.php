@@ -1731,13 +1731,26 @@
       errorEl.classList.remove('d-none');
     }
 
-    function notify(icon, title, text) {
+    function notify(icon, title, text, details) {
+      var messageText = text ? String(text).trim() : '';
+      var detailsText = details ? String(details).trim() : '';
+
       if (window.Swal && typeof window.Swal.fire === 'function') {
         var options = {
           icon: icon,
-          title: title,
-          text: text
+          title: title
         };
+
+        if (detailsText) {
+          options.html = (
+            '<div style="display:block;">' + escapeHtml(messageText).replace(/\n/g, '<br>') + '</div>' +
+            '<div style="display:block;margin-top:0.7rem;font-size:0.92em;opacity:0.9;word-break:break-word;">' +
+              escapeHtml(detailsText).replace(/\n/g, '<br>') +
+            '</div>'
+          );
+        } else {
+          options.text = messageText;
+        }
 
         if (typeof window.woSwalWithTheme === 'function') {
           options = window.woSwalWithTheme(options);
@@ -1747,7 +1760,7 @@
         return;
       }
 
-      window.alert(title + ': ' + text);
+      window.alert(title + ': ' + messageText + (detailsText ? ('\n\n' + detailsText) : ''));
     }
 
     function shouldIgnoreSelectableRowClick(target) {
@@ -2442,13 +2455,57 @@
       window.setTimeout(applyBackdrop, 120);
     }
 
+    function extractResponseErrorDetail(payload) {
+      if (!payload || typeof payload !== 'object') {
+        return '';
+      }
+
+      if (payload.detail) {
+        return String(payload.detail).trim();
+      }
+
+      if (payload.server_message) {
+        return String(payload.server_message).trim();
+      }
+
+      if (!payload.errors || typeof payload.errors !== 'object') {
+        return '';
+      }
+
+      var details = [];
+      Object.keys(payload.errors).forEach(function (key) {
+        var value = payload.errors[key];
+
+        if (Array.isArray(value)) {
+          value.forEach(function (entry) {
+            var text = String(entry || '').trim();
+            if (text) {
+              details.push(text);
+            }
+          });
+          return;
+        }
+
+        var single = String(value || '').trim();
+        if (single) {
+          details.push(single);
+        }
+      });
+
+      return details.slice(0, 4).join('\n');
+    }
+
     function parseResponse(response) {
       return response.json().catch(function () {
         return {};
       }).then(function (payload) {
         if (!response.ok) {
           var message = payload && payload.message ? payload.message : 'Zahtjev nije uspio.';
-          throw new Error(message);
+          var error = new Error(message);
+          error.detail = extractResponseErrorDetail(payload);
+          error.status = response.status;
+          error.payload = payload || {};
+          throw error;
         }
 
         return payload || {};
@@ -5247,7 +5304,12 @@
           handleSaveSuccess(payload);
         })
         .catch(function (error) {
-          notify('error', 'Greska', error && error.message ? error.message : 'Snimanje nije uspjelo.');
+          notify(
+            'error',
+            'Greška',
+            error && error.message ? error.message : 'Snimanje nije uspjelo.',
+            error && error.detail ? error.detail : ''
+          );
         })
         .finally(function () {
           state.saving = false;
