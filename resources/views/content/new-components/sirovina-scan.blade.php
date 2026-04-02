@@ -4251,8 +4251,8 @@
 
           if (field === 'dim1' || field === 'dim2' || field === 'dim3') {
             var dimensionValue = escapeHtml(row[field] || '');
-            return '<td><input type="number" class="form-control form-control-sm fine-adjust-input" ' +
-              'data-row="' + rowIndex + '" data-field="' + field + '" value="' + dimensionValue + '" step="0.01" min="0"></td>';
+            return '<td><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" class="form-control form-control-sm fine-adjust-input" ' +
+              'data-row="' + rowIndex + '" data-field="' + field + '" value="' + dimensionValue + '"></td>';
           }
 
           if (field === 'planirano') {
@@ -4267,21 +4267,20 @@
             return '' +
               '<td class="fine-adjust-plan-cell">' +
                 '<div class="fine-adjust-plan-stack' + (planLocked ? ' is-locked' : '') + (planHint ? ' has-hint' : '') + '">' +
-                  '<input type="number" class="form-control form-control-sm fine-adjust-input fine-adjust-plan-input' + (planLocked ? ' is-locked' : '') + '" ' +
-                    'data-row="' + rowIndex + '" data-field="planirano" value="' + planValue + '" step="0.0001" min="0" placeholder="" title="' + planHint + '"' + (planLocked ? ' readonly' : '') + '>' +
+                  '<input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" class="form-control form-control-sm fine-adjust-input fine-adjust-plan-input' + (planLocked ? ' is-locked' : '') + '" ' +
+                    'data-row="' + rowIndex + '" data-field="planirano" value="' + planValue + '" placeholder="" title="' + planHint + '"' + (planLocked ? ' readonly' : '') + '>' +
                   '<div class="fine-adjust-plan-hint' + (planLocked ? ' is-locked' : '') + '" title="' + planHint + '">' + planHint + '</div>' +
                 '</div>' +
               '</td>';
           }
 
           var value = escapeHtml(row[field] || '');
-          var inputType = (field === 'pozicija' || field === 'alternativa')
-            ? 'number'
-            : 'text';
-          var stepAttr = inputType === 'number' ? ' step="0.0001"' : '';
+          var numericInputAttrs = (field === 'pozicija' || field === 'alternativa')
+            ? ' type="text" inputmode="decimal" autocomplete="off" spellcheck="false"'
+            : ' type="text"';
 
-          return '<td><input type="' + inputType + '" class="form-control form-control-sm fine-adjust-input" ' +
-            'data-row="' + rowIndex + '" data-field="' + field + '" value="' + value + '"' + stepAttr + '></td>';
+          return '<td><input' + numericInputAttrs + ' class="form-control form-control-sm fine-adjust-input" ' +
+            'data-row="' + rowIndex + '" data-field="' + field + '" value="' + value + '"></td>';
         }).join('');
 
         return '<tr data-row="' + rowIndex + '">' + cells + '</tr>';
@@ -5873,6 +5872,182 @@
     }
 
     if (fineAdjustBodyEl) {
+      var fineAdjustNavigationFields = [
+        'alternativa', 'pozicija', 'artikal', 'opis', 'dim1', 'dim2', 'dim3', 'napomena', 'planirano', 'mj'
+      ];
+      var fineAdjustNumericFields = [
+        'alternativa', 'pozicija', 'dim1', 'dim2', 'dim3', 'planirano'
+      ];
+
+      var isFineAdjustNumericField = function (field) {
+        return fineAdjustNumericFields.indexOf(field) !== -1;
+      };
+
+      var isFineAdjustNavigableInput = function (element) {
+        return !!(
+          element &&
+          element.classList &&
+          element.classList.contains('fine-adjust-input') &&
+          !element.disabled &&
+          !element.readOnly
+        );
+      };
+
+      var focusFineAdjustNavigableInput = function (element) {
+        if (!isFineAdjustNavigableInput(element)) {
+          return false;
+        }
+
+        element.focus();
+
+        if (element.tagName === 'INPUT' && typeof element.select === 'function') {
+          try {
+            element.select();
+          } catch (error) {
+          }
+        }
+
+        return true;
+      };
+
+      var findFineAdjustNavigableInput = function (rowIndex, field) {
+        if (!Number.isFinite(rowIndex) || rowIndex < 0 || !field) {
+          return null;
+        }
+
+        var selector = '.fine-adjust-input[data-row="' + rowIndex + '"][data-field="' + field + '"]';
+        var element = fineAdjustBodyEl.querySelector(selector);
+
+        return isFineAdjustNavigableInput(element) ? element : null;
+      };
+
+      var findFineAdjustHorizontalTarget = function (rowIndex, field, direction) {
+        var fieldIndex = fineAdjustNavigationFields.indexOf(field);
+        if (fieldIndex === -1) {
+          return null;
+        }
+
+        var nextIndex = fieldIndex + direction;
+        while (nextIndex >= 0 && nextIndex < fineAdjustNavigationFields.length) {
+          var target = findFineAdjustNavigableInput(rowIndex, fineAdjustNavigationFields[nextIndex]);
+          if (target) {
+            return target;
+          }
+
+          nextIndex += direction;
+        }
+
+        return null;
+      };
+
+      var readFineAdjustSelection = function (element) {
+        if (!element || element.tagName !== 'INPUT') {
+          return null;
+        }
+
+        try {
+          if (typeof element.selectionStart === 'number' && typeof element.selectionEnd === 'number') {
+            return {
+              start: element.selectionStart,
+              end: element.selectionEnd
+            };
+          }
+        } catch (error) {
+        }
+
+        return null;
+      };
+
+      var shouldNavigateFineAdjustHorizontally = function (element, key) {
+        if (!element) {
+          return false;
+        }
+
+        if (element.tagName === 'SELECT') {
+          return true;
+        }
+
+        var value = String(element.value || '');
+        var selection = readFineAdjustSelection(element);
+        if (value === '') {
+          return true;
+        }
+
+        if (!selection || selection.start !== selection.end) {
+          return false;
+        }
+
+        if (key === 'ArrowRight') {
+          return selection.end >= value.length;
+        }
+
+        if (key === 'ArrowLeft') {
+          return selection.start <= 0;
+        }
+
+        return false;
+      };
+
+      fineAdjustBodyEl.addEventListener('keydown', function (event) {
+        var target = event.target;
+        if (!isFineAdjustNavigableInput(target)) {
+          return;
+        }
+
+        var key = String(event.key || '');
+        if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'ArrowUp' && key !== 'ArrowDown') {
+          return;
+        }
+
+        var field = String(target.getAttribute('data-field') || '').trim();
+        var rowIndex = Number(target.getAttribute('data-row') || -1);
+
+        if (key === 'ArrowUp' || key === 'ArrowDown') {
+          event.preventDefault();
+
+          if (!field || !Number.isFinite(rowIndex) || rowIndex < 0) {
+            return;
+          }
+
+          var verticalTarget = findFineAdjustNavigableInput(
+            rowIndex + (key === 'ArrowUp' ? -1 : 1),
+            field
+          );
+
+          if (!verticalTarget) {
+            return;
+          }
+
+          focusFineAdjustNavigableInput(verticalTarget);
+          return;
+        }
+
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+          return;
+        }
+
+        if (!field || !Number.isFinite(rowIndex) || rowIndex < 0) {
+          return;
+        }
+
+        if (!shouldNavigateFineAdjustHorizontally(target, key)) {
+          return;
+        }
+
+        var horizontalTarget = findFineAdjustHorizontalTarget(
+          rowIndex,
+          field,
+          key === 'ArrowLeft' ? -1 : 1
+        );
+
+        if (!horizontalTarget) {
+          return;
+        }
+
+        event.preventDefault();
+        focusFineAdjustNavigableInput(horizontalTarget);
+      });
+
       fineAdjustBodyEl.addEventListener('input', function (event) {
         var target = event.target;
         if (!target || !target.classList || !target.classList.contains('fine-adjust-input')) {
@@ -5883,6 +6058,13 @@
         var rowIndex = Number(target.getAttribute('data-row') || -1);
         if (!Number.isFinite(rowIndex) || rowIndex < 0) {
           return;
+        }
+
+        if (isFineAdjustNumericField(field) && target.tagName === 'INPUT') {
+          var normalizedNumericValue = normalizeQuantityInputValue(target.value);
+          if (normalizedNumericValue !== String(target.value || '')) {
+            target.value = normalizedNumericValue;
+          }
         }
 
         var row = Array.isArray(state.fineAdjustRows) ? state.fineAdjustRows[rowIndex] : null;
