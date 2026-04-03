@@ -4105,6 +4105,7 @@
           }
 
           return {
+            row_uid: generateFineAdjustRowUid(),
             alternativa: '0',
             pozicija: String(index + 1),
             artikal: String(row.acIdentChild || '').trim(),
@@ -4128,12 +4129,14 @@
     }
 
     function renderFineAdjustRows() {
+      var totalColumns = 13;
+
       if (!fineAdjustBodyEl) {
         return;
       }
 
       if (!Array.isArray(state.fineAdjustRows) || state.fineAdjustRows.length === 0) {
-        fineAdjustBodyEl.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-2">Nema odabranih stavki.</td></tr>';
+        fineAdjustBodyEl.innerHTML = '<tr><td colspan="' + totalColumns + '" class="text-center text-muted py-2">Nema odabranih stavki.</td></tr>';
         if (fineAdjustCountEl) {
           fineAdjustCountEl.textContent = 'Stavki: 0';
         }
@@ -4199,7 +4202,14 @@
             'data-row="' + rowIndex + '" data-field="' + field + '" value="' + value + '"' + stepAttr + minAttr + '></td>';
         }).join('');
 
-        return '<tr data-row="' + rowIndex + '">' + cells + '</tr>';
+        var actionsCell = '' +
+          '<td class="fine-adjust-action-cell d-none d-lg-table-cell">' +
+            '<button type="button" class="btn btn-outline-primary btn-sm fine-adjust-copy-row-btn" data-row="' + rowIndex + '" title="Kopiraj red" aria-label="Kopiraj red">' +
+              '<i class="fa fa-copy" aria-hidden="true"></i>' +
+            '</button>' +
+          '</td>';
+
+        return '<tr data-row="' + rowIndex + '">' + cells + actionsCell + '</tr>';
       }).join('');
 
       fineAdjustBodyEl.innerHTML = html;
@@ -4247,13 +4257,91 @@
       return rows;
     }
 
+    function generateFineAdjustRowUid() {
+      return 'fine-adjust-row-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    }
+
+    function cloneFineAdjustRow(row) {
+      if (!row || typeof row !== 'object') {
+        return null;
+      }
+
+      var clonedRow = Object.assign({}, row);
+      clonedRow.row_uid = generateFineAdjustRowUid();
+
+      if (row.bgSummary && typeof row.bgSummary === 'object') {
+        clonedRow.bgSummary = Object.assign({}, row.bgSummary);
+
+        if (row.bgSummary.geometry && typeof row.bgSummary.geometry === 'object') {
+          clonedRow.bgSummary.geometry = Object.assign({}, row.bgSummary.geometry);
+        }
+      }
+
+      return syncFineAdjustComputedRow(clonedRow);
+    }
+
+    function focusFineAdjustInput(rowIndex, field) {
+      if (!fineAdjustBodyEl || !Number.isFinite(rowIndex) || rowIndex < 0 || !field) {
+        return;
+      }
+
+      var selector = '.fine-adjust-input[data-row="' + rowIndex + '"][data-field="' + field + '"]';
+      var inputEl = fineAdjustBodyEl.querySelector(selector);
+
+      if (!inputEl || inputEl.disabled || inputEl.readOnly) {
+        return;
+      }
+
+      if (typeof inputEl.scrollIntoView === 'function') {
+        inputEl.scrollIntoView({
+          block: 'nearest',
+          inline: 'nearest'
+        });
+      }
+
+      inputEl.focus();
+
+      if (inputEl.tagName === 'INPUT' && typeof inputEl.select === 'function') {
+        try {
+          inputEl.select();
+        } catch (error) {
+        }
+      }
+    }
+
+    function duplicateFineAdjustRow(rowIndex) {
+      if (!Number.isFinite(rowIndex) || rowIndex < 0) {
+        return;
+      }
+
+      var currentRows = collectFineAdjustRowsFromDom();
+      if (!Array.isArray(currentRows) || rowIndex >= currentRows.length) {
+        return;
+      }
+
+      var duplicatedRow = cloneFineAdjustRow(currentRows[rowIndex]);
+      if (!duplicatedRow) {
+        return;
+      }
+
+      currentRows.splice(rowIndex + 1, 0, duplicatedRow);
+      state.fineAdjustRows = currentRows;
+      renderFineAdjustRows();
+
+      window.requestAnimationFrame(function () {
+        focusFineAdjustInput(rowIndex + 1, 'alternativa');
+      });
+    }
+
     function renderFineAdjustRows() {
+      var totalColumns = 13;
+
       if (!fineAdjustBodyEl) {
         return;
       }
 
       if (!Array.isArray(state.fineAdjustRows) || state.fineAdjustRows.length === 0) {
-        fineAdjustBodyEl.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-2">Nema odabranih stavki.</td></tr>';
+        fineAdjustBodyEl.innerHTML = '<tr><td colspan="' + totalColumns + '" class="text-center text-muted py-2">Nema odabranih stavki.</td></tr>';
         if (fineAdjustCountEl) {
           fineAdjustCountEl.textContent = 'Stavki: 0';
         }
@@ -4339,7 +4427,14 @@
             'data-row="' + rowIndex + '" data-field="' + field + '" value="' + value + '"></td>';
         }).join('');
 
-        return '<tr data-row="' + rowIndex + '">' + cells + '</tr>';
+        var actionsCell = '' +
+          '<td class="fine-adjust-action-cell d-none d-lg-table-cell">' +
+            '<button type="button" class="btn btn-outline-primary btn-sm fine-adjust-copy-row-btn" data-row="' + rowIndex + '" title="Kopiraj red" aria-label="Kopiraj red">' +
+              '<i class="fa fa-copy" aria-hidden="true"></i>' +
+            '</button>' +
+          '</td>';
+
+        return '<tr data-row="' + rowIndex + '">' + cells + actionsCell + '</tr>';
       }).join('');
 
       fineAdjustBodyEl.innerHTML = html;
@@ -4799,8 +4894,9 @@
       var editedRows = collectFineAdjustRowsFromDom();
       state.fineAdjustRows = editedRows.slice();
 
-      var unique = new Map();
+      var selected = [];
       editedRows.forEach(function (row) {
+        var rowUid = String((row && row.row_uid) || '').trim();
         var componentId = String((row && row.artikal) || '').trim();
         var lineNo = Number((row && row.pozicija) || 0);
         var opis = String((row && row.opis) || '').trim();
@@ -4815,7 +4911,11 @@
           return;
         }
 
-        var key = bomKey(lineNo, componentId);
+        if (rowUid === '') {
+          rowUid = generateFineAdjustRowUid();
+          row.row_uid = rowUid;
+        }
+
         var normalizedOperationType = (operationTypeValue === 'M' || operationTypeValue === 'O')
           ? operationTypeValue
           : '';
@@ -4828,7 +4928,8 @@
           ? unitValue
           : normalizedSourceUnit;
 
-        unique.set(key, {
+        selected.push({
+          row_uid: rowUid,
           acIdentChild: componentId,
           anNo: lineNo,
           acDescr: opis,
@@ -4845,7 +4946,6 @@
         });
       });
 
-      var selected = Array.from(unique.values());
       var quantity = 1;
       var unitSet = new Set(
         editedRows.map(function (row) {
@@ -4870,8 +4970,9 @@
       var editedRows = collectFineAdjustRowsFromDom();
       state.fineAdjustRows = editedRows.slice();
 
-      var unique = new Map();
+      var selected = [];
       editedRows.forEach(function (row) {
+        var rowUid = String((row && row.row_uid) || '').trim();
         var componentId = String((row && row.artikal) || '').trim();
         var lineNo = Number((row && row.pozicija) || 0);
         var opis = String((row && row.opis) || '').trim();
@@ -4879,13 +4980,18 @@
         var sourceUnitValue = String((row && row.acUMSource) || '').trim().toUpperCase();
         var operationTypeValue = String((row && row.acOperationType) || '').trim().toUpperCase();
         var planiranoRawValue = String((row && row.planirano) || '').trim();
+        var planiranoValue = parseDecimalValue(planiranoRawValue, 0);
         var zalihaValue = parseDecimalValue((row && row.zaliha) || 0, 0);
 
         if (!componentId || !Number.isFinite(lineNo)) {
           return;
         }
 
-        var key = bomKey(lineNo, componentId);
+        if (rowUid === '') {
+          rowUid = generateFineAdjustRowUid();
+          row.row_uid = rowUid;
+        }
+
         var normalizedOperationType = (operationTypeValue === 'M' || operationTypeValue === 'O')
           ? operationTypeValue
           : '';
@@ -4898,7 +5004,8 @@
           ? unitValue
           : normalizedSourceUnit;
 
-        unique.set(key, {
+        selected.push({
+          row_uid: rowUid,
           acIdentChild: componentId,
           anNo: lineNo,
           acDescr: opis,
@@ -4910,12 +5017,11 @@
           acOperationType: normalizedOperationType,
           anPlanQty: planiranoRawValue === ''
             ? null
-            : clampPlaniranoToZaliha(planiranoRawValue, zalihaValue),
+            : clampPlaniranoToZaliha(planiranoValue, zalihaValue),
           napomena: String((row && row.napomena) || '').trim()
         });
       });
 
-      var selected = Array.from(unique.values());
       var quantity = 1;
       var unitSet = new Set(
         editedRows.map(function (row) {
@@ -5904,8 +6010,9 @@
       var editedRows = collectFineAdjustRowsFromDom();
       state.fineAdjustRows = editedRows.slice();
 
-      var unique = new Map();
+      var selected = [];
       editedRows.forEach(function (row) {
+        var rowUid = String((row && row.row_uid) || '').trim();
         var componentId = String((row && row.artikal) || '').trim();
         var lineNo = Number((row && row.pozicija) || 0);
         var opis = String((row && row.opis) || '').trim();
@@ -5913,13 +6020,18 @@
         var sourceUnitValue = String((row && row.acUMSource) || '').trim().toUpperCase();
         var operationTypeValue = String((row && row.acOperationType) || '').trim().toUpperCase();
         var planiranoRawValue = String((row && row.planirano) || '').trim();
+        var planiranoValue = parseDecimalValue(planiranoRawValue, 0);
         var zalihaValue = parseDecimalValue((row && row.zaliha) || 0, 0);
 
         if (!componentId || !Number.isFinite(lineNo)) {
           return;
         }
 
-        var key = bomKey(lineNo, componentId);
+        if (rowUid === '') {
+          rowUid = generateFineAdjustRowUid();
+          row.row_uid = rowUid;
+        }
+
         var normalizedOperationType = (operationTypeValue === 'M' || operationTypeValue === 'O')
           ? operationTypeValue
           : '';
@@ -5932,7 +6044,8 @@
           ? unitValue
           : normalizedSourceUnit;
 
-        unique.set(key, {
+        selected.push({
+          row_uid: rowUid,
           acIdentChild: componentId,
           anNo: lineNo,
           acDescr: opis,
@@ -5944,12 +6057,11 @@
           acOperationType: normalizedOperationType,
           anPlanQty: planiranoRawValue === ''
             ? null
-            : clampPlaniranoToZaliha(planiranoRawValue, zalihaValue),
+            : clampPlaniranoToZaliha(planiranoValue, zalihaValue),
           napomena: String((row && row.napomena) || '').trim()
         });
       });
 
-      var selected = Array.from(unique.values());
       var quantity = 1;
       var unitSet = new Set(
         editedRows.map(function (row) {
@@ -6234,6 +6346,22 @@
       });
 
       fineAdjustBodyEl.addEventListener('click', function (event) {
+        var copyButton = event.target && event.target.closest
+          ? event.target.closest('.fine-adjust-copy-row-btn')
+          : null;
+
+        if (copyButton) {
+          event.preventDefault();
+
+          var copyRowIndex = Number(copyButton.getAttribute('data-row') || -1);
+          if (!Number.isFinite(copyRowIndex) || copyRowIndex < 0) {
+            return;
+          }
+
+          duplicateFineAdjustRow(copyRowIndex);
+          return;
+        }
+
         var toggleButton = event.target && event.target.closest
           ? event.target.closest('.fine-adjust-material-switch')
           : null;

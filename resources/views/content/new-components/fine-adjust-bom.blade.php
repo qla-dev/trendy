@@ -32,11 +32,12 @@
                 <th class="text-center">Planirano</th>
                 <th class="text-center">Zaliha</th>
                 <th class="text-center">MJ</th>
+                <th class="text-center fine-adjust-action-cell d-none d-lg-table-cell">Akcija</th>
               </tr>
             </thead>
             <tbody id="fine-adjust-bom-body">
               <tr>
-                <td colspan="12" class="text-center text-muted py-2">Nema odabranih stavki.</td>
+                <td colspan="13" class="text-center text-muted py-2">Nema odabranih stavki.</td>
               </tr>
             </tbody>
           </table>
@@ -160,6 +161,11 @@
     border-spacing: 0;
   }
 
+  #fine-adjust-bom-modal #fine-adjust-bom-table {
+    width: max-content;
+    min-width: 100%;
+  }
+
   #fine-adjust-bom-modal .fine-adjust-bom-table-wrap::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -221,6 +227,75 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+
+  @media (min-width: 992px) {
+    #fine-adjust-bom-modal th.fine-adjust-action-cell,
+    #fine-adjust-bom-modal td.fine-adjust-action-cell {
+      position: sticky;
+      right: 0;
+      z-index: 4;
+      min-width: 4.5rem !important;
+      width: 4.5rem !important;
+      max-width: 4.5rem !important;
+      padding: 0.5rem !important;
+      text-align: center;
+      border-left: 1px solid rgba(186, 194, 210, 0.16) !important;
+      background-color: rgba(10, 17, 30, 0.98);
+      background-image: none;
+      box-shadow: none;
+      background-clip: padding-box;
+      overflow: visible;
+    }
+
+    #fine-adjust-bom-modal th.fine-adjust-action-cell {
+      z-index: 5;
+      background-color: rgba(20, 31, 56, 0.98);
+    }
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-copy-row-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.45rem;
+    height: 2.45rem;
+    padding: 0;
+    border-radius: 0.375rem;
+    white-space: nowrap;
+    margin-left: auto;
+    margin-right: auto;
+    background: rgba(10, 18, 34, 0.96);
+    border: 2px solid rgba(96, 118, 154, 0.7);
+    color: #7f96bf;
+    box-shadow: none;
+    transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-copy-row-btn.btn-outline-primary {
+    background: rgba(10, 18, 34, 0.96);
+    border-color: rgba(96, 118, 154, 0.7);
+    color: #7f96bf;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-copy-row-btn i {
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-copy-row-btn:hover,
+  #fine-adjust-bom-modal .fine-adjust-copy-row-btn:focus,
+  #fine-adjust-bom-modal .fine-adjust-copy-row-btn.btn-outline-primary:hover,
+  #fine-adjust-bom-modal .fine-adjust-copy-row-btn.btn-outline-primary:focus {
+    background: rgba(13, 23, 41, 1);
+    border-color: rgba(120, 145, 187, 0.9);
+    color: #a9c0ea;
+    box-shadow: none;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-copy-row-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 0.18rem rgba(112, 136, 178, 0.18);
   }
 
   #fine-adjust-bom-modal table tbody td .fine-adjust-note-stack,
