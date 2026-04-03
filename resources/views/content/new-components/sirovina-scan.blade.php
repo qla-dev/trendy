@@ -53,7 +53,7 @@
       <div class="modal-header wo-bom-modal-header wo-bom-content-header">
         <div class="w-100 text-center">
           <h4 class="mb-0 text-white" id="sirovina-scanner-modal-label">
-            Planiraj novu potrošnju za RN <span id="sirovina-rn-number">-</span>
+            Planiraj novu potroĹˇnju za RN <span id="sirovina-rn-number">-</span>
           </h4>
           <p class="mb-0 wo-bom-modal-subtitle">Izaberite materijal i operacije za privremenu sastavnicu</p>
         </div>
@@ -74,7 +74,7 @@
                     <div class="qr-corner qr-corner-bottom-left"></div>
                     <div class="qr-corner qr-corner-bottom-right"></div>
                     <div class="qr-barcode-window"></div>
-                    <div class="qr-barcode-window-label">Barcode može biti bilo gdje u okviru</div>
+                    <div class="qr-barcode-window-label">Barcode moĹľe biti bilo gdje u okviru</div>
 
                     <div class="qr-scan-line"></div>
 
@@ -125,7 +125,7 @@
                         >
                       </div>
                       <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-subtle" id="sirovina-qr-torch-btn" disabled>
-                        <i class="fa fa-lightbulb-o me-50"></i> Uključite svjetlo
+                        <i class="fa fa-lightbulb-o me-50"></i> UkljuÄŤite svjetlo
                       </button>
                     </div>
 
@@ -180,13 +180,13 @@
                       </select>
                     </div>
                   </div>
-                  <p id="bom-status" class="small mb-0 text-white-50">Sastavnica se automatski učitava nakon odabira proizvoda.</p>
+                  <p id="bom-status" class="small mb-0 text-white-50">Sastavnica se automatski uÄŤitava nakon odabira proizvoda.</p>
                   <p id="bom-error" class="small mb-0 text-danger d-none"></p>
                 </div>
                 <div class="wo-bom-table-section">
                   <div class="wo-bom-table-head mt-1">
                     <h6 class="wo-bom-section-title mb-0">Sastavnice proizvoda</h6>
-                    <span class="wo-bom-table-found">Pronađeno: <strong id="bom-total-count">0</strong></span>
+                    <span class="wo-bom-table-found">PronaÄ‘eno: <strong id="bom-total-count">0</strong></span>
                   </div>
 
                   <div class="table-responsive wo-bom-table-wrap">
@@ -203,7 +203,7 @@
                       </thead>
                       <tbody id="bom-components-body">
                         <tr>
-                          <td colspan="6" class="text-center text-white-50 py-2">Sastavnica nije učitana.</td>
+                          <td colspan="6" class="text-center text-white-50 py-2">Sastavnica nije uÄŤitana.</td>
                         </tr>
                       </tbody>
                     </table>
@@ -212,7 +212,7 @@
                   <div class="wo-bom-loading-overlay d-none" id="bom-loading-overlay" aria-hidden="true">
                     <div class="wo-bom-loading-inner">
                       <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
-                      <span>Učitavanje</span>
+                      <span>UÄŤitavanje</span>
                     </div>
                   </div>
                 </div>
@@ -222,13 +222,13 @@
                 <div class="wo-bom-mode-panel d-none" id="bom-mode-all-panel" data-mode-panel="all" aria-hidden="true">
                   <div class="wo-bom-field">
                     <label class="form-label wo-bom-section-title mb-50" for="bom-all-search-input">Pretraga</label>
-                    <input type="text" class="form-control form-control-sm" id="bom-all-search-input" placeholder="Unesite šifru ili naziv">
+                    <input type="text" class="form-control form-control-sm" id="bom-all-search-input" placeholder="Unesite Ĺˇifru ili naziv">
                   </div>
 
                   <div class="wo-bom-table-section mt-1">
                     <div class="wo-bom-table-head">
                       <h6 class="wo-bom-section-title mb-0" id="bom-all-title">Sve stavke - Materijali</h6>
-                      <span class="wo-bom-table-found">Pronađeno: <strong id="bom-all-total-count">0</strong></span>
+                      <span class="wo-bom-table-found">PronaÄ‘eno: <strong id="bom-all-total-count">0</strong></span>
                     </div>
                     <div class="wo-bom-loading-more-note d-none" id="bom-all-loading-more-note" aria-live="polite">
                       U&#269;itavanje jo&#353; rezultata...
@@ -258,7 +258,7 @@
                     <div class="wo-bom-loading-overlay d-none" id="bom-all-loading-overlay" aria-hidden="true">
                       <div class="wo-bom-loading-inner">
                         <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></span>
-                        <span>Učitavanje</span>
+                        <span>UÄŤitavanje</span>
                       </div>
                     </div>
                   </div>
@@ -1466,7 +1466,7 @@
     var layoutSyncRaf = null;
     var confirmSaveIdleHtml = confirmSaveBtn
       ? confirmSaveBtn.innerHTML
-      : '<i class="fa fa-check me-2"></i> Sačuvaj planiranu potršnju';
+      : '<i class="fa fa-check me-2"></i> SaÄŤuvaj planiranu potrĹˇnju';
     var barcodeScanner = null;
     var barcodeScannerRunning = false;
     var barcodeScannerBusy = false;
@@ -1762,7 +1762,6 @@
 
       window.alert(title + ': ' + messageText + (detailsText ? ('\n\n' + detailsText) : ''));
     }
-
     function shouldIgnoreSelectableRowClick(target) {
       if (!target || typeof target.closest !== 'function') {
         return true;
@@ -1944,7 +1943,7 @@
         scannerTorchBtn.disabled = true;
         scannerTorchBtn.classList.remove('wo-qr-btn-primary');
         scannerTorchBtn.classList.add('wo-qr-btn-subtle');
-        scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> Uključite svjetlo';
+        scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> UkljuÄŤite svjetlo';
       }
     }
 
@@ -2076,11 +2075,11 @@
           scannerTorchBtn.classList.toggle('wo-qr-btn-subtle', !barcodeTorchEnabled);
           scannerTorchBtn.innerHTML = barcodeTorchEnabled
             ? '<i class="fa fa-lightbulb-o me-50"></i> Ugasi svjetlo'
-            : '<i class="fa fa-lightbulb-o me-50"></i> Uključite svjetlo';
+            : '<i class="fa fa-lightbulb-o me-50"></i> UkljuÄŤite svjetlo';
         } else {
           scannerTorchBtn.classList.remove('wo-qr-btn-primary');
           scannerTorchBtn.classList.add('wo-qr-btn-subtle');
-          scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> Uključite svjetlo';
+          scannerTorchBtn.innerHTML = '<i class="fa fa-lightbulb-o me-50"></i> UkljuÄŤite svjetlo';
         }
       }
     }
@@ -2260,10 +2259,10 @@
       var selectedRow = buildBarcodeSelectionRow(materialPayload);
 
       if (!selectedRow.acIdentChild) {
-        throw new Error('Materijal za skenirani barcode nije pronađen');
+        throw new Error('Materijal za skenirani barcode nije pronaÄ‘en');
       }
 
-      setScannerStatus('Materijal pronađen. Otvara se modal za potvrdu težine...', 'success');
+      setScannerStatus('Materijal pronaÄ‘en. Otvara se modal za potvrdu teĹľine...', 'success');
       clearScannerError();
       markProceedSource('barcode');
       openQuantityModal([selectedRow], {
@@ -2305,8 +2304,8 @@
             });
         })
         .catch(function (error) {
-          setScannerStatus('Postavi barcode bilo gdje u okviru i zadrži fokus na etiketi', 'warning');
-          showScannerError(error && error.message ? error.message : 'Barcode materijal nije pronađen');
+          setScannerStatus('Postavi barcode bilo gdje u okviru i zadrĹľi fokus na etiketi', 'warning');
+          showScannerError(error && error.message ? error.message : 'Barcode materijal nije pronaÄ‘en');
         })
         .finally(function () {
           barcodeScannerBusy = false;
@@ -2326,7 +2325,7 @@
 
       clearScannerError();
       resetScannerEnhancementControls();
-      setScannerStatus('Kamera se pokreće...');
+      setScannerStatus('Kamera se pokreÄ‡e...');
 
       if (!barcodeScanner) {
         barcodeScanner = new Html5Qrcode('sirovina-qr-scanner-region');
@@ -2354,7 +2353,7 @@
             applyScannerMirrorState();
             captureScannerTrackState();
             return applyScannerAutoEnhancements().then(function () {
-              setScannerStatus('Postavi barcode bilo gdje u okviru i drži etiketu 10-20 cm od kamere.');
+              setScannerStatus('Postavi barcode bilo gdje u okviru i drĹľi etiketu 10-20 cm od kamere.');
             });
           });
         })
@@ -2500,7 +2499,7 @@
         return {};
       }).then(function (payload) {
         if (!response.ok) {
-          var message = payload && payload.message ? payload.message : 'Zahtjev nije uspio.';
+          var message = payload && payload.message ? payload.message : 'Planirana potrosnja je uspjesno sacuvana.';
           var error = new Error(message);
           error.detail = extractResponseErrorDetail(payload);
           error.status = response.status;
@@ -3027,7 +3026,7 @@
             '<td class="fw-semibold">' + componentId + '</td>' +
             '<td class="wo-opis-cell">' + formatOpisCell(descr) + '</td>' +
             '<td class="text-end">' + (isStockLoading
-              ? '<span class="wo-zaliha-loading" aria-label="Učitavanje zalihe"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span></span>'
+              ? '<span class="wo-zaliha-loading" aria-label="UÄŤitavanje zalihe"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span></span>'
               : formatQuantity(stockQty)
             ) + '</td>' +
             '<td class="text-center">' + operationType + '</td>' +
@@ -3704,7 +3703,7 @@
         return null;
       }
 
-      var fiMatch = normalized.match(/(?:fi|ø|φ)\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
+      var fiMatch = normalized.match(/(?:fi|Ă¸|Ď†)\s*(\d+(?:\.\d+)?)\s*[xĂ—]\s*(\d+(?:\.\d+)?)/i);
       if (fiMatch) {
         return {
           type: 'round',
@@ -3714,7 +3713,7 @@
         };
       }
 
-      var rectangularMatch = normalized.match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i);
+      var rectangularMatch = normalized.match(/(\d+(?:\.\d+)?)\s*[xĂ—]\s*(\d+(?:\.\d+)?)\s*[xĂ—]\s*(\d+(?:\.\d+)?)/i);
       if (rectangularMatch) {
         return {
           type: 'rectangular',
@@ -3793,7 +3792,7 @@
           geometry: null,
           unitWeight: 0,
           totalWeight: 0,
-          note: 'Unesite visinu, širinu i dužinu i planiranu količinu za automatski izračun težine.'
+          note: 'Unesite visinu, Ĺˇirinu i duĹľinu i planiranu koliÄŤinu za automatski izraÄŤun teĹľine.'
         };
       }
 
@@ -3859,7 +3858,7 @@
       var mode = row.materialMode === 'aluminum' ? 'aluminum' : 'steel';
 
       if (noteInputEl) {
-        var hint = 'Unesite visinu, širinu i dužinu i planiranu količinu za automatski izračun težine.';
+        var hint = 'Unesite visinu, Ĺˇirinu i duĹľinu i planiranu koliÄŤinu za automatski izraÄŤun teĹľine.';
         var computed = row.bgSummary && row.bgSummary.note ? String(row.bgSummary.note) : '';
 
         if (!row.napomena || row.napomena === row._computedNapomena) {
@@ -4162,7 +4161,7 @@
                     '</button>' +
                     '<span class="fine-adjust-material-label is-steel"><i class="fa fa-industry"></i><span>\u010Celik</span></span>' +
                   '</div>' +
-                  '<input type="text" class="form-control form-control-sm fine-adjust-input fine-adjust-note-input" data-row="' + rowIndex + '" data-field="napomena" value="' + noteValue + '" placeholder="Unesite visinu, širinu i dužinu i planiranu količinu" />' +
+                  '<input type="text" class="form-control form-control-sm fine-adjust-input fine-adjust-note-input" data-row="' + rowIndex + '" data-field="napomena" value="' + noteValue + '" placeholder="Unesite visinu, Ĺˇirinu i duĹľinu i planiranu koliÄŤinu" />' +
                 '</div>' +
               '</td>';
           }
@@ -4532,10 +4531,10 @@
         },
         language: {
           searching: function () {
-            return 'Pretražujem';
+            return 'PretraĹľujem';
           },
           loadingMore: function () {
-            return 'Učitavanje još rezultata...';
+            return 'UÄŤitavanje joĹˇ rezultata...';
           },
           noResults: function () {
             return 'Nema rezultata';
@@ -4556,7 +4555,7 @@
           state.selectedKeys.clear();
           renderBomRows();
           setBomLoading(false);
-          setStatus('Izaberite proizvod iz liste za učitavanje sastavnice', 'warning');
+          setStatus('Izaberite proizvod iz liste za uÄŤitavanje sastavnice', 'warning');
           syncAllSearchInputHeight();
         });
 
@@ -4649,7 +4648,7 @@
 
       state.loadingProducts = true;
       showError('');
-      setStatus('Učitavam proizvode...');
+      setStatus('UÄŤitavam proizvode...');
 
       var url = buildUrl(productsUrl, {});
 
@@ -4670,13 +4669,13 @@
             return;
           }
 
-          setStatus('Proizvodi učitani.', 'success');
+          setStatus('Proizvodi uÄŤitani.', 'success');
         })
         .catch(function (error) {
           state.products = [];
           renderProducts();
-          setStatus('Ne mogu učitati proizvode.', 'danger');
-          showError(error && error.message ? error.message : 'Greška pri učitavanju proizvoda.');
+          setStatus('Ne mogu uÄŤitati proizvode.', 'danger');
+          showError(error && error.message ? error.message : 'GreĹˇka pri uÄŤitavanju proizvoda.');
         })
         .finally(function () {
           state.loadingProducts = false;
@@ -4691,7 +4690,7 @@
         state.selectedKeys.clear();
         renderBomRows();
         setBomLoading(false);
-        setStatus('Izaberite proizvod prije učitavanja sastavnice.', 'warning');
+        setStatus('Izaberite proizvod prije uÄŤitavanja sastavnice.', 'warning');
         return Promise.resolve();
       }
 
@@ -4705,7 +4704,7 @@
       state.loadingBom = true;
       showError('');
       setBomLoading(true);
-      setStatus('Učitavam sastavnicu...');
+      setStatus('UÄŤitavam sastavnicu...');
 
       return fetch(buildUrl(bomUrl, { product_id: productId }), {
         method: 'GET',
@@ -4725,7 +4724,7 @@
           renderBomRows();
 
           if (state.bomRows.length === 0) {
-            setStatus('Sastavnica nije pronađena za odabrani proizvod.', 'warning');
+            setStatus('Sastavnica nije pronaÄ‘ena za odabrani proizvod.', 'warning');
             return;
           }
 
@@ -4739,8 +4738,8 @@
           state.bomRows = [];
           state.selectedKeys.clear();
           renderBomRows();
-          setStatus('Ne mogu učitati sastavnicu.', 'danger');
-          showError(error && error.message ? error.message : 'Greška pri učitavanju sastavnice.');
+          setStatus('Ne mogu uÄŤitati sastavnicu.', 'danger');
+          showError(error && error.message ? error.message : 'GreĹˇka pri uÄŤitavanju sastavnice.');
         })
         .finally(function () {
           if (requestSeq === state.bomRequestSeq) {
@@ -4772,7 +4771,7 @@
       }
 
       if (!Number.isFinite(quantity) || quantity <= 0) {
-        notify('warning', 'Neispravna kolicina', 'Unesite količinu vecću od 0');
+        notify('warning', 'Neispravna kolicina', 'Unesite koliÄŤinu vecÄ‡u od 0');
         return null;
       }
 
@@ -5050,7 +5049,7 @@
       }
 
       if (context.action === 'update') {
-        return '<i class="fa fa-refresh me-2"></i> Ažuriraj postojecu stavku';
+        return '<i class="fa fa-refresh me-2"></i> AĹľuriraj postojecu stavku';
       }
 
       return '<i class="fa fa-plus me-2"></i> Dodaj materijal na RN';
@@ -5128,13 +5127,13 @@
       if (confirmMaterialActionEl) {
         confirmMaterialActionEl.classList.toggle('is-update', action === 'update');
         confirmMaterialActionEl.textContent = action === 'update'
-          ? 'Postojeća stavka na RN ce biti ažurirana novom tezinom.'
-          : 'Materijal ne postoji na RN i bit će dodan kao nova stavka sastavnice.';
+          ? 'PostojeÄ‡a stavka na RN ce biti aĹľurirana novom tezinom.'
+          : 'Materijal ne postoji na RN i bit Ä‡e dodan kao nova stavka sastavnice.';
       }
       if (confirmHelpTextEl) {
         confirmHelpTextEl.textContent = action === 'update'
-          ? 'Prilagodite količinu i mjernu jedinicu koja se dopisuje na postojeći materijal RN.'
-          : 'Unesite količinu i mjernu jedinicu skeniranog materijala koji se dodaje na RN.';
+          ? 'Prilagodite koliÄŤinu i mjernu jedinicu koja se dopisuje na postojeÄ‡i materijal RN.'
+          : 'Unesite koliÄŤinu i mjernu jedinicu skeniranog materijala koji se dodaje na RN.';
       }
       if (quantityUnitSelect) {
         quantityUnitSelect.value = resolveBarcodeQuantityUnit(material);
@@ -5230,7 +5229,42 @@
       var stockAdjustments = payload && payload.data && Array.isArray(payload.data.stock_adjustments)
         ? payload.data.stock_adjustments
         : [];
-      var message = payload && payload.message ? payload.message : 'Planirana potrošnja je uspješno sačuvana.';
+      var adjustmentLines = stockAdjustments.map(function (item) {
+        if (!item) {
+          return '';
+        }
+
+        var materialCode = String(item.material_code || item.code || item.acIdent || '').trim();
+        var consumedQty = Number(
+          item.consumed_qty !== undefined && item.consumed_qty !== null
+            ? item.consumed_qty
+            : item.value
+        );
+        var remainingStockQty = Number(
+          item.remaining_stock_qty !== undefined && item.remaining_stock_qty !== null
+            ? item.remaining_stock_qty
+            : item.new_stock_value
+        );
+
+        if (!materialCode) {
+          return '';
+        }
+
+        var details = [materialCode];
+
+        if (Number.isFinite(consumedQty)) {
+          details.push('utrošeno: ' + formatQuantity(Math.abs(consumedQty)));
+        }
+
+        if (Number.isFinite(remainingStockQty)) {
+          details.push('zaliha sada: ' + formatQuantity(remainingStockQty));
+        }
+
+        return details.join(' | ');
+      }).filter(function (line) {
+        return line !== '';
+      });
+      var message = payload && payload.message ? payload.message : 'Planirana potrosnja je uspjesno sacuvana.';
 
       stockAdjustments.forEach(function (item) {
         if (!item) {
@@ -5244,34 +5278,62 @@
       });
 
       var itemsLine = 'Broj stavki: ' + savedCount;
+      var visibleAdjustmentLines = adjustmentLines.slice(0, 5);
+      var adjustmentsHtml = visibleAdjustmentLines.map(function (line) {
+        return '<span style="display:block;margin-top:0.35rem;">' + escapeHtml(line) + '</span>';
+      }).join('');
+
+      if (adjustmentLines.length > visibleAdjustmentLines.length) {
+        adjustmentsHtml += '<span style="display:block;margin-top:0.35rem;">+' + escapeHtml(String(adjustmentLines.length - visibleAdjustmentLines.length)) + ' jos</span>';
+      }
+
+      var finalizeSuccessfulSave = function () {
+        setStatus('Planirana potrosnja je uspjesno sacuvana.', 'success');
+        resetConfirmContext();
+        hideModalIfOpen(confirmModalEl);
+        hideModalIfOpen(fineAdjustModalEl);
+
+        window.setTimeout(function () {
+          window.location.reload();
+        }, 150);
+      };
+
       var successHtml = (
         '<span style="display:block;">' + escapeHtml(message) + '</span>' +
-        '<span style="display:block;margin-top:0.45rem;">' + escapeHtml(itemsLine) + '</span>'
+        '<span style="display:block;margin-top:0.45rem;">' + escapeHtml(itemsLine) + '</span>' +
+        (adjustmentsHtml !== ''
+          ? '<span style="display:block;margin-top:0.6rem;font-weight:600;">Utrošeno / zaliha</span>' + adjustmentsHtml
+          : '')
       );
 
       if (window.Swal && typeof window.Swal.fire === 'function') {
         var successOptions = {
           icon: 'success',
-          title: 'Uspješno',
-          html: successHtml
+          title: 'Uspjesno',
+          html: successHtml,
+          showConfirmButton: true,
+          confirmButtonText: 'OK',
+          allowOutsideClick: false,
+          allowEscapeKey: false
         };
 
         if (typeof window.woSwalWithTheme === 'function') {
           successOptions = window.woSwalWithTheme(successOptions);
         }
 
-        window.Swal.fire(successOptions);
-      } else {
-        notify('success', 'Uspješno', message + ' ' + itemsLine);
+        return window.Swal.fire(successOptions).then(function (result) {
+          if (result && result.isConfirmed) {
+            finalizeSuccessfulSave();
+          }
+        });
       }
-      setStatus('Planirana potrošnja je uspješno sačuvana.', 'success');
-      resetConfirmContext();
-      hideModalIfOpen(confirmModalEl);
-      hideModalIfOpen(fineAdjustModalEl);
 
-      window.setTimeout(function () {
-        window.location.reload();
-      }, 150);
+      notify(
+        'success',
+        'Uspjesno',
+        message + ' ' + itemsLine + (adjustmentLines.length > 0 ? ' ' + adjustmentLines.slice(0, 2).join(' ; ') : '')
+      );
+      return finalizeSuccessfulSave();
     }
 
     function submitPlannedConsumption(selectedComponents, quantity, quantityUnit, description, buttonEl, idleHtml) {
@@ -5306,7 +5368,7 @@
         .catch(function (error) {
           notify(
             'error',
-            'Greška',
+            'GreĹˇka',
             error && error.message ? error.message : 'Snimanje nije uspjelo.',
             error && error.detail ? error.detail : ''
           );
@@ -5368,7 +5430,7 @@
           : normalizedSourceUnit;
 
         var normalizedPlanirano = clampPlaniranoToZaliha(planiranoValue, zalihaValue);
-        var placeholderNote = 'Unesite visinu, širinu i dužinu i planiranu količinu za automatski izračun težine.';
+        var placeholderNote = 'Unesite visinu, Ĺˇirinu i duĹľinu i planiranu koliÄŤinu za automatski izraÄŤun teĹľine.';
         var napomenaValue = String((row && row.napomena) || '').trim();
 
         if (napomenaValue === placeholderNote) {
@@ -5471,10 +5533,10 @@
     }
 
     function resolveConfirmButtonHtml(context) {
-      var subtitle = 'Sačuvaj';
+      var subtitle = 'SaÄŤuvaj';
 
       if (context && context.mode === 'barcode') {
-        subtitle = context.action === 'update' ? 'Ažuriraj' : 'Dodaj';
+        subtitle = context.action === 'update' ? 'AĹľuriraj' : 'Dodaj';
       }
 
       return '<span class="confirm-weight-ok-label">OK</span><span class="confirm-weight-ok-subtitle">' + subtitle + '</span>';
@@ -5586,14 +5648,14 @@
         confirmMaterialActionEl.classList.remove('d-none');
         confirmMaterialActionEl.classList.toggle('is-update', action === 'update');
         confirmMaterialActionEl.textContent = action === 'update'
-          ? 'Postojeća stavka na RN biće ažurirana novom težinom.'
-          : 'Materijal ne postoji na RN i biće dodan kao nova stavka sastavnice';
+          ? 'PostojeÄ‡a stavka na RN biÄ‡e aĹľurirana novom teĹľinom.'
+          : 'Materijal ne postoji na RN i biÄ‡e dodan kao nova stavka sastavnice';
       }
 
       if (confirmHelpTextEl) {
         confirmHelpTextEl.textContent = action === 'update'
-          ? 'Prilagodite količinu i mjernu jedinicu koja se dopisuje na postojeci materijal RN'
-          : 'Unesite količinu i mjernu jedinicu skeniranog materijala koji se dodaje na RN';
+          ? 'Prilagodite koliÄŤinu i mjernu jedinicu koja se dopisuje na postojeci materijal RN'
+          : 'Unesite koliÄŤinu i mjernu jedinicu skeniranog materijala koji se dodaje na RN';
       }
 
       setQuantityUnitValue(resolveBarcodeQuantityUnit(material));
@@ -5632,7 +5694,7 @@
       var quantityUnit = quantityUnitSelect ? String(quantityUnitSelect.value || 'AUTO').toUpperCase() : 'AUTO';
 
       if (!(quantity > 0)) {
-        notify('warning', 'Nedostaje količina', 'Unesite količinu preko tastature na ekranu.');
+        notify('warning', 'Nedostaje koliÄŤina', 'Unesite koliÄŤinu preko tastature na ekranu.');
         return;
       }
 
@@ -6328,7 +6390,7 @@
       clearScannerError();
       setScannerStatus(
         requiresManualCameraStartForCurrentView()
-          ? 'Još uvijek nije dostupno.'
+          ? 'JoĹˇ uvijek nije dostupno.'
           : 'Dozvoli pristup kameri i pokreni skeniranje barcodova.' ,
       );
       applyScannerMirrorState();
@@ -6373,7 +6435,7 @@
 
       if (requiresManualCameraStartForCurrentView()) {
         refreshScannerCameras();
-        setScannerStatus('Još uvijek nije dostupno', 'warning');
+        setScannerStatus('JoĹˇ uvijek nije dostupno', 'warning');
       } else {
         requestBarcodeScannerStart(false);
       }
@@ -6384,8 +6446,8 @@
       }
 
       if (!productsUrl || !bomUrl || !saveUrl) {
-        setStatus('Skenirajte i učitajte validan radni nalog prije planiranja potrošnje.', 'warning');
-        showError('Nedostaju API rute za planiranu potrošnju.');
+        setStatus('Skenirajte i uÄŤitajte validan radni nalog prije planiranja potroĹˇnje.', 'warning');
+        showError('Nedostaju API rute za planiranu potroĹˇnju.');
         return;
       }
 
@@ -6407,7 +6469,7 @@
           state.selectedKeys.clear();
           renderBomRows();
           setBomLoading(false);
-          setStatus('Izaberite proizvod iz liste za učitavanje sastavnice', 'warning');
+          setStatus('Izaberite proizvod iz liste za uÄŤitavanje sastavnice', 'warning');
         });
         return;
       }
@@ -6422,7 +6484,7 @@
       state.selectedKeys.clear();
       renderBomRows();
       setBomLoading(false);
-      setStatus('Izaberite proizvod iz liste za učitavanje sastavnice', 'warning');
+      setStatus('Izaberite proizvod iz liste za uÄŤitavanje sastavnice', 'warning');
     });
 
     modalEl.addEventListener('hidden.bs.modal', function () {
@@ -6453,4 +6515,3 @@
     });
   });
 </script>
-
