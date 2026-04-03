@@ -1951,6 +1951,18 @@ class WorkOrderController extends Controller
                 ? $saveResult['status_transition']
                 : ['changed' => false];
 
+            foreach ($stockAdjustmentResults as &$stockAdjustmentResult) {
+                if (!is_array($stockAdjustmentResult)) {
+                    continue;
+                }
+
+                $consumedQty = $this->toFloatOrNull($stockAdjustmentResult['value'] ?? null);
+                if ($consumedQty !== null) {
+                    $stockAdjustmentResult['consumed_qty'] = abs($consumedQty);
+                }
+            }
+            unset($stockAdjustmentResult);
+
             if (empty($insertedRows)) {
                 return response()->json([
                     'message' => 'Nema stavki za snimanje planirane potrosnje.',
@@ -3487,7 +3499,7 @@ class WorkOrderController extends Controller
             }
 
             $consumedQty = (float) ($this->toFloatOrNull(
-                $savedRow['stock_consumed_qty'] ?? $savedRow['anPlanQty'] ?? null
+                $savedRow['stock_consumed_qty'] ?? null
             ) ?? 0);
 
             if ($consumedQty <= 0) {
