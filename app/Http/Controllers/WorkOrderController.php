@@ -1414,6 +1414,7 @@ class WorkOrderController extends Controller
             'components.*.acUM' => ['nullable', 'string', 'max:8'],
             'components.*.acUMSource' => ['nullable', 'string', 'max:8'],
             'components.*.acOperationType' => ['nullable', 'string', 'max:8'],
+            'components.*.row_uid' => ['nullable', 'string', 'max:64'],
             'components.*.anPlanQty' => ['nullable', 'numeric', 'min:0'],
         ]);
 
@@ -1475,12 +1476,13 @@ class WorkOrderController extends Controller
             foreach ((array) ($validated['components'] ?? []) as $component) {
                 $componentId = trim((string) ($component['acIdentChild'] ?? ''));
                 $lineNo = (int) ($this->toFloatOrNull($component['anNo'] ?? null) ?? 0);
+                $rowUid = trim((string) ($component['row_uid'] ?? ''));
 
                 if ($componentId === '') {
                     continue;
                 }
 
-                $selectionKey = $this->bomSelectionKey($lineNo, $componentId);
+                $selectionKey = $this->plannedConsumptionComponentSelectionKey($lineNo, $componentId, $rowUid);
                 if (array_key_exists($selectionKey, $normalizedSeen)) {
                     continue;
                 }
@@ -1501,6 +1503,7 @@ class WorkOrderController extends Controller
                 ]);
 
                 $normalizedComponents[] = [
+                    'row_uid' => $rowUid,
                     'acIdentChild' => $componentId,
                     'anNo' => $lineNo,
                     'acDescr' => trim((string) ($component['acDescr'] ?? '')),
@@ -1545,6 +1548,7 @@ class WorkOrderController extends Controller
                 }
 
                 return [
+                    'row_uid' => trim((string) ($component['row_uid'] ?? '')),
                     'acIdentChild' => $componentId,
                     'anNo' => (int) ($component['anNo'] ?? 0),
                     'acDescr' => $componentDescription,
@@ -2114,6 +2118,82 @@ class WorkOrderController extends Controller
                 ], 422);
             }
 
+            $preferredWarehouse = $this->resolveWorkOrderWarehouse($workOrderRow);
+            $userId = (int) (auth()->id() ?? 0);
+
+            $deleteResult = DB::transaction(function () use ($deleteQuery, $preferredWarehouse, $userId) {
+                $row = (clone $deleteQuery)->lockForUpdate()->first();
+
+                if ($row === null) {
+                    return null;
+                }
+
+                $rowData = (array) $row;
+                $deletedCount = $deleteQuery->delete();
+
+                if ($deletedCount < 1) {
+                    throw new RuntimeException('Stavka nije obrisana.');
+                }
+
+                $stockAdjustments = [];
+                $reverseAdjustment = $this->buildRemovedPlannedConsumptionStockAdjustment($rowData, $preferredWarehouse);
+
+                if ($reverseAdjustment !== null) {
+                    $stockAdjustments = Material::bulkAdjustStock(
+                        [$reverseAdjustment],
+                        $userId,
+                        $preferredWarehouse
+                    );
+                }
+
+                return [
+                    'row' => $rowData,
+                    'deleted_count' => $deletedCount,
+                    'stock_adjustments' => $stockAdjustments,
+                    'restored_qty' => $reverseAdjustment !== null
+                        ? abs((float) ($reverseAdjustment['value'] ?? 0))
+                        : 0.0,
+                ];
+            });
+
+            if ($deleteResult === null) {
+                return response()->json([
+                    'message' => 'Stavka nije pronađena.',
+                ], 404);
+            }
+
+            $rowData = is_array($deleteResult['row'] ?? null) ? $deleteResult['row'] : [];
+            $deletedCount = (int) ($deleteResult['deleted_count'] ?? 0);
+            $stockAdjustmentResults = is_array($deleteResult['stock_adjustments'] ?? null)
+                ? $deleteResult['stock_adjustments']
+                : [];
+            $restoredQty = (float) ($deleteResult['restored_qty'] ?? 0);
+
+            Log::info('Work order item removed.', [
+                'id' => $id,
+                'work_order_key' => $workOrderKey,
+                'item_id' => $hasQId ? (int) ($rowData['anQId'] ?? 0) : null,
+                'item_no' => $hasNo ? (int) ($rowData['anNo'] ?? 0) : null,
+                'ac_ident' => trim((string) ($rowData['acIdent'] ?? '')),
+                'deleted_count' => $deletedCount,
+                'restored_qty' => $restoredQty,
+                'stock_adjustments' => $stockAdjustmentResults,
+                'user_id' => $userId,
+            ]);
+
+            return response()->json([
+                'message' => 'Stavka je uklonjena sa sastavnice ovog radnog naloga',
+                'data' => [
+                    'work_order_id' => $id,
+                    'work_order_key' => $workOrderKey,
+                    'item_id' => $hasQId ? (int) ($rowData['anQId'] ?? 0) : null,
+                    'item_no' => $hasNo ? (int) ($rowData['anNo'] ?? 0) : null,
+                    'deleted_count' => $deletedCount,
+                    'restored_qty' => $restoredQty,
+                    'stock_adjustments' => $stockAdjustmentResults,
+                ],
+            ]);
+
             $row = (clone $deleteQuery)->first();
 
             if ($row === null) {
@@ -2643,6 +2723,17 @@ class WorkOrderController extends Controller
     private function bomSelectionKey(int $lineNo, string $componentId): string
     {
         return $lineNo . '|' . strtolower(trim($componentId));
+    }
+
+    private function plannedConsumptionComponentSelectionKey(int $lineNo, string $componentId, string $rowUid = ''): string
+    {
+        $normalizedRowUid = strtolower(trim($rowUid));
+
+        if ($normalizedRowUid !== '') {
+            return 'row|' . $normalizedRowUid;
+        }
+
+        return $this->bomSelectionKey($lineNo, $componentId);
     }
 
     private function bomLimit(): int
@@ -3472,6 +3563,34 @@ class WorkOrderController extends Controller
         return (float) ($this->toFloatOrNull(
             $row['anPlanQty'] ?? $row['anQty'] ?? $row['anQty1'] ?? 0
         ) ?? 0);
+    }
+
+    private function buildRemovedPlannedConsumptionStockAdjustment(array $row, string $preferredWarehouse = ''): ?array
+    {
+        $materialCode = trim((string) ($row['acIdent'] ?? ''));
+        if ($materialCode === '') {
+            return null;
+        }
+
+        $itemKind = $this->resolveItemKindForPreview(
+            (string) ($row['acOperationType'] ?? ''),
+            ''
+        );
+
+        if ($itemKind !== 'materials') {
+            return null;
+        }
+
+        $removedQty = $this->workOrderItemQuantity($row);
+        if ($removedQty <= 0) {
+            return null;
+        }
+
+        return [
+            'material_code' => $materialCode,
+            'value' => -1 * $removedQty,
+            'warehouse' => trim($preferredWarehouse),
+        ];
     }
 
     private function resolveWorkOrderWarehouse(array $workOrderRow): string
