@@ -152,7 +152,6 @@
     background: rgba(10, 17, 30, 0.76);
     scrollbar-width: thin;
     scrollbar-color: var(--wo-scroll-thumb) var(--wo-scroll-track);
-    scrollbar-gutter: stable;
   }
 
   #fine-adjust-bom-modal .fine-adjust-bom-table-wrap > .table {
@@ -313,8 +312,8 @@
   }
 
   #fine-adjust-bom-modal .fine-adjust-note-cell {
-    min-width: 480px;
-    max-width: 640px;
+    min-width: 72px;
+    max-width: 144px;
     width: 100%;
   }
 
