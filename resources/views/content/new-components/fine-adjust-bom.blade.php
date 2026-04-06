@@ -64,6 +64,9 @@
     --wo-scroll-thumb-hover: rgba(160, 170, 190, 0.92);
     --wo-scroll-thumb-active: rgba(176, 186, 206, 0.95);
     --wo-scroll-thumb-border: rgba(11, 17, 29, 0.9);
+    --fine-adjust-note-column-width: 350px;
+    --fine-adjust-plan-column-width: 300px;
+    --fine-adjust-dimension-column-width: 96px;
   }
 
   #fine-adjust-bom-modal .fine-adjust-bom-subtitle {
@@ -311,17 +314,29 @@
     white-space: normal;
   }
 
+  #fine-adjust-bom-modal table thead th:nth-child(6),
+  #fine-adjust-bom-modal table thead th:nth-child(7),
+  #fine-adjust-bom-modal table thead th:nth-child(8),
+  #fine-adjust-bom-modal table tbody td:nth-child(6),
+  #fine-adjust-bom-modal table tbody td:nth-child(7),
+  #fine-adjust-bom-modal table tbody td:nth-child(8) {
+    min-width: var(--fine-adjust-dimension-column-width);
+    width: var(--fine-adjust-dimension-column-width);
+    max-width: var(--fine-adjust-dimension-column-width);
+  }
+
   #fine-adjust-bom-modal .fine-adjust-note-cell {
-    min-width: 72px;
-    max-width: 144px;
-    width: 100%;
+    min-width: var(--fine-adjust-note-column-width);
+    width: var(--fine-adjust-note-column-width);
+    max-width: var(--fine-adjust-note-column-width);
   }
 
   #fine-adjust-bom-modal .fine-adjust-note-stack {
     display: flex;
     align-items: stretch;
     gap: 0;
-    min-width: 300px;
+    width: 100%;
+    min-width: 100%;
     min-height: 72px;
     height: 72px;
     border: 1px solid rgba(123, 153, 210, 0.35);
@@ -503,11 +518,21 @@
     padding: 0.5rem 0.75rem;
   }
 
+  #fine-adjust-bom-modal table tbody td:nth-child(6) .fine-adjust-input,
+  #fine-adjust-bom-modal table tbody td:nth-child(7) .fine-adjust-input,
+  #fine-adjust-bom-modal table tbody td:nth-child(8) .fine-adjust-input {
+    min-width: 0;
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+    text-align: center;
+  }
+
   #fine-adjust-bom-modal .fine-adjust-note-stack {
     display: flex;
     align-items: center;
     gap: 0.55rem;
-    min-width: 300px;
+    width: 100%;
+    min-width: 100%;
     min-height: 72px;
   }
 
@@ -553,12 +578,15 @@
   }
 
   #fine-adjust-bom-modal .fine-adjust-plan-cell {
-    min-width: 230px;
+    min-width: var(--fine-adjust-plan-column-width);
+    width: var(--fine-adjust-plan-column-width);
+    max-width: var(--fine-adjust-plan-column-width);
   }
 
   #fine-adjust-bom-modal .fine-adjust-plan-stack {
     position: relative;
-    min-width: 190px;
+    width: 100%;
+    min-width: 100%;
     min-height: 54px;
     height: 54px;
     max-height: 54px;
