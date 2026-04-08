@@ -336,6 +336,38 @@ class Product extends Model
         });
     }
 
+    public static function deleteCatalogProductStructure(string $productCode): array
+    {
+        $normalizedProductCode = trim($productCode);
+
+        if ($normalizedProductCode === '') {
+            throw new \InvalidArgumentException('Product code is required for structure deletion.');
+        }
+
+        $structureTable = self::sourceSchema() . '.' . self::productStructureTable();
+
+        return DB::transaction(function () use ($structureTable, $normalizedProductCode) {
+            $query = DB::table($structureTable)
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$normalizedProductCode]);
+
+            $count = (int) (clone $query)->count();
+
+            if ($count < 1) {
+                return [
+                    'deleted' => false,
+                    'count' => 0,
+                ];
+            }
+
+            $deletedCount = (int) $query->delete();
+
+            return [
+                'deleted' => $deletedCount > 0,
+                'count' => $deletedCount,
+            ];
+        });
+    }
+
     private static function baseScannerQuery(string $search = ''): Builder
     {
         $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';

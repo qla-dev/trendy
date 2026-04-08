@@ -70,6 +70,7 @@ Route::middleware('auth:web')->group(function () {
         Route::post('invoice/preview/{id}/priority', [WorkOrderController::class, 'updateInvoicePriority'])->name('app-invoice-update-priority');
         Route::get('invoice/preview/{id}/products', [ProductsController::class, 'scannerIndex'])->name('app-invoice-products');
         Route::get('invoice/preview/{id}/bom', [WorkOrderController::class, 'workOrderBom'])->name('app-invoice-bom');
+        Route::delete('invoice/preview/{id}/bom', [WorkOrderController::class, 'destroyWorkOrderBom'])->name('app-invoice-bom-destroy');
         Route::get('invoice/preview/{id}/all-materials', [MaterialsController::class, 'scannerIndex'])->name('app-invoice-all-materials');
         Route::get('invoice/preview/{id}/all-operations', [OperationsController::class, 'scannerIndex'])->name('app-invoice-all-operations');
         Route::get('invoice/preview/{id}/barcode-material', [WorkOrderController::class, 'barcodeMaterialLookup'])->name('app-invoice-barcode-material');

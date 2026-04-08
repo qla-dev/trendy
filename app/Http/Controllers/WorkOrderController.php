@@ -1304,6 +1304,73 @@ class WorkOrderController extends Controller
         }
     }
 
+    public function destroyWorkOrderBom(Request $request, string $id): JsonResponse
+    {
+        if (!$this->canDeleteWorkOrders(auth()->user())) {
+            return response()->json([
+                'message' => 'Nemate dozvolu za brisanje sastavnice proizvoda.',
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'product_id' => ['required', 'string', 'max:64'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravan proizvod.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $productId = trim((string) $validator->validated()['product_id']);
+
+        if ($productId === '') {
+            return response()->json([
+                'message' => 'Product ID (acIdent) je obavezan.',
+            ], 422);
+        }
+
+        try {
+            $workOrderRow = $this->findWorkOrderRow($id);
+
+            if ($workOrderRow === null) {
+                return response()->json([
+                    'message' => 'Radni nalog nije pronađen.',
+                ], 404);
+            }
+
+            $deleteResult = Product::deleteCatalogProductStructure($productId);
+            $deletedCount = (int) ($deleteResult['count'] ?? 0);
+
+            if ($deletedCount < 1) {
+                return response()->json([
+                    'message' => 'Sastavnica za odabrani proizvod nije pronađena.',
+                ], 404);
+            }
+
+            return response()->json([
+                'message' => 'Sastavnica proizvoda je uspješno izbrisana.',
+                'meta' => [
+                    'product_id' => $productId,
+                    'deleted_count' => $deletedCount,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order BOM delete failed.', [
+                'id' => $id,
+                'product_id' => $productId,
+                'connection' => config('database.default'),
+                'product_structure_table' => $this->qualifiedProductStructureTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greška pri brisanju BOM strukture.',
+            ], 500);
+        }
+    }
+
     public function barcodeMaterialLookup(Request $request, string $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
