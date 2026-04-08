@@ -1,6 +1,7 @@
 @php
   $productsEndpoint = (string) ($productsFetchUrl ?? '');
   $bomEndpoint = (string) ($bomFetchUrl ?? '');
+  $bomDestroyEndpoint = (string) ($bomDestroyUrl ?? '');
   $allMaterialsEndpoint = (string) ($allMaterialsFetchUrl ?? '');
   $allOperationsEndpoint = (string) ($allOperationsFetchUrl ?? '');
   $barcodeMaterialLookupEndpoint = (string) ($barcodeMaterialLookupUrl ?? '');
@@ -35,6 +36,7 @@
   data-bs-keyboard="false"
   data-products-url="{{ $productsEndpoint }}"
   data-bom-url="{{ $bomEndpoint }}"
+  data-bom-destroy-url="{{ $bomDestroyEndpoint }}"
   data-all-materials-url="{{ $allMaterialsEndpoint }}"
   data-all-operations-url="{{ $allOperationsEndpoint }}"
   data-barcode-lookup-url="{{ $barcodeMaterialLookupEndpoint }}"
@@ -186,6 +188,17 @@
                 <div class="wo-bom-table-section">
                   <div class="wo-bom-table-head mt-1">
                     <h6 class="wo-bom-section-title mb-0">Sastavnice proizvoda</h6>
+                    @if($isAdminUser)
+                      <button
+                        type="button"
+                        class="btn btn-sm wo-bom-inline-action-btn wo-bom-inline-action-btn-danger"
+                        id="bom-delete-structure-btn"
+                        data-default-label="Resetuj"
+                        disabled
+                      >
+                        Resetuj
+                      </button>
+                    @endif
                     <span class="wo-bom-table-found">Pronađeno: <strong id="bom-total-count">0</strong></span>
                   </div>
 
@@ -489,6 +502,46 @@
     font-size: 0.86rem;
     color: #d4def8;
     white-space: nowrap;
+  }
+
+  #sirovina-scanner-modal .wo-bom-inline-action-btn {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    color: #d4def8;
+    font-size: 0.75rem;
+    line-height: 1.15;
+    white-space: nowrap;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+  }
+
+  #sirovina-scanner-modal .wo-bom-inline-action-btn:hover,
+  #sirovina-scanner-modal .wo-bom-inline-action-btn:focus {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f7f9ff;
+  }
+
+  #sirovina-scanner-modal .wo-bom-inline-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  #sirovina-scanner-modal .wo-bom-inline-action-btn-danger {
+    border-color: rgba(255, 107, 107, 0.38);
+    color: #ffb2b2;
+    background: rgba(255, 107, 107, 0.08);
+  }
+
+  #sirovina-scanner-modal .wo-bom-inline-action-btn-danger:hover,
+  #sirovina-scanner-modal .wo-bom-inline-action-btn-danger:focus {
+    border-color: rgba(255, 107, 107, 0.62);
+    background: rgba(255, 107, 107, 0.14);
+    color: #ffd6d6;
   }
 
   #sirovina-scanner-modal .wo-bom-loading-more-note {
@@ -1376,6 +1429,7 @@
 
     var productsUrl = modalEl.getAttribute('data-products-url') || '';
     var bomUrl = modalEl.getAttribute('data-bom-url') || '';
+    var deleteBomUrl = modalEl.getAttribute('data-bom-destroy-url') || '';
     var allMaterialsUrl = modalEl.getAttribute('data-all-materials-url') || '';
     var allOperationsUrl = modalEl.getAttribute('data-all-operations-url') || '';
     var barcodeLookupUrl = modalEl.getAttribute('data-barcode-lookup-url') || '';
@@ -1405,6 +1459,7 @@
     var bomLoadingOverlay = document.getElementById('bom-loading-overlay');
     var selectedCountEl = document.getElementById('bom-selected-count');
     var totalCountEl = document.getElementById('bom-total-count');
+    var deleteBomButton = document.getElementById('bom-delete-structure-btn');
     var openQuantityBtn = document.getElementById('bom-open-quantity-btn');
     var modeSwitcherEl = document.getElementById('bom-mode-switcher');
     var modeButtons = modeSwitcherEl ? modeSwitcherEl.querySelectorAll('[data-mode]') : [];
@@ -1503,6 +1558,7 @@
       quickSelections: new Map(),
       loadingProducts: false,
       loadingBom: false,
+      deletingBom: false,
       bomRequestSeq: 0,
       select2EventsBound: false,
       proceedSource: 'manual',
@@ -1762,6 +1818,15 @@
 
       window.alert(title + ': ' + messageText + (detailsText ? ('\n\n' + detailsText) : ''));
     }
+
+    function withSwalTheme(options) {
+      if (typeof window.woSwalWithTheme === 'function') {
+        return window.woSwalWithTheme(options);
+      }
+
+      return options;
+    }
+
     function shouldIgnoreSelectableRowClick(target) {
       if (!target || typeof target.closest !== 'function') {
         return true;
@@ -2762,6 +2827,23 @@
       state.selectedKeysByProduct.set(resolvedProductId, new Set(selectedKeySet || []));
     }
 
+    function clearStoredSelectionForProduct(productId) {
+      var resolvedProductId = String(productId || '').trim();
+      var quickSelectionPrefix = resolvedProductId + '::';
+
+      if (!resolvedProductId) {
+        return;
+      }
+
+      state.selectedKeysByProduct.delete(resolvedProductId);
+
+      Array.from(state.quickSelections.keys()).forEach(function (key) {
+        if (String(key || '').indexOf(quickSelectionPrefix) === 0) {
+          state.quickSelections.delete(key);
+        }
+      });
+    }
+
     function syncQuickSelectionRow(productId, row, isSelected) {
       var resolvedProductId = String(productId || '').trim();
       if (!resolvedProductId || !row) {
@@ -3052,16 +3134,172 @@
         openQuantityBtn.disabled = selectedCount === 0;
       }
 
+      updateDeleteBomButtonState();
       renderQuickBomRows();
     }
 
     function setBomLoading(isLoading) {
+      state.loadingBom = Boolean(isLoading);
+
       if (!bomLoadingOverlay) {
+        updateDeleteBomButtonState();
         return;
       }
 
       bomLoadingOverlay.classList.toggle('d-none', !isLoading);
       bomLoadingOverlay.setAttribute('aria-hidden', isLoading ? 'false' : 'true');
+      updateDeleteBomButtonState();
+    }
+
+    function setDeleteBomLoading(isLoading) {
+      state.deletingBom = Boolean(isLoading);
+
+      if (deleteBomButton) {
+        if (state.deletingBom) {
+          deleteBomButton.innerHTML = '<span class="spinner-border spinner-border-sm me-50" role="status" aria-hidden="true"></span> Brisanje';
+        } else {
+          deleteBomButton.textContent = String(deleteBomButton.getAttribute('data-default-label') || 'Resetuj');
+        }
+      }
+
+      updateDeleteBomButtonState();
+    }
+
+    function updateDeleteBomButtonState() {
+      if (!deleteBomButton) {
+        return;
+      }
+
+      var hasProduct = currentProductId() !== '';
+      var hasBomRows = Array.isArray(state.bomRows) && state.bomRows.length > 0;
+      var isEnabled = allowManualStockAdjust
+        && state.activeMode === 'product'
+        && hasProduct
+        && hasBomRows
+        && !state.loadingBom
+        && !state.deletingBom;
+
+      deleteBomButton.disabled = !isEnabled;
+    }
+
+    function resetDeletedBomProductState(productId) {
+      clearStoredSelectionForProduct(productId);
+      state.bomRequestSeq += 1;
+      state.bomRows = [];
+      state.selectedKeys.clear();
+      renderBomRows();
+      setBomLoading(false);
+      showError('');
+      setStatus('Sastavnica proizvoda je izbrisana.', 'success');
+    }
+
+    function requestBomDelete(productId) {
+      if (!deleteBomUrl) {
+        return Promise.reject(new Error('Endpoint za brisanje sastavnice nije dostupan.'));
+      }
+
+      return fetch(deleteBomUrl, {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+          product_id: productId
+        })
+      }).then(parseResponse);
+    }
+
+    function confirmDeleteBomForSelectedProduct() {
+      var productId = currentProductId();
+      var productLabel = '';
+
+      if (!allowManualStockAdjust) {
+        notify('warning', 'Nedostaje dozvola', 'Samo administrator može brisati sastavnicu proizvoda.');
+        return;
+      }
+
+      if (!productId) {
+        notify('warning', 'Nedostaje proizvod', 'Izaberite proizvod sa sastavnicom prije brisanja.');
+        return;
+      }
+
+      if (!deleteBomUrl) {
+        notify('error', 'Nedostaje endpoint', 'Brisanje sastavnice proizvoda nije dostupno.');
+        return;
+      }
+
+      if (productSelect && productSelect.selectedIndex > -1) {
+        productLabel = String(productSelect.options[productSelect.selectedIndex].text || '').trim();
+      }
+
+      if (!window.Swal || typeof window.Swal.fire !== 'function') {
+        if (!window.confirm('Resetovati sastavnicu proizvoda za ' + (productLabel || productId) + '?')) {
+          return;
+        }
+
+        setDeleteBomLoading(true);
+        requestBomDelete(productId)
+          .then(function (payload) {
+            resetDeletedBomProductState(productId);
+            notify('success', 'Sastavnica izbrisana', payload && payload.message ? payload.message : 'Sastavnica proizvoda je uspješno izbrisana.');
+          })
+          .catch(function (error) {
+            notify('error', 'Brisanje nije uspjelo', error && error.message ? error.message : 'Brisanje sastavnice proizvoda nije uspjelo.');
+          })
+          .finally(function () {
+            setDeleteBomLoading(false);
+          });
+
+        return;
+      }
+
+      window.Swal.fire(withSwalTheme({
+        title: 'Resetovati sastavnicu proizvoda?',
+        text: productLabel
+          ? ('Proizvod ' + productLabel + ' će biti odspojen od sastavnice, a ista trajno obrisana.')
+          : 'Odabrani proizvod će biti odspojen od sastavnice, a ista trajno obrisana.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Izbriši sastavnicu',
+        cancelButtonText: 'Otkaži',
+        customClass: {
+          confirmButton: 'btn btn-danger',
+          cancelButton: 'btn btn-outline-danger ms-1'
+        },
+        buttonsStyling: false,
+        showLoaderOnConfirm: true,
+        preConfirm: function () {
+          setDeleteBomLoading(true);
+
+          return requestBomDelete(productId).catch(function (error) {
+            var detail = error && error.detail ? '\n' + error.detail : '';
+            setDeleteBomLoading(false);
+            window.Swal.showValidationMessage(
+              (error && error.message ? error.message : 'Brisanje sastavnice proizvoda nije uspjelo.') + detail
+            );
+          });
+        },
+        allowOutsideClick: function () {
+          return !window.Swal.isLoading();
+        }
+      })).then(function (result) {
+        if (!result.isConfirmed) {
+          return;
+        }
+
+        resetDeletedBomProductState(productId);
+
+        return window.Swal.fire(withSwalTheme({
+          icon: 'success',
+          title: 'Sastavnica resetovana',
+          text: result.value && result.value.message ? result.value.message : 'Sastavnica proizvoda je uspješno resetovana.'
+        }));
+      }).finally(function () {
+        setDeleteBomLoading(false);
+      });
     }
 
     function setAllLoading(isLoading) {
@@ -3252,6 +3490,7 @@
       state.activeMode = normalizedMode;
       state.allType = normalizedMode === 'operations' ? 'operations' : 'materials';
       updateModeButtons();
+      updateDeleteBomButtonState();
 
       if (!fromPanel || !toPanel) {
         if (nextIsAll) {
@@ -4796,7 +5035,6 @@
 
       state.bomRequestSeq += 1;
       var requestSeq = state.bomRequestSeq;
-      state.loadingBom = true;
       showError('');
       setBomLoading(true);
       setStatus('Učitavam sastavnicu...');
@@ -4838,7 +5076,6 @@
         })
         .finally(function () {
           if (requestSeq === state.bomRequestSeq) {
-            state.loadingBom = false;
             setBomLoading(false);
           }
         });
@@ -6392,6 +6629,12 @@
           var mode = String(button.getAttribute('data-mode') || '').trim();
           showModePanel(mode);
         });
+      });
+    }
+
+    if (deleteBomButton) {
+      deleteBomButton.addEventListener('click', function () {
+        confirmDeleteBomForSelectedProduct();
       });
     }
 
