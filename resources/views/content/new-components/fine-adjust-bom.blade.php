@@ -231,6 +231,15 @@
     text-overflow: ellipsis;
   }
 
+  #fine-adjust-bom-modal table tbody tr.fine-adjust-row-duplicate td {
+    background: rgba(255, 91, 92, 0.12);
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-position-input-duplicate {
+    border-color: rgba(255, 91, 92, 0.9) !important;
+    box-shadow: 0 0 0 1px rgba(255, 91, 92, 0.18);
+  }
+
   @media (min-width: 992px) {
     #fine-adjust-bom-modal th.fine-adjust-action-cell,
     #fine-adjust-bom-modal td.fine-adjust-action-cell {
