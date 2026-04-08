@@ -4519,6 +4519,108 @@
       return syncFineAdjustComputedRow(clonedRow);
     }
 
+    function normalizeFineAdjustPosition(value) {
+      var normalizedValue = normalizeQuantityInputValue(value);
+
+      if (normalizedValue === '') {
+        return null;
+      }
+
+      var parsedValue = Number(normalizedValue);
+
+      if (!Number.isFinite(parsedValue) || parsedValue < 1 || Math.floor(parsedValue) !== parsedValue) {
+        return null;
+      }
+
+      return parsedValue;
+    }
+
+    function shiftPositions(rows, startPozicija, originalRowUid, originalRowIndex) {
+      if (!Array.isArray(rows) || !Number.isFinite(startPozicija)) {
+        return rows;
+      }
+
+      rows.forEach(function (row, index) {
+        if (!row || typeof row !== 'object') {
+          return;
+        }
+
+        if (index === originalRowIndex) {
+          return;
+        }
+
+        var rowUid = String((row && row.row_uid) || '').trim();
+        if (originalRowUid !== '' && rowUid === originalRowUid) {
+          return;
+        }
+
+        var position = normalizeFineAdjustPosition(row.pozicija);
+        if (position === null || position < startPozicija) {
+          return;
+        }
+
+        row.pozicija = String(position + 1);
+      });
+
+      return rows;
+    }
+
+    function findDuplicatePositions(rows) {
+      var counts = {};
+
+      if (!Array.isArray(rows)) {
+        return [];
+      }
+
+      rows.forEach(function (row) {
+        var position = normalizeFineAdjustPosition(row && row.pozicija);
+
+        if (position === null) {
+          return;
+        }
+
+        var key = String(position);
+        counts[key] = (counts[key] || 0) + 1;
+      });
+
+      return Object.keys(counts)
+        .filter(function (key) {
+          return counts[key] > 1;
+        })
+        .map(function (key) {
+          return Number(key);
+        })
+        .sort(function (left, right) {
+          return left - right;
+        });
+    }
+
+    function applyFineAdjustPositionHighlights(rows) {
+      if (!fineAdjustBodyEl) {
+        return;
+      }
+
+      var duplicateLookup = {};
+      findDuplicatePositions(rows).forEach(function (position) {
+        duplicateLookup[String(position)] = true;
+      });
+
+      var rowElements = fineAdjustBodyEl.querySelectorAll('tr[data-row]');
+      rowElements.forEach(function (rowEl) {
+        var rowIndex = Number(rowEl.getAttribute('data-row') || -1);
+        var row = Array.isArray(rows) ? rows[rowIndex] : null;
+        var position = normalizeFineAdjustPosition(row && row.pozicija);
+        var hasDuplicate = position !== null && duplicateLookup[String(position)] === true;
+        var positionInputEl = rowEl.querySelector('.fine-adjust-input[data-field="pozicija"]');
+
+        rowEl.classList.toggle('fine-adjust-row-duplicate', hasDuplicate);
+
+        if (positionInputEl) {
+          positionInputEl.classList.toggle('fine-adjust-position-input-duplicate', hasDuplicate);
+        }
+      });
+    }
+
     function focusFineAdjustInput(rowIndex, field) {
       if (!fineAdjustBodyEl || !Number.isFinite(rowIndex) || rowIndex < 0 || !field) {
         return;
@@ -4558,10 +4660,28 @@
         return;
       }
 
-      var duplicatedRow = cloneFineAdjustRow(currentRows[rowIndex]);
+      var originalRow = currentRows[rowIndex];
+      var originalPosition = normalizeFineAdjustPosition(originalRow && originalRow.pozicija);
+
+      if (originalPosition === null) {
+        notify('error', 'Greška', 'Cannot duplicate the row because its position is missing or invalid.');
+        return;
+      }
+
+      var duplicatedRow = cloneFineAdjustRow(originalRow);
       if (!duplicatedRow) {
         return;
       }
+
+      var newPosition = originalPosition + 1;
+      duplicatedRow.pozicija = String(newPosition);
+
+      shiftPositions(
+        currentRows,
+        newPosition,
+        String((originalRow && originalRow.row_uid) || '').trim(),
+        rowIndex
+      );
 
       currentRows.splice(rowIndex + 1, 0, duplicatedRow);
       state.fineAdjustRows = currentRows;
@@ -4681,6 +4801,8 @@
       state.fineAdjustRows.forEach(function (unusedRow, rowIndex) {
         syncFineAdjustRowUi(rowIndex);
       });
+
+      applyFineAdjustPositionHighlights(state.fineAdjustRows);
 
       if (fineAdjustCountEl) {
         fineAdjustCountEl.textContent = 'Stavki: ' + state.fineAdjustRows.length;
@@ -5130,12 +5252,32 @@
     function saveFineAdjustedConsumption() {
       var editedRows = collectFineAdjustRowsFromDom();
       state.fineAdjustRows = editedRows.slice();
+      applyFineAdjustPositionHighlights(state.fineAdjustRows);
+
+      var invalidPositions = editedRows.filter(function (row) {
+        return normalizeFineAdjustPosition(row && row.pozicija) === null;
+      });
+
+      if (invalidPositions.length > 0) {
+        notify('error', 'Greška', 'Cannot proceed because one or more positions are missing or invalid.');
+        return;
+      }
+
+      var duplicatePositions = findDuplicatePositions(editedRows);
+      if (duplicatePositions.length > 0) {
+        notify(
+          'error',
+          'Greška',
+          'Nije moguće nastaviti jer postoje duple pozicije. Duple pozicije: ' + duplicatePositions.join(', ') + '.'
+        );
+        return;
+      }
 
       var selected = [];
       editedRows.forEach(function (row) {
         var rowUid = String((row && row.row_uid) || '').trim();
         var componentId = String((row && row.artikal) || '').trim();
-        var lineNo = Number((row && row.pozicija) || 0);
+        var lineNo = normalizeFineAdjustPosition(row && row.pozicija);
         var opis = String((row && row.opis) || '').trim();
         var unitValue = String((row && row.mj) || '').trim().toUpperCase();
         var sourceUnitValue = String((row && row.acUMSource) || '').trim().toUpperCase();
@@ -5144,7 +5286,7 @@
         var planiranoValue = parseDecimalValue(planiranoRawValue, 0);
         var zalihaValue = parseDecimalValue((row && row.zaliha) || 0, 0);
 
-        if (!componentId || !Number.isFinite(lineNo)) {
+        if (!componentId || lineNo === null) {
           return;
         }
 
@@ -5206,12 +5348,32 @@
     function saveFineAdjustedConsumption() {
       var editedRows = collectFineAdjustRowsFromDom();
       state.fineAdjustRows = editedRows.slice();
+      applyFineAdjustPositionHighlights(state.fineAdjustRows);
+
+      var invalidPositions = editedRows.filter(function (row) {
+        return normalizeFineAdjustPosition(row && row.pozicija) === null;
+      });
+
+      if (invalidPositions.length > 0) {
+        notify('error', 'Greška', 'Cannot proceed because one or more positions are missing or invalid.');
+        return;
+      }
+
+      var duplicatePositions = findDuplicatePositions(editedRows);
+      if (duplicatePositions.length > 0) {
+        notify(
+          'error',
+          'Greška',
+          'Nije moguće nastaviti jer postoje duple pozicije. Duple pozicije: ' + duplicatePositions.join(', ') + '.'
+        );
+        return;
+      }
 
       var selected = [];
       editedRows.forEach(function (row) {
         var rowUid = String((row && row.row_uid) || '').trim();
         var componentId = String((row && row.artikal) || '').trim();
-        var lineNo = Number((row && row.pozicija) || 0);
+        var lineNo = normalizeFineAdjustPosition(row && row.pozicija);
         var opis = String((row && row.opis) || '').trim();
         var unitValue = String((row && row.mj) || '').trim().toUpperCase();
         var sourceUnitValue = String((row && row.acUMSource) || '').trim().toUpperCase();
@@ -5220,7 +5382,7 @@
         var planiranoValue = parseDecimalValue(planiranoRawValue, 0);
         var zalihaValue = parseDecimalValue((row && row.zaliha) || 0, 0);
 
-        if (!componentId || !Number.isFinite(lineNo)) {
+        if (!componentId || lineNo === null) {
           return;
         }
 
@@ -6247,11 +6409,32 @@
       var editedRows = collectFineAdjustRowsFromDom();
       state.fineAdjustRows = editedRows.slice();
 
+      applyFineAdjustPositionHighlights(state.fineAdjustRows);
+
+      var invalidPositions = editedRows.filter(function (row) {
+        return normalizeFineAdjustPosition(row && row.pozicija) === null;
+      });
+
+      if (invalidPositions.length > 0) {
+        notify('error', 'Greška', 'Cannot proceed because one or more positions are missing or invalid.');
+        return;
+      }
+
+      var duplicatePositions = findDuplicatePositions(editedRows);
+      if (duplicatePositions.length > 0) {
+        notify(
+          'error',
+          'Greška',
+          'Nije moguće nastaviti jer postoje duple pozicije. Duple pozicije: ' + duplicatePositions.join(', ') + '.'
+        );
+        return;
+      }
+
       var selected = [];
       editedRows.forEach(function (row) {
         var rowUid = String((row && row.row_uid) || '').trim();
         var componentId = String((row && row.artikal) || '').trim();
-        var lineNo = Number((row && row.pozicija) || 0);
+        var lineNo = normalizeFineAdjustPosition(row && row.pozicija);
         var opis = String((row && row.opis) || '').trim();
         var unitValue = String((row && row.mj) || '').trim().toUpperCase();
         var sourceUnitValue = String((row && row.acUMSource) || '').trim().toUpperCase();
@@ -6260,7 +6443,7 @@
         var planiranoValue = parseDecimalValue(planiranoRawValue, 0);
         var zalihaValue = parseDecimalValue((row && row.zaliha) || 0, 0);
 
-        if (!componentId || !Number.isFinite(lineNo)) {
+        if (!componentId || lineNo === null) {
           return;
         }
 
@@ -6566,6 +6749,16 @@
 
         if (field === 'napomena') {
           row.napomena = String(target.value || '').trim();
+          return;
+        }
+
+        if (field === 'alternativa' || field === 'pozicija') {
+          row[field] = String(target.value || '').trim();
+
+          if (field === 'pozicija') {
+            applyFineAdjustPositionHighlights(state.fineAdjustRows);
+          }
+
           return;
         }
 

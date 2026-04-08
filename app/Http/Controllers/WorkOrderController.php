@@ -1630,6 +1630,16 @@ class WorkOrderController extends Controller
                 ];
             }, $normalizedComponents);
 
+            if ($saveMode === 'manual') {
+                $duplicatePositions = $this->findDuplicatePlannedConsumptionPositions($normalizedComponents);
+
+                if (!empty($duplicatePositions)) {
+                    return response()->json([
+                        'message' => 'Nije moguće nastaviti jer postoje duple pozicije. Duple pozicije: ' . implode(', ', $duplicatePositions) . '.',
+                    ], 422);
+                }
+            }
+
             if ($saveMode === 'manual' && empty($bomRows)) {
                 $structureEnsureResult = Product::ensureCatalogProductStructure(
                     $productId,
@@ -2801,6 +2811,52 @@ class WorkOrderController extends Controller
         }
 
         return $this->bomSelectionKey($lineNo, $componentId);
+    }
+
+    private function normalizePlannedConsumptionPosition(mixed $value): ?int
+    {
+        $position = $this->toFloatOrNull($value);
+
+        if ($position === null || $position < 1) {
+            return null;
+        }
+
+        $integerPosition = (int) $position;
+        if (abs($position - $integerPosition) > 0.000001) {
+            return null;
+        }
+
+        return $integerPosition;
+    }
+
+    private function findDuplicatePlannedConsumptionPositions(array $components): array
+    {
+        $counts = [];
+
+        foreach ($components as $component) {
+            if (!is_array($component)) {
+                continue;
+            }
+
+            $position = $this->normalizePlannedConsumptionPosition($component['anNo'] ?? null);
+            if ($position === null) {
+                continue;
+            }
+
+            $counts[$position] = ($counts[$position] ?? 0) + 1;
+        }
+
+        $duplicates = [];
+
+        foreach ($counts as $position => $count) {
+            if ($count > 1) {
+                $duplicates[] = (int) $position;
+            }
+        }
+
+        sort($duplicates);
+
+        return $duplicates;
     }
 
     private function bomLimit(): int

@@ -82,6 +82,41 @@ class WorkOrderPlannedConsumptionTest extends TestCase
         $this->assertSame('row|fine-adjust-row-abc', $result);
     }
 
+    public function test_find_duplicate_planned_consumption_positions_returns_sorted_unique_duplicates(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('findDuplicatePlannedConsumptionPositions');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            ['anNo' => 5],
+            ['anNo' => 3],
+            ['anNo' => 5],
+            ['anNo' => 3],
+            ['anNo' => 8],
+        ]);
+
+        $this->assertSame([3, 5], $result);
+    }
+
+    public function test_find_duplicate_planned_consumption_positions_ignores_invalid_positions(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('findDuplicatePlannedConsumptionPositions');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            ['anNo' => null],
+            ['anNo' => ''],
+            ['anNo' => 0],
+            ['anNo' => 2.5],
+            ['anNo' => 7],
+            ['anNo' => 7],
+        ]);
+
+        $this->assertSame([7], $result);
+    }
+
     public function test_build_removed_planned_consumption_stock_adjustment_returns_reverse_delta_for_materials(): void
     {
         $controller = new WorkOrderController();
