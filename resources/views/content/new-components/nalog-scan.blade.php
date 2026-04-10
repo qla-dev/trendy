@@ -1409,7 +1409,7 @@
       var selectedQuantity = result && result.value ? result.value.quantity : parsePromptQuantityValue(order && order.kolicina != null ? order.kolicina : '');
       var loadingCopy = order && order.catalog_item_missing
         ? 'Kreiram RN, dopunjavam šifrarnik artikala i otvaram radni nalog...'
-        : 'Prepisujem podatke sa naruddžbe i otvaram radni nalog...';
+        : 'Prepisujem podatke sa narudžbe i otvaram radni nalog...';
 
       Swal.fire(swalWithProjectTheme({
         html: [

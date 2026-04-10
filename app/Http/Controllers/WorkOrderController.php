@@ -46,9 +46,11 @@ class WorkOrderController extends Controller
     private ?array $orderTableColumnsCache = null;
     private ?array $orderItemTableColumnsCache = null;
     private ?array $workOrderOrderItemLinkTableColumnsCache = null;
+    private ?array $workOrderOrderItemLinkInsertTableColumnsCache = null;
     private ?array $tableNonInsertableColumnsCache = null;
     private ?array $tableStringLengthMapCache = null;
     private ?string $workOrderOrderItemLinkTableCache = null;
+    private ?string $workOrderOrderItemLinkInsertTableCache = null;
     private array $linkedOrderCache = [];
 
     public function invoiceList()
@@ -523,6 +525,16 @@ class WorkOrderController extends Controller
                 ]);
 
                 $this->newTableQuery()->insert($payload);
+
+                // Create link between WorkOrder and OrderItem
+                $linkPayload = $this->buildWorkOrderOrderItemLinkPayload(
+                    (string) ($payload['acKey'] ?? ''),
+                    $orderContext,
+                    $request->user()
+                );
+                if (!empty($linkPayload)) {
+                    $this->newWorkOrderOrderItemLinkInsertTableQuery()->insert($linkPayload);
+                }
 
                 $lookupIdentifier = (string) ($payload['acRefNo1'] ?? ($payload['acKey'] ?? $numberContext['next_display']));
                 $debugContext['lookup_identifier_after_insert'] = $lookupIdentifier;
@@ -5621,6 +5633,92 @@ class WorkOrderController extends Controller
         return $payload;
     }
 
+    private function buildWorkOrderOrderItemLinkPayload(
+        string $workOrderKey,
+        array $orderContext,
+        mixed $user = null
+    ): array {
+        $columns = $this->workOrderOrderItemLinkInsertTableColumns();
+        $payload = [];
+
+        $orderKey = trim((string) ($orderContext['order_key'] ?? ''));
+        $orderPosition = (int) ($orderContext['order_position'] ?? 0);
+
+        if ($workOrderKey === '' || $orderKey === '') {
+            return [];
+        }
+
+        if (empty($columns)) {
+            return [];
+        }
+
+        $now = Carbon::now();
+        $username = is_object($user) ? trim((string) ($user->username ?? $user->name ?? '')) : '';
+        $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
+        $orderItemRow = $this->findOrderItemRowByOrderContext($orderContext);
+        $orderItemQIdValue = $this->toFloatOrNull($orderItemRow['anQId'] ?? null);
+        $orderItemQId = $orderItemQIdValue === null ? null : (int) $orderItemQIdValue;
+
+        if (in_array('acKey', $columns, true)) {
+            $payload['acKey'] = $workOrderKey;
+        }
+
+        if (in_array('acLnkKey', $columns, true)) {
+            $payload['acLnkKey'] = $orderKey;
+        }
+        if (in_array('anLnkNo', $columns, true)) {
+            $payload['anLnkNo'] = $orderPosition;
+        }
+        if ($orderItemQId !== null && in_array('anOrderItemQId', $columns, true)) {
+            $payload['anOrderItemQId'] = $orderItemQId;
+        }
+
+        if (in_array('anOrderItemQId', $columns, true) && !array_key_exists('anOrderItemQId', $payload)) {
+            Log::warning('Skipping work order order item link insert because order item QID could not be resolved.', [
+                'work_order_key' => $workOrderKey,
+                'order_key' => $orderKey,
+                'order_position' => $orderPosition,
+                'product_code' => (string) ($orderContext['product_code'] ?? ''),
+                'table' => $this->qualifiedWorkOrderOrderItemLinkInsertTableName(),
+            ]);
+
+            return [];
+        }
+
+        if (in_array('acType', $columns, true)) {
+            $payload['acType'] = 'DK';
+        }
+
+        if (in_array('adTimeIns', $columns, true)) {
+            $payload['adTimeIns'] = $now;
+        }
+        if (in_array('adTimeChg', $columns, true)) {
+            $payload['adTimeChg'] = $now;
+        }
+
+        if ($userId > 0) {
+            if (in_array('anUserId', $columns, true)) {
+                $payload['anUserId'] = $userId;
+            }
+            if (in_array('anUserIns', $columns, true)) {
+                $payload['anUserIns'] = $userId;
+            }
+            if (in_array('anUserChg', $columns, true)) {
+                $payload['anUserChg'] = $userId;
+            }
+        }
+
+        if ($username !== '' && in_array('acValue', $columns, true)) {
+            $payload['acValue'] = substr($username, 0, 35);
+        }
+
+        if (in_array('anNo', $columns, true)) {
+            $payload['anNo'] = 0;
+        }
+
+        return $payload;
+    }
+
     private function resolveScanCreateWorkOrderUnit(array $orderRow, array $orderContext): string
     {
         $orderUnit = strtoupper(substr((string) $this->valueTrimmed($orderRow, ['acUM', 'acUM1', 'acUnit'], ''), 0, 3));
@@ -7969,6 +8067,25 @@ class WorkOrderController extends Controller
         return $this->workOrderOrderItemLinkTableColumnsCache;
     }
 
+    protected function workOrderOrderItemLinkInsertTableColumns(): array
+    {
+        if ($this->workOrderOrderItemLinkInsertTableColumnsCache !== null) {
+            return $this->workOrderOrderItemLinkInsertTableColumnsCache;
+        }
+
+        $this->workOrderOrderItemLinkInsertTableColumnsCache = DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->where('TABLE_SCHEMA', $this->tableSchema())
+            ->where('TABLE_NAME', $this->workOrderOrderItemLinkInsertTableName())
+            ->pluck('COLUMN_NAME')
+            ->map(function ($columnName) {
+                return (string) $columnName;
+            })
+            ->values()
+            ->all();
+
+        return $this->workOrderOrderItemLinkInsertTableColumnsCache;
+    }
+
     protected function orderTableColumns(): array
     {
         if ($this->orderTableColumnsCache !== null) {
@@ -8409,6 +8526,11 @@ class WorkOrderController extends Controller
         return DB::table($this->qualifiedWorkOrderOrderItemLinkTableName());
     }
 
+    private function newWorkOrderOrderItemLinkInsertTableQuery(): Builder
+    {
+        return DB::table($this->qualifiedWorkOrderOrderItemLinkInsertTableName());
+    }
+
     private function newCatalogItemsTableQuery(): Builder
     {
         return DB::table($this->qualifiedCatalogItemsTableName());
@@ -8498,6 +8620,41 @@ class WorkOrderController extends Controller
         return $this->workOrderOrderItemLinkTableCache;
     }
 
+    private function workOrderOrderItemLinkInsertTableName(): string
+    {
+        if ($this->workOrderOrderItemLinkInsertTableCache !== null) {
+            return $this->workOrderOrderItemLinkInsertTableCache;
+        }
+
+        $configuredTable = trim((string) config('workorders.work_order_order_item_link_insert_table', 'tHF_LinkWOExOrderItem'));
+        $readTable = trim((string) config('workorders.work_order_order_item_link_table', 'vHF_LinkWOExOrderItem'));
+        $derivedTable = preg_match('/^v(.+)$/', $readTable, $matches) === 1 ? 't' . $matches[1] : '';
+        $candidates = array_values(array_unique(array_filter([
+            $configuredTable,
+            $derivedTable,
+            'tHF_LinkWOExOrderItem',
+            $readTable,
+        ])));
+
+        foreach ($candidates as $candidate) {
+            $exists = DB::table('INFORMATION_SCHEMA.TABLES')
+                ->where('TABLE_SCHEMA', $this->tableSchema())
+                ->where('TABLE_NAME', $candidate)
+                ->where('TABLE_TYPE', 'BASE TABLE')
+                ->exists();
+
+            if ($exists) {
+                $this->workOrderOrderItemLinkInsertTableCache = (string) $candidate;
+
+                return $this->workOrderOrderItemLinkInsertTableCache;
+            }
+        }
+
+        $this->workOrderOrderItemLinkInsertTableCache = $configuredTable !== '' ? $configuredTable : 'tHF_LinkWOExOrderItem';
+
+        return $this->workOrderOrderItemLinkInsertTableCache;
+    }
+
     private function catalogItemsTableName(): string
     {
         return (string) config('workorders.catalog_items_table', 'tHE_SetItem');
@@ -8541,6 +8698,11 @@ class WorkOrderController extends Controller
     protected function qualifiedWorkOrderOrderItemLinkTableName(): string
     {
         return $this->tableSchema() . '.' . $this->workOrderOrderItemLinkTableName();
+    }
+
+    private function qualifiedWorkOrderOrderItemLinkInsertTableName(): string
+    {
+        return $this->tableSchema() . '.' . $this->workOrderOrderItemLinkInsertTableName();
     }
 
     private function qualifiedCatalogItemsTableName(): string
