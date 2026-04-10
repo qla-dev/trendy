@@ -77,12 +77,12 @@ Route::middleware('auth:web')->group(function () {
         Route::post('invoice/preview/{id}/planned-consumption', [WorkOrderController::class, 'storePlannedConsumption'])->name('app-invoice-planned-consumption');
         Route::post('invoice/preview/{id}/planned-consumption/update', [WorkOrderController::class, 'updatePlannedConsumptionItem'])->name('app-invoice-planned-consumption-update');
         Route::post('invoice/preview/{id}/planned-consumption/remove', [WorkOrderController::class, 'removePlannedConsumptionItem'])->name('app-invoice-planned-consumption-remove');
-        Route::get('orders-test', [WorkOrderController::class, 'ordersLinkageIndex'])->name('app-orders-test');
-        Route::get('orders-test/data', [WorkOrderController::class, 'ordersLinkageData'])->name('app-orders-test-data');
-        Route::get('orders-test/positions', [WorkOrderController::class, 'ordersLinkagePositions'])->name('app-orders-test-positions');
-        Route::get('orders-test/work-orders', [WorkOrderController::class, 'ordersLinkageWorkOrders'])->name('app-orders-test-work-orders');
-        Route::get('radni-nalozi', [WorkOrderController::class, 'ordersLinkageWorkOrdersApi'])->name('app-orders-test-radni-nalozi');
-        Route::delete('orders-test', [WorkOrderController::class, 'destroyLinkedOrder'])->name('app-orders-test-destroy');
+        Route::get('orders', [WorkOrderController::class, 'ordersLinkageIndex'])->name('app-orders');
+        Route::get('orders/data', [WorkOrderController::class, 'ordersLinkageData'])->name('app-orders-data');
+        Route::get('orders/positions', [WorkOrderController::class, 'ordersLinkagePositions'])->name('app-orders-positions');
+        Route::get('orders/work-orders', [WorkOrderController::class, 'ordersLinkageWorkOrders'])->name('app-orders-work-orders');
+        Route::get('orders/radni-nalozi', [WorkOrderController::class, 'ordersLinkageWorkOrdersApi'])->name('app-orders-radni-nalozi');
+        Route::delete('orders', [WorkOrderController::class, 'destroyLinkedOrder'])->name('app-orders-destroy');
         Route::get('stock', [MaterialsController::class, 'stockIndex'])->name('app-stock');
         Route::get('stock/data', [MaterialsController::class, 'stockData'])->name('app-stock-data');
         Route::post('materials', [MaterialsController::class, 'storeMaterial'])->name('app-materials-store');

@@ -1073,21 +1073,29 @@ class WorkOrderController extends Controller
 
     public function ordersLinkageIndex(Request $request)
     {
+        if (!$this->canAccessOrderLinkage($request->user())) {
+            return redirect()->route('misc-not-authorized');
+        }
+
         $pageConfigs = ['pageHeader' => false];
 
-        return view('/content/apps/orders/app-order-link-test', [
+        return view('/content/apps/orders/app-orders', [
             'pageConfigs' => $pageConfigs,
-            'ordersLinkageDataUrl' => route('app-orders-test-data'),
-            'ordersLinkagePositionsUrl' => route('app-orders-test-positions'),
-            'ordersLinkageWorkOrdersUrl' => route('app-orders-test-work-orders'),
-            'ordersLinkageWorkOrdersApiUrl' => route('app-orders-test-radni-nalozi'),
-            'ordersLinkageDeleteUrl' => route('app-orders-test-destroy'),
+            'ordersLinkageDataUrl' => route('app-orders-data'),
+            'ordersLinkagePositionsUrl' => route('app-orders-positions'),
+            'ordersLinkageWorkOrdersUrl' => route('app-orders-work-orders'),
+            'ordersLinkageWorkOrdersApiUrl' => route('app-orders-radni-nalozi'),
+            'ordersLinkageDeleteUrl' => route('app-orders-destroy'),
             'canDeleteLinkedOrders' => $this->canDeleteWorkOrders($request->user()),
         ]);
     }
 
     public function ordersLinkageData(Request $request): JsonResponse
     {
+        if (!$this->canAccessOrderLinkage($request->user())) {
+            return $this->orderLinkageForbiddenJsonResponse();
+        }
+
         try {
             $requestedLimit = (int) $request->input('limit', $request->input('length', config('workorders.default_limit', 10)));
             $requestedPage = (int) $request->input('page', 0);
@@ -1115,7 +1123,7 @@ class WorkOrderController extends Controller
                 ],
             ]);
         } catch (Throwable $exception) {
-            Log::error('Order linkage test list failed.', [
+            Log::error('Order linkage list failed.', [
                 'connection' => config('database.default'),
                 'orders_table' => $this->qualifiedOrderTableName(),
                 'order_items_table' => $this->qualifiedOrderItemTableName(),
@@ -1125,7 +1133,7 @@ class WorkOrderController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greška pri učitavanju narudžbi za test povezivanja.',
+                'message' => 'Greška pri učitavanju narudžbi.',
                 'data' => [],
                 'meta' => [
                     'count' => 0,
@@ -1141,6 +1149,10 @@ class WorkOrderController extends Controller
 
     public function ordersLinkagePositions(Request $request)
     {
+        if (!$this->canAccessOrderLinkage($request->user())) {
+            return $this->orderLinkageForbiddenHtmlResponse();
+        }
+
         $validator = Validator::make($request->all(), [
             'order_number' => ['required', 'string', 'max:255'],
         ]);
@@ -1195,6 +1207,10 @@ class WorkOrderController extends Controller
 
     public function ordersLinkageWorkOrders(Request $request)
     {
+        if (!$this->canAccessOrderLinkage($request->user())) {
+            return $this->orderLinkageForbiddenHtmlResponse();
+        }
+
         $validator = Validator::make($request->all(), [
             'order_number' => ['required', 'string', 'max:255'],
         ]);
@@ -1249,6 +1265,10 @@ class WorkOrderController extends Controller
 
     public function ordersLinkageWorkOrdersApi(Request $request): JsonResponse
     {
+        if (!$this->canAccessOrderLinkage($request->user())) {
+            return $this->orderLinkageForbiddenJsonResponse();
+        }
+
         $orderNumber = trim((string) $request->query('narudzba', $request->query('order_number', '')));
         $normalizedOrderNumber = $this->normalizeComparableIdentifier($orderNumber);
 
@@ -1320,7 +1340,7 @@ class WorkOrderController extends Controller
 
             if (!empty($linkedWorkOrders)) {
                 return response()->json([
-                    'message' => 'Narudžba ima povezane radne naloge i ne može biti obrisana sa ove test stranice.',
+                    'message' => 'Narudžba ima povezane radne naloge i ne može biti obrisana sa ove stranice.',
                 ], 422);
             }
 
@@ -1370,7 +1390,7 @@ class WorkOrderController extends Controller
                 return $deleted;
             }, 3);
 
-            Log::info('Linked order deleted from order linkage test.', [
+            Log::info('Linked order deleted from order linkage page.', [
                 'order_number' => $normalizedOrderNumber,
                 'order_keys' => $orderKeys,
                 'deleted_counts' => $deletedCounts,
@@ -1387,7 +1407,7 @@ class WorkOrderController extends Controller
                 ],
             ]);
         } catch (Throwable $exception) {
-            Log::error('Linked order delete failed from order linkage test.', [
+            Log::error('Linked order delete failed from order linkage page.', [
                 'connection' => config('database.default'),
                 'orders_table' => $this->qualifiedOrderTableName(),
                 'order_items_table' => $this->qualifiedOrderItemTableName(),
@@ -9399,6 +9419,27 @@ class WorkOrderController extends Controller
         }
 
         return strtolower(trim((string) ($user->role ?? ''))) === 'admin';
+    }
+
+    private function canAccessOrderLinkage(mixed $user = null): bool
+    {
+        return $this->canDeleteWorkOrders($user);
+    }
+
+    private function orderLinkageForbiddenJsonResponse(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Nemate dozvolu za pristup upravljanju narudzbama.',
+            'data' => [],
+        ], 403);
+    }
+
+    private function orderLinkageForbiddenHtmlResponse()
+    {
+        return response(
+            '<div class="alert alert-danger mb-0">' . e('Nemate dozvolu za pristup upravljanju narudzbama.') . '</div>',
+            403
+        );
     }
 
     private function emptyInvoicePreviewResponse(array $pageConfigs, ?string $invoiceNumber = null)
