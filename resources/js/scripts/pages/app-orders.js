@@ -3,7 +3,7 @@ $(function () {
 
   var tableElement = $('#order-linkage-table');
   var pageErrorElement = $('#order-linkage-page-error');
-  var config = window.orderLinkageTestConfig || {};
+  var config = window.orderLinkageConfig || {};
   var dataUrl = (config.dataUrl || '').toString().trim();
   var positionsUrl = (config.positionsUrl || '').toString().trim();
   var workOrdersUrl = (config.workOrdersUrl || '').toString().trim();
@@ -717,7 +717,7 @@ $(function () {
           },
           error: function (xhr) {
             var responseJson = xhr && xhr.responseJSON ? xhr.responseJSON : null;
-            var message = responseJson && responseJson.message ? responseJson.message : 'Greska pri ucitavanju narudzbi za test povezivanja.';
+            var message = responseJson && responseJson.message ? responseJson.message : 'Greska pri ucitavanju narudzbi.';
 
             showPageError(message);
             callback({

@@ -15,10 +15,10 @@
       "slug": ""
     },
     {
-      "name": "Narudžbe (test)",
+      "name": "Upravljanje narudžbama",
       "icon": "briefcase",
-      "url": "app/orders-test",
-      "slug": "app-orders-test"
+      "url": "app/orders",
+      "slug": "app-orders"
     },
     {
       "name": "Upravljanje nalozima",

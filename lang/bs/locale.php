@@ -157,6 +157,7 @@ return [
     "Upravljaj" => "Upravljaj",
     "Radni nalozi" => "Radni nalozi",
     "Upravljanje nalozima" => "Upravljanje nalozima",
+    "Upravljanje narudžbama" => "Upravljanje narudžbama",
     "Skeniraj radni nalog" => "Skeniraj nalog",
     "Barcode generator" => "Barcode generator",
     "View" => "Pregled",

@@ -1,15 +1,15 @@
 @extends('layouts/contentLayoutMaster')
 
-@section('title', 'Narudzbe')
+@section('title', 'Lista narudzbi')
 
 @php
   $canDeleteLinkedOrders = (bool) ($canDeleteLinkedOrders ?? false);
   $orderLinkageConfig = [
-      'dataUrl' => (string) ($ordersLinkageDataUrl ?? route('app-orders-test-data')),
-      'positionsUrl' => (string) ($ordersLinkagePositionsUrl ?? route('app-orders-test-positions')),
-      'workOrdersUrl' => (string) ($ordersLinkageWorkOrdersUrl ?? route('app-orders-test-work-orders')),
-      'workOrdersApiUrl' => (string) ($ordersLinkageWorkOrdersApiUrl ?? route('app-orders-test-radni-nalozi')),
-      'deleteUrl' => (string) ($ordersLinkageDeleteUrl ?? route('app-orders-test-destroy')),
+      'dataUrl' => (string) ($ordersLinkageDataUrl ?? route('app-orders-data')),
+      'positionsUrl' => (string) ($ordersLinkagePositionsUrl ?? route('app-orders-positions')),
+      'workOrdersUrl' => (string) ($ordersLinkageWorkOrdersUrl ?? route('app-orders-work-orders')),
+      'workOrdersApiUrl' => (string) ($ordersLinkageWorkOrdersApiUrl ?? route('app-orders-radni-nalozi')),
+      'deleteUrl' => (string) ($ordersLinkageDeleteUrl ?? route('app-orders-destroy')),
       'canDeleteOrders' => $canDeleteLinkedOrders,
   ];
 @endphp
@@ -552,7 +552,7 @@
 
 @section('page-script')
 <script>
-  window.orderLinkageTestConfig = @json($orderLinkageConfig);
+  window.orderLinkageConfig = @json($orderLinkageConfig);
 </script>
-<script src="{{ asset('js/scripts/pages/app-order-link-test.js?v=5') }}"></script>
+<script src="{{ asset('js/scripts/pages/app-orders.js?v=2') }}"></script>
 @endsection
