@@ -11,6 +11,7 @@ return [
     'product_structure_table' => env('WORK_ORDER_PRODUCT_STRUCTURE_TABLE', 'tHF_SetPrSt'),
     'orders_table' => env('WORK_ORDER_ORDERS_TABLE', 'tHE_Order'),
     'order_items_table' => env('WORK_ORDER_ORDER_ITEMS_TABLE', 'tHE_OrderItem'),
+    'work_order_order_item_link_table' => env('WORK_ORDER_ORDER_ITEM_LINK_TABLE', 'vHF_LinkWOExOrderItem'),
     'default_limit' => 10,
     'max_limit' => 100,
     'bom_limit' => 100,

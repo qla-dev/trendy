@@ -523,11 +523,52 @@ $(function () {
   function loadPositionsModalContent(row) {
     var modalInstance;
 
-    if (!row || !positionsUrl) {
+    if (!row || !workOrdersUrl) {
       return;
     }
 
     modalInstance = openModal('Pozicije narudzbe', 'Narudzba: ' + ((row && row.narudzba) || '-'));
+
+    if (!modalInstance) {
+      return;
+    }
+
+    if (modalRequest && typeof modalRequest.abort === 'function') {
+      modalRequest.abort();
+    }
+
+    modalRequest = $.ajax({
+      url: workOrdersUrl,
+      method: 'GET',
+      dataType: 'html',
+      data: {
+        order_number: row.narudzba || row.order_number || ''
+      },
+      success: function (html) {
+        setModalState({
+          loading: false,
+          errorMessage: '',
+          html: html || '<div class="order-linkage-modal-empty">Nema podataka za prikaz.</div>'
+        });
+      },
+      error: function (xhr) {
+        setModalState({
+          loading: false,
+          errorMessage: xhr && xhr.responseText ? $(xhr.responseText).text() || 'Greska pri ucitavanju detalja.' : 'Greska pri ucitavanju detalja.',
+          html: ''
+        });
+      }
+    });
+  }
+
+  function loadWorkOrdersModalContent(row) {
+    var modalInstance;
+
+    if (!row || !positionsUrl) {
+      return;
+    }
+
+    modalInstance = openModal('Veze narudzbe', 'Narudzba: ' + ((row && row.narudzba) || '-'));
 
     if (!modalInstance) {
       return;
@@ -555,49 +596,6 @@ $(function () {
         setModalState({
           loading: false,
           errorMessage: xhr && xhr.responseText ? $(xhr.responseText).text() || 'Greska pri ucitavanju detalja.' : 'Greska pri ucitavanju detalja.',
-          html: ''
-        });
-      }
-    });
-  }
-
-  function loadWorkOrdersModalContent(row) {
-    var modalInstance;
-
-    if (!row || !workOrdersApiUrl) {
-      return;
-    }
-
-    modalInstance = openModal('Veze narudzbe', 'Narudzba: ' + ((row && row.narudzba) || '-'));
-
-    if (!modalInstance) {
-      return;
-    }
-
-    if (modalRequest && typeof modalRequest.abort === 'function') {
-      modalRequest.abort();
-    }
-
-    modalRequest = $.ajax({
-      url: workOrdersApiUrl,
-      method: 'GET',
-      dataType: 'json',
-      data: {
-        narudzba: row.narudzba || row.order_number || ''
-      },
-      success: function (response) {
-        setModalState({
-          loading: false,
-          errorMessage: '',
-          html: buildWorkOrdersModalHtml(row, Array.isArray(response) ? response : [])
-        });
-      },
-      error: function (xhr) {
-        var responseJson = xhr && xhr.responseJSON ? xhr.responseJSON : null;
-
-        setModalState({
-          loading: false,
-          errorMessage: responseJson && responseJson.message ? responseJson.message : 'Greska pri ucitavanju radnih naloga.',
           html: ''
         });
       }

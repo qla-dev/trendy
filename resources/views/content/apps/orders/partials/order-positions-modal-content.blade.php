@@ -1,6 +1,6 @@
 @php
   $orderSummary = (array) ($orderSummary ?? []);
-  $positions = (array) ($positions ?? []);
+  $links = (array) ($links ?? []);
   $linkageToneClass = match ((string) ($orderSummary['linkage_tone'] ?? 'secondary')) {
       'danger' => 'badge-light-danger',
       'warning' => 'badge-light-warning',
@@ -25,8 +25,8 @@
     </span>
   </div>
   <div class="order-linkage-modal-summary-card">
-    <span class="order-linkage-modal-summary-label">Broj pozicija</span>
-    <span class="order-linkage-modal-summary-value">{{ $orderSummary['position_count'] ?? count($positions) }}</span>
+    <span class="order-linkage-modal-summary-label">Broj veza</span>
+    <span class="order-linkage-modal-summary-value">{{ $orderSummary['link_count'] ?? count($links) }}</span>
   </div>
 </div>
 
@@ -35,31 +35,35 @@
     <table class="table order-linkage-modal-table">
       <thead>
         <tr>
-          <th>ID</th>
-          <th>RN</th>
-          <th>Pozicija</th>
+          <th>Dokument</th>
+          <th>Datum</th>
+          <th>Poz.</th>
           <th>Artikal</th>
           <th>Opis</th>
-          <th>Napomena</th>
-          <th class="text-end">Kolicina</th>
+          <th>Tip</th>
+          <th class="text-end">Naruceno</th>
+          <th class="text-end">Izradjeno</th>
+          <th class="text-end">Neizradjeno</th>
           <th>JM</th>
         </tr>
       </thead>
       <tbody>
-        @forelse($positions as $position)
+        @forelse($links as $link)
           <tr>
-            <td>{{ $position['id'] ?? '-' }}</td>
-            <td>{{ $position['rn_number'] ?? '-' }}</td>
-            <td>{{ $position['pozicija'] ?? '-' }}</td>
-            <td>{{ $position['sifra'] ?? '-' }}</td>
-            <td>{{ $position['naziv'] ?? '-' }}</td>
-            <td>{{ $position['napomena'] ?? '-' }}</td>
-            <td class="text-end">{{ $position['kolicina'] ?? '-' }}</td>
-            <td>{{ $position['mj'] ?? '-' }}</td>
+            <td>{{ $link['dokument'] ?? '-' }}</td>
+            <td>{{ $link['datum'] ?? '-' }}</td>
+            <td>{{ $link['pozicija'] ?? '-' }}</td>
+            <td>{{ $link['artikal'] ?? '-' }}</td>
+            <td>{{ $link['opis'] ?? '-' }}</td>
+            <td>{{ $link['tip'] ?? '-' }}</td>
+            <td class="text-end">{{ $link['naruceno'] ?? '-' }}</td>
+            <td class="text-end">{{ $link['izradjeno'] ?? '-' }}</td>
+            <td class="text-end">{{ $link['neizradjeno'] ?? '-' }}</td>
+            <td>{{ $link['jm'] ?? '-' }}</td>
           </tr>
         @empty
           <tr>
-            <td colspan="8" class="order-linkage-modal-empty">Za ovu narudzbu nisu pronadjene pozicije.</td>
+            <td colspan="10" class="order-linkage-modal-empty">Za ovu narudzbu nisu pronadjene veze.</td>
           </tr>
         @endforelse
       </tbody>
