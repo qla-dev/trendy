@@ -8,9 +8,6 @@ $(function () {
   var positionsUrl = (config.positionsUrl || '').toString().trim();
   var workOrdersUrl = (config.workOrdersUrl || '').toString().trim();
   var workOrdersApiUrl = (config.workOrdersApiUrl || '').toString().trim();
-  var deleteUrl = (config.deleteUrl || '').toString().trim();
-  var canDeleteOrders = !!config.canDeleteOrders;
-  var csrfToken = $('meta[name="csrf-token"]').attr('content') || '';
   var modalElement = document.getElementById('order-linkage-modal');
   var modalTitleElement = document.getElementById('order-linkage-modal-label');
   var modalSubtitleElement = document.getElementById('order-linkage-modal-subtitle');
@@ -368,10 +365,7 @@ $(function () {
     replaceFeather();
   }
 
-  function buildActionsHtml(row) {
-    var hasLinkedWorkOrders = !!(row && Number(row.brojRN || 0) > 0);
-    var deleteDisabledAttributes = canDeleteOrders && !hasLinkedWorkOrders ? '' : ' disabled aria-disabled="true"';
-
+  function buildActionsHtml() {
     return (
       '<div class="order-linkage-actions-group">' +
         '<button type="button" class="btn btn-sm btn-outline-primary order-linkage-action-btn order-linkage-positions-btn">' +
@@ -382,29 +376,8 @@ $(function () {
           '<i class="fa fa-industry"></i>' +
           '<span>Veze</span>' +
         '</button>' +
-        '<button type="button" class="btn btn-sm btn-outline-danger order-linkage-action-btn order-linkage-delete-btn"' + deleteDisabledAttributes + '>' +
-          '<i class="fa fa-trash"></i>' +
-          '<span>Izbrisi</span>' +
-        '</button>' +
       '</div>'
     );
-  }
-
-  function showFeedback(icon, title, text, confirmClass) {
-    if (window.Swal && typeof window.Swal.fire === 'function') {
-      window.Swal.fire({
-        icon: icon,
-        title: title,
-        text: text,
-        customClass: {
-          confirmButton: confirmClass || 'btn btn-primary'
-        },
-        buttonsStyling: false
-      });
-      return;
-    }
-
-    window.alert(text || title || '');
   }
 
   function resolveRowDataFromTrigger(trigger) {
@@ -415,6 +388,25 @@ $(function () {
     }
 
     return dataTable.row(rowElement).data() || null;
+  }
+
+  function ensureTableBodyScrollContainer() {
+    var existingScrollHost = tableElement.closest('.order-linkage-table-body-scroll');
+    var scrollHost;
+
+    if (existingScrollHost.length) {
+      return existingScrollHost;
+    }
+
+    scrollHost = $('<div class="order-linkage-table-body-scroll"></div>');
+    tableElement.before(scrollHost);
+    scrollHost.append(tableElement);
+
+    if (scrollHost.get(0)) {
+      scrollHost.get(0).scrollLeft = 0;
+    }
+
+    return scrollHost;
   }
 
   function setModalState(options) {
@@ -501,11 +493,12 @@ $(function () {
                 ? records
                     .map(function (workOrder) {
                       var vezaToneClass = badgeToneClass((workOrder && workOrder.veza_tone) || 'secondary');
+                      var statusToneClass = badgeToneClass((workOrder && workOrder.status_tone) || 'secondary');
 
                       return (
                         '<tr>' +
                           '<td>' + escapeHtml((workOrder && workOrder.id) || '-') + '</td>' +
-                          '<td>' + escapeHtml((workOrder && workOrder.status) || 'N/A') + '</td>' +
+                          '<td><span class="badge ' + statusToneClass + '">' + escapeHtml((workOrder && workOrder.status) || 'N/A') + '</span></td>' +
                           '<td><span class="badge ' + vezaToneClass + '">' + escapeHtml((workOrder && workOrder.veza) || 'Sumnjiva veza') + '</span></td>' +
                           '<td>' + escapeHtml((workOrder && workOrder.pozicije) || '-') + '</td>' +
                         '</tr>'
@@ -523,52 +516,11 @@ $(function () {
   function loadPositionsModalContent(row) {
     var modalInstance;
 
-    if (!row || !workOrdersUrl) {
-      return;
-    }
-
-    modalInstance = openModal('Pozicije narudzbe', 'Narudzba: ' + ((row && row.narudzba) || '-'));
-
-    if (!modalInstance) {
-      return;
-    }
-
-    if (modalRequest && typeof modalRequest.abort === 'function') {
-      modalRequest.abort();
-    }
-
-    modalRequest = $.ajax({
-      url: workOrdersUrl,
-      method: 'GET',
-      dataType: 'html',
-      data: {
-        order_number: row.narudzba || row.order_number || ''
-      },
-      success: function (html) {
-        setModalState({
-          loading: false,
-          errorMessage: '',
-          html: html || '<div class="order-linkage-modal-empty">Nema podataka za prikaz.</div>'
-        });
-      },
-      error: function (xhr) {
-        setModalState({
-          loading: false,
-          errorMessage: xhr && xhr.responseText ? $(xhr.responseText).text() || 'Greska pri ucitavanju detalja.' : 'Greska pri ucitavanju detalja.',
-          html: ''
-        });
-      }
-    });
-  }
-
-  function loadWorkOrdersModalContent(row) {
-    var modalInstance;
-
     if (!row || !positionsUrl) {
       return;
     }
 
-    modalInstance = openModal('Veze narudzbe', 'Narudzba: ' + ((row && row.narudzba) || '-'));
+    modalInstance = openModal('Pozicije narudzbe', 'Narudzba: ' + ((row && row.narudzba) || '-'));
 
     if (!modalInstance) {
       return;
@@ -602,72 +554,44 @@ $(function () {
     });
   }
 
-  function requestDeleteConfirmation(row) {
-    var orderNumber = row && (row.narudzba || row.order_number) ? String(row.narudzba || row.order_number) : '-';
+  function loadWorkOrdersModalContent(row) {
+    var modalInstance;
 
-    if (window.Swal && typeof window.Swal.fire === 'function') {
-      return window.Swal.fire({
-        title: 'Izbrisati narudzbu?',
-        html: '<div class="small">Ova akcija brise narudzbu samo kada nema povezanih RN-ova.<br><strong>' + escapeHtml(orderNumber) + '</strong></div>',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Izbrisi',
-        cancelButtonText: 'Odustani',
-        customClass: {
-          confirmButton: 'btn btn-danger',
-          cancelButton: 'btn btn-outline-secondary ms-1'
-        },
-        buttonsStyling: false,
-        reverseButtons: true
-      });
-    }
-
-    return Promise.resolve({
-      isConfirmed: window.confirm('Izbrisati narudzbu ' + orderNumber + '?')
-    });
-  }
-
-  function deleteOrder(row) {
-    var requestHeaders = {
-      Accept: 'application/json'
-    };
-
-    if (!canDeleteOrders || !deleteUrl || !row) {
+    if (!row || !workOrdersUrl) {
       return;
     }
 
-    requestDeleteConfirmation(row).then(function (result) {
-      if (!result || !result.isConfirmed) {
-        return;
+    modalInstance = openModal('Veze narudzbe', 'Narudzba: ' + ((row && row.narudzba) || '-'));
+
+    if (!modalInstance) {
+      return;
+    }
+
+    if (modalRequest && typeof modalRequest.abort === 'function') {
+      modalRequest.abort();
+    }
+
+    modalRequest = $.ajax({
+      url: workOrdersUrl,
+      method: 'GET',
+      dataType: 'html',
+      data: {
+        order_number: row.narudzba || row.order_number || ''
+      },
+      success: function (html) {
+        setModalState({
+          loading: false,
+          errorMessage: '',
+          html: html || '<div class="order-linkage-modal-empty">Nema podataka za prikaz.</div>'
+        });
+      },
+      error: function (xhr) {
+        setModalState({
+          loading: false,
+          errorMessage: xhr && xhr.responseText ? $(xhr.responseText).text() || 'Greska pri ucitavanju detalja.' : 'Greska pri ucitavanju detalja.',
+          html: ''
+        });
       }
-
-      if (csrfToken) {
-        requestHeaders['X-CSRF-TOKEN'] = csrfToken;
-      }
-
-      $.ajax({
-        url: deleteUrl,
-        method: 'DELETE',
-        dataType: 'json',
-        contentType: 'application/json; charset=UTF-8',
-        headers: requestHeaders,
-        data: JSON.stringify({
-          order_number: row.narudzba || row.order_number || ''
-        }),
-        success: function (response) {
-          showFeedback('success', 'Narudzba obrisana', response && response.message ? response.message : 'Narudzba je obrisana.', 'btn btn-primary');
-
-          if (dataTable && dataTable.ajax) {
-            dataTable.ajax.reload(null, false);
-          }
-        },
-        error: function (xhr) {
-          var responseJson = xhr && xhr.responseJSON ? xhr.responseJSON : null;
-          var message = responseJson && responseJson.message ? responseJson.message : 'Greska pri brisanju narudzbe.';
-
-          showFeedback('error', 'Brisanje nije uspjelo', message, 'btn btn-danger');
-        }
-      });
     });
   }
 
@@ -858,10 +782,12 @@ $(function () {
         }
       },
       initComplete: function () {
+        ensureTableBodyScrollContainer();
         tableElement.closest('.card-datatable').removeClass('order-linkage-initial-loading');
         replaceFeather();
       },
       drawCallback: function () {
+        ensureTableBodyScrollContainer();
         replaceFeather();
       }
     });
@@ -892,18 +818,6 @@ $(function () {
       loadWorkOrdersModalContent(row);
     });
 
-    tableElement.find('tbody').on('click', '.order-linkage-delete-btn', function (event) {
-      var row = resolveRowDataFromTrigger(this);
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (!row || !canDeleteOrders || Number(row.brojRN || 0) > 0) {
-        return;
-      }
-
-      deleteOrder(row);
-    });
   }
 
   function applyFilters() {

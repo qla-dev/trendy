@@ -3,14 +3,11 @@
 @section('title', 'Lista narudzbi')
 
 @php
-  $canDeleteLinkedOrders = (bool) ($canDeleteLinkedOrders ?? false);
   $orderLinkageConfig = [
       'dataUrl' => (string) ($ordersLinkageDataUrl ?? route('app-orders-data')),
       'positionsUrl' => (string) ($ordersLinkagePositionsUrl ?? route('app-orders-positions')),
       'workOrdersUrl' => (string) ($ordersLinkageWorkOrdersUrl ?? route('app-orders-work-orders')),
       'workOrdersApiUrl' => (string) ($ordersLinkageWorkOrdersApiUrl ?? route('app-orders-radni-nalozi')),
-      'deleteUrl' => (string) ($ordersLinkageDeleteUrl ?? route('app-orders-destroy')),
-      'canDeleteOrders' => $canDeleteLinkedOrders,
   ];
 @endphp
 
@@ -102,7 +99,7 @@
   }
 
   .order-linkage-wrapper .card-datatable.table-responsive {
-    overflow-x: visible;
+    overflow-x: hidden;
   }
 
   .order-linkage-wrapper .card-datatable .dataTables_wrapper > .row:first-child,
@@ -166,6 +163,48 @@
     background: var(--wo-table-scroll-track);
   }
 
+  .order-linkage-table-body-scroll {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
+    scrollbar-gutter: stable;
+  }
+
+  .order-linkage-table-body-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .order-linkage-table-body-scroll::-webkit-scrollbar-track {
+    background: var(--wo-table-scroll-track);
+    border-radius: 999px;
+  }
+
+  .order-linkage-table-body-scroll::-webkit-scrollbar-thumb {
+    background: var(--wo-table-scroll-thumb);
+    border-radius: 999px;
+    border: 1px solid var(--wo-table-scroll-thumb-border);
+  }
+
+  .order-linkage-table-body-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--wo-table-scroll-thumb-hover);
+  }
+
+  .order-linkage-table-body-scroll::-webkit-scrollbar-thumb:active {
+    background: var(--wo-table-scroll-thumb-active);
+  }
+
+  .order-linkage-table-body-scroll::-webkit-scrollbar-corner {
+    background: var(--wo-table-scroll-track);
+  }
+
   .order-linkage-table {
     min-width: 1380px;
   }
@@ -220,6 +259,43 @@
 
   .order-linkage-actions-cell {
     width: 1%;
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background-color: #ffffff;
+    box-shadow: none;
+    border-left: 1px solid #ebe9f1;
+  }
+
+  .order-linkage-table thead .order-linkage-actions-cell {
+    z-index: 3;
+    background-color: #f8f8fa;
+  }
+
+  .order-linkage-table.table tbody tr:hover > .order-linkage-actions-cell {
+    background-color: #f8f8fc;
+  }
+
+  body.dark-layout .order-linkage-table .order-linkage-actions-cell,
+  body.semi-dark-layout .order-linkage-table .order-linkage-actions-cell,
+  .dark-layout .order-linkage-table .order-linkage-actions-cell,
+  .semi-dark-layout .order-linkage-table .order-linkage-actions-cell {
+    background-color: #283046;
+    border-left-color: rgba(184, 190, 220, 0.22);
+  }
+
+  body.dark-layout .order-linkage-table thead .order-linkage-actions-cell,
+  body.semi-dark-layout .order-linkage-table thead .order-linkage-actions-cell,
+  .dark-layout .order-linkage-table thead .order-linkage-actions-cell,
+  .semi-dark-layout .order-linkage-table thead .order-linkage-actions-cell {
+    background-color: #2f3854;
+  }
+
+  body.dark-layout .order-linkage-table.table tbody tr:hover > .order-linkage-actions-cell,
+  body.semi-dark-layout .order-linkage-table.table tbody tr:hover > .order-linkage-actions-cell,
+  .dark-layout .order-linkage-table.table tbody tr:hover > .order-linkage-actions-cell,
+  .semi-dark-layout .order-linkage-table.table tbody tr:hover > .order-linkage-actions-cell {
+    background-color: #36405a !important;
   }
 
   .order-linkage-actions-group {
@@ -258,19 +334,6 @@
 
   .order-linkage-action-btn.order-linkage-work-orders-btn:hover {
     background-color: rgba(40, 199, 111, 0.1) !important;
-  }
-
-  .order-linkage-action-btn.order-linkage-delete-btn {
-    border-color: #ea5455 !important;
-    color: #ea5455 !important;
-    background-color: transparent !important;
-    justify-content: center;
-    text-align: center;
-    gap: 0.35rem;
-  }
-
-  .order-linkage-action-btn.order-linkage-delete-btn:hover {
-    background-color: rgba(234, 84, 85, 0.1) !important;
   }
 
   .order-linkage-action-btn[disabled],
@@ -502,7 +565,7 @@
             <th>Koli&#269;ina</th>
             <th>Broj pozicija</th>
             <th>Broj RN</th>
-            <th>Akcija</th>
+            <th class="order-linkage-actions-cell">Akcija</th>
           </tr>
         </thead>
         <tbody>

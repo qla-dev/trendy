@@ -1,32 +1,35 @@
 @php
   $orderSummary = (array) ($orderSummary ?? []);
-  $links = (array) ($links ?? []);
-  $linkageToneClass = match ((string) ($orderSummary['linkage_tone'] ?? 'secondary')) {
-      'danger' => 'badge-light-danger',
-      'warning' => 'badge-light-warning',
-      'success' => 'badge-light-success',
-      default => 'badge-light-secondary',
+  $items = (array) ($items ?? []);
+  $formatNumber = static function ($value, int $precision = 2): string {
+      if ($value === null || $value === '') {
+          return '-';
+      }
+
+      if (!is_numeric($value)) {
+          return (string) $value;
+      }
+
+      return number_format((float) $value, $precision, ',', '.');
   };
 @endphp
 
 <div class="order-linkage-modal-summary-grid">
   <div class="order-linkage-modal-summary-card">
     <span class="order-linkage-modal-summary-label">Narudzba</span>
-    <span class="order-linkage-modal-summary-value">{{ $orderSummary['order_number'] ?? '-' }}</span>
+    <span class="order-linkage-modal-summary-value">{{ $orderSummary['order_number'] ?? $orderSummary['narudzba'] ?? '-' }}</span>
   </div>
   <div class="order-linkage-modal-summary-card">
     <span class="order-linkage-modal-summary-label">Narucitelj</span>
     <span class="order-linkage-modal-summary-value">{{ $orderSummary['narucitelj'] ?? $orderSummary['customer'] ?? '-' }}</span>
   </div>
   <div class="order-linkage-modal-summary-card">
-    <span class="order-linkage-modal-summary-label">Veza</span>
-    <span class="order-linkage-modal-summary-value">
-      <span class="badge {{ $linkageToneClass }} order-linkage-indicator">{{ $orderSummary['linkage_label'] ?? 'N/A' }}</span>
-    </span>
+    <span class="order-linkage-modal-summary-label">Broj pozicija</span>
+    <span class="order-linkage-modal-summary-value">{{ $orderSummary['position_count'] ?? count($items) }}</span>
   </div>
   <div class="order-linkage-modal-summary-card">
-    <span class="order-linkage-modal-summary-label">Broj veza</span>
-    <span class="order-linkage-modal-summary-value">{{ $orderSummary['link_count'] ?? count($links) }}</span>
+    <span class="order-linkage-modal-summary-label">Rok otpreme</span>
+    <span class="order-linkage-modal-summary-value">{{ $orderSummary['due_date'] ?? '-' }}</span>
   </div>
 </div>
 
@@ -35,35 +38,61 @@
     <table class="table order-linkage-modal-table">
       <thead>
         <tr>
-          <th>Dokument</th>
-          <th>Datum</th>
           <th>Poz.</th>
-          <th>Artikal</th>
-          <th>Opis</th>
-          <th>Tip</th>
-          <th class="text-end">Naruceno</th>
-          <th class="text-end">Izradjeno</th>
-          <th class="text-end">Neizradjeno</th>
+          <th>Sifra</th>
+          <th>Alt.</th>
+          <th>Naziv</th>
           <th>JM</th>
+          <th class="text-end">Kolicina</th>
+          <th class="text-end">Cijena</th>
+          <th class="text-end">R1 %</th>
+          <th class="text-end">R2 %</th>
+          <th class="text-end">SR %</th>
+          <th class="text-end">Popust %</th>
+          <th class="text-end">Vrijednost</th>
+          <th>PDV</th>
+          <th class="text-end">Za platiti</th>
+          <th class="text-end">Otprem.</th>
+          <th class="text-end">Paketa</th>
+          <th class="text-end">Neto tez.</th>
+          <th class="text-end">Bruto tez.</th>
+          <th class="text-end">Volumen</th>
+          <th>Rok otpreme</th>
+          <th>Odjel</th>
+          <th>Nos. tr.</th>
+          <th class="text-end">Cijena s rab.</th>
         </tr>
       </thead>
       <tbody>
-        @forelse($links as $link)
+        @forelse($items as $item)
           <tr>
-            <td>{{ $link['dokument'] ?? '-' }}</td>
-            <td>{{ $link['datum'] ?? '-' }}</td>
-            <td>{{ $link['pozicija'] ?? '-' }}</td>
-            <td>{{ $link['artikal'] ?? '-' }}</td>
-            <td>{{ $link['opis'] ?? '-' }}</td>
-            <td>{{ $link['tip'] ?? '-' }}</td>
-            <td class="text-end">{{ $link['naruceno'] ?? '-' }}</td>
-            <td class="text-end">{{ $link['izradjeno'] ?? '-' }}</td>
-            <td class="text-end">{{ $link['neizradjeno'] ?? '-' }}</td>
-            <td>{{ $link['jm'] ?? '-' }}</td>
+            <td>{{ $item['pozicija'] ?? '-' }}</td>
+            <td>{{ $item['sifra'] ?? $item['artikal'] ?? '-' }}</td>
+            <td>{{ $item['alt'] ?? '-' }}</td>
+            <td>{{ $item['naziv'] ?? $item['opis'] ?? '-' }}</td>
+            <td>{{ $item['jm'] ?? '-' }}</td>
+            <td class="text-end">{{ $formatNumber($item['kolicina'] ?? null, 2) }}</td>
+            <td class="text-end">{{ $formatNumber($item['cijena'] ?? null, 2) }}</td>
+            <td class="text-end">{{ $formatNumber($item['r1'] ?? null, 2) }}</td>
+            <td class="text-end">{{ $formatNumber($item['r2'] ?? null, 2) }}</td>
+            <td class="text-end">{{ $formatNumber($item['sr'] ?? null, 2) }}</td>
+            <td class="text-end">{{ $formatNumber($item['popust'] ?? null, 2) }}</td>
+            <td class="text-end">{{ $formatNumber($item['vrijednost'] ?? null, 2) }}</td>
+            <td>{{ trim((string) ($item['pdv'] ?? '')) !== '' ? $item['pdv'] : $formatNumber($item['pdv_stopa'] ?? null, 2) }}</td>
+            <td class="text-end">{{ $formatNumber($item['za_platiti'] ?? null, 2) }}</td>
+            <td class="text-end">{{ $formatNumber($item['otpremljeno'] ?? null, 2) }}</td>
+            <td class="text-end">{{ $formatNumber($item['paketa'] ?? null, 2) }}</td>
+            <td class="text-end">{{ $formatNumber($item['neto_tezina'] ?? null, 2) }}</td>
+            <td class="text-end">{{ $formatNumber($item['bruto_tezina'] ?? null, 2) }}</td>
+            <td class="text-end">{{ $formatNumber($item['volumen'] ?? null, 2) }}</td>
+            <td>{{ $item['rok_otpreme'] ?? '-' }}</td>
+            <td>{{ $item['odjel'] ?? '-' }}</td>
+            <td>{{ $item['nos_tr'] ?? '-' }}</td>
+            <td class="text-end">{{ $formatNumber($item['cijena_s_rabatom'] ?? null, 2) }}</td>
           </tr>
         @empty
           <tr>
-            <td colspan="10" class="order-linkage-modal-empty">Za ovu narudzbu nisu pronadjene veze.</td>
+            <td colspan="23" class="order-linkage-modal-empty">Za ovu narudzbu nisu pronadjene pozicije.</td>
           </tr>
         @endforelse
       </tbody>

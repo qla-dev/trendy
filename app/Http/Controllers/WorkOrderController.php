@@ -5934,6 +5934,7 @@ class WorkOrderController extends Controller
             return [
                 'id' => trim((string) ($row['id'] ?? $row['rn_number'] ?? '')),
                 'status' => trim((string) ($row['status'] ?? 'N/A')),
+                'status_tone' => trim((string) ($row['status_tone'] ?? 'secondary')),
                 'veza' => trim((string) ($row['veza'] ?? 'Sumnjiva veza')),
                 'veza_tone' => trim((string) ($row['veza_tone'] ?? 'secondary')),
                 'pozicije' => trim((string) ($row['pozicije'] ?? '')),
@@ -8924,13 +8925,53 @@ class WorkOrderController extends Controller
             'acName',
             'acDescr',
             'anQty',
+            'anQtyDispDoc',
             'anQty1',
             'anPlanQty',
             'acUM',
+            'anPrice',
+            'anRebate',
+            'acVATCode',
+            'anVAT',
+            'acNote',
+            'anSalePrice',
+            'anPackQty',
             'adDate',
             'adDateOut',
             'adDeliveryDeadline',
+            'adDeliveryDate',
             'adDateValid',
+            'acDept',
+            'acCostDrv',
+            'anVariant',
+            'anDimVolume',
+            'anDimWeight',
+            'anDimWeightBrutto',
+            'anRebate1',
+            'anRebate2',
+            'anRebate3',
+            'anRetailPrice',
+            'anPriceCurrency',
+            'anPVValue',
+            'anPVDiscount',
+            'anPVExcise',
+            'anPVVATBase',
+            'anPVVAT',
+            'anPVForPay',
+            'anPVOCValue',
+            'anPVOCDiscount',
+            'anPVOCExcise',
+            'anPVOCVATBase',
+            'anPVOCVAT',
+            'anPVOCForPay',
+            'anRTPrice',
+            'anReserved',
+            'anQId',
+            'anQtyConverted',
+            'acUMConverted',
+            'anRTPriceConverted',
+            'acPackNum',
+            'acWeighed',
             'acStatusMF',
             'acStatus',
             'status',
@@ -9492,11 +9533,37 @@ class WorkOrderController extends Controller
                 $remainingQty = max($orderedQty - (float) ($producedQty ?? 0.0), 0.0);
             }
 
+            $orderItemQuantity = $this->toFloatOrNull($this->value($orderItem, ['anQty', 'anQty1', 'anPlanQty'], $orderedQty));
+            $dispatchedQty = $this->toFloatOrNull($this->value($orderItem, ['anQtyDispDoc'], null));
+            $packageQty = $this->toFloatOrNull($this->value($orderItem, ['anPackQty'], null));
+            $unitNetWeight = $this->toFloatOrNull($this->value($orderItem, ['anDimWeight'], null));
+            $unitGrossWeight = $this->toFloatOrNull($this->value($orderItem, ['anDimWeightBrutto'], null));
+            $unitVolume = $this->toFloatOrNull($this->value($orderItem, ['anDimVolume'], null));
+            $dimensionMultiplier = $orderItemQuantity ?? $orderedQty;
+            $netWeight = $unitNetWeight !== null && $dimensionMultiplier !== null ? $unitNetWeight * $dimensionMultiplier : $unitNetWeight;
+            $grossWeight = $unitGrossWeight !== null && $dimensionMultiplier !== null ? $unitGrossWeight * $dimensionMultiplier : $unitGrossWeight;
+            $volume = $unitVolume !== null && $dimensionMultiplier !== null ? $unitVolume * $dimensionMultiplier : $unitVolume;
+            $deliveryDate = $this->normalizeDate($this->value(
+                $orderItem,
+                ['adDeliveryDeadline', 'adDeliveryDate', 'adDateOut', 'adDateValid'],
+                null
+            ));
             $dateValue = $this->normalizeDate($this->value(
                 $rawWorkOrder,
                 ['adDate', 'adTimeIns'],
                 $this->value($row, ['adDate', 'adTimeIns'], null)
             ));
+            $status = trim((string) ($mappedWorkOrder['status'] ?? 'N/A'));
+            $statusBucket = $this->statusBucket($status);
+            $statusToneMap = [
+                'planiran' => 'primary',
+                'otvoren' => 'success',
+                'rezerviran' => 'warning',
+                'raspisan' => 'info',
+                'u_radu' => 'warning',
+                'djelimicno_zakljucen' => 'warning',
+                'zakljucen' => 'danger',
+            ];
 
             $links[] = [
                 'id' => $workOrderNumber !== '' && $position !== ''
@@ -9508,12 +9575,35 @@ class WorkOrderController extends Controller
                 'pozicija' => $position,
                 'artikal' => trim((string) ($orderItem['acIdent'] ?? $mappedWorkOrder['sifra'] ?? '')),
                 'opis' => trim((string) ($orderItem['acName'] ?? $mappedWorkOrder['naziv'] ?? '')),
-                'status' => trim((string) ($mappedWorkOrder['status'] ?? 'N/A')),
+                'napomena' => trim((string) $this->valueTrimmed($orderItem, ['acNote', 'acDescr'], '')),
+                'status' => $status,
+                'status_tone' => $statusBucket !== null ? ($statusToneMap[$statusBucket] ?? 'secondary') : 'secondary',
+                'alt' => $this->normalizeNullableNumber($this->value($orderItem, ['anVariant'], null)),
                 'tip' => $linkType,
                 'naruceno' => $orderedQty,
+                'kolicina' => $orderItemQuantity,
+                'otpremljeno' => $dispatchedQty,
                 'izradjeno' => $producedQty,
                 'neizradjeno' => $remainingQty,
                 'jm' => trim((string) ($orderItem['acUM'] ?? $mappedWorkOrder['mj'] ?? $this->valueTrimmed($rawWorkOrder, ['acUM'], ''))),
+                'cijena' => $this->normalizeNullableNumber($this->value($orderItem, ['anPrice'], null)),
+                'r1' => $this->normalizeNullableNumber($this->value($orderItem, ['anRebate1'], null)),
+                'r2' => $this->normalizeNullableNumber($this->value($orderItem, ['anRebate2'], null)),
+                'sr' => $this->normalizeNullableNumber($this->value($orderItem, ['anRebate3'], null)),
+                'popust' => $this->normalizeNullableNumber($this->value($orderItem, ['anRebate'], null)),
+                'vrijednost' => $this->normalizeNullableNumber($this->value($orderItem, ['anPVValue'], null)),
+                'pdv' => trim((string) $this->valueTrimmed($orderItem, ['acVATCode'], '')),
+                'pdv_stopa' => $this->normalizeNullableNumber($this->value($orderItem, ['anVAT'], null)),
+                'za_platiti' => $this->normalizeNullableNumber($this->value($orderItem, ['anPVForPay'], null)),
+                'paketa' => $packageQty,
+                'neto_tezina' => $netWeight,
+                'bruto_tezina' => $grossWeight,
+                'volumen' => $volume,
+                'rok_otpreme' => $this->displayDate($deliveryDate),
+                'odjel' => trim((string) $this->valueTrimmed($orderItem, ['acDept'], '')),
+                'nos_tr' => trim((string) $this->valueTrimmed($orderItem, ['acCostDrv'], '')),
+                'cijena_s_rabatom' => $this->normalizeNullableNumber($this->value($orderItem, ['anRTPrice', 'anSalePrice', 'anPrice'], null)),
+                'order_item_qid' => $this->normalizeNullableNumber($this->value($orderItem, ['anQId'], null)),
                 '_sort_rn' => $workOrderNumber,
                 '_sort_position' => $this->toFloatOrNull($position !== '' ? $position : null),
                 '_sort_index' => $index,
@@ -9664,6 +9754,17 @@ class WorkOrderController extends Controller
 
             $workOrderNumber = (string) ($mappedRow['broj_naloga'] ?? '');
             $positionIds = array_values((array) ($workOrderPositionIds[$workOrderNumber] ?? []));
+            $status = (string) ($mappedRow['status'] ?? 'N/A');
+            $statusBucket = $this->statusBucket($status);
+            $statusToneMap = [
+                'planiran' => 'primary',
+                'otvoren' => 'success',
+                'rezerviran' => 'warning',
+                'raspisan' => 'info',
+                'u_radu' => 'warning',
+                'djelimicno_zakljucen' => 'warning',
+                'zakljucen' => 'danger',
+            ];
 
             $workOrders[] = [
                 'id' => $workOrderNumber,
@@ -9671,7 +9772,8 @@ class WorkOrderController extends Controller
                 'order_number' => (string) ($resolvedOrder['display'] ?? $mappedRow['broj_narudzbe'] ?? ''),
                 'issue_date' => $this->displayDate($mappedRow['datum_kreiranja'] ?? null),
                 'planned_start' => $this->formatMetaDateTime($this->value($row, ['adSchedStartTime'], null)),
-                'status' => (string) ($mappedRow['status'] ?? 'N/A'),
+                'status' => $status,
+                'status_tone' => $statusBucket !== null ? ($statusToneMap[$statusBucket] ?? 'secondary') : 'secondary',
                 'sifra' => (string) ($mappedRow['sifra'] ?? ''),
                 'naziv' => (string) ($mappedRow['naziv'] ?? ''),
                 'kolicina' => $mappedRow['kolicina'] ?? null,
