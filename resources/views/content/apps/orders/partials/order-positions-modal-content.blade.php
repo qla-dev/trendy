@@ -11,12 +11,12 @@
 
 <div class="order-linkage-modal-summary-grid">
   <div class="order-linkage-modal-summary-card">
-    <span class="order-linkage-modal-summary-label">Narudžba</span>
+    <span class="order-linkage-modal-summary-label">Narudzba</span>
     <span class="order-linkage-modal-summary-value">{{ $orderSummary['order_number'] ?? '-' }}</span>
   </div>
   <div class="order-linkage-modal-summary-card">
-    <span class="order-linkage-modal-summary-label">Kupac</span>
-    <span class="order-linkage-modal-summary-value">{{ $orderSummary['customer'] ?? '-' }}</span>
+    <span class="order-linkage-modal-summary-label">Narucitelj</span>
+    <span class="order-linkage-modal-summary-value">{{ $orderSummary['narucitelj'] ?? $orderSummary['customer'] ?? '-' }}</span>
   </div>
   <div class="order-linkage-modal-summary-card">
     <span class="order-linkage-modal-summary-label">Veza</span>
@@ -26,7 +26,7 @@
   </div>
   <div class="order-linkage-modal-summary-card">
     <span class="order-linkage-modal-summary-label">Broj pozicija</span>
-    <span class="order-linkage-modal-summary-value">{{ $orderSummary['position_count'] ?? 0 }}</span>
+    <span class="order-linkage-modal-summary-value">{{ $orderSummary['position_count'] ?? count($positions) }}</span>
   </div>
 </div>
 
@@ -35,29 +35,31 @@
     <table class="table order-linkage-modal-table">
       <thead>
         <tr>
+          <th>ID</th>
+          <th>RN</th>
           <th>Pozicija</th>
-          <th>Šifra</th>
-          <th>Naziv</th>
-          <th class="text-end">Količina</th>
+          <th>Artikal</th>
+          <th>Opis</th>
+          <th>Napomena</th>
+          <th class="text-end">Kolicina</th>
           <th>JM</th>
-          <th>Datum / rok</th>
-          <th>Status</th>
         </tr>
       </thead>
       <tbody>
         @forelse($positions as $position)
           <tr>
+            <td>{{ $position['id'] ?? '-' }}</td>
+            <td>{{ $position['rn_number'] ?? '-' }}</td>
             <td>{{ $position['pozicija'] ?? '-' }}</td>
             <td>{{ $position['sifra'] ?? '-' }}</td>
             <td>{{ $position['naziv'] ?? '-' }}</td>
+            <td>{{ $position['napomena'] ?? '-' }}</td>
             <td class="text-end">{{ $position['kolicina'] ?? '-' }}</td>
             <td>{{ $position['mj'] ?? '-' }}</td>
-            <td>{{ $position['datum'] ?? '-' }}</td>
-            <td>{{ $position['status'] ?? 'N/A' }}</td>
           </tr>
         @empty
           <tr>
-            <td colspan="7" class="order-linkage-modal-empty">Za ovu narudžbu nisu pronađene pozicije.</td>
+            <td colspan="8" class="order-linkage-modal-empty">Za ovu narudzbu nisu pronadjene pozicije.</td>
           </tr>
         @endforelse
       </tbody>

@@ -252,26 +252,21 @@
     border-color: #28c76f !important;
     color: #28c76f !important;
     background-color: transparent !important;
+    justify-content: center;
+    text-align: center;
   }
 
   .order-linkage-action-btn.order-linkage-work-orders-btn:hover {
     background-color: rgba(40, 199, 111, 0.1) !important;
   }
 
-  .order-linkage-action-btn.order-linkage-copy-btn {
-    border-color: #6e6b7b !important;
-    color: #6e6b7b !important;
-    background-color: transparent !important;
-  }
-
-  .order-linkage-action-btn.order-linkage-copy-btn:hover {
-    background-color: rgba(110, 107, 123, 0.1) !important;
-  }
-
   .order-linkage-action-btn.order-linkage-delete-btn {
     border-color: #ea5455 !important;
     color: #ea5455 !important;
     background-color: transparent !important;
+    justify-content: center;
+    text-align: center;
+    gap: 0.35rem;
   }
 
   .order-linkage-action-btn.order-linkage-delete-btn:hover {
@@ -501,9 +496,8 @@
         <thead>
           <tr>
             <th>Narud&#382;ba</th>
-            <th>Naziv</th>
-            <th>&#352;ifra</th>
-            <th>Klijent</th>
+            <th>Naru&#269;itelj</th>
+            <th>Prijevoznik</th>
             <th>Datum</th>
             <th>Koli&#269;ina</th>
             <th>Broj pozicija</th>
@@ -513,7 +507,7 @@
         </thead>
         <tbody>
           <tr class="order-linkage-loading-spacer-row" aria-hidden="true">
-            <td colspan="9"></td>
+            <td colspan="8"></td>
           </tr>
         </tbody>
       </table>
@@ -560,5 +554,5 @@
 <script>
   window.orderLinkageTestConfig = @json($orderLinkageConfig);
 </script>
-<script src="{{ asset('js/scripts/pages/app-order-link-test.js?v=3') }}"></script>
+<script src="{{ asset('js/scripts/pages/app-order-link-test.js?v=5') }}"></script>
 @endsection

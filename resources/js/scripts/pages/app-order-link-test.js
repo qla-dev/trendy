@@ -64,13 +64,12 @@ $(function () {
 
   var sortableColumnMap = {
     0: 'narudzba',
-    1: 'naziv',
-    2: 'sifra',
-    3: 'klijent',
-    4: 'datum',
-    5: 'kolicina',
-    6: 'broj_pozicija',
-    7: 'broj_rn'
+    1: 'narucitelj',
+    2: 'prijevoznik',
+    3: 'datum',
+    4: 'kolicina',
+    5: 'broj_pozicija',
+    6: 'broj_rn'
   };
 
   var bosnianDatePickerLocale = {
@@ -381,11 +380,7 @@ $(function () {
         '</button>' +
         '<button type="button" class="btn btn-sm btn-outline-primary order-linkage-action-btn order-linkage-work-orders-btn">' +
           '<i class="fa fa-industry"></i>' +
-          '<span>Radni nalozi</span>' +
-        '</button>' +
-        '<button type="button" class="btn btn-sm btn-outline-secondary order-linkage-action-btn order-linkage-copy-btn">' +
-          '<i class="fa fa-copy"></i>' +
-          '<span>Kopiraj</span>' +
+          '<span>Veze</span>' +
         '</button>' +
         '<button type="button" class="btn btn-sm btn-outline-danger order-linkage-action-btn order-linkage-delete-btn"' + deleteDisabledAttributes + '>' +
           '<i class="fa fa-trash"></i>' +
@@ -393,20 +388,6 @@ $(function () {
         '</button>' +
       '</div>'
     );
-  }
-
-  function buildCopyText(row) {
-    return [
-      'Narudzba: ' + ((row && row.narudzba) || '-'),
-      'Naziv: ' + ((row && row.naziv) || '-'),
-      'Sifra: ' + ((row && row.sifra) || '-'),
-      'Klijent: ' + ((row && row.klijent) || '-'),
-      'Datum: ' + ((row && row.datum) || '-'),
-      'Veza: ' + ((row && row.linkage_label) || 'N/A'),
-      'Kolicina: ' + (row ? formatQuantityWithUnit(row.totalKolicina, row.jedinica).replace(/<[^>]+>/g, '') : '-'),
-      'Broj RN: ' + ((row && row.brojRN) || 0),
-      'Broj pozicija: ' + ((row && row.brojPozicija) || 0)
-    ].join('\n');
   }
 
   function showFeedback(icon, title, text, confirmClass) {
@@ -492,8 +473,8 @@ $(function () {
           '<span class="order-linkage-modal-summary-value">' + escapeHtml((row && row.narudzba) || '-') + '</span>' +
         '</div>' +
         '<div class="order-linkage-modal-summary-card">' +
-          '<span class="order-linkage-modal-summary-label">Klijent</span>' +
-          '<span class="order-linkage-modal-summary-value">' + escapeHtml((row && row.klijent) || '-') + '</span>' +
+          '<span class="order-linkage-modal-summary-label">Narucitelj</span>' +
+          '<span class="order-linkage-modal-summary-value">' + escapeHtml((row && (row.narucitelj || row.klijent)) || '-') + '</span>' +
         '</div>' +
         '<div class="order-linkage-modal-summary-card">' +
           '<span class="order-linkage-modal-summary-label">Broj RN</span>' +
@@ -511,21 +492,27 @@ $(function () {
               '<tr>' +
                 '<th>#</th>' +
                 '<th>Status</th>' +
+                '<th>Veza</th>' +
+                '<th>Pozicije</th>' +
               '</tr>' +
             '</thead>' +
             '<tbody>' +
               (records.length
                 ? records
                     .map(function (workOrder) {
+                      var vezaToneClass = badgeToneClass((workOrder && workOrder.veza_tone) || 'secondary');
+
                       return (
                         '<tr>' +
                           '<td>' + escapeHtml((workOrder && workOrder.id) || '-') + '</td>' +
                           '<td>' + escapeHtml((workOrder && workOrder.status) || 'N/A') + '</td>' +
+                          '<td><span class="badge ' + vezaToneClass + '">' + escapeHtml((workOrder && workOrder.veza) || 'Sumnjiva veza') + '</span></td>' +
+                          '<td>' + escapeHtml((workOrder && workOrder.pozicije) || '-') + '</td>' +
                         '</tr>'
                       );
                     })
                     .join('')
-                : '<tr><td colspan="2" class="order-linkage-modal-empty">Za ovu narudzbu nisu pronadjeni radni nalozi.</td></tr>') +
+                : '<tr><td colspan="4" class="order-linkage-modal-empty">Za ovu narudzbu nisu pronadjeni radni nalozi.</td></tr>') +
             '</tbody>' +
           '</table>' +
         '</div>' +
@@ -581,7 +568,7 @@ $(function () {
       return;
     }
 
-    modalInstance = openModal('Radni nalozi narudzbe', 'Narudzba: ' + ((row && row.narudzba) || '-'));
+    modalInstance = openModal('Veze narudzbe', 'Narudzba: ' + ((row && row.narudzba) || '-'));
 
     if (!modalInstance) {
       return;
@@ -642,24 +629,6 @@ $(function () {
     });
   }
 
-  function copyOrder(row) {
-    var copyText = buildCopyText(row);
-
-    if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
-      showFeedback('warning', 'Kopiranje nije uspjelo', 'Clipboard nije dostupan u ovom pregledniku.', 'btn btn-warning');
-      return;
-    }
-
-    navigator.clipboard.writeText(copyText).then(
-      function () {
-        showFeedback('success', 'Kopirano', 'Sazetak narudzbe je kopiran u clipboard.', 'btn btn-primary');
-      },
-      function () {
-        showFeedback('warning', 'Kopiranje nije uspjelo', 'Clipboard nije dostupan u ovom pregledniku.', 'btn btn-warning');
-      }
-    );
-  }
-
   function deleteOrder(row) {
     var requestHeaders = {
       Accept: 'application/json'
@@ -713,7 +682,7 @@ $(function () {
       pageLength: 10,
       lengthMenu: [10, 25, 50],
       searchDelay: 350,
-      order: [[4, 'desc']],
+      order: [[3, 'desc']],
       ajax: function (requestData, callback) {
         var page = Math.floor(requestData.start / requestData.length) + 1;
         var firstOrder = requestData.order && requestData.order.length ? requestData.order[0] : null;
@@ -764,9 +733,8 @@ $(function () {
       },
       columns: [
         { data: 'narudzba' },
-        { data: 'naziv' },
-        { data: 'sifra' },
-        { data: 'klijent' },
+        { data: 'narucitelj' },
+        { data: 'prijevoznik' },
         { data: 'datum' },
         { data: 'totalKolicina' },
         { data: 'brojPozicija' },
@@ -817,21 +785,11 @@ $(function () {
         {
           targets: 3,
           render: function (data, type) {
-            if (type === 'sort' || type === 'type') {
-              return data || '';
-            }
-
-            return data ? escapeHtml(data) : '<span class="text-muted">-</span>';
-          }
-        },
-        {
-          targets: 4,
-          render: function (data, type) {
             return type === 'display' ? formatDate(data) : (data || '');
           }
         },
         {
-          targets: 5,
+          targets: 4,
           className: 'text-end order-linkage-quantity-cell',
           render: function (data, type, row) {
             if (type === 'sort' || type === 'type') {
@@ -839,6 +797,17 @@ $(function () {
             }
 
             return formatQuantityWithUnit(data, row && row.jedinica ? row.jedinica : '');
+          }
+        },
+        {
+          targets: 5,
+          className: 'text-center order-linkage-count-cell',
+          render: function (data, type) {
+            if (type === 'sort' || type === 'type') {
+              return Number(data || 0);
+            }
+
+            return '<span class="badge badge-light-secondary">' + escapeHtml(data || 0) + '</span>';
           }
         },
         {
@@ -854,17 +823,6 @@ $(function () {
         },
         {
           targets: 7,
-          className: 'text-center order-linkage-count-cell',
-          render: function (data, type) {
-            if (type === 'sort' || type === 'type') {
-              return Number(data || 0);
-            }
-
-            return '<span class="badge badge-light-secondary">' + escapeHtml(data || 0) + '</span>';
-          }
-        },
-        {
-          targets: 8,
           className: 'text-end order-linkage-actions-cell',
           render: function (data, type, row) {
             if (type !== 'display') {
@@ -934,19 +892,6 @@ $(function () {
       }
 
       loadWorkOrdersModalContent(row);
-    });
-
-    tableElement.find('tbody').on('click', '.order-linkage-copy-btn', function (event) {
-      var row = resolveRowDataFromTrigger(this);
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (!row) {
-        return;
-      }
-
-      copyOrder(row);
     });
 
     tableElement.find('tbody').on('click', '.order-linkage-delete-btn', function (event) {
