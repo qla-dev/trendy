@@ -2769,15 +2769,33 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
                 mj: editSastavnicaUnitInput ? String(editSastavnicaUnitInput.value || '').trim().toUpperCase() : ''
               };
 
-          applyUpdatedSastavnicaRow(activeSastavnicaEditContext.row, activeSastavnicaEditContext.button, item);
-          hideModal(editSastavnicaModalElement);
+           applyUpdatedSastavnicaRow(activeSastavnicaEditContext.row, activeSastavnicaEditContext.button, item);
+           hideModal(editSastavnicaModalElement);
 
-          Swal.fire(swalWithTheme({
-            icon: 'success',
-            title: 'Stavka ažurirana',
-            text: response && response.message ? response.message : 'Stavka sastavnice je uspješno ažurirana.'
-          }));
-        })
+           var stockAdjustments = response && response.data && response.data.stock_adjustments
+             ? response.data.stock_adjustments
+             : [];
+           var stockAdjusted = Array.isArray(stockAdjustments) && stockAdjustments.length > 0;
+           var stockInfoText = '';
+
+           if (stockAdjusted) {
+             var firstAdjustment = stockAdjustments[0] || {};
+             var stockBefore = formatSastavnicaQuantity(firstAdjustment.current_stock_value);
+             var stockAfter = formatSastavnicaQuantity(firstAdjustment.new_stock_value);
+
+             if (stockBefore !== '-' && stockAfter !== '-') {
+               stockInfoText = '\nZaliha: ' + stockBefore + ' -> ' + stockAfter;
+             }
+           }
+
+           Swal.fire(swalWithTheme({
+             icon: 'success',
+             title: 'Stavka ažurirana',
+             text: stockAdjusted
+               ? ('Stavka sastavnice i skladište uspješno ažurirani.' + stockInfoText)
+               : (response && response.message ? response.message : 'Stavka sastavnice je uspješno ažurirana.')
+           }));
+         })
         .catch(function (error) {
           setEditSastavnicaError(error && error.message ? error.message : 'Ažuriranje stavke nije uspjelo.');
         })

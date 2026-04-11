@@ -2757,6 +2757,8 @@ class WorkOrderController extends Controller
             $validated = $validator->validated();
             $itemId = $this->toFloatOrNull($validated['item_id'] ?? null);
             $itemNo = $this->toFloatOrNull($validated['item_no'] ?? null);
+            $hasQId = in_array('anQId', $columns, true);
+            $hasNo = in_array('anNo', $columns, true);
 
             if ($itemId === null && $itemNo === null) {
                 return response()->json([
@@ -2764,85 +2766,188 @@ class WorkOrderController extends Controller
                 ], 422);
             }
 
-            $itemRow = $this->findWorkOrderItemRow($workOrderKey, $columns, $itemId, $itemNo);
+            $userId = (int) (auth()->id() ?? 0);
+            $preferredWarehouse = $this->resolveWorkOrderWarehouse($workOrderRow);
+            $hasStatementColumn = in_array('acStatement', $columns, true);
+            $now = Carbon::now();
 
-            if ($itemRow === null) {
+            $updateQuery = $this->newItemTableQuery()->where('acKey', $workOrderKey);
+
+            if ($itemId !== null && $hasQId) {
+                $updateQuery->where('anQId', (int) $itemId);
+            } elseif ($itemNo !== null && $hasNo) {
+                $updateQuery->where('anNo', (int) $itemNo);
+            } else {
                 return response()->json([
-                    'message' => 'Stavka nije pronađena.',
-                ], 404);
-            }
-
-            $fieldUpdates = [];
-
-            if ($hasDescriptionInput && in_array('acDescr', $columns, true)) {
-                $description = trim((string) ($validated['opis'] ?? ''));
-                $fieldUpdates['acDescr'] = $description === '' ? null : substr($description, 0, 80);
-            }
-
-            $itemNoteColumn = $this->workOrderItemNoteColumn($columns);
-
-            if ($hasNoteInput && $itemNoteColumn !== null) {
-                $fieldUpdates[$itemNoteColumn] = $this->resolveWorkOrderItemNoteForSave(
-                    (string) ($validated['napomena'] ?? ''),
-                    $itemNoteColumn,
-                    $itemRow
-                );
-            }
-
-            if ($hasQuantityInput) {
-                $quantityColumns = $this->existingColumns($columns, ['anPlanQty', 'anQty', 'anQty1']);
-                $quantityValue = max(0, (float) ($this->toFloatOrNull($validated['kolicina'] ?? 0) ?? 0));
-
-                foreach ($quantityColumns as $quantityColumn) {
-                    $fieldUpdates[$quantityColumn] = $quantityValue;
-                }
-            }
-
-            if ($hasUnitInput && in_array('acUM', $columns, true)) {
-                $unit = strtoupper(substr(trim((string) ($validated['mj'] ?? '')), 0, 3));
-                $fieldUpdates['acUM'] = $unit === '' ? null : $unit;
-            }
-
-            if (empty($fieldUpdates)) {
-                return response()->json([
-                    'message' => 'Nijedno traženo polje nije dostupno za ažuriranje stavke.',
+                    'message' => 'Nije moguće odrediti stavku za ažuriranje.',
                 ], 422);
             }
 
-            if ($this->rowAlreadyHasUpdates($itemRow, $fieldUpdates)) {
-                return response()->json([
-                    'message' => 'Stavka je već na odabranim vrijednostima.',
-                    'data' => [
-                        'work_order_id' => $id,
-                        'work_order_key' => $workOrderKey,
-                        'item' => $this->mapItemRow($itemRow),
+            $updateResult = DB::transaction(function () use (
+                $updateQuery,
+                $columns,
+                $validated,
+                $hasDescriptionInput,
+                $hasNoteInput,
+                $hasQuantityInput,
+                $hasUnitInput,
+                $now,
+                $userId,
+                $preferredWarehouse,
+                $hasStatementColumn
+            ) {
+                $row = (clone $updateQuery)->lockForUpdate()->first();
+
+                if ($row === null) {
+                    return [
+                        'row' => null,
+                    ];
+                }
+
+                $itemRow = (array) $row;
+                $fieldUpdates = [];
+                $requestedQuantity = null;
+
+                if ($hasDescriptionInput && in_array('acDescr', $columns, true)) {
+                    $description = trim((string) ($validated['opis'] ?? ''));
+                    $fieldUpdates['acDescr'] = $description === '' ? null : substr($description, 0, 80);
+                }
+
+                $itemNoteColumn = $this->workOrderItemNoteColumn($columns);
+
+                if ($hasNoteInput && $itemNoteColumn !== null) {
+                    $fieldUpdates[$itemNoteColumn] = $this->resolveWorkOrderItemNoteForSave(
+                        (string) ($validated['napomena'] ?? ''),
+                        $itemNoteColumn,
+                        $itemRow
+                    );
+                }
+
+                if ($hasQuantityInput) {
+                    $quantityColumns = $this->existingColumns($columns, ['anPlanQty', 'anQty', 'anQty1']);
+                    if (!empty($quantityColumns)) {
+                        $requestedQuantity = max(0, (float) ($this->toFloatOrNull($validated['kolicina'] ?? 0) ?? 0));
+
+                        foreach ($quantityColumns as $quantityColumn) {
+                            $fieldUpdates[$quantityColumn] = $requestedQuantity;
+                        }
+                    }
+                }
+
+                if ($hasUnitInput && in_array('acUM', $columns, true)) {
+                    $unit = strtoupper(substr(trim((string) ($validated['mj'] ?? '')), 0, 3));
+                    $fieldUpdates['acUM'] = $unit === '' ? null : $unit;
+                }
+
+                if (empty($fieldUpdates)) {
+                    return [
+                        'row' => $itemRow,
+                        'missing_fields' => true,
+                    ];
+                }
+
+                if ($this->rowAlreadyHasUpdates($itemRow, $fieldUpdates)) {
+                    return [
+                        'row' => $itemRow,
                         'changed' => false,
-                    ],
-                ]);
-            }
+                        'item' => $this->mapItemRow($itemRow),
+                        'updated_fields' => [],
+                    ];
+                }
 
-            $updates = $fieldUpdates;
-            $userId = (int) (auth()->id() ?? 0);
-            $now = Carbon::now();
+                $updates = $fieldUpdates;
 
-            if (in_array('adTimeChg', $columns, true)) {
-                $updates['adTimeChg'] = $now;
-            }
+                if (in_array('adTimeChg', $columns, true)) {
+                    $updates['adTimeChg'] = $now;
+                }
 
-            if ($userId > 0 && in_array('anUserChg', $columns, true)) {
-                $updates['anUserChg'] = $userId;
-            }
+                if ($userId > 0 && in_array('anUserChg', $columns, true)) {
+                    $updates['anUserChg'] = $userId;
+                }
 
-            $updated = $this->updateWorkOrderItemRow($itemRow, $updates);
+                $stockAdjustmentResults = [];
+                $quantityDelta = null;
+                $stockAdjustment = null;
 
-            if (!$updated) {
+                if ($requestedQuantity !== null) {
+                    $previousQuantity = $this->workOrderItemQuantity($itemRow);
+                    $quantityDelta = $requestedQuantity - $previousQuantity;
+
+                    if (
+                        abs($quantityDelta) > 0.000001
+                        && $this->workOrderItemRowShouldRestoreStockOnRemove($itemRow, $hasStatementColumn)
+                    ) {
+                        $stockAdjustment = $this->buildRemovedPlannedConsumptionStockAdjustment(
+                            $itemRow,
+                            $preferredWarehouse,
+                            $quantityDelta
+                        );
+                    }
+                }
+
+                $updated = $this->updateWorkOrderItemRow($itemRow, $updates);
+
+                if (!$updated) {
+                    throw new RuntimeException('Stavka nije ažurirana.');
+                }
+
+                if ($stockAdjustment !== null) {
+                    $stockAdjustmentResults = Material::bulkAdjustStock(
+                        [$stockAdjustment],
+                        $userId,
+                        $preferredWarehouse
+                    );
+                }
+
+                $updatedRow = (clone $updateQuery)->first();
+                $resolvedRow = $updatedRow !== null ? (array) $updatedRow : array_merge($itemRow, $fieldUpdates);
+
+                return [
+                    'row' => $resolvedRow,
+                    'changed' => true,
+                    'item' => $this->mapItemRow($resolvedRow),
+                    'stock_adjustments' => $stockAdjustmentResults,
+                    'quantity_delta' => $quantityDelta,
+                    'updated_fields' => array_keys($fieldUpdates),
+                ];
+            });
+
+            if (!is_array($updateResult) || !array_key_exists('row', $updateResult)) {
                 return response()->json([
                     'message' => 'Stavka nije ažurirana.',
                 ], 500);
             }
 
-            $updatedRow = $this->findWorkOrderItemRow($workOrderKey, $columns, $itemId, $itemNo);
-            $mappedItem = $this->mapItemRow($updatedRow ?? array_merge($itemRow, $fieldUpdates));
+            if ($updateResult['row'] === null) {
+                return response()->json([
+                    'message' => 'Stavka nije pronađena.',
+                ], 404);
+            }
+
+            if (!empty($updateResult['missing_fields'])) {
+                return response()->json([
+                    'message' => 'Nijedno traženo polje nije dostupno za ažuriranje stavke.',
+                ], 422);
+            }
+
+            $mappedItem = is_array($updateResult['item'] ?? null) ? $updateResult['item'] : $this->mapItemRow((array) $updateResult['row']);
+            $stockAdjustmentResults = is_array($updateResult['stock_adjustments'] ?? null)
+                ? $updateResult['stock_adjustments']
+                : [];
+            $changed = (bool) ($updateResult['changed'] ?? false);
+            $updatedFields = is_array($updateResult['updated_fields'] ?? null) ? $updateResult['updated_fields'] : [];
+
+            if (!$changed) {
+                return response()->json([
+                    'message' => 'Stavka je već na odabranim vrijednostima.',
+                    'data' => [
+                        'work_order_id' => $id,
+                        'work_order_key' => $workOrderKey,
+                        'item' => $mappedItem,
+                        'changed' => false,
+                    ],
+                ]);
+            }
 
             Log::info('Work order item updated.', [
                 'id' => $id,
@@ -2850,7 +2955,8 @@ class WorkOrderController extends Controller
                 'item_id' => $mappedItem['qid'] ?? $itemId,
                 'item_no' => $mappedItem['no'] ?? $itemNo,
                 'ac_ident' => $mappedItem['artikal'] ?? '',
-                'updated_fields' => array_keys($fieldUpdates),
+                'updated_fields' => $updatedFields,
+                'stock_adjusted' => !empty($stockAdjustmentResults),
                 'user_id' => $userId,
             ]);
 
@@ -2860,7 +2966,8 @@ class WorkOrderController extends Controller
                     'work_order_id' => $id,
                     'work_order_key' => $workOrderKey,
                     'item' => $mappedItem,
-                    'changed' => true,
+                    'changed' => $changed,
+                    'stock_adjustments' => $stockAdjustmentResults,
                 ],
             ]);
         } catch (Throwable $exception) {
@@ -4649,7 +4756,11 @@ class WorkOrderController extends Controller
         ) ?? 0);
     }
 
-    private function buildRemovedPlannedConsumptionStockAdjustment(array $row, string $preferredWarehouse = ''): ?array
+    private function buildRemovedPlannedConsumptionStockAdjustment(
+        array $row,
+        string $preferredWarehouse = '',
+        ?float $valueOverride = null
+    ): ?array
     {
         $materialCode = trim((string) ($row['acIdent'] ?? ''));
         if ($materialCode === '') {
@@ -4665,14 +4776,24 @@ class WorkOrderController extends Controller
             return null;
         }
 
-        $removedQty = $this->workOrderItemQuantity($row);
-        if ($removedQty <= 0) {
+        $value = $valueOverride;
+
+        if ($value === null) {
+            $removedQty = $this->workOrderItemQuantity($row);
+            if ($removedQty <= 0) {
+                return null;
+            }
+
+            $value = -1 * $removedQty;
+        }
+
+        if (abs($value) <= 0.000001) {
             return null;
         }
 
         return [
             'material_code' => $materialCode,
-            'value' => -1 * $removedQty,
+            'value' => $value,
             'warehouse' => trim($preferredWarehouse),
         ];
     }
