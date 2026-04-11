@@ -5637,7 +5637,7 @@
       }
       if (confirmHelpTextEl) {
         confirmHelpTextEl.textContent = action === 'update'
-          ? 'Unesite ukupnu (konačnu) količinu za materijal na RN. Vrijednost se ne sabira sa postojećom.'
+          ? 'Unesite ukupnu količinu za materijal. Ista količina će se skinuti sa skladišta i eventualno prilagoditi na sastavnici ovog radnog naloga.'
           : 'Unesite količinu i mjernu jedinicu skeniranog materijala koji se dodaje na RN.';
       }
       if (quantityUnitSelect) {
@@ -6044,7 +6044,9 @@
       var subtitle = 'Sačuvaj';
 
       if (context && context.mode === 'barcode') {
-        subtitle = context.action === 'update' ? 'Ažuriraj' : 'Dodaj';
+        subtitle = context.action === 'update'
+          ? 'Ažuriraj<br>skladište i<br>sastavnicu'
+          : 'Dodaj na RN<br>i skini sa<br>skladišta';
       }
 
       return '<span class="confirm-weight-ok-label">OK</span><span class="confirm-weight-ok-subtitle">' + subtitle + '</span>';
@@ -6162,7 +6164,7 @@
 
       if (confirmHelpTextEl) {
         confirmHelpTextEl.textContent = action === 'update'
-          ? 'Unesite ukupnu (konačnu) količinu za materijal na RN. Vrijednost se ne sabira sa postojećom.'
+          ? 'Unesite ukupnu količinu za materijal. Ista će se skinuti sa skladišta i eventualno prilagoditi na sastavnici ovog radnog naloga.'
           : 'Unesite količinu i mjernu jedinicu skeniranog materijala koji se dodaje na RN';
       }
 

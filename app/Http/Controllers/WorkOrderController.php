@@ -2213,9 +2213,6 @@ class WorkOrderController extends Controller
                     if ($saveMode === 'barcode' && $itemKind === 'materials' && array_key_exists($componentKey, $existingMaterialItemsByIdent)) {
                         $existingRow = $existingMaterialItemsByIdent[$componentKey];
                         $existingQty = $this->workOrderItemQuantity($existingRow);
-                        $existingStatement = strtoupper(trim((string) ($existingRow['acStatement'] ?? '')));
-                        $existingStockAdjusted = $this->workOrderItemStatementAdjustsStock($existingStatement);
-                        $stockDeltaQty = $existingStockAdjusted ? ($plannedQty - $existingQty) : $plannedQty;
                         $updatedQty = $plannedQty;
                         $updatePayload = [
                             'anPlanQty' => $updatedQty,
@@ -2280,7 +2277,7 @@ class WorkOrderController extends Controller
                             'item_kind' => $itemKind,
                             'anGrossQty' => $baseQty,
                             'previous_anPlanQty' => $existingQty,
-                            'stock_consumed_qty' => $stockDeltaQty,
+                            'stock_consumed_qty' => $plannedQty,
                             'anPlanQty' => $updatedQty,
                         ];
 
