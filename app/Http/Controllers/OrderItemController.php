@@ -4,15 +4,19 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\WorkOrderOrderItemLink;
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Throwable;
 
 class OrderItemController extends Controller
 {
+    private ?array $positionTransferWorkOrderColumnsCache = null;
+
     public function ordersLinkagePositions(Request $request)
     {
         if (!$this->canAccessOrderLinkage($request->user())) {
@@ -42,6 +46,7 @@ class OrderItemController extends Controller
 
         try {
             $items = $this->fetchOrderItemRows($normalizedOrderNumber);
+            $items = $this->addTransferStatusToOrderItems($items, $normalizedOrderNumber);
             $summary = $this->buildOrderSummary($normalizedOrderNumber, $orderNumber);
             $summary['position_count'] = count($items);
 
@@ -250,6 +255,251 @@ class OrderItemController extends Controller
             'cijena_s_rabatom' => $this->normalizeNullableNumber($this->value($row, ['anRTPrice', 'anSalePrice', 'anPrice'], null)),
             'order_item_qid' => $this->normalizeNullableNumber($this->value($row, ['anQId'], null)),
         ];
+    }
+
+    protected function addTransferStatusToOrderItems(array $items, string $normalizedOrderNumber): array
+    {
+        if (empty($items)) {
+            return $items;
+        }
+
+        $statuses = $this->fetchOrderItemTransferStatuses($normalizedOrderNumber);
+
+        if (empty($statuses)) {
+            return array_values(array_map(function (array $item) {
+                $item['prenos_status'] = '';
+                $item['prenos_status_tone'] = 'secondary';
+
+                return $item;
+            }, $items));
+        }
+
+        return array_values(array_map(function (array $item) use ($statuses) {
+            $position = trim((string) ($item['pozicija'] ?? ''));
+            $qid = trim((string) ($item['order_item_qid'] ?? ''));
+            $status = [];
+
+            if ($qid !== '' && isset($statuses['qid:' . $qid])) {
+                $status = $statuses['qid:' . $qid];
+            } elseif ($position !== '' && isset($statuses['position:' . $position])) {
+                $status = $statuses['position:' . $position];
+            }
+
+            $item['prenos_status'] = (string) ($status['label'] ?? '');
+            $item['prenos_status_tone'] = (string) ($status['tone'] ?? 'secondary');
+            $item['prenos_document'] = (string) ($status['document'] ?? '');
+
+            return $item;
+        }, $items));
+    }
+
+    protected function fetchOrderItemTransferStatuses(string $normalizedOrderNumber): array
+    {
+        $linkColumns = WorkOrderOrderItemLink::sourceColumns();
+
+        if (empty($linkColumns)) {
+            return [];
+        }
+
+        $selectColumns = $this->existingColumns($linkColumns, [
+            'acKey',
+            'acKeyView',
+            'anNo',
+            'acLnkKey',
+            'acLnkKeyView',
+            'anLnkNo',
+            'acType',
+            'acTypeA',
+            'acTypeB',
+            'acValue',
+            'adDate',
+            'adTimeIns',
+            'anOrderItemQId',
+        ]);
+        $query = WorkOrderOrderItemLink::newSourceQuery();
+        $found = $this->applyOrderNumberFilter(
+            $query,
+            $linkColumns,
+            $normalizedOrderNumber,
+            ['acLnkKey'],
+            ['acLnkKeyView']
+        );
+
+        if (!$found) {
+            return [];
+        }
+
+        foreach (['adTimeIns', 'adDate', 'acKey', 'anNo'] as $orderByColumn) {
+            if (in_array($orderByColumn, $linkColumns, true)) {
+                $query->orderByDesc($orderByColumn);
+            }
+        }
+
+        $linkRows = (empty($selectColumns) ? $query->get() : $query->get($selectColumns))
+            ->map(function ($row) {
+                return (array) $row;
+            })
+            ->values()
+            ->all();
+
+        if (empty($linkRows)) {
+            return [];
+        }
+
+        $workOrderKeys = array_values(array_unique(array_filter(array_map(function (array $row) {
+            return $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acKey'], ''));
+        }, $linkRows))));
+        $workOrdersByKey = $this->fetchPositionTransferWorkOrdersByKeys($workOrderKeys);
+        $statuses = [];
+
+        foreach ($linkRows as $row) {
+            $workOrderKey = $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acKey'], ''));
+            $workOrder = (array) ($workOrdersByKey[$workOrderKey] ?? []);
+            $position = trim((string) $this->valueTrimmed($row, ['anLnkNo'], ''));
+            $qid = trim((string) $this->valueTrimmed($row, ['anOrderItemQId'], ''));
+            $document = (string) $this->valueTrimmed(
+                $row,
+                ['acKeyView', 'acKey'],
+                $this->valueTrimmed($workOrder, ['acKeyView', 'acRefNo1', 'acKey'], '')
+            );
+            $docType = (string) $this->valueTrimmed($workOrder, ['acDocTypeView', 'acDocType'], '');
+            $rawStatus = (string) $this->valueTrimmed($workOrder, ['acStatusMF', 'acStatus', 'status'], '');
+            $label = $this->formatTransferStatusLabel($document, $docType, $rawStatus);
+            $tone = $this->transferStatusTone($rawStatus);
+
+            if ($label === '') {
+                continue;
+            }
+
+            $mapped = [
+                'label' => $label,
+                'tone' => $tone,
+                'document' => $document,
+            ];
+
+            if ($qid !== '') {
+                $statuses['qid:' . $qid] = $mapped;
+            }
+
+            if ($position !== '' && !isset($statuses['position:' . $position])) {
+                $statuses['position:' . $position] = $mapped;
+            }
+        }
+
+        return $statuses;
+    }
+
+    protected function fetchPositionTransferWorkOrdersByKeys(array $normalizedWorkOrderKeys): array
+    {
+        $normalizedWorkOrderKeys = array_values(array_unique(array_filter($normalizedWorkOrderKeys, function ($key) {
+            return trim((string) $key) !== '';
+        })));
+
+        if (empty($normalizedWorkOrderKeys)) {
+            return [];
+        }
+
+        $columns = $this->positionTransferWorkOrderColumns();
+        $keyColumn = $this->firstExistingColumn($columns, ['acKey']);
+
+        if ($keyColumn === null) {
+            return [];
+        }
+
+        $selectColumns = $this->existingColumns($columns, [
+            'acKey',
+            'acKeyView',
+            'acRefNo1',
+            'acDocType',
+            'acDocTypeView',
+            'acStatusMF',
+            'acStatus',
+            'status',
+        ]);
+        $query = DB::table($this->qualifiedPositionTransferWorkOrderTableName());
+        $placeholders = implode(', ', array_fill(0, count($normalizedWorkOrderKeys), '?'));
+        $query->whereRaw(
+            $this->normalizedIdentifierExpression($query, $keyColumn) . " IN ($placeholders)",
+            $normalizedWorkOrderKeys
+        );
+
+        return (empty($selectColumns) ? $query->get() : $query->get($selectColumns))
+            ->map(function ($row) {
+                return (array) $row;
+            })
+            ->keyBy(function (array $row) {
+                return $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acKey'], ''));
+            })
+            ->all();
+    }
+
+    protected function positionTransferWorkOrderColumns(): array
+    {
+        if ($this->positionTransferWorkOrderColumnsCache !== null) {
+            return $this->positionTransferWorkOrderColumnsCache;
+        }
+
+        $this->positionTransferWorkOrderColumnsCache = DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->where('TABLE_SCHEMA', $this->positionTransferWorkOrderSchema())
+            ->where('TABLE_NAME', $this->positionTransferWorkOrderTableName())
+            ->pluck('COLUMN_NAME')
+            ->map(function ($columnName) {
+                return (string) $columnName;
+            })
+            ->values()
+            ->all();
+
+        return $this->positionTransferWorkOrderColumnsCache;
+    }
+
+    protected function qualifiedPositionTransferWorkOrderTableName(): string
+    {
+        return $this->positionTransferWorkOrderSchema() . '.' . $this->positionTransferWorkOrderTableName();
+    }
+
+    protected function positionTransferWorkOrderSchema(): string
+    {
+        return (string) config('workorders.schema', 'dbo');
+    }
+
+    protected function positionTransferWorkOrderTableName(): string
+    {
+        return (string) config('workorders.table', 'tHF_WOEx');
+    }
+
+    protected function formatTransferStatusLabel(string $document, string $docType, string $rawStatus): string
+    {
+        $document = trim($document);
+        $docType = trim($docType);
+        $rawStatus = trim($rawStatus);
+
+        if ($document !== '' && $docType !== '') {
+            return $document . ' ' . $docType;
+        }
+
+        if ($document !== '') {
+            return $document;
+        }
+
+        return $rawStatus;
+    }
+
+    protected function transferStatusTone(string $rawStatus): string
+    {
+        switch (strtoupper(trim($rawStatus))) {
+            case 'O':
+            case 'N':
+                return 'success';
+            case 'P':
+            case 'R':
+            case 'L':
+                return 'warning';
+            case 'Z':
+            case 'C':
+                return 'danger';
+            default:
+                return 'secondary';
+        }
     }
 
     protected function applyOrderNumberFilter(

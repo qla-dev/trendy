@@ -14,6 +14,9 @@ $(function () {
   var modalErrorElement = document.getElementById('order-linkage-modal-error');
   var modalLoadingElement = document.getElementById('order-linkage-modal-loading');
   var modalContentElement = document.getElementById('order-linkage-modal-content');
+  var transferModalElement = document.getElementById('order-linkage-transfer-modal');
+  var transferModalSubtitleElement = document.getElementById('order-linkage-transfer-modal-subtitle');
+  var transferModalBodyElement = document.getElementById('order-linkage-transfer-modal-body');
   var filtersBody = $('#filters-body');
   var toggleFiltersBtn = $('#btn-toggle-filters');
   var deleteFiltersBtn = $('#btn-delete-filter');
@@ -513,6 +516,66 @@ $(function () {
     );
   }
 
+  function buildTransferModalDetail(label, value) {
+    var displayValue = (value || '').toString().trim() || '-';
+
+    return (
+      '<div class="order-linkage-transfer-detail">' +
+        '<span class="order-linkage-transfer-detail-label">' + escapeHtml(label) + '</span>' +
+        '<span class="order-linkage-transfer-detail-value">' + escapeHtml(displayValue) + '</span>' +
+      '</div>'
+    );
+  }
+
+  function buildTransferModalHtml(details) {
+    return (
+      '<div class="order-linkage-transfer-detail-grid">' +
+        buildTransferModalDetail('Pozicija', details.position) +
+        buildTransferModalDetail('Status', details.status) +
+        buildTransferModalDetail('Dokument', details.document) +
+        buildTransferModalDetail('Order item QID', details.orderItemQid) +
+      '</div>'
+    );
+  }
+
+  function openTransferModal(buttonElement) {
+    var button = $(buttonElement);
+    var details = {
+      position: (button.data('position') || '').toString(),
+      orderItemQid: (button.data('order-item-qid') || '').toString(),
+      document: (button.data('transfer-document') || '').toString(),
+      status: (button.data('transfer-status') || '').toString()
+    };
+    var showTransferModal;
+    var activeModal;
+
+    if (!transferModalElement || !window.bootstrap || !window.bootstrap.Modal) {
+      return;
+    }
+
+    if (transferModalSubtitleElement) {
+      transferModalSubtitleElement.textContent = 'Pozicija: ' + (details.position || '-');
+    }
+
+    if (transferModalBodyElement) {
+      transferModalBodyElement.innerHTML = buildTransferModalHtml(details);
+    }
+
+    showTransferModal = function () {
+      window.bootstrap.Modal.getOrCreateInstance(transferModalElement).show();
+      replaceFeather();
+    };
+
+    if (modalElement && modalElement.classList.contains('show')) {
+      activeModal = window.bootstrap.Modal.getInstance(modalElement) || window.bootstrap.Modal.getOrCreateInstance(modalElement);
+      $(modalElement).one('hidden.bs.modal', showTransferModal);
+      activeModal.hide();
+      return;
+    }
+
+    showTransferModal();
+  }
+
   function loadPositionsModalContent(row) {
     var modalInstance;
 
@@ -846,6 +909,14 @@ $(function () {
   renderActiveFilters();
   setFiltersBodyVisibility(false);
   initialiseTable();
+
+  if (modalContentElement) {
+    $(modalContentElement).on('click', '.order-linkage-modal-transfer-btn', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      openTransferModal(this);
+    });
+  }
 
   toggleFiltersBtn.on('click', function () {
     setFiltersBodyVisibility(filtersBody.hasClass('d-none'));

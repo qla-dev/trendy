@@ -12,6 +12,22 @@
 
       return number_format((float) $value, $precision, ',', '.');
   };
+  $statusBadgeClass = static function ($tone): string {
+      switch ((string) $tone) {
+          case 'danger':
+              return 'badge-light-danger';
+          case 'warning':
+              return 'badge-light-warning';
+          case 'success':
+              return 'badge-light-success';
+          case 'info':
+              return 'badge-light-info';
+          case 'primary':
+              return 'badge-light-primary';
+          default:
+              return 'badge-light-secondary';
+      }
+  };
 @endphp
 
 <div class="order-linkage-modal-summary-grid">
@@ -61,6 +77,8 @@
           <th>Odjel</th>
           <th>Nos. tr.</th>
           <th class="text-end">Cijena s rab.</th>
+          <th>Status</th>
+          <th class="order-linkage-modal-transfer-cell">Prenos</th>
         </tr>
       </thead>
       <tbody>
@@ -89,10 +107,33 @@
             <td>{{ $item['odjel'] ?? '-' }}</td>
             <td>{{ $item['nos_tr'] ?? '-' }}</td>
             <td class="text-end">{{ $formatNumber($item['cijena_s_rabatom'] ?? null, 2) }}</td>
+            <td>
+              @php
+                $transferStatus = trim((string) ($item['prenos_status'] ?? ''));
+              @endphp
+              @if($transferStatus !== '')
+                <span class="badge {{ $statusBadgeClass($item['prenos_status_tone'] ?? 'secondary') }}">{{ $transferStatus }}</span>
+              @else
+                <span class="text-muted">-</span>
+              @endif
+            </td>
+            <td class="order-linkage-modal-transfer-cell">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-primary order-linkage-modal-transfer-btn"
+                title="Prenos"
+                aria-label="Prenos"
+                data-position="{{ $item['pozicija'] ?? '' }}"
+                data-order-item-qid="{{ $item['order_item_qid'] ?? '' }}"
+                data-transfer-document="{{ $item['prenos_document'] ?? '' }}"
+                data-transfer-status="{{ $transferStatus }}">
+                <i data-feather="arrow-right"></i>
+              </button>
+            </td>
           </tr>
         @empty
           <tr>
-            <td colspan="23" class="order-linkage-modal-empty">Za ovu narudzbu nisu pronadjene pozicije.</td>
+            <td colspan="25" class="order-linkage-modal-empty">Za ovu narudzbu nisu pronadjene pozicije.</td>
           </tr>
         @endforelse
       </tbody>

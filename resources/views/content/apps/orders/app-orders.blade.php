@@ -421,6 +421,92 @@
     white-space: nowrap;
   }
 
+  .order-linkage-modal-transfer-cell {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    width: 1%;
+    white-space: nowrap;
+    text-align: center;
+    background-color: #ffffff;
+    border-left: 1px solid #ebe9f1;
+    box-shadow: none;
+  }
+
+  .order-linkage-modal-table thead .order-linkage-modal-transfer-cell {
+    z-index: 3;
+    background-color: #f8f8fa;
+  }
+
+  .order-linkage-modal-table.table tbody tr:hover > .order-linkage-modal-transfer-cell {
+    background-color: #f8f8fc;
+  }
+
+  body.dark-layout .order-linkage-modal-transfer-cell,
+  body.semi-dark-layout .order-linkage-modal-transfer-cell,
+  .dark-layout .order-linkage-modal-transfer-cell,
+  .semi-dark-layout .order-linkage-modal-transfer-cell {
+    background-color: #283046;
+    border-left-color: rgba(184, 190, 220, 0.22);
+  }
+
+  body.dark-layout .order-linkage-modal-table thead .order-linkage-modal-transfer-cell,
+  body.semi-dark-layout .order-linkage-modal-table thead .order-linkage-modal-transfer-cell,
+  .dark-layout .order-linkage-modal-table thead .order-linkage-modal-transfer-cell,
+  .semi-dark-layout .order-linkage-modal-table thead .order-linkage-modal-transfer-cell {
+    background-color: #2f3854;
+  }
+
+  body.dark-layout .order-linkage-modal-table.table tbody tr:hover > .order-linkage-modal-transfer-cell,
+  body.semi-dark-layout .order-linkage-modal-table.table tbody tr:hover > .order-linkage-modal-transfer-cell,
+  .dark-layout .order-linkage-modal-table.table tbody tr:hover > .order-linkage-modal-transfer-cell,
+  .semi-dark-layout .order-linkage-modal-table.table tbody tr:hover > .order-linkage-modal-transfer-cell {
+    background-color: #36405a;
+  }
+
+  .order-linkage-modal-transfer-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+  }
+
+  .order-linkage-modal-transfer-btn svg {
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+
+  .order-linkage-transfer-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+  }
+
+  .order-linkage-transfer-detail {
+    padding: 0.9rem 1rem;
+    border: 1px solid rgba(71, 95, 123, 0.12);
+    border-radius: 0.5rem;
+    background: rgba(71, 95, 123, 0.04);
+  }
+
+  .order-linkage-transfer-detail-label {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: #6e6b7b;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .order-linkage-transfer-detail-value {
+    display: block;
+    font-weight: 600;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
   .order-linkage-modal-empty {
     padding: 1rem;
     color: #6e6b7b;
@@ -616,6 +702,24 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="order-linkage-transfer-modal" tabindex="-1" aria-labelledby="order-linkage-transfer-modal-label" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0" id="order-linkage-transfer-modal-label">Prenos pozicije</h5>
+          <div class="order-linkage-modal-subtitle" id="order-linkage-transfer-modal-subtitle">-</div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
+      </div>
+      <div class="modal-body" id="order-linkage-transfer-modal-body"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Zatvori</button>
+      </div>
+    </div>
+  </div>
+</div>
 @endsection
 
 @section('vendor-script')
@@ -631,5 +735,5 @@
 <script>
   window.orderLinkageConfig = @json($orderLinkageConfig);
 </script>
-<script src="{{ asset('js/scripts/pages/app-orders.js?v=2') }}"></script>
+<script src="{{ asset('js/scripts/pages/app-orders.js?v=3') }}"></script>
 @endsection
