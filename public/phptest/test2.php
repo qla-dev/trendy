@@ -1,30 +1,48 @@
 <?php
 
-$server   = "hostBApa1.datalab.ba,50387";
-$database = "BA_TRENDY";
-$username = "SQLTREN_ADM2";
-$password = "#4^Sdgfx3VHy5G";
+require __DIR__ . '/_conn.php';
 
-$schema = "dbo";
-$table = "tHE_OrderItem";
+if (PHP_SAPI === 'cli') {
+    parse_str((string) ($argv[1] ?? ''), $_GET);
+}
+
+function phptest_identifier(string $value, string $fallback): string
+{
+    $value = trim($value);
+
+    if ($value === '') {
+        return $fallback;
+    }
+
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $value)) {
+        return $fallback;
+    }
+
+    return $value;
+}
+
+$schema = phptest_identifier((string) ($_GET['schema'] ?? ''), $defaultSchema !== '' ? $defaultSchema : 'dbo');
+$table = phptest_identifier((string) ($_GET['table'] ?? ''), 'tHE_OrderItem');
+$limit = (int) ($_GET['limit'] ?? 20);
+$limit = max(1, min($limit, 200));
+
 $orderDisplay = trim((string) ($_GET['order'] ?? '26-0110-000928'));
-$orderKey = preg_replace('/\D+/', '', $orderDisplay);
+$orderKey = preg_replace('/\\D+/', '', $orderDisplay);
 $orderKeyCandidates = array_values(array_unique(array_filter([
     $orderKey,
     strlen($orderKey) === 12 ? substr($orderKey, 0, 6) . '0' . substr($orderKey, 6) : '',
 ])));
 
-$conn = sqlsrv_connect($server, [
-    "Database" => $database,
-    "UID"      => $username,
-    "PWD"      => $password,
-    "CharacterSet" => "UTF-8",
-    "LoginTimeout" => 10,
-]);
+$qidRaw = trim((string) ($_GET['qid'] ?? ''));
+$qidCandidates = array_values(array_unique(array_filter(array_map(function ($value) {
+    return trim((string) preg_replace('/\\D+/', '', $value));
+}, preg_split('/\\s*,\\s*/', $qidRaw, -1, PREG_SPLIT_NO_EMPTY) ?: []), function ($value) {
+    return $value !== '';
+})));
 
-if (!$conn) {
-    die('<pre>' . htmlspecialchars(print_r(sqlsrv_errors(), true)) . '</pre>');
-}
+$keyRaw = trim((string) ($_GET['key'] ?? ''));
+$keyNormalized = preg_replace('/\\s+/', ' ', $keyRaw);
+$keyCompact = str_replace(['-', ' '], '', $keyNormalized);
 
 function qcol(string $column): string
 {
@@ -36,7 +54,7 @@ $columnsStmt = sqlsrv_query($conn, "
     FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
     ORDER BY ORDINAL_POSITION
-", [$schema, $table], ["QueryTimeout" => 15]);
+", [$schema, $table], ["QueryTimeout" => 20]);
 
 if (!$columnsStmt) {
     die('<pre>' . htmlspecialchars(print_r(sqlsrv_errors(), true)) . '</pre>');
@@ -70,8 +88,23 @@ foreach (['acKeyView', 'acRefNo1', 'acOrderNo', 'order_number'] as $columnName) 
     }
 }
 
+foreach (['acKey', 'acKeyView', 'acLnkKey', 'acLnkKeyView'] as $columnName) {
+    if ($keyCompact !== '' && in_array($columnName, $columns, true)) {
+        $whereParts[] = "REPLACE(REPLACE(CONVERT(nvarchar(255), " . qcol($columnName) . "), '-', ''), ' ', '') = ?";
+        $params[] = $keyCompact;
+    }
+}
+
+foreach (['anOrderItemQId', 'anWOExQId', 'anMoveItemQId', 'anQId', 'anDocQId'] as $columnName) {
+    if (in_array($columnName, $columns, true) && !empty($qidCandidates)) {
+        $placeholders = implode(', ', array_fill(0, count($qidCandidates), '?'));
+        $whereParts[] = qcol($columnName) . " IN ($placeholders)";
+        array_push($params, ...$qidCandidates);
+    }
+}
+
 $orderBy = in_array('anNo', $columns, true) ? ' ORDER BY [anNo]' : '';
-$sql = "SELECT TOP 20 * FROM [$schema].[$table]";
+$sql = "SELECT TOP $limit * FROM [$schema].[$table]";
 
 if (!empty($whereParts)) {
     $sql .= " WHERE " . implode(" OR ", $whereParts);
@@ -79,7 +112,7 @@ if (!empty($whereParts)) {
 
 $sql .= $orderBy;
 
-$stmt = sqlsrv_query($conn, $sql, $params, ["QueryTimeout" => 20]);
+$stmt = sqlsrv_query($conn, $sql, $params, ["QueryTimeout" => 30]);
 
 if (!$stmt) {
     die('<pre>' . htmlspecialchars($sql . "\n\n" . print_r(sqlsrv_errors(), true)) . '</pre>');
@@ -87,6 +120,8 @@ if (!$stmt) {
 
 echo "<h2>TABLE: " . htmlspecialchars("$schema.$table") . "</h2>";
 echo "<p>Order: " . htmlspecialchars($orderDisplay) . " / " . htmlspecialchars($orderKey) . "</p>";
+echo "<p>QId: " . htmlspecialchars($qidRaw) . "</p>";
+echo "<p>Key: " . htmlspecialchars($keyRaw) . "</p>";
 echo "<h3>Columns</h3>";
 echo "<table border='1' cellpadding='4' cellspacing='0'><tr><th>#</th><th>Name</th><th>Type</th></tr>";
 

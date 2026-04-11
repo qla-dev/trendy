@@ -15,6 +15,7 @@ use Throwable;
 
 class OrderItemController extends OrderItemMoveLinkController
 {
+    private ?array $positionTransferWorkOrderOrderItemLinkColumnsCache = null;
     private ?array $positionTransferWorkOrderColumnsCache = null;
 
     public function ordersLinkagePositions(Request $request)
@@ -295,7 +296,7 @@ class OrderItemController extends OrderItemMoveLinkController
 
     protected function fetchOrderItemTransferStatuses(string $normalizedOrderNumber): array
     {
-        $linkColumns = WorkOrderOrderItemLink::sourceColumns();
+        $linkColumns = $this->positionTransferWorkOrderOrderItemLinkColumns();
 
         if (empty($linkColumns)) {
             return [];
@@ -316,7 +317,7 @@ class OrderItemController extends OrderItemMoveLinkController
             'adTimeIns',
             'anOrderItemQId',
         ]);
-        $query = WorkOrderOrderItemLink::newSourceQuery();
+        $query = DB::table($this->qualifiedPositionTransferWorkOrderOrderItemLinkTableName());
         $found = $this->applyOrderNumberFilter(
             $query,
             $linkColumns,
@@ -360,13 +361,9 @@ class OrderItemController extends OrderItemMoveLinkController
             $workOrder = (array) ($workOrdersByKey[$workOrderKey] ?? []);
             $position = trim((string) $this->valueTrimmed($row, ['anLnkNo'], ''));
             $qid = trim((string) $this->valueTrimmed($row, ['anOrderItemQId'], ''));
-            $document = (string) $this->valueTrimmed(
-                $row,
-                ['acKeyView', 'acKey'],
-                $this->valueTrimmed($workOrder, ['acKeyView', 'acRefNo1', 'acKey'], '')
-            );
+            $document = $this->transferStatusDocument($row, $workOrder);
             $hasProducedMove = $qid !== '' && isset($producedOrderItemQids[$qid]);
-            $transferMessage = $this->transferStatusMessage($workOrder, $hasProducedMove);
+            $transferMessage = $this->transferStatusMessageForLink($workOrder, $hasProducedMove, $workOrderKey !== '');
             $rawStatus = (string) $this->valueTrimmed($workOrder, ['acStatusMF', 'acStatus', 'status'], '');
             $label = $this->formatTransferStatusLabel($document, $transferMessage, $rawStatus);
             $tone = $this->transferStatusTone($rawStatus, $this->transferHasProducedQuantity($workOrder) || $hasProducedMove);
@@ -391,6 +388,41 @@ class OrderItemController extends OrderItemMoveLinkController
         }
 
         return $statuses;
+    }
+
+    protected function positionTransferWorkOrderOrderItemLinkColumns(): array
+    {
+        if ($this->positionTransferWorkOrderOrderItemLinkColumnsCache !== null) {
+            return $this->positionTransferWorkOrderOrderItemLinkColumnsCache;
+        }
+
+        $this->positionTransferWorkOrderOrderItemLinkColumnsCache = DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->where('TABLE_SCHEMA', $this->positionTransferWorkOrderOrderItemLinkSchema())
+            ->where('TABLE_NAME', $this->positionTransferWorkOrderOrderItemLinkTableName())
+            ->pluck('COLUMN_NAME')
+            ->map(function ($columnName) {
+                return (string) $columnName;
+            })
+            ->values()
+            ->all();
+
+        return $this->positionTransferWorkOrderOrderItemLinkColumnsCache;
+    }
+
+    protected function qualifiedPositionTransferWorkOrderOrderItemLinkTableName(): string
+    {
+        return $this->positionTransferWorkOrderOrderItemLinkSchema() . '.' . $this->positionTransferWorkOrderOrderItemLinkTableName();
+    }
+
+    protected function positionTransferWorkOrderOrderItemLinkSchema(): string
+    {
+        return (string) config('workorders.schema', 'dbo');
+    }
+
+    protected function positionTransferWorkOrderOrderItemLinkTableName(): string
+    {
+        // Use the base table so we always have anOrderItemQId for MoveItem linkage checks.
+        return (string) config('workorders.work_order_order_item_link_insert_table', 'tHF_LinkWOExOrderItem');
     }
 
     protected function fetchPositionTransferWorkOrdersByKeys(array $normalizedWorkOrderKeys): array
@@ -472,17 +504,40 @@ class OrderItemController extends OrderItemMoveLinkController
         return (string) config('workorders.table', 'tHF_WOEx');
     }
 
-    protected function transferStatusMessage(array $workOrder, bool $hasProducedMove = false): string
+    protected function transferStatusDocument(array $linkRow, array $workOrder): string
+    {
+        $document = (string) $this->valueTrimmed($workOrder, ['acKeyView', 'acKey'], '');
+
+        if ($document === '') {
+            $document = (string) $this->valueTrimmed($linkRow, ['acKeyView', 'acKey'], '');
+        }
+
+        // Some sources append extra tokens (e.g. "26-6000-0000011 6000"). Keep the first identifier.
+        $document = trim((string) preg_replace('/\\s+/', ' ', $document));
+        $spacePos = strpos($document, ' ');
+        if ($spacePos !== false) {
+            $document = substr($document, 0, $spacePos);
+        }
+
+        return trim($document);
+    }
+
+    protected function transferStatusMessageForLink(array $workOrder, bool $hasProducedMove, bool $hasWorkOrderLink): string
     {
         if ($this->transferHasProducedQuantity($workOrder) || $hasProducedMove) {
             return 'Nalog je već djelimično izrađen';
         }
 
-        if (!empty($workOrder)) {
+        if ($hasWorkOrderLink || !empty($workOrder)) {
             return 'Promjena naloga';
         }
 
         return '';
+    }
+
+    protected function transferStatusMessage(array $workOrder, bool $hasProducedMove = false): string
+    {
+        return $this->transferStatusMessageForLink($workOrder, $hasProducedMove, !empty($workOrder));
     }
 
     protected function formatTransferStatusLabel(string $document, string $message, string $rawStatus): string

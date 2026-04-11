@@ -261,7 +261,7 @@
     width: 1% !important;
     position: sticky !important;
     right: 0 !important;
-    z-index: 20 !important;
+    z-index: 10 !important;
     background: #ffffff !important;
     background-color: #ffffff !important;
     background-clip: border-box !important;
@@ -272,7 +272,7 @@
   }
 
   .order-linkage-table thead .order-linkage-actions-cell {
-    z-index: 21 !important;
+    z-index: 11 !important;
     background: #f8f8fa !important;
     background-color: #f8f8fa !important;
     box-shadow: none !important;
@@ -706,6 +706,9 @@
         <div id="order-linkage-modal-content" class="d-none"></div>
       </div>
       <div class="modal-footer">
+        <button type="button" class="btn btn-outline-primary" id="order-linkage-modal-refresh-btn">
+          <i data-feather="refresh-cw" class="me-50"></i> Osvje&#382;i
+        </button>
         <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Zatvori</button>
       </div>
     </div>
@@ -744,5 +747,5 @@
 <script>
   window.orderLinkageConfig = @json($orderLinkageConfig);
 </script>
-<script src="{{ asset('js/scripts/pages/app-orders.js?v=3') }}"></script>
+<script src="{{ asset('js/scripts/pages/app-orders.js?v=5') }}"></script>
 @endsection

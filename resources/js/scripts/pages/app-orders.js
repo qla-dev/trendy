@@ -14,6 +14,7 @@ $(function () {
   var modalErrorElement = document.getElementById('order-linkage-modal-error');
   var modalLoadingElement = document.getElementById('order-linkage-modal-loading');
   var modalContentElement = document.getElementById('order-linkage-modal-content');
+  var modalRefreshButtonElement = document.getElementById('order-linkage-modal-refresh-btn');
   var transferModalElement = document.getElementById('order-linkage-transfer-modal');
   var transferModalSubtitleElement = document.getElementById('order-linkage-transfer-modal-subtitle');
   var transferModalBodyElement = document.getElementById('order-linkage-transfer-modal-body');
@@ -24,6 +25,8 @@ $(function () {
   var activeFiltersDivider = $('#active-filters-divider');
   var dataTable = null;
   var modalRequest = null;
+  var activeModalType = '';
+  var activeModalRow = null;
 
   var filterLabels = {
     kupac: 'Kupac',
@@ -105,6 +108,14 @@ $(function () {
     if (window.feather && typeof window.feather.replace === 'function') {
       window.feather.replace({ width: 14, height: 14 });
     }
+  }
+
+  function updateModalRefreshButtonState(isLoading) {
+    if (!modalRefreshButtonElement) {
+      return;
+    }
+
+    modalRefreshButtonElement.disabled = Boolean(isLoading) || !activeModalType || !activeModalRow;
   }
 
   function showPageError(message) {
@@ -417,6 +428,8 @@ $(function () {
     var errorMessage = options && options.errorMessage ? String(options.errorMessage) : '';
     var html = options && options.html ? String(options.html) : '';
 
+    updateModalRefreshButtonState(loading);
+
     if (modalLoadingElement) {
       modalLoadingElement.classList.toggle('d-none', !loading);
     }
@@ -554,7 +567,10 @@ $(function () {
     }
 
     if (transferModalSubtitleElement) {
-      transferModalSubtitleElement.textContent = 'Pozicija: ' + (details.position || '-');
+      transferModalSubtitleElement.innerHTML =
+        '<div>Pozicija: ' +
+        escapeHtml(details.position || '-') +
+        '</div><div>Opcija ru\u010dnog prenosa podataka sa narud\u017ebe jo\u0161 uvijek nije omogu\u0107ena.</div>';
     }
 
     if (transferModalBodyElement) {
@@ -582,6 +598,9 @@ $(function () {
     if (!row || !positionsUrl) {
       return;
     }
+
+    activeModalType = 'positions';
+    activeModalRow = row;
 
     modalInstance = openModal('Pozicije narudzbe', 'Narudzba: ' + ((row && row.narudzba) || '-'));
 
@@ -623,6 +642,9 @@ $(function () {
     if (!row || !workOrdersUrl) {
       return;
     }
+
+    activeModalType = 'work_orders';
+    activeModalRow = row;
 
     modalInstance = openModal('Veze narudzbe', 'Narudzba: ' + ((row && row.narudzba) || '-'));
 
@@ -910,11 +932,40 @@ $(function () {
   setFiltersBodyVisibility(false);
   initialiseTable();
 
+  updateModalRefreshButtonState(false);
+
+  if (modalElement) {
+    $(modalElement).on('hidden.bs.modal', function () {
+      activeModalType = '';
+      activeModalRow = null;
+      updateModalRefreshButtonState(false);
+    });
+  }
+
   if (modalContentElement) {
     $(modalContentElement).on('click', '.order-linkage-modal-transfer-btn', function (event) {
       event.preventDefault();
       event.stopPropagation();
       openTransferModal(this);
+    });
+  }
+
+  if (modalRefreshButtonElement) {
+    $(modalRefreshButtonElement).on('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (!activeModalRow) {
+        return;
+      }
+
+      if (activeModalType === 'positions') {
+        loadPositionsModalContent(activeModalRow);
+      } else if (activeModalType === 'work_orders') {
+        loadWorkOrdersModalContent(activeModalRow);
+      }
+
+      releaseButtonState(this);
     });
   }
 

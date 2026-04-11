@@ -260,7 +260,7 @@ class WorkOrderOrderItemLinkController extends OrderItemController
             ['adSchedEndTime', 'adEndTime', 'adDeliveryDeadline', 'adDateOut'],
             $scheduledStart
         );
-        $article = trim(($position !== '' ? $position . ' ' : '') . $ident);
+        $article = trim($ident);
 
         return [
             'dokument' => $document,
