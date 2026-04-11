@@ -13,6 +13,7 @@ return [
     'order_items_table' => env('WORK_ORDER_ORDER_ITEMS_TABLE', 'tHE_OrderItem'),
     'work_order_order_item_link_table' => env('WORK_ORDER_ORDER_ITEM_LINK_TABLE', 'vHF_LinkWOExOrderItem'),
     'work_order_order_item_link_insert_table' => env('WORK_ORDER_ORDER_ITEM_LINK_INSERT_TABLE', 'tHF_LinkWOExOrderItem'),
+    'order_item_move_link_table' => env('WORK_ORDER_ORDER_ITEM_MOVE_LINK_TABLE', 'tHE_LinkMoveItemOrderItem'),
     'default_limit' => 10,
     'max_limit' => 100,
     'bom_limit' => 100,

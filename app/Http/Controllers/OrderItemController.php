@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Throwable;
 
-class OrderItemController extends Controller
+class OrderItemController extends OrderItemMoveLinkController
 {
     private ?array $positionTransferWorkOrderColumnsCache = null;
 
@@ -350,6 +350,9 @@ class OrderItemController extends Controller
             return $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acKey'], ''));
         }, $linkRows))));
         $workOrdersByKey = $this->fetchPositionTransferWorkOrdersByKeys($workOrderKeys);
+        $producedOrderItemQids = $this->fetchProducedMoveOrderItemQids(array_values(array_unique(array_filter(array_map(function (array $row) {
+            return trim((string) $this->valueTrimmed($row, ['anOrderItemQId'], ''));
+        }, $linkRows)))));
         $statuses = [];
 
         foreach ($linkRows as $row) {
@@ -362,10 +365,11 @@ class OrderItemController extends Controller
                 ['acKeyView', 'acKey'],
                 $this->valueTrimmed($workOrder, ['acKeyView', 'acRefNo1', 'acKey'], '')
             );
-            $transferMessage = $this->transferStatusMessage($workOrder);
+            $hasProducedMove = $qid !== '' && isset($producedOrderItemQids[$qid]);
+            $transferMessage = $this->transferStatusMessage($workOrder, $hasProducedMove);
             $rawStatus = (string) $this->valueTrimmed($workOrder, ['acStatusMF', 'acStatus', 'status'], '');
             $label = $this->formatTransferStatusLabel($document, $transferMessage, $rawStatus);
-            $tone = $this->transferStatusTone($rawStatus);
+            $tone = $this->transferStatusTone($rawStatus, $this->transferHasProducedQuantity($workOrder) || $hasProducedMove);
 
             if ($label === '') {
                 continue;
@@ -468,11 +472,9 @@ class OrderItemController extends Controller
         return (string) config('workorders.table', 'tHF_WOEx');
     }
 
-    protected function transferStatusMessage(array $workOrder): string
+    protected function transferStatusMessage(array $workOrder, bool $hasProducedMove = false): string
     {
-        $producedQty = $this->toFloatOrNull($this->value($workOrder, ['anProducedQty'], null));
-
-        if ($producedQty !== null && $producedQty > 0) {
+        if ($this->transferHasProducedQuantity($workOrder) || $hasProducedMove) {
             return 'Nalog je već djelimično izrađen';
         }
 
@@ -500,8 +502,19 @@ class OrderItemController extends Controller
         return $rawStatus;
     }
 
-    protected function transferStatusTone(string $rawStatus): string
+    protected function transferHasProducedQuantity(array $workOrder): bool
     {
+        $producedQty = $this->toFloatOrNull($this->value($workOrder, ['anProducedQty'], null));
+
+        return $producedQty !== null && $producedQty > 0;
+    }
+
+    protected function transferStatusTone(string $rawStatus, bool $hasProduced = false): string
+    {
+        if ($hasProduced) {
+            return 'danger';
+        }
+
         switch (strtoupper(trim($rawStatus))) {
             case 'O':
             case 'N':
