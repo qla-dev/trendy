@@ -2189,6 +2189,10 @@ class WorkOrderController extends Controller
 
                     if ($manualPlanQty !== null) {
                         $plannedQty = max(0, $manualPlanQty);
+                    } elseif ($saveMode === 'barcode') {
+                        // Barcode/weight-confirm mode always treats entered quantity as the absolute value,
+                        // not as a BOM multiplier.
+                        $plannedQty = $quantityFactor;
                     } elseif ($source === 'bom') {
                         // Fallback to entered quantity when BOM gross qty is 0 to avoid saving 0 by default.
                         $plannedQty = abs($baseQty) > 0.000001 ? ($baseQty * $quantityFactor) : $quantityFactor;
@@ -2209,7 +2213,10 @@ class WorkOrderController extends Controller
                     if ($saveMode === 'barcode' && $itemKind === 'materials' && array_key_exists($componentKey, $existingMaterialItemsByIdent)) {
                         $existingRow = $existingMaterialItemsByIdent[$componentKey];
                         $existingQty = $this->workOrderItemQuantity($existingRow);
-                        $updatedQty = $existingQty + $plannedQty;
+                        $existingStatement = strtoupper(trim((string) ($existingRow['acStatement'] ?? '')));
+                        $existingStockAdjusted = $this->workOrderItemStatementAdjustsStock($existingStatement);
+                        $stockDeltaQty = $existingStockAdjusted ? ($plannedQty - $existingQty) : $plannedQty;
+                        $updatedQty = $plannedQty;
                         $updatePayload = [
                             'anPlanQty' => $updatedQty,
                             'anQty' => $updatedQty,
@@ -2273,7 +2280,7 @@ class WorkOrderController extends Controller
                             'item_kind' => $itemKind,
                             'anGrossQty' => $baseQty,
                             'previous_anPlanQty' => $existingQty,
-                            'stock_consumed_qty' => $plannedQty,
+                            'stock_consumed_qty' => $stockDeltaQty,
                             'anPlanQty' => $updatedQty,
                         ];
 
@@ -2282,7 +2289,7 @@ class WorkOrderController extends Controller
 
                     $statementMarker = $saveMode === 'barcode'
                         ? 'PLANNED_BARCODE'
-                        : ($source === 'bom' ? 'PLANNED_BOM' : 'PLANNED_RAW');
+                        : ($source === 'bom' ? 'PLANNED_BOM_PENDING' : 'PLANNED_RAW_PENDING');
                     $insertPayload = [
                         'acKey' => $workOrderKey,
                         'anVariant' => $variant,
@@ -2336,7 +2343,7 @@ class WorkOrderController extends Controller
                         'acOperationType' => $operationType,
                         'item_kind' => $itemKind,
                         'anGrossQty' => $baseQty,
-                        'stock_consumed_qty' => $plannedQty,
+                        'stock_consumed_qty' => $saveMode === 'barcode' ? $plannedQty : 0.0,
                         'anPlanQty' => $plannedQty,
                     ];
 
@@ -2352,7 +2359,7 @@ class WorkOrderController extends Controller
                 $stockAdjustmentResults = [];
                 $stockAdjustments = $this->buildPlannedConsumptionStockAdjustments($saved);
 
-                if (!empty($stockAdjustments)) {
+                if ($saveMode === 'barcode' && !empty($stockAdjustments)) {
                     $stockAdjustmentResults = Material::bulkAdjustStock(
                         $stockAdjustments,
                         $userId,
@@ -2562,8 +2569,9 @@ class WorkOrderController extends Controller
 
             $preferredWarehouse = $this->resolveWorkOrderWarehouse($workOrderRow);
             $userId = (int) (auth()->id() ?? 0);
+            $hasStatementColumn = in_array('acStatement', $columns, true);
 
-            $deleteResult = DB::transaction(function () use ($deleteQuery, $preferredWarehouse, $userId) {
+            $deleteResult = DB::transaction(function () use ($deleteQuery, $preferredWarehouse, $userId, $hasStatementColumn) {
                 $row = (clone $deleteQuery)->lockForUpdate()->first();
 
                 if ($row === null) {
@@ -2578,14 +2586,18 @@ class WorkOrderController extends Controller
                 }
 
                 $stockAdjustments = [];
-                $reverseAdjustment = $this->buildRemovedPlannedConsumptionStockAdjustment($rowData, $preferredWarehouse);
+                $reverseAdjustment = null;
 
-                if ($reverseAdjustment !== null) {
-                    $stockAdjustments = Material::bulkAdjustStock(
-                        [$reverseAdjustment],
-                        $userId,
-                        $preferredWarehouse
-                    );
+                if ($this->workOrderItemRowShouldRestoreStockOnRemove($rowData, $hasStatementColumn)) {
+                    $reverseAdjustment = $this->buildRemovedPlannedConsumptionStockAdjustment($rowData, $preferredWarehouse);
+
+                    if ($reverseAdjustment !== null) {
+                        $stockAdjustments = Material::bulkAdjustStock(
+                            [$reverseAdjustment],
+                            $userId,
+                            $preferredWarehouse
+                        );
+                    }
                 }
 
                 return [
@@ -4696,7 +4708,7 @@ class WorkOrderController extends Controller
                 $savedRow['stock_consumed_qty'] ?? null
             ) ?? 0);
 
-            if ($consumedQty <= 0) {
+            if (abs($consumedQty) <= 0.000001) {
                 continue;
             }
 
@@ -4712,6 +4724,41 @@ class WorkOrderController extends Controller
         }
 
         return array_values($adjustmentsByCode);
+    }
+
+    private function workOrderItemStatementAdjustsStock(string $statement): bool
+    {
+        $normalized = strtoupper(trim($statement));
+
+        if ($normalized === '') {
+            return true;
+        }
+
+        return in_array($normalized, [
+            'PLANNED_BOM',
+            'PLANNED_RAW',
+            'PLANNED_BARCODE',
+            'PLANNED_BARCODE_UPDATE',
+        ], true);
+    }
+
+    private function workOrderItemRowShouldRestoreStockOnRemove(array $row, bool $hasStatementColumn): bool
+    {
+        if (!$hasStatementColumn) {
+            return true;
+        }
+
+        $statement = strtoupper(trim((string) ($row['acStatement'] ?? '')));
+
+        if ($statement === '') {
+            return true;
+        }
+
+        if (in_array($statement, ['PLANNED_BOM_PENDING', 'PLANNED_RAW_PENDING'], true)) {
+            return false;
+        }
+
+        return $this->workOrderItemStatementAdjustsStock($statement);
     }
 
     private function fetchWorkOrderItemRows(string $workOrderKey): array

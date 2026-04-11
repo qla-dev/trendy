@@ -71,6 +71,28 @@ class WorkOrderPlannedConsumptionTest extends TestCase
         ], $result);
     }
 
+    public function test_build_planned_consumption_stock_adjustments_keeps_negative_deltas_for_stock_readjustments(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('buildPlannedConsumptionStockAdjustments');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            [
+                'item_kind' => 'materials',
+                'acIdent' => 'CK2020S235JRC',
+                'stock_consumed_qty' => -10,
+            ],
+        ]);
+
+        $this->assertSame([
+            [
+                'material_code' => 'CK2020S235JRC',
+                'value' => -10.0,
+            ],
+        ], $result);
+    }
+
     public function test_planned_consumption_component_selection_key_prefers_row_uid_when_present(): void
     {
         $controller = new WorkOrderController();
@@ -149,5 +171,25 @@ class WorkOrderPlannedConsumptionTest extends TestCase
         ], 'WH1');
 
         $this->assertNull($result);
+    }
+
+    public function test_work_order_item_statement_adjusts_stock_skips_pending_markers(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('workOrderItemStatementAdjustsStock');
+        $method->setAccessible(true);
+
+        $this->assertFalse($method->invoke($controller, 'PLANNED_BOM_PENDING'));
+        $this->assertFalse($method->invoke($controller, 'PLANNED_RAW_PENDING'));
+    }
+
+    public function test_work_order_item_row_should_restore_stock_on_remove_skips_pending_markers(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('workOrderItemRowShouldRestoreStockOnRemove');
+        $method->setAccessible(true);
+
+        $this->assertFalse($method->invoke($controller, ['acStatement' => 'PLANNED_BOM_PENDING'], true));
+        $this->assertFalse($method->invoke($controller, ['acStatement' => 'PLANNED_RAW_PENDING'], true));
     }
 }

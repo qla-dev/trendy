@@ -5637,7 +5637,7 @@
       }
       if (confirmHelpTextEl) {
         confirmHelpTextEl.textContent = action === 'update'
-          ? 'Prilagodite količinu i mjernu jedinicu koja se dopisuje na postojeći materijal RN.'
+          ? 'Unesite ukupnu (konačnu) količinu za materijal na RN. Vrijednost se ne sabira sa postojećom.'
           : 'Unesite količinu i mjernu jedinicu skeniranog materijala koji se dodaje na RN.';
       }
       if (quantityUnitSelect) {
@@ -5665,7 +5665,10 @@
 
       if (quantityInput) {
         if (context && context.mode === 'barcode') {
-          quantityInput.value = '1';
+          var existingQty = context && context.material && context.material.existing_item
+            ? Number(context.material.existing_item.qty || 0)
+            : 0;
+          quantityInput.value = Number.isFinite(existingQty) && existingQty > 0 ? String(existingQty) : '1';
         } else if (!quantityInput.value || Number(quantityInput.value) <= 0) {
           quantityInput.value = '1';
         }
@@ -6159,7 +6162,7 @@
 
       if (confirmHelpTextEl) {
         confirmHelpTextEl.textContent = action === 'update'
-          ? 'Prilagodite količinu i mjernu jedinicu koja se dopisuje na postojeći materijal RN'
+          ? 'Unesite ukupnu (konačnu) količinu za materijal na RN. Vrijednost se ne sabira sa postojećom.'
           : 'Unesite količinu i mjernu jedinicu skeniranog materijala koji se dodaje na RN';
       }
 
@@ -6186,7 +6189,16 @@
       }
 
       applyConfirmContext(selected, context);
-      setQuantityInputValue('1');
+      var prefillValue = '1';
+      if (context && context.mode === 'barcode') {
+        var existingQty = context && context.material && context.material.existing_item
+          ? Number(context.material.existing_item.qty || 0)
+          : 0;
+        if (Number.isFinite(existingQty) && existingQty > 0) {
+          prefillValue = String(existingQty);
+        }
+      }
+      setQuantityInputValue(prefillValue);
 
       var confirmModal = window.bootstrap.Modal.getOrCreateInstance(confirmModalEl);
       confirmModal.show();
