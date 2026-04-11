@@ -60,6 +60,7 @@
           <th>Naziv</th>
           <th>JM</th>
           <th class="text-end">Kolicina</th>
+          <th>Status</th>
           <th class="text-end">Cijena</th>
           <th class="text-end">R1 %</th>
           <th class="text-end">R2 %</th>
@@ -77,7 +78,6 @@
           <th>Odjel</th>
           <th>Nos. tr.</th>
           <th class="text-end">Cijena s rab.</th>
-          <th>Status</th>
           <th class="order-linkage-modal-transfer-cell">Prenos</th>
         </tr>
       </thead>
@@ -90,6 +90,16 @@
             <td>{{ $item['naziv'] ?? $item['opis'] ?? '-' }}</td>
             <td>{{ $item['jm'] ?? '-' }}</td>
             <td class="text-end">{{ $formatNumber($item['kolicina'] ?? null, 2) }}</td>
+            <td>
+              @php
+                $transferStatus = trim((string) ($item['prenos_status'] ?? ''));
+              @endphp
+              @if($transferStatus !== '')
+                <span class="badge {{ $statusBadgeClass($item['prenos_status_tone'] ?? 'secondary') }}">{{ $transferStatus }}</span>
+              @else
+                <span class="text-muted">-</span>
+              @endif
+            </td>
             <td class="text-end">{{ $formatNumber($item['cijena'] ?? null, 2) }}</td>
             <td class="text-end">{{ $formatNumber($item['r1'] ?? null, 2) }}</td>
             <td class="text-end">{{ $formatNumber($item['r2'] ?? null, 2) }}</td>
@@ -107,16 +117,6 @@
             <td>{{ $item['odjel'] ?? '-' }}</td>
             <td>{{ $item['nos_tr'] ?? '-' }}</td>
             <td class="text-end">{{ $formatNumber($item['cijena_s_rabatom'] ?? null, 2) }}</td>
-            <td>
-              @php
-                $transferStatus = trim((string) ($item['prenos_status'] ?? ''));
-              @endphp
-              @if($transferStatus !== '')
-                <span class="badge {{ $statusBadgeClass($item['prenos_status_tone'] ?? 'secondary') }}">{{ $transferStatus }}</span>
-              @else
-                <span class="text-muted">-</span>
-              @endif
-            </td>
             <td class="order-linkage-modal-transfer-cell">
               <button
                 type="button"

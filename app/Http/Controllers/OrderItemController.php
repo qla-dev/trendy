@@ -362,9 +362,9 @@ class OrderItemController extends Controller
                 ['acKeyView', 'acKey'],
                 $this->valueTrimmed($workOrder, ['acKeyView', 'acRefNo1', 'acKey'], '')
             );
-            $docType = (string) $this->valueTrimmed($workOrder, ['acDocTypeView', 'acDocType'], '');
+            $transferMessage = $this->transferStatusMessage($workOrder);
             $rawStatus = (string) $this->valueTrimmed($workOrder, ['acStatusMF', 'acStatus', 'status'], '');
-            $label = $this->formatTransferStatusLabel($document, $docType, $rawStatus);
+            $label = $this->formatTransferStatusLabel($document, $transferMessage, $rawStatus);
             $tone = $this->transferStatusTone($rawStatus);
 
             if ($label === '') {
@@ -415,6 +415,7 @@ class OrderItemController extends Controller
             'acStatusMF',
             'acStatus',
             'status',
+            'anProducedQty',
         ]);
         $query = DB::table($this->qualifiedPositionTransferWorkOrderTableName());
         $placeholders = implode(', ', array_fill(0, count($normalizedWorkOrderKeys), '?'));
@@ -467,14 +468,29 @@ class OrderItemController extends Controller
         return (string) config('workorders.table', 'tHF_WOEx');
     }
 
-    protected function formatTransferStatusLabel(string $document, string $docType, string $rawStatus): string
+    protected function transferStatusMessage(array $workOrder): string
+    {
+        $producedQty = $this->toFloatOrNull($this->value($workOrder, ['anProducedQty'], null));
+
+        if ($producedQty !== null && $producedQty > 0) {
+            return 'Nalog je već djelimično izrađen';
+        }
+
+        if (!empty($workOrder)) {
+            return 'Promjena naloga';
+        }
+
+        return '';
+    }
+
+    protected function formatTransferStatusLabel(string $document, string $message, string $rawStatus): string
     {
         $document = trim($document);
-        $docType = trim($docType);
+        $message = trim($message);
         $rawStatus = trim($rawStatus);
 
-        if ($document !== '' && $docType !== '') {
-            return $document . ' ' . $docType;
+        if ($document !== '' && $message !== '') {
+            return $document . ' ' . $message;
         }
 
         if ($document !== '') {

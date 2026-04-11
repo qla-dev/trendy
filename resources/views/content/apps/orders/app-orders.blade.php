@@ -422,46 +422,55 @@
   }
 
   .order-linkage-modal-transfer-cell {
-    position: sticky;
-    right: 0;
-    z-index: 2;
-    width: 1%;
+    position: sticky !important;
+    right: 0 !important;
+    z-index: 20 !important;
+    width: 1% !important;
     white-space: nowrap;
     text-align: center;
-    background-color: #ffffff;
-    border-left: 1px solid #ebe9f1;
-    box-shadow: none;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-clip: border-box !important;
+    opacity: 1 !important;
+    isolation: isolate !important;
+    border-left: 1px solid #ebe9f1 !important;
+    box-shadow: none !important;
   }
 
   .order-linkage-modal-table thead .order-linkage-modal-transfer-cell {
-    z-index: 3;
-    background-color: #f8f8fa;
+    z-index: 21 !important;
+    background: #f8f8fa !important;
+    background-color: #f8f8fa !important;
   }
 
   .order-linkage-modal-table.table tbody tr:hover > .order-linkage-modal-transfer-cell {
-    background-color: #f8f8fc;
+    background: #f8f8fc !important;
+    background-color: #f8f8fc !important;
   }
 
   body.dark-layout .order-linkage-modal-transfer-cell,
   body.semi-dark-layout .order-linkage-modal-transfer-cell,
   .dark-layout .order-linkage-modal-transfer-cell,
   .semi-dark-layout .order-linkage-modal-transfer-cell {
-    background-color: #283046;
-    border-left-color: rgba(184, 190, 220, 0.22);
+    background: #283046 !important;
+    background-color: #283046 !important;
+    border-left-color: rgba(184, 190, 220, 0.22) !important;
   }
 
   body.dark-layout .order-linkage-modal-table thead .order-linkage-modal-transfer-cell,
   body.semi-dark-layout .order-linkage-modal-table thead .order-linkage-modal-transfer-cell,
   .dark-layout .order-linkage-modal-table thead .order-linkage-modal-transfer-cell,
   .semi-dark-layout .order-linkage-modal-table thead .order-linkage-modal-transfer-cell {
-    background-color: #2f3854;
+    background: #2f3854 !important;
+    background-color: #2f3854 !important;
   }
 
   body.dark-layout .order-linkage-modal-table.table tbody tr:hover > .order-linkage-modal-transfer-cell,
   body.semi-dark-layout .order-linkage-modal-table.table tbody tr:hover > .order-linkage-modal-transfer-cell,
   .dark-layout .order-linkage-modal-table.table tbody tr:hover > .order-linkage-modal-transfer-cell,
   .semi-dark-layout .order-linkage-modal-table.table tbody tr:hover > .order-linkage-modal-transfer-cell {
-    background-color: #36405a;
+    background: #36405a !important;
+    background-color: #36405a !important;
   }
 
   .order-linkage-modal-transfer-btn {
