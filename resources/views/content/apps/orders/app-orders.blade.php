@@ -258,44 +258,58 @@
   }
 
   .order-linkage-actions-cell {
-    width: 1%;
-    position: sticky;
-    right: 0;
-    z-index: 2;
-    background-color: #ffffff;
-    box-shadow: none;
-    border-left: 1px solid #ebe9f1;
+    width: 1% !important;
+    position: sticky !important;
+    right: 0 !important;
+    z-index: 20 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-clip: border-box !important;
+    opacity: 1 !important;
+    isolation: isolate !important;
+    box-shadow: none !important;
+    border-left: 1px solid #ebe9f1 !important;
   }
 
   .order-linkage-table thead .order-linkage-actions-cell {
-    z-index: 3;
-    background-color: #f8f8fa;
+    z-index: 21 !important;
+    background: #f8f8fa !important;
+    background-color: #f8f8fa !important;
+    box-shadow: none !important;
   }
 
   .order-linkage-table.table tbody tr:hover > .order-linkage-actions-cell {
-    background-color: #f8f8fc;
+    background: #f8f8fc !important;
+    background-color: #f8f8fc !important;
+    box-shadow: none !important;
   }
 
   body.dark-layout .order-linkage-table .order-linkage-actions-cell,
   body.semi-dark-layout .order-linkage-table .order-linkage-actions-cell,
   .dark-layout .order-linkage-table .order-linkage-actions-cell,
   .semi-dark-layout .order-linkage-table .order-linkage-actions-cell {
-    background-color: #283046;
-    border-left-color: rgba(184, 190, 220, 0.22);
+    background: #283046 !important;
+    background-color: #283046 !important;
+    box-shadow: none !important;
+    border-left-color: rgba(184, 190, 220, 0.22) !important;
   }
 
   body.dark-layout .order-linkage-table thead .order-linkage-actions-cell,
   body.semi-dark-layout .order-linkage-table thead .order-linkage-actions-cell,
   .dark-layout .order-linkage-table thead .order-linkage-actions-cell,
   .semi-dark-layout .order-linkage-table thead .order-linkage-actions-cell {
-    background-color: #2f3854;
+    background: #2f3854 !important;
+    background-color: #2f3854 !important;
+    box-shadow: none !important;
   }
 
   body.dark-layout .order-linkage-table.table tbody tr:hover > .order-linkage-actions-cell,
   body.semi-dark-layout .order-linkage-table.table tbody tr:hover > .order-linkage-actions-cell,
   .dark-layout .order-linkage-table.table tbody tr:hover > .order-linkage-actions-cell,
   .semi-dark-layout .order-linkage-table.table tbody tr:hover > .order-linkage-actions-cell {
+    background: #36405a !important;
     background-color: #36405a !important;
+    box-shadow: none !important;
   }
 
   .order-linkage-actions-group {

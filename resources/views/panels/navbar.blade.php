@@ -54,6 +54,11 @@
             data-feather="menu"></i></a></li>
     </ul>
     <ul class="nav navbar-nav bookmark-icons">
+      @if (Auth::check() && Auth::user()->role === 'admin')
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="{{ url('/') }}"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" title="Dashboard"><i class="ficon"
+              data-feather="home"></i></a></li>
+      @endif
       @if (!(Auth::check() && Auth::user()->role === 'user'))
         <li class="nav-item d-none d-md-block"><a class="nav-link" href="{{ url('app/calendar') }}"
             data-bs-toggle="tooltip" data-bs-placement="bottom" title="Kalendar"><i class="ficon"

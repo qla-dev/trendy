@@ -9,6 +9,7 @@ return [
     "Apps" => "Aplikacije",
     "Glavna navigacija" => "Glavna navigacija",
     "Administracija" => "Administracija",
+    "Narudžbe" => "Narudžbe",
     "Skladišni alati" => "Skladišni alati",
     "TRENDY DRIVE" => "TRENDY DRIVE",
     "Pregled zaliha" => "Pregled zaliha",
