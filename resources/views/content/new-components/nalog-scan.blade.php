@@ -1287,10 +1287,10 @@
     }
 
     async function promptToCreateWorkOrderLegacy(identifier, payload, scanMeta) {
-      var order = payload && payload.order ? payload.order : {};
+      var orderPayload = payload && payload.order ? payload.order : {};
+      var order = Object.assign({}, orderPayload, mergeScanContext(scanMeta, orderPayload));
       var nextWorkOrder = payload && payload.next_work_order ? payload.next_work_order : {};
       var lastWorkOrder = payload && payload.last_work_order ? payload.last_work_order : {};
-      var scanSummary = mergeScanContext(scanMeta, order);
       var extraHtml = '<h2 class="mb-1">Da li želite kreirati RN broj <br><strong>' + escapeHtml(nextWorkOrder.number || '') + '?</strong></h2>';
 
 
@@ -1358,7 +1358,8 @@
     }
 
     async function promptToCreateWorkOrder(identifier, payload, scanMeta) {
-      var order = payload && payload.order ? payload.order : {};
+      var orderPayload = payload && payload.order ? payload.order : {};
+      var order = Object.assign({}, orderPayload, mergeScanContext(scanMeta, orderPayload));
       var docTypeState = normalizeCreateDocTypePayload(payload);
       var selectedDocType = docTypeState.selected;
 
@@ -1553,7 +1554,7 @@
           return lookupScannedWorkOrder(parsed.id);
         })
         .then(function (lookupResponse) {
-          return handleScanLookup(parsed.id, lookupResponse);
+          return handleScanLookup(parsed.id, lookupResponse, parsed.scanMeta);
         })
         .catch(function (error) {
           console.error(error);

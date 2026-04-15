@@ -5196,13 +5196,13 @@ class WorkOrderController extends Controller
         ];
 
         if ($productCodeRaw !== null) {
-            $normalizedProductCode = $this->normalizeComparableIdentifier($productCodeRaw);
+            $productCode = trim((string) $productCodeRaw);
 
-            if ($normalizedProductCode === '') {
+            if ($productCode === '') {
                 return null;
             }
 
-            $parsed['product_code'] = $normalizedProductCode;
+            $parsed['product_code'] = $productCode;
         }
 
         return $parsed;
@@ -5211,7 +5211,7 @@ class WorkOrderController extends Controller
     private function findWorkOrderRowByOrderLocator(
         string $normalizedOrderNumber,
         int $orderPosition,
-        ?string $normalizedProductCode = null
+        ?string $productCode = null
     ): ?array
     {
         if ($normalizedOrderNumber === '') {
@@ -5253,9 +5253,8 @@ class WorkOrderController extends Controller
                     }
                 });
 
-            if ($normalizedProductCode !== null && $normalizedProductCode !== '' && $workOrderProductColumn !== null) {
-                $normalizedProductExpression = $this->normalizedIdentifierExpression($query, 'wo.' . $workOrderProductColumn);
-                $query->whereRaw("$normalizedProductExpression = ?", [$normalizedProductCode]);
+            if ($productCode !== null && trim($productCode) !== '' && $workOrderProductColumn !== null) {
+                $this->applyProductCodeMatchFilter($query, ['wo.' . $workOrderProductColumn], $productCode);
             }
 
             foreach (['adDate', 'adDateIns', 'adTimeIns', 'anNo'] as $orderByColumn) {
@@ -5274,7 +5273,7 @@ class WorkOrderController extends Controller
                 'orders_table' => $this->qualifiedOrderTableName(),
                 'order_number' => $normalizedOrderNumber,
                 'order_position' => $orderPosition,
-                'product_code' => $normalizedProductCode,
+                'product_code' => $productCode,
                 'message' => $exception->getMessage(),
             ]);
 
@@ -5285,7 +5284,7 @@ class WorkOrderController extends Controller
     private function findOrderRowByLocator(
         string $normalizedOrderNumber,
         int $orderPosition,
-        ?string $normalizedProductCode = null
+        ?string $productCode = null
     ): ?array {
         if ($normalizedOrderNumber === '') {
             return null;
@@ -5319,14 +5318,8 @@ class WorkOrderController extends Controller
                 });
             }
 
-            if ($normalizedProductCode !== null && $normalizedProductCode !== '' && !empty($orderProductColumns)) {
-                $query->where(function (Builder $productQuery) use ($orderProductColumns, $normalizedProductCode) {
-                    foreach ($orderProductColumns as $index => $orderProductColumn) {
-                        $normalizedExpression = $this->normalizedIdentifierExpression($productQuery, $orderProductColumn);
-                        $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
-                        $productQuery->{$method}("$normalizedExpression = ?", [$normalizedProductCode]);
-                    }
-                });
+            if ($productCode !== null && trim($productCode) !== '' && !empty($orderProductColumns)) {
+                $this->applyProductCodeMatchFilter($query, $orderProductColumns, $productCode);
             }
 
             foreach (['adDate', 'adDateIns', 'adTimeIns', 'anNo', 'anQId'] as $orderByColumn) {
@@ -5344,7 +5337,7 @@ class WorkOrderController extends Controller
                 'orders_table' => $this->qualifiedOrderTableName(),
                 'order_number' => $normalizedOrderNumber,
                 'order_position' => $orderPosition,
-                'product_code' => $normalizedProductCode,
+                'product_code' => $productCode,
                 'message' => $exception->getMessage(),
             ]);
 
@@ -5365,7 +5358,7 @@ class WorkOrderController extends Controller
         }
 
         $orderPosition = (int) ($orderContext['order_position'] ?? 0);
-        $normalizedProductCode = $this->normalizeComparableIdentifier((string) ($orderContext['product_code'] ?? ''));
+        $productCode = trim((string) ($orderContext['product_code'] ?? ''));
 
         try {
             $orderItemColumns = $this->orderItemTableColumns();
@@ -5395,14 +5388,8 @@ class WorkOrderController extends Controller
                 });
             }
 
-            if ($normalizedProductCode !== '' && !empty($orderProductColumns)) {
-                $query->where(function (Builder $productQuery) use ($orderProductColumns, $normalizedProductCode) {
-                    foreach ($orderProductColumns as $index => $orderProductColumn) {
-                        $normalizedExpression = $this->normalizedIdentifierExpression($productQuery, $orderProductColumn);
-                        $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
-                        $productQuery->{$method}("$normalizedExpression = ?", [$normalizedProductCode]);
-                    }
-                });
+            if ($productCode !== '' && !empty($orderProductColumns)) {
+                $this->applyProductCodeMatchFilter($query, $orderProductColumns, $productCode);
             }
 
             foreach (['adDate', 'adDateIns', 'adTimeIns', 'anNo', 'anQId'] as $orderByColumn) {
@@ -5420,7 +5407,7 @@ class WorkOrderController extends Controller
                 'order_items_table' => $this->qualifiedOrderItemTableName(),
                 'order_key' => $normalizedOrderKey,
                 'order_position' => $orderPosition,
-                'product_code' => $normalizedProductCode,
+                'product_code' => $productCode,
                 'message' => $exception->getMessage(),
             ]);
 
@@ -5428,20 +5415,46 @@ class WorkOrderController extends Controller
         }
     }
 
+    private function applyProductCodeMatchFilter(Builder $query, array $columnIdentifiers, string $productCode): void
+    {
+        $productCode = trim($productCode);
+
+        if ($productCode === '' || empty($columnIdentifiers)) {
+            return;
+        }
+
+        $exactProductCode = $this->normalizeProductCodeExact($productCode);
+
+        $query->where(function (Builder $productQuery) use ($columnIdentifiers, $exactProductCode): void {
+            $hasClause = false;
+
+            foreach ($columnIdentifiers as $columnIdentifier) {
+                $exactExpression = $this->productCodeExactExpression($productQuery, $columnIdentifier);
+
+                if ($hasClause) {
+                    $productQuery->orWhereRaw("$exactExpression = ?", [$exactProductCode]);
+                } else {
+                    $productQuery->whereRaw("$exactExpression = ?", [$exactProductCode]);
+                    $hasClause = true;
+                }
+            }
+
+            if (!$hasClause) {
+                $productQuery->whereRaw('1 = 0');
+            }
+        });
+    }
+
     private function buildOrderLocatorContext(array $orderRow, array $orderLocator): array
     {
-        $normalizedProductCode = trim((string) ($orderLocator['product_code'] ?? ''));
-        $catalogRow = $normalizedProductCode !== ''
-            ? $this->findCatalogItemByNormalizedCode($normalizedProductCode)
+        $scannedProductCode = trim((string) ($orderLocator['product_code'] ?? ''));
+        $catalogRow = $scannedProductCode !== ''
+            ? $this->findCatalogItemByProductCode($scannedProductCode)
             : [];
-        $productCode = trim((string) ($catalogRow['acIdent'] ?? ''));
+        $productCode = $scannedProductCode;
 
         if ($productCode === '') {
             $productCode = (string) $this->valueTrimmed($orderRow, ['acIdent', 'product_code', 'acCode'], '');
-        }
-
-        if ($productCode === '') {
-            $productCode = $normalizedProductCode;
         }
 
         $productName = (string) $this->valueTrimmed($orderRow, ['acName', 'acDescr', 'title'], '');
@@ -5573,9 +5586,8 @@ class WorkOrderController extends Controller
             ];
         }
 
-        $normalizedProductCode = $this->normalizeComparableIdentifier($productCode);
-        $catalogRow = $normalizedProductCode !== ''
-            ? $this->findCatalogItemByNormalizedCode($normalizedProductCode)
+        $catalogRow = $productCode !== ''
+            ? $this->findCatalogItemByProductCode($productCode)
             : [];
 
         if (!empty($catalogRow)) {
@@ -5607,8 +5619,8 @@ class WorkOrderController extends Controller
             ? (array) ($ensureResult['row'] ?? [])
             : [];
 
-        if (empty($catalogRow) && $normalizedProductCode !== '') {
-            $catalogRow = $this->findCatalogItemByNormalizedCode($normalizedProductCode);
+        if (empty($catalogRow) && $productCode !== '') {
+            $catalogRow = $this->findCatalogItemByProductCode($productCode);
         }
 
         $orderContext['catalog'] = $catalogRow;
@@ -5685,20 +5697,23 @@ class WorkOrderController extends Controller
         return $displayNumber !== '' ? $displayNumber : $fallbackNormalizedOrderNumber;
     }
 
-    private function findCatalogItemByNormalizedCode(string $normalizedProductCode): array
+    private function findCatalogItemByProductCode(string $productCode): array
     {
-        if ($normalizedProductCode === '') {
+        $productCode = trim($productCode);
+
+        if ($productCode === '') {
             return [];
         }
 
         try {
             $query = $this->newCatalogItemsTableQuery();
-            $normalizedExpression = $this->normalizedIdentifierExpression($query, 'acIdent');
+            $exactProductCode = $this->normalizeProductCodeExact($productCode);
+            $exactExpression = $this->productCodeExactExpression($query, 'acIdent');
             $row = $query
-                ->whereRaw("$normalizedExpression = ?", [$normalizedProductCode])
+                ->whereRaw("$exactExpression = ?", [$exactProductCode])
                 ->first();
             $catalogRow = $row === null ? [] : (array) $row;
-            $catalogProduct = Product::findCatalogProduct($normalizedProductCode);
+            $catalogProduct = Product::findCatalogProduct($productCode);
 
             if ($catalogProduct === null) {
                 return $catalogRow;
@@ -5713,7 +5728,7 @@ class WorkOrderController extends Controller
             Log::warning('Unable to resolve catalog item for scanned work order QR.', [
                 'connection' => config('database.default'),
                 'catalog_items_table' => $this->qualifiedCatalogItemsTableName(),
-                'product_code' => $normalizedProductCode,
+                'product_code' => $productCode,
                 'message' => $exception->getMessage(),
             ]);
 
@@ -6056,10 +6071,10 @@ class WorkOrderController extends Controller
             }
         }
 
-        $normalizedProductCode = $this->normalizeComparableIdentifier((string) ($orderContext['product_code'] ?? ''));
+        $productCode = trim((string) ($orderContext['product_code'] ?? ''));
 
-        if ($normalizedProductCode !== '') {
-            $catalogRow = $this->findCatalogItemByNormalizedCode($normalizedProductCode);
+        if ($productCode !== '') {
+            $catalogRow = $this->findCatalogItemByProductCode($productCode);
 
             if (!empty($catalogRow)) {
                 foreach (['anQty', 'anQty1', 'anPlanQty', 'anOrdQty', 'anQuantity', 'anDefQty', 'anDefaultQty', 'anStock'] as $column) {
@@ -6184,6 +6199,11 @@ class WorkOrderController extends Controller
         return is_string($normalized) ? $normalized : '';
     }
 
+    private function normalizeProductCodeExact(string $value): string
+    {
+        return strtoupper(trim($value));
+    }
+
     private function normalizeComparableIdentifiers(array $values): array
     {
         return array_values(array_unique(array_filter(array_map(function ($value) {
@@ -6198,6 +6218,13 @@ class WorkOrderController extends Controller
         $wrappedColumn = $query->getGrammar()->wrap($columnIdentifier);
 
         return "UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(CAST($wrappedColumn AS NVARCHAR(64)), ''), '-', ''), ' ', ''), '/', ''), '.', ''), '_', ''))";
+    }
+
+    private function productCodeExactExpression(Builder $query, string $columnIdentifier): string
+    {
+        $wrappedColumn = $query->getGrammar()->wrap($columnIdentifier);
+
+        return "UPPER(LTRIM(RTRIM(COALESCE(CAST($wrappedColumn AS NVARCHAR(64)), ''))))";
     }
 
     private function orderLinkageDisplayIdentifierExpression(Builder $query, string $columnIdentifier): string
