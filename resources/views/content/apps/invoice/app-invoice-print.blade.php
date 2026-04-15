@@ -47,37 +47,70 @@
   if ($workOrderRouteId === '') {
     $workOrderRouteId = trim((string) ($invoiceNumber ?? ''));
   }
-  $orderNumberQrRaw = trim((string) ($workOrder['broj_narudzbe'] ?? ''));
-  $orderNumberQrPayload = preg_replace('/\D+/', '', $orderNumberQrRaw);
-  if (!is_string($orderNumberQrPayload) || $orderNumberQrPayload === '') {
-    $orderNumberQrPayload = preg_replace('/[^A-Za-z0-9]+/', '', $orderNumberQrRaw);
-  }
-  $orderPositionQrRaw = trim((string) ($workOrder['broj_pozicije_narudzbe'] ?? ''));
-  $orderPositionQrPayload = '';
-  if (is_numeric(str_replace(',', '.', $orderPositionQrRaw))) {
-    $orderPositionQrPayload = (string) ((int) round((float) str_replace(',', '.', $orderPositionQrRaw)));
-  }
-  $productCodeQrRaw = trim((string) ($workOrder['sifra'] ?? ''));
-  $productCodeQrPayload = preg_replace('/[^A-Za-z0-9]+/', '', $productCodeQrRaw);
-  if (is_string($productCodeQrPayload)) {
-    $productCodeQrPayload = strtoupper($productCodeQrPayload);
-  } else {
-    $productCodeQrPayload = '';
-  }
+  $normalizeOrderLocatorQrNumber = static function ($value): string {
+    $normalized = preg_replace('/[^A-Z0-9]+/', '', strtoupper(trim((string) $value)));
+    if (!is_string($normalized)) {
+      return '';
+    }
+    if (preg_match('/^\d{13}$/', $normalized) === 1 && substr($normalized, 6, 1) === '0') {
+      $normalized = substr($normalized, 0, 6) . substr($normalized, 7);
+    }
+    return $normalized;
+  };
+  $normalizeOrderLocatorQrPosition = static function ($value): string {
+    $raw = trim((string) $value);
+    if ($raw === '') {
+      return '';
+    }
+    $normalized = str_replace(',', '.', $raw);
+    if (!is_numeric($normalized)) {
+      return '';
+    }
+    $position = (float) $normalized;
+    $integerPosition = (int) round($position);
+    if (abs($position - $integerPosition) > 0.000001) {
+      return '';
+    }
+    return (string) $integerPosition;
+  };
+  $escapeOrderLocatorQrProductCode = static function ($value): string {
+    $productCode = trim((string) $value);
+    $productCode = preg_replace('/[\r\n\t]+/', ' ', $productCode);
+    if (!is_string($productCode)) {
+      return '';
+    }
+    $productCode = trim($productCode);
+    $productComparable = preg_replace('/[^A-Za-z0-9]+/', '', $productCode);
+    if (!is_string($productComparable) || $productComparable === '') {
+      return '';
+    }
+    return str_replace(';', '%3B', str_replace('%', '%25', $productCode));
+  };
+  $composeOrderLocatorQrTarget = static function ($orderNumberRaw, $orderPositionRaw, $productCodeRaw) use (
+    $normalizeOrderLocatorQrNumber,
+    $normalizeOrderLocatorQrPosition,
+    $escapeOrderLocatorQrProductCode
+  ): ?string {
+    $orderNumberPayload = $normalizeOrderLocatorQrNumber($orderNumberRaw);
+    $orderPositionPayload = $normalizeOrderLocatorQrPosition($orderPositionRaw);
+    if ($orderNumberPayload === '' || $orderPositionPayload === '') {
+      return null;
+    }
+
+    $productCodePayload = $escapeOrderLocatorQrProductCode($productCodeRaw);
+    if ($productCodePayload !== '') {
+      return $orderNumberPayload . ';' . $orderPositionPayload . ';' . $productCodePayload;
+    }
+
+    return $orderNumberPayload . ';' . $orderPositionPayload;
+  };
+  $orderNumberQrRaw = $workOrder['broj_narudzbe'] ?? $workOrder['order_number'] ?? $workOrder['acLnkKey'] ?? '';
+  $orderPositionQrRaw = $workOrder['broj_pozicije_narudzbe'] ?? $workOrder['order_position'] ?? $workOrder['anLnkNo'] ?? '';
+  $productCodeQrRaw = $workOrder['sifra'] ?? $workOrder['sifra_proizvoda'] ?? $workOrder['product_code'] ?? $workOrder['acIdent'] ?? '';
   $previewQrTarget = request()->getSchemeAndHttpHost() . route('app-invoice-preview', ['id' => $workOrderRouteId], false);
-  if (
-    is_string($orderNumberQrPayload) &&
-    $orderNumberQrPayload !== '' &&
-    $orderPositionQrPayload !== '' &&
-    $productCodeQrPayload !== ''
-  ) {
-    $previewQrTarget = $orderNumberQrPayload . ';' . $orderPositionQrPayload . ';' . $productCodeQrPayload;
-  } elseif (
-    is_string($orderNumberQrPayload) &&
-    $orderNumberQrPayload !== '' &&
-    $orderPositionQrPayload !== ''
-  ) {
-    $previewQrTarget = $orderNumberQrPayload . ';' . $orderPositionQrPayload;
+  $orderLocatorQrTarget = $composeOrderLocatorQrTarget($orderNumberQrRaw, $orderPositionQrRaw, $productCodeQrRaw);
+  if ($orderLocatorQrTarget !== null) {
+    $previewQrTarget = $orderLocatorQrTarget;
   }
   $previewQrImage = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=' . urlencode($previewQrTarget);
 @endphp

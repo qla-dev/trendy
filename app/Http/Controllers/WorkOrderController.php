@@ -5184,7 +5184,7 @@ class WorkOrderController extends Controller
             return null;
         }
 
-        $normalizedOrderNumber = $this->normalizeComparableIdentifier($orderNumberRaw);
+        $normalizedOrderNumber = $this->normalizeOrderLocatorNumber($orderNumberRaw);
 
         if ($normalizedOrderNumber === '') {
             return null;
@@ -5196,7 +5196,7 @@ class WorkOrderController extends Controller
         ];
 
         if ($productCodeRaw !== null) {
-            $productCode = trim((string) $productCodeRaw);
+            $productCode = $this->decodeOrderLocatorProductCode((string) $productCodeRaw);
 
             if ($productCode === '') {
                 return null;
@@ -5206,6 +5206,27 @@ class WorkOrderController extends Controller
         }
 
         return $parsed;
+    }
+
+    private function decodeOrderLocatorProductCode(string $value): string
+    {
+        $decoded = preg_replace('/%3B/i', ';', trim($value));
+        if (!is_string($decoded)) {
+            $decoded = trim($value);
+        }
+
+        return trim(str_replace('%25', '%', $decoded));
+    }
+
+    private function normalizeOrderLocatorNumber(string $value): string
+    {
+        $normalized = $this->normalizeComparableIdentifier($value);
+
+        if (preg_match('/^\d{13}$/', $normalized) === 1 && substr($normalized, 6, 1) === '0') {
+            return substr($normalized, 0, 6) . substr($normalized, 7);
+        }
+
+        return $normalized;
     }
 
     private function findWorkOrderRowByOrderLocator(
@@ -5247,7 +5268,7 @@ class WorkOrderController extends Controller
                 ->where('wo.' . $workOrderPositionColumn, $orderPosition)
                 ->where(function (Builder $orderNumberQuery) use ($orderNumberColumns, $normalizedOrderNumber) {
                     foreach ($orderNumberColumns as $index => $orderNumberColumn) {
-                        $normalizedExpression = $this->normalizedIdentifierExpression($orderNumberQuery, 'ord.' . $orderNumberColumn);
+                        $normalizedExpression = $this->orderLinkageDisplayIdentifierExpression($orderNumberQuery, 'ord.' . $orderNumberColumn);
                         $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
                         $orderNumberQuery->{$method}("$normalizedExpression = ?", [$normalizedOrderNumber]);
                     }
@@ -5303,7 +5324,7 @@ class WorkOrderController extends Controller
             $query = $this->newOrderTableQuery()
                 ->where(function (Builder $orderNumberQuery) use ($orderNumberColumns, $normalizedOrderNumber) {
                     foreach ($orderNumberColumns as $index => $orderNumberColumn) {
-                        $normalizedExpression = $this->normalizedIdentifierExpression($orderNumberQuery, $orderNumberColumn);
+                        $normalizedExpression = $this->orderLinkageDisplayIdentifierExpression($orderNumberQuery, $orderNumberColumn);
                         $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
                         $orderNumberQuery->{$method}("$normalizedExpression = ?", [$normalizedOrderNumber]);
                     }

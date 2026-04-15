@@ -810,6 +810,13 @@
       return match ? decodeURIComponent(match[1]) : null;
     }
 
+    function decodeOrderLocatorProductCode(value) {
+      return String(value || '')
+        .replace(/%3B/gi, ';')
+        .replace(/%25/g, '%')
+        .trim();
+    }
+
     function parseOrderLocatorToken(text) {
       var parts = (text || '').split(';').map(function (part) {
         return (part || '').trim();
@@ -851,13 +858,14 @@
       };
 
       if (parts.length === 3) {
-        var normalizedProductCode = rawProductCode.replace(/[^0-9A-Za-z]+/g, '').toUpperCase();
+        var productCode = decodeOrderLocatorProductCode(rawProductCode);
+        var normalizedProductCode = productCode.replace(/[^0-9A-Za-z]+/g, '').toUpperCase();
         if (!normalizedProductCode) {
           return null;
         }
 
         parsedToken.identifier = rawOrderNumber + ';' + String(integerPosition) + ';' + rawProductCode;
-        parsedToken.details.sifra = rawProductCode;
+        parsedToken.details.sifra = productCode;
         return parsedToken;
       }
 
