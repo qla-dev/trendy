@@ -26,7 +26,7 @@ class WorkOrderOrderItemLinkController extends OrderItemController
 
         if ($validator->fails()) {
             return response(
-                '<div class="alert alert-danger mb-0">' . e('Broj narudzbe je obavezan.') . '</div>',
+                '<div class="alert alert-danger mb-0">' . e('Broj narudžbe je obavezan.') . '</div>',
                 422
             );
         }
@@ -36,7 +36,7 @@ class WorkOrderOrderItemLinkController extends OrderItemController
 
         if ($normalizedOrderNumber === '') {
             return response(
-                '<div class="alert alert-danger mb-0">' . e('Neispravan broj narudzbe.') . '</div>',
+                '<div class="alert alert-danger mb-0">' . e('Neispravan broj narudžbe.') . '</div>',
                 422
             );
         }
@@ -48,7 +48,7 @@ class WorkOrderOrderItemLinkController extends OrderItemController
 
             if (empty($links) && empty($summary['found'])) {
                 return response(
-                    '<div class="alert alert-warning mb-0">' . e('Narudzba nije pronadjena.') . '</div>',
+                    '<div class="alert alert-warning mb-0">' . e('Narudžba nije pronađena.') . '</div>',
                     404
                 );
             }
@@ -67,7 +67,7 @@ class WorkOrderOrderItemLinkController extends OrderItemController
             ]);
 
             return response(
-                '<div class="alert alert-danger mb-0">' . e('Greska pri ucitavanju veza narudzbe.') . '</div>',
+                '<div class="alert alert-danger mb-0">' . e('Greška pri učitavanju veza narudžbe.') . '</div>',
                 500
             );
         }

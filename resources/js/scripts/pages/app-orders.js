@@ -27,13 +27,19 @@ $(function () {
   var modalRequest = null;
   var activeModalType = '';
   var activeModalRow = null;
+  var tableLoadingRequestCount = 0;
+  var hasCompletedInitialTableLoad = false;
+  var searchDebounceTimer = null;
+  var searchOverlaySafetyTimer = null;
+  var quickSearchIdleLabel = 'Brza pretraga po narud\u017ebi, naru\u010ditelju ili prijevozniku';
+  var quickSearchLoadingLabel = 'Filtriranje';
 
   var filterLabels = {
-    kupac: 'Kupac',
-    primatelj: 'Primatelj',
+    kupac: 'Naru\u010ditelj',
+    primatelj: 'Prijevoznik',
     proizvod: 'Proizvod',
-    plan_pocetak_od: 'Plan. pocetak od',
-    plan_pocetak_do: 'Plan. pocetak do',
+    plan_pocetak_od: 'Plan. po\u010detak od',
+    plan_pocetak_do: 'Plan. po\u010detak do',
     plan_kraj_od: 'Plan. kraj od',
     plan_kraj_do: 'Plan. kraj do',
     datum_od: 'Datum od',
@@ -78,8 +84,8 @@ $(function () {
   var bosnianDatePickerLocale = {
     firstDayOfWeek: 1,
     weekdays: {
-      shorthand: ['Ned', 'Pon', 'Uto', 'Sri', 'Cet', 'Pet', 'Sub'],
-      longhand: ['Nedjelja', 'Ponedjeljak', 'Utorak', 'Srijeda', 'Cetvrtak', 'Petak', 'Subota']
+      shorthand: ['Ned', 'Pon', 'Uto', 'Sri', '\u010cet', 'Pet', 'Sub'],
+      longhand: ['Nedjelja', 'Ponedjeljak', 'Utorak', 'Srijeda', '\u010cetvrtak', 'Petak', 'Subota']
     },
     months: {
       shorthand: ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec'],
@@ -123,7 +129,7 @@ $(function () {
       return;
     }
 
-    pageErrorElement.text(message || 'Greska pri ucitavanju narudzbi.');
+    pageErrorElement.text(message || 'Gre\u0161ka pri u\u010ditavanju narud\u017ebi.');
     pageErrorElement.removeClass('d-none');
   }
 
@@ -248,7 +254,7 @@ $(function () {
       case '1':
         return '1 - Visoki prioritet';
       case '5':
-        return '5 - Uobicajeni prioritet';
+        return '5 - Uobi\u010dajeni prioritet';
       case '10':
         return '10 - Niski prioritet';
       case '15':
@@ -374,7 +380,7 @@ $(function () {
 
   function setFiltersBodyVisibility(isVisible) {
     filtersBody.toggleClass('d-none', !isVisible);
-    toggleFiltersBtn.html('<i data-feather="filter" class="me-50"></i> ' + (isVisible ? 'Sakrij filtere' : 'Pokazi filtere'));
+    toggleFiltersBtn.html('<i data-feather="filter" class="me-50"></i> ' + (isVisible ? 'Sakrij filtere' : 'Poka\u017ei filtere'));
     toggleFiltersBtn.attr('aria-expanded', isVisible ? 'true' : 'false');
     replaceFeather();
   }
@@ -423,6 +429,214 @@ $(function () {
     return scrollHost;
   }
 
+  function ensureQuickSearchHeaderLabel() {
+    var tableWrapper = tableElement.closest('.dataTables_wrapper');
+    var searchLabel;
+    var searchInput;
+
+    if (!tableWrapper.length) {
+      tableWrapper = tableElement.closest('.card-datatable').find('.dataTables_wrapper').first();
+    }
+
+    searchLabel = tableWrapper.find('div.dataTables_filter label').first();
+    searchInput = searchLabel.find('input').first();
+
+    if (!searchLabel.length || !searchInput.length) {
+      return null;
+    }
+
+    if (!searchLabel.find('.order-linkage-search-label-wrap').length) {
+      searchInput.detach();
+      searchLabel.empty().append(
+        '<span class="order-linkage-search-label-wrap">' +
+          '<span class="spinner-border spinner-border-sm order-linkage-search-header-spinner" role="status" aria-hidden="true"></span>' +
+          '<span class="order-linkage-search-header-label">' + quickSearchIdleLabel + '</span>' +
+        '</span>'
+      );
+      searchLabel.append(searchInput);
+    }
+
+    return searchLabel;
+  }
+
+  function setQuickSearchHeaderLoading(isLoading) {
+    var searchLabel = ensureQuickSearchHeaderLabel();
+    var isBusy = !!isLoading;
+
+    if (!searchLabel || !searchLabel.length) {
+      return;
+    }
+
+    searchLabel.toggleClass('is-filtering', isBusy);
+    searchLabel.find('.order-linkage-search-header-label').text(isBusy ? quickSearchLoadingLabel : quickSearchIdleLabel);
+    searchLabel
+      .find('.order-linkage-search-header-spinner')
+      .toggleClass('is-visible', isBusy)
+      .attr('aria-hidden', isBusy ? 'false' : 'true');
+  }
+
+  function setInitialBottomControlsRowVisible(visible) {
+    var wrapper = tableElement.closest('.dataTables_wrapper');
+    var bottomRow;
+
+    if (!wrapper.length) {
+      return;
+    }
+
+    bottomRow = wrapper.children('.row').eq(2);
+    if (!bottomRow.length) {
+      return;
+    }
+
+    bottomRow.css('display', visible ? '' : 'none');
+  }
+
+  function resolveTableOverlayHost() {
+    ensureTableBodyScrollContainer();
+    return tableElement.closest('.card-datatable');
+  }
+
+  function setInitialTableLoadingState(active) {
+    var overlayHost = tableElement.closest('.card-datatable');
+
+    if (!overlayHost.length) {
+      return;
+    }
+
+    if (active && hasCompletedInitialTableLoad) {
+      return;
+    }
+
+    overlayHost.toggleClass('order-linkage-initial-loading', !!active);
+  }
+
+  function ensureTableLoadingOverlay() {
+    var overlayHost = resolveTableOverlayHost();
+    var overlay;
+
+    if (!overlayHost.length) {
+      return null;
+    }
+
+    overlayHost.addClass('order-linkage-table-overlay-host');
+    overlay = overlayHost.find('.order-linkage-table-loading-overlay').first();
+
+    if (overlay.length) {
+      return overlay;
+    }
+
+    overlayHost.append(
+      '<div class="order-linkage-table-loading-overlay" aria-hidden="true">' +
+        '<div class="order-linkage-table-loading-overlay-content">' +
+          '<div class="spinner-border order-linkage-table-loading-spinner" role="status" aria-hidden="true"></div>' +
+          '<div class="order-linkage-table-loading-message">U\u010ditavanje rezultata</div>' +
+        '</div>' +
+      '</div>'
+    );
+
+    return overlayHost.find('.order-linkage-table-loading-overlay').first();
+  }
+
+  function updateTableLoadingOverlayBounds() {
+    var overlayHost = resolveTableOverlayHost();
+    var overlay = overlayHost.find('.order-linkage-table-loading-overlay').first();
+    var scrollHost = tableElement.closest('.order-linkage-table-body-scroll');
+    var hostElement;
+    var hostRect;
+    var bodyElement;
+    var bodyRect;
+    var top = 0;
+    var left = 0;
+    var width = 0;
+    var height = 220;
+
+    if (!overlay.length || !overlayHost.length) {
+      return;
+    }
+
+    hostElement = overlayHost.get(0);
+    bodyElement = scrollHost.length ? scrollHost.get(0) : tableElement.get(0);
+
+    if (hostElement) {
+      hostRect = hostElement.getBoundingClientRect();
+      width = hostElement.clientWidth || hostRect.width || width;
+    }
+
+    if (hostElement && bodyElement) {
+      hostRect = hostRect || hostElement.getBoundingClientRect();
+      bodyRect = bodyElement.getBoundingClientRect();
+      top = Math.max(0, bodyRect.top - hostRect.top);
+      left = 0;
+      width = hostElement.clientWidth || hostRect.width || bodyRect.width || width;
+      height = Math.max(220, bodyRect.height || height);
+    }
+
+    overlay.css({
+      top: top + 'px',
+      left: left + 'px',
+      width: Math.max(0, width) + 'px',
+      height: Math.max(220, height) + 'px'
+    });
+  }
+
+  function showTableLoadingOverlay() {
+    var overlay = ensureTableLoadingOverlay();
+
+    if (!overlay || !overlay.length) {
+      return;
+    }
+
+    updateTableLoadingOverlayBounds();
+    overlay.addClass('is-visible').attr('aria-hidden', 'false');
+    window.requestAnimationFrame(updateTableLoadingOverlayBounds);
+    window.setTimeout(updateTableLoadingOverlayBounds, 0);
+    setQuickSearchHeaderLoading(true);
+  }
+
+  function hideTableLoadingOverlay(force) {
+    var overlayHost = tableElement.closest('.card-datatable');
+    var overlay = overlayHost.find('.order-linkage-table-loading-overlay').first();
+
+    if (!overlay.length) {
+      return;
+    }
+
+    if (!force && tableLoadingRequestCount > 0) {
+      return;
+    }
+
+    overlay.removeClass('is-visible').attr('aria-hidden', 'true');
+    setQuickSearchHeaderLoading(false);
+  }
+
+  function beginTableLoadingRequest() {
+    tableLoadingRequestCount += 1;
+    showTableLoadingOverlay();
+  }
+
+  function finishTableLoadingRequest() {
+    tableLoadingRequestCount = Math.max(0, tableLoadingRequestCount - 1);
+
+    if (tableLoadingRequestCount === 0) {
+      hasCompletedInitialTableLoad = true;
+      setInitialTableLoadingState(false);
+      setInitialBottomControlsRowVisible(true);
+      hideTableLoadingOverlay(true);
+    }
+  }
+
+  function scheduleSearchOverlaySafetyHide() {
+    if (searchOverlaySafetyTimer) {
+      clearTimeout(searchOverlaySafetyTimer);
+    }
+
+    searchOverlaySafetyTimer = setTimeout(function () {
+      if (tableLoadingRequestCount === 0) {
+        hideTableLoadingOverlay(true);
+      }
+    }, 1000);
+  }
+
   function setModalState(options) {
     var loading = options && options.loading;
     var errorMessage = options && options.errorMessage ? String(options.errorMessage) : '';
@@ -457,7 +671,7 @@ $(function () {
     }
 
     if (modalTitleElement) {
-      modalTitleElement.textContent = title || 'Detalji narudzbe';
+      modalTitleElement.textContent = title || 'Detalji narud\u017ebe';
     }
 
     if (modalSubtitleElement) {
@@ -477,11 +691,11 @@ $(function () {
     return (
       '<div class="order-linkage-modal-summary-grid">' +
         '<div class="order-linkage-modal-summary-card">' +
-          '<span class="order-linkage-modal-summary-label">Narudzba</span>' +
+          '<span class="order-linkage-modal-summary-label">Narud\u017eba</span>' +
           '<span class="order-linkage-modal-summary-value">' + escapeHtml((row && row.narudzba) || '-') + '</span>' +
         '</div>' +
         '<div class="order-linkage-modal-summary-card">' +
-          '<span class="order-linkage-modal-summary-label">Narucitelj</span>' +
+          '<span class="order-linkage-modal-summary-label">Naru\u010ditelj</span>' +
           '<span class="order-linkage-modal-summary-value">' + escapeHtml((row && (row.narucitelj || row.klijent)) || '-') + '</span>' +
         '</div>' +
         '<div class="order-linkage-modal-summary-card">' +
@@ -489,7 +703,7 @@ $(function () {
           '<span class="order-linkage-modal-summary-value">' + escapeHtml((row && row.brojRN) || 0) + '</span>' +
         '</div>' +
         '<div class="order-linkage-modal-summary-card">' +
-          '<span class="order-linkage-modal-summary-label">Kolicina</span>' +
+          '<span class="order-linkage-modal-summary-label">Koli\u010dina</span>' +
           '<span class="order-linkage-modal-summary-value">' + formatQuantityWithUnit(row && row.totalKolicina, row && row.jedinica) + '</span>' +
         '</div>' +
       '</div>' +
@@ -521,7 +735,7 @@ $(function () {
                       );
                     })
                     .join('')
-                : '<tr><td colspan="4" class="order-linkage-modal-empty">Za ovu narudzbu nisu pronadjeni radni nalozi.</td></tr>') +
+                : '<tr><td colspan="4" class="order-linkage-modal-empty">Za ovu narud\u017ebu nisu prona\u0111eni radni nalozi.</td></tr>') +
             '</tbody>' +
           '</table>' +
         '</div>' +
@@ -602,7 +816,7 @@ $(function () {
     activeModalType = 'positions';
     activeModalRow = row;
 
-    modalInstance = openModal('Pozicije narudzbe', 'Narudzba: ' + ((row && row.narudzba) || '-'));
+    modalInstance = openModal('Pozicije narud\u017ebe', 'Narud\u017eba: ' + ((row && row.narudzba) || '-'));
 
     if (!modalInstance) {
       return;
@@ -629,7 +843,7 @@ $(function () {
       error: function (xhr) {
         setModalState({
           loading: false,
-          errorMessage: xhr && xhr.responseText ? $(xhr.responseText).text() || 'Greska pri ucitavanju detalja.' : 'Greska pri ucitavanju detalja.',
+          errorMessage: xhr && xhr.responseText ? $(xhr.responseText).text() || 'Gre\u0161ka pri u\u010ditavanju detalja.' : 'Gre\u0161ka pri u\u010ditavanju detalja.',
           html: ''
         });
       }
@@ -646,7 +860,7 @@ $(function () {
     activeModalType = 'work_orders';
     activeModalRow = row;
 
-    modalInstance = openModal('Veze narudzbe', 'Narudzba: ' + ((row && row.narudzba) || '-'));
+    modalInstance = openModal('Veze narud\u017ebe', 'Narud\u017eba: ' + ((row && row.narudzba) || '-'));
 
     if (!modalInstance) {
       return;
@@ -673,9 +887,48 @@ $(function () {
       error: function (xhr) {
         setModalState({
           loading: false,
-          errorMessage: xhr && xhr.responseText ? $(xhr.responseText).text() || 'Greska pri ucitavanju detalja.' : 'Greska pri ucitavanju detalja.',
+          errorMessage: xhr && xhr.responseText ? $(xhr.responseText).text() || 'Gre\u0161ka pri u\u010ditavanju detalja.' : 'Gre\u0161ka pri u\u010ditavanju detalja.',
           html: ''
         });
+      }
+    });
+  }
+
+  function runOrderTableRequest(requestData, callback, params, skipBeginLoading) {
+    if (!skipBeginLoading) {
+      beginTableLoadingRequest();
+    }
+
+    hidePageError();
+
+    $.ajax({
+      url: dataUrl,
+      method: 'GET',
+      dataType: 'json',
+      data: params,
+      success: function (response) {
+        hidePageError();
+        callback({
+          draw: requestData.draw,
+          recordsTotal: response.meta && response.meta.total ? response.meta.total : 0,
+          recordsFiltered: response.meta && response.meta.filtered_total ? response.meta.filtered_total : 0,
+          data: response.data || []
+        });
+      },
+      error: function (xhr) {
+        var responseJson = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+        var message = responseJson && responseJson.message ? responseJson.message : 'Gre\u0161ka pri u\u010ditavanju narud\u017ebi.';
+
+        showPageError(message);
+        callback({
+          draw: requestData.draw,
+          recordsTotal: 0,
+          recordsFiltered: 0,
+          data: []
+        });
+      },
+      complete: function () {
+        finishTableLoadingRequest();
       }
     });
   }
@@ -708,35 +961,7 @@ $(function () {
           params.sort_dir = '';
         }
 
-        hidePageError();
-
-        $.ajax({
-          url: dataUrl,
-          method: 'GET',
-          dataType: 'json',
-          data: params,
-          success: function (response) {
-            hidePageError();
-            callback({
-              draw: requestData.draw,
-              recordsTotal: response.meta && response.meta.total ? response.meta.total : 0,
-              recordsFiltered: response.meta && response.meta.filtered_total ? response.meta.filtered_total : 0,
-              data: response.data || []
-            });
-          },
-          error: function (xhr) {
-            var responseJson = xhr && xhr.responseJSON ? xhr.responseJSON : null;
-            var message = responseJson && responseJson.message ? responseJson.message : 'Greska pri ucitavanju narudzbi.';
-
-            showPageError(message);
-            callback({
-              draw: requestData.draw,
-              recordsTotal: 0,
-              recordsFiltered: 0,
-              data: []
-            });
-          }
-        });
+        runOrderTableRequest(requestData, callback, params, false);
       },
       columns: [
         { data: 'narudzba' },
@@ -852,27 +1077,89 @@ $(function () {
         '>',
       language: {
         search: 'Brza pretraga:',
-        searchPlaceholder: 'Pretrazi...',
-        lengthMenu: 'Prikazi _MENU_ narudzbi',
-        info: 'Prikaz _START_ do _END_ od _TOTAL_ narudzbi',
-        infoEmpty: 'Nema narudzbi za prikaz',
+        searchPlaceholder: '',
+        lengthMenu: 'Prika\u017ei _MENU_ narud\u017ebi',
+        info: 'Prikaz _START_ do _END_ od _TOTAL_ narud\u017ebi',
+        infoEmpty: 'Nema narud\u017ebi za prikaz',
         infoFiltered: '(filtrirano od _MAX_ ukupno)',
-        emptyTable: 'Nema narudzbi za prikaz.',
+        emptyTable: 'Nema narud\u017ebi za prikaz.',
         zeroRecords: 'Nema rezultata za zadanu pretragu.',
         paginate: {
           first: 'Prva',
           last: 'Zadnja',
-          next: 'Sljedeca',
+          next: 'Sljede\u0107a',
           previous: 'Prethodna'
         }
       },
       initComplete: function () {
+        var tableApi = this.api();
+        var searchInput = $(tableApi.table().container()).find('div.dataTables_filter input');
+
         ensureTableBodyScrollContainer();
-        tableElement.closest('.card-datatable').removeClass('order-linkage-initial-loading');
+        ensureQuickSearchHeaderLabel();
+        setQuickSearchHeaderLoading(false);
+        setInitialTableLoadingState(false);
+        setInitialBottomControlsRowVisible(true);
+
+        searchInput.off('.DT');
+
+        searchInput.on('input.order-linkage-search', function () {
+          var searchValue = ($(this).val() || '').toString();
+
+          showTableLoadingOverlay();
+          scheduleSearchOverlaySafetyHide();
+
+          if (searchDebounceTimer) {
+            clearTimeout(searchDebounceTimer);
+          }
+
+          searchDebounceTimer = setTimeout(function () {
+            if (tableApi.search() === searchValue) {
+              if (tableLoadingRequestCount === 0) {
+                hideTableLoadingOverlay(true);
+              }
+
+              return;
+            }
+
+            tableApi.search(searchValue).draw();
+          }, 320);
+        });
+
+        searchInput.on('keydown.order-linkage-search', function (event) {
+          var searchValue;
+
+          if (event.key !== 'Enter') {
+            return;
+          }
+
+          event.preventDefault();
+          searchValue = ($(this).val() || '').toString();
+
+          if (searchDebounceTimer) {
+            clearTimeout(searchDebounceTimer);
+          }
+
+          showTableLoadingOverlay();
+
+          if (tableApi.search() === searchValue) {
+            if (tableLoadingRequestCount === 0) {
+              hideTableLoadingOverlay(true);
+            }
+
+            return;
+          }
+
+          tableApi.search(searchValue).draw();
+        });
+
         replaceFeather();
       },
       drawCallback: function () {
         ensureTableBodyScrollContainer();
+        ensureQuickSearchHeaderLabel();
+        updateTableLoadingOverlayBounds();
+        hideTableLoadingOverlay();
         replaceFeather();
       }
     });
@@ -906,8 +1193,13 @@ $(function () {
   }
 
   function applyFilters() {
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+    }
+
     renderActiveFilters();
     hidePageError();
+    showTableLoadingOverlay();
 
     if (dataTable) {
       dataTable.ajax.reload();
@@ -931,8 +1223,14 @@ $(function () {
   renderActiveFilters();
   setFiltersBodyVisibility(false);
   initialiseTable();
+  setInitialTableLoadingState(true);
+  setInitialBottomControlsRowVisible(false);
 
   updateModalRefreshButtonState(false);
+
+  $(window).on('resize.orderLinkageTableOverlay', function () {
+    updateTableLoadingOverlayBounds();
+  });
 
   if (modalElement) {
     $(modalElement).on('hidden.bs.modal', function () {

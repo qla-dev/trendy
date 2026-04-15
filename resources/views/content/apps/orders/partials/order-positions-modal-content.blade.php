@@ -32,11 +32,11 @@
 
 <div class="order-linkage-modal-summary-grid">
   <div class="order-linkage-modal-summary-card">
-    <span class="order-linkage-modal-summary-label">Narudzba</span>
+    <span class="order-linkage-modal-summary-label">Narudžba</span>
     <span class="order-linkage-modal-summary-value">{{ $orderSummary['order_number'] ?? $orderSummary['narudzba'] ?? '-' }}</span>
   </div>
   <div class="order-linkage-modal-summary-card">
-    <span class="order-linkage-modal-summary-label">Narucitelj</span>
+    <span class="order-linkage-modal-summary-label">Naručitelj</span>
     <span class="order-linkage-modal-summary-value">{{ $orderSummary['narucitelj'] ?? $orderSummary['customer'] ?? '-' }}</span>
   </div>
   <div class="order-linkage-modal-summary-card">
@@ -55,11 +55,11 @@
       <thead>
         <tr>
           <th>Poz.</th>
-          <th>Sifra</th>
+          <th>Šifra</th>
           <th>Alt.</th>
           <th>Naziv</th>
           <th>JM</th>
-          <th class="text-end">Kolicina</th>
+          <th class="text-end">Količina</th>
           <th>Status</th>
           <th class="text-end">Cijena</th>
           <th class="text-end">R1 %</th>
@@ -133,7 +133,7 @@
           </tr>
         @empty
           <tr>
-            <td colspan="25" class="order-linkage-modal-empty">Za ovu narudzbu nisu pronadjene pozicije.</td>
+            <td colspan="25" class="order-linkage-modal-empty">Za ovu narudžbu nisu pronađene pozicije.</td>
           </tr>
         @endforelse
       </tbody>

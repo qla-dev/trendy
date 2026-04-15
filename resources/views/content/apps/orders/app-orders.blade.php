@@ -1,6 +1,6 @@
 @extends('layouts/contentLayoutMaster')
 
-@section('title', 'Lista narudzbi')
+@section('title', 'Lista narudžbi')
 
 @php
   $orderLinkageConfig = [
@@ -230,6 +230,71 @@
     border-top: 0 !important;
     border-bottom: 0 !important;
     background: transparent !important;
+  }
+
+  .order-linkage-table-overlay-host {
+    position: relative;
+  }
+
+  .order-linkage-table-loading-overlay {
+    position: absolute;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.74);
+    backdrop-filter: blur(1px);
+    z-index: 9;
+    pointer-events: none;
+  }
+
+  .order-linkage-table-loading-overlay.is-visible {
+    display: flex;
+  }
+
+  .order-linkage-table-loading-overlay-content {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    text-align: center;
+  }
+
+  .order-linkage-table-loading-spinner {
+    width: 2rem;
+    height: 2rem;
+    border-width: 0.2em;
+    color: #495b73;
+  }
+
+  .order-linkage-table-loading-message {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #5e5873;
+    letter-spacing: 0.01em;
+  }
+
+  .order-linkage-search-label-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-right: 0.5rem;
+    color: #6e6b7b;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .order-linkage-search-header-spinner {
+    width: 0.9rem;
+    height: 0.9rem;
+    border-width: 0.15em;
+    color: #495b73;
+    display: none;
+  }
+
+  .order-linkage-search-header-spinner.is-visible {
+    display: inline-block;
   }
 
   .order-linkage-order-cell {
@@ -487,6 +552,17 @@
     height: 0.9rem;
   }
 
+  #order-linkage-modal-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
+  #order-linkage-modal-refresh-btn svg {
+    flex: 0 0 auto;
+  }
+
   .order-linkage-transfer-detail-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -520,6 +596,31 @@
     padding: 1rem;
     color: #6e6b7b;
     text-align: center;
+  }
+
+  .dark-layout .order-linkage-table-loading-overlay,
+  .semi-dark-layout .order-linkage-table-loading-overlay {
+    background: rgba(20, 28, 48, 0.68);
+  }
+
+  .dark-layout .order-linkage-table-loading-spinner,
+  .semi-dark-layout .order-linkage-table-loading-spinner {
+    color: #d6dcec;
+  }
+
+  .dark-layout .order-linkage-table-loading-message,
+  .semi-dark-layout .order-linkage-table-loading-message {
+    color: #f4f5fb;
+  }
+
+  .dark-layout .order-linkage-search-label-wrap,
+  .semi-dark-layout .order-linkage-search-label-wrap {
+    color: #d6dcec;
+  }
+
+  .dark-layout .order-linkage-search-header-spinner,
+  .semi-dark-layout .order-linkage-search-header-spinner {
+    color: #d6dcec;
   }
 
   @media (max-width: 991.98px) {
@@ -569,17 +670,17 @@
     <div class="card-body" id="filters-body">
       <div class="row g-2 mb-2">
         <div class="col-md-3">
-          <label class="form-label">Kupac</label>
+          <label class="form-label">Naru&#269;itelj</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="search"></i></span>
-            <input type="text" class="form-control order-linkage-filter-input" id="filter-kupac" placeholder="Kupac">
+            <input type="text" class="form-control order-linkage-filter-input" id="filter-kupac" placeholder="Naru&#269;itelj">
           </div>
         </div>
         <div class="col-md-3">
-          <label class="form-label">Primatelj</label>
+          <label class="form-label">Prijevoznik</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="search"></i></span>
-            <input type="text" class="form-control order-linkage-filter-input" id="filter-primatelj" placeholder="Primatelj">
+            <input type="text" class="form-control order-linkage-filter-input" id="filter-primatelj" placeholder="Prijevoznik">
           </div>
         </div>
         <div class="col-md-3">
@@ -701,7 +802,7 @@
         <div class="alert alert-danger d-none" id="order-linkage-modal-error"></div>
         <div class="order-linkage-modal-loading" id="order-linkage-modal-loading">
           <span class="spinner-border text-primary" role="status" aria-hidden="true"></span>
-          <span>Ucitavanje detalja narudzbe...</span>
+          <span>U&#269;itavanje detalja narud&#382;be...</span>
         </div>
         <div id="order-linkage-modal-content" class="d-none"></div>
       </div>
@@ -747,5 +848,5 @@
 <script>
   window.orderLinkageConfig = @json($orderLinkageConfig);
 </script>
-<script src="{{ asset('js/scripts/pages/app-orders.js?v=5') }}"></script>
+<script src="{{ asset('js/scripts/pages/app-orders.js?v=6') }}"></script>
 @endsection

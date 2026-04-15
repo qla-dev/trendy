@@ -894,7 +894,7 @@
         return { id: idFromPath, error: null, scanMeta: null };
       }
 
-      return { id: null, error: 'Neispravan QR format. Koristi brojNarudzbe;pozicija;sifraProizvoda ili link na radni nalog.' };
+      return { id: null, error: 'Neispravan QR format. Koristi brojNarudžbe;pozicija;šifraProizvoda ili link na radni nalog.' };
     }
 
     function toWorkOrderPreviewUrl(workOrderId) {
@@ -1059,9 +1059,9 @@
       var catalogNotice = order && order.catalog_item_missing
         ? [
             '<div class="wo-scan-create-notice">',
-            '<div class="wo-scan-create-notice-title">Artikal ce biti kreiran</div>',
+            '<div class="wo-scan-create-notice-title">Artikal će biti kreiran</div>',
             '<p class="wo-scan-create-notice-copy">',
-            escapeHtml(order.catalog_item_notice || ('Sifra ' + String(order && order.sifra ? order.sifra : '') + ' nije pronadjena u sifrarniku. Prilikom kreiranja RN bice automatski kreirana osnovna stavka artikla.')),
+            escapeHtml(order.catalog_item_notice || ('Šifra ' + String(order && order.sifra ? order.sifra : '') + ' nije pronađena u šifrarniku. Prilikom kreiranja RN bit će automatski kreirana osnovna stavka artikla.')),
             '</p>',
             '</div>'
           ].join('')
@@ -1263,7 +1263,7 @@
       var previewUrl = workOrder.preview_url || toWorkOrderPreviewUrl(workOrder.id || '');
       var scanSummary = mergeScanContext(scanMeta, workOrder);
       var result = await Swal.fire(swalWithProjectTheme({
-        title: 'RN pronadjen',
+        title: 'RN pronađen',
         html: buildScanSummaryHtml(workOrder, '<p class="mb-1">Da li želite otvoriti RN broj <strong>' + escapeHtml(workOrder.number || '') + '</strong>?</p>'),
         icon: 'question',
         showCancelButton: true,
@@ -1320,7 +1320,7 @@
           '<div class="wo-scan-create-loading-title-main">Kreiram</div>',
           '<div class="wo-scan-create-loading-title-number">RN ' + escapeHtml(nextWorkOrder.number || '') + '</div>',
           '</div>',
-          '<div class="wo-scan-create-loading-copy">Prepisujem podatke sa narudzbe i otvaram radni nalog...</div>'
+          '<div class="wo-scan-create-loading-copy">Prepisujem podatke sa narudžbe i otvaram radni nalog...</div>'
         ].join(''),
         allowOutsideClick: false,
         allowEscapeKey: false,
@@ -1474,7 +1474,7 @@
         return;
       }
 
-      throw new Error(payload.message || 'Skenirani QR nije moguce obraditi.');
+      throw new Error(payload.message || 'Skenirani QR nije moguće obraditi.');
     }
 
     function renderCameraOptions() {

@@ -30,7 +30,7 @@ class OrderItemController extends OrderItemMoveLinkController
 
         if ($validator->fails()) {
             return response(
-                '<div class="alert alert-danger mb-0">' . e('Broj narudzbe je obavezan.') . '</div>',
+                '<div class="alert alert-danger mb-0">' . e('Broj narudžbe je obavezan.') . '</div>',
                 422
             );
         }
@@ -40,7 +40,7 @@ class OrderItemController extends OrderItemMoveLinkController
 
         if ($normalizedOrderNumber === '') {
             return response(
-                '<div class="alert alert-danger mb-0">' . e('Neispravan broj narudzbe.') . '</div>',
+                '<div class="alert alert-danger mb-0">' . e('Neispravan broj narudžbe.') . '</div>',
                 422
             );
         }
@@ -53,7 +53,7 @@ class OrderItemController extends OrderItemMoveLinkController
 
             if (empty($items) && empty($summary['found'])) {
                 return response(
-                    '<div class="alert alert-warning mb-0">' . e('Narudzba nije pronadjena.') . '</div>',
+                    '<div class="alert alert-warning mb-0">' . e('Narudžba nije pronađena.') . '</div>',
                     404
                 );
             }
@@ -72,7 +72,7 @@ class OrderItemController extends OrderItemMoveLinkController
             ]);
 
             return response(
-                '<div class="alert alert-danger mb-0">' . e('Greska pri ucitavanju pozicija narudzbe.') . '</div>',
+                '<div class="alert alert-danger mb-0">' . e('Greška pri učitavanju pozicija narudžbe.') . '</div>',
                 500
             );
         }
@@ -828,7 +828,7 @@ class OrderItemController extends OrderItemMoveLinkController
     protected function orderLinkageForbiddenHtmlResponse()
     {
         return response(
-            '<div class="alert alert-danger mb-0">' . e('Nemate dozvolu za pristup upravljanju narudzbama.') . '</div>',
+            '<div class="alert alert-danger mb-0">' . e('Nemate dozvolu za pristup upravljanju narudžbama.') . '</div>',
             403
         );
     }

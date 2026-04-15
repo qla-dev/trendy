@@ -343,7 +343,7 @@ class WorkOrderController extends Controller
 
             if ($orderRow === null) {
                 return response()->json([
-                    'message' => 'Ne postoji ni radni nalog ni narudzba za skenirane parametre.',
+                    'message' => 'Ne postoji ni radni nalog ni narudžba za skenirane parametre.',
                 ], 404);
             }
 
@@ -406,7 +406,7 @@ class WorkOrderController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri provjeri skeniranog QR koda.',
+                'message' => 'Greška pri provjeri skeniranog QR koda.',
             ], 500);
         }
     }
@@ -447,7 +447,7 @@ class WorkOrderController extends Controller
 
         if ($orderLocator === null) {
             return response()->json([
-                'message' => 'Kreiranje RN je moguce samo za QR sa narudzbom, pozicijom i sifrom.',
+                'message' => 'Kreiranje RN je moguće samo za QR sa narudžbom, pozicijom i šifrom.',
             ], 422);
         }
 
@@ -551,7 +551,7 @@ class WorkOrderController extends Controller
                 }
 
                 if ($createdRow === null) {
-                    throw new \RuntimeException('RN je kreiran, ali ga nije moguce ponovo ucitati.');
+                    throw new \RuntimeException('RN je kreiran, ali ga nije moguće ponovo učitati.');
                 }
 
                 return [
@@ -576,8 +576,8 @@ class WorkOrderController extends Controller
 
             return response()->json([
                 'message' => $created
-                    ? 'Radni nalog je uspjesno kreiran.'
-                    : 'Radni nalog vec postoji i bice otvoren.',
+                    ? 'Radni nalog je uspješno kreiran.'
+                    : 'Radni nalog već postoji i bit će otvoren.',
                 'data' => [
                     'status' => $created ? 'created' : 'existing',
                     'created' => $created,
@@ -618,11 +618,12 @@ class WorkOrderController extends Controller
                 'debug_context' => $debugContext,
             ]);
 
-            $statusCode = str_contains(strtolower($exception->getMessage()), 'narudzba') ? 404 : 500;
+            $normalizedExceptionMessage = strtolower(Str::ascii($exception->getMessage()));
+            $statusCode = str_contains($normalizedExceptionMessage, 'narudzba') ? 404 : 500;
             $response = [
                 'message' => $statusCode === 404
-                    ? 'Narudzba za skenirane parametre nije pronadjena.'
-                    : 'Greska pri kreiranju radnog naloga iz narudzbe.',
+                    ? 'Narudžba za skenirane parametre nije pronađena.'
+                    : 'Greška pri kreiranju radnog naloga iz narudžbe.',
             ];
 
             if (config('app.debug')) {
@@ -3541,6 +3542,7 @@ class WorkOrderController extends Controller
         // SQL Server is much more stable when the normalized order number is aliased once in a derived table.
         $query = DB::query()->fromSub($baseQuery, 'order_linkage_source');
         $query->where('normalized_order_number', '<>', '');
+        $this->applyOrderLinkageSourceQuickSearchFilter($query, (string) ($filters['search'] ?? ''));
         $query->select('normalized_order_number');
         $query->selectRaw('MAX(resolved_order_number) as narudzba');
         $query->selectRaw('MAX(naziv_source) as naziv_sort');
@@ -3560,7 +3562,9 @@ class WorkOrderController extends Controller
     {
         $workOrderColumns = $this->tableColumns();
         $workOrderQuery = $this->newTableQuery();
-        $this->applyFilters($workOrderQuery, $workOrderColumns, $filters);
+        $baseFilters = $filters;
+        $baseFilters['search'] = '';
+        $this->applyFilters($workOrderQuery, $workOrderColumns, $baseFilters);
 
         $query = DB::query()->fromSub($workOrderQuery, 'wo');
         $orderColumns = $this->orderTableColumns();
@@ -3588,7 +3592,7 @@ class WorkOrderController extends Controller
             return null;
         }
 
-        $normalizedOrderExpression = $this->normalizedSqlExpression($orderNumberExpression);
+        $normalizedOrderExpression = $this->orderLinkageDisplaySqlExpression($orderNumberExpression);
         $senderColumns = $hasOrderJoin
             ? array_merge(
                 $this->qualifyColumns($this->existingColumns($orderColumns, ['acConsignee', 'acReceiver', 'acPartner']), 'ord'),
@@ -3708,6 +3712,63 @@ class WorkOrderController extends Controller
         }
     }
 
+    private function applyOrderLinkageSourceQuickSearchFilter(Builder $query, string $search): void
+    {
+        $search = trim($search);
+
+        if ($search === '') {
+            return;
+        }
+
+        $orderNumberVariants = $this->normalizeComparableIdentifiers(
+            $this->orderLinkageOrderNumberSearchVariants($search)
+        );
+        $tailSearch = $this->orderLinkageOrderNumberTailSearch($search);
+        $allowFullOrderNumberMatch = $tailSearch === ''
+            || preg_match('/\D/', $search) === 1;
+
+        $query->where(function (Builder $searchQuery) use (
+            $search,
+            $orderNumberVariants,
+            $tailSearch,
+            $allowFullOrderNumberMatch
+        ) {
+            $hasAnyClause = false;
+
+            if ($tailSearch !== '') {
+                $tailLength = strlen($tailSearch);
+
+                $searchQuery->whereRaw(
+                    "LEN(normalized_order_number) = 12 AND SUBSTRING(normalized_order_number, 7, $tailLength) = ?",
+                    [$tailSearch]
+                );
+                $hasAnyClause = true;
+            }
+
+            if ($allowFullOrderNumberMatch) {
+                foreach ($orderNumberVariants as $orderNumberVariant) {
+                    if ($hasAnyClause) {
+                        $searchQuery->orWhere('normalized_order_number', 'like', '%' . $orderNumberVariant . '%');
+                    } else {
+                        $searchQuery->where('normalized_order_number', 'like', '%' . $orderNumberVariant . '%');
+                        $hasAnyClause = true;
+                    }
+                }
+            }
+
+            if ($hasAnyClause) {
+                $searchQuery->orWhere('klijent_source', 'like', '%' . $search . '%');
+            } else {
+                $searchQuery->where('klijent_source', 'like', '%' . $search . '%');
+                $hasAnyClause = true;
+            }
+
+            if (!$hasAnyClause) {
+                $searchQuery->whereRaw('1 = 0');
+            }
+        });
+    }
+
     private function applyOrderLinkageFilters(
         Builder $query,
         array $orderColumns,
@@ -3795,9 +3856,6 @@ class WorkOrderController extends Controller
 
         $searchColumns = $this->qualifyColumns(
             $this->existingColumns($orderColumns, [
-                'acKeyView',
-                'acRefNo1',
-                'acKey',
                 'acConsignee',
                 'acReceiver',
                 'acPartner',
@@ -3809,18 +3867,28 @@ class WorkOrderController extends Controller
             ]),
             $orderAlias
         );
+        $identifierSearchColumns = $this->qualifyColumns(
+            $this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']),
+            $orderAlias
+        );
         $statusColumn = $this->firstExistingColumn($orderColumns, ['acStatusMF', 'acStatus']);
         $priorityCodeColumns = $this->qualifyColumns($this->existingColumns($orderColumns, ['anPriority']), $orderAlias);
         $statusAliases = $this->statusAliasesForSearch($search);
         $priorityCodes = $this->priorityCodesForSearch($search);
+        $orderNumberSearchVariants = $this->orderLinkageOrderNumberSearchVariants($search);
+        $normalizedOrderNumberSearchVariants = $this->normalizeComparableIdentifiers($orderNumberSearchVariants);
+        $orderNumberSuffixSearch = $this->orderLinkageOrderNumberSuffixSearch($search);
 
         $query->where(function (Builder $searchQuery) use (
             $searchColumns,
+            $identifierSearchColumns,
             $statusColumn,
             $priorityCodeColumns,
             $statusAliases,
             $priorityCodes,
             $searchVariants,
+            $normalizedOrderNumberSearchVariants,
+            $orderNumberSuffixSearch,
             $orderColumns,
             $orderAlias
         ) {
@@ -3833,6 +3901,47 @@ class WorkOrderController extends Controller
                     } else {
                         $searchQuery->where($column, 'like', '%' . $variant . '%');
                         $hasAnyClause = true;
+                    }
+                }
+            }
+
+            if ($orderNumberSuffixSearch !== '') {
+                foreach ($identifierSearchColumns as $column) {
+                    $displayExpression = $this->orderLinkageDisplayIdentifierExpression($searchQuery, $column);
+                    $suffixLength = strlen($orderNumberSuffixSearch);
+
+                    if ($hasAnyClause) {
+                        $searchQuery->orWhereRaw(
+                            "LEN($displayExpression) = 12 AND SUBSTRING($displayExpression, 7, $suffixLength) = ?",
+                            [$orderNumberSuffixSearch]
+                        );
+                    } else {
+                        $searchQuery->whereRaw(
+                            "LEN($displayExpression) = 12 AND SUBSTRING($displayExpression, 7, $suffixLength) = ?",
+                            [$orderNumberSuffixSearch]
+                        );
+                        $hasAnyClause = true;
+                    }
+                }
+            }
+
+            if ($orderNumberSuffixSearch === '') {
+                foreach ($normalizedOrderNumberSearchVariants as $normalizedVariant) {
+                    foreach ($identifierSearchColumns as $column) {
+                        $displayExpression = $this->orderLinkageDisplayIdentifierExpression($searchQuery, $column);
+
+                        if ($hasAnyClause) {
+                            $searchQuery->orWhereRaw(
+                                $displayExpression . ' like ?',
+                                ['%' . $normalizedVariant . '%']
+                            );
+                        } else {
+                            $searchQuery->whereRaw(
+                                $displayExpression . ' like ?',
+                                ['%' . $normalizedVariant . '%']
+                            );
+                            $hasAnyClause = true;
+                        }
                     }
                 }
             }
@@ -3859,7 +3968,7 @@ class WorkOrderController extends Controller
                 }
             }
 
-            if ($this->applyOrderLinkageItemSearchExists($searchQuery, $orderColumns, $searchVariants, $orderAlias, $hasAnyClause)) {
+            if ($orderNumberSuffixSearch === '' && $this->applyOrderLinkageItemSearchExists($searchQuery, $orderColumns, $searchVariants, $orderAlias, $hasAnyClause)) {
                 $hasAnyClause = true;
             }
 
@@ -3891,6 +4000,11 @@ class WorkOrderController extends Controller
             $this->existingColumns($itemColumns, ['acIdent', 'acName', 'acDescr', 'acCode', 'product_code']),
             'oi'
         );
+        $itemIdentifierColumns = $this->qualifyColumns(
+            $this->existingColumns($itemColumns, ['acIdent', 'acCode', 'product_code']),
+            'oi'
+        );
+        $normalizedSearchVariants = $this->normalizeComparableIdentifiers($searchVariants);
 
         if (empty($itemSearchColumns)) {
             return false;
@@ -3914,6 +4028,8 @@ class WorkOrderController extends Controller
         $query->{$method}(function (Builder $itemQuery) use (
             $searchVariants,
             $itemSearchColumns,
+            $itemIdentifierColumns,
+            $normalizedSearchVariants,
             $outerOrderKeyColumn,
             $orderAlias,
             $outerOrderNumberExpression,
@@ -3959,7 +4075,13 @@ class WorkOrderController extends Controller
                 }
             });
 
-            $this->buildOrderLinkageItemSearchTextGroup($itemQuery, $itemSearchColumns, $searchVariants);
+            $this->buildOrderLinkageItemSearchTextGroup(
+                $itemQuery,
+                $itemSearchColumns,
+                $itemIdentifierColumns,
+                $searchVariants,
+                $normalizedSearchVariants
+            );
         });
 
         return true;
@@ -3968,9 +4090,11 @@ class WorkOrderController extends Controller
     private function buildOrderLinkageItemSearchTextGroup(
         Builder $query,
         array $itemSearchColumns,
-        array $searchVariants
+        array $itemIdentifierColumns,
+        array $searchVariants,
+        array $normalizedSearchVariants
     ): void {
-        $query->where(function (Builder $textQuery) use ($itemSearchColumns, $searchVariants) {
+        $query->where(function (Builder $textQuery) use ($itemSearchColumns, $itemIdentifierColumns, $searchVariants, $normalizedSearchVariants) {
             $hasSearchClause = false;
 
             foreach ($searchVariants as $variant) {
@@ -3979,6 +4103,23 @@ class WorkOrderController extends Controller
                         $textQuery->orWhere($itemSearchColumn, 'like', '%' . $variant . '%');
                     } else {
                         $textQuery->where($itemSearchColumn, 'like', '%' . $variant . '%');
+                        $hasSearchClause = true;
+                    }
+                }
+            }
+
+            foreach ($normalizedSearchVariants as $normalizedVariant) {
+                foreach ($itemIdentifierColumns as $itemIdentifierColumn) {
+                    if ($hasSearchClause) {
+                        $textQuery->orWhereRaw(
+                            $this->normalizedIdentifierExpression($textQuery, $itemIdentifierColumn) . ' like ?',
+                            ['%' . $normalizedVariant . '%']
+                        );
+                    } else {
+                        $textQuery->whereRaw(
+                            $this->normalizedIdentifierExpression($textQuery, $itemIdentifierColumn) . ' like ?',
+                            ['%' . $normalizedVariant . '%']
+                        );
                         $hasSearchClause = true;
                     }
                 }
@@ -5327,7 +5468,7 @@ class WorkOrderController extends Controller
         $context['unit'] = $this->resolveScanCreateWorkOrderUnit($orderRow, $context);
         $context['quantity'] = $this->resolveScanCreateWorkOrderQuantity($orderRow, $context);
         $context['catalog_item_notice'] = $context['catalog_item_missing']
-            ? 'Sifra artikla nije pronadjena u sifrarniku. Prilikom kreiranja RN bice automatski kreirana osnovna stavka artikla.'
+            ? 'Šifra artikla nije pronađena u šifrarniku. Prilikom kreiranja RN bit će automatski kreirana osnovna stavka artikla.'
             : '';
 
         return $context;
@@ -6057,6 +6198,20 @@ class WorkOrderController extends Controller
         $wrappedColumn = $query->getGrammar()->wrap($columnIdentifier);
 
         return "UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(CAST($wrappedColumn AS NVARCHAR(64)), ''), '-', ''), ' ', ''), '/', ''), '.', ''), '_', ''))";
+    }
+
+    private function orderLinkageDisplayIdentifierExpression(Builder $query, string $columnIdentifier): string
+    {
+        $normalizedExpression = $this->normalizedIdentifierExpression($query, $columnIdentifier);
+
+        return "CASE WHEN LEN($normalizedExpression) = 13 AND SUBSTRING($normalizedExpression, 7, 1) = '0' THEN STUFF($normalizedExpression, 7, 1, '') ELSE $normalizedExpression END";
+    }
+
+    private function orderLinkageDisplaySqlExpression(string $sqlExpression): string
+    {
+        $normalizedExpression = $this->normalizedSqlExpression($sqlExpression);
+
+        return "CASE WHEN LEN($normalizedExpression) = 13 AND SUBSTRING($normalizedExpression, 7, 1) = '0' THEN STUFF($normalizedExpression, 7, 1, '') ELSE $normalizedExpression END";
     }
 
     private function normalizedSqlExpression(string $sqlExpression): string
@@ -7282,6 +7437,72 @@ class WorkOrderController extends Controller
         });
     }
 
+    private function orderLinkageOrderNumberSearchVariants(string $search): array
+    {
+        $rawSearch = trim($search);
+        $digits = preg_replace('/\D+/', '', $rawSearch);
+        $variants = [];
+
+        if (is_string($digits) && strlen($digits) === 13 && substr($digits, 6, 1) === '0') {
+            $displayDigits = $this->canonicalOrderNumberDigits($digits);
+            $variants[] = $displayDigits;
+            $variants[] = $this->formatOrderNumberDigitsForDisplay($displayDigits);
+        } else {
+            if ($rawSearch !== '') {
+                $variants[] = $rawSearch;
+            }
+
+            if (is_string($digits) && $digits !== '') {
+                $variants[] = $digits;
+                $variants[] = $this->formatOrderNumberDigitsForDisplay($digits);
+            }
+        }
+
+        return array_values(array_unique(array_filter($variants, function ($variant) {
+            return trim((string) $variant) !== '';
+        })));
+    }
+
+    private function orderLinkageOrderNumberSuffixSearch(string $search): string
+    {
+        $rawSearch = trim($search);
+
+        if (!preg_match('/^\d{4}$/', $rawSearch)) {
+            return '';
+        }
+
+        return $rawSearch;
+    }
+
+    private function orderLinkageOrderNumberTailSearch(string $search): string
+    {
+        $rawSearch = trim($search);
+
+        if (!preg_match('/^\d{1,6}$/', $rawSearch)) {
+            return '';
+        }
+
+        return $rawSearch;
+    }
+
+    private function canonicalOrderNumberDigits(string $digits): string
+    {
+        if (strlen($digits) === 13 && substr($digits, 6, 1) === '0') {
+            return substr($digits, 0, 6) . substr($digits, 7);
+        }
+
+        return $digits;
+    }
+
+    private function formatOrderNumberDigitsForDisplay(string $digits): string
+    {
+        if (strlen($digits) !== 12) {
+            return '';
+        }
+
+        return substr($digits, 0, 2) . '-' . substr($digits, 2, 4) . '-' . substr($digits, 6);
+    }
+
     private function searchVariants(string $search): array
     {
         $variants = [trim($search)];
@@ -7296,6 +7517,14 @@ class WorkOrderController extends Controller
 
             if ($formatted !== 'N/A' && !in_array($formatted, $variants, true)) {
                 $variants[] = $formatted;
+            }
+
+            if (strlen($digits) === 6) {
+                $formattedProductCode = substr($digits, 0, 2) . '-' . substr($digits, 2);
+
+                if (!in_array($formattedProductCode, $variants, true)) {
+                    $variants[] = $formattedProductCode;
+                }
             }
         }
 
@@ -10217,7 +10446,7 @@ class WorkOrderController extends Controller
     private function orderLinkageForbiddenJsonResponse(): JsonResponse
     {
         return response()->json([
-            'message' => 'Nemate dozvolu za pristup upravljanju narudzbama.',
+            'message' => 'Nemate dozvolu za pristup upravljanju narudžbama.',
             'data' => [],
         ], 403);
     }
@@ -10225,7 +10454,7 @@ class WorkOrderController extends Controller
     private function orderLinkageForbiddenHtmlResponse()
     {
         return response(
-            '<div class="alert alert-danger mb-0">' . e('Nemate dozvolu za pristup upravljanju narudzbama.') . '</div>',
+            '<div class="alert alert-danger mb-0">' . e('Nemate dozvolu za pristup upravljanju narudžbama.') . '</div>',
             403
         );
     }
