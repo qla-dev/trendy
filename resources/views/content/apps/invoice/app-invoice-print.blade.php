@@ -347,14 +347,14 @@
         <span class="meta-product-kicker">Naziv proizvoda</span>
         <span class="meta-product-title">{{ $workOrderProductName !== '' ? $workOrderProductName : '-' }}</span>
         @if($workOrderProductCode !== '')
-          <span class="meta-product-sub">Sifra proizvoda: {{ $workOrderProductCode }}</span>
+          <span class="meta-product-sub">Šifra proizvoda: {{ $workOrderProductCode }}</span>
         @endif
       </div>
     @endif
 
     <div class="meta-progress-shell">
       <div class="meta-progress-head">
-        <span>{{ $workOrderMetaProgress['label'] ?? 'Realizacija po kolicini' }}</span>
+        <span>{{ $workOrderMetaProgress['label'] ?? 'Realizacija po količini' }}</span>
         <span>{{ $workOrderMetaProgress['display'] ?? '0 %' }}</span>
       </div>
       <div class="meta-progress">
@@ -398,7 +398,7 @@
             <th>Serija</th>
             <th>Normativna osnova</th>
             <th>Aktivno</th>
-            <th>Zavrseno</th>
+            <th>Završeno</th>
             <th>VA</th>
             <th>Prim klas</th>
             <th>Sek klas</th>
@@ -543,7 +543,7 @@
       <table class="print-table">
         <thead>
           <tr>
-            <th>Dogadjaj</th>
+            <th>Događaj</th>
             <th>Vrijeme</th>
           </tr>
         </thead>

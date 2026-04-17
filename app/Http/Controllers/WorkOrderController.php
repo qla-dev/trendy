@@ -291,7 +291,7 @@ class WorkOrderController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'message' => 'Neispravan QR sadrzaj.',
+                'message' => 'Neispravan QR sadržaj.',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -421,7 +421,7 @@ class WorkOrderController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'message' => 'Neispravan QR sadrzaj.',
+                'message' => 'Neispravan QR sadržaj.',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -959,7 +959,7 @@ class WorkOrderController extends Controller
 
             if ($workOrderRow === null) {
                 return response()->json([
-                    'message' => 'Radni nalog nije pronadjen.',
+                    'message' => 'Radni nalog nije pronađen.',
                 ], 404);
             }
 
@@ -967,7 +967,7 @@ class WorkOrderController extends Controller
 
             if ($workOrderKey === '') {
                 return response()->json([
-                    'message' => 'RN kljuc nije pronadjen.',
+                    'message' => 'RN ključ nije pronađen.',
                 ], 422);
             }
 
@@ -1034,7 +1034,7 @@ class WorkOrderController extends Controller
                 $workOrderDeleteColumn = $this->firstExistingColumn($this->tableColumns(), ['acKey', 'acRefNo1']);
 
                 if ($workOrderDeleteColumn === null) {
-                    throw new \RuntimeException('Kolona za brisanje RN nije pronadjena.');
+                    throw new \RuntimeException('Kolona za brisanje RN nije pronađena.');
                 }
 
                 $workOrderDeleteValue = trim((string) ($workOrderRow[$workOrderDeleteColumn] ?? $workOrderKey));
@@ -1081,7 +1081,7 @@ class WorkOrderController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri brisanju radnog naloga.',
+                'message' => 'Greška pri brisanju radnog naloga.',
             ], 500);
         }
     }
@@ -1853,7 +1853,7 @@ class WorkOrderController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'message' => 'Neispravni podaci za planiranu potrosnju.',
+                'message' => 'Neispravni podaci za planiranu potrošnju.',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -1889,7 +1889,7 @@ class WorkOrderController extends Controller
 
             if ($quantityFactor <= 0) {
                 return response()->json([
-                    'message' => 'Količina mora biti veca od 0.',
+                    'message' => 'Količina mora biti veća od 0.',
                 ], 422);
             }
 
@@ -1898,7 +1898,7 @@ class WorkOrderController extends Controller
 
             if ($workOrderKey === '') {
                 return response()->json([
-                    'message' => 'RN kljuc nije pronađen.',
+                    'message' => 'RN ključ nije pronađen.',
                 ], 422);
             }
 
@@ -2416,7 +2416,7 @@ class WorkOrderController extends Controller
 
             if (empty($insertedRows)) {
                 return response()->json([
-                    'message' => 'Nema stavki za snimanje planirane potrosnje.',
+                    'message' => 'Nema stavki za snimanje planirane potrošnje.',
                 ], 422);
             }
 
@@ -2426,20 +2426,20 @@ class WorkOrderController extends Controller
             $insertedCount = count(array_filter($insertedRows, function (array $row) {
                 return (string) ($row['action'] ?? '') !== 'updated';
             }));
-            $responseMessage = 'Planirana potrosnja je uspjesno sačuvana.';
+            $responseMessage = 'Planirana potrošnja je uspješno sačuvana.';
 
             if ($saveMode === 'barcode') {
                 if ($updatedCount > 0 && $insertedCount > 0) {
                     $responseMessage = 'Barcode materijal je obrađen. Ažurirano: ' . $updatedCount . ', dodano: ' . $insertedCount . '.';
                 } elseif ($updatedCount > 0) {
-                    $responseMessage = 'Barcode materijal je uspjesno ažuriran na radnom nalogu.';
+                    $responseMessage = 'Barcode materijal je uspješno ažuriran na radnom nalogu.';
                 } elseif ($insertedCount > 0) {
                     $responseMessage = 'Barcode materijal je uspješno dodan na radni nalog.';
                 }
             }
 
             return response()->json([
-                'message' => 'Planirana potrošnja je uspjesno sačuvana.',
+                'message' => 'Planirana potrošnja je uspješno sačuvana.',
                 'message' => $responseMessage,
                 'data' => [
                     'work_order_id' => $id,
@@ -2519,13 +2519,13 @@ class WorkOrderController extends Controller
 
             if ($workOrderKey === '') {
                 return response()->json([
-                    'message' => 'RN kljuc nije pronađen.',
+                    'message' => 'RN ključ nije pronađen.',
                 ], 422);
             }
 
             if (!in_array('acKey', $columns, true)) {
                 return response()->json([
-                    'message' => 'Tabela stavki nema RN kljuc.',
+                    'message' => 'Tabela stavki nema RN ključ.',
                 ], 500);
             }
 
@@ -2561,7 +2561,7 @@ class WorkOrderController extends Controller
                 $deleteQuery->where('anNo', (int) $itemNo);
             } else {
                 return response()->json([
-                    'message' => 'Nije moguce odrediti stavku za brisanje.',
+                    'message' => 'Nije moguće odrediti stavku za brisanje.',
                 ], 422);
             }
 
@@ -2697,7 +2697,7 @@ class WorkOrderController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri brisanju stavke planirane potrosnje.',
+                'message' => 'Greška pri brisanju stavke planirane potrošnje.',
             ], 500);
         }
     }
@@ -5879,7 +5879,7 @@ class WorkOrderController extends Controller
         }
 
         $now = Carbon::now();
-        $priorityLabel = (string) ($this->deliveryPriorityMap()[5] ?? '5 - Uobicajeni prioritet');
+        $priorityLabel = (string) ($this->deliveryPriorityMap()[5] ?? '5 - Uobičajeni prioritet');
         $productCode = trim((string) ($orderContext['product_code'] ?? ''));
         $productName = trim((string) ($orderContext['product_name'] ?? ''));
         $orderNumber = trim((string) ($orderContext['order_number'] ?? ''));
@@ -5968,7 +5968,7 @@ class WorkOrderController extends Controller
             $note .= ' / poz ' . $orderContext['order_position'];
         }
         if ($productCode !== '') {
-            $note .= ' / sifra ' . $productCode;
+            $note .= ' / šifra ' . $productCode;
         }
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acNote', $note, false);
 
@@ -6549,8 +6549,8 @@ class WorkOrderController extends Controller
             ['label' => 'Popravka', 'value' => $this->formatMetaNumber($repairQty), 'unit' => $unit],
             ['label' => 'Plan otpad', 'value' => $this->formatMetaNumber($planWasteQty), 'unit' => $unit],
             ['label' => 'Otpad', 'value' => $this->formatMetaNumber($wasteQty), 'unit' => $unit],
-            ['label' => 'Plan skart', 'value' => $this->formatMetaNumber($planScrapQty), 'unit' => $unit],
-            ['label' => 'Skart', 'value' => $this->formatMetaNumber($scrapQty), 'unit' => $unit],
+            ['label' => 'Plan škart', 'value' => $this->formatMetaNumber($planScrapQty), 'unit' => $unit],
+            ['label' => 'Škart', 'value' => $this->formatMetaNumber($scrapQty), 'unit' => $unit],
             ['label' => 'Vrijeme rada', 'value' => $this->formatMetaNumber($workTime), 'unit' => 'h'],
             ['label' => 'Vrijeme protoka', 'value' => $this->formatMetaNumber($throTime), 'unit' => 'h'],
             ['label' => 'Stavke', 'value' => (string) $itemTotal, 'unit' => ''],
@@ -6562,7 +6562,7 @@ class WorkOrderController extends Controller
             ['label' => 'Datum naloga', 'raw' => $this->value($raw, ['adDate'], null)],
             ['label' => 'Planirani start', 'raw' => $this->value($raw, ['adSchedStartTime'], null)],
             ['label' => 'Planirani kraj', 'raw' => $this->value($raw, ['adSchedEndTime'], null)],
-            ['label' => 'Zavrsetak WO', 'raw' => $this->value($raw, ['adWOFinishDate'], null)],
+            ['label' => 'Završetak WO', 'raw' => $this->value($raw, ['adWOFinishDate'], null)],
             ['label' => 'Datum veze', 'raw' => $this->value($raw, ['adLnkDate'], null)],
             ['label' => 'Vrijeme unosa', 'raw' => $this->value($raw, ['adTimeIns'], null)],
             ['label' => 'Vrijeme izmjene', 'raw' => $this->value($raw, ['adTimeChg'], null)],
@@ -10037,7 +10037,7 @@ class WorkOrderController extends Controller
         if (in_array($matchType, ['direct', 'mapped'], true)) {
             return $hasPositionLink
                 ? ['label' => 'Puna veza', 'tone' => 'success']
-                : ['label' => 'Djelimicna veza', 'tone' => 'warning'];
+                : ['label' => 'Djelimična veza', 'tone' => 'warning'];
         }
 
         return [

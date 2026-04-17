@@ -33,7 +33,7 @@
           <div class="material-create-field-card">
             <label class="form-label" for="material-create-warehouse-input">Skladište</label>
             <select class="form-select" id="material-create-warehouse-input">
-              <option value="">Odaberite skladiste</option>
+              <option value="">Odaberite skladište</option>
               @foreach(($stockWarehouseOptions ?? []) as $warehouseName)
                 <option value="{{ $warehouseName }}">{{ $warehouseName }}</option>
               @endforeach
@@ -54,7 +54,7 @@
         </div>
 
         <div class="material-create-help" id="material-create-help-text">
-          Novi materijal ce biti upisan u katalog, a početna zaliha ce odmah biti evidentirana na odabranom skladištu.
+          Novi materijal će biti upisan u katalog, a početna zaliha će odmah biti evidentirana na odabranom skladištu.
         </div>
       </div>
       <div class="modal-footer">

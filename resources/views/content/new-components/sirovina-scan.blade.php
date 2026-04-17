@@ -253,7 +253,7 @@
                           <tr>
                             <th class="text-center" style="width: 46px;">#</th>
                             <th style="width: 70px;">Poz</th>
-                            <th style="width: 210px;">Sifra</th>
+                            <th style="width: 210px;">Šifra</th>
                             <th>Opis</th>
                             <th style="width: 120px;" class="text-end">Zaliha</th>
                             <th style="width: 100px;" class="text-center">MJ</th>
@@ -262,7 +262,7 @@
                         </thead>
                         <tbody id="bom-all-items-body">
                           <tr>
-                            <td colspan="7" class="text-center text-white-50 py-2">Ucitajte stavke iz odabranog prikaza.</td>
+                            <td colspan="7" class="text-center text-white-50 py-2">Učitajte stavke iz odabranog prikaza.</td>
                           </tr>
                         </tbody>
                       </table>
@@ -3544,7 +3544,7 @@
           '<tr>' +
             '<th class="text-center" style="width: 46px;">#</th>' +
             '<th style="width: 70px;">Poz</th>' +
-            '<th style="width: 210px;">Sifra</th>' +
+            '<th style="width: 210px;">Šifra</th>' +
             '<th>Opis</th>' +
             '<th style="width: 120px;" class="text-end">Zaliha</th>' +
             '<th style="width: 100px;" class="text-center">MJ</th>' +
@@ -4398,7 +4398,7 @@
                 '<div class="fine-adjust-note-stack">' +
                   '<div class="fine-adjust-material-toggle ' + (mode === 'aluminum' ? 'is-aluminum' : 'is-steel') + '">' +
                     '<span class="fine-adjust-material-label is-aluminum"><i class="fa fa-cubes"></i><span>Alumijum</span></span>' +
-                    '<button type="button" class="fine-adjust-material-switch" data-row="' + rowIndex + '" aria-label="Prebaci materijal izmedu Alumijuma i \u010Celika">' +
+                    '<button type="button" class="fine-adjust-material-switch" data-row="' + rowIndex + '" aria-label="Prebaci materijal između Alumijuma i \u010Celika">' +
                       '<span class="fine-adjust-material-switch-thumb"></span>' +
                     '</button>' +
                     '<span class="fine-adjust-material-label is-steel"><i class="fa fa-industry"></i><span>\u010Celik</span></span>' +
@@ -4726,7 +4726,7 @@
                 '<div class="fine-adjust-note-stack' + (noteLocked ? ' is-locked' : '') + (showMaterialToggle ? '' : ' is-material-hidden') + '">' +
                   '<div class="fine-adjust-material-toggle ' + (mode === 'aluminum' ? 'is-aluminum' : 'is-steel') + (showMaterialToggle ? '' : ' d-none') + '">' +
                     '<span class="fine-adjust-material-label is-aluminum"><i class="fa fa-cubes"></i><span>Alumijum</span></span>' +
-                    '<button type="button" class="fine-adjust-material-switch" data-row="' + rowIndex + '" aria-label="Prebaci materijal izmedu Alumijuma i \u010Celika">' +
+                    '<button type="button" class="fine-adjust-material-switch" data-row="' + rowIndex + '" aria-label="Prebaci materijal između Alumijuma i \u010Celika">' +
                       '<span class="fine-adjust-material-switch-thumb"></span>' +
                     '</button>' +
                     '<span class="fine-adjust-material-label is-steel"><i class="fa fa-industry"></i><span>\u010Celik</span></span>' +
@@ -5225,7 +5225,7 @@
       }
 
       if (!Number.isFinite(quantity) || quantity <= 0) {
-        notify('warning', 'Neispravna količina', 'Unesite količinu vecću od 0');
+        notify('warning', 'Neispravna količina', 'Unesite količinu veću od 0');
         return null;
       }
 

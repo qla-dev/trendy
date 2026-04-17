@@ -875,7 +875,7 @@
     function parseWorkOrderIdFromQr(rawText) {
       var text = (rawText || '').trim();
       if (!text) {
-        return { id: null, error: 'Prazan QR sadrzaj.' };
+        return { id: null, error: 'Prazan QR sadržaj.' };
       }
 
       var orderLocator = parseOrderLocatorToken(text);
@@ -1188,7 +1188,7 @@
       }
 
       if (!response.ok) {
-        var errorMessage = data && data.message ? data.message : 'Neuspjesan odgovor servera.';
+        var errorMessage = data && data.message ? data.message : 'Neuspješan odgovor servera.';
 
         if (data && data.debug && Array.isArray(data.debug.messages) && data.debug.messages.length > 0) {
           errorMessage += ' [' + data.debug.messages[0] + ']';
@@ -1393,7 +1393,7 @@
           var resolvedQuantity = parsePromptQuantityValue(quantityInput ? quantityInput.value : '');
 
           if (resolvedQuantity === null) {
-            Swal.showValidationMessage('Unesite kolicinu vecu od 0.');
+            Swal.showValidationMessage('Unesite količinu veću od 0.');
             return false;
           }
 

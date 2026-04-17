@@ -3127,7 +3127,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           Swal.fire(swalWithTheme({
             icon: 'warning',
             title: 'Nedostaje identifikator',
-            text: 'Stavku nije moguce identifikovati za brisanje.'
+            text: 'Stavku nije moguće identifikovati za brisanje.'
           }));
           return;
         }
@@ -3146,7 +3146,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
         Swal.fire(swalWithTheme({
           title: 'Ukloniti stavku?',
-          text: componentCode ? ('Stavka: ' + componentCode) : 'Ova stavka ce biti uklonjena iz radnog naloga.',
+          text: componentCode ? ('Stavka: ' + componentCode) : 'Ova stavka će biti uklonjena iz radnog naloga.',
           icon: 'warning',
           showCancelButton: true,
           confirmButtonText: 'Ukloni',
@@ -3176,13 +3176,13 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
               Swal.fire(swalWithTheme({
                 icon: 'success',
                 title: 'Stavka obrisana',
-                text: response && response.message ? response.message : 'Stavka je uspjesno obrisana.'
+                text: response && response.message ? response.message : 'Stavka je uspješno obrisana.'
               }));
             })
             .catch(function (error) {
               Swal.fire(swalWithTheme({
                 icon: 'error',
-                title: 'Greska',
+                title: 'Greška',
                 text: error && error.message ? error.message : 'Brisanje stavke nije uspjelo.'
               }));
             })

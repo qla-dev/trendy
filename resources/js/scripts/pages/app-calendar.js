@@ -601,8 +601,8 @@ document.addEventListener('DOMContentLoaded', function () {
         'end-date': { required: true }
       },
       messages: {
-        'start-date': { required: 'Datum pocetka je obavezan' },
-        'end-date': { required: 'Datum zavrsetka je obavezan' }
+        'start-date': { required: 'Datum početka je obavezan' },
+        'end-date': { required: 'Datum završetka je obavezan' }
       }
     });
   }
