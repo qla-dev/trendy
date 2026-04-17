@@ -55,4 +55,9 @@ class WorkOrder extends Model
     {
         return $this->hasMany(Operation::class);
     }
+
+    public function orderItemLinks()
+    {
+        return $this->hasMany(WorkOrderOrderItemLink::class, 'acKey', 'acKey');
+    }
 }

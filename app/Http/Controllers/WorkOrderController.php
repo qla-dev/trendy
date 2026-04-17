@@ -45,8 +45,12 @@ class WorkOrderController extends Controller
     private ?array $deliveryPriorityMap = null;
     private ?array $orderTableColumnsCache = null;
     private ?array $orderItemTableColumnsCache = null;
+    private ?array $workOrderOrderItemLinkTableColumnsCache = null;
+    private ?array $workOrderOrderItemLinkInsertTableColumnsCache = null;
     private ?array $tableNonInsertableColumnsCache = null;
     private ?array $tableStringLengthMapCache = null;
+    private ?string $workOrderOrderItemLinkTableCache = null;
+    private ?string $workOrderOrderItemLinkInsertTableCache = null;
     private array $linkedOrderCache = [];
 
     public function invoiceList()
@@ -287,7 +291,7 @@ class WorkOrderController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'message' => 'Neispravan QR sadrzaj.',
+                'message' => 'Neispravan QR sadržaj.',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -339,7 +343,7 @@ class WorkOrderController extends Controller
 
             if ($orderRow === null) {
                 return response()->json([
-                    'message' => 'Ne postoji ni radni nalog ni narudzba za skenirane parametre.',
+                    'message' => 'Ne postoji ni radni nalog ni narudžba za skenirane parametre.',
                 ], 404);
             }
 
@@ -402,7 +406,7 @@ class WorkOrderController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri provjeri skeniranog QR koda.',
+                'message' => 'Greška pri provjeri skeniranog QR koda.',
             ], 500);
         }
     }
@@ -417,7 +421,7 @@ class WorkOrderController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'message' => 'Neispravan QR sadrzaj.',
+                'message' => 'Neispravan QR sadržaj.',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -443,7 +447,7 @@ class WorkOrderController extends Controller
 
         if ($orderLocator === null) {
             return response()->json([
-                'message' => 'Kreiranje RN je moguce samo za QR sa narudzbom, pozicijom i sifrom.',
+                'message' => 'Kreiranje RN je moguće samo za QR sa narudžbom, pozicijom i šifrom.',
             ], 422);
         }
 
@@ -522,6 +526,16 @@ class WorkOrderController extends Controller
 
                 $this->newTableQuery()->insert($payload);
 
+                // Create link between WorkOrder and OrderItem
+                $linkPayload = $this->buildWorkOrderOrderItemLinkPayload(
+                    (string) ($payload['acKey'] ?? ''),
+                    $orderContext,
+                    $request->user()
+                );
+                if (!empty($linkPayload)) {
+                    $this->newWorkOrderOrderItemLinkInsertTableQuery()->insert($linkPayload);
+                }
+
                 $lookupIdentifier = (string) ($payload['acRefNo1'] ?? ($payload['acKey'] ?? $numberContext['next_display']));
                 $debugContext['lookup_identifier_after_insert'] = $lookupIdentifier;
                 $createdRow = $this->findWorkOrderRow($lookupIdentifier);
@@ -537,7 +551,7 @@ class WorkOrderController extends Controller
                 }
 
                 if ($createdRow === null) {
-                    throw new \RuntimeException('RN je kreiran, ali ga nije moguce ponovo ucitati.');
+                    throw new \RuntimeException('RN je kreiran, ali ga nije moguće ponovo učitati.');
                 }
 
                 return [
@@ -562,8 +576,8 @@ class WorkOrderController extends Controller
 
             return response()->json([
                 'message' => $created
-                    ? 'Radni nalog je uspjesno kreiran.'
-                    : 'Radni nalog vec postoji i bice otvoren.',
+                    ? 'Radni nalog je uspješno kreiran.'
+                    : 'Radni nalog već postoji i bit će otvoren.',
                 'data' => [
                     'status' => $created ? 'created' : 'existing',
                     'created' => $created,
@@ -604,11 +618,12 @@ class WorkOrderController extends Controller
                 'debug_context' => $debugContext,
             ]);
 
-            $statusCode = str_contains(strtolower($exception->getMessage()), 'narudzba') ? 404 : 500;
+            $normalizedExceptionMessage = strtolower(Str::ascii($exception->getMessage()));
+            $statusCode = str_contains($normalizedExceptionMessage, 'narudzba') ? 404 : 500;
             $response = [
                 'message' => $statusCode === 404
-                    ? 'Narudzba za skenirane parametre nije pronadjena.'
-                    : 'Greska pri kreiranju radnog naloga iz narudzbe.',
+                    ? 'Narudžba za skenirane parametre nije pronađena.'
+                    : 'Greška pri kreiranju radnog naloga iz narudžbe.',
             ];
 
             if (config('app.debug')) {
@@ -944,7 +959,7 @@ class WorkOrderController extends Controller
 
             if ($workOrderRow === null) {
                 return response()->json([
-                    'message' => 'Radni nalog nije pronadjen.',
+                    'message' => 'Radni nalog nije pronađen.',
                 ], 404);
             }
 
@@ -952,7 +967,7 @@ class WorkOrderController extends Controller
 
             if ($workOrderKey === '') {
                 return response()->json([
-                    'message' => 'RN kljuc nije pronadjen.',
+                    'message' => 'RN ključ nije pronađen.',
                 ], 422);
             }
 
@@ -1019,7 +1034,7 @@ class WorkOrderController extends Controller
                 $workOrderDeleteColumn = $this->firstExistingColumn($this->tableColumns(), ['acKey', 'acRefNo1']);
 
                 if ($workOrderDeleteColumn === null) {
-                    throw new \RuntimeException('Kolona za brisanje RN nije pronadjena.');
+                    throw new \RuntimeException('Kolona za brisanje RN nije pronađena.');
                 }
 
                 $workOrderDeleteValue = trim((string) ($workOrderRow[$workOrderDeleteColumn] ?? $workOrderKey));
@@ -1066,7 +1081,358 @@ class WorkOrderController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri brisanju radnog naloga.',
+                'message' => 'Greška pri brisanju radnog naloga.',
+            ], 500);
+        }
+    }
+
+    protected function ordersLinkageIndex(Request $request)
+    {
+        if (!$this->canAccessOrderLinkage($request->user())) {
+            return redirect()->route('misc-not-authorized');
+        }
+
+        $pageConfigs = ['pageHeader' => false];
+
+        return view('/content/apps/orders/app-orders', [
+            'pageConfigs' => $pageConfigs,
+            'ordersLinkageDataUrl' => route('app-orders-data'),
+            'ordersLinkagePositionsUrl' => route('app-orders-positions'),
+            'ordersLinkageWorkOrdersUrl' => route('app-orders-work-orders'),
+            'ordersLinkageWorkOrdersApiUrl' => route('app-orders-radni-nalozi'),
+            'ordersLinkageDeleteUrl' => route('app-orders-destroy'),
+            'canDeleteLinkedOrders' => $this->canDeleteWorkOrders($request->user()),
+        ]);
+    }
+
+    protected function ordersLinkageData(Request $request): JsonResponse
+    {
+        if (!$this->canAccessOrderLinkage($request->user())) {
+            return $this->orderLinkageForbiddenJsonResponse();
+        }
+
+        try {
+            $requestedLimit = (int) $request->input('limit', $request->input('length', config('workorders.default_limit', 10)));
+            $requestedPage = (int) $request->input('page', 0);
+            $requestedStart = (int) $request->input('start', 0);
+
+            if ($requestedPage < 1) {
+                $resolvedLength = max(1, (int) $request->input('length', $requestedLimit));
+                $requestedPage = (int) floor(max(0, $requestedStart) / $resolvedLength) + 1;
+            }
+
+            $filters = $this->extractOrderLinkageFilters($request);
+            $sort = $this->extractOrderLinkageSort($request);
+            $result = $this->fetchOrdersLinkagePage($requestedLimit, $requestedPage, $filters, $sort);
+
+            return response()->json([
+                'draw' => (int) $request->input('draw', 0),
+                'data' => $result['data'] ?? [],
+                'meta' => $result['meta'] ?? [
+                    'count' => 0,
+                    'page' => 1,
+                    'limit' => $this->resolveLimit($requestedLimit),
+                    'total' => 0,
+                    'filtered_total' => 0,
+                    'last_page' => 1,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Order linkage list failed.', [
+                'connection' => config('database.default'),
+                'orders_table' => $this->qualifiedOrderTableName(),
+                'order_items_table' => $this->qualifiedOrderItemTableName(),
+                'work_orders_table' => $this->qualifiedTableName(),
+                'filters' => $request->except(['_token']),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greška pri učitavanju narudžbi.',
+                'data' => [],
+                'meta' => [
+                    'count' => 0,
+                    'page' => 1,
+                    'limit' => $this->resolveLimit((int) $request->input('limit', $request->input('length', config('workorders.default_limit', 10)))),
+                    'total' => 0,
+                    'filtered_total' => 0,
+                    'last_page' => 1,
+                ],
+            ], 500);
+        }
+    }
+
+    protected function ordersLinkagePositions(Request $request)
+    {
+        if (!$this->canAccessOrderLinkage($request->user())) {
+            return $this->orderLinkageForbiddenHtmlResponse();
+        }
+
+        $validator = Validator::make($request->all(), [
+            'order_number' => ['required', 'string', 'max:255'],
+        ]);
+
+        if ($validator->fails()) {
+            return response(
+                '<div class="alert alert-danger mb-0">' . e('Broj narudžbe je obavezan.') . '</div>',
+                422
+            );
+        }
+
+        $normalizedOrderNumber = $this->normalizeComparableIdentifier(
+            (string) ($validator->validated()['order_number'] ?? '')
+        );
+
+        if ($normalizedOrderNumber === '') {
+            return response(
+                '<div class="alert alert-danger mb-0">' . e('Neispravan broj narudžbe.') . '</div>',
+                422
+            );
+        }
+
+        try {
+            $details = $this->buildOrdersLinkageDetails($normalizedOrderNumber);
+
+            if (empty($details)) {
+                return response(
+                    '<div class="alert alert-warning mb-0">' . e('Narudžba nije pronađena.') . '</div>',
+                    404
+                );
+            }
+
+            return view('content.apps.orders.partials.order-positions-modal-content', [
+                'orderSummary' => $details['summary'],
+                'links' => $details['links'],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Order linkage relations modal failed.', [
+                'connection' => config('database.default'),
+                'orders_table' => $this->qualifiedOrderTableName(),
+                'order_items_table' => $this->qualifiedOrderItemTableName(),
+                'links_table' => $this->qualifiedWorkOrderOrderItemLinkTableName(),
+                'order_number' => $normalizedOrderNumber,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response(
+                '<div class="alert alert-danger mb-0">' . e('Greška pri učitavanju veza narudžbe.') . '</div>',
+                500
+            );
+        }
+    }
+
+    protected function ordersLinkageWorkOrders(Request $request)
+    {
+        if (!$this->canAccessOrderLinkage($request->user())) {
+            return $this->orderLinkageForbiddenHtmlResponse();
+        }
+
+        $validator = Validator::make($request->all(), [
+            'order_number' => ['required', 'string', 'max:255'],
+        ]);
+
+        if ($validator->fails()) {
+            return response(
+                '<div class="alert alert-danger mb-0">' . e('Broj narudžbe je obavezan.') . '</div>',
+                422
+            );
+        }
+
+        $normalizedOrderNumber = $this->normalizeComparableIdentifier(
+            (string) ($validator->validated()['order_number'] ?? '')
+        );
+
+        if ($normalizedOrderNumber === '') {
+            return response(
+                '<div class="alert alert-danger mb-0">' . e('Neispravan broj narudžbe.') . '</div>',
+                422
+            );
+        }
+
+        try {
+            $details = $this->buildOrdersLinkageDetails($normalizedOrderNumber);
+
+            if (empty($details)) {
+                return response(
+                    '<div class="alert alert-warning mb-0">' . e('Narudžba nije pronađena.') . '</div>',
+                    404
+                );
+            }
+
+            return view('content.apps.orders.partials.order-work-orders-modal-content', [
+                'orderSummary' => $details['summary'],
+                'workOrders' => $details['work_orders'],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Order linkage work orders modal failed.', [
+                'connection' => config('database.default'),
+                'orders_table' => $this->qualifiedOrderTableName(),
+                'work_orders_table' => $this->qualifiedTableName(),
+                'order_number' => $normalizedOrderNumber,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response(
+                '<div class="alert alert-danger mb-0">' . e('Greška pri učitavanju radnih naloga narudžbe.') . '</div>',
+                500
+            );
+        }
+    }
+
+    protected function ordersLinkageWorkOrdersApi(Request $request): JsonResponse
+    {
+        if (!$this->canAccessOrderLinkage($request->user())) {
+            return $this->orderLinkageForbiddenJsonResponse();
+        }
+
+        $orderNumber = trim((string) $request->query('narudzba', $request->query('order_number', '')));
+        $normalizedOrderNumber = $this->normalizeComparableIdentifier($orderNumber);
+
+        if ($normalizedOrderNumber === '') {
+            return response()->json([
+                'message' => 'Broj narudžbe je obavezan.',
+                'data' => [],
+            ], 422);
+        }
+
+        try {
+            return response()->json($this->fetchLinkedWorkOrdersByOrderNumber($normalizedOrderNumber));
+        } catch (Throwable $exception) {
+            Log::error('Order linkage RN API failed.', [
+                'connection' => config('database.default'),
+                'work_orders_table' => $this->qualifiedTableName(),
+                'orders_table' => $this->qualifiedOrderTableName(),
+                'order_number' => $normalizedOrderNumber,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greška pri učitavanju radnih naloga za odabranu narudžbu.',
+                'data' => [],
+            ], 500);
+        }
+    }
+
+    protected function destroyLinkedOrder(Request $request): JsonResponse
+    {
+        if (!$this->canDeleteWorkOrders($request->user())) {
+            return response()->json([
+                'message' => 'Nemate dozvolu za brisanje narudžbe.',
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'order_number' => ['required', 'string', 'max:255'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Broj narudžbe je obavezan.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $normalizedOrderNumber = $this->normalizeComparableIdentifier(
+            (string) ($validator->validated()['order_number'] ?? '')
+        );
+
+        if ($normalizedOrderNumber === '') {
+            return response()->json([
+                'message' => 'Neispravan broj narudžbe.',
+            ], 422);
+        }
+
+        try {
+            $orderRows = $this->fetchOrderHeadersForLinkage($normalizedOrderNumber);
+
+            if (empty($orderRows)) {
+                return response()->json([
+                    'message' => 'Narudžba nije pronađena.',
+                ], 404);
+            }
+
+            $details = $this->buildOrdersLinkageDetails($normalizedOrderNumber);
+            $linkedWorkOrders = (array) ($details['work_orders'] ?? []);
+
+            if (!empty($linkedWorkOrders)) {
+                return response()->json([
+                    'message' => 'Narudžba ima povezane radne naloge i ne može biti obrisana sa ove stranice.',
+                ], 422);
+            }
+
+            $orderColumns = $this->orderTableColumns();
+            $orderKeyColumn = $this->firstExistingColumn($orderColumns, ['acKey']);
+            $orderKeys = array_values(array_unique(array_filter(array_map(function (array $row) {
+                return trim((string) $this->valueTrimmed($row, ['acKey'], ''));
+            }, $orderRows))));
+
+            if ($orderKeyColumn === null || empty($orderKeys)) {
+                return response()->json([
+                    'message' => 'Narudžba nema raspoloživ ključ za sigurno brisanje.',
+                ], 422);
+            }
+
+            $deletedCounts = DB::transaction(function () use ($orderKeys, $orderKeyColumn) {
+                $deleted = [
+                    'order_items' => 0,
+                    'orders' => 0,
+                ];
+
+                $orderItemColumns = $this->orderItemTableColumns();
+                $orderItemKeyColumns = $this->existingColumns(
+                    $orderItemColumns,
+                    ['acKey', 'acLnkKey', 'acOrderKey', 'order_key']
+                );
+
+                if (!empty($orderItemKeyColumns)) {
+                    $deleted['order_items'] = $this->newOrderItemTableQuery()
+                        ->where(function (Builder $query) use ($orderItemKeyColumns, $orderKeys) {
+                            foreach ($orderItemKeyColumns as $index => $orderItemKeyColumn) {
+                                $method = $index === 0 ? 'whereIn' : 'orWhereIn';
+                                $query->{$method}($orderItemKeyColumn, $orderKeys);
+                            }
+                        })
+                        ->delete();
+                }
+
+                $deleted['orders'] = $this->newOrderTableQuery()
+                    ->whereIn($orderKeyColumn, $orderKeys)
+                    ->delete();
+
+                if ($deleted['orders'] < 1) {
+                    throw new \RuntimeException('Narudžba nije obrisana.');
+                }
+
+                return $deleted;
+            }, 3);
+
+            Log::info('Linked order deleted from order linkage page.', [
+                'order_number' => $normalizedOrderNumber,
+                'order_keys' => $orderKeys,
+                'deleted_counts' => $deletedCounts,
+                'user_id' => (int) ($request->user()->id ?? 0),
+                'username' => (string) ($request->user()->username ?? ''),
+            ]);
+
+            return response()->json([
+                'message' => 'Narudžba je obrisana.',
+                'data' => [
+                    'order_number' => $normalizedOrderNumber,
+                    'order_keys' => $orderKeys,
+                    'deleted_counts' => $deletedCounts,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Linked order delete failed from order linkage page.', [
+                'connection' => config('database.default'),
+                'orders_table' => $this->qualifiedOrderTableName(),
+                'order_items_table' => $this->qualifiedOrderItemTableName(),
+                'order_number' => $normalizedOrderNumber,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greška pri brisanju narudžbe.',
             ], 500);
         }
     }
@@ -1487,7 +1853,7 @@ class WorkOrderController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'message' => 'Neispravni podaci za planiranu potrosnju.',
+                'message' => 'Neispravni podaci za planiranu potrošnju.',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -1523,7 +1889,7 @@ class WorkOrderController extends Controller
 
             if ($quantityFactor <= 0) {
                 return response()->json([
-                    'message' => 'Količina mora biti veca od 0.',
+                    'message' => 'Količina mora biti veća od 0.',
                 ], 422);
             }
 
@@ -1532,7 +1898,7 @@ class WorkOrderController extends Controller
 
             if ($workOrderKey === '') {
                 return response()->json([
-                    'message' => 'RN kljuc nije pronađen.',
+                    'message' => 'RN ključ nije pronađen.',
                 ], 422);
             }
 
@@ -1824,6 +2190,10 @@ class WorkOrderController extends Controller
 
                     if ($manualPlanQty !== null) {
                         $plannedQty = max(0, $manualPlanQty);
+                    } elseif ($saveMode === 'barcode') {
+                        // Barcode/weight-confirm mode always treats entered quantity as the absolute value,
+                        // not as a BOM multiplier.
+                        $plannedQty = $quantityFactor;
                     } elseif ($source === 'bom') {
                         // Fallback to entered quantity when BOM gross qty is 0 to avoid saving 0 by default.
                         $plannedQty = abs($baseQty) > 0.000001 ? ($baseQty * $quantityFactor) : $quantityFactor;
@@ -1844,7 +2214,7 @@ class WorkOrderController extends Controller
                     if ($saveMode === 'barcode' && $itemKind === 'materials' && array_key_exists($componentKey, $existingMaterialItemsByIdent)) {
                         $existingRow = $existingMaterialItemsByIdent[$componentKey];
                         $existingQty = $this->workOrderItemQuantity($existingRow);
-                        $updatedQty = $existingQty + $plannedQty;
+                        $updatedQty = $plannedQty;
                         $updatePayload = [
                             'anPlanQty' => $updatedQty,
                             'anQty' => $updatedQty,
@@ -1917,7 +2287,7 @@ class WorkOrderController extends Controller
 
                     $statementMarker = $saveMode === 'barcode'
                         ? 'PLANNED_BARCODE'
-                        : ($source === 'bom' ? 'PLANNED_BOM' : 'PLANNED_RAW');
+                        : ($source === 'bom' ? 'PLANNED_BOM_PENDING' : 'PLANNED_RAW_PENDING');
                     $insertPayload = [
                         'acKey' => $workOrderKey,
                         'anVariant' => $variant,
@@ -1971,7 +2341,7 @@ class WorkOrderController extends Controller
                         'acOperationType' => $operationType,
                         'item_kind' => $itemKind,
                         'anGrossQty' => $baseQty,
-                        'stock_consumed_qty' => $plannedQty,
+                        'stock_consumed_qty' => $saveMode === 'barcode' ? $plannedQty : 0.0,
                         'anPlanQty' => $plannedQty,
                     ];
 
@@ -1987,7 +2357,7 @@ class WorkOrderController extends Controller
                 $stockAdjustmentResults = [];
                 $stockAdjustments = $this->buildPlannedConsumptionStockAdjustments($saved);
 
-                if (!empty($stockAdjustments)) {
+                if ($saveMode === 'barcode' && !empty($stockAdjustments)) {
                     $stockAdjustmentResults = Material::bulkAdjustStock(
                         $stockAdjustments,
                         $userId,
@@ -2046,7 +2416,7 @@ class WorkOrderController extends Controller
 
             if (empty($insertedRows)) {
                 return response()->json([
-                    'message' => 'Nema stavki za snimanje planirane potrosnje.',
+                    'message' => 'Nema stavki za snimanje planirane potrošnje.',
                 ], 422);
             }
 
@@ -2056,20 +2426,20 @@ class WorkOrderController extends Controller
             $insertedCount = count(array_filter($insertedRows, function (array $row) {
                 return (string) ($row['action'] ?? '') !== 'updated';
             }));
-            $responseMessage = 'Planirana potrosnja je uspjesno sačuvana.';
+            $responseMessage = 'Planirana potrošnja je uspješno sačuvana.';
 
             if ($saveMode === 'barcode') {
                 if ($updatedCount > 0 && $insertedCount > 0) {
                     $responseMessage = 'Barcode materijal je obrađen. Ažurirano: ' . $updatedCount . ', dodano: ' . $insertedCount . '.';
                 } elseif ($updatedCount > 0) {
-                    $responseMessage = 'Barcode materijal je uspjesno ažuriran na radnom nalogu.';
+                    $responseMessage = 'Barcode materijal je uspješno ažuriran na radnom nalogu.';
                 } elseif ($insertedCount > 0) {
                     $responseMessage = 'Barcode materijal je uspješno dodan na radni nalog.';
                 }
             }
 
             return response()->json([
-                'message' => 'Planirana potrošnja je uspjesno sačuvana.',
+                'message' => 'Planirana potrošnja je uspješno sačuvana.',
                 'message' => $responseMessage,
                 'data' => [
                     'work_order_id' => $id,
@@ -2149,13 +2519,13 @@ class WorkOrderController extends Controller
 
             if ($workOrderKey === '') {
                 return response()->json([
-                    'message' => 'RN kljuc nije pronađen.',
+                    'message' => 'RN ključ nije pronađen.',
                 ], 422);
             }
 
             if (!in_array('acKey', $columns, true)) {
                 return response()->json([
-                    'message' => 'Tabela stavki nema RN kljuc.',
+                    'message' => 'Tabela stavki nema RN ključ.',
                 ], 500);
             }
 
@@ -2191,14 +2561,15 @@ class WorkOrderController extends Controller
                 $deleteQuery->where('anNo', (int) $itemNo);
             } else {
                 return response()->json([
-                    'message' => 'Nije moguce odrediti stavku za brisanje.',
+                    'message' => 'Nije moguće odrediti stavku za brisanje.',
                 ], 422);
             }
 
             $preferredWarehouse = $this->resolveWorkOrderWarehouse($workOrderRow);
             $userId = (int) (auth()->id() ?? 0);
+            $hasStatementColumn = in_array('acStatement', $columns, true);
 
-            $deleteResult = DB::transaction(function () use ($deleteQuery, $preferredWarehouse, $userId) {
+            $deleteResult = DB::transaction(function () use ($deleteQuery, $preferredWarehouse, $userId, $hasStatementColumn) {
                 $row = (clone $deleteQuery)->lockForUpdate()->first();
 
                 if ($row === null) {
@@ -2213,14 +2584,18 @@ class WorkOrderController extends Controller
                 }
 
                 $stockAdjustments = [];
-                $reverseAdjustment = $this->buildRemovedPlannedConsumptionStockAdjustment($rowData, $preferredWarehouse);
+                $reverseAdjustment = null;
 
-                if ($reverseAdjustment !== null) {
-                    $stockAdjustments = Material::bulkAdjustStock(
-                        [$reverseAdjustment],
-                        $userId,
-                        $preferredWarehouse
-                    );
+                if ($this->workOrderItemRowShouldRestoreStockOnRemove($rowData, $hasStatementColumn)) {
+                    $reverseAdjustment = $this->buildRemovedPlannedConsumptionStockAdjustment($rowData, $preferredWarehouse);
+
+                    if ($reverseAdjustment !== null) {
+                        $stockAdjustments = Material::bulkAdjustStock(
+                            [$reverseAdjustment],
+                            $userId,
+                            $preferredWarehouse
+                        );
+                    }
                 }
 
                 return [
@@ -2322,7 +2697,7 @@ class WorkOrderController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri brisanju stavke planirane potrosnje.',
+                'message' => 'Greška pri brisanju stavke planirane potrošnje.',
             ], 500);
         }
     }
@@ -2383,6 +2758,8 @@ class WorkOrderController extends Controller
             $validated = $validator->validated();
             $itemId = $this->toFloatOrNull($validated['item_id'] ?? null);
             $itemNo = $this->toFloatOrNull($validated['item_no'] ?? null);
+            $hasQId = in_array('anQId', $columns, true);
+            $hasNo = in_array('anNo', $columns, true);
 
             if ($itemId === null && $itemNo === null) {
                 return response()->json([
@@ -2390,85 +2767,188 @@ class WorkOrderController extends Controller
                 ], 422);
             }
 
-            $itemRow = $this->findWorkOrderItemRow($workOrderKey, $columns, $itemId, $itemNo);
+            $userId = (int) (auth()->id() ?? 0);
+            $preferredWarehouse = $this->resolveWorkOrderWarehouse($workOrderRow);
+            $hasStatementColumn = in_array('acStatement', $columns, true);
+            $now = Carbon::now();
 
-            if ($itemRow === null) {
+            $updateQuery = $this->newItemTableQuery()->where('acKey', $workOrderKey);
+
+            if ($itemId !== null && $hasQId) {
+                $updateQuery->where('anQId', (int) $itemId);
+            } elseif ($itemNo !== null && $hasNo) {
+                $updateQuery->where('anNo', (int) $itemNo);
+            } else {
                 return response()->json([
-                    'message' => 'Stavka nije pronađena.',
-                ], 404);
-            }
-
-            $fieldUpdates = [];
-
-            if ($hasDescriptionInput && in_array('acDescr', $columns, true)) {
-                $description = trim((string) ($validated['opis'] ?? ''));
-                $fieldUpdates['acDescr'] = $description === '' ? null : substr($description, 0, 80);
-            }
-
-            $itemNoteColumn = $this->workOrderItemNoteColumn($columns);
-
-            if ($hasNoteInput && $itemNoteColumn !== null) {
-                $fieldUpdates[$itemNoteColumn] = $this->resolveWorkOrderItemNoteForSave(
-                    (string) ($validated['napomena'] ?? ''),
-                    $itemNoteColumn,
-                    $itemRow
-                );
-            }
-
-            if ($hasQuantityInput) {
-                $quantityColumns = $this->existingColumns($columns, ['anPlanQty', 'anQty', 'anQty1']);
-                $quantityValue = max(0, (float) ($this->toFloatOrNull($validated['kolicina'] ?? 0) ?? 0));
-
-                foreach ($quantityColumns as $quantityColumn) {
-                    $fieldUpdates[$quantityColumn] = $quantityValue;
-                }
-            }
-
-            if ($hasUnitInput && in_array('acUM', $columns, true)) {
-                $unit = strtoupper(substr(trim((string) ($validated['mj'] ?? '')), 0, 3));
-                $fieldUpdates['acUM'] = $unit === '' ? null : $unit;
-            }
-
-            if (empty($fieldUpdates)) {
-                return response()->json([
-                    'message' => 'Nijedno traženo polje nije dostupno za ažuriranje stavke.',
+                    'message' => 'Nije moguće odrediti stavku za ažuriranje.',
                 ], 422);
             }
 
-            if ($this->rowAlreadyHasUpdates($itemRow, $fieldUpdates)) {
-                return response()->json([
-                    'message' => 'Stavka je već na odabranim vrijednostima.',
-                    'data' => [
-                        'work_order_id' => $id,
-                        'work_order_key' => $workOrderKey,
-                        'item' => $this->mapItemRow($itemRow),
+            $updateResult = DB::transaction(function () use (
+                $updateQuery,
+                $columns,
+                $validated,
+                $hasDescriptionInput,
+                $hasNoteInput,
+                $hasQuantityInput,
+                $hasUnitInput,
+                $now,
+                $userId,
+                $preferredWarehouse,
+                $hasStatementColumn
+            ) {
+                $row = (clone $updateQuery)->lockForUpdate()->first();
+
+                if ($row === null) {
+                    return [
+                        'row' => null,
+                    ];
+                }
+
+                $itemRow = (array) $row;
+                $fieldUpdates = [];
+                $requestedQuantity = null;
+
+                if ($hasDescriptionInput && in_array('acDescr', $columns, true)) {
+                    $description = trim((string) ($validated['opis'] ?? ''));
+                    $fieldUpdates['acDescr'] = $description === '' ? null : substr($description, 0, 80);
+                }
+
+                $itemNoteColumn = $this->workOrderItemNoteColumn($columns);
+
+                if ($hasNoteInput && $itemNoteColumn !== null) {
+                    $fieldUpdates[$itemNoteColumn] = $this->resolveWorkOrderItemNoteForSave(
+                        (string) ($validated['napomena'] ?? ''),
+                        $itemNoteColumn,
+                        $itemRow
+                    );
+                }
+
+                if ($hasQuantityInput) {
+                    $quantityColumns = $this->existingColumns($columns, ['anPlanQty', 'anQty', 'anQty1']);
+                    if (!empty($quantityColumns)) {
+                        $requestedQuantity = max(0, (float) ($this->toFloatOrNull($validated['kolicina'] ?? 0) ?? 0));
+
+                        foreach ($quantityColumns as $quantityColumn) {
+                            $fieldUpdates[$quantityColumn] = $requestedQuantity;
+                        }
+                    }
+                }
+
+                if ($hasUnitInput && in_array('acUM', $columns, true)) {
+                    $unit = strtoupper(substr(trim((string) ($validated['mj'] ?? '')), 0, 3));
+                    $fieldUpdates['acUM'] = $unit === '' ? null : $unit;
+                }
+
+                if (empty($fieldUpdates)) {
+                    return [
+                        'row' => $itemRow,
+                        'missing_fields' => true,
+                    ];
+                }
+
+                if ($this->rowAlreadyHasUpdates($itemRow, $fieldUpdates)) {
+                    return [
+                        'row' => $itemRow,
                         'changed' => false,
-                    ],
-                ]);
-            }
+                        'item' => $this->mapItemRow($itemRow),
+                        'updated_fields' => [],
+                    ];
+                }
 
-            $updates = $fieldUpdates;
-            $userId = (int) (auth()->id() ?? 0);
-            $now = Carbon::now();
+                $updates = $fieldUpdates;
 
-            if (in_array('adTimeChg', $columns, true)) {
-                $updates['adTimeChg'] = $now;
-            }
+                if (in_array('adTimeChg', $columns, true)) {
+                    $updates['adTimeChg'] = $now;
+                }
 
-            if ($userId > 0 && in_array('anUserChg', $columns, true)) {
-                $updates['anUserChg'] = $userId;
-            }
+                if ($userId > 0 && in_array('anUserChg', $columns, true)) {
+                    $updates['anUserChg'] = $userId;
+                }
 
-            $updated = $this->updateWorkOrderItemRow($itemRow, $updates);
+                $stockAdjustmentResults = [];
+                $quantityDelta = null;
+                $stockAdjustment = null;
 
-            if (!$updated) {
+                if ($requestedQuantity !== null) {
+                    $previousQuantity = $this->workOrderItemQuantity($itemRow);
+                    $quantityDelta = $requestedQuantity - $previousQuantity;
+
+                    if (
+                        abs($quantityDelta) > 0.000001
+                        && $this->workOrderItemRowShouldRestoreStockOnRemove($itemRow, $hasStatementColumn)
+                    ) {
+                        $stockAdjustment = $this->buildRemovedPlannedConsumptionStockAdjustment(
+                            $itemRow,
+                            $preferredWarehouse,
+                            $quantityDelta
+                        );
+                    }
+                }
+
+                $updated = $this->updateWorkOrderItemRow($itemRow, $updates);
+
+                if (!$updated) {
+                    throw new RuntimeException('Stavka nije ažurirana.');
+                }
+
+                if ($stockAdjustment !== null) {
+                    $stockAdjustmentResults = Material::bulkAdjustStock(
+                        [$stockAdjustment],
+                        $userId,
+                        $preferredWarehouse
+                    );
+                }
+
+                $updatedRow = (clone $updateQuery)->first();
+                $resolvedRow = $updatedRow !== null ? (array) $updatedRow : array_merge($itemRow, $fieldUpdates);
+
+                return [
+                    'row' => $resolvedRow,
+                    'changed' => true,
+                    'item' => $this->mapItemRow($resolvedRow),
+                    'stock_adjustments' => $stockAdjustmentResults,
+                    'quantity_delta' => $quantityDelta,
+                    'updated_fields' => array_keys($fieldUpdates),
+                ];
+            });
+
+            if (!is_array($updateResult) || !array_key_exists('row', $updateResult)) {
                 return response()->json([
                     'message' => 'Stavka nije ažurirana.',
                 ], 500);
             }
 
-            $updatedRow = $this->findWorkOrderItemRow($workOrderKey, $columns, $itemId, $itemNo);
-            $mappedItem = $this->mapItemRow($updatedRow ?? array_merge($itemRow, $fieldUpdates));
+            if ($updateResult['row'] === null) {
+                return response()->json([
+                    'message' => 'Stavka nije pronađena.',
+                ], 404);
+            }
+
+            if (!empty($updateResult['missing_fields'])) {
+                return response()->json([
+                    'message' => 'Nijedno traženo polje nije dostupno za ažuriranje stavke.',
+                ], 422);
+            }
+
+            $mappedItem = is_array($updateResult['item'] ?? null) ? $updateResult['item'] : $this->mapItemRow((array) $updateResult['row']);
+            $stockAdjustmentResults = is_array($updateResult['stock_adjustments'] ?? null)
+                ? $updateResult['stock_adjustments']
+                : [];
+            $changed = (bool) ($updateResult['changed'] ?? false);
+            $updatedFields = is_array($updateResult['updated_fields'] ?? null) ? $updateResult['updated_fields'] : [];
+
+            if (!$changed) {
+                return response()->json([
+                    'message' => 'Stavka je već na odabranim vrijednostima.',
+                    'data' => [
+                        'work_order_id' => $id,
+                        'work_order_key' => $workOrderKey,
+                        'item' => $mappedItem,
+                        'changed' => false,
+                    ],
+                ]);
+            }
 
             Log::info('Work order item updated.', [
                 'id' => $id,
@@ -2476,7 +2956,8 @@ class WorkOrderController extends Controller
                 'item_id' => $mappedItem['qid'] ?? $itemId,
                 'item_no' => $mappedItem['no'] ?? $itemNo,
                 'ac_ident' => $mappedItem['artikal'] ?? '',
-                'updated_fields' => array_keys($fieldUpdates),
+                'updated_fields' => $updatedFields,
+                'stock_adjusted' => !empty($stockAdjustmentResults),
                 'user_id' => $userId,
             ]);
 
@@ -2486,7 +2967,8 @@ class WorkOrderController extends Controller
                     'work_order_id' => $id,
                     'work_order_key' => $workOrderKey,
                     'item' => $mappedItem,
-                    'changed' => true,
+                    'changed' => $changed,
+                    'stock_adjustments' => $stockAdjustmentResults,
                 ],
             ]);
         } catch (Throwable $exception) {
@@ -2920,6 +3402,733 @@ class WorkOrderController extends Controller
                 'has_money_values' => $hasMoneyValues,
             ],
         ];
+    }
+
+    private function fetchOrdersLinkagePage(
+        ?int $limit = null,
+        ?int $page = null,
+        array $filters = [],
+        array $sort = []
+    ): array {
+        $resolvedLimit = $this->resolveLimit($limit);
+        $resolvedPage = max(1, (int) ($page ?? 1));
+        $totalQuery = $this->newOrderLinkageGroupQuery([]);
+        $filteredQuery = $this->newOrderLinkageGroupQuery($filters);
+        $total = $totalQuery === null ? 0 : (int) DB::query()->fromSub($totalQuery, 'order_linkage_total')->count();
+        $filteredTotal = $filteredQuery === null ? 0 : (int) DB::query()->fromSub($filteredQuery, 'order_linkage_filtered')->count();
+        $lastPage = $resolvedLimit > 0 ? max(1, (int) ceil($filteredTotal / $resolvedLimit)) : 1;
+
+        if ($filteredQuery === null || $filteredTotal < 1) {
+            return [
+                'data' => [],
+                'meta' => [
+                    'count' => 0,
+                    'page' => $resolvedPage,
+                    'limit' => $resolvedLimit,
+                    'total' => $total,
+                    'filtered_total' => $filteredTotal,
+                    'last_page' => $lastPage,
+                ],
+            ];
+        }
+
+        $pageGroupsQuery = DB::query()->fromSub($filteredQuery, 'order_linkage_page');
+        $this->applyOrderLinkageGroupingOrdering($pageGroupsQuery, $sort);
+
+        $pageGroups = $pageGroupsQuery
+            ->forPage($resolvedPage, $resolvedLimit)
+            ->get()
+            ->map(function ($row) {
+                return (array) $row;
+            })
+            ->values()
+            ->all();
+        $data = array_map(function (array $row): array {
+            return $this->mapOrderLinkageGroupRow($row);
+        }, $pageGroups);
+
+        return [
+            'data' => $data,
+            'meta' => [
+                'count' => count($data),
+                'page' => $resolvedPage,
+                'limit' => $resolvedLimit,
+                'total' => $total,
+                'filtered_total' => $filteredTotal,
+                'last_page' => $lastPage,
+            ],
+        ];
+    }
+
+    private function extractOrderLinkageFilters(Request $request): array
+    {
+        $rawSearch = $request->input('search.value');
+
+        if ($rawSearch === null) {
+            $rawSearch = $request->input('search');
+        }
+
+        return [
+            'status' => trim((string) $request->input('status', '')),
+            'kupac' => trim((string) $request->input('kupac', '')),
+            'primatelj' => trim((string) $request->input('primatelj', '')),
+            'proizvod' => trim((string) $request->input('proizvod', '')),
+            'plan_pocetak_od' => trim((string) $request->input('plan_pocetak_od', '')),
+            'plan_pocetak_do' => trim((string) $request->input('plan_pocetak_do', '')),
+            'plan_kraj_od' => trim((string) $request->input('plan_kraj_od', '')),
+            'plan_kraj_do' => trim((string) $request->input('plan_kraj_do', '')),
+            'datum_od' => trim((string) $request->input('datum_od', '')),
+            'datum_do' => trim((string) $request->input('datum_do', '')),
+            'vezni_dok' => trim((string) $request->input('vezni_dok', '')),
+            'prioritet' => trim((string) $request->input('prioritet', '')),
+            'search' => is_string($rawSearch) ? trim($rawSearch) : '',
+        ];
+    }
+
+    private function extractOrderLinkageSort(Request $request): array
+    {
+        $sortBy = $this->normalizeOrderLinkageSortColumnAlias((string) $request->input('sort_by', ''));
+        $sortDir = strtolower(trim((string) $request->input('sort_dir', 'desc')));
+
+        if (!in_array($sortDir, ['asc', 'desc'], true)) {
+            $sortDir = 'desc';
+        }
+
+        if ($sortBy === '') {
+            $orderColumnIndex = $request->input('order.0.column');
+            $orderDirection = strtolower(trim((string) $request->input('order.0.dir', '')));
+
+            if (in_array($orderDirection, ['asc', 'desc'], true)) {
+                $sortDir = $orderDirection;
+            }
+
+            if (is_numeric($orderColumnIndex)) {
+                $columnData = (string) $request->input('columns.' . ((int) $orderColumnIndex) . '.data', '');
+                $sortBy = $this->normalizeOrderLinkageSortColumnAlias($columnData);
+            }
+        }
+
+        return [
+            'by' => $sortBy,
+            'dir' => $sortDir,
+        ];
+    }
+
+    private function normalizeOrderLinkageSortColumnAlias(string $sortBy): string
+    {
+        $normalized = strtolower(trim($sortBy));
+
+        return match ($normalized) {
+            'order_number', 'narudzba', 'broj_narudzbe' => 'narudzba',
+            'naziv', 'name' => 'naziv',
+            'sifra', 'code' => 'sifra',
+            'customer', 'kupac', 'klijent', 'narucitelj', 'prijevoznik', 'posiljatelj' => 'klijent',
+            'date', 'datum' => 'datum',
+            'quantity', 'qty', 'kolicina', 'totalkolicina' => 'kolicina',
+            'position_count', 'broj_pozicija' => 'broj_pozicija',
+            'work_order_count', 'broj_rn', 'broj_radnih_naloga' => 'broj_rn',
+            default => '',
+        };
+    }
+
+    private function newOrderLinkageGroupQuery(array $filters = []): ?Builder
+    {
+        $baseQuery = $this->newOrderLinkageBaseQuery($filters);
+
+        if ($baseQuery === null) {
+            return null;
+        }
+
+        // SQL Server is much more stable when the normalized order number is aliased once in a derived table.
+        $query = DB::query()->fromSub($baseQuery, 'order_linkage_source');
+        $query->where('normalized_order_number', '<>', '');
+        $this->applyOrderLinkageSourceQuickSearchFilter($query, (string) ($filters['search'] ?? ''));
+        $query->select('normalized_order_number');
+        $query->selectRaw('MAX(resolved_order_number) as narudzba');
+        $query->selectRaw('MAX(naziv_source) as naziv_sort');
+        $query->selectRaw('MAX(sifra_source) as sifra_sort');
+        $query->selectRaw('MAX(klijent_source) as klijent_sort');
+        $query->selectRaw('MIN(datum_source) as datum_sort');
+        $query->selectRaw('SUM(COALESCE(quantity_source, 0)) as total_kolicina_sort');
+        $query->selectRaw('SUM(CASE WHEN position_source IS NULL THEN 0 ELSE 1 END) as broj_pozicija_sort');
+        $query->selectRaw('COUNT(*) as broj_rn_sort');
+        $query->selectRaw('MAX(jedinica_source) as jedinica_sort');
+        $query->groupBy('normalized_order_number');
+
+        return $query;
+    }
+
+    private function newOrderLinkageBaseQuery(array $filters = []): ?Builder
+    {
+        $workOrderColumns = $this->tableColumns();
+        $workOrderQuery = $this->newTableQuery();
+        $baseFilters = $filters;
+        $baseFilters['search'] = '';
+        $this->applyFilters($workOrderQuery, $workOrderColumns, $baseFilters);
+
+        $query = DB::query()->fromSub($workOrderQuery, 'wo');
+        $orderColumns = $this->orderTableColumns();
+        $workOrderLinkColumn = $this->firstExistingColumn($workOrderColumns, ['acLnkKey']);
+        $orderKeyColumn = $this->firstExistingColumn($orderColumns, ['acKey']);
+        $hasOrderJoin = $workOrderLinkColumn !== null && $orderKeyColumn !== null;
+
+        if ($hasOrderJoin) {
+            $query->leftJoin(
+                $this->qualifiedOrderTableName() . ' as ord',
+                'wo.' . $workOrderLinkColumn,
+                '=',
+                'ord.' . $orderKeyColumn
+            );
+        }
+
+        $orderNumberExpression = $this->buildOrderLinkageResolvedOrderNumberExpression(
+            $query,
+            $workOrderColumns,
+            $orderColumns,
+            $hasOrderJoin
+        );
+
+        if ($orderNumberExpression === null) {
+            return null;
+        }
+
+        $normalizedOrderExpression = $this->orderLinkageDisplaySqlExpression($orderNumberExpression);
+        $senderColumns = $hasOrderJoin
+            ? array_merge(
+                $this->qualifyColumns($this->existingColumns($orderColumns, ['acConsignee', 'acReceiver', 'acPartner']), 'ord'),
+                $this->qualifyColumns($this->existingColumns($workOrderColumns, ['acConsignee', 'acReceiver', 'acPartner']), 'wo')
+            )
+            : $this->qualifyColumns($this->existingColumns($workOrderColumns, ['acConsignee', 'acReceiver', 'acPartner']), 'wo');
+        $customerExpression = $this->firstNonEmptyStringExpression($query, $senderColumns) ?? "''";
+        $nameExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($workOrderColumns, ['acName', 'acDescr']), 'wo')
+        ) ?? "''";
+        $codeExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($workOrderColumns, ['acIdent', 'acCode']), 'wo')
+        ) ?? "''";
+        $unitExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($workOrderColumns, ['acUM']), 'wo'),
+            32
+        ) ?? "''";
+        $createdDateColumn = $this->firstExistingColumn($workOrderColumns, ['adDate', 'adDateIns']);
+        $quantityExpression = $this->firstNonNullNumericExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($workOrderColumns, ['anPlanQty', 'anQty', 'anQty1']), 'wo')
+        );
+        $positionColumn = $this->firstExistingColumn($workOrderColumns, ['anLnkNo']);
+        $statusExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($workOrderColumns, ['acStatusMF', 'acStatus']), 'wo'),
+            64
+        ) ?? "''";
+        $identifierExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($workOrderColumns, ['acRefNo1', 'acKey', 'anNo', 'id']), 'wo')
+        ) ?? "''";
+
+        $query->selectRaw($normalizedOrderExpression . ' as normalized_order_number');
+        $query->selectRaw($orderNumberExpression . ' as resolved_order_number');
+        $query->selectRaw($nameExpression . ' as naziv_source');
+        $query->selectRaw($codeExpression . ' as sifra_source');
+        $query->selectRaw($customerExpression . ' as klijent_source');
+
+        if ($createdDateColumn !== null) {
+            $query->selectRaw('CAST(' . $query->getGrammar()->wrap('wo.' . $createdDateColumn) . ' AS DATE) as datum_source');
+        } else {
+            $query->selectRaw('NULL as datum_source');
+        }
+
+        if ($quantityExpression !== null) {
+            $query->selectRaw($quantityExpression . ' as quantity_source');
+        } else {
+            $query->selectRaw('NULL as quantity_source');
+        }
+
+        if ($positionColumn !== null) {
+            $query->selectRaw(
+                "NULLIF(LTRIM(RTRIM(CAST(" . $query->getGrammar()->wrap('wo.' . $positionColumn) . " AS NVARCHAR(64)))), '') as position_source"
+            );
+        } else {
+            $query->selectRaw('NULL as position_source');
+        }
+
+        $query->selectRaw($unitExpression . ' as jedinica_source');
+        $query->selectRaw($statusExpression . ' as status_source');
+        $query->selectRaw($identifierExpression . ' as work_order_id_source');
+
+        return $query;
+    }
+
+    private function applyOrderLinkageGroupingOrdering(Builder $query, array $sort): void
+    {
+        $sortBy = $this->normalizeOrderLinkageSortColumnAlias((string) ($sort['by'] ?? ''));
+        $direction = strtolower(trim((string) ($sort['dir'] ?? 'desc')));
+        $direction = in_array($direction, ['asc', 'desc'], true) ? $direction : 'desc';
+
+        switch ($sortBy) {
+            case 'narudzba':
+                $query->orderBy('narudzba', $direction);
+                return;
+            case 'naziv':
+                $query->orderByRaw("CASE WHEN NULLIF(LTRIM(RTRIM(COALESCE(naziv_sort, ''))), '') IS NULL THEN 1 ELSE 0 END ASC");
+                $query->orderBy('naziv_sort', $direction);
+                $query->orderBy('narudzba', $direction);
+                return;
+            case 'sifra':
+                $query->orderByRaw("CASE WHEN NULLIF(LTRIM(RTRIM(COALESCE(sifra_sort, ''))), '') IS NULL THEN 1 ELSE 0 END ASC");
+                $query->orderBy('sifra_sort', $direction);
+                $query->orderBy('narudzba', $direction);
+                return;
+            case 'klijent':
+                $query->orderByRaw("CASE WHEN NULLIF(LTRIM(RTRIM(COALESCE(klijent_sort, ''))), '') IS NULL THEN 1 ELSE 0 END ASC");
+                $query->orderBy('klijent_sort', $direction);
+                $query->orderBy('narudzba', $direction);
+                return;
+            case 'datum':
+                $query->orderByRaw('CASE WHEN datum_sort IS NULL THEN 1 ELSE 0 END ASC');
+                $query->orderBy('datum_sort', $direction);
+                $query->orderBy('narudzba', $direction);
+                return;
+            case 'kolicina':
+                $query->orderBy('total_kolicina_sort', $direction);
+                $query->orderBy('narudzba', $direction);
+                return;
+            case 'broj_pozicija':
+                $query->orderBy('broj_pozicija_sort', $direction);
+                $query->orderBy('narudzba', $direction);
+                return;
+            case 'broj_rn':
+                $query->orderBy('broj_rn_sort', $direction);
+                $query->orderBy('narudzba', $direction);
+                return;
+            default:
+                $query->orderByRaw('CASE WHEN datum_sort IS NULL THEN 1 ELSE 0 END ASC');
+                $query->orderBy('datum_sort', 'desc');
+                $query->orderBy('narudzba', 'desc');
+                return;
+        }
+    }
+
+    private function applyOrderLinkageSourceQuickSearchFilter(Builder $query, string $search): void
+    {
+        $search = trim($search);
+
+        if ($search === '') {
+            return;
+        }
+
+        $orderNumberVariants = $this->normalizeComparableIdentifiers(
+            $this->orderLinkageOrderNumberSearchVariants($search)
+        );
+        $tailSearch = $this->orderLinkageOrderNumberTailSearch($search);
+        $allowFullOrderNumberMatch = $tailSearch === ''
+            || preg_match('/\D/', $search) === 1;
+
+        $query->where(function (Builder $searchQuery) use (
+            $search,
+            $orderNumberVariants,
+            $tailSearch,
+            $allowFullOrderNumberMatch
+        ) {
+            $hasAnyClause = false;
+
+            if ($tailSearch !== '') {
+                $tailLength = strlen($tailSearch);
+
+                $searchQuery->whereRaw(
+                    "LEN(normalized_order_number) = 12 AND SUBSTRING(normalized_order_number, 7, $tailLength) = ?",
+                    [$tailSearch]
+                );
+                $hasAnyClause = true;
+            }
+
+            if ($allowFullOrderNumberMatch) {
+                foreach ($orderNumberVariants as $orderNumberVariant) {
+                    if ($hasAnyClause) {
+                        $searchQuery->orWhere('normalized_order_number', 'like', '%' . $orderNumberVariant . '%');
+                    } else {
+                        $searchQuery->where('normalized_order_number', 'like', '%' . $orderNumberVariant . '%');
+                        $hasAnyClause = true;
+                    }
+                }
+            }
+
+            if ($hasAnyClause) {
+                $searchQuery->orWhere('klijent_source', 'like', '%' . $search . '%');
+            } else {
+                $searchQuery->where('klijent_source', 'like', '%' . $search . '%');
+                $hasAnyClause = true;
+            }
+
+            if (!$hasAnyClause) {
+                $searchQuery->whereRaw('1 = 0');
+            }
+        });
+    }
+
+    private function applyOrderLinkageFilters(
+        Builder $query,
+        array $orderColumns,
+        array $filters,
+        string $orderAlias = 'ord'
+    ): void {
+        $statusColumn = $this->firstExistingColumn($orderColumns, ['acStatusMF', 'acStatus', 'status']);
+
+        if ($statusColumn !== null && !empty($filters['status'])) {
+            $this->applyStatusFilter($query, $this->qualifyColumn($statusColumn, $orderAlias), (string) $filters['status']);
+        }
+
+        $this->applyLikeAny(
+            $query,
+            $this->qualifyColumns($this->existingColumns($orderColumns, ['acConsignee', 'acReceiver', 'acPartner']), $orderAlias),
+            (string) ($filters['kupac'] ?? '')
+        );
+
+        $this->applyLikeAny(
+            $query,
+            $this->qualifyColumns($this->existingColumns($orderColumns, ['acReceiver', 'acConsignee', 'acPartner']), $orderAlias),
+            (string) ($filters['primatelj'] ?? '')
+        );
+
+        $this->applyLikeAny(
+            $query,
+            $this->qualifyColumns($this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']), $orderAlias),
+            (string) ($filters['vezni_dok'] ?? '')
+        );
+
+        $this->applyPriorityFilter(
+            $query,
+            $this->qualifyColumns($this->existingColumns($orderColumns, ['anPriority', 'acPriority', 'acWayOfSale', 'priority']), $orderAlias),
+            (string) ($filters['prioritet'] ?? '')
+        );
+
+        $createdDateColumn = $this->firstExistingColumn($orderColumns, ['adDate', 'adDateIns']);
+        $dueDateColumn = $this->firstExistingColumn($orderColumns, ['adDeliveryDeadline', 'adDateValid', 'adDateOut', 'adDateDoc']);
+
+        $this->applyDateRangeFilter(
+            $query,
+            $createdDateColumn !== null ? $this->qualifyColumn($createdDateColumn, $orderAlias) : null,
+            (string) ($filters['plan_pocetak_od'] ?? ''),
+            (string) ($filters['plan_pocetak_do'] ?? '')
+        );
+        $this->applyDateRangeFilter(
+            $query,
+            $dueDateColumn !== null ? $this->qualifyColumn($dueDateColumn, $orderAlias) : null,
+            (string) ($filters['plan_kraj_od'] ?? ''),
+            (string) ($filters['plan_kraj_do'] ?? '')
+        );
+        $this->applyDateRangeFilter(
+            $query,
+            $createdDateColumn !== null ? $this->qualifyColumn($createdDateColumn, $orderAlias) : null,
+            (string) ($filters['datum_od'] ?? ''),
+            (string) ($filters['datum_do'] ?? '')
+        );
+
+        $productFilter = trim((string) ($filters['proizvod'] ?? ''));
+
+        if ($productFilter !== '') {
+            $this->applyOrderLinkageItemSearchExists($query, $orderColumns, $this->searchVariants($productFilter), $orderAlias);
+        }
+
+        $search = trim((string) ($filters['search'] ?? ''));
+
+        if ($search !== '') {
+            $this->applyOrderLinkageQuickSearchFilter($query, $orderColumns, $search, $orderAlias);
+        }
+    }
+
+    private function applyOrderLinkageQuickSearchFilter(
+        Builder $query,
+        array $orderColumns,
+        string $search,
+        string $orderAlias = 'ord'
+    ): void {
+        $searchVariants = array_values(array_filter($this->searchVariants($search), function ($value) {
+            return trim((string) $value) !== '';
+        }));
+
+        if (empty($searchVariants)) {
+            return;
+        }
+
+        $searchColumns = $this->qualifyColumns(
+            $this->existingColumns($orderColumns, [
+                'acConsignee',
+                'acReceiver',
+                'acPartner',
+                'acStatusMF',
+                'acStatus',
+                'acPriority',
+                'acWayOfSale',
+                'priority',
+            ]),
+            $orderAlias
+        );
+        $identifierSearchColumns = $this->qualifyColumns(
+            $this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']),
+            $orderAlias
+        );
+        $statusColumn = $this->firstExistingColumn($orderColumns, ['acStatusMF', 'acStatus']);
+        $priorityCodeColumns = $this->qualifyColumns($this->existingColumns($orderColumns, ['anPriority']), $orderAlias);
+        $statusAliases = $this->statusAliasesForSearch($search);
+        $priorityCodes = $this->priorityCodesForSearch($search);
+        $orderNumberSearchVariants = $this->orderLinkageOrderNumberSearchVariants($search);
+        $normalizedOrderNumberSearchVariants = $this->normalizeComparableIdentifiers($orderNumberSearchVariants);
+        $orderNumberSuffixSearch = $this->orderLinkageOrderNumberSuffixSearch($search);
+
+        $query->where(function (Builder $searchQuery) use (
+            $searchColumns,
+            $identifierSearchColumns,
+            $statusColumn,
+            $priorityCodeColumns,
+            $statusAliases,
+            $priorityCodes,
+            $searchVariants,
+            $normalizedOrderNumberSearchVariants,
+            $orderNumberSuffixSearch,
+            $orderColumns,
+            $orderAlias
+        ) {
+            $hasAnyClause = false;
+
+            foreach ($searchVariants as $variant) {
+                foreach ($searchColumns as $column) {
+                    if ($hasAnyClause) {
+                        $searchQuery->orWhere($column, 'like', '%' . $variant . '%');
+                    } else {
+                        $searchQuery->where($column, 'like', '%' . $variant . '%');
+                        $hasAnyClause = true;
+                    }
+                }
+            }
+
+            if ($orderNumberSuffixSearch !== '') {
+                foreach ($identifierSearchColumns as $column) {
+                    $displayExpression = $this->orderLinkageDisplayIdentifierExpression($searchQuery, $column);
+                    $suffixLength = strlen($orderNumberSuffixSearch);
+
+                    if ($hasAnyClause) {
+                        $searchQuery->orWhereRaw(
+                            "LEN($displayExpression) = 12 AND SUBSTRING($displayExpression, 7, $suffixLength) = ?",
+                            [$orderNumberSuffixSearch]
+                        );
+                    } else {
+                        $searchQuery->whereRaw(
+                            "LEN($displayExpression) = 12 AND SUBSTRING($displayExpression, 7, $suffixLength) = ?",
+                            [$orderNumberSuffixSearch]
+                        );
+                        $hasAnyClause = true;
+                    }
+                }
+            }
+
+            if ($orderNumberSuffixSearch === '') {
+                foreach ($normalizedOrderNumberSearchVariants as $normalizedVariant) {
+                    foreach ($identifierSearchColumns as $column) {
+                        $displayExpression = $this->orderLinkageDisplayIdentifierExpression($searchQuery, $column);
+
+                        if ($hasAnyClause) {
+                            $searchQuery->orWhereRaw(
+                                $displayExpression . ' like ?',
+                                ['%' . $normalizedVariant . '%']
+                            );
+                        } else {
+                            $searchQuery->whereRaw(
+                                $displayExpression . ' like ?',
+                                ['%' . $normalizedVariant . '%']
+                            );
+                            $hasAnyClause = true;
+                        }
+                    }
+                }
+            }
+
+            if ($statusColumn !== null && !empty($statusAliases)) {
+                $qualifiedStatusColumn = $this->qualifyColumn($statusColumn, $orderAlias);
+
+                if ($hasAnyClause) {
+                    $searchQuery->orWhereIn($qualifiedStatusColumn, $statusAliases);
+                } else {
+                    $searchQuery->whereIn($qualifiedStatusColumn, $statusAliases);
+                    $hasAnyClause = true;
+                }
+            }
+
+            if (!empty($priorityCodes)) {
+                foreach ($priorityCodeColumns as $priorityCodeColumn) {
+                    if ($hasAnyClause) {
+                        $searchQuery->orWhereIn($priorityCodeColumn, $priorityCodes);
+                    } else {
+                        $searchQuery->whereIn($priorityCodeColumn, $priorityCodes);
+                        $hasAnyClause = true;
+                    }
+                }
+            }
+
+            if ($orderNumberSuffixSearch === '' && $this->applyOrderLinkageItemSearchExists($searchQuery, $orderColumns, $searchVariants, $orderAlias, $hasAnyClause)) {
+                $hasAnyClause = true;
+            }
+
+            if (!$hasAnyClause) {
+                $searchQuery->whereRaw('1 = 0');
+            }
+        });
+    }
+
+    private function applyOrderLinkageItemSearchExists(
+        Builder $query,
+        array $orderColumns,
+        array $searchVariants,
+        string $orderAlias = 'ord',
+        bool $useOrWhere = false
+    ): bool {
+        $searchVariants = array_values(array_unique(array_filter(array_map(function ($value) {
+            return trim((string) $value);
+        }, $searchVariants), function ($value) {
+            return $value !== '';
+        })));
+
+        if (empty($searchVariants)) {
+            return false;
+        }
+
+        $itemColumns = $this->orderItemTableColumns();
+        $itemSearchColumns = $this->qualifyColumns(
+            $this->existingColumns($itemColumns, ['acIdent', 'acName', 'acDescr', 'acCode', 'product_code']),
+            'oi'
+        );
+        $itemIdentifierColumns = $this->qualifyColumns(
+            $this->existingColumns($itemColumns, ['acIdent', 'acCode', 'product_code']),
+            'oi'
+        );
+        $normalizedSearchVariants = $this->normalizeComparableIdentifiers($searchVariants);
+
+        if (empty($itemSearchColumns)) {
+            return false;
+        }
+
+        $outerOrderKeyColumn = $this->firstExistingColumn($orderColumns, ['acKey']);
+        $outerOrderNumberExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']), $orderAlias)
+        );
+        $itemKeyColumns = $this->qualifyColumns(
+            $this->existingColumns($itemColumns, ['acKey', 'acLnkKey', 'acOrderKey', 'order_key']),
+            'oi'
+        );
+        $itemNumberColumns = $this->qualifyColumns(
+            $this->existingColumns($itemColumns, ['acKeyView', 'acRefNo1', 'acOrderNo', 'order_number']),
+            'oi'
+        );
+        $method = $useOrWhere ? 'orWhereExists' : 'whereExists';
+
+        $query->{$method}(function (Builder $itemQuery) use (
+            $searchVariants,
+            $itemSearchColumns,
+            $itemIdentifierColumns,
+            $normalizedSearchVariants,
+            $outerOrderKeyColumn,
+            $orderAlias,
+            $outerOrderNumberExpression,
+            $itemKeyColumns,
+            $itemNumberColumns
+        ) {
+            $itemQuery->selectRaw('1')->from($this->qualifiedOrderItemTableName() . ' as oi');
+            $innerOrderNumberExpression = $this->firstNonEmptyStringExpression($itemQuery, $itemNumberColumns);
+
+            $itemQuery->where(function (Builder $relationQuery) use (
+                $outerOrderKeyColumn,
+                $orderAlias,
+                $outerOrderNumberExpression,
+                $itemKeyColumns,
+                $innerOrderNumberExpression
+            ) {
+                $hasRelation = false;
+
+                if ($outerOrderKeyColumn !== null && !empty($itemKeyColumns)) {
+                    foreach ($itemKeyColumns as $itemKeyColumn) {
+                        if ($hasRelation) {
+                            $relationQuery->orWhereColumn($itemKeyColumn, $this->qualifyColumn($outerOrderKeyColumn, $orderAlias));
+                        } else {
+                            $relationQuery->whereColumn($itemKeyColumn, $this->qualifyColumn($outerOrderKeyColumn, $orderAlias));
+                            $hasRelation = true;
+                        }
+                    }
+                }
+
+                if ($outerOrderNumberExpression !== null && $innerOrderNumberExpression !== null) {
+                    $comparison = $this->normalizedSqlExpression($innerOrderNumberExpression) . ' = ' . $this->normalizedSqlExpression($outerOrderNumberExpression);
+
+                    if ($hasRelation) {
+                        $relationQuery->orWhereRaw($comparison);
+                    } else {
+                        $relationQuery->whereRaw($comparison);
+                        $hasRelation = true;
+                    }
+                }
+
+                if (!$hasRelation) {
+                    $relationQuery->whereRaw('1 = 0');
+                }
+            });
+
+            $this->buildOrderLinkageItemSearchTextGroup(
+                $itemQuery,
+                $itemSearchColumns,
+                $itemIdentifierColumns,
+                $searchVariants,
+                $normalizedSearchVariants
+            );
+        });
+
+        return true;
+    }
+
+    private function buildOrderLinkageItemSearchTextGroup(
+        Builder $query,
+        array $itemSearchColumns,
+        array $itemIdentifierColumns,
+        array $searchVariants,
+        array $normalizedSearchVariants
+    ): void {
+        $query->where(function (Builder $textQuery) use ($itemSearchColumns, $itemIdentifierColumns, $searchVariants, $normalizedSearchVariants) {
+            $hasSearchClause = false;
+
+            foreach ($searchVariants as $variant) {
+                foreach ($itemSearchColumns as $itemSearchColumn) {
+                    if ($hasSearchClause) {
+                        $textQuery->orWhere($itemSearchColumn, 'like', '%' . $variant . '%');
+                    } else {
+                        $textQuery->where($itemSearchColumn, 'like', '%' . $variant . '%');
+                        $hasSearchClause = true;
+                    }
+                }
+            }
+
+            foreach ($normalizedSearchVariants as $normalizedVariant) {
+                foreach ($itemIdentifierColumns as $itemIdentifierColumn) {
+                    if ($hasSearchClause) {
+                        $textQuery->orWhereRaw(
+                            $this->normalizedIdentifierExpression($textQuery, $itemIdentifierColumn) . ' like ?',
+                            ['%' . $normalizedVariant . '%']
+                        );
+                    } else {
+                        $textQuery->whereRaw(
+                            $this->normalizedIdentifierExpression($textQuery, $itemIdentifierColumn) . ' like ?',
+                            ['%' . $normalizedVariant . '%']
+                        );
+                        $hasSearchClause = true;
+                    }
+                }
+            }
+
+            if (!$hasSearchClause) {
+                $textQuery->whereRaw('1 = 0');
+            }
+        });
     }
 
     private function fetchCalendarEvents(?string $startDate, ?string $endDate, array $statusBuckets, array $priorityCodes = []): array
@@ -3688,7 +4897,11 @@ class WorkOrderController extends Controller
         ) ?? 0);
     }
 
-    private function buildRemovedPlannedConsumptionStockAdjustment(array $row, string $preferredWarehouse = ''): ?array
+    private function buildRemovedPlannedConsumptionStockAdjustment(
+        array $row,
+        string $preferredWarehouse = '',
+        ?float $valueOverride = null
+    ): ?array
     {
         $materialCode = trim((string) ($row['acIdent'] ?? ''));
         if ($materialCode === '') {
@@ -3704,14 +4917,24 @@ class WorkOrderController extends Controller
             return null;
         }
 
-        $removedQty = $this->workOrderItemQuantity($row);
-        if ($removedQty <= 0) {
+        $value = $valueOverride;
+
+        if ($value === null) {
+            $removedQty = $this->workOrderItemQuantity($row);
+            if ($removedQty <= 0) {
+                return null;
+            }
+
+            $value = -1 * $removedQty;
+        }
+
+        if (abs($value) <= 0.000001) {
             return null;
         }
 
         return [
             'material_code' => $materialCode,
-            'value' => -1 * $removedQty,
+            'value' => $value,
             'warehouse' => trim($preferredWarehouse),
         ];
     }
@@ -3744,7 +4967,7 @@ class WorkOrderController extends Controller
                 $savedRow['stock_consumed_qty'] ?? null
             ) ?? 0);
 
-            if ($consumedQty <= 0) {
+            if (abs($consumedQty) <= 0.000001) {
                 continue;
             }
 
@@ -3760,6 +4983,41 @@ class WorkOrderController extends Controller
         }
 
         return array_values($adjustmentsByCode);
+    }
+
+    private function workOrderItemStatementAdjustsStock(string $statement): bool
+    {
+        $normalized = strtoupper(trim($statement));
+
+        if ($normalized === '') {
+            return true;
+        }
+
+        return in_array($normalized, [
+            'PLANNED_BOM',
+            'PLANNED_RAW',
+            'PLANNED_BARCODE',
+            'PLANNED_BARCODE_UPDATE',
+        ], true);
+    }
+
+    private function workOrderItemRowShouldRestoreStockOnRemove(array $row, bool $hasStatementColumn): bool
+    {
+        if (!$hasStatementColumn) {
+            return true;
+        }
+
+        $statement = strtoupper(trim((string) ($row['acStatement'] ?? '')));
+
+        if ($statement === '') {
+            return true;
+        }
+
+        if (in_array($statement, ['PLANNED_BOM_PENDING', 'PLANNED_RAW_PENDING'], true)) {
+            return false;
+        }
+
+        return $this->workOrderItemStatementAdjustsStock($statement);
     }
 
     private function fetchWorkOrderItemRows(string $workOrderKey): array
@@ -3926,7 +5184,7 @@ class WorkOrderController extends Controller
             return null;
         }
 
-        $normalizedOrderNumber = $this->normalizeComparableIdentifier($orderNumberRaw);
+        $normalizedOrderNumber = $this->normalizeOrderLocatorNumber($orderNumberRaw);
 
         if ($normalizedOrderNumber === '') {
             return null;
@@ -3938,22 +5196,43 @@ class WorkOrderController extends Controller
         ];
 
         if ($productCodeRaw !== null) {
-            $normalizedProductCode = $this->normalizeComparableIdentifier($productCodeRaw);
+            $productCode = $this->decodeOrderLocatorProductCode((string) $productCodeRaw);
 
-            if ($normalizedProductCode === '') {
+            if ($productCode === '') {
                 return null;
             }
 
-            $parsed['product_code'] = $normalizedProductCode;
+            $parsed['product_code'] = $productCode;
         }
 
         return $parsed;
     }
 
+    private function decodeOrderLocatorProductCode(string $value): string
+    {
+        $decoded = preg_replace('/%3B/i', ';', trim($value));
+        if (!is_string($decoded)) {
+            $decoded = trim($value);
+        }
+
+        return trim(str_replace('%25', '%', $decoded));
+    }
+
+    private function normalizeOrderLocatorNumber(string $value): string
+    {
+        $normalized = $this->normalizeComparableIdentifier($value);
+
+        if (preg_match('/^\d{13}$/', $normalized) === 1 && substr($normalized, 6, 1) === '0') {
+            return substr($normalized, 0, 6) . substr($normalized, 7);
+        }
+
+        return $normalized;
+    }
+
     private function findWorkOrderRowByOrderLocator(
         string $normalizedOrderNumber,
         int $orderPosition,
-        ?string $normalizedProductCode = null
+        ?string $productCode = null
     ): ?array
     {
         if ($normalizedOrderNumber === '') {
@@ -3989,15 +5268,14 @@ class WorkOrderController extends Controller
                 ->where('wo.' . $workOrderPositionColumn, $orderPosition)
                 ->where(function (Builder $orderNumberQuery) use ($orderNumberColumns, $normalizedOrderNumber) {
                     foreach ($orderNumberColumns as $index => $orderNumberColumn) {
-                        $normalizedExpression = $this->normalizedIdentifierExpression($orderNumberQuery, 'ord.' . $orderNumberColumn);
+                        $normalizedExpression = $this->orderLinkageDisplayIdentifierExpression($orderNumberQuery, 'ord.' . $orderNumberColumn);
                         $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
                         $orderNumberQuery->{$method}("$normalizedExpression = ?", [$normalizedOrderNumber]);
                     }
                 });
 
-            if ($normalizedProductCode !== null && $normalizedProductCode !== '' && $workOrderProductColumn !== null) {
-                $normalizedProductExpression = $this->normalizedIdentifierExpression($query, 'wo.' . $workOrderProductColumn);
-                $query->whereRaw("$normalizedProductExpression = ?", [$normalizedProductCode]);
+            if ($productCode !== null && trim($productCode) !== '' && $workOrderProductColumn !== null) {
+                $this->applyProductCodeMatchFilter($query, ['wo.' . $workOrderProductColumn], $productCode);
             }
 
             foreach (['adDate', 'adDateIns', 'adTimeIns', 'anNo'] as $orderByColumn) {
@@ -4016,7 +5294,7 @@ class WorkOrderController extends Controller
                 'orders_table' => $this->qualifiedOrderTableName(),
                 'order_number' => $normalizedOrderNumber,
                 'order_position' => $orderPosition,
-                'product_code' => $normalizedProductCode,
+                'product_code' => $productCode,
                 'message' => $exception->getMessage(),
             ]);
 
@@ -4027,7 +5305,7 @@ class WorkOrderController extends Controller
     private function findOrderRowByLocator(
         string $normalizedOrderNumber,
         int $orderPosition,
-        ?string $normalizedProductCode = null
+        ?string $productCode = null
     ): ?array {
         if ($normalizedOrderNumber === '') {
             return null;
@@ -4046,7 +5324,7 @@ class WorkOrderController extends Controller
             $query = $this->newOrderTableQuery()
                 ->where(function (Builder $orderNumberQuery) use ($orderNumberColumns, $normalizedOrderNumber) {
                     foreach ($orderNumberColumns as $index => $orderNumberColumn) {
-                        $normalizedExpression = $this->normalizedIdentifierExpression($orderNumberQuery, $orderNumberColumn);
+                        $normalizedExpression = $this->orderLinkageDisplayIdentifierExpression($orderNumberQuery, $orderNumberColumn);
                         $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
                         $orderNumberQuery->{$method}("$normalizedExpression = ?", [$normalizedOrderNumber]);
                     }
@@ -4061,14 +5339,8 @@ class WorkOrderController extends Controller
                 });
             }
 
-            if ($normalizedProductCode !== null && $normalizedProductCode !== '' && !empty($orderProductColumns)) {
-                $query->where(function (Builder $productQuery) use ($orderProductColumns, $normalizedProductCode) {
-                    foreach ($orderProductColumns as $index => $orderProductColumn) {
-                        $normalizedExpression = $this->normalizedIdentifierExpression($productQuery, $orderProductColumn);
-                        $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
-                        $productQuery->{$method}("$normalizedExpression = ?", [$normalizedProductCode]);
-                    }
-                });
+            if ($productCode !== null && trim($productCode) !== '' && !empty($orderProductColumns)) {
+                $this->applyProductCodeMatchFilter($query, $orderProductColumns, $productCode);
             }
 
             foreach (['adDate', 'adDateIns', 'adTimeIns', 'anNo', 'anQId'] as $orderByColumn) {
@@ -4086,7 +5358,7 @@ class WorkOrderController extends Controller
                 'orders_table' => $this->qualifiedOrderTableName(),
                 'order_number' => $normalizedOrderNumber,
                 'order_position' => $orderPosition,
-                'product_code' => $normalizedProductCode,
+                'product_code' => $productCode,
                 'message' => $exception->getMessage(),
             ]);
 
@@ -4107,7 +5379,7 @@ class WorkOrderController extends Controller
         }
 
         $orderPosition = (int) ($orderContext['order_position'] ?? 0);
-        $normalizedProductCode = $this->normalizeComparableIdentifier((string) ($orderContext['product_code'] ?? ''));
+        $productCode = trim((string) ($orderContext['product_code'] ?? ''));
 
         try {
             $orderItemColumns = $this->orderItemTableColumns();
@@ -4137,14 +5409,8 @@ class WorkOrderController extends Controller
                 });
             }
 
-            if ($normalizedProductCode !== '' && !empty($orderProductColumns)) {
-                $query->where(function (Builder $productQuery) use ($orderProductColumns, $normalizedProductCode) {
-                    foreach ($orderProductColumns as $index => $orderProductColumn) {
-                        $normalizedExpression = $this->normalizedIdentifierExpression($productQuery, $orderProductColumn);
-                        $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
-                        $productQuery->{$method}("$normalizedExpression = ?", [$normalizedProductCode]);
-                    }
-                });
+            if ($productCode !== '' && !empty($orderProductColumns)) {
+                $this->applyProductCodeMatchFilter($query, $orderProductColumns, $productCode);
             }
 
             foreach (['adDate', 'adDateIns', 'adTimeIns', 'anNo', 'anQId'] as $orderByColumn) {
@@ -4162,7 +5428,7 @@ class WorkOrderController extends Controller
                 'order_items_table' => $this->qualifiedOrderItemTableName(),
                 'order_key' => $normalizedOrderKey,
                 'order_position' => $orderPosition,
-                'product_code' => $normalizedProductCode,
+                'product_code' => $productCode,
                 'message' => $exception->getMessage(),
             ]);
 
@@ -4170,20 +5436,46 @@ class WorkOrderController extends Controller
         }
     }
 
+    private function applyProductCodeMatchFilter(Builder $query, array $columnIdentifiers, string $productCode): void
+    {
+        $productCode = trim($productCode);
+
+        if ($productCode === '' || empty($columnIdentifiers)) {
+            return;
+        }
+
+        $exactProductCode = $this->normalizeProductCodeExact($productCode);
+
+        $query->where(function (Builder $productQuery) use ($columnIdentifiers, $exactProductCode): void {
+            $hasClause = false;
+
+            foreach ($columnIdentifiers as $columnIdentifier) {
+                $exactExpression = $this->productCodeExactExpression($productQuery, $columnIdentifier);
+
+                if ($hasClause) {
+                    $productQuery->orWhereRaw("$exactExpression = ?", [$exactProductCode]);
+                } else {
+                    $productQuery->whereRaw("$exactExpression = ?", [$exactProductCode]);
+                    $hasClause = true;
+                }
+            }
+
+            if (!$hasClause) {
+                $productQuery->whereRaw('1 = 0');
+            }
+        });
+    }
+
     private function buildOrderLocatorContext(array $orderRow, array $orderLocator): array
     {
-        $normalizedProductCode = trim((string) ($orderLocator['product_code'] ?? ''));
-        $catalogRow = $normalizedProductCode !== ''
-            ? $this->findCatalogItemByNormalizedCode($normalizedProductCode)
+        $scannedProductCode = trim((string) ($orderLocator['product_code'] ?? ''));
+        $catalogRow = $scannedProductCode !== ''
+            ? $this->findCatalogItemByProductCode($scannedProductCode)
             : [];
-        $productCode = trim((string) ($catalogRow['acIdent'] ?? ''));
+        $productCode = $scannedProductCode;
 
         if ($productCode === '') {
             $productCode = (string) $this->valueTrimmed($orderRow, ['acIdent', 'product_code', 'acCode'], '');
-        }
-
-        if ($productCode === '') {
-            $productCode = $normalizedProductCode;
         }
 
         $productName = (string) $this->valueTrimmed($orderRow, ['acName', 'acDescr', 'title'], '');
@@ -4210,7 +5502,7 @@ class WorkOrderController extends Controller
         $context['unit'] = $this->resolveScanCreateWorkOrderUnit($orderRow, $context);
         $context['quantity'] = $this->resolveScanCreateWorkOrderQuantity($orderRow, $context);
         $context['catalog_item_notice'] = $context['catalog_item_missing']
-            ? 'Sifra artikla nije pronadjena u sifrarniku. Prilikom kreiranja RN bice automatski kreirana osnovna stavka artikla.'
+            ? 'Šifra artikla nije pronađena u šifrarniku. Prilikom kreiranja RN bit će automatski kreirana osnovna stavka artikla.'
             : '';
 
         return $context;
@@ -4315,9 +5607,8 @@ class WorkOrderController extends Controller
             ];
         }
 
-        $normalizedProductCode = $this->normalizeComparableIdentifier($productCode);
-        $catalogRow = $normalizedProductCode !== ''
-            ? $this->findCatalogItemByNormalizedCode($normalizedProductCode)
+        $catalogRow = $productCode !== ''
+            ? $this->findCatalogItemByProductCode($productCode)
             : [];
 
         if (!empty($catalogRow)) {
@@ -4349,8 +5640,8 @@ class WorkOrderController extends Controller
             ? (array) ($ensureResult['row'] ?? [])
             : [];
 
-        if (empty($catalogRow) && $normalizedProductCode !== '') {
-            $catalogRow = $this->findCatalogItemByNormalizedCode($normalizedProductCode);
+        if (empty($catalogRow) && $productCode !== '') {
+            $catalogRow = $this->findCatalogItemByProductCode($productCode);
         }
 
         $orderContext['catalog'] = $catalogRow;
@@ -4427,20 +5718,23 @@ class WorkOrderController extends Controller
         return $displayNumber !== '' ? $displayNumber : $fallbackNormalizedOrderNumber;
     }
 
-    private function findCatalogItemByNormalizedCode(string $normalizedProductCode): array
+    private function findCatalogItemByProductCode(string $productCode): array
     {
-        if ($normalizedProductCode === '') {
+        $productCode = trim($productCode);
+
+        if ($productCode === '') {
             return [];
         }
 
         try {
             $query = $this->newCatalogItemsTableQuery();
-            $normalizedExpression = $this->normalizedIdentifierExpression($query, 'acIdent');
+            $exactProductCode = $this->normalizeProductCodeExact($productCode);
+            $exactExpression = $this->productCodeExactExpression($query, 'acIdent');
             $row = $query
-                ->whereRaw("$normalizedExpression = ?", [$normalizedProductCode])
+                ->whereRaw("$exactExpression = ?", [$exactProductCode])
                 ->first();
             $catalogRow = $row === null ? [] : (array) $row;
-            $catalogProduct = Product::findCatalogProduct($normalizedProductCode);
+            $catalogProduct = Product::findCatalogProduct($productCode);
 
             if ($catalogProduct === null) {
                 return $catalogRow;
@@ -4455,7 +5749,7 @@ class WorkOrderController extends Controller
             Log::warning('Unable to resolve catalog item for scanned work order QR.', [
                 'connection' => config('database.default'),
                 'catalog_items_table' => $this->qualifiedCatalogItemsTableName(),
-                'product_code' => $normalizedProductCode,
+                'product_code' => $productCode,
                 'message' => $exception->getMessage(),
             ]);
 
@@ -4585,7 +5879,7 @@ class WorkOrderController extends Controller
         }
 
         $now = Carbon::now();
-        $priorityLabel = (string) ($this->deliveryPriorityMap()[5] ?? '5 - Uobicajeni prioritet');
+        $priorityLabel = (string) ($this->deliveryPriorityMap()[5] ?? '5 - Uobičajeni prioritet');
         $productCode = trim((string) ($orderContext['product_code'] ?? ''));
         $productName = trim((string) ($orderContext['product_name'] ?? ''));
         $orderNumber = trim((string) ($orderContext['order_number'] ?? ''));
@@ -4674,9 +5968,95 @@ class WorkOrderController extends Controller
             $note .= ' / poz ' . $orderContext['order_position'];
         }
         if ($productCode !== '') {
-            $note .= ' / sifra ' . $productCode;
+            $note .= ' / šifra ' . $productCode;
         }
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acNote', $note, false);
+
+        return $payload;
+    }
+
+    private function buildWorkOrderOrderItemLinkPayload(
+        string $workOrderKey,
+        array $orderContext,
+        mixed $user = null
+    ): array {
+        $columns = $this->workOrderOrderItemLinkInsertTableColumns();
+        $payload = [];
+
+        $orderKey = trim((string) ($orderContext['order_key'] ?? ''));
+        $orderPosition = (int) ($orderContext['order_position'] ?? 0);
+
+        if ($workOrderKey === '' || $orderKey === '') {
+            return [];
+        }
+
+        if (empty($columns)) {
+            return [];
+        }
+
+        $now = Carbon::now();
+        $username = is_object($user) ? trim((string) ($user->username ?? $user->name ?? '')) : '';
+        $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
+        $orderItemRow = $this->findOrderItemRowByOrderContext($orderContext);
+        $orderItemQIdValue = $this->toFloatOrNull($orderItemRow['anQId'] ?? null);
+        $orderItemQId = $orderItemQIdValue === null ? null : (int) $orderItemQIdValue;
+
+        if (in_array('acKey', $columns, true)) {
+            $payload['acKey'] = $workOrderKey;
+        }
+
+        if (in_array('acLnkKey', $columns, true)) {
+            $payload['acLnkKey'] = $orderKey;
+        }
+        if (in_array('anLnkNo', $columns, true)) {
+            $payload['anLnkNo'] = $orderPosition;
+        }
+        if ($orderItemQId !== null && in_array('anOrderItemQId', $columns, true)) {
+            $payload['anOrderItemQId'] = $orderItemQId;
+        }
+
+        if (in_array('anOrderItemQId', $columns, true) && !array_key_exists('anOrderItemQId', $payload)) {
+            Log::warning('Skipping work order order item link insert because order item QID could not be resolved.', [
+                'work_order_key' => $workOrderKey,
+                'order_key' => $orderKey,
+                'order_position' => $orderPosition,
+                'product_code' => (string) ($orderContext['product_code'] ?? ''),
+                'table' => $this->qualifiedWorkOrderOrderItemLinkInsertTableName(),
+            ]);
+
+            return [];
+        }
+
+        if (in_array('acType', $columns, true)) {
+            $payload['acType'] = 'DK';
+        }
+
+        if (in_array('adTimeIns', $columns, true)) {
+            $payload['adTimeIns'] = $now;
+        }
+        if (in_array('adTimeChg', $columns, true)) {
+            $payload['adTimeChg'] = $now;
+        }
+
+        if ($userId > 0) {
+            if (in_array('anUserId', $columns, true)) {
+                $payload['anUserId'] = $userId;
+            }
+            if (in_array('anUserIns', $columns, true)) {
+                $payload['anUserIns'] = $userId;
+            }
+            if (in_array('anUserChg', $columns, true)) {
+                $payload['anUserChg'] = $userId;
+            }
+        }
+
+        if ($username !== '' && in_array('acValue', $columns, true)) {
+            $payload['acValue'] = substr($username, 0, 35);
+        }
+
+        if (in_array('anNo', $columns, true)) {
+            $payload['anNo'] = 0;
+        }
 
         return $payload;
     }
@@ -4712,10 +6092,10 @@ class WorkOrderController extends Controller
             }
         }
 
-        $normalizedProductCode = $this->normalizeComparableIdentifier((string) ($orderContext['product_code'] ?? ''));
+        $productCode = trim((string) ($orderContext['product_code'] ?? ''));
 
-        if ($normalizedProductCode !== '') {
-            $catalogRow = $this->findCatalogItemByNormalizedCode($normalizedProductCode);
+        if ($productCode !== '') {
+            $catalogRow = $this->findCatalogItemByProductCode($productCode);
 
             if (!empty($catalogRow)) {
                 foreach (['anQty', 'anQty1', 'anPlanQty', 'anOrdQty', 'anQuantity', 'anDefQty', 'anDefaultQty', 'anStock'] as $column) {
@@ -4840,11 +6220,194 @@ class WorkOrderController extends Controller
         return is_string($normalized) ? $normalized : '';
     }
 
+    private function normalizeProductCodeExact(string $value): string
+    {
+        return strtoupper(trim($value));
+    }
+
+    private function normalizeComparableIdentifiers(array $values): array
+    {
+        return array_values(array_unique(array_filter(array_map(function ($value) {
+            return $this->normalizeComparableIdentifier((string) $value);
+        }, $values), function ($value) {
+            return $value !== '';
+        })));
+    }
+
     private function normalizedIdentifierExpression(Builder $query, string $columnIdentifier): string
     {
         $wrappedColumn = $query->getGrammar()->wrap($columnIdentifier);
 
         return "UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(CAST($wrappedColumn AS NVARCHAR(64)), ''), '-', ''), ' ', ''), '/', ''), '.', ''), '_', ''))";
+    }
+
+    private function productCodeExactExpression(Builder $query, string $columnIdentifier): string
+    {
+        $wrappedColumn = $query->getGrammar()->wrap($columnIdentifier);
+
+        return "UPPER(LTRIM(RTRIM(COALESCE(CAST($wrappedColumn AS NVARCHAR(64)), ''))))";
+    }
+
+    private function orderLinkageDisplayIdentifierExpression(Builder $query, string $columnIdentifier): string
+    {
+        $normalizedExpression = $this->normalizedIdentifierExpression($query, $columnIdentifier);
+
+        return "CASE WHEN LEN($normalizedExpression) = 13 AND SUBSTRING($normalizedExpression, 7, 1) = '0' THEN STUFF($normalizedExpression, 7, 1, '') ELSE $normalizedExpression END";
+    }
+
+    private function orderLinkageDisplaySqlExpression(string $sqlExpression): string
+    {
+        $normalizedExpression = $this->normalizedSqlExpression($sqlExpression);
+
+        return "CASE WHEN LEN($normalizedExpression) = 13 AND SUBSTRING($normalizedExpression, 7, 1) = '0' THEN STUFF($normalizedExpression, 7, 1, '') ELSE $normalizedExpression END";
+    }
+
+    private function normalizedSqlExpression(string $sqlExpression): string
+    {
+        return "UPPER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(CAST(($sqlExpression) AS NVARCHAR(64)), ''), '-', ''), ' ', ''), '/', ''), '.', ''), '_', ''))";
+    }
+
+    private function qualifyColumn(string $column, string $alias): string
+    {
+        return strpos($column, '.') !== false ? $column : $alias . '.' . $column;
+    }
+
+    private function qualifyColumns(array $columns, string $alias): array
+    {
+        return array_values(array_map(function ($column) use ($alias) {
+            return $this->qualifyColumn((string) $column, $alias);
+        }, $columns));
+    }
+
+    private function firstNonEmptyStringExpression(Builder $query, array $columnIdentifiers, int $length = 255): ?string
+    {
+        $columnIdentifiers = array_values(array_filter(array_map(function ($columnIdentifier) {
+            return trim((string) $columnIdentifier);
+        }, $columnIdentifiers), function ($columnIdentifier) {
+            return $columnIdentifier !== '';
+        }));
+
+        if (empty($columnIdentifiers)) {
+            return null;
+        }
+
+        $parts = array_map(function ($columnIdentifier) use ($query, $length) {
+            $wrappedColumn = $query->getGrammar()->wrap((string) $columnIdentifier);
+
+            return "NULLIF(LTRIM(RTRIM(CAST($wrappedColumn AS NVARCHAR($length)))), '')";
+        }, $columnIdentifiers);
+
+        if (count($parts) === 1) {
+            return $parts[0];
+        }
+
+        return 'COALESCE(' . implode(', ', $parts) . ')';
+    }
+
+    private function firstNonNullNumericExpression(
+        Builder $query,
+        array $columnIdentifiers,
+        int $precision = 18,
+        int $scale = 3
+    ): ?string {
+        $columnIdentifiers = array_values(array_filter(array_map(function ($columnIdentifier) {
+            return trim((string) $columnIdentifier);
+        }, $columnIdentifiers), function ($columnIdentifier) {
+            return $columnIdentifier !== '';
+        }));
+
+        if (empty($columnIdentifiers)) {
+            return null;
+        }
+
+        $parts = array_map(function ($columnIdentifier) use ($query, $precision, $scale) {
+            $wrappedColumn = $query->getGrammar()->wrap((string) $columnIdentifier);
+
+            return "TRY_CONVERT(DECIMAL($precision,$scale), $wrappedColumn)";
+        }, $columnIdentifiers);
+
+        if (count($parts) === 1) {
+            return $parts[0];
+        }
+
+        return 'COALESCE(' . implode(', ', $parts) . ')';
+    }
+
+    private function buildOrderLinkageResolvedOrderNumberExpression(
+        Builder $query,
+        array $workOrderColumns,
+        array $orderColumns,
+        bool $hasOrderJoin
+    ): ?string {
+        $orderNumberColumns = [];
+
+        if ($hasOrderJoin) {
+            $orderNumberColumns = array_merge(
+                $orderNumberColumns,
+                $this->qualifyColumns($this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']), 'ord')
+            );
+        }
+
+        // Pantheon veza nije uvijek dvosmjerna, pa kao rezervu koristimo broj narudžbe upisan direktno na RN.
+        $orderNumberColumns = array_merge(
+            $orderNumberColumns,
+            $this->qualifyColumns($this->existingColumns($workOrderColumns, ['acLnkKeyView', 'acLnkKey']), 'wo')
+        );
+
+        return $this->firstNonEmptyStringExpression($query, $orderNumberColumns);
+    }
+
+    private function mapOrderLinkageGroupRow(array $row): array
+    {
+        $orderNumber = trim((string) ($row['narudzba'] ?? ''));
+        $quantity = $this->normalizeNullableNumber($row['total_kolicina_sort'] ?? null);
+        $unit = trim((string) ($row['jedinica_sort'] ?? ''));
+        $workOrderCount = max(0, (int) ($row['broj_rn_sort'] ?? 0));
+        $positionCount = max(0, (int) ($row['broj_pozicija_sort'] ?? 0));
+        $sender = trim((string) ($row['klijent_sort'] ?? ''));
+
+        return [
+            'narudzba' => $orderNumber,
+            'order_number' => $orderNumber,
+            'klijent' => $sender,
+            'narucitelj' => $sender,
+            'prijevoznik' => $sender,
+            'datum' => $this->normalizeDate($row['datum_sort'] ?? null),
+            'totalKolicina' => $quantity,
+            'jedinica' => $unit,
+            'brojRN' => $workOrderCount,
+            'brojPozicija' => $positionCount,
+            'linkage_state' => $workOrderCount > 0 ? 'linked' : 'missing',
+            'linkage_label' => $workOrderCount > 0 ? 'Povezano' : 'Bez RN',
+            'linkage_tone' => $workOrderCount > 0 ? 'success' : 'secondary',
+        ];
+    }
+
+    private function fetchLinkedWorkOrdersByOrderNumber(string $normalizedOrderNumber): array
+    {
+        if ($normalizedOrderNumber === '') {
+            return [];
+        }
+
+        $details = $this->buildOrdersLinkageDetails($normalizedOrderNumber);
+        $workOrders = (array) ($details['work_orders'] ?? []);
+
+        if (empty($workOrders)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(function (array $row): array {
+            return [
+                'id' => trim((string) ($row['id'] ?? $row['rn_number'] ?? '')),
+                'status' => trim((string) ($row['status'] ?? 'N/A')),
+                'status_tone' => trim((string) ($row['status_tone'] ?? 'secondary')),
+                'veza' => trim((string) ($row['veza'] ?? 'Sumnjiva veza')),
+                'veza_tone' => trim((string) ($row['veza_tone'] ?? 'secondary')),
+                'pozicije' => trim((string) ($row['pozicije'] ?? '')),
+            ];
+        }, $workOrders), function (array $row): bool {
+                return $row['id'] !== '';
+        }));
     }
 
     private function mapRow(
@@ -4986,8 +6549,8 @@ class WorkOrderController extends Controller
             ['label' => 'Popravka', 'value' => $this->formatMetaNumber($repairQty), 'unit' => $unit],
             ['label' => 'Plan otpad', 'value' => $this->formatMetaNumber($planWasteQty), 'unit' => $unit],
             ['label' => 'Otpad', 'value' => $this->formatMetaNumber($wasteQty), 'unit' => $unit],
-            ['label' => 'Plan skart', 'value' => $this->formatMetaNumber($planScrapQty), 'unit' => $unit],
-            ['label' => 'Skart', 'value' => $this->formatMetaNumber($scrapQty), 'unit' => $unit],
+            ['label' => 'Plan škart', 'value' => $this->formatMetaNumber($planScrapQty), 'unit' => $unit],
+            ['label' => 'Škart', 'value' => $this->formatMetaNumber($scrapQty), 'unit' => $unit],
             ['label' => 'Vrijeme rada', 'value' => $this->formatMetaNumber($workTime), 'unit' => 'h'],
             ['label' => 'Vrijeme protoka', 'value' => $this->formatMetaNumber($throTime), 'unit' => 'h'],
             ['label' => 'Stavke', 'value' => (string) $itemTotal, 'unit' => ''],
@@ -4999,7 +6562,7 @@ class WorkOrderController extends Controller
             ['label' => 'Datum naloga', 'raw' => $this->value($raw, ['adDate'], null)],
             ['label' => 'Planirani start', 'raw' => $this->value($raw, ['adSchedStartTime'], null)],
             ['label' => 'Planirani kraj', 'raw' => $this->value($raw, ['adSchedEndTime'], null)],
-            ['label' => 'Zavrsetak WO', 'raw' => $this->value($raw, ['adWOFinishDate'], null)],
+            ['label' => 'Završetak WO', 'raw' => $this->value($raw, ['adWOFinishDate'], null)],
             ['label' => 'Datum veze', 'raw' => $this->value($raw, ['adLnkDate'], null)],
             ['label' => 'Vrijeme unosa', 'raw' => $this->value($raw, ['adTimeIns'], null)],
             ['label' => 'Vrijeme izmjene', 'raw' => $this->value($raw, ['adTimeChg'], null)],
@@ -5400,6 +6963,7 @@ class WorkOrderController extends Controller
         return [
             'id' => $this->value($row, ['anQId', 'anNo', 'anLineNo'], null),
             'item_qid' => $this->value($row, ['anWOExItemQId'], null),
+            'alternativa' => (string) $this->valueTrimmed($row, ['anVariant', 'anVariantSubLvl'], ''),
             'pozicija' => (string) $this->valueTrimmed($row, ['anNo', 'anLineNo', 'anResNo', '__item_no'], ''),
             'materijal' => (string) $this->valueTrimmed($row, ['acResursID', 'acIdent', 'acResIdent', 'acResource', 'acCode', '__item_ident'], ''),
             'naziv' => (string) $this->valueTrimmed($row, ['acResType', 'acDescr', 'acName', 'acResDescr', '__item_descr', '__item_ident'], ''),
@@ -5921,6 +7485,72 @@ class WorkOrderController extends Controller
         });
     }
 
+    private function orderLinkageOrderNumberSearchVariants(string $search): array
+    {
+        $rawSearch = trim($search);
+        $digits = preg_replace('/\D+/', '', $rawSearch);
+        $variants = [];
+
+        if (is_string($digits) && strlen($digits) === 13 && substr($digits, 6, 1) === '0') {
+            $displayDigits = $this->canonicalOrderNumberDigits($digits);
+            $variants[] = $displayDigits;
+            $variants[] = $this->formatOrderNumberDigitsForDisplay($displayDigits);
+        } else {
+            if ($rawSearch !== '') {
+                $variants[] = $rawSearch;
+            }
+
+            if (is_string($digits) && $digits !== '') {
+                $variants[] = $digits;
+                $variants[] = $this->formatOrderNumberDigitsForDisplay($digits);
+            }
+        }
+
+        return array_values(array_unique(array_filter($variants, function ($variant) {
+            return trim((string) $variant) !== '';
+        })));
+    }
+
+    private function orderLinkageOrderNumberSuffixSearch(string $search): string
+    {
+        $rawSearch = trim($search);
+
+        if (!preg_match('/^\d{4}$/', $rawSearch)) {
+            return '';
+        }
+
+        return $rawSearch;
+    }
+
+    private function orderLinkageOrderNumberTailSearch(string $search): string
+    {
+        $rawSearch = trim($search);
+
+        if (!preg_match('/^\d{1,6}$/', $rawSearch)) {
+            return '';
+        }
+
+        return $rawSearch;
+    }
+
+    private function canonicalOrderNumberDigits(string $digits): string
+    {
+        if (strlen($digits) === 13 && substr($digits, 6, 1) === '0') {
+            return substr($digits, 0, 6) . substr($digits, 7);
+        }
+
+        return $digits;
+    }
+
+    private function formatOrderNumberDigitsForDisplay(string $digits): string
+    {
+        if (strlen($digits) !== 12) {
+            return '';
+        }
+
+        return substr($digits, 0, 2) . '-' . substr($digits, 2, 4) . '-' . substr($digits, 6);
+    }
+
     private function searchVariants(string $search): array
     {
         $variants = [trim($search)];
@@ -5935,6 +7565,14 @@ class WorkOrderController extends Controller
 
             if ($formatted !== 'N/A' && !in_array($formatted, $variants, true)) {
                 $variants[] = $formatted;
+            }
+
+            if (strlen($digits) === 6) {
+                $formattedProductCode = substr($digits, 0, 2) . '-' . substr($digits, 2);
+
+                if (!in_array($formattedProductCode, $variants, true)) {
+                    $variants[] = $formattedProductCode;
+                }
             }
         }
 
@@ -6833,7 +8471,7 @@ class WorkOrderController extends Controller
             ->all();
     }
 
-    private function orderItemTableColumns(): array
+    protected function orderItemTableColumns(): array
     {
         if ($this->orderItemTableColumnsCache !== null) {
             return $this->orderItemTableColumnsCache;
@@ -6852,7 +8490,45 @@ class WorkOrderController extends Controller
         return $this->orderItemTableColumnsCache;
     }
 
-    private function orderTableColumns(): array
+    protected function workOrderOrderItemLinkTableColumns(): array
+    {
+        if ($this->workOrderOrderItemLinkTableColumnsCache !== null) {
+            return $this->workOrderOrderItemLinkTableColumnsCache;
+        }
+
+        $this->workOrderOrderItemLinkTableColumnsCache = DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->where('TABLE_SCHEMA', $this->tableSchema())
+            ->where('TABLE_NAME', $this->workOrderOrderItemLinkTableName())
+            ->pluck('COLUMN_NAME')
+            ->map(function ($columnName) {
+                return (string) $columnName;
+            })
+            ->values()
+            ->all();
+
+        return $this->workOrderOrderItemLinkTableColumnsCache;
+    }
+
+    protected function workOrderOrderItemLinkInsertTableColumns(): array
+    {
+        if ($this->workOrderOrderItemLinkInsertTableColumnsCache !== null) {
+            return $this->workOrderOrderItemLinkInsertTableColumnsCache;
+        }
+
+        $this->workOrderOrderItemLinkInsertTableColumnsCache = DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->where('TABLE_SCHEMA', $this->tableSchema())
+            ->where('TABLE_NAME', $this->workOrderOrderItemLinkInsertTableName())
+            ->pluck('COLUMN_NAME')
+            ->map(function ($columnName) {
+                return (string) $columnName;
+            })
+            ->values()
+            ->all();
+
+        return $this->workOrderOrderItemLinkInsertTableColumnsCache;
+    }
+
+    protected function orderTableColumns(): array
     {
         if ($this->orderTableColumnsCache !== null) {
             return $this->orderTableColumnsCache;
@@ -7277,14 +8953,24 @@ class WorkOrderController extends Controller
         return DB::table($this->qualifiedProductStructureTableName());
     }
 
-    private function newOrderTableQuery(): Builder
+    protected function newOrderTableQuery(): Builder
     {
         return DB::table($this->qualifiedOrderTableName());
     }
 
-    private function newOrderItemTableQuery(): Builder
+    protected function newOrderItemTableQuery(): Builder
     {
         return DB::table($this->qualifiedOrderItemTableName());
+    }
+
+    protected function newWorkOrderOrderItemLinkTableQuery(): Builder
+    {
+        return DB::table($this->qualifiedWorkOrderOrderItemLinkTableName());
+    }
+
+    private function newWorkOrderOrderItemLinkInsertTableQuery(): Builder
+    {
+        return DB::table($this->qualifiedWorkOrderOrderItemLinkInsertTableName());
     }
 
     private function newCatalogItemsTableQuery(): Builder
@@ -7335,14 +9021,80 @@ class WorkOrderController extends Controller
         return (string) config('workorders.product_structure_table', 'tHF_SetPrSt');
     }
 
-    private function orderTableName(): string
+    protected function orderTableName(): string
     {
         return (string) config('workorders.orders_table', 'tHE_Order');
     }
 
-    private function orderItemTableName(): string
+    protected function orderItemTableName(): string
     {
         return (string) config('workorders.order_items_table', 'tHE_OrderItem');
+    }
+
+    protected function workOrderOrderItemLinkTableName(): string
+    {
+        if ($this->workOrderOrderItemLinkTableCache !== null) {
+            return $this->workOrderOrderItemLinkTableCache;
+        }
+
+        $configuredTable = trim((string) config('workorders.work_order_order_item_link_table', 'vHF_LinkWOExOrderItem'));
+        $candidates = array_values(array_unique(array_filter([
+            $configuredTable,
+            'vHF_LinkWOExOrderItem',
+            'tHF_LinkWOExOrderItem',
+        ])));
+
+        foreach ($candidates as $candidate) {
+            $exists = DB::table('INFORMATION_SCHEMA.COLUMNS')
+                ->where('TABLE_SCHEMA', $this->tableSchema())
+                ->where('TABLE_NAME', $candidate)
+                ->exists();
+
+            if ($exists) {
+                $this->workOrderOrderItemLinkTableCache = (string) $candidate;
+
+                return $this->workOrderOrderItemLinkTableCache;
+            }
+        }
+
+        $this->workOrderOrderItemLinkTableCache = $configuredTable !== '' ? $configuredTable : 'tHF_LinkWOExOrderItem';
+
+        return $this->workOrderOrderItemLinkTableCache;
+    }
+
+    private function workOrderOrderItemLinkInsertTableName(): string
+    {
+        if ($this->workOrderOrderItemLinkInsertTableCache !== null) {
+            return $this->workOrderOrderItemLinkInsertTableCache;
+        }
+
+        $configuredTable = trim((string) config('workorders.work_order_order_item_link_insert_table', 'tHF_LinkWOExOrderItem'));
+        $readTable = trim((string) config('workorders.work_order_order_item_link_table', 'vHF_LinkWOExOrderItem'));
+        $derivedTable = preg_match('/^v(.+)$/', $readTable, $matches) === 1 ? 't' . $matches[1] : '';
+        $candidates = array_values(array_unique(array_filter([
+            $configuredTable,
+            $derivedTable,
+            'tHF_LinkWOExOrderItem',
+            $readTable,
+        ])));
+
+        foreach ($candidates as $candidate) {
+            $exists = DB::table('INFORMATION_SCHEMA.TABLES')
+                ->where('TABLE_SCHEMA', $this->tableSchema())
+                ->where('TABLE_NAME', $candidate)
+                ->where('TABLE_TYPE', 'BASE TABLE')
+                ->exists();
+
+            if ($exists) {
+                $this->workOrderOrderItemLinkInsertTableCache = (string) $candidate;
+
+                return $this->workOrderOrderItemLinkInsertTableCache;
+            }
+        }
+
+        $this->workOrderOrderItemLinkInsertTableCache = $configuredTable !== '' ? $configuredTable : 'tHF_LinkWOExOrderItem';
+
+        return $this->workOrderOrderItemLinkInsertTableCache;
     }
 
     private function catalogItemsTableName(): string
@@ -7375,19 +9127,1350 @@ class WorkOrderController extends Controller
         return $this->tableSchema() . '.' . $this->productStructureTableName();
     }
 
-    private function qualifiedOrderTableName(): string
+    protected function qualifiedOrderTableName(): string
     {
         return $this->tableSchema() . '.' . $this->orderTableName();
     }
 
-    private function qualifiedOrderItemTableName(): string
+    protected function qualifiedOrderItemTableName(): string
     {
         return $this->tableSchema() . '.' . $this->orderItemTableName();
+    }
+
+    protected function qualifiedWorkOrderOrderItemLinkTableName(): string
+    {
+        return $this->tableSchema() . '.' . $this->workOrderOrderItemLinkTableName();
+    }
+
+    private function qualifiedWorkOrderOrderItemLinkInsertTableName(): string
+    {
+        return $this->tableSchema() . '.' . $this->workOrderOrderItemLinkInsertTableName();
     }
 
     private function qualifiedCatalogItemsTableName(): string
     {
         return $this->tableSchema() . '.' . $this->catalogItemsTableName();
+    }
+
+    private function buildOrdersLinkageSummary(?string $normalizedOrderNumber = null): array
+    {
+        if ($normalizedOrderNumber !== null && $normalizedOrderNumber !== '') {
+            return $this->buildOrdersLinkageSummaryForOrderNumbers([$normalizedOrderNumber]);
+        }
+
+        return $this->buildOrdersLinkageSummaryForOrderNumbers(null);
+    }
+
+    private function buildOrdersLinkageSummaryForOrderNumbers(?array $normalizedOrderNumbers = null): array
+    {
+        $normalizedOrderNumbers = $normalizedOrderNumbers === null
+            ? null
+            : $this->normalizeComparableIdentifiers($normalizedOrderNumbers);
+
+        if ($normalizedOrderNumbers !== null && empty($normalizedOrderNumbers)) {
+            return [];
+        }
+
+        $headerRows = $this->fetchOrderHeadersForLinkage($normalizedOrderNumbers);
+
+        if (empty($headerRows)) {
+            return [];
+        }
+
+        $groups = [];
+        $displayNumbers = [];
+        $orderKeysToNumbers = [];
+        $rawOrderKeys = [];
+
+        foreach ($headerRows as $row) {
+            $displayNumber = $this->resolveOrderDisplayNumber(
+                $row,
+                $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acKeyView', 'acRefNo1', 'acKey'], ''))
+            );
+            $normalizedDisplayNumber = $this->normalizeComparableIdentifier($displayNumber);
+
+            if ($normalizedDisplayNumber === '') {
+                continue;
+            }
+
+            $this->primeOrderLinkageGroup($groups, $normalizedDisplayNumber, $displayNumber);
+            $displayNumbers[$normalizedDisplayNumber] = (string) ($groups[$normalizedDisplayNumber]['order_number'] ?? $displayNumber);
+
+            $customer = trim((string) $this->valueTrimmed($row, ['acConsignee', 'acReceiver', 'acPartner', 'client_name'], ''));
+            if ($customer !== '' && trim((string) ($groups[$normalizedDisplayNumber]['customer'] ?? '')) === '') {
+                $groups[$normalizedDisplayNumber]['customer'] = $customer;
+            }
+
+            $createdDate = $this->normalizeDate($this->value($row, ['adDate', 'adDateIns'], null));
+            if ($createdDate !== null) {
+                $groups[$normalizedDisplayNumber]['_date_candidates'][$createdDate] = $createdDate;
+            }
+
+            $dueDate = $this->normalizeDate($this->value($row, ['adDeliveryDeadline', 'adDateValid', 'adDateOut', 'adDateDoc'], null));
+            if ($dueDate !== null) {
+                $groups[$normalizedDisplayNumber]['_due_date_candidates'][$dueDate] = $dueDate;
+            }
+
+            $statusMeta = $this->resolveStatus($this->value($row, ['acStatusMF', 'acStatus', 'status'], ''));
+            $statusLabel = trim((string) ($statusMeta['label'] ?? ''));
+            $statusBucket = $statusMeta['bucket'] ?? null;
+
+            if ($statusLabel !== '' && $statusLabel !== 'N/A') {
+                $groups[$normalizedDisplayNumber]['_status_labels'][$statusLabel] = true;
+            }
+
+            if ($statusBucket !== null && $statusBucket !== '') {
+                $groups[$normalizedDisplayNumber]['_status_buckets'][(string) $statusBucket] = true;
+            }
+
+            $rawOrderKey = trim((string) $this->valueTrimmed($row, ['acKey'], ''));
+            $normalizedOrderKey = $this->normalizeComparableIdentifier($rawOrderKey);
+
+            if ($rawOrderKey !== '') {
+                $groups[$normalizedDisplayNumber]['_raw_order_keys'][$rawOrderKey] = true;
+                $rawOrderKeys[$rawOrderKey] = true;
+            }
+
+            if ($normalizedOrderKey !== '') {
+                $orderKeysToNumbers[$normalizedOrderKey] = $normalizedDisplayNumber;
+            }
+        }
+
+        $itemRows = $this->fetchOrderItemsForLinkage($normalizedOrderNumbers, array_values(array_keys($rawOrderKeys)));
+
+        foreach ($itemRows as $index => $row) {
+            $resolvedOrder = $this->resolveOrderLinkageNumberFromOrderItem($row, $orderKeysToNumbers, $displayNumbers);
+            $normalizedItemOrderNumber = (string) ($resolvedOrder['normalized'] ?? '');
+            $displayItemOrderNumber = (string) ($resolvedOrder['display'] ?? '');
+
+            if ($normalizedItemOrderNumber === '') {
+                continue;
+            }
+
+            $this->primeOrderLinkageGroup($groups, $normalizedItemOrderNumber, $displayItemOrderNumber);
+            $displayNumbers[$normalizedItemOrderNumber] = (string) ($groups[$normalizedItemOrderNumber]['order_number'] ?? $displayItemOrderNumber);
+
+            $positionValue = trim((string) $this->valueTrimmed($row, ['anNo', 'anLineNo', 'anItemNo', 'anPosition', 'anPos', 'anPosNo'], ''));
+            $positionKey = $positionValue !== '' ? $positionValue : '__row_' . $index;
+            $groups[$normalizedItemOrderNumber]['_position_keys'][$positionKey] = true;
+
+            $quantity = $this->normalizeNullableNumber($this->value($row, ['anQty', 'anQty1', 'anPlanQty'], null));
+            if (is_int($quantity) || is_float($quantity)) {
+                $groups[$normalizedItemOrderNumber]['quantity_total'] += (float) $quantity;
+                $groups[$normalizedItemOrderNumber]['has_quantity_total'] = true;
+            }
+        }
+
+        $workOrderRows = $this->fetchWorkOrdersForLinkage($normalizedOrderNumbers, array_values(array_keys($rawOrderKeys)));
+        $linkedOrders = $this->resolveLinkedOrdersForRows($workOrderRows);
+
+        foreach ($workOrderRows as $row) {
+            $mappedRow = $this->mapRow($row, false, $linkedOrders);
+            $resolvedOrder = $this->resolveOrderLinkageNumberFromWorkOrder(
+                $row,
+                $mappedRow,
+                $orderKeysToNumbers,
+                $displayNumbers
+            );
+            $normalizedWorkOrderNumber = (string) ($resolvedOrder['normalized'] ?? '');
+            $displayWorkOrderNumber = (string) ($resolvedOrder['display'] ?? '');
+
+            if ($normalizedWorkOrderNumber === '') {
+                continue;
+            }
+
+            $this->primeOrderLinkageGroup($groups, $normalizedWorkOrderNumber, $displayWorkOrderNumber);
+            $displayNumbers[$normalizedWorkOrderNumber] = (string) ($groups[$normalizedWorkOrderNumber]['order_number'] ?? $displayWorkOrderNumber);
+            $groups[$normalizedWorkOrderNumber]['work_order_count']++;
+
+            $linkedPosition = trim((string) ($mappedRow['broj_pozicije_narudzbe'] ?? ''));
+            if ($linkedPosition !== '') {
+                $groups[$normalizedWorkOrderNumber]['_linked_position_keys'][$linkedPosition] = true;
+            }
+
+            $workOrderQuantity = $mappedRow['kolicina'] ?? null;
+            if (is_int($workOrderQuantity) || is_float($workOrderQuantity)) {
+                $groups[$normalizedWorkOrderNumber]['work_order_qty_total'] += (float) $workOrderQuantity;
+                $groups[$normalizedWorkOrderNumber]['has_work_order_qty_total'] = true;
+            }
+        }
+
+        $summaryRows = [];
+
+        foreach ($groups as $normalizedKey => $group) {
+            $positionCount = count((array) ($group['_position_keys'] ?? []));
+            $linkedPositionCount = count((array) ($group['_linked_position_keys'] ?? []));
+            $workOrderCount = (int) ($group['work_order_count'] ?? 0);
+            $statusLabels = array_keys((array) ($group['_status_labels'] ?? []));
+            $statusBuckets = array_keys((array) ($group['_status_buckets'] ?? []));
+            $state = $this->determineOrderLinkageState(
+                $positionCount,
+                $linkedPositionCount,
+                $workOrderCount,
+                (bool) ($group['has_quantity_total'] ?? false),
+                (float) ($group['quantity_total'] ?? 0),
+                (bool) ($group['has_work_order_qty_total'] ?? false),
+                (float) ($group['work_order_qty_total'] ?? 0)
+            );
+            $stateMeta = $this->orderLinkageStateMeta($state);
+
+            $summaryRows[] = [
+                'order_number' => (string) ($group['order_number'] ?? $displayNumbers[$normalizedKey] ?? $normalizedKey),
+                'customer' => (string) ($group['customer'] ?? ''),
+                'date' => $this->orderLinkagePickDate((array) ($group['_date_candidates'] ?? []), true),
+                'due_date' => $this->orderLinkagePickDate((array) ($group['_due_date_candidates'] ?? []), false),
+                'status' => count($statusLabels) === 1
+                    ? $statusLabels[0]
+                    : (count($statusLabels) > 1 ? 'Više statusa' : 'N/A'),
+                'status_bucket' => count($statusBuckets) === 1 ? $statusBuckets[0] : ($statusBuckets[0] ?? null),
+                'quantity' => ($group['has_quantity_total'] ?? false)
+                    ? round((float) ($group['quantity_total'] ?? 0), 3)
+                    : null,
+                'position_count' => $positionCount,
+                'work_order_count' => $workOrderCount,
+                'linkage_state' => $state,
+                'linkage_label' => $stateMeta['label'],
+                'linkage_tone' => $stateMeta['tone'],
+            ];
+        }
+
+        usort($summaryRows, function (array $firstRow, array $secondRow): int {
+            $firstDate = trim((string) ($firstRow['date'] ?? ''));
+            $secondDate = trim((string) ($secondRow['date'] ?? ''));
+
+            if ($firstDate !== $secondDate) {
+                return strcmp($secondDate, $firstDate);
+            }
+
+            return strnatcasecmp(
+                (string) ($secondRow['order_number'] ?? ''),
+                (string) ($firstRow['order_number'] ?? '')
+            );
+        });
+
+        return $summaryRows;
+    }
+
+    private function buildOrdersLinkageDetails(string $normalizedOrderNumber): array
+    {
+        $summaryRows = $this->buildOrdersLinkageSummary($normalizedOrderNumber);
+        $summaryRow = $summaryRows[0] ?? null;
+
+        if ($summaryRow === null) {
+            return [];
+        }
+
+        $headerRows = $this->fetchOrderHeadersForLinkage($normalizedOrderNumber);
+        $orderKeysToNumbers = [];
+        $rawOrderKeys = [];
+        $displayNumbers = [
+            $normalizedOrderNumber => (string) ($summaryRow['order_number'] ?? $normalizedOrderNumber),
+        ];
+
+        foreach ($headerRows as $row) {
+            $rawOrderKey = trim((string) $this->valueTrimmed($row, ['acKey'], ''));
+            $normalizedOrderKey = $this->normalizeComparableIdentifier($rawOrderKey);
+
+            if ($rawOrderKey !== '') {
+                $rawOrderKeys[$rawOrderKey] = true;
+            }
+
+            if ($normalizedOrderKey !== '') {
+                $orderKeysToNumbers[$normalizedOrderKey] = $normalizedOrderNumber;
+            }
+        }
+
+        $workOrderRows = $this->fetchWorkOrdersForLinkage(
+            $normalizedOrderNumber,
+            array_values(array_keys($rawOrderKeys))
+        );
+        $orderItemRows = $this->fetchOrderItemsForLinkage(
+            $normalizedOrderNumber,
+            array_values(array_keys($rawOrderKeys))
+        );
+        $orderPositionKeys = [];
+
+        foreach ($orderItemRows as $index => $row) {
+            $resolvedOrder = $this->resolveOrderLinkageNumberFromOrderItem($row, $orderKeysToNumbers, $displayNumbers);
+
+            if (($resolvedOrder['normalized'] ?? '') !== $normalizedOrderNumber) {
+                continue;
+            }
+
+            $positionValue = trim((string) $this->valueTrimmed($row, ['anNo', 'anLineNo', 'anItemNo', 'anPosition', 'anPos', 'anPosNo'], ''));
+            $positionKey = $positionValue !== '' ? $positionValue : '__row_' . $index;
+            $orderPositionKeys[$positionKey] = true;
+        }
+
+        $linkPreview = $this->buildOrderLinkPreviewData(
+            $workOrderRows,
+            $normalizedOrderNumber,
+            array_values(array_keys($rawOrderKeys)),
+            $orderKeysToNumbers,
+            $displayNumbers
+        );
+        $summaryRow['position_count'] = count($orderPositionKeys);
+        $summaryRow['link_count'] = count((array) ($linkPreview['links'] ?? []));
+
+        return [
+            'summary' => $summaryRow,
+            'links' => (array) ($linkPreview['links'] ?? []),
+            'work_orders' => $this->buildOrderWorkOrderPreviewRows(
+                $workOrderRows,
+                $normalizedOrderNumber,
+                $orderKeysToNumbers,
+                $displayNumbers,
+                (array) ($linkPreview['work_order_position_ids'] ?? [])
+            ),
+        ];
+    }
+
+    private function fetchOrderHeadersForLinkage(array|string|null $normalizedOrderNumbers = null): array
+    {
+        if (is_string($normalizedOrderNumbers)) {
+            $normalizedOrderNumbers = $normalizedOrderNumbers === ''
+                ? null
+                : [$normalizedOrderNumbers];
+        }
+
+        if ($normalizedOrderNumbers !== null) {
+            $normalizedOrderNumbers = $this->normalizeComparableIdentifiers($normalizedOrderNumbers);
+
+            if (empty($normalizedOrderNumbers)) {
+                return [];
+            }
+        }
+
+        $orderColumns = $this->orderTableColumns();
+        $selectColumns = $this->existingColumns($orderColumns, [
+            'acKey',
+            'acKeyView',
+            'acRefNo1',
+            'acConsignee',
+            'acReceiver',
+            'acPartner',
+            'adDate',
+            'adDateIns',
+            'adDeliveryDeadline',
+            'adDateOut',
+            'adDateDoc',
+            'adDateValid',
+            'acStatusMF',
+            'acStatus',
+            'status',
+        ]);
+        $query = $this->newOrderTableQuery();
+
+        if ($normalizedOrderNumbers !== null) {
+            $orderNumberColumns = $this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']);
+
+            if (empty($orderNumberColumns)) {
+                return [];
+            }
+
+            $query->where(function (Builder $numberQuery) use ($orderNumberColumns, $normalizedOrderNumbers) {
+                $placeholders = implode(', ', array_fill(0, count($normalizedOrderNumbers), '?'));
+
+                foreach ($orderNumberColumns as $index => $orderNumberColumn) {
+                    $normalizedExpression = $this->normalizedIdentifierExpression($numberQuery, $orderNumberColumn);
+                    $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
+                    $numberQuery->{$method}("$normalizedExpression IN ($placeholders)", $normalizedOrderNumbers);
+                }
+            });
+        }
+
+        foreach (['adDate', 'adDateIns', 'acKey'] as $orderByColumn) {
+            if (in_array($orderByColumn, $orderColumns, true)) {
+                $query->orderByDesc($orderByColumn);
+            }
+        }
+
+        return (empty($selectColumns) ? $query->get() : $query->get($selectColumns))
+            ->map(function ($row) {
+                return (array) $row;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function fetchOrderItemsForLinkage(array|string|null $normalizedOrderNumbers = null, array $rawOrderKeys = []): array
+    {
+        if (is_string($normalizedOrderNumbers)) {
+            $normalizedOrderNumbers = $normalizedOrderNumbers === ''
+                ? null
+                : [$normalizedOrderNumbers];
+        }
+
+        if ($normalizedOrderNumbers !== null) {
+            $normalizedOrderNumbers = $this->normalizeComparableIdentifiers($normalizedOrderNumbers);
+
+            if (empty($normalizedOrderNumbers)) {
+                return [];
+            }
+        }
+
+        $orderItemColumns = $this->orderItemTableColumns();
+        $selectColumns = $this->existingColumns($orderItemColumns, [
+            'acKey',
+            'acLnkKey',
+            'acOrderKey',
+            'order_key',
+            'acKeyView',
+            'acRefNo1',
+            'acOrderNo',
+            'order_number',
+            'anNo',
+            'anLineNo',
+            'anItemNo',
+            'anPosition',
+            'anPos',
+            'anPosNo',
+            'acIdent',
+            'acName',
+            'acDescr',
+            'anQty',
+            'anQtyDispDoc',
+            'anQty1',
+            'anPlanQty',
+            'acUM',
+            'anPrice',
+            'anRebate',
+            'acVATCode',
+            'anVAT',
+            'acNote',
+            'anSalePrice',
+            'anPackQty',
+            'adDate',
+            'adDateOut',
+            'adDeliveryDeadline',
+            'adDeliveryDate',
+            'adDateValid',
+            'acDept',
+            'acCostDrv',
+            'anVariant',
+            'anDimVolume',
+            'anDimWeight',
+            'anDimWeightBrutto',
+            'anRebate1',
+            'anRebate2',
+            'anRebate3',
+            'anRetailPrice',
+            'anPriceCurrency',
+            'anPVValue',
+            'anPVDiscount',
+            'anPVExcise',
+            'anPVVATBase',
+            'anPVVAT',
+            'anPVForPay',
+            'anPVOCValue',
+            'anPVOCDiscount',
+            'anPVOCExcise',
+            'anPVOCVATBase',
+            'anPVOCVAT',
+            'anPVOCForPay',
+            'anRTPrice',
+            'anReserved',
+            'anQId',
+            'anQtyConverted',
+            'acUMConverted',
+            'anRTPriceConverted',
+            'acPackNum',
+            'acWeighed',
+            'acStatusMF',
+            'acStatus',
+            'status',
+        ]);
+        $query = $this->newOrderItemTableQuery();
+
+        if ($normalizedOrderNumbers !== null) {
+            $orderItemKeyColumns = $this->existingColumns($orderItemColumns, ['acKey', 'acLnkKey', 'acOrderKey', 'order_key']);
+            $orderItemNumberColumns = $this->existingColumns($orderItemColumns, ['acKeyView', 'acRefNo1', 'acOrderNo', 'order_number']);
+            $normalizedRawOrderKeys = $this->normalizeComparableIdentifiers($rawOrderKeys);
+
+            if ((empty($normalizedRawOrderKeys) || empty($orderItemKeyColumns)) && empty($orderItemNumberColumns)) {
+                return [];
+            }
+
+            $query->where(function (Builder $filterQuery) use ($orderItemKeyColumns, $orderItemNumberColumns, $normalizedOrderNumbers, $normalizedRawOrderKeys) {
+                $hasCondition = false;
+                $placeholders = implode(', ', array_fill(0, count($normalizedOrderNumbers), '?'));
+
+                if (!empty($normalizedRawOrderKeys) && !empty($orderItemKeyColumns)) {
+                    $normalizedKeyPlaceholders = implode(', ', array_fill(0, count($normalizedRawOrderKeys), '?'));
+
+                    foreach ($orderItemKeyColumns as $index => $orderItemKeyColumn) {
+                        $normalizedExpression = $this->normalizedIdentifierExpression($filterQuery, $orderItemKeyColumn);
+                        $method = $hasCondition || $index > 0 ? 'orWhereRaw' : 'whereRaw';
+                        $filterQuery->{$method}("$normalizedExpression IN ($normalizedKeyPlaceholders)", $normalizedRawOrderKeys);
+                        $hasCondition = true;
+                    }
+                }
+
+                if (!empty($orderItemNumberColumns)) {
+                    foreach ($orderItemNumberColumns as $index => $orderItemNumberColumn) {
+                        $normalizedExpression = $this->normalizedIdentifierExpression($filterQuery, $orderItemNumberColumn);
+                        $method = $hasCondition || $index > 0 ? 'orWhereRaw' : 'whereRaw';
+                        $filterQuery->{$method}("$normalizedExpression IN ($placeholders)", $normalizedOrderNumbers);
+                        $hasCondition = true;
+                    }
+                }
+            });
+        }
+
+        foreach (['anNo', 'anLineNo', 'anItemNo'] as $orderByColumn) {
+            if (in_array($orderByColumn, $orderItemColumns, true)) {
+                $query->orderBy($orderByColumn);
+            }
+        }
+
+        return (empty($selectColumns) ? $query->get() : $query->get($selectColumns))
+            ->map(function ($row) {
+                return (array) $row;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function fetchWorkOrdersForLinkage(array|string|null $normalizedOrderNumbers = null, array $rawOrderKeys = []): array
+    {
+        if (is_string($normalizedOrderNumbers)) {
+            $normalizedOrderNumbers = $normalizedOrderNumbers === ''
+                ? null
+                : [$normalizedOrderNumbers];
+        }
+
+        if ($normalizedOrderNumbers !== null) {
+            $normalizedOrderNumbers = $this->normalizeComparableIdentifiers($normalizedOrderNumbers);
+
+            if (empty($normalizedOrderNumbers)) {
+                return [];
+            }
+        }
+
+        $workOrderColumns = $this->tableColumns();
+        $selectColumns = $this->existingColumns($workOrderColumns, [
+            'acRefNo1',
+            'acKey',
+            'anNo',
+            'id',
+            'acStatusMF',
+            'anPriority',
+            'acPriority',
+            'acWayOfSale',
+            'adDate',
+            'adDateIns',
+            'adDeliveryDeadline',
+            'adDateOut',
+            'anValue',
+            'acCurrency',
+            'acLnkKey',
+            'acLnkKeyView',
+            'anLnkNo',
+            'anPlanQty',
+            'anQty',
+            'anQty1',
+            'acUM',
+            'acName',
+            'acDescr',
+            'acIdent',
+            'acCode',
+            'acNote',
+            'acStatement',
+            'acConsignee',
+            'acReceiver',
+            'acPartner',
+            'acWarehouse',
+            'acWarehouseFrom',
+            'adSchedStartTime',
+        ]);
+        $query = $this->newTableQuery();
+
+        if ($normalizedOrderNumbers !== null) {
+            $linkKeyColumn = $this->firstExistingColumn($workOrderColumns, ['acLnkKey']);
+            $linkDisplayColumns = $this->existingColumns($workOrderColumns, ['acLnkKeyView']);
+            $normalizedRawOrderKeys = $this->normalizeComparableIdentifiers($rawOrderKeys);
+
+            if (($linkKeyColumn === null || empty($normalizedRawOrderKeys)) && empty($linkDisplayColumns)) {
+                return [];
+            }
+
+            $query->where(function (Builder $filterQuery) use ($linkKeyColumn, $linkDisplayColumns, $normalizedOrderNumbers, $normalizedRawOrderKeys) {
+                $hasCondition = false;
+                $placeholders = implode(', ', array_fill(0, count($normalizedOrderNumbers), '?'));
+
+                if ($linkKeyColumn !== null && !empty($normalizedRawOrderKeys)) {
+                    $normalizedKeyPlaceholders = implode(', ', array_fill(0, count($normalizedRawOrderKeys), '?'));
+                    $normalizedExpression = $this->normalizedIdentifierExpression($filterQuery, $linkKeyColumn);
+                    $filterQuery->whereRaw("$normalizedExpression IN ($normalizedKeyPlaceholders)", $normalizedRawOrderKeys);
+                    $hasCondition = true;
+                }
+
+                foreach ($linkDisplayColumns as $index => $linkDisplayColumn) {
+                    $normalizedExpression = $this->normalizedIdentifierExpression($filterQuery, $linkDisplayColumn);
+                    $method = $hasCondition || $index > 0 ? 'orWhereRaw' : 'whereRaw';
+                    $filterQuery->{$method}("$normalizedExpression IN ($placeholders)", $normalizedOrderNumbers);
+                    $hasCondition = true;
+                }
+            });
+        }
+
+        foreach (['adDate', 'adDateIns', 'adTimeIns', 'anNo'] as $orderByColumn) {
+            if (in_array($orderByColumn, $workOrderColumns, true)) {
+                $query->orderByDesc($orderByColumn);
+            }
+        }
+
+        return (empty($selectColumns) ? $query->get() : $query->get($selectColumns))
+            ->map(function ($row) {
+                return (array) $row;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function fetchWorkOrderOrderItemLinksForLinkage(array|string|null $normalizedOrderNumbers = null, array $rawOrderKeys = []): array
+    {
+        if (is_string($normalizedOrderNumbers)) {
+            $normalizedOrderNumbers = $normalizedOrderNumbers === ''
+                ? null
+                : [$normalizedOrderNumbers];
+        }
+
+        if ($normalizedOrderNumbers !== null) {
+            $normalizedOrderNumbers = $this->normalizeComparableIdentifiers($normalizedOrderNumbers);
+
+            if (empty($normalizedOrderNumbers)) {
+                return [];
+            }
+        }
+
+        $linkColumns = $this->workOrderOrderItemLinkTableColumns();
+
+        if (empty($linkColumns)) {
+            return [];
+        }
+
+        $selectColumns = $this->existingColumns($linkColumns, [
+            'acKey',
+            'acKeyView',
+            'anNo',
+            'acLnkKey',
+            'acLnkKeyView',
+            'anLnkNo',
+            'acType',
+            'acTypeA',
+            'acTypeB',
+            'anFieldNA',
+            'anFieldNB',
+            'adDate',
+            'acValue',
+            'adTimeIns',
+        ]);
+        $query = $this->newWorkOrderOrderItemLinkTableQuery();
+
+        if ($normalizedOrderNumbers !== null) {
+            $linkKeyColumns = $this->existingColumns($linkColumns, ['acLnkKey']);
+            $linkDisplayColumns = $this->existingColumns($linkColumns, ['acLnkKeyView']);
+            $normalizedRawOrderKeys = $this->normalizeComparableIdentifiers($rawOrderKeys);
+
+            if ((empty($normalizedRawOrderKeys) || empty($linkKeyColumns)) && empty($linkDisplayColumns)) {
+                return [];
+            }
+
+            $query->where(function (Builder $filterQuery) use ($linkKeyColumns, $linkDisplayColumns, $normalizedOrderNumbers, $normalizedRawOrderKeys) {
+                $hasCondition = false;
+                $placeholders = implode(', ', array_fill(0, count($normalizedOrderNumbers), '?'));
+
+                if (!empty($normalizedRawOrderKeys) && !empty($linkKeyColumns)) {
+                    $normalizedKeyPlaceholders = implode(', ', array_fill(0, count($normalizedRawOrderKeys), '?'));
+
+                    foreach ($linkKeyColumns as $index => $linkKeyColumn) {
+                        $normalizedExpression = $this->normalizedIdentifierExpression($filterQuery, $linkKeyColumn);
+                        $method = $hasCondition || $index > 0 ? 'orWhereRaw' : 'whereRaw';
+                        $filterQuery->{$method}("$normalizedExpression IN ($normalizedKeyPlaceholders)", $normalizedRawOrderKeys);
+                        $hasCondition = true;
+                    }
+                }
+
+                foreach ($linkDisplayColumns as $index => $linkDisplayColumn) {
+                    $normalizedExpression = $this->normalizedIdentifierExpression($filterQuery, $linkDisplayColumn);
+                    $method = $hasCondition || $index > 0 ? 'orWhereRaw' : 'whereRaw';
+                    $filterQuery->{$method}("$normalizedExpression IN ($placeholders)", $normalizedOrderNumbers);
+                    $hasCondition = true;
+                }
+            });
+        }
+
+        foreach (['adTimeIns', 'adDate', 'acKey', 'anNo'] as $orderByColumn) {
+            if (in_array($orderByColumn, $linkColumns, true)) {
+                $query->orderByDesc($orderByColumn);
+            }
+        }
+
+        return (empty($selectColumns) ? $query->get() : $query->get($selectColumns))
+            ->map(function ($row) {
+                return (array) $row;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function primeOrderLinkageGroup(array &$groups, string $normalizedOrderNumber, string $displayOrderNumber): void
+    {
+        if (isset($groups[$normalizedOrderNumber])) {
+            if ($displayOrderNumber !== '' && trim((string) ($groups[$normalizedOrderNumber]['order_number'] ?? '')) === '') {
+                $groups[$normalizedOrderNumber]['order_number'] = $displayOrderNumber;
+            }
+
+            return;
+        }
+
+        $groups[$normalizedOrderNumber] = [
+            'order_number' => $displayOrderNumber,
+            'customer' => '',
+            'quantity_total' => 0.0,
+            'has_quantity_total' => false,
+            'work_order_count' => 0,
+            'work_order_qty_total' => 0.0,
+            'has_work_order_qty_total' => false,
+            '_date_candidates' => [],
+            '_due_date_candidates' => [],
+            '_status_labels' => [],
+            '_status_buckets' => [],
+            '_raw_order_keys' => [],
+            '_position_keys' => [],
+            '_linked_position_keys' => [],
+        ];
+    }
+
+    private function resolveOrderLinkageNumberFromOrderItem(
+        array $row,
+        array $orderKeysToNumbers,
+        array $displayNumbers
+    ): array {
+        foreach (['acKey', 'acLnkKey', 'acOrderKey', 'order_key'] as $candidateKeyColumn) {
+            $candidateKey = $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, [$candidateKeyColumn], ''));
+
+            if ($candidateKey === '' || !array_key_exists($candidateKey, $orderKeysToNumbers)) {
+                continue;
+            }
+
+            $normalizedOrderNumber = (string) $orderKeysToNumbers[$candidateKey];
+
+            return [
+                'normalized' => $normalizedOrderNumber,
+                'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $normalizedOrderNumber),
+            ];
+        }
+
+        $displayOrderNumber = trim((string) $this->valueTrimmed($row, ['acKeyView', 'acRefNo1', 'acOrderNo', 'order_number'], ''));
+        $normalizedOrderNumber = $this->normalizeComparableIdentifier($displayOrderNumber);
+
+        if ($normalizedOrderNumber === '') {
+            return [
+                'normalized' => '',
+                'display' => '',
+            ];
+        }
+
+        return [
+            'normalized' => $normalizedOrderNumber,
+            'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $displayOrderNumber),
+        ];
+    }
+
+    private function resolveOrderLinkageNumberFromLinkRow(
+        array $row,
+        array $orderKeysToNumbers,
+        array $displayNumbers
+    ): array {
+        $linkedOrderKey = $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acLnkKey'], ''));
+
+        if ($linkedOrderKey !== '' && array_key_exists($linkedOrderKey, $orderKeysToNumbers)) {
+            $normalizedOrderNumber = (string) $orderKeysToNumbers[$linkedOrderKey];
+
+            return [
+                'normalized' => $normalizedOrderNumber,
+                'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $normalizedOrderNumber),
+            ];
+        }
+
+        $displayOrderNumber = trim((string) $this->valueTrimmed($row, ['acLnkKeyView'], ''));
+        $normalizedOrderNumber = $this->normalizeComparableIdentifier($displayOrderNumber);
+
+        if ($normalizedOrderNumber === '') {
+            return [
+                'normalized' => '',
+                'display' => '',
+            ];
+        }
+
+        return [
+            'normalized' => $normalizedOrderNumber,
+            'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $displayOrderNumber),
+        ];
+    }
+
+    private function resolveOrderLinkageNumberFromWorkOrder(
+        array $row,
+        array $mappedRow,
+        array $orderKeysToNumbers,
+        array $displayNumbers
+    ): array {
+        $linkedOrderKey = $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acLnkKey'], ''));
+
+        if ($linkedOrderKey !== '' && array_key_exists($linkedOrderKey, $orderKeysToNumbers)) {
+            $normalizedOrderNumber = (string) $orderKeysToNumbers[$linkedOrderKey];
+
+            return [
+                'normalized' => $normalizedOrderNumber,
+                'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $normalizedOrderNumber),
+            ];
+        }
+
+        $mappedOrderNumber = trim((string) ($mappedRow['broj_narudzbe'] ?? ''));
+        $normalizedMappedOrderNumber = $this->normalizeComparableIdentifier($mappedOrderNumber);
+
+        if ($normalizedMappedOrderNumber !== '' && array_key_exists($normalizedMappedOrderNumber, $displayNumbers)) {
+            return [
+                'normalized' => $normalizedMappedOrderNumber,
+                'display' => (string) ($displayNumbers[$normalizedMappedOrderNumber] ?? $mappedOrderNumber),
+            ];
+        }
+
+        // Pantheon veza nije uvijek dvosmjerna, pa kao rezervu koristimo vidljivi broj narudžbe upisan na RN.
+        $displayOrderNumber = trim((string) $this->valueTrimmed($row, ['acLnkKeyView'], ''));
+        $normalizedDisplayOrderNumber = $this->normalizeComparableIdentifier($displayOrderNumber);
+
+        if ($normalizedDisplayOrderNumber !== '') {
+            return [
+                'normalized' => $normalizedDisplayOrderNumber,
+                'display' => (string) ($displayNumbers[$normalizedDisplayOrderNumber] ?? $displayOrderNumber),
+            ];
+        }
+
+        if ($normalizedMappedOrderNumber !== '') {
+            return [
+                'normalized' => $normalizedMappedOrderNumber,
+                'display' => $mappedOrderNumber !== ''
+                    ? $mappedOrderNumber
+                    : (string) ($displayNumbers[$normalizedMappedOrderNumber] ?? $normalizedMappedOrderNumber),
+            ];
+        }
+
+        return [
+            'normalized' => '',
+            'display' => '',
+        ];
+    }
+
+    private function resolveOrderLinkageMatchMetaFromWorkOrder(
+        array $row,
+        array $mappedRow,
+        array $orderKeysToNumbers,
+        array $displayNumbers
+    ): array {
+        $positionLink = trim((string) ($mappedRow['broj_pozicije_narudzbe'] ?? $this->valueTrimmed($row, ['anLnkNo'], '')));
+        $hasPositionLink = $positionLink !== '';
+        $linkedOrderKey = $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acLnkKey'], ''));
+
+        if ($linkedOrderKey !== '' && array_key_exists($linkedOrderKey, $orderKeysToNumbers)) {
+            $normalizedOrderNumber = (string) $orderKeysToNumbers[$linkedOrderKey];
+
+            return [
+                'normalized' => $normalizedOrderNumber,
+                'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $normalizedOrderNumber),
+                'match_type' => 'direct',
+                'has_position_link' => $hasPositionLink,
+            ];
+        }
+
+        $mappedOrderNumber = trim((string) ($mappedRow['broj_narudzbe'] ?? ''));
+        $normalizedMappedOrderNumber = $this->normalizeComparableIdentifier($mappedOrderNumber);
+
+        if ($normalizedMappedOrderNumber !== '' && array_key_exists($normalizedMappedOrderNumber, $displayNumbers)) {
+            return [
+                'normalized' => $normalizedMappedOrderNumber,
+                'display' => (string) ($displayNumbers[$normalizedMappedOrderNumber] ?? $mappedOrderNumber),
+                'match_type' => 'mapped',
+                'has_position_link' => $hasPositionLink,
+            ];
+        }
+
+        // Pantheon veza nije uvijek dvosmjerna, pa kao rezervu koristimo vidljivi broj narudzbe upisan na RN.
+        $displayOrderNumber = trim((string) $this->valueTrimmed($row, ['acLnkKeyView'], ''));
+        $normalizedDisplayOrderNumber = $this->normalizeComparableIdentifier($displayOrderNumber);
+
+        if ($normalizedDisplayOrderNumber !== '') {
+            return [
+                'normalized' => $normalizedDisplayOrderNumber,
+                'display' => (string) ($displayNumbers[$normalizedDisplayOrderNumber] ?? $displayOrderNumber),
+                'match_type' => 'visible',
+                'has_position_link' => $hasPositionLink,
+            ];
+        }
+
+        if ($normalizedMappedOrderNumber !== '') {
+            return [
+                'normalized' => $normalizedMappedOrderNumber,
+                'display' => $mappedOrderNumber !== ''
+                    ? $mappedOrderNumber
+                    : (string) ($displayNumbers[$normalizedMappedOrderNumber] ?? $normalizedMappedOrderNumber),
+                'match_type' => 'fallback',
+                'has_position_link' => $hasPositionLink,
+            ];
+        }
+
+        return [
+            'normalized' => '',
+            'display' => '',
+            'match_type' => 'none',
+            'has_position_link' => $hasPositionLink,
+        ];
+    }
+
+    private function orderWorkOrderLinkageMeta(array $resolvedOrder): array
+    {
+        $matchType = trim((string) ($resolvedOrder['match_type'] ?? 'none'));
+        $hasPositionLink = (bool) ($resolvedOrder['has_position_link'] ?? false);
+
+        if (in_array($matchType, ['direct', 'mapped'], true)) {
+            return $hasPositionLink
+                ? ['label' => 'Puna veza', 'tone' => 'success']
+                : ['label' => 'Djelimična veza', 'tone' => 'warning'];
+        }
+
+        return [
+            'label' => 'Sumnjiva veza',
+            'tone' => 'secondary',
+        ];
+    }
+
+    private function buildOrderLinkPreviewData(
+        array $workOrderRows,
+        string $normalizedOrderNumber,
+        array $rawOrderKeys,
+        array $orderKeysToNumbers,
+        array $displayNumbers
+    ): array {
+        $linkRows = $this->fetchWorkOrderOrderItemLinksForLinkage($normalizedOrderNumber, $rawOrderKeys);
+        $orderItemRows = $this->fetchOrderItemsForLinkage($normalizedOrderNumber, $rawOrderKeys);
+        $orderItemsByKeyAndPosition = [];
+
+        foreach ($orderItemRows as $row) {
+            $resolvedOrder = $this->resolveOrderLinkageNumberFromOrderItem($row, $orderKeysToNumbers, $displayNumbers);
+
+            if (($resolvedOrder['normalized'] ?? '') !== $normalizedOrderNumber) {
+                continue;
+            }
+
+            $orderKey = $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acKey', 'acLnkKey', 'acOrderKey', 'order_key'], ''));
+            $position = trim((string) $this->valueTrimmed($row, ['anNo', 'anLineNo', 'anItemNo', 'anPosition', 'anPos', 'anPosNo'], ''));
+
+            if ($orderKey === '' || $position === '') {
+                continue;
+            }
+
+            $orderItemsByKeyAndPosition[$orderKey . '#' . $position] = $row;
+        }
+
+        $linkedOrders = $this->resolveLinkedOrdersForRows($workOrderRows);
+        $mappedWorkOrdersByKey = [];
+        $rawWorkOrdersByKey = [];
+
+        foreach ($workOrderRows as $row) {
+            $workOrderKey = $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acKey'], ''));
+
+            if ($workOrderKey === '') {
+                continue;
+            }
+
+            $mappedWorkOrdersByKey[$workOrderKey] = $this->mapRow($row, false, $linkedOrders);
+            $rawWorkOrdersByKey[$workOrderKey] = $row;
+        }
+
+        $links = [];
+        $workOrderPositionIds = [];
+        $seenLinks = [];
+
+        foreach ($linkRows as $index => $row) {
+            $resolvedOrder = $this->resolveOrderLinkageNumberFromLinkRow($row, $orderKeysToNumbers, $displayNumbers);
+
+            if (($resolvedOrder['normalized'] ?? '') !== $normalizedOrderNumber) {
+                continue;
+            }
+
+            $workOrderKey = $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acKey'], ''));
+            $orderKey = $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acLnkKey'], ''));
+            $position = trim((string) $this->valueTrimmed($row, ['anLnkNo'], ''));
+            $linkType = trim((string) $this->valueTrimmed($row, ['acType'], ''));
+            $seenKey = strtolower($workOrderKey . '#' . $orderKey . '#' . $position . '#' . $linkType);
+
+            if (isset($seenLinks[$seenKey])) {
+                continue;
+            }
+
+            $seenLinks[$seenKey] = true;
+
+            $mappedWorkOrder = (array) ($mappedWorkOrdersByKey[$workOrderKey] ?? []);
+            $rawWorkOrder = (array) ($rawWorkOrdersByKey[$workOrderKey] ?? []);
+            $workOrderNumber = trim((string) ($mappedWorkOrder['broj_naloga'] ?? $this->valueTrimmed($row, ['acKeyView'], '')));
+            $orderItem = (array) ($orderItemsByKeyAndPosition[$orderKey . '#' . $position] ?? []);
+
+            if ($workOrderNumber !== '' && $position !== '') {
+                $workOrderPositionIds[$workOrderNumber][$position] = $position;
+            }
+
+            $orderedQty = $this->toFloatOrNull($this->value(
+                $orderItem,
+                ['anQty', 'anQty1', 'anPlanQty'],
+                $this->value($rawWorkOrder, ['anPlanQty', 'anQty', 'anQty1'], $mappedWorkOrder['kolicina'] ?? null)
+            ));
+            $producedQty = $this->toFloatOrNull($this->value($rawWorkOrder, ['anProducedQty'], null));
+
+            if ($producedQty === null && $orderedQty !== null) {
+                $producedQty = 0.0;
+            }
+
+            $remainingQty = null;
+            if ($orderedQty !== null) {
+                $remainingQty = max($orderedQty - (float) ($producedQty ?? 0.0), 0.0);
+            }
+
+            $orderItemQuantity = $this->toFloatOrNull($this->value($orderItem, ['anQty', 'anQty1', 'anPlanQty'], $orderedQty));
+            $dispatchedQty = $this->toFloatOrNull($this->value($orderItem, ['anQtyDispDoc'], null));
+            $packageQty = $this->toFloatOrNull($this->value($orderItem, ['anPackQty'], null));
+            $unitNetWeight = $this->toFloatOrNull($this->value($orderItem, ['anDimWeight'], null));
+            $unitGrossWeight = $this->toFloatOrNull($this->value($orderItem, ['anDimWeightBrutto'], null));
+            $unitVolume = $this->toFloatOrNull($this->value($orderItem, ['anDimVolume'], null));
+            $dimensionMultiplier = $orderItemQuantity ?? $orderedQty;
+            $netWeight = $unitNetWeight !== null && $dimensionMultiplier !== null ? $unitNetWeight * $dimensionMultiplier : $unitNetWeight;
+            $grossWeight = $unitGrossWeight !== null && $dimensionMultiplier !== null ? $unitGrossWeight * $dimensionMultiplier : $unitGrossWeight;
+            $volume = $unitVolume !== null && $dimensionMultiplier !== null ? $unitVolume * $dimensionMultiplier : $unitVolume;
+            $deliveryDate = $this->normalizeDate($this->value(
+                $orderItem,
+                ['adDeliveryDeadline', 'adDeliveryDate', 'adDateOut', 'adDateValid'],
+                null
+            ));
+            $dateValue = $this->normalizeDate($this->value(
+                $rawWorkOrder,
+                ['adDate', 'adTimeIns'],
+                $this->value($row, ['adDate', 'adTimeIns'], null)
+            ));
+            $status = trim((string) ($mappedWorkOrder['status'] ?? 'N/A'));
+            $statusBucket = $this->statusBucket($status);
+            $statusToneMap = [
+                'planiran' => 'primary',
+                'otvoren' => 'success',
+                'rezerviran' => 'warning',
+                'raspisan' => 'info',
+                'u_radu' => 'warning',
+                'djelimicno_zakljucen' => 'warning',
+                'zakljucen' => 'danger',
+            ];
+
+            $links[] = [
+                'id' => $workOrderNumber !== '' && $position !== ''
+                    ? $workOrderNumber . '-' . $position
+                    : ($workOrderNumber !== '' ? $workOrderNumber : '__link_' . $index),
+                'dokument' => $workOrderNumber !== '' ? $workOrderNumber : trim((string) $this->valueTrimmed($row, ['acKeyView', 'acKey'], '-')),
+                'datum' => $this->displayDate($dateValue),
+                'rn_number' => $workOrderNumber,
+                'pozicija' => $position,
+                'artikal' => trim((string) ($orderItem['acIdent'] ?? $mappedWorkOrder['sifra'] ?? '')),
+                'opis' => trim((string) ($orderItem['acName'] ?? $mappedWorkOrder['naziv'] ?? '')),
+                'napomena' => trim((string) $this->valueTrimmed($orderItem, ['acNote', 'acDescr'], '')),
+                'status' => $status,
+                'status_tone' => $statusBucket !== null ? ($statusToneMap[$statusBucket] ?? 'secondary') : 'secondary',
+                'alt' => $this->normalizeNullableNumber($this->value($orderItem, ['anVariant'], null)),
+                'tip' => $linkType,
+                'naruceno' => $orderedQty,
+                'kolicina' => $orderItemQuantity,
+                'otpremljeno' => $dispatchedQty,
+                'izradjeno' => $producedQty,
+                'neizradjeno' => $remainingQty,
+                'jm' => trim((string) ($orderItem['acUM'] ?? $mappedWorkOrder['mj'] ?? $this->valueTrimmed($rawWorkOrder, ['acUM'], ''))),
+                'cijena' => $this->normalizeNullableNumber($this->value($orderItem, ['anPrice'], null)),
+                'r1' => $this->normalizeNullableNumber($this->value($orderItem, ['anRebate1'], null)),
+                'r2' => $this->normalizeNullableNumber($this->value($orderItem, ['anRebate2'], null)),
+                'sr' => $this->normalizeNullableNumber($this->value($orderItem, ['anRebate3'], null)),
+                'popust' => $this->normalizeNullableNumber($this->value($orderItem, ['anRebate'], null)),
+                'vrijednost' => $this->normalizeNullableNumber($this->value($orderItem, ['anPVValue'], null)),
+                'pdv' => trim((string) $this->valueTrimmed($orderItem, ['acVATCode'], '')),
+                'pdv_stopa' => $this->normalizeNullableNumber($this->value($orderItem, ['anVAT'], null)),
+                'za_platiti' => $this->normalizeNullableNumber($this->value($orderItem, ['anPVForPay'], null)),
+                'paketa' => $packageQty,
+                'neto_tezina' => $netWeight,
+                'bruto_tezina' => $grossWeight,
+                'volumen' => $volume,
+                'rok_otpreme' => $this->displayDate($deliveryDate),
+                'odjel' => trim((string) $this->valueTrimmed($orderItem, ['acDept'], '')),
+                'nos_tr' => trim((string) $this->valueTrimmed($orderItem, ['acCostDrv'], '')),
+                'cijena_s_rabatom' => $this->normalizeNullableNumber($this->value($orderItem, ['anRTPrice', 'anSalePrice', 'anPrice'], null)),
+                'order_item_qid' => $this->normalizeNullableNumber($this->value($orderItem, ['anQId'], null)),
+                '_sort_rn' => $workOrderNumber,
+                '_sort_position' => $this->toFloatOrNull($position !== '' ? $position : null),
+                '_sort_index' => $index,
+            ];
+        }
+
+        usort($links, static function (array $firstRow, array $secondRow): int {
+            $firstWorkOrder = trim((string) ($firstRow['_sort_rn'] ?? ''));
+            $secondWorkOrder = trim((string) ($secondRow['_sort_rn'] ?? ''));
+
+            if ($firstWorkOrder !== $secondWorkOrder) {
+                return strnatcasecmp($firstWorkOrder, $secondWorkOrder);
+            }
+
+            $firstPosition = $firstRow['_sort_position'] ?? null;
+            $secondPosition = $secondRow['_sort_position'] ?? null;
+
+            if ($firstPosition !== null && $secondPosition !== null && $firstPosition !== $secondPosition) {
+                return $firstPosition <=> $secondPosition;
+            }
+
+            if ($firstPosition !== null && $secondPosition === null) {
+                return -1;
+            }
+
+            if ($firstPosition === null && $secondPosition !== null) {
+                return 1;
+            }
+
+            return ($firstRow['_sort_index'] ?? 0) <=> ($secondRow['_sort_index'] ?? 0);
+        });
+
+        return [
+            'links' => array_map(static function (array $row): array {
+                unset($row['_sort_rn'], $row['_sort_position'], $row['_sort_index']);
+
+                return $row;
+            }, $links),
+            'work_order_position_ids' => array_map(static function (array $ids): array {
+                return array_values($ids);
+            }, $workOrderPositionIds),
+        ];
+    }
+
+    private function buildOrderPositionPreviewData(
+        array $rows,
+        string $normalizedOrderNumber,
+        array $orderKeysToNumbers,
+        array $displayNumbers
+    ): array {
+        $linkedOrders = $this->resolveLinkedOrdersForRows($rows);
+        $positions = [];
+        $workOrderPositionIds = [];
+
+        foreach ($rows as $index => $row) {
+            $mappedRow = $this->mapRow($row, false, $linkedOrders);
+            $resolvedOrder = $this->resolveOrderLinkageMatchMetaFromWorkOrder($row, $mappedRow, $orderKeysToNumbers, $displayNumbers);
+
+            if (($resolvedOrder['normalized'] ?? '') !== $normalizedOrderNumber) {
+                continue;
+            }
+
+            $workOrderNumber = trim((string) ($mappedRow['broj_naloga'] ?? ''));
+            $resourceRows = $this->fetchMappedWorkOrderItemResources($row);
+
+            foreach ($resourceRows as $resourceIndex => $resourceRow) {
+                $positionId = trim((string) ($resourceRow['id'] ?? ''));
+                $positionNumber = trim((string) ($resourceRow['pozicija'] ?? ''));
+                $positionReference = $positionId !== '' ? $positionId : $positionNumber;
+
+                if ($workOrderNumber !== '' && $positionReference !== '') {
+                    $workOrderPositionIds[$workOrderNumber][$positionReference] = $positionReference;
+                }
+
+                $positions[] = [
+                    'id' => $positionReference,
+                    'rn_number' => $workOrderNumber,
+                    'alternativa' => (string) ($resourceRow['alternativa'] ?? ''),
+                    'pozicija' => $positionNumber,
+                    'sifra' => (string) ($resourceRow['materijal'] ?? ''),
+                    'naziv' => (string) ($resourceRow['naziv'] ?? ''),
+                    'napomena' => (string) ($resourceRow['napomena'] ?? ''),
+                    'kolicina' => $this->normalizeNullableNumber($resourceRow['kolicina'] ?? null),
+                    'mj' => (string) ($resourceRow['mj'] ?? ''),
+                    '_sort_work_order' => $workOrderNumber,
+                    '_sort_position' => $this->toFloatOrNull($positionNumber !== '' ? $positionNumber : null),
+                    '_sort_index' => ($index * 1000) + $resourceIndex,
+                ];
+            }
+        }
+
+        usort($positions, static function (array $firstRow, array $secondRow): int {
+            $firstWorkOrder = trim((string) ($firstRow['_sort_work_order'] ?? ''));
+            $secondWorkOrder = trim((string) ($secondRow['_sort_work_order'] ?? ''));
+
+            if ($firstWorkOrder !== $secondWorkOrder) {
+                return strnatcasecmp($firstWorkOrder, $secondWorkOrder);
+            }
+
+            $firstPosition = $firstRow['_sort_position'] ?? null;
+            $secondPosition = $secondRow['_sort_position'] ?? null;
+
+            if ($firstPosition !== null && $secondPosition !== null && $firstPosition !== $secondPosition) {
+                return $firstPosition <=> $secondPosition;
+            }
+
+            if ($firstPosition !== null && $secondPosition === null) {
+                return -1;
+            }
+
+            if ($firstPosition === null && $secondPosition !== null) {
+                return 1;
+            }
+
+            return ($firstRow['_sort_index'] ?? 0) <=> ($secondRow['_sort_index'] ?? 0);
+        });
+
+        return [
+            'positions' => array_map(static function (array $row): array {
+                unset($row['_sort_work_order'], $row['_sort_position'], $row['_sort_index']);
+
+                return $row;
+            }, $positions),
+            'work_order_position_ids' => array_map(static function (array $ids): array {
+                return array_values($ids);
+            }, $workOrderPositionIds),
+        ];
+    }
+
+    private function buildOrderWorkOrderPreviewRows(
+        array $rows,
+        string $normalizedOrderNumber,
+        array $orderKeysToNumbers,
+        array $displayNumbers,
+        array $workOrderPositionIds = []
+    ): array {
+        $linkedOrders = $this->resolveLinkedOrdersForRows($rows);
+        $workOrders = [];
+
+        foreach ($rows as $index => $row) {
+            $mappedRow = $this->mapRow($row, false, $linkedOrders);
+            $resolvedOrder = $this->resolveOrderLinkageMatchMetaFromWorkOrder($row, $mappedRow, $orderKeysToNumbers, $displayNumbers);
+            $linkageMeta = $this->orderWorkOrderLinkageMeta($resolvedOrder);
+
+            if (($resolvedOrder['normalized'] ?? '') !== $normalizedOrderNumber) {
+                continue;
+            }
+
+            $workOrderNumber = (string) ($mappedRow['broj_naloga'] ?? '');
+            $positionIds = array_values((array) ($workOrderPositionIds[$workOrderNumber] ?? []));
+            $status = (string) ($mappedRow['status'] ?? 'N/A');
+            $statusBucket = $this->statusBucket($status);
+            $statusToneMap = [
+                'planiran' => 'primary',
+                'otvoren' => 'success',
+                'rezerviran' => 'warning',
+                'raspisan' => 'info',
+                'u_radu' => 'warning',
+                'djelimicno_zakljucen' => 'warning',
+                'zakljucen' => 'danger',
+            ];
+
+            $workOrders[] = [
+                'id' => $workOrderNumber,
+                'rn_number' => $workOrderNumber,
+                'order_number' => (string) ($resolvedOrder['display'] ?? $mappedRow['broj_narudzbe'] ?? ''),
+                'issue_date' => $this->displayDate($mappedRow['datum_kreiranja'] ?? null),
+                'planned_start' => $this->formatMetaDateTime($this->value($row, ['adSchedStartTime'], null)),
+                'status' => $status,
+                'status_tone' => $statusBucket !== null ? ($statusToneMap[$statusBucket] ?? 'secondary') : 'secondary',
+                'sifra' => (string) ($mappedRow['sifra'] ?? ''),
+                'naziv' => (string) ($mappedRow['naziv'] ?? ''),
+                'kolicina' => $mappedRow['kolicina'] ?? null,
+                'mj' => (string) ($mappedRow['mj'] ?? ''),
+                'link_position' => (string) ($mappedRow['broj_pozicije_narudzbe'] ?? ''),
+                'veza' => (string) ($linkageMeta['label'] ?? 'Sumnjiva veza'),
+                'veza_tone' => (string) ($linkageMeta['tone'] ?? 'secondary'),
+                'pozicije' => !empty($positionIds) ? implode(', ', $positionIds) : '',
+                '_sort_date' => (string) ($mappedRow['datum_kreiranja'] ?? ''),
+                '_sort_index' => $index,
+            ];
+        }
+
+        usort($workOrders, static function (array $firstRow, array $secondRow): int {
+            $firstDate = trim((string) ($firstRow['_sort_date'] ?? ''));
+            $secondDate = trim((string) ($secondRow['_sort_date'] ?? ''));
+
+            if ($firstDate !== $secondDate) {
+                return strcmp($secondDate, $firstDate);
+            }
+
+            return ($firstRow['_sort_index'] ?? 0) <=> ($secondRow['_sort_index'] ?? 0);
+        });
+
+        return array_map(static function (array $row): array {
+            unset($row['_sort_date'], $row['_sort_index']);
+
+            return $row;
+        }, $workOrders);
+    }
+
+    private function orderLinkagePickDate(array $dateCandidates, bool $preferEarliest): ?string
+    {
+        $dates = array_values(array_filter(array_map(function ($value) {
+            return $this->normalizeDate($value);
+        }, $dateCandidates)));
+
+        if (empty($dates)) {
+            return null;
+        }
+
+        sort($dates);
+
+        return $preferEarliest ? $dates[0] : $dates[count($dates) - 1];
+    }
+
+    private function determineOrderLinkageState(
+        int $positionCount,
+        int $linkedPositionCount,
+        int $workOrderCount,
+        bool $hasOrderQuantity,
+        float $orderQuantity,
+        bool $hasWorkOrderQuantity,
+        float $workOrderQuantity
+    ): string {
+        if ($workOrderCount < 1) {
+            return 'none';
+        }
+
+        // Pantheon veza nije uvijek dvosmjerna, pa "djelimično" procjenjujemo preko pokrivenih pozicija i količina.
+        if ($positionCount > 0) {
+            if ($linkedPositionCount > 0 && $linkedPositionCount < $positionCount) {
+                return 'partial';
+            }
+
+            if ($linkedPositionCount === 0 && $workOrderCount < $positionCount) {
+                return 'partial';
+            }
+        }
+
+        if ($hasOrderQuantity && $hasWorkOrderQuantity && ($workOrderQuantity + 0.000001) < $orderQuantity) {
+            return 'partial';
+        }
+
+        return 'linked';
+    }
+
+    private function orderLinkageStateMeta(string $state): array
+    {
+        return match ($state) {
+            'none' => [
+                'label' => 'Bez RN',
+                'tone' => 'danger',
+            ],
+            'partial' => [
+                'label' => 'Djelimično',
+                'tone' => 'warning',
+            ],
+            default => [
+                'label' => 'Povezano',
+                'tone' => 'success',
+            ],
+        };
     }
 
     private function canDeleteWorkOrders(mixed $user = null): bool
@@ -7401,6 +10484,27 @@ class WorkOrderController extends Controller
         }
 
         return strtolower(trim((string) ($user->role ?? ''))) === 'admin';
+    }
+
+    private function canAccessOrderLinkage(mixed $user = null): bool
+    {
+        return $this->canDeleteWorkOrders($user);
+    }
+
+    private function orderLinkageForbiddenJsonResponse(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Nemate dozvolu za pristup upravljanju narudžbama.',
+            'data' => [],
+        ], 403);
+    }
+
+    private function orderLinkageForbiddenHtmlResponse()
+    {
+        return response(
+            '<div class="alert alert-danger mb-0">' . e('Nemate dozvolu za pristup upravljanju narudžbama.') . '</div>',
+            403
+        );
     }
 
     private function emptyInvoicePreviewResponse(array $pageConfigs, ?string $invoiceNumber = null)

@@ -327,7 +327,7 @@ class MaterialsController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'message' => 'Neispravni podaci za azuriranje zalihe.',
+                'message' => 'Neispravni podaci za ažuriranje zalihe.',
                 'errors' => $validator->errors(),
             ], 422);
         }
@@ -342,7 +342,7 @@ class MaterialsController extends Controller
             );
 
             return response()->json([
-                'message' => 'Zaliha je uspjesno azurirana.',
+                'message' => 'Zaliha je uspješno ažurirana.',
                 'data' => [
                     'count' => count($results),
                     'items' => $results,
@@ -358,7 +358,7 @@ class MaterialsController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri azuriranju zalihe.',
+                'message' => 'Greška pri ažuriranju zalihe.',
             ], 500);
         }
     }

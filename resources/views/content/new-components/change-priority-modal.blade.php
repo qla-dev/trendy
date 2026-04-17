@@ -40,7 +40,7 @@
             </option>
           @endforeach
         </select>
-        <small class="d-block mt-75">Odabir ce biti sačuvan nakon potvrde.</small>
+        <small class="d-block mt-75">Odabir će biti sačuvan nakon potvrde.</small>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Otkaži</button>

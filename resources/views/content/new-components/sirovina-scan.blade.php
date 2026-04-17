@@ -253,7 +253,7 @@
                           <tr>
                             <th class="text-center" style="width: 46px;">#</th>
                             <th style="width: 70px;">Poz</th>
-                            <th style="width: 210px;">Sifra</th>
+                            <th style="width: 210px;">Šifra</th>
                             <th>Opis</th>
                             <th style="width: 120px;" class="text-end">Zaliha</th>
                             <th style="width: 100px;" class="text-center">MJ</th>
@@ -262,7 +262,7 @@
                         </thead>
                         <tbody id="bom-all-items-body">
                           <tr>
-                            <td colspan="7" class="text-center text-white-50 py-2">Ucitajte stavke iz odabranog prikaza.</td>
+                            <td colspan="7" class="text-center text-white-50 py-2">Učitajte stavke iz odabranog prikaza.</td>
                           </tr>
                         </tbody>
                       </table>
@@ -3544,7 +3544,7 @@
           '<tr>' +
             '<th class="text-center" style="width: 46px;">#</th>' +
             '<th style="width: 70px;">Poz</th>' +
-            '<th style="width: 210px;">Sifra</th>' +
+            '<th style="width: 210px;">Šifra</th>' +
             '<th>Opis</th>' +
             '<th style="width: 120px;" class="text-end">Zaliha</th>' +
             '<th style="width: 100px;" class="text-center">MJ</th>' +
@@ -4398,7 +4398,7 @@
                 '<div class="fine-adjust-note-stack">' +
                   '<div class="fine-adjust-material-toggle ' + (mode === 'aluminum' ? 'is-aluminum' : 'is-steel') + '">' +
                     '<span class="fine-adjust-material-label is-aluminum"><i class="fa fa-cubes"></i><span>Alumijum</span></span>' +
-                    '<button type="button" class="fine-adjust-material-switch" data-row="' + rowIndex + '" aria-label="Prebaci materijal izmedu Alumijuma i \u010Celika">' +
+                    '<button type="button" class="fine-adjust-material-switch" data-row="' + rowIndex + '" aria-label="Prebaci materijal između Alumijuma i \u010Celika">' +
                       '<span class="fine-adjust-material-switch-thumb"></span>' +
                     '</button>' +
                     '<span class="fine-adjust-material-label is-steel"><i class="fa fa-industry"></i><span>\u010Celik</span></span>' +
@@ -4726,7 +4726,7 @@
                 '<div class="fine-adjust-note-stack' + (noteLocked ? ' is-locked' : '') + (showMaterialToggle ? '' : ' is-material-hidden') + '">' +
                   '<div class="fine-adjust-material-toggle ' + (mode === 'aluminum' ? 'is-aluminum' : 'is-steel') + (showMaterialToggle ? '' : ' d-none') + '">' +
                     '<span class="fine-adjust-material-label is-aluminum"><i class="fa fa-cubes"></i><span>Alumijum</span></span>' +
-                    '<button type="button" class="fine-adjust-material-switch" data-row="' + rowIndex + '" aria-label="Prebaci materijal izmedu Alumijuma i \u010Celika">' +
+                    '<button type="button" class="fine-adjust-material-switch" data-row="' + rowIndex + '" aria-label="Prebaci materijal između Alumijuma i \u010Celika">' +
                       '<span class="fine-adjust-material-switch-thumb"></span>' +
                     '</button>' +
                     '<span class="fine-adjust-material-label is-steel"><i class="fa fa-industry"></i><span>\u010Celik</span></span>' +
@@ -5225,7 +5225,7 @@
       }
 
       if (!Number.isFinite(quantity) || quantity <= 0) {
-        notify('warning', 'Neispravna količina', 'Unesite količinu vecću od 0');
+        notify('warning', 'Neispravna količina', 'Unesite količinu veću od 0');
         return null;
       }
 
@@ -5637,7 +5637,7 @@
       }
       if (confirmHelpTextEl) {
         confirmHelpTextEl.textContent = action === 'update'
-          ? 'Prilagodite količinu i mjernu jedinicu koja se dopisuje na postojeći materijal RN.'
+          ? 'Unesite ukupnu količinu za materijal. Ista količina će se skinuti sa skladišta i eventualno prilagoditi na sastavnici ovog radnog naloga.'
           : 'Unesite količinu i mjernu jedinicu skeniranog materijala koji se dodaje na RN.';
       }
       if (quantityUnitSelect) {
@@ -5665,7 +5665,10 @@
 
       if (quantityInput) {
         if (context && context.mode === 'barcode') {
-          quantityInput.value = '1';
+          var existingQty = context && context.material && context.material.existing_item
+            ? Number(context.material.existing_item.qty || 0)
+            : 0;
+          quantityInput.value = Number.isFinite(existingQty) && existingQty > 0 ? String(existingQty) : '1';
         } else if (!quantityInput.value || Number(quantityInput.value) <= 0) {
           quantityInput.value = '1';
         }
@@ -6041,7 +6044,9 @@
       var subtitle = 'Sačuvaj';
 
       if (context && context.mode === 'barcode') {
-        subtitle = context.action === 'update' ? 'Ažuriraj' : 'Dodaj';
+        subtitle = context.action === 'update'
+          ? 'Ažuriraj<br>skladište i<br>sastavnicu'
+          : 'Dodaj na RN<br>i skini sa<br>skladišta';
       }
 
       return '<span class="confirm-weight-ok-label">OK</span><span class="confirm-weight-ok-subtitle">' + subtitle + '</span>';
@@ -6159,7 +6164,7 @@
 
       if (confirmHelpTextEl) {
         confirmHelpTextEl.textContent = action === 'update'
-          ? 'Prilagodite količinu i mjernu jedinicu koja se dopisuje na postojeći materijal RN'
+          ? 'Unesite ukupnu količinu za materijal. Ista će se skinuti sa skladišta i eventualno prilagoditi na sastavnici ovog radnog naloga.'
           : 'Unesite količinu i mjernu jedinicu skeniranog materijala koji se dodaje na RN';
       }
 
@@ -6186,7 +6191,16 @@
       }
 
       applyConfirmContext(selected, context);
-      setQuantityInputValue('1');
+      var prefillValue = '1';
+      if (context && context.mode === 'barcode') {
+        var existingQty = context && context.material && context.material.existing_item
+          ? Number(context.material.existing_item.qty || 0)
+          : 0;
+        if (Number.isFinite(existingQty) && existingQty > 0) {
+          prefillValue = String(existingQty);
+        }
+      }
+      setQuantityInputValue(prefillValue);
 
       var confirmModal = window.bootstrap.Modal.getOrCreateInstance(confirmModalEl);
       confirmModal.show();

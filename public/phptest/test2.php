@@ -5,7 +5,7 @@ $database = "BA_TRENDY";
 $username = "SQLTREN_ADM2";
 $password = "#4^Sdgfx3VHy5G";
 
-$table = "tHF_WOEx";   // 👈 promijeni tabelu ovdje
+$table = "tHE_Order";   // 👈 promijeni tabelu ovdje
 
 
 $conn = sqlsrv_connect($server, [
@@ -23,7 +23,7 @@ echo "<h2>TABLE: $table</h2>";
 
 
 // 🔥 SELECT * = sve kolone + svi redovi
-$sql = "SELECT * FROM $table";
+$sql = "SELECT TOP 100 * FROM $table";  // TOP 100 = ograničava na prvih 100 redova (ako tabela ima puno podataka)
 
 $stmt = sqlsrv_query($conn, $sql);
 

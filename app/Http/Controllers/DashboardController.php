@@ -196,10 +196,10 @@ class DashboardController extends Controller
     $code = strtoupper(trim((string) $status));
 
     return [
-      'F' => 'Zakljucen',
-      'I' => 'Zakljucen',
-      'Z' => 'Zakljucen',
-      'R' => 'Djelimicno zakljucen',
+      'F' => 'Zaključen',
+      'I' => 'Zaključen',
+      'Z' => 'Zaključen',
+      'R' => 'Djelimično zaključen',
       'D' => 'U radu',
       'P' => 'Planiran',
       'S' => 'Rezerviran',

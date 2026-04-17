@@ -23,7 +23,7 @@
         <div class="confirm-weight-layout">
           <section class="confirm-weight-info-panel">
             <div id="confirm-material-action-indicator" class="confirm-material-action-indicator d-none">
-              Dodat ce novu stavku na radni nalog.
+              Dodat će novu stavku na radni nalog.
             </div>
 
             <div class="confirm-weight-selection-name" id="scanned-material-name">0 komponenti</div>

@@ -64,7 +64,7 @@ $(function () {
     : 'Kreiraj novi katalog materijal i početnu zalihu.';
   var defaultCreateModalHelp = createModalHelpElement
     ? createModalHelpElement.textContent
-    : 'Novi materijal ce biti upisan u katalog, a pocetna zaliha ce odmah biti evidentirana na odabranom skladistu.';
+    : 'Novi materijal će biti upisan u katalog, a početna zaliha će odmah biti evidentirana na odabranom skladištu.';
   var defaultCreateModalSaveHtml = createModalSaveButton ? createModalSaveButton.innerHTML : '';
   var sortableColumnMap = canSeeWarehouse
     ? {
@@ -330,7 +330,7 @@ $(function () {
     }
 
     if (modalCodeElement) {
-      modalCodeElement.textContent = materialCode ? 'Barcode / sifra: ' + materialCode : '-';
+      modalCodeElement.textContent = materialCode ? 'Barcode / šifra: ' + materialCode : '-';
     }
 
     if (downloadButton) {
@@ -396,7 +396,7 @@ $(function () {
       '<div class="invoice-table-loading-overlay" aria-hidden="true">' +
         '<div class="invoice-table-loading-overlay-content">' +
           '<div class="spinner-border invoice-table-loading-spinner" role="status" aria-hidden="true"></div>' +
-          '<div class="invoice-table-loading-message">Ucitavanje rezultata</div>' +
+          '<div class="invoice-table-loading-message">Učitavanje rezultata</div>' +
         '</div>' +
       '</div>'
     );
@@ -753,14 +753,14 @@ $(function () {
         }
 
         syncStockDeltaPreview();
-        setStockMessage('success', response && response.message ? response.message : 'Zaliha je uspjesno azurirana.');
+        setStockMessage('success', response && response.message ? response.message : 'Zaliha je uspješno ažurirana.');
 
         if (dataTable) {
           dataTable.ajax.reload(null, false);
         }
       },
       error: function (xhr) {
-        setStockMessage('error', extractAjaxErrorMessage(xhr, 'Ne mogu azurirati zalihu.'));
+        setStockMessage('error', extractAjaxErrorMessage(xhr, 'Ne mogu ažurirati zalihu.'));
       },
       complete: function () {
         stockRequestInFlight = false;
@@ -808,19 +808,19 @@ $(function () {
 
     if (createModalSubtitleElement) {
       createModalSubtitleElement.textContent = isCopyMode
-        ? 'Prefill podaci su ucitani. Promijenite sifru prije cuvanja kopije.'
+        ? 'Prefill podaci su učitani. Promijenite šifru prije čuvanja kopije.'
         : defaultCreateModalSubtitle;
     }
 
     if (createModalHelpElement) {
       createModalHelpElement.textContent = isCopyMode
-        ? 'Kopija koristi podatke odabranog materijala i po potrebi novu pocetnu zalihu.'
+        ? 'Kopija koristi podatke odabranog materijala i po potrebi novu početnu zalihu.'
         : defaultCreateModalHelp;
     }
 
     if (createModalSaveButton) {
       createModalSaveButton.innerHTML = isCopyMode
-        ? '<i class="fa fa-copy me-50"></i> Sacuvaj kopiju'
+        ? '<i class="fa fa-copy me-50"></i> Sačuvaj kopiju'
         : defaultCreateModalSaveHtml;
     }
   }
@@ -968,7 +968,7 @@ $(function () {
 
     return (
       '<div class="small lh-lg text-start d-inline-block">' +
-        '<div><span class="fw-bolder">Sifra:</span> ' + materialCode + '</div>' +
+        '<div><span class="fw-bolder">Šifra:</span> ' + materialCode + '</div>' +
         '<div><span class="fw-bolder">Naziv:</span> ' + materialName + '</div>' +
       '</div>'
     );
@@ -1009,7 +1009,7 @@ $(function () {
           window.Swal.fire({
             icon: 'success',
             title: 'Materijal obrisan',
-            text: response && response.message ? response.message : 'Materijal je uspjesno obrisan.',
+            text: response && response.message ? response.message : 'Materijal je uspješno obrisan.',
             confirmButtonText: 'U redu',
             customClass: {
               confirmButton: 'btn btn-success'
@@ -1229,7 +1229,7 @@ $(function () {
               actionsHtml +=
                 '<button type="button" class="btn btn-sm btn-outline-primary material-action-btn material-stock-adjust-btn">' +
                   '<i class="fa fa-database"></i>' +
-                  '<span>Skladiste</span>' +
+                  '<span>Skladište</span>' +
                 '</button>';
             }
 

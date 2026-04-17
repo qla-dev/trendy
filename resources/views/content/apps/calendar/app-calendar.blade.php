@@ -250,13 +250,13 @@
       <div class="modal-content p-0">
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori">×</button>
         <div class="modal-header mb-1">
-          <h5 class="modal-title">Dodaj dogadjaj</h5>
+          <h5 class="modal-title">Dodaj događaj</h5>
         </div>
         <div class="modal-body flex-grow-1 pb-sm-0 pb-3">
           <form class="event-form needs-validation" data-ajax="false" novalidate>
             <div class="mb-1">
               <label for="title" class="form-label">Naslov</label>
-              <input type="text" class="form-control" id="title" name="title" placeholder="Naslov dogadjaja" required />
+              <input type="text" class="form-control" id="title" name="title" placeholder="Naslov događaja" required />
             </div>
             <div class="mb-1">
               <label for="select-label" class="form-label">Oznaka</label>
@@ -283,7 +283,7 @@
               </div>
             </div>
             <div class="mb-1">
-              <label for="event-url" class="form-label">URL dogadjaja</label>
+              <label for="event-url" class="form-label">URL događaja</label>
               <input type="url" class="form-control" id="event-url" placeholder="https://www.google.com" />
             </div>
             <div class="mb-1 select2-primary">
@@ -333,5 +333,5 @@
 @section('page-script')
   <!-- Page js files -->
   <script src="{{ asset(mix('js/scripts/pages/app-calendar-events.js')) }}"></script>
-  <script src="{{ asset(mix('js/scripts/pages/app-calendar.js')) }}"></script>
+  <script src="{{ asset(mix('js/scripts/pages/app-calendar.js?v=2')) }}"></script>
 @endsection

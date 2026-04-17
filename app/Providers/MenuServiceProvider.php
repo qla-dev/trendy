@@ -106,8 +106,14 @@ class MenuServiceProvider extends ServiceProvider
             return $menuData;
         }
 
-        $menuData->menu = array_values(array_filter($menuData->menu, function ($menu) {
-            return !isset($menu->slug) || $menu->slug !== 'app-barcode-generator';
+        $adminOnlySlugs = [
+            'app-barcode-generator',
+            'app-orders-navheader',
+            'app-orders',
+        ];
+
+        $menuData->menu = array_values(array_filter($menuData->menu, function ($menu) use ($adminOnlySlugs) {
+            return !isset($menu->slug) || !in_array($menu->slug, $adminOnlySlugs, true);
         }));
 
         return $menuData;

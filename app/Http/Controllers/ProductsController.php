@@ -37,7 +37,7 @@ class ProductsController extends Controller
             ]);
 
             return response()->json([
-                'message' => 'Greska pri ucitavanju proizvoda.',
+                'message' => 'Greška pri učitavanju proizvoda.',
             ], 500);
         }
     }

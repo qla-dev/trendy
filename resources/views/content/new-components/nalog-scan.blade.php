@@ -810,6 +810,13 @@
       return match ? decodeURIComponent(match[1]) : null;
     }
 
+    function decodeOrderLocatorProductCode(value) {
+      return String(value || '')
+        .replace(/%3B/gi, ';')
+        .replace(/%25/g, '%')
+        .trim();
+    }
+
     function parseOrderLocatorToken(text) {
       var parts = (text || '').split(';').map(function (part) {
         return (part || '').trim();
@@ -851,13 +858,14 @@
       };
 
       if (parts.length === 3) {
-        var normalizedProductCode = rawProductCode.replace(/[^0-9A-Za-z]+/g, '').toUpperCase();
+        var productCode = decodeOrderLocatorProductCode(rawProductCode);
+        var normalizedProductCode = productCode.replace(/[^0-9A-Za-z]+/g, '').toUpperCase();
         if (!normalizedProductCode) {
           return null;
         }
 
         parsedToken.identifier = rawOrderNumber + ';' + String(integerPosition) + ';' + rawProductCode;
-        parsedToken.details.sifra = rawProductCode;
+        parsedToken.details.sifra = productCode;
         return parsedToken;
       }
 
@@ -867,7 +875,7 @@
     function parseWorkOrderIdFromQr(rawText) {
       var text = (rawText || '').trim();
       if (!text) {
-        return { id: null, error: 'Prazan QR sadrzaj.' };
+        return { id: null, error: 'Prazan QR sadržaj.' };
       }
 
       var orderLocator = parseOrderLocatorToken(text);
@@ -894,7 +902,7 @@
         return { id: idFromPath, error: null, scanMeta: null };
       }
 
-      return { id: null, error: 'Neispravan QR format. Koristi brojNarudzbe;pozicija;sifraProizvoda ili link na radni nalog.' };
+      return { id: null, error: 'Neispravan QR format. Koristi brojNarudžbe;pozicija;šifraProizvoda ili link na radni nalog.' };
     }
 
     function toWorkOrderPreviewUrl(workOrderId) {
@@ -1059,9 +1067,9 @@
       var catalogNotice = order && order.catalog_item_missing
         ? [
             '<div class="wo-scan-create-notice">',
-            '<div class="wo-scan-create-notice-title">Artikal ce biti kreiran</div>',
+            '<div class="wo-scan-create-notice-title">Artikal će biti kreiran</div>',
             '<p class="wo-scan-create-notice-copy">',
-            escapeHtml(order.catalog_item_notice || ('Sifra ' + String(order && order.sifra ? order.sifra : '') + ' nije pronadjena u sifrarniku. Prilikom kreiranja RN bice automatski kreirana osnovna stavka artikla.')),
+            escapeHtml(order.catalog_item_notice || ('Šifra ' + String(order && order.sifra ? order.sifra : '') + ' nije pronađena u šifrarniku. Prilikom kreiranja RN bit će automatski kreirana osnovna stavka artikla.')),
             '</p>',
             '</div>'
           ].join('')
@@ -1180,7 +1188,7 @@
       }
 
       if (!response.ok) {
-        var errorMessage = data && data.message ? data.message : 'Neuspjesan odgovor servera.';
+        var errorMessage = data && data.message ? data.message : 'Neuspješan odgovor servera.';
 
         if (data && data.debug && Array.isArray(data.debug.messages) && data.debug.messages.length > 0) {
           errorMessage += ' [' + data.debug.messages[0] + ']';
@@ -1263,7 +1271,7 @@
       var previewUrl = workOrder.preview_url || toWorkOrderPreviewUrl(workOrder.id || '');
       var scanSummary = mergeScanContext(scanMeta, workOrder);
       var result = await Swal.fire(swalWithProjectTheme({
-        title: 'RN pronadjen',
+        title: 'RN pronađen',
         html: buildScanSummaryHtml(workOrder, '<p class="mb-1">Da li želite otvoriti RN broj <strong>' + escapeHtml(workOrder.number || '') + '</strong>?</p>'),
         icon: 'question',
         showCancelButton: true,
@@ -1287,10 +1295,10 @@
     }
 
     async function promptToCreateWorkOrderLegacy(identifier, payload, scanMeta) {
-      var order = payload && payload.order ? payload.order : {};
+      var orderPayload = payload && payload.order ? payload.order : {};
+      var order = Object.assign({}, orderPayload, mergeScanContext(scanMeta, orderPayload));
       var nextWorkOrder = payload && payload.next_work_order ? payload.next_work_order : {};
       var lastWorkOrder = payload && payload.last_work_order ? payload.last_work_order : {};
-      var scanSummary = mergeScanContext(scanMeta, order);
       var extraHtml = '<h2 class="mb-1">Da li želite kreirati RN broj <br><strong>' + escapeHtml(nextWorkOrder.number || '') + '?</strong></h2>';
 
 
@@ -1320,7 +1328,7 @@
           '<div class="wo-scan-create-loading-title-main">Kreiram</div>',
           '<div class="wo-scan-create-loading-title-number">RN ' + escapeHtml(nextWorkOrder.number || '') + '</div>',
           '</div>',
-          '<div class="wo-scan-create-loading-copy">Prepisujem podatke sa narudzbe i otvaram radni nalog...</div>'
+          '<div class="wo-scan-create-loading-copy">Prepisujem podatke sa narudžbe i otvaram radni nalog...</div>'
         ].join(''),
         allowOutsideClick: false,
         allowEscapeKey: false,
@@ -1358,7 +1366,8 @@
     }
 
     async function promptToCreateWorkOrder(identifier, payload, scanMeta) {
-      var order = payload && payload.order ? payload.order : {};
+      var orderPayload = payload && payload.order ? payload.order : {};
+      var order = Object.assign({}, orderPayload, mergeScanContext(scanMeta, orderPayload));
       var docTypeState = normalizeCreateDocTypePayload(payload);
       var selectedDocType = docTypeState.selected;
 
@@ -1384,7 +1393,7 @@
           var resolvedQuantity = parsePromptQuantityValue(quantityInput ? quantityInput.value : '');
 
           if (resolvedQuantity === null) {
-            Swal.showValidationMessage('Unesite kolicinu vecu od 0.');
+            Swal.showValidationMessage('Unesite količinu veću od 0.');
             return false;
           }
 
@@ -1409,7 +1418,7 @@
       var selectedQuantity = result && result.value ? result.value.quantity : parsePromptQuantityValue(order && order.kolicina != null ? order.kolicina : '');
       var loadingCopy = order && order.catalog_item_missing
         ? 'Kreiram RN, dopunjavam šifrarnik artikala i otvaram radni nalog...'
-        : 'Prepisujem podatke sa naruddžbe i otvaram radni nalog...';
+        : 'Prepisujem podatke sa narudžbe i otvaram radni nalog...';
 
       Swal.fire(swalWithProjectTheme({
         html: [
@@ -1474,7 +1483,7 @@
         return;
       }
 
-      throw new Error(payload.message || 'Skenirani QR nije moguce obraditi.');
+      throw new Error(payload.message || 'Skenirani QR nije moguće obraditi.');
     }
 
     function renderCameraOptions() {
@@ -1553,7 +1562,7 @@
           return lookupScannedWorkOrder(parsed.id);
         })
         .then(function (lookupResponse) {
-          return handleScanLookup(parsed.id, lookupResponse);
+          return handleScanLookup(parsed.id, lookupResponse, parsed.scanMeta);
         })
         .catch(function (error) {
           console.error(error);

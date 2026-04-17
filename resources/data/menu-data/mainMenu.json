@@ -1,16 +1,6 @@
 {
   "menu": [
     {
-      "navheader": "Glavna navigacija",
-      "slug": ""
-    },
-    {
-      "name": "Dashboards",
-      "url": "/",
-      "icon": "home",
-      "slug": "dashboard-ecommerce"
-    },
-    {
       "navheader": "Apps & Pages",
       "slug": ""
     },
@@ -25,6 +15,16 @@
       "icon": "camera",
       "url": "app/invoice/preview",
       "slug": "app-invoice-preview"
+    },
+    {
+      "navheader": "Narudžbe",
+      "slug": "app-orders-navheader"
+    },
+    {
+      "name": "Upravljanje narudžbama",
+      "icon": "briefcase",
+      "url": "app/orders",
+      "slug": "app-orders"
     },
     {
       "navheader": "Administracija",
