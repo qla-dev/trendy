@@ -3720,39 +3720,31 @@ class WorkOrderController extends Controller
             return;
         }
 
-        $orderNumberVariants = $this->normalizeComparableIdentifiers(
-            $this->orderLinkageOrderNumberSearchVariants($search)
-        );
-        $tailSearch = $this->orderLinkageOrderNumberTailSearch($search);
-        $allowFullOrderNumberMatch = $tailSearch === ''
-            || preg_match('/\D/', $search) === 1;
+        $orderNumberVariants = $this->orderNumberDigitSearchVariants($search);
+        $rawOrderNumberVariants = $this->orderNumberRawSearchVariants($search);
 
         $query->where(function (Builder $searchQuery) use (
             $search,
             $orderNumberVariants,
-            $tailSearch,
-            $allowFullOrderNumberMatch
+            $rawOrderNumberVariants
         ) {
             $hasAnyClause = false;
 
-            if ($tailSearch !== '') {
-                $tailLength = strlen($tailSearch);
-
-                $searchQuery->whereRaw(
-                    "LEN(normalized_order_number) = 12 AND SUBSTRING(normalized_order_number, 7, $tailLength) = ?",
-                    [$tailSearch]
-                );
-                $hasAnyClause = true;
+            foreach ($orderNumberVariants as $orderNumberVariant) {
+                if ($hasAnyClause) {
+                    $searchQuery->orWhere('normalized_order_number', 'like', '%' . $orderNumberVariant . '%');
+                } else {
+                    $searchQuery->where('normalized_order_number', 'like', '%' . $orderNumberVariant . '%');
+                    $hasAnyClause = true;
+                }
             }
 
-            if ($allowFullOrderNumberMatch) {
-                foreach ($orderNumberVariants as $orderNumberVariant) {
-                    if ($hasAnyClause) {
-                        $searchQuery->orWhere('normalized_order_number', 'like', '%' . $orderNumberVariant . '%');
-                    } else {
-                        $searchQuery->where('normalized_order_number', 'like', '%' . $orderNumberVariant . '%');
-                        $hasAnyClause = true;
-                    }
+            foreach ($rawOrderNumberVariants as $rawOrderNumberVariant) {
+                if ($hasAnyClause) {
+                    $searchQuery->orWhere('resolved_order_number', 'like', '%' . $rawOrderNumberVariant . '%');
+                } else {
+                    $searchQuery->where('resolved_order_number', 'like', '%' . $rawOrderNumberVariant . '%');
+                    $hasAnyClause = true;
                 }
             }
 
@@ -3793,7 +3785,7 @@ class WorkOrderController extends Controller
             (string) ($filters['primatelj'] ?? '')
         );
 
-        $this->applyLikeAny(
+        $this->applyOrderIdentifierSearchFilter(
             $query,
             $this->qualifyColumns($this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']), $orderAlias),
             (string) ($filters['vezni_dok'] ?? '')
@@ -3875,9 +3867,8 @@ class WorkOrderController extends Controller
         $priorityCodeColumns = $this->qualifyColumns($this->existingColumns($orderColumns, ['anPriority']), $orderAlias);
         $statusAliases = $this->statusAliasesForSearch($search);
         $priorityCodes = $this->priorityCodesForSearch($search);
-        $orderNumberSearchVariants = $this->orderLinkageOrderNumberSearchVariants($search);
-        $normalizedOrderNumberSearchVariants = $this->normalizeComparableIdentifiers($orderNumberSearchVariants);
-        $orderNumberSuffixSearch = $this->orderLinkageOrderNumberSuffixSearch($search);
+        $orderNumberDigitSearchVariants = $this->orderNumberDigitSearchVariants($search);
+        $rawOrderNumberSearchVariants = $this->orderNumberRawSearchVariants($search);
 
         $query->where(function (Builder $searchQuery) use (
             $searchColumns,
@@ -3887,8 +3878,8 @@ class WorkOrderController extends Controller
             $statusAliases,
             $priorityCodes,
             $searchVariants,
-            $normalizedOrderNumberSearchVariants,
-            $orderNumberSuffixSearch,
+            $orderNumberDigitSearchVariants,
+            $rawOrderNumberSearchVariants,
             $orderColumns,
             $orderAlias
         ) {
@@ -3905,43 +3896,32 @@ class WorkOrderController extends Controller
                 }
             }
 
-            if ($orderNumberSuffixSearch !== '') {
+            foreach ($rawOrderNumberSearchVariants as $rawVariant) {
                 foreach ($identifierSearchColumns as $column) {
-                    $displayExpression = $this->orderLinkageDisplayIdentifierExpression($searchQuery, $column);
-                    $suffixLength = strlen($orderNumberSuffixSearch);
-
                     if ($hasAnyClause) {
-                        $searchQuery->orWhereRaw(
-                            "LEN($displayExpression) = 12 AND SUBSTRING($displayExpression, 7, $suffixLength) = ?",
-                            [$orderNumberSuffixSearch]
-                        );
+                        $searchQuery->orWhere($column, 'like', '%' . $rawVariant . '%');
                     } else {
-                        $searchQuery->whereRaw(
-                            "LEN($displayExpression) = 12 AND SUBSTRING($displayExpression, 7, $suffixLength) = ?",
-                            [$orderNumberSuffixSearch]
-                        );
+                        $searchQuery->where($column, 'like', '%' . $rawVariant . '%');
                         $hasAnyClause = true;
                     }
                 }
             }
 
-            if ($orderNumberSuffixSearch === '') {
-                foreach ($normalizedOrderNumberSearchVariants as $normalizedVariant) {
-                    foreach ($identifierSearchColumns as $column) {
-                        $displayExpression = $this->orderLinkageDisplayIdentifierExpression($searchQuery, $column);
+            foreach ($orderNumberDigitSearchVariants as $digitVariant) {
+                foreach ($identifierSearchColumns as $column) {
+                    $digitExpression = $this->orderLinkageDisplayIdentifierExpression($searchQuery, $column);
 
-                        if ($hasAnyClause) {
-                            $searchQuery->orWhereRaw(
-                                $displayExpression . ' like ?',
-                                ['%' . $normalizedVariant . '%']
-                            );
-                        } else {
-                            $searchQuery->whereRaw(
-                                $displayExpression . ' like ?',
-                                ['%' . $normalizedVariant . '%']
-                            );
-                            $hasAnyClause = true;
-                        }
+                    if ($hasAnyClause) {
+                        $searchQuery->orWhereRaw(
+                            $digitExpression . ' like ?',
+                            ['%' . $digitVariant . '%']
+                        );
+                    } else {
+                        $searchQuery->whereRaw(
+                            $digitExpression . ' like ?',
+                            ['%' . $digitVariant . '%']
+                        );
+                        $hasAnyClause = true;
                     }
                 }
             }
@@ -3968,7 +3948,7 @@ class WorkOrderController extends Controller
                 }
             }
 
-            if ($orderNumberSuffixSearch === '' && $this->applyOrderLinkageItemSearchExists($searchQuery, $orderColumns, $searchVariants, $orderAlias, $hasAnyClause)) {
+            if ($this->applyOrderLinkageItemSearchExists($searchQuery, $orderColumns, $searchVariants, $orderAlias, $hasAnyClause)) {
                 $hasAnyClause = true;
             }
 
@@ -7233,10 +7213,11 @@ class WorkOrderController extends Controller
             (string) ($filters['proizvod'] ?? '')
         );
 
-        $this->applyLikeAny(
+        $this->applyOrderIdentifierSearchFilter(
             $query,
-            $this->existingColumns($columns, ['acRefNo1', 'acKey', 'acLnkKey', 'acLnkKeyView']),
-            (string) ($filters['vezni_dok'] ?? '')
+            $this->existingColumns($columns, ['acLnkKeyView', 'acLnkKey']),
+            (string) ($filters['vezni_dok'] ?? ''),
+            $this->existingColumns($columns, ['acRefNo1', 'acKey'])
         );
 
         $this->applyPriorityFilter(
@@ -7398,6 +7379,78 @@ class WorkOrderController extends Controller
         });
     }
 
+    private function applyOrderIdentifierSearchFilter(
+        Builder $query,
+        array $orderColumns,
+        string $value,
+        array $genericColumns = []
+    ): void {
+        $value = trim($value);
+
+        if ($value === '' || (empty($orderColumns) && empty($genericColumns))) {
+            return;
+        }
+
+        $rawOrderVariants = $this->orderNumberRawSearchVariants($value);
+        $digitOrderVariants = $this->orderNumberDigitSearchVariants($value);
+
+        $query->where(function (Builder $identifierQuery) use (
+            $value,
+            $genericColumns,
+            $orderColumns,
+            $rawOrderVariants,
+            $digitOrderVariants
+        ) {
+            $hasAnyClause = false;
+
+            foreach ($genericColumns as $column) {
+                if ($hasAnyClause) {
+                    $identifierQuery->orWhere($column, 'like', '%' . $value . '%');
+                    continue;
+                }
+
+                $identifierQuery->where($column, 'like', '%' . $value . '%');
+                $hasAnyClause = true;
+            }
+
+            foreach ($rawOrderVariants as $rawVariant) {
+                foreach ($orderColumns as $column) {
+                    if ($hasAnyClause) {
+                        $identifierQuery->orWhere($column, 'like', '%' . $rawVariant . '%');
+                        continue;
+                    }
+
+                    $identifierQuery->where($column, 'like', '%' . $rawVariant . '%');
+                    $hasAnyClause = true;
+                }
+            }
+
+            foreach ($digitOrderVariants as $digitVariant) {
+                foreach ($orderColumns as $column) {
+                    $displayExpression = $this->orderLinkageDisplayIdentifierExpression($identifierQuery, $column);
+
+                    if ($hasAnyClause) {
+                        $identifierQuery->orWhereRaw(
+                            $displayExpression . ' like ?',
+                            ['%' . $digitVariant . '%']
+                        );
+                        continue;
+                    }
+
+                    $identifierQuery->whereRaw(
+                        $displayExpression . ' like ?',
+                        ['%' . $digitVariant . '%']
+                    );
+                    $hasAnyClause = true;
+                }
+            }
+
+            if (!$hasAnyClause) {
+                $identifierQuery->whereRaw('1 = 0');
+            }
+        });
+    }
+
     private function applyQuickSearchFilter(Builder $query, array $columns, string $search): void
     {
         $search = trim($search);
@@ -7409,8 +7462,6 @@ class WorkOrderController extends Controller
         $searchColumns = $this->existingColumns($columns, [
             'acRefNo1',
             'acKey',
-            'acLnkKey',
-            'acLnkKeyView',
             'acConsignee',
             'acReceiver',
             'acPartner',
@@ -7431,6 +7482,12 @@ class WorkOrderController extends Controller
         $statusAliases = $this->statusAliasesForSearch($search);
         $priorityCodes = $this->priorityCodesForSearch($search);
         $searchVariants = $this->searchVariants($search);
+        $orderLinkSearchColumns = $this->existingColumns($columns, ['acLnkKeyView', 'acLnkKey']);
+        $orderNumberDigitSearchVariants = $this->orderNumberDigitSearchVariants($search);
+        $rawOrderNumberSearchVariants = array_values(array_diff(
+            $this->orderNumberRawSearchVariants($search),
+            $searchVariants
+        ));
 
         $query->where(function (Builder $searchQuery) use (
             $searchColumns,
@@ -7438,7 +7495,10 @@ class WorkOrderController extends Controller
             $statusAliases,
             $priorityCodeColumns,
             $priorityCodes,
-            $searchVariants
+            $searchVariants,
+            $orderLinkSearchColumns,
+            $orderNumberDigitSearchVariants,
+            $rawOrderNumberSearchVariants
         ) {
             $hasAnyClause = false;
 
@@ -7454,6 +7514,38 @@ class WorkOrderController extends Controller
                     }
 
                     $searchQuery->where($column, 'like', '%' . $variant . '%');
+                    $hasAnyClause = true;
+                }
+            }
+
+            foreach ($rawOrderNumberSearchVariants as $rawVariant) {
+                foreach ($orderLinkSearchColumns as $column) {
+                    if ($hasAnyClause) {
+                        $searchQuery->orWhere($column, 'like', '%' . $rawVariant . '%');
+                        continue;
+                    }
+
+                    $searchQuery->where($column, 'like', '%' . $rawVariant . '%');
+                    $hasAnyClause = true;
+                }
+            }
+
+            foreach ($orderNumberDigitSearchVariants as $digitVariant) {
+                foreach ($orderLinkSearchColumns as $column) {
+                    $digitExpression = $this->orderLinkageDisplayIdentifierExpression($searchQuery, $column);
+
+                    if ($hasAnyClause) {
+                        $searchQuery->orWhereRaw(
+                            $digitExpression . ' like ?',
+                            ['%' . $digitVariant . '%']
+                        );
+                        continue;
+                    }
+
+                    $searchQuery->whereRaw(
+                        $digitExpression . ' like ?',
+                        ['%' . $digitVariant . '%']
+                    );
                     $hasAnyClause = true;
                 }
             }
@@ -7491,18 +7583,62 @@ class WorkOrderController extends Controller
         $digits = preg_replace('/\D+/', '', $rawSearch);
         $variants = [];
 
-        if (is_string($digits) && strlen($digits) === 13 && substr($digits, 6, 1) === '0') {
-            $displayDigits = $this->canonicalOrderNumberDigits($digits);
-            $variants[] = $displayDigits;
-            $variants[] = $this->formatOrderNumberDigitsForDisplay($displayDigits);
-        } else {
-            if ($rawSearch !== '') {
-                $variants[] = $rawSearch;
-            }
+        if (is_string($digits) && $this->isExtraZeroOrderNumberDigits($digits)) {
+            return [];
+        }
 
-            if (is_string($digits) && $digits !== '') {
-                $variants[] = $digits;
-                $variants[] = $this->formatOrderNumberDigitsForDisplay($digits);
+        if ($rawSearch !== '') {
+            $variants[] = $rawSearch;
+        }
+
+        if (is_string($digits) && $digits !== '') {
+            $variants[] = $digits;
+            $variants[] = $this->formatOrderNumberDigitsForDisplay($digits);
+        }
+
+        return array_values(array_unique(array_filter($variants, function ($variant) {
+            return trim((string) $variant) !== '';
+        })));
+    }
+
+    private function orderNumberDigitSearchVariants(string $search): array
+    {
+        $digits = preg_replace('/\D+/', '', trim($search));
+
+        if (!is_string($digits) || $digits === '') {
+            return [];
+        }
+
+        if ($this->isExtraZeroOrderNumberDigits($digits)) {
+            return [];
+        }
+
+        $variants = [$digits];
+
+        return array_values(array_unique(array_filter($variants, function ($variant) {
+            return trim((string) $variant) !== '';
+        })));
+    }
+
+    private function orderNumberRawSearchVariants(string $search): array
+    {
+        $rawSearch = trim($search);
+        $rawDigits = preg_replace('/\D+/', '', $rawSearch);
+        $variants = [];
+
+        if (is_string($rawDigits) && $this->isExtraZeroOrderNumberDigits($rawDigits)) {
+            return [];
+        }
+
+        if ($rawSearch !== '') {
+            $variants[] = $rawSearch;
+        }
+
+        foreach ($this->orderNumberDigitSearchVariants($rawSearch) as $digits) {
+            $variants[] = $digits;
+
+            foreach ($this->hyphenatedOrderNumberSearchVariants($digits) as $hyphenatedVariant) {
+                $variants[] = $hyphenatedVariant;
             }
         }
 
@@ -7511,26 +7647,28 @@ class WorkOrderController extends Controller
         })));
     }
 
-    private function orderLinkageOrderNumberSuffixSearch(string $search): string
+    private function hyphenatedOrderNumberSearchVariants(string $digits): array
     {
-        $rawSearch = trim($search);
+        $digits = preg_replace('/\D+/', '', $digits);
 
-        if (!preg_match('/^\d{4}$/', $rawSearch)) {
-            return '';
+        if (!is_string($digits) || strlen($digits) < 3) {
+            return [];
         }
 
-        return $rawSearch;
+        $variants = [
+            substr($digits, 0, 2) . '-' . substr($digits, 2),
+        ];
+
+        if (strlen($digits) > 6) {
+            $variants[] = substr($digits, 0, 2) . '-' . substr($digits, 2, 4) . '-' . substr($digits, 6);
+        }
+
+        return $variants;
     }
 
-    private function orderLinkageOrderNumberTailSearch(string $search): string
+    private function isExtraZeroOrderNumberDigits(string $digits): bool
     {
-        $rawSearch = trim($search);
-
-        if (!preg_match('/^\d{1,6}$/', $rawSearch)) {
-            return '';
-        }
-
-        return $rawSearch;
+        return strlen($digits) === 13 && substr($digits, 6, 1) === '0';
     }
 
     private function canonicalOrderNumberDigits(string $digits): string
