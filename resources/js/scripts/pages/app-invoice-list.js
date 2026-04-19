@@ -345,6 +345,23 @@ $(function () {
     return rawValue;
   }
 
+  function formatOrderNumberForDisplay(value) {
+    var rawValue = (value || '').toString().trim();
+    var digits;
+
+    if (!rawValue) {
+      return '';
+    }
+
+    digits = rawValue.replace(/\D/g, '');
+
+    if (digits.length === 13) {
+      return digits.slice(0, 2) + '-' + digits.slice(2, 6) + '-' + digits.slice(6);
+    }
+
+    return rawValue;
+  }
+
   function formatQuantityValue(value) {
     var normalizedValue = value;
 
@@ -983,7 +1000,7 @@ $(function () {
           width: '150px',
           render: function (data, type, full) {
             var orderNumber = (full['broj_narudzbe'] || full['narudzba_kljuc'] || '').toString().trim();
-            var displayNumber = formatWorkOrderNumber(orderNumber);
+            var displayNumber = formatOrderNumberForDisplay(orderNumber);
 
             if (!orderNumber) {
               return '<span class="text-muted">-</span>';

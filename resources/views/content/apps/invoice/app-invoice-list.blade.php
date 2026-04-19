@@ -1177,5 +1177,5 @@
 @endsection
 
 @section('page-script')
-<script src="{{asset('js/scripts/pages/app-invoice-list.js?v=13')}}"></script>
+<script src="{{asset('js/scripts/pages/app-invoice-list.js?v=14')}}"></script>
 @endsection

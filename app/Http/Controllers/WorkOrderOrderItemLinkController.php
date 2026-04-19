@@ -248,11 +248,17 @@ class WorkOrderOrderItemLinkController extends OrderItemController
             $remainingQty = max($orderedQty - (float) ($producedQty ?? 0.0), 0.0);
         }
 
-        $document = (string) $this->valueTrimmed(
-            $linkRow,
-            ['acKeyView', 'acKey'],
-            $this->valueTrimmed($workOrder, ['acKeyView', 'acRefNo1', 'acKey'], '-')
-        );
+        $document = (string) $this->valueTrimmed($linkRow, ['acKey'], '');
+
+        if ($document === '') {
+            $document = (string) $this->valueTrimmed($workOrder, ['acKey', 'acRefNo1', 'acKeyView'], '');
+        }
+
+        if ($document === '') {
+            $document = (string) $this->valueTrimmed($linkRow, ['acKeyView'], '-');
+        }
+
+        $document = $this->formatWorkOrderDocumentNumber($document);
         $status = (string) $this->valueTrimmed($workOrder, ['acStatusMF', 'acStatus', 'status'], '-');
         $scheduledStart = $this->value($workOrder, ['adSchedStartTime', 'adStartTime'], null);
         $scheduledEnd = $this->value(

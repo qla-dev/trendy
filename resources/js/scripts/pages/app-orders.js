@@ -185,6 +185,27 @@ $(function () {
     return escapeHtml(formatDateForDisplay(value));
   }
 
+  function formatOrderNumberForDisplay(value) {
+    var rawValue = (value || '').toString().trim();
+    var digits;
+
+    if (!rawValue) {
+      return '';
+    }
+
+    digits = rawValue.replace(/\D/g, '');
+
+    if (digits.length === 13) {
+      return digits.slice(0, 2) + '-' + digits.slice(2, 6) + '-' + digits.slice(6);
+    }
+
+    return rawValue;
+  }
+
+  function resolveRowOrderNumberDisplay(row) {
+    return formatOrderNumberForDisplay((row && (row.narudzba || row.order_number)) || '');
+  }
+
   function formatQuantity(value) {
     var numericValue = Number(value);
 
@@ -687,12 +708,13 @@ $(function () {
 
   function buildWorkOrdersModalHtml(row, workOrders) {
     var records = Array.isArray(workOrders) ? workOrders : [];
+    var orderNumberDisplay = resolveRowOrderNumberDisplay(row) || '-';
 
     return (
       '<div class="order-linkage-modal-summary-grid">' +
         '<div class="order-linkage-modal-summary-card">' +
           '<span class="order-linkage-modal-summary-label">Narud\u017eba</span>' +
-          '<span class="order-linkage-modal-summary-value">' + escapeHtml((row && row.narudzba) || '-') + '</span>' +
+          '<span class="order-linkage-modal-summary-value">' + escapeHtml(orderNumberDisplay) + '</span>' +
         '</div>' +
         '<div class="order-linkage-modal-summary-card">' +
           '<span class="order-linkage-modal-summary-label">Naru\u010ditelj</span>' +
@@ -808,6 +830,7 @@ $(function () {
 
   function loadPositionsModalContent(row) {
     var modalInstance;
+    var orderNumberDisplay;
 
     if (!row || !positionsUrl) {
       return;
@@ -815,8 +838,9 @@ $(function () {
 
     activeModalType = 'positions';
     activeModalRow = row;
+    orderNumberDisplay = resolveRowOrderNumberDisplay(row) || '-';
 
-    modalInstance = openModal('Pozicije narud\u017ebe', 'Narud\u017eba: ' + ((row && row.narudzba) || '-'));
+    modalInstance = openModal('Pozicije narud\u017ebe', 'Narud\u017eba: ' + orderNumberDisplay);
 
     if (!modalInstance) {
       return;
@@ -852,6 +876,7 @@ $(function () {
 
   function loadWorkOrdersModalContent(row) {
     var modalInstance;
+    var orderNumberDisplay;
 
     if (!row || !workOrdersUrl) {
       return;
@@ -859,8 +884,9 @@ $(function () {
 
     activeModalType = 'work_orders';
     activeModalRow = row;
+    orderNumberDisplay = resolveRowOrderNumberDisplay(row) || '-';
 
-    modalInstance = openModal('Veze narud\u017ebe', 'Narud\u017eba: ' + ((row && row.narudzba) || '-'));
+    modalInstance = openModal('Veze narud\u017ebe', 'Narud\u017eba: ' + orderNumberDisplay);
 
     if (!modalInstance) {
       return;
@@ -978,12 +1004,13 @@ $(function () {
           targets: 0,
           className: 'order-linkage-order-cell',
           render: function (data, type, row) {
-            var orderNumber = data ? escapeHtml(data) : '<span class="text-muted">-</span>';
+            var displayOrderNumber = formatOrderNumberForDisplay(data || (row && row.order_number) || '');
+            var orderNumber = displayOrderNumber ? escapeHtml(displayOrderNumber) : '<span class="text-muted">-</span>';
             var linkageLabel = row && row.linkage_label ? escapeHtml(row.linkage_label) : 'N/A';
             var toneClass = badgeToneClass(row && row.linkage_tone ? row.linkage_tone : 'secondary');
 
             if (type === 'sort' || type === 'type') {
-              return row && row.narudzba ? row.narudzba : '';
+              return displayOrderNumber ? displayOrderNumber.replace(/\D/g, '') : '';
             }
 
             return (

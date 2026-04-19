@@ -52,9 +52,6 @@
     if (!is_string($normalized)) {
       return '';
     }
-    if (preg_match('/^\d{13}$/', $normalized) === 1 && substr($normalized, 6, 1) === '0') {
-      $normalized = substr($normalized, 0, 6) . substr($normalized, 7);
-    }
     return $normalized;
   };
   $normalizeOrderLocatorQrPosition = static function ($value): string {
