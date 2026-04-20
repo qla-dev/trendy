@@ -99,11 +99,16 @@ class DashboardController extends Controller
             : [];
           $orderKey = trim((string) ($linkedOrder['order_key'] ?? $orderLinkKey));
           $orderNumber = trim((string) ($linkedOrder['order_number'] ?? $orderKey));
+          if ($orderNumber === '') {
+            $orderNumber = trim((string) ($rowData['acLnkKey'] ?? ($rowData['acLnkKeyView'] ?? '')));
+          }
+
+          $workOrderNumber = $this->formatOrderNumberForDisplay((string) ($rowData['acKey'] ?? ($rowData['acRefNo1'] ?? 'N/A')));
 
           return (object) [
-            'id' => $rowData['acRefNo1'] ?? $rowData['acKey'] ?? $rowData['anNo'] ?? null,
-            'work_order_number' => $rowData['acRefNo1'] ?? $rowData['acKey'] ?? 'N/A',
-            'order_number' => $orderNumber,
+            'id' => $rowData['acKey'] ?? $rowData['acRefNo1'] ?? $rowData['anNo'] ?? null,
+            'work_order_number' => $workOrderNumber,
+            'order_number' => $this->formatOrderNumberForDisplay($orderNumber),
             'order_key' => $orderKey,
             'product_name' => $rowData['acName'] ?? $rowData['acDescr'] ?? 'Radni nalog',
             'product_code' => $rowData['acIdent'] ?? $rowData['acCode'] ?? '',
@@ -259,7 +264,7 @@ class DashboardController extends Controller
 
     $orderColumns = $this->orderTableColumns();
     $orderKeyColumn = $this->resolveFirstExistingColumn($orderColumns, ['acKey']);
-    $orderNumberColumn = $this->resolveFirstExistingColumn($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']);
+    $orderNumberColumn = $this->resolveFirstExistingColumn($orderColumns, ['acKey', 'acRefNo1', 'acKeyView']);
     $orderQidColumn = $this->resolveFirstExistingColumn($orderColumns, ['anQId']);
 
     foreach ($missingLinkKeys as $linkKey) {
@@ -337,6 +342,22 @@ class DashboardController extends Controller
       ->all();
 
     return $this->orderTableColumnsCache;
+  }
+
+  private function formatOrderNumberForDisplay(string $value): string
+  {
+    $trimmedValue = trim($value);
+    $digits = preg_replace('/\D+/', '', $trimmedValue);
+
+    if (!is_string($digits)) {
+      return $trimmedValue;
+    }
+
+    if (strlen($digits) !== 13) {
+      return $trimmedValue;
+    }
+
+    return substr($digits, 0, 2) . '-' . substr($digits, 2, 4) . '-' . substr($digits, 6);
   }
 
   private function qualifiedOrderTableName(): string

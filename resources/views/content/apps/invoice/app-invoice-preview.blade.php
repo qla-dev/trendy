@@ -1361,15 +1361,14 @@
   $orderNumberDisplay = $workOrder['broj_narudzbe'] ?? '';
   if (
     is_string($orderNumberDisplay) &&
-    $orderNumberDisplay !== '' &&
-    !str_contains($orderNumberDisplay, '-')
+    $orderNumberDisplay !== ''
   ) {
     $orderDigits = preg_replace('/\D+/', '', $orderNumberDisplay);
     if (is_string($orderDigits) && strlen($orderDigits) === 13) {
       $orderNumberDisplay =
         substr($orderDigits, 0, 2) . '-' .
-        substr($orderDigits, 2, 5) . '-' .
-        substr($orderDigits, 7);
+        substr($orderDigits, 2, 4) . '-' .
+        substr($orderDigits, 6);
     }
   }
   $orderNumberDisplay = $displayValue($orderNumberDisplay);
@@ -1455,9 +1454,6 @@
     $normalized = preg_replace('/[^A-Z0-9]+/', '', strtoupper(trim((string) $value)));
     if (!is_string($normalized)) {
       return '';
-    }
-    if (preg_match('/^\d{13}$/', $normalized) === 1 && substr($normalized, 6, 1) === '0') {
-      $normalized = substr($normalized, 0, 6) . substr($normalized, 7);
     }
     return $normalized;
   };

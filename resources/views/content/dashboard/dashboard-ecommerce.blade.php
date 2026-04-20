@@ -741,7 +741,7 @@
                     $orderDigits = preg_replace('/\D+/', '', $rawOrderNumber);
                     $displayOrderNumber = $rawOrderNumber;
                     if (is_string($orderDigits) && strlen($orderDigits) === 13) {
-                      $displayOrderNumber = substr($orderDigits, 0, 2) . '-' . substr($orderDigits, 2, 5) . '-' . substr($orderDigits, 7);
+                      $displayOrderNumber = substr($orderDigits, 0, 2) . '-' . substr($orderDigits, 2, 4) . '-' . substr($orderDigits, 6);
                     }
 
                     $clientName = trim((string) ($order->client_name ?? 'N/A'));

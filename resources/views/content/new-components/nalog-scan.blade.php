@@ -929,9 +929,26 @@
         .replace(/'/g, '&#039;');
     }
 
+    function formatOrderNumberForDisplay(value) {
+      var rawValue = String(value == null ? '' : value).trim();
+      var digits;
+
+      if (!rawValue) {
+        return '';
+      }
+
+      digits = rawValue.replace(/\D/g, '');
+
+      if (digits.length === 13) {
+        return digits.slice(0, 2) + '-' + digits.slice(2, 6) + '-' + digits.slice(6);
+      }
+
+      return rawValue;
+    }
+
   function buildScanDetailRowsHtml(context) {
     var details = [];
-    var brojNarudzbe = context && context.broj_narudzbe ? String(context.broj_narudzbe) : '';
+    var brojNarudzbe = context && context.broj_narudzbe ? formatOrderNumberForDisplay(context.broj_narudzbe) : '';
     var poz = context && context.poz ? String(context.poz) : '';
     var sifra = context && context.sifra ? String(context.sifra) : '';
     var naziv = context && context.naziv ? String(context.naziv) : '';

@@ -108,12 +108,13 @@ class OrderItemController extends OrderItemMoveLinkController
             ? (array) (empty($selectColumns) ? $query->first() : $query->first($selectColumns))
             : [];
 
-        $displayNumber = $this->valueTrimmed($row, ['acKeyView', 'acRefNo1', 'acKey'], '');
+        $displayNumber = $this->valueTrimmed($row, ['acKey', 'acRefNo1', 'acKeyView'], '');
         if ($displayNumber === '') {
             $displayNumber = $requestedOrderNumber !== ''
                 ? $requestedOrderNumber
                 : $this->formatDisplayOrderNumber($normalizedOrderNumber);
         }
+        $displayNumber = $this->formatDisplayOrderNumber((string) $displayNumber);
 
         return [
             'found' => !empty($row),
@@ -506,10 +507,10 @@ class OrderItemController extends OrderItemMoveLinkController
 
     protected function transferStatusDocument(array $linkRow, array $workOrder): string
     {
-        $document = (string) $this->valueTrimmed($workOrder, ['acKeyView', 'acKey'], '');
+        $document = (string) $this->valueTrimmed($workOrder, ['acKey', 'acRefNo1', 'acKeyView'], '');
 
         if ($document === '') {
-            $document = (string) $this->valueTrimmed($linkRow, ['acKeyView', 'acKey'], '');
+            $document = (string) $this->valueTrimmed($linkRow, ['acKey', 'acKeyView'], '');
         }
 
         // Some sources append extra tokens (e.g. "26-6000-0000011 6000"). Keep the first identifier.
@@ -519,7 +520,7 @@ class OrderItemController extends OrderItemMoveLinkController
             $document = substr($document, 0, $spacePos);
         }
 
-        return trim($document);
+        return $this->formatWorkOrderDocumentNumber($document);
     }
 
     protected function transferStatusMessageForLink(array $workOrder, bool $hasProducedMove, bool $hasWorkOrderLink): string
@@ -641,15 +642,27 @@ class OrderItemController extends OrderItemMoveLinkController
             return $normalizedOrderNumber;
         }
 
-        if (strlen($digits) === 13 && substr($digits, 6, 1) === '0') {
-            $digits = substr($digits, 0, 6) . substr($digits, 7);
-        }
-
-        if (strlen($digits) === 12) {
+        if (strlen($digits) === 13) {
             return substr($digits, 0, 2) . '-' . substr($digits, 2, 4) . '-' . substr($digits, 6);
         }
 
         return $normalizedOrderNumber;
+    }
+
+    protected function formatWorkOrderDocumentNumber(string $workOrderNumber): string
+    {
+        $trimmedValue = trim($workOrderNumber);
+        $digits = preg_replace('/\D+/', '', $trimmedValue);
+
+        if (!is_string($digits) || $digits === '') {
+            return $trimmedValue;
+        }
+
+        if (strlen($digits) === 13) {
+            return substr($digits, 0, 2) . '-' . substr($digits, 2, 4) . '-' . substr($digits, 6);
+        }
+
+        return $trimmedValue;
     }
 
     protected function normalizedIdentifierExpression(Builder $query, string $columnIdentifier): string

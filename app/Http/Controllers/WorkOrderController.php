@@ -3787,7 +3787,7 @@ class WorkOrderController extends Controller
 
         $this->applyOrderIdentifierSearchFilter(
             $query,
-            $this->qualifyColumns($this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']), $orderAlias),
+            $this->qualifyColumns($this->existingColumns($orderColumns, ['acKey', 'acRefNo1', 'acKeyView']), $orderAlias),
             (string) ($filters['vezni_dok'] ?? '')
         );
 
@@ -3860,7 +3860,7 @@ class WorkOrderController extends Controller
             $orderAlias
         );
         $identifierSearchColumns = $this->qualifyColumns(
-            $this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']),
+            $this->existingColumns($orderColumns, ['acKey', 'acRefNo1', 'acKeyView']),
             $orderAlias
         );
         $statusColumn = $this->firstExistingColumn($orderColumns, ['acStatusMF', 'acStatus']);
@@ -3993,7 +3993,7 @@ class WorkOrderController extends Controller
         $outerOrderKeyColumn = $this->firstExistingColumn($orderColumns, ['acKey']);
         $outerOrderNumberExpression = $this->firstNonEmptyStringExpression(
             $query,
-            $this->qualifyColumns($this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']), $orderAlias)
+            $this->qualifyColumns($this->existingColumns($orderColumns, ['acKey', 'acRefNo1', 'acKeyView']), $orderAlias)
         );
         $itemKeyColumns = $this->qualifyColumns(
             $this->existingColumns($itemColumns, ['acKey', 'acLnkKey', 'acOrderKey', 'order_key']),
@@ -4518,6 +4518,10 @@ class WorkOrderController extends Controller
         }
 
         $digits = preg_replace('/\D+/', '', $rawValue);
+
+        if (!is_string($digits) || $digits === '') {
+            return $rawValue;
+        }
 
         if (strlen($digits) === 13) {
             return substr($digits, 0, 2) . '-' . substr($digits, 2, 4) . '-' . substr($digits, 6);
@@ -5200,13 +5204,7 @@ class WorkOrderController extends Controller
 
     private function normalizeOrderLocatorNumber(string $value): string
     {
-        $normalized = $this->normalizeComparableIdentifier($value);
-
-        if (preg_match('/^\d{13}$/', $normalized) === 1 && substr($normalized, 6, 1) === '0') {
-            return substr($normalized, 0, 6) . substr($normalized, 7);
-        }
-
-        return $normalized;
+        return $this->normalizeComparableIdentifier($value);
     }
 
     private function findWorkOrderRowByOrderLocator(
@@ -5226,7 +5224,7 @@ class WorkOrderController extends Controller
             $workOrderProductColumn = $this->firstExistingColumn($workOrderColumns, ['acIdent', 'product_code', 'acCode']);
             $orderColumns = $this->orderTableColumns();
             $orderKeyColumn = $this->firstExistingColumn($orderColumns, ['acKey']);
-            $orderNumberColumns = $this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']);
+            $orderNumberColumns = $this->existingColumns($orderColumns, ['acKey', 'acRefNo1', 'acKeyView']);
 
             if (
                 $workOrderLinkColumn === null
@@ -5247,10 +5245,13 @@ class WorkOrderController extends Controller
                 ->select('wo.*')
                 ->where('wo.' . $workOrderPositionColumn, $orderPosition)
                 ->where(function (Builder $orderNumberQuery) use ($orderNumberColumns, $normalizedOrderNumber) {
+                    $orderNumberCandidates = $this->orderNumberComparisonCandidates([$normalizedOrderNumber]);
+                    $placeholders = implode(', ', array_fill(0, count($orderNumberCandidates), '?'));
+
                     foreach ($orderNumberColumns as $index => $orderNumberColumn) {
                         $normalizedExpression = $this->orderLinkageDisplayIdentifierExpression($orderNumberQuery, 'ord.' . $orderNumberColumn);
                         $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
-                        $orderNumberQuery->{$method}("$normalizedExpression = ?", [$normalizedOrderNumber]);
+                        $orderNumberQuery->{$method}("$normalizedExpression IN ($placeholders)", $orderNumberCandidates);
                     }
                 });
 
@@ -5293,7 +5294,7 @@ class WorkOrderController extends Controller
 
         try {
             $orderColumns = $this->orderTableColumns();
-            $orderNumberColumns = $this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']);
+            $orderNumberColumns = $this->existingColumns($orderColumns, ['acKey', 'acRefNo1', 'acKeyView']);
             $orderPositionColumns = $this->existingColumns($orderColumns, ['anLnkNo', 'anLineNo', 'anItemNo', 'anPosition', 'anPos', 'anPosNo']);
             $orderProductColumns = $this->existingColumns($orderColumns, ['acIdent', 'product_code', 'acCode']);
 
@@ -5303,10 +5304,13 @@ class WorkOrderController extends Controller
 
             $query = $this->newOrderTableQuery()
                 ->where(function (Builder $orderNumberQuery) use ($orderNumberColumns, $normalizedOrderNumber) {
+                    $orderNumberCandidates = $this->orderNumberComparisonCandidates([$normalizedOrderNumber]);
+                    $placeholders = implode(', ', array_fill(0, count($orderNumberCandidates), '?'));
+
                     foreach ($orderNumberColumns as $index => $orderNumberColumn) {
                         $normalizedExpression = $this->orderLinkageDisplayIdentifierExpression($orderNumberQuery, $orderNumberColumn);
                         $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
-                        $orderNumberQuery->{$method}("$normalizedExpression = ?", [$normalizedOrderNumber]);
+                        $orderNumberQuery->{$method}("$normalizedExpression IN ($placeholders)", $orderNumberCandidates);
                     }
                 });
 
@@ -5677,7 +5681,7 @@ class WorkOrderController extends Controller
 
     private function resolveOrderDisplayNumber(array $orderRow, string $fallbackNormalizedOrderNumber): string
     {
-        foreach (['acKeyView', 'acRefNo1', 'acKey'] as $candidateColumn) {
+        foreach (['acKey', 'acRefNo1', 'acKeyView'] as $candidateColumn) {
             if (!array_key_exists($candidateColumn, $orderRow)) {
                 continue;
             }
@@ -5688,14 +5692,14 @@ class WorkOrderController extends Controller
                 continue;
             }
 
-            if ($this->normalizeComparableIdentifier($candidateValue) === $fallbackNormalizedOrderNumber) {
-                return $candidateValue;
+            if ($this->orderNumbersMatch($candidateValue, $fallbackNormalizedOrderNumber)) {
+                return $this->formatOrderNumberForDisplay($candidateValue);
             }
         }
 
-        $displayNumber = trim((string) $this->valueTrimmed($orderRow, ['acKeyView', 'acRefNo1', 'acKey'], ''));
+        $displayNumber = trim((string) $this->valueTrimmed($orderRow, ['acKey', 'acRefNo1', 'acKeyView'], ''));
 
-        return $displayNumber !== '' ? $displayNumber : $fallbackNormalizedOrderNumber;
+        return $this->formatOrderNumberForDisplay($displayNumber !== '' ? $displayNumber : $fallbackNormalizedOrderNumber);
     }
 
     private function findCatalogItemByProductCode(string $productCode): array
@@ -5943,7 +5947,8 @@ class WorkOrderController extends Controller
             $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anQId', $nextQId);
         }
 
-        $note = 'Kreirano iz preko eNalog.app preko QR skena narudžbe ' . ($orderNumber !== '' ? $orderNumber : $orderKey);
+        $noteOrderNumber = $orderNumber !== '' ? $orderNumber : $orderKey;
+        $note = 'Kreirano iz eNalog.app preko QR skena narudžbe ' . $this->formatOrderNumberForDisplay($noteOrderNumber);
         if (!empty($orderContext['order_position'])) {
             $note .= ' / poz ' . $orderContext['order_position'];
         }
@@ -6230,16 +6235,12 @@ class WorkOrderController extends Controller
 
     private function orderLinkageDisplayIdentifierExpression(Builder $query, string $columnIdentifier): string
     {
-        $normalizedExpression = $this->normalizedIdentifierExpression($query, $columnIdentifier);
-
-        return "CASE WHEN LEN($normalizedExpression) = 13 AND SUBSTRING($normalizedExpression, 7, 1) = '0' THEN STUFF($normalizedExpression, 7, 1, '') ELSE $normalizedExpression END";
+        return $this->normalizedIdentifierExpression($query, $columnIdentifier);
     }
 
     private function orderLinkageDisplaySqlExpression(string $sqlExpression): string
     {
-        $normalizedExpression = $this->normalizedSqlExpression($sqlExpression);
-
-        return "CASE WHEN LEN($normalizedExpression) = 13 AND SUBSTRING($normalizedExpression, 7, 1) = '0' THEN STUFF($normalizedExpression, 7, 1, '') ELSE $normalizedExpression END";
+        return $this->normalizedSqlExpression($sqlExpression);
     }
 
     private function normalizedSqlExpression(string $sqlExpression): string
@@ -6324,14 +6325,14 @@ class WorkOrderController extends Controller
         if ($hasOrderJoin) {
             $orderNumberColumns = array_merge(
                 $orderNumberColumns,
-                $this->qualifyColumns($this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']), 'ord')
+                $this->qualifyColumns($this->existingColumns($orderColumns, ['acKey', 'acRefNo1', 'acKeyView']), 'ord')
             );
         }
 
         // Pantheon veza nije uvijek dvosmjerna, pa kao rezervu koristimo broj narudžbe upisan direktno na RN.
         $orderNumberColumns = array_merge(
             $orderNumberColumns,
-            $this->qualifyColumns($this->existingColumns($workOrderColumns, ['acLnkKeyView', 'acLnkKey']), 'wo')
+            $this->qualifyColumns($this->existingColumns($workOrderColumns, ['acLnkKey', 'acLnkKeyView']), 'wo')
         );
 
         return $this->firstNonEmptyStringExpression($query, $orderNumberColumns);
@@ -6339,7 +6340,7 @@ class WorkOrderController extends Controller
 
     private function mapOrderLinkageGroupRow(array $row): array
     {
-        $orderNumber = trim((string) ($row['narudzba'] ?? ''));
+        $orderNumber = $this->formatOrderNumberForDisplay((string) ($row['narudzba'] ?? ''));
         $quantity = $this->normalizeNullableNumber($row['total_kolicina_sort'] ?? null);
         $unit = trim((string) ($row['jedinica_sort'] ?? ''));
         $workOrderCount = max(0, (int) ($row['broj_rn_sort'] ?? 0));
@@ -6397,8 +6398,9 @@ class WorkOrderController extends Controller
         bool $loadLinkedOrderOnMiss = false
     ): array
     {
-        $brojNaloga = (string) $this->value($row, ['acRefNo1', 'acKey', 'anNo', 'id'], 'N/A');
-        $id = $this->value($row, ['acRefNo1', 'acKey'], null);
+        $rawBrojNaloga = (string) $this->value($row, ['acKey', 'acRefNo1', 'acKeyView', 'anNo', 'id'], 'N/A');
+        $brojNaloga = $this->formatWorkOrderNumberForCalendar($rawBrojNaloga);
+        $id = $this->value($row, ['acKey', 'acRefNo1'], null);
 
         if ($id === null || $id === '' || ((is_int($id) || is_float($id) || is_numeric((string) $id)) && (float) $id === 0.0)) {
             $id = $this->value($row, ['anNo', 'id'], $brojNaloga);
@@ -6414,6 +6416,10 @@ class WorkOrderController extends Controller
         $linkedOrder = $this->resolveLinkedOrder($orderLinkKey, $linkedOrders, $loadLinkedOrderOnMiss);
         $orderKey = trim((string) ($linkedOrder['order_key'] ?? $orderLinkKey));
         $orderNumber = trim((string) ($linkedOrder['order_number'] ?? $orderKey));
+        if ($orderNumber === '') {
+            $orderNumber = trim((string) $this->valueTrimmed($row, ['acLnkKey', 'acLnkKeyView'], ''));
+        }
+        $orderNumberDisplay = $this->formatOrderNumberForDisplay($orderNumber);
         $orderPosition = $this->valueTrimmed($row, ['anLnkNo'], null);
         $quantity = $this->normalizeNullableNumber($this->value($row, ['anPlanQty', 'anQty', 'anQty1'], null));
         $unit = (string) $this->valueTrimmed($row, ['acUM'], '');
@@ -6425,7 +6431,7 @@ class WorkOrderController extends Controller
             'broj_naloga' => $brojNaloga,
             'naziv' => (string) $this->value($row, ['acName', 'acDescr', 'title'], 'Radni nalog'),
             'sifra' => (string) $this->valueTrimmed($row, ['acIdent', 'product_code', 'acCode'], ''),
-            'opis' => (string) $this->value($row, ['acNote', 'acStatement', 'acDescr', 'description'], ''),
+            'opis' => $note !== '' ? $note : (string) $this->value($row, ['acStatement', 'acDescr', 'description'], ''),
             'napomena_rn' => $note,
             'status' => $status,
             'prioritet' => $priority,
@@ -6436,7 +6442,7 @@ class WorkOrderController extends Controller
             'vrednost' => $amount,
             'valuta' => $amount === null ? '' : (string) $this->value($row, ['acCurrency', 'currency'], 'BAM'),
             'magacin' => (string) $this->value($row, ['acWarehouse', 'linked_document', 'acWarehouseFrom'], ''),
-            'broj_narudzbe' => $orderNumber,
+            'broj_narudzbe' => $orderNumberDisplay,
             'narudzba_kljuc' => $orderKey,
             'broj_pozicije_narudzbe' => $orderPosition,
             'kolicina' => $quantity,
@@ -6452,7 +6458,34 @@ class WorkOrderController extends Controller
 
     private function resolveWorkOrderNote(array $row): string
     {
-        return (string) $this->valueTrimmed($row, ['acNote', 'description'], '');
+        $note = (string) $this->valueTrimmed($row, ['acNote', 'description'], '');
+        $orderNumber = (string) $this->valueTrimmed($row, ['acLnkKey', 'acLnkKeyView'], '');
+
+        return $this->normalizeIdentifiersInWorkOrderNote($note, $orderNumber);
+    }
+
+    private function normalizeIdentifiersInWorkOrderNote(string $note, string $orderNumber = ''): string
+    {
+        $normalizedNote = trim($note);
+
+        if ($normalizedNote === '') {
+            return $normalizedNote;
+        }
+
+        $normalizedNote = preg_replace('/\bkreirano\s+iz\s+preko\s+/iu', 'Kreirano iz ', $normalizedNote, 1) ?? $normalizedNote;
+
+        $displayOrderNumber = $this->formatOrderNumberForDisplay($orderNumber);
+
+        if ($displayOrderNumber !== '') {
+            $normalizedNote = (string) preg_replace(
+                '/(narudžbe\s+)[A-Z0-9-]+/iu',
+                '${1}' . $displayOrderNumber,
+                $normalizedNote,
+                1
+            );
+        }
+
+        return $normalizedNote;
     }
 
     private function buildWorkOrderMetadata(
@@ -6550,9 +6583,9 @@ class WorkOrderController extends Controller
         $timeline = $this->sortTimelineRowsChronologically($timelineRows);
 
         $traceability = [
-            ['label' => 'RN ključ', 'value' => (string) $this->valueTrimmed($raw, ['acKeyView', 'acKey'], '-')],
+            ['label' => 'RN ključ', 'value' => $this->formatWorkOrderNumberForCalendar((string) $this->valueTrimmed($raw, ['acKey', 'acRefNo1', 'acKeyView'], '-'))],
             ['label' => 'Broj narudžbe', 'value' => (string) ($workOrder['broj_narudzbe'] ?? '-')],
-            ['label' => 'Vezni dokument', 'value' => (string) $this->valueTrimmed($raw, ['acLnkKeyView', 'acLnkKey'], '-')],
+            ['label' => 'Vezni dokument', 'value' => $this->formatOrderNumberForDisplay((string) $this->valueTrimmed($raw, ['acLnkKey', 'acLnkKeyView'], '-'))],
             ['label' => 'Vezni broj', 'value' => (string) $this->valueTrimmed($raw, ['anLnkNo'], '-')],
             ['label' => 'Nadređeni RN', 'value' => (string) $this->valueTrimmed($raw, ['acParentWOView', 'acParentWO'], '-')],
             ['label' => 'Nadređena količina', 'value' => $this->formatMetaNumber($this->toFloatOrNull($this->valueTrimmed($raw, ['anParentWOQty'], null)))],
@@ -6755,7 +6788,7 @@ class WorkOrderController extends Controller
 
         $orderColumns = $this->orderTableColumns();
         $orderKeyColumn = $this->firstExistingColumn($orderColumns, ['acKey']);
-        $orderNumberColumn = $this->firstExistingColumn($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']);
+        $orderNumberColumn = $this->firstExistingColumn($orderColumns, ['acKey', 'acRefNo1', 'acKeyView']);
         $orderQidColumn = $this->firstExistingColumn($orderColumns, ['anQId']);
 
         foreach ($missingLinkKeys as $linkKey) {
@@ -7215,7 +7248,7 @@ class WorkOrderController extends Controller
 
         $this->applyOrderIdentifierSearchFilter(
             $query,
-            $this->existingColumns($columns, ['acLnkKeyView', 'acLnkKey']),
+            $this->existingColumns($columns, ['acLnkKey', 'acLnkKeyView']),
             (string) ($filters['vezni_dok'] ?? ''),
             $this->existingColumns($columns, ['acRefNo1', 'acKey'])
         );
@@ -7482,7 +7515,7 @@ class WorkOrderController extends Controller
         $statusAliases = $this->statusAliasesForSearch($search);
         $priorityCodes = $this->priorityCodesForSearch($search);
         $searchVariants = $this->searchVariants($search);
-        $orderLinkSearchColumns = $this->existingColumns($columns, ['acLnkKeyView', 'acLnkKey']);
+        $orderLinkSearchColumns = $this->existingColumns($columns, ['acLnkKey', 'acLnkKeyView']);
         $orderNumberDigitSearchVariants = $this->orderNumberDigitSearchVariants($search);
         $rawOrderNumberSearchVariants = array_values(array_diff(
             $this->orderNumberRawSearchVariants($search),
@@ -7580,20 +7613,18 @@ class WorkOrderController extends Controller
     private function orderLinkageOrderNumberSearchVariants(string $search): array
     {
         $rawSearch = trim($search);
-        $digits = preg_replace('/\D+/', '', $rawSearch);
         $variants = [];
-
-        if (is_string($digits) && $this->isExtraZeroOrderNumberDigits($digits)) {
-            return [];
-        }
 
         if ($rawSearch !== '') {
             $variants[] = $rawSearch;
         }
 
-        if (is_string($digits) && $digits !== '') {
-            $variants[] = $digits;
-            $variants[] = $this->formatOrderNumberDigitsForDisplay($digits);
+        foreach ($this->orderNumberDigitSearchVariants($rawSearch) as $digitVariant) {
+            $variants[] = $digitVariant;
+
+            foreach ($this->hyphenatedOrderNumberSearchVariants($digitVariant) as $hyphenatedVariant) {
+                $variants[] = $hyphenatedVariant;
+            }
         }
 
         return array_values(array_unique(array_filter($variants, function ($variant) {
@@ -7609,11 +7640,15 @@ class WorkOrderController extends Controller
             return [];
         }
 
-        if ($this->isExtraZeroOrderNumberDigits($digits)) {
-            return [];
+        $variants = [$digits];
+
+        if (strlen($digits) === 12) {
+            $variants[] = substr($digits, 0, 6) . '0' . substr($digits, 6);
         }
 
-        $variants = [$digits];
+        if (strlen($digits) === 13 && substr($digits, 6, 1) === '0') {
+            $variants[] = substr($digits, 0, 6) . substr($digits, 7);
+        }
 
         return array_values(array_unique(array_filter($variants, function ($variant) {
             return trim((string) $variant) !== '';
@@ -7623,12 +7658,7 @@ class WorkOrderController extends Controller
     private function orderNumberRawSearchVariants(string $search): array
     {
         $rawSearch = trim($search);
-        $rawDigits = preg_replace('/\D+/', '', $rawSearch);
         $variants = [];
-
-        if (is_string($rawDigits) && $this->isExtraZeroOrderNumberDigits($rawDigits)) {
-            return [];
-        }
 
         if ($rawSearch !== '') {
             $variants[] = $rawSearch;
@@ -7645,6 +7675,41 @@ class WorkOrderController extends Controller
         return array_values(array_unique(array_filter($variants, function ($variant) {
             return trim((string) $variant) !== '';
         })));
+    }
+
+    private function orderNumberComparisonCandidates(array $values): array
+    {
+        $candidates = [];
+
+        foreach ($values as $value) {
+            $normalized = $this->normalizeComparableIdentifier((string) $value);
+
+            if ($normalized === '') {
+                continue;
+            }
+
+            $candidates[] = $normalized;
+
+            foreach ($this->orderNumberDigitSearchVariants($normalized) as $digitVariant) {
+                $candidates[] = $digitVariant;
+            }
+        }
+
+        return array_values(array_unique(array_filter($candidates, function ($candidate) {
+            return trim((string) $candidate) !== '';
+        })));
+    }
+
+    private function orderNumbersMatch(string $first, string $second): bool
+    {
+        $firstCandidates = $this->orderNumberComparisonCandidates([$first]);
+        $secondCandidates = $this->orderNumberComparisonCandidates([$second]);
+
+        if (empty($firstCandidates) || empty($secondCandidates)) {
+            return false;
+        }
+
+        return count(array_intersect($firstCandidates, $secondCandidates)) > 0;
     }
 
     private function hyphenatedOrderNumberSearchVariants(string $digits): array
@@ -7666,27 +7731,25 @@ class WorkOrderController extends Controller
         return $variants;
     }
 
-    private function isExtraZeroOrderNumberDigits(string $digits): bool
-    {
-        return strlen($digits) === 13 && substr($digits, 6, 1) === '0';
-    }
-
-    private function canonicalOrderNumberDigits(string $digits): string
-    {
-        if (strlen($digits) === 13 && substr($digits, 6, 1) === '0') {
-            return substr($digits, 0, 6) . substr($digits, 7);
-        }
-
-        return $digits;
-    }
-
     private function formatOrderNumberDigitsForDisplay(string $digits): string
     {
-        if (strlen($digits) !== 12) {
+        if (strlen($digits) !== 13) {
             return '';
         }
 
         return substr($digits, 0, 2) . '-' . substr($digits, 2, 4) . '-' . substr($digits, 6);
+    }
+
+    private function formatOrderNumberForDisplay(string $value): string
+    {
+        $trimmedValue = trim($value);
+        $digits = preg_replace('/\D+/', '', $trimmedValue);
+
+        if (!is_string($digits) || strlen($digits) !== 13) {
+            return $trimmedValue;
+        }
+
+        return $this->formatOrderNumberDigitsForDisplay($digits);
     }
 
     private function searchVariants(string $search): array
@@ -7699,10 +7762,16 @@ class WorkOrderController extends Controller
         }
 
         if (is_string($digits) && $digits !== '') {
-            $formatted = $this->formatWorkOrderNumberForCalendar($digits);
+            foreach ($this->orderNumberDigitSearchVariants($digits) as $digitVariant) {
+                if (!in_array($digitVariant, $variants, true)) {
+                    $variants[] = $digitVariant;
+                }
 
-            if ($formatted !== 'N/A' && !in_array($formatted, $variants, true)) {
-                $variants[] = $formatted;
+                $formatted = $this->formatWorkOrderNumberForCalendar($digitVariant);
+
+                if ($formatted !== 'N/A' && !in_array($formatted, $variants, true)) {
+                    $variants[] = $formatted;
+                }
             }
 
             if (strlen($digits) === 6) {
@@ -9323,7 +9392,7 @@ class WorkOrderController extends Controller
         foreach ($headerRows as $row) {
             $displayNumber = $this->resolveOrderDisplayNumber(
                 $row,
-                $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acKeyView', 'acRefNo1', 'acKey'], ''))
+                $this->normalizeComparableIdentifier((string) $this->valueTrimmed($row, ['acKey', 'acRefNo1', 'acKeyView'], ''))
             );
             $normalizedDisplayNumber = $this->normalizeComparableIdentifier($displayNumber);
 
@@ -9453,7 +9522,7 @@ class WorkOrderController extends Controller
             $stateMeta = $this->orderLinkageStateMeta($state);
 
             $summaryRows[] = [
-                'order_number' => (string) ($group['order_number'] ?? $displayNumbers[$normalizedKey] ?? $normalizedKey),
+                'order_number' => $this->formatOrderNumberForDisplay((string) ($group['order_number'] ?? $displayNumbers[$normalizedKey] ?? $normalizedKey)),
                 'customer' => (string) ($group['customer'] ?? ''),
                 'date' => $this->orderLinkagePickDate((array) ($group['_date_candidates'] ?? []), true),
                 'due_date' => $this->orderLinkagePickDate((array) ($group['_due_date_candidates'] ?? []), false),
@@ -9531,7 +9600,7 @@ class WorkOrderController extends Controller
         foreach ($orderItemRows as $index => $row) {
             $resolvedOrder = $this->resolveOrderLinkageNumberFromOrderItem($row, $orderKeysToNumbers, $displayNumbers);
 
-            if (($resolvedOrder['normalized'] ?? '') !== $normalizedOrderNumber) {
+            if (!$this->orderNumbersMatch((string) ($resolvedOrder['normalized'] ?? ''), $normalizedOrderNumber)) {
                 continue;
             }
 
@@ -9573,8 +9642,9 @@ class WorkOrderController extends Controller
 
         if ($normalizedOrderNumbers !== null) {
             $normalizedOrderNumbers = $this->normalizeComparableIdentifiers($normalizedOrderNumbers);
+            $normalizedOrderNumberCandidates = $this->orderNumberComparisonCandidates($normalizedOrderNumbers);
 
-            if (empty($normalizedOrderNumbers)) {
+            if (empty($normalizedOrderNumberCandidates)) {
                 return [];
             }
         }
@@ -9600,19 +9670,19 @@ class WorkOrderController extends Controller
         $query = $this->newOrderTableQuery();
 
         if ($normalizedOrderNumbers !== null) {
-            $orderNumberColumns = $this->existingColumns($orderColumns, ['acKeyView', 'acRefNo1', 'acKey']);
+            $orderNumberColumns = $this->existingColumns($orderColumns, ['acKey', 'acRefNo1', 'acKeyView']);
 
             if (empty($orderNumberColumns)) {
                 return [];
             }
 
-            $query->where(function (Builder $numberQuery) use ($orderNumberColumns, $normalizedOrderNumbers) {
-                $placeholders = implode(', ', array_fill(0, count($normalizedOrderNumbers), '?'));
+            $query->where(function (Builder $numberQuery) use ($orderNumberColumns, $normalizedOrderNumberCandidates) {
+                $placeholders = implode(', ', array_fill(0, count($normalizedOrderNumberCandidates), '?'));
 
                 foreach ($orderNumberColumns as $index => $orderNumberColumn) {
                     $normalizedExpression = $this->normalizedIdentifierExpression($numberQuery, $orderNumberColumn);
                     $method = $index === 0 ? 'whereRaw' : 'orWhereRaw';
-                    $numberQuery->{$method}("$normalizedExpression IN ($placeholders)", $normalizedOrderNumbers);
+                    $numberQuery->{$method}("$normalizedExpression IN ($placeholders)", $normalizedOrderNumberCandidates);
                 }
             });
         }
@@ -9641,8 +9711,9 @@ class WorkOrderController extends Controller
 
         if ($normalizedOrderNumbers !== null) {
             $normalizedOrderNumbers = $this->normalizeComparableIdentifiers($normalizedOrderNumbers);
+            $normalizedOrderNumberCandidates = $this->orderNumberComparisonCandidates($normalizedOrderNumbers);
 
-            if (empty($normalizedOrderNumbers)) {
+            if (empty($normalizedOrderNumberCandidates)) {
                 return [];
             }
         }
@@ -9729,9 +9800,9 @@ class WorkOrderController extends Controller
                 return [];
             }
 
-            $query->where(function (Builder $filterQuery) use ($orderItemKeyColumns, $orderItemNumberColumns, $normalizedOrderNumbers, $normalizedRawOrderKeys) {
+            $query->where(function (Builder $filterQuery) use ($orderItemKeyColumns, $orderItemNumberColumns, $normalizedOrderNumberCandidates, $normalizedRawOrderKeys) {
                 $hasCondition = false;
-                $placeholders = implode(', ', array_fill(0, count($normalizedOrderNumbers), '?'));
+                $placeholders = implode(', ', array_fill(0, count($normalizedOrderNumberCandidates), '?'));
 
                 if (!empty($normalizedRawOrderKeys) && !empty($orderItemKeyColumns)) {
                     $normalizedKeyPlaceholders = implode(', ', array_fill(0, count($normalizedRawOrderKeys), '?'));
@@ -9748,7 +9819,7 @@ class WorkOrderController extends Controller
                     foreach ($orderItemNumberColumns as $index => $orderItemNumberColumn) {
                         $normalizedExpression = $this->normalizedIdentifierExpression($filterQuery, $orderItemNumberColumn);
                         $method = $hasCondition || $index > 0 ? 'orWhereRaw' : 'whereRaw';
-                        $filterQuery->{$method}("$normalizedExpression IN ($placeholders)", $normalizedOrderNumbers);
+                        $filterQuery->{$method}("$normalizedExpression IN ($placeholders)", $normalizedOrderNumberCandidates);
                         $hasCondition = true;
                     }
                 }
@@ -9779,8 +9850,9 @@ class WorkOrderController extends Controller
 
         if ($normalizedOrderNumbers !== null) {
             $normalizedOrderNumbers = $this->normalizeComparableIdentifiers($normalizedOrderNumbers);
+            $normalizedOrderNumberCandidates = $this->orderNumberComparisonCandidates($normalizedOrderNumbers);
 
-            if (empty($normalizedOrderNumbers)) {
+            if (empty($normalizedOrderNumberCandidates)) {
                 return [];
             }
         }
@@ -9825,16 +9897,16 @@ class WorkOrderController extends Controller
 
         if ($normalizedOrderNumbers !== null) {
             $linkKeyColumn = $this->firstExistingColumn($workOrderColumns, ['acLnkKey']);
-            $linkDisplayColumns = $this->existingColumns($workOrderColumns, ['acLnkKeyView']);
+            $linkDisplayColumns = $this->existingColumns($workOrderColumns, ['acLnkKey', 'acLnkKeyView']);
             $normalizedRawOrderKeys = $this->normalizeComparableIdentifiers($rawOrderKeys);
 
             if (($linkKeyColumn === null || empty($normalizedRawOrderKeys)) && empty($linkDisplayColumns)) {
                 return [];
             }
 
-            $query->where(function (Builder $filterQuery) use ($linkKeyColumn, $linkDisplayColumns, $normalizedOrderNumbers, $normalizedRawOrderKeys) {
+            $query->where(function (Builder $filterQuery) use ($linkKeyColumn, $linkDisplayColumns, $normalizedOrderNumberCandidates, $normalizedRawOrderKeys) {
                 $hasCondition = false;
-                $placeholders = implode(', ', array_fill(0, count($normalizedOrderNumbers), '?'));
+                $placeholders = implode(', ', array_fill(0, count($normalizedOrderNumberCandidates), '?'));
 
                 if ($linkKeyColumn !== null && !empty($normalizedRawOrderKeys)) {
                     $normalizedKeyPlaceholders = implode(', ', array_fill(0, count($normalizedRawOrderKeys), '?'));
@@ -9846,7 +9918,7 @@ class WorkOrderController extends Controller
                 foreach ($linkDisplayColumns as $index => $linkDisplayColumn) {
                     $normalizedExpression = $this->normalizedIdentifierExpression($filterQuery, $linkDisplayColumn);
                     $method = $hasCondition || $index > 0 ? 'orWhereRaw' : 'whereRaw';
-                    $filterQuery->{$method}("$normalizedExpression IN ($placeholders)", $normalizedOrderNumbers);
+                    $filterQuery->{$method}("$normalizedExpression IN ($placeholders)", $normalizedOrderNumberCandidates);
                     $hasCondition = true;
                 }
             });
@@ -9876,8 +9948,9 @@ class WorkOrderController extends Controller
 
         if ($normalizedOrderNumbers !== null) {
             $normalizedOrderNumbers = $this->normalizeComparableIdentifiers($normalizedOrderNumbers);
+            $normalizedOrderNumberCandidates = $this->orderNumberComparisonCandidates($normalizedOrderNumbers);
 
-            if (empty($normalizedOrderNumbers)) {
+            if (empty($normalizedOrderNumberCandidates)) {
                 return [];
             }
         }
@@ -9908,16 +9981,16 @@ class WorkOrderController extends Controller
 
         if ($normalizedOrderNumbers !== null) {
             $linkKeyColumns = $this->existingColumns($linkColumns, ['acLnkKey']);
-            $linkDisplayColumns = $this->existingColumns($linkColumns, ['acLnkKeyView']);
+            $linkDisplayColumns = $this->existingColumns($linkColumns, ['acLnkKey', 'acLnkKeyView']);
             $normalizedRawOrderKeys = $this->normalizeComparableIdentifiers($rawOrderKeys);
 
             if ((empty($normalizedRawOrderKeys) || empty($linkKeyColumns)) && empty($linkDisplayColumns)) {
                 return [];
             }
 
-            $query->where(function (Builder $filterQuery) use ($linkKeyColumns, $linkDisplayColumns, $normalizedOrderNumbers, $normalizedRawOrderKeys) {
+            $query->where(function (Builder $filterQuery) use ($linkKeyColumns, $linkDisplayColumns, $normalizedOrderNumberCandidates, $normalizedRawOrderKeys) {
                 $hasCondition = false;
-                $placeholders = implode(', ', array_fill(0, count($normalizedOrderNumbers), '?'));
+                $placeholders = implode(', ', array_fill(0, count($normalizedOrderNumberCandidates), '?'));
 
                 if (!empty($normalizedRawOrderKeys) && !empty($linkKeyColumns)) {
                     $normalizedKeyPlaceholders = implode(', ', array_fill(0, count($normalizedRawOrderKeys), '?'));
@@ -9933,7 +10006,7 @@ class WorkOrderController extends Controller
                 foreach ($linkDisplayColumns as $index => $linkDisplayColumn) {
                     $normalizedExpression = $this->normalizedIdentifierExpression($filterQuery, $linkDisplayColumn);
                     $method = $hasCondition || $index > 0 ? 'orWhereRaw' : 'whereRaw';
-                    $filterQuery->{$method}("$normalizedExpression IN ($placeholders)", $normalizedOrderNumbers);
+                    $filterQuery->{$method}("$normalizedExpression IN ($placeholders)", $normalizedOrderNumberCandidates);
                     $hasCondition = true;
                 }
             });
@@ -9955,6 +10028,8 @@ class WorkOrderController extends Controller
 
     private function primeOrderLinkageGroup(array &$groups, string $normalizedOrderNumber, string $displayOrderNumber): void
     {
+        $displayOrderNumber = $this->formatOrderNumberForDisplay($displayOrderNumber);
+
         if (isset($groups[$normalizedOrderNumber])) {
             if ($displayOrderNumber !== '' && trim((string) ($groups[$normalizedOrderNumber]['order_number'] ?? '')) === '') {
                 $groups[$normalizedOrderNumber]['order_number'] = $displayOrderNumber;
@@ -9997,7 +10072,7 @@ class WorkOrderController extends Controller
 
             return [
                 'normalized' => $normalizedOrderNumber,
-                'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $normalizedOrderNumber),
+                'display' => $this->formatOrderNumberForDisplay((string) ($displayNumbers[$normalizedOrderNumber] ?? $normalizedOrderNumber)),
             ];
         }
 
@@ -10013,7 +10088,7 @@ class WorkOrderController extends Controller
 
         return [
             'normalized' => $normalizedOrderNumber,
-            'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $displayOrderNumber),
+            'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $this->formatOrderNumberForDisplay($displayOrderNumber)),
         ];
     }
 
@@ -10029,11 +10104,11 @@ class WorkOrderController extends Controller
 
             return [
                 'normalized' => $normalizedOrderNumber,
-                'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $normalizedOrderNumber),
+                'display' => $this->formatOrderNumberForDisplay((string) ($displayNumbers[$normalizedOrderNumber] ?? $normalizedOrderNumber)),
             ];
         }
 
-        $displayOrderNumber = trim((string) $this->valueTrimmed($row, ['acLnkKeyView'], ''));
+        $displayOrderNumber = trim((string) $this->valueTrimmed($row, ['acLnkKey', 'acLnkKeyView'], ''));
         $normalizedOrderNumber = $this->normalizeComparableIdentifier($displayOrderNumber);
 
         if ($normalizedOrderNumber === '') {
@@ -10045,7 +10120,7 @@ class WorkOrderController extends Controller
 
         return [
             'normalized' => $normalizedOrderNumber,
-            'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $displayOrderNumber),
+            'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $this->formatOrderNumberForDisplay($displayOrderNumber)),
         ];
     }
 
@@ -10062,7 +10137,7 @@ class WorkOrderController extends Controller
 
             return [
                 'normalized' => $normalizedOrderNumber,
-                'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $normalizedOrderNumber),
+                'display' => $this->formatOrderNumberForDisplay((string) ($displayNumbers[$normalizedOrderNumber] ?? $normalizedOrderNumber)),
             ];
         }
 
@@ -10072,18 +10147,18 @@ class WorkOrderController extends Controller
         if ($normalizedMappedOrderNumber !== '' && array_key_exists($normalizedMappedOrderNumber, $displayNumbers)) {
             return [
                 'normalized' => $normalizedMappedOrderNumber,
-                'display' => (string) ($displayNumbers[$normalizedMappedOrderNumber] ?? $mappedOrderNumber),
+                'display' => $this->formatOrderNumberForDisplay((string) ($displayNumbers[$normalizedMappedOrderNumber] ?? $mappedOrderNumber)),
             ];
         }
 
         // Pantheon veza nije uvijek dvosmjerna, pa kao rezervu koristimo vidljivi broj narudžbe upisan na RN.
-        $displayOrderNumber = trim((string) $this->valueTrimmed($row, ['acLnkKeyView'], ''));
+        $displayOrderNumber = trim((string) $this->valueTrimmed($row, ['acLnkKey', 'acLnkKeyView'], ''));
         $normalizedDisplayOrderNumber = $this->normalizeComparableIdentifier($displayOrderNumber);
 
         if ($normalizedDisplayOrderNumber !== '') {
             return [
                 'normalized' => $normalizedDisplayOrderNumber,
-                'display' => (string) ($displayNumbers[$normalizedDisplayOrderNumber] ?? $displayOrderNumber),
+                'display' => (string) ($displayNumbers[$normalizedDisplayOrderNumber] ?? $this->formatOrderNumberForDisplay($displayOrderNumber)),
             ];
         }
 
@@ -10091,7 +10166,7 @@ class WorkOrderController extends Controller
             return [
                 'normalized' => $normalizedMappedOrderNumber,
                 'display' => $mappedOrderNumber !== ''
-                    ? $mappedOrderNumber
+                    ? $this->formatOrderNumberForDisplay($mappedOrderNumber)
                     : (string) ($displayNumbers[$normalizedMappedOrderNumber] ?? $normalizedMappedOrderNumber),
             ];
         }
@@ -10117,7 +10192,7 @@ class WorkOrderController extends Controller
 
             return [
                 'normalized' => $normalizedOrderNumber,
-                'display' => (string) ($displayNumbers[$normalizedOrderNumber] ?? $normalizedOrderNumber),
+                'display' => $this->formatOrderNumberForDisplay((string) ($displayNumbers[$normalizedOrderNumber] ?? $normalizedOrderNumber)),
                 'match_type' => 'direct',
                 'has_position_link' => $hasPositionLink,
             ];
@@ -10129,20 +10204,20 @@ class WorkOrderController extends Controller
         if ($normalizedMappedOrderNumber !== '' && array_key_exists($normalizedMappedOrderNumber, $displayNumbers)) {
             return [
                 'normalized' => $normalizedMappedOrderNumber,
-                'display' => (string) ($displayNumbers[$normalizedMappedOrderNumber] ?? $mappedOrderNumber),
+                'display' => $this->formatOrderNumberForDisplay((string) ($displayNumbers[$normalizedMappedOrderNumber] ?? $mappedOrderNumber)),
                 'match_type' => 'mapped',
                 'has_position_link' => $hasPositionLink,
             ];
         }
 
         // Pantheon veza nije uvijek dvosmjerna, pa kao rezervu koristimo vidljivi broj narudzbe upisan na RN.
-        $displayOrderNumber = trim((string) $this->valueTrimmed($row, ['acLnkKeyView'], ''));
+        $displayOrderNumber = trim((string) $this->valueTrimmed($row, ['acLnkKey', 'acLnkKeyView'], ''));
         $normalizedDisplayOrderNumber = $this->normalizeComparableIdentifier($displayOrderNumber);
 
         if ($normalizedDisplayOrderNumber !== '') {
             return [
                 'normalized' => $normalizedDisplayOrderNumber,
-                'display' => (string) ($displayNumbers[$normalizedDisplayOrderNumber] ?? $displayOrderNumber),
+                'display' => (string) ($displayNumbers[$normalizedDisplayOrderNumber] ?? $this->formatOrderNumberForDisplay($displayOrderNumber)),
                 'match_type' => 'visible',
                 'has_position_link' => $hasPositionLink,
             ];
@@ -10152,7 +10227,7 @@ class WorkOrderController extends Controller
             return [
                 'normalized' => $normalizedMappedOrderNumber,
                 'display' => $mappedOrderNumber !== ''
-                    ? $mappedOrderNumber
+                    ? $this->formatOrderNumberForDisplay($mappedOrderNumber)
                     : (string) ($displayNumbers[$normalizedMappedOrderNumber] ?? $normalizedMappedOrderNumber),
                 'match_type' => 'fallback',
                 'has_position_link' => $hasPositionLink,
@@ -10198,7 +10273,7 @@ class WorkOrderController extends Controller
         foreach ($orderItemRows as $row) {
             $resolvedOrder = $this->resolveOrderLinkageNumberFromOrderItem($row, $orderKeysToNumbers, $displayNumbers);
 
-            if (($resolvedOrder['normalized'] ?? '') !== $normalizedOrderNumber) {
+            if (!$this->orderNumbersMatch((string) ($resolvedOrder['normalized'] ?? ''), $normalizedOrderNumber)) {
                 continue;
             }
 
@@ -10234,7 +10309,7 @@ class WorkOrderController extends Controller
         foreach ($linkRows as $index => $row) {
             $resolvedOrder = $this->resolveOrderLinkageNumberFromLinkRow($row, $orderKeysToNumbers, $displayNumbers);
 
-            if (($resolvedOrder['normalized'] ?? '') !== $normalizedOrderNumber) {
+            if (!$this->orderNumbersMatch((string) ($resolvedOrder['normalized'] ?? ''), $normalizedOrderNumber)) {
                 continue;
             }
 
@@ -10252,7 +10327,8 @@ class WorkOrderController extends Controller
 
             $mappedWorkOrder = (array) ($mappedWorkOrdersByKey[$workOrderKey] ?? []);
             $rawWorkOrder = (array) ($rawWorkOrdersByKey[$workOrderKey] ?? []);
-            $workOrderNumber = trim((string) ($mappedWorkOrder['broj_naloga'] ?? $this->valueTrimmed($row, ['acKeyView'], '')));
+            $workOrderNumber = trim((string) ($mappedWorkOrder['broj_naloga'] ?? $this->valueTrimmed($row, ['acKey', 'acRefNo1', 'acKeyView'], '')));
+            $workOrderNumber = $workOrderNumber !== '' ? $this->formatWorkOrderNumberForCalendar($workOrderNumber) : '';
             $orderItem = (array) ($orderItemsByKeyAndPosition[$orderKey . '#' . $position] ?? []);
 
             if ($workOrderNumber !== '' && $position !== '') {
@@ -10311,7 +10387,7 @@ class WorkOrderController extends Controller
                 'id' => $workOrderNumber !== '' && $position !== ''
                     ? $workOrderNumber . '-' . $position
                     : ($workOrderNumber !== '' ? $workOrderNumber : '__link_' . $index),
-                'dokument' => $workOrderNumber !== '' ? $workOrderNumber : trim((string) $this->valueTrimmed($row, ['acKeyView', 'acKey'], '-')),
+                'dokument' => $workOrderNumber !== '' ? $workOrderNumber : $this->formatWorkOrderNumberForCalendar(trim((string) $this->valueTrimmed($row, ['acKey', 'acRefNo1', 'acKeyView'], '-'))),
                 'datum' => $this->displayDate($dateValue),
                 'rn_number' => $workOrderNumber,
                 'pozicija' => $position,
@@ -10404,7 +10480,7 @@ class WorkOrderController extends Controller
             $mappedRow = $this->mapRow($row, false, $linkedOrders);
             $resolvedOrder = $this->resolveOrderLinkageMatchMetaFromWorkOrder($row, $mappedRow, $orderKeysToNumbers, $displayNumbers);
 
-            if (($resolvedOrder['normalized'] ?? '') !== $normalizedOrderNumber) {
+            if (!$this->orderNumbersMatch((string) ($resolvedOrder['normalized'] ?? ''), $normalizedOrderNumber)) {
                 continue;
             }
 
@@ -10490,7 +10566,7 @@ class WorkOrderController extends Controller
             $resolvedOrder = $this->resolveOrderLinkageMatchMetaFromWorkOrder($row, $mappedRow, $orderKeysToNumbers, $displayNumbers);
             $linkageMeta = $this->orderWorkOrderLinkageMeta($resolvedOrder);
 
-            if (($resolvedOrder['normalized'] ?? '') !== $normalizedOrderNumber) {
+            if (!$this->orderNumbersMatch((string) ($resolvedOrder['normalized'] ?? ''), $normalizedOrderNumber)) {
                 continue;
             }
 
@@ -10511,7 +10587,7 @@ class WorkOrderController extends Controller
             $workOrders[] = [
                 'id' => $workOrderNumber,
                 'rn_number' => $workOrderNumber,
-                'order_number' => (string) ($resolvedOrder['display'] ?? $mappedRow['broj_narudzbe'] ?? ''),
+                'order_number' => $this->formatOrderNumberForDisplay((string) ($resolvedOrder['display'] ?? $mappedRow['broj_narudzbe'] ?? '')),
                 'issue_date' => $this->displayDate($mappedRow['datum_kreiranja'] ?? null),
                 'planned_start' => $this->formatMetaDateTime($this->value($row, ['adSchedStartTime'], null)),
                 'status' => $status,
