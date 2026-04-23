@@ -9,6 +9,7 @@ use App\Http\Controllers\OperationsController;
 use App\Http\Controllers\ProductsController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OrderItemController;
+use App\Http\Controllers\ReleasedMaterialDocumentController;
 use App\Http\Controllers\WorkOrderController;
 use App\Http\Controllers\WorkOrderOrderItemLinkController;
 use App\Http\Controllers\UserInterfaceController;
@@ -86,6 +87,8 @@ Route::middleware('auth:web')->group(function () {
         Route::get('orders/work-orders', [WorkOrderOrderItemLinkController::class, 'ordersLinkageWorkOrders'])->name('app-orders-work-orders');
         Route::get('orders/radni-nalozi', [OrderController::class, 'ordersLinkageWorkOrdersApi'])->name('app-orders-radni-nalozi');
         Route::delete('orders', [OrderController::class, 'destroyLinkedOrder'])->name('app-orders-destroy');
+        Route::get('documents/released-materials', [ReleasedMaterialDocumentController::class, 'index'])->name('app-released-material-documents');
+        Route::get('documents/released-materials/data', [ReleasedMaterialDocumentController::class, 'data'])->name('app-released-material-documents-data');
         Route::get('stock', [MaterialsController::class, 'stockIndex'])->name('app-stock');
         Route::get('stock/data', [MaterialsController::class, 'stockData'])->name('app-stock-data');
         Route::post('materials', [MaterialsController::class, 'storeMaterial'])->name('app-materials-store');

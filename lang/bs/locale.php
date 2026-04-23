@@ -1,6 +1,8 @@
 <?php
 
 return [
+    "Dokumenti" => "Dokumenti",
+    "Razduženi materijali" => "Razduženi materijali",
     "Apps & Pages" => "Radni nalozi",
     "User Interface" => "Korisničko Sučelje",
     "Dashboards" => "Kontrolna ploča",

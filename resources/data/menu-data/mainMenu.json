@@ -27,6 +27,16 @@
       "slug": "app-orders"
     },
     {
+      "navheader": "Dokumenti",
+      "slug": "app-documents-navheader"
+    },
+    {
+      "name": "Razduženi materijali",
+      "icon": "archive",
+      "url": "app/documents/released-materials",
+      "slug": "app-released-material-documents"
+    },
+    {
       "navheader": "Administracija",
       "slug": ""
     },
