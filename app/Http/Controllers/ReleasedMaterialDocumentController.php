@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Throwable;
 
 class ReleasedMaterialDocumentController extends Controller
@@ -23,8 +24,127 @@ class ReleasedMaterialDocumentController extends Controller
         return view('content.apps.documents.released-materials', [
             'pageConfigs' => ['pageHeader' => false],
             'releasedMaterialsDataUrl' => route('app-released-material-documents-data'),
+            'releasedMaterialsDeleteUrl' => route('app-released-material-documents-destroy'),
+            'canDeleteReleasedMaterialDocuments' => $this->canDeleteDocuments($request->user()),
             'documentType' => self::DOCUMENT_TYPE,
         ]);
+    }
+
+    public function destroy(Request $request): JsonResponse
+    {
+        if (!$this->canDeleteDocuments($request->user())) {
+            return response()->json([
+                'message' => 'Nemate dozvolu za brisanje dokumenta.',
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'document_key' => ['required', 'string', 'max:64'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Neispravni podaci za brisanje dokumenta.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $validated = $validator->validated();
+        $documentKey = trim((string) ($validated['document_key'] ?? ''));
+        $connection = DB::connection('sqlsrv');
+
+        try {
+            $documentRow = $connection
+                ->table($this->qualifiedReleasedMaterialMoveTableName())
+                ->selectRaw($this->trimExpr('acKey') . ' as document_key')
+                ->selectRaw($this->trimExpr('acKeyView') . ' as document_number')
+                ->where('acKey', $documentKey)
+                ->where('acDocType', self::DOCUMENT_TYPE)
+                ->first();
+
+            if ($documentRow === null) {
+                return response()->json([
+                    'message' => 'Dokument nije pronađen.',
+                ], 404);
+            }
+
+            $documentNumber = trim((string) ($documentRow->document_number ?? ''));
+            if ($documentNumber === '') {
+                $documentNumber = $this->formatPantheonDocumentNumber($documentKey);
+            }
+
+            $deletedCounts = $connection->transaction(function () use ($connection, $documentKey) {
+                $deleted = [
+                    'move_item_links' => 0,
+                    'move_work_order_links' => 0,
+                    'fx_rates' => 0,
+                    'items' => 0,
+                    'documents' => 0,
+                ];
+
+                $deleted['move_item_links'] = $connection
+                    ->table($this->qualifiedReleasedMaterialMoveItemWorkOrderItemLinkTableName())
+                    ->where('acKey', $documentKey)
+                    ->delete();
+
+                $deleted['move_work_order_links'] = $connection
+                    ->table($this->qualifiedReleasedMaterialMoveWorkOrderLinkTableName())
+                    ->where('acKey', $documentKey)
+                    ->delete();
+
+                $deleted['fx_rates'] = $connection
+                    ->table($this->qualifiedReleasedMaterialMoveFxRateTableName())
+                    ->where('acKey', $documentKey)
+                    ->delete();
+
+                $deleted['items'] = $connection
+                    ->table($this->qualifiedReleasedMaterialMoveItemTableName())
+                    ->where('acKey', $documentKey)
+                    ->delete();
+
+                $deleted['documents'] = $connection
+                    ->table($this->qualifiedReleasedMaterialMoveTableName())
+                    ->where('acKey', $documentKey)
+                    ->where('acDocType', self::DOCUMENT_TYPE)
+                    ->delete();
+
+                if ($deleted['documents'] < 1) {
+                    throw new \RuntimeException('Dokument nije obrisan.');
+                }
+
+                return $deleted;
+            });
+
+            Log::info('Released material document deleted.', [
+                'document_key' => $documentKey,
+                'document_number' => $documentNumber,
+                'user_id' => (int) ($request->user()->id ?? 0),
+                'deleted_counts' => $deletedCounts,
+            ]);
+
+            return response()->json([
+                'message' => 'Dokument je uspjesno obrisan.',
+                'data' => [
+                    'document_key' => $documentKey,
+                    'document_number' => $documentNumber,
+                    'deleted' => $deletedCounts,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Released material document delete failed.', [
+                'document_key' => $documentKey,
+                'user_id' => (int) ($request->user()->id ?? 0),
+                'message' => $exception->getMessage(),
+            ]);
+
+            $isUserFacingException = $exception instanceof \RuntimeException || $exception instanceof \InvalidArgumentException;
+
+            return response()->json([
+                'message' => $isUserFacingException
+                    ? $exception->getMessage()
+                    : 'Greska pri brisanju dokumenta.',
+            ], $isUserFacingException ? 422 : 500);
+        }
     }
 
     public function data(Request $request): JsonResponse
@@ -99,7 +219,7 @@ class ReleasedMaterialDocumentController extends Controller
             ->selectRaw($this->trimExpr('m.acKey') . ' as document_key')
             ->selectRaw($this->trimExpr('m.acKeyView') . ' as document_number')
             ->selectRaw($this->trimExpr('m.acDocType') . ' as document_type')
-            ->selectRaw('CONVERT(varchar(10), m.adDate, 120) as document_date')
+            ->selectRaw('CONVERT(varchar(19), ' . $this->releasedMaterialDocumentDateTimeExpr() . ', 120) as document_date')
             ->selectRaw($this->trimExpr('m.acDoc1') . ' as order_reference')
             ->selectRaw($this->trimExpr('m.acDoc2') . ' as pantheon_work_order_reference')
             ->selectRaw($this->trimExpr('move_wo.acLnkKey') . ' as linked_work_order_key')
@@ -107,12 +227,13 @@ class ReleasedMaterialDocumentController extends Controller
             ->selectRaw($this->trimExpr('wo.acLnkKey') . ' as order_number')
             ->selectRaw('CAST(ISNULL(wo.anLnkNo, 0) as int) as order_position')
             ->selectRaw('CAST(ISNULL(mi.anNo, 0) as int) as position')
+            ->selectRaw($this->releasedMaterialBarcodeCreatedExpr() . ' as is_enalog_created')
             ->selectRaw($this->trimExpr('mi.acIdent') . ' as material_code')
             ->selectRaw($this->trimExpr('mi.acName') . ' as material_name')
             ->selectRaw('CAST(mi.anQty as float) as quantity')
             ->selectRaw($this->trimExpr('mi.acUM') . ' as unit')
             ->selectRaw('CAST(mi.anPrice as float) as document_price')
-            ->selectRaw("COALESCE(NULLIF({$this->trimExpr('mi.acNote')}, ''), NULLIF({$this->trimExpr('m.acNote')}, ''), '') as note");
+            ->selectRaw("COALESCE(NULLIF({$this->trimExpr('mi.acNote')}, ''), NULLIF({$this->trimExpr('m.acNote')}, ''), '') as raw_note");
     }
 
     private function extractFilters(Request $request): array
@@ -139,6 +260,7 @@ class ReleasedMaterialDocumentController extends Controller
     private function applyFilters(Builder $query, array $filters): void
     {
         $search = (string) ($filters['search'] ?? '');
+        $displayNoteExpr = $this->releasedMaterialDisplayNoteExpr();
 
         if ($search !== '') {
             $query->where(function (Builder $searchQuery) use ($search): void {
@@ -154,7 +276,7 @@ class ReleasedMaterialDocumentController extends Controller
                     $this->formatLongPantheonExpr('wo.acLnkKey'),
                     $this->trimExpr('mi.acIdent'),
                     $this->trimExpr('mi.acName'),
-                    $this->trimExpr('mi.acNote'),
+                    $this->releasedMaterialDisplayNoteExpr(),
                 ], $search, 'or');
             });
         }
@@ -164,16 +286,16 @@ class ReleasedMaterialDocumentController extends Controller
         $this->applyLikeFilter($query, [$this->trimExpr('m.acDoc1'), $this->trimExpr('wo.acLnkKey'), $this->formatLongPantheonExpr('wo.acLnkKey')], (string) ($filters['narudzba'] ?? ''));
         $this->applyLikeFilter($query, [$this->trimExpr('mi.acIdent')], (string) ($filters['sifra'] ?? ''));
         $this->applyLikeFilter($query, [$this->trimExpr('mi.acName')], (string) ($filters['naziv'] ?? ''));
-        $this->applyLikeFilter($query, [$this->trimExpr('mi.acNote'), $this->trimExpr('m.acNote')], (string) ($filters['napomena'] ?? ''));
+        $this->applyLikeFilter($query, [$displayNoteExpr], (string) ($filters['napomena'] ?? ''));
 
         $dateFrom = $this->normalizeDate((string) ($filters['datum_od'] ?? ''));
         if ($dateFrom !== '') {
-            $query->whereDate('m.adDate', '>=', $dateFrom);
+            $query->whereRaw($this->releasedMaterialDocumentDateExpr() . ' >= ?', [$dateFrom]);
         }
 
         $dateTo = $this->normalizeDate((string) ($filters['datum_do'] ?? ''));
         if ($dateTo !== '') {
-            $query->whereDate('m.adDate', '<=', $dateTo);
+            $query->whereRaw($this->releasedMaterialDocumentDateExpr() . ' <= ?', [$dateTo]);
         }
     }
 
@@ -181,7 +303,7 @@ class ReleasedMaterialDocumentController extends Controller
     {
         $sortMap = [
             0 => 'm.acKey',
-            1 => 'm.adDate',
+            1 => $this->releasedMaterialDocumentDateTimeExpr(),
             2 => 'wo.acKeyView',
             3 => 'wo.acLnkKey',
             4 => 'mi.anNo',
@@ -201,8 +323,13 @@ class ReleasedMaterialDocumentController extends Controller
         }
 
         $sortColumn = $sortMap[$columnIndex] ?? 'm.acKey';
-        $query->orderBy($sortColumn, $direction)
-            ->orderBy('mi.anNo');
+        if ($columnIndex === 1) {
+            $query->orderByRaw($sortColumn . ' ' . $direction);
+        } else {
+            $query->orderBy($sortColumn, $direction);
+        }
+
+        $query->orderBy('mi.anNo');
     }
 
     private function applyLikeFilter(Builder $query, array $expressions, string $value): void
@@ -242,6 +369,7 @@ class ReleasedMaterialDocumentController extends Controller
         $resolvedOrderNumber = $orderNumber !== '' ? $orderNumber : $this->extractOrderNumberFromReference($orderReference);
         $documentPrice = $this->nullableFloat($row->document_price ?? null);
         $roundedDocumentPrice = $documentPrice === null ? null : round($documentPrice, 2);
+        $note = $this->resolveReleasedMaterialNote($row, $workOrderNumber);
 
         return [
             'document_key' => $documentKey,
@@ -255,7 +383,7 @@ class ReleasedMaterialDocumentController extends Controller
             'narudzba' => $this->formatLongPantheonNumber($resolvedOrderNumber),
             'order_number' => $resolvedOrderNumber,
             'order_position' => (int) ($row->order_position ?? 0),
-            'napomena' => trim((string) ($row->note ?? '')),
+            'napomena' => $note,
             'pozicija' => (int) ($row->position ?? 0),
             'sifra' => trim((string) ($row->material_code ?? '')),
             'naziv' => trim((string) ($row->material_name ?? '')),
@@ -312,9 +440,106 @@ class ReleasedMaterialDocumentController extends Controller
         return '';
     }
 
+    private function releasedMaterialDisplayNoteExpr(): string
+    {
+        $rawNoteExpr = "COALESCE(NULLIF({$this->trimExpr('mi.acNote')}, ''), NULLIF({$this->trimExpr('m.acNote')}, ''), '')";
+        $workOrderNumberExpr = $this->releasedMaterialWorkOrderNumberExpr();
+        $materialCodeExpr = $this->trimExpr('mi.acIdent');
+        $isEnalogCreatedExpr = $this->releasedMaterialBarcodeCreatedExpr();
+
+        return "CASE WHEN {$isEnalogCreatedExpr} = 1 THEN CONCAT('Kreirano iz eNalog.app, RN ', {$workOrderNumberExpr}, ', za artikal ', {$materialCodeExpr}) ELSE {$rawNoteExpr} END";
+    }
+
+    private function releasedMaterialWorkOrderNumberExpr(): string
+    {
+        $candidates = [
+            $this->formatLongPantheonExpr('move_wo.acLnkKey'),
+            $this->formatLongPantheonExpr('wo.acKeyView'),
+            $this->formatLongPantheonExpr('m.acDoc2'),
+        ];
+
+        return 'COALESCE(' . implode(', ', array_map(
+            static fn (string $expression): string => "NULLIF({$expression}, '')",
+            $candidates
+        )) . ", '')";
+    }
+
+    private function releasedMaterialBarcodeCreatedExpr(): string
+    {
+        $insertedFromExpr = $this->trimExpr('m.acInsertedFrom');
+
+        return "CASE WHEN EXISTS (
+            SELECT 1
+            FROM {$this->qualifiedReleasedMaterialMoveItemWorkOrderItemLinkTableName()} AS move_item_link
+            WHERE move_item_link.anMoveItemQId = mi.anQId
+        ) AND {$insertedFromExpr} = 'D' THEN 1 ELSE 0 END";
+    }
+
+    private function resolveReleasedMaterialNote(object $row, string $workOrderNumber = ''): string
+    {
+        if ($this->isEnalogReleasedMaterialDocument($row)) {
+            return $this->buildEnalogReleasedMaterialNote(
+                $workOrderNumber,
+                trim((string) ($row->material_code ?? ''))
+            );
+        }
+
+        return trim((string) ($row->raw_note ?? $row->note ?? ''));
+    }
+
+    private function isEnalogReleasedMaterialDocument(object $row): bool
+    {
+        return (int) ($row->is_enalog_created ?? 0) === 1;
+    }
+
+    private function buildEnalogReleasedMaterialNote(string $workOrderNumber, string $materialCode): string
+    {
+        return 'Kreirano preko eNalog.app/ RN ' . trim($workOrderNumber) . '/ šifra ' . trim($materialCode);
+    }
+
     private function trimExpr(string $column): string
     {
         return "LTRIM(RTRIM(ISNULL(CONVERT(nvarchar(4000), {$column}), '')))";
+    }
+
+    private function qualifiedReleasedMaterialMoveItemWorkOrderItemLinkTableName(): string
+    {
+        return $this->tableSchema() . '.tHF_LinkMoveItemWOExItem';
+    }
+
+    private function qualifiedReleasedMaterialMoveTableName(): string
+    {
+        return $this->tableSchema() . '.tHE_Move';
+    }
+
+    private function qualifiedReleasedMaterialMoveItemTableName(): string
+    {
+        return $this->tableSchema() . '.tHE_MoveItem';
+    }
+
+    private function qualifiedReleasedMaterialMoveFxRateTableName(): string
+    {
+        return $this->tableSchema() . '.tHE_MoveFXRate';
+    }
+
+    private function qualifiedReleasedMaterialMoveWorkOrderLinkTableName(): string
+    {
+        return $this->tableSchema() . '.tHF_LinkMoveWOEx';
+    }
+
+    private function tableSchema(): string
+    {
+        return (string) config('workorders.schema', 'dbo');
+    }
+
+    private function releasedMaterialDocumentDateTimeExpr(): string
+    {
+        return 'CASE WHEN m.adTimeIns IS NOT NULL THEN m.adTimeIns ELSE CAST(m.adDate AS datetime) END';
+    }
+
+    private function releasedMaterialDocumentDateExpr(): string
+    {
+        return 'CAST(' . $this->releasedMaterialDocumentDateTimeExpr() . ' AS date)';
     }
 
     private function normalizeDate(string $value): string
@@ -430,5 +655,10 @@ class ReleasedMaterialDocumentController extends Controller
         }
 
         return strtolower(trim((string) ($user->role ?? ''))) === 'admin';
+    }
+
+    private function canDeleteDocuments(mixed $user = null): bool
+    {
+        return $this->canAccessDocuments($user);
     }
 }

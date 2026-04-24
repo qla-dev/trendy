@@ -3,7 +3,7 @@
 require __DIR__ . '/_conn.php';
 
 $limit = max(10, min((int) ($_GET['limit'] ?? 200), 500));
-$documentLike = '26-6400-00228%';
+$documentLike = '26-6400%';
 $sql = "
     SELECT TOP {$limit}
         move.acKeyView AS document_key_view,

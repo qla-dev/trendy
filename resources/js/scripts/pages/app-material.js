@@ -1571,7 +1571,7 @@ $(function () {
   dataTable = tableElement.DataTable({
     processing: false,
     serverSide: true,
-    responsive: true,
+    responsive: false,
     pageLength: 25,
     lengthMenu: [10, 25, 50, 100],
     searchDelay: 250,

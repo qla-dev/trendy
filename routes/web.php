@@ -89,6 +89,7 @@ Route::middleware('auth:web')->group(function () {
         Route::delete('orders', [OrderController::class, 'destroyLinkedOrder'])->name('app-orders-destroy');
         Route::get('documents/released-materials', [ReleasedMaterialDocumentController::class, 'index'])->name('app-released-material-documents');
         Route::get('documents/released-materials/data', [ReleasedMaterialDocumentController::class, 'data'])->name('app-released-material-documents-data');
+        Route::delete('documents/released-materials', [ReleasedMaterialDocumentController::class, 'destroy'])->name('app-released-material-documents-destroy');
         Route::get('stock', [MaterialsController::class, 'stockIndex'])->name('app-stock');
         Route::get('stock/data', [MaterialsController::class, 'stockData'])->name('app-stock-data');
         Route::post('materials', [MaterialsController::class, 'storeMaterial'])->name('app-materials-store');

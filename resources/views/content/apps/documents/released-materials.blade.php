@@ -5,6 +5,8 @@
 @php
   $releasedMaterialsConfig = [
       'dataUrl' => (string) ($releasedMaterialsDataUrl ?? route('app-released-material-documents-data')),
+      'deleteUrl' => (string) ($releasedMaterialsDeleteUrl ?? route('app-released-material-documents-destroy')),
+      'canDeleteDocuments' => (bool) ($canDeleteReleasedMaterialDocuments ?? false),
       'documentType' => (string) ($documentType ?? '6400'),
   ];
 @endphp
@@ -13,6 +15,7 @@
 <link rel="stylesheet" href="{{ asset('vendors/css/tables/datatable/dataTables.bootstrap5.min.css') }}">
 <link rel="stylesheet" href="{{ asset('vendors/css/tables/datatable/responsive.bootstrap5.min.css') }}">
 <link rel="stylesheet" href="{{ asset('vendors/css/pickers/flatpickr/flatpickr.min.css') }}">
+<link rel="stylesheet" href="{{ asset('vendors/css/extensions/sweetalert2.min.css') }}">
 @endsection
 
 @section('page-style')
@@ -76,11 +79,11 @@
   }
 
   .released-doc-table {
-    min-width: 1500px;
+    min-width: {{ !empty($canDeleteReleasedMaterialDocuments) ? '1620px' : '1500px' }};
   }
 
   .released-doc-wrapper .card-datatable.table-responsive {
-    overflow-x: visible;
+    overflow-x: hidden;
   }
 
   .released-doc-wrapper .card-datatable.released-doc-initial-loading .dataTables_wrapper > .row:last-child {
@@ -226,7 +229,8 @@
   .released-doc-order-cell,
   .released-doc-position-cell,
   .released-doc-quantity-cell,
-  .released-doc-price-cell {
+  .released-doc-price-cell,
+  .released-doc-action-cell {
     white-space: nowrap;
   }
 
@@ -241,6 +245,86 @@
   .released-doc-note-cell,
   .released-doc-name-cell {
     min-width: 220px;
+  }
+
+  .released-doc-action-cell {
+    width: 1% !important;
+    position: sticky !important;
+    right: 0 !important;
+    z-index: 10 !important;
+    text-align: center;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-clip: border-box !important;
+    opacity: 1 !important;
+    isolation: isolate !important;
+    box-shadow: none !important;
+    border-left: 1px solid #ebe9f1 !important;
+  }
+
+  .released-doc-table thead .released-doc-action-cell {
+    z-index: 11 !important;
+    background: #f8f8fa !important;
+    background-color: #f8f8fa !important;
+    box-shadow: none !important;
+  }
+
+  .released-doc-table.table tbody tr:hover > .released-doc-action-cell {
+    background: #f8f8fc !important;
+    background-color: #f8f8fc !important;
+    box-shadow: none !important;
+  }
+
+  body.dark-layout .released-doc-table .released-doc-action-cell,
+  body.semi-dark-layout .released-doc-table .released-doc-action-cell,
+  .dark-layout .released-doc-table .released-doc-action-cell,
+  .semi-dark-layout .released-doc-table .released-doc-action-cell {
+    background: #283046 !important;
+    background-color: #283046 !important;
+    box-shadow: none !important;
+    border-left-color: rgba(184, 190, 220, 0.22) !important;
+  }
+
+  body.dark-layout .released-doc-table thead .released-doc-action-cell,
+  body.semi-dark-layout .released-doc-table thead .released-doc-action-cell,
+  .dark-layout .released-doc-table thead .released-doc-action-cell,
+  .semi-dark-layout .released-doc-table thead .released-doc-action-cell {
+    background: #2f3854 !important;
+    background-color: #2f3854 !important;
+    box-shadow: none !important;
+  }
+
+  body.dark-layout .released-doc-table.table tbody tr:hover > .released-doc-action-cell,
+  body.semi-dark-layout .released-doc-table.table tbody tr:hover > .released-doc-action-cell,
+  .dark-layout .released-doc-table.table tbody tr:hover > .released-doc-action-cell,
+  .semi-dark-layout .released-doc-table.table tbody tr:hover > .released-doc-action-cell {
+    background: #36405a !important;
+    background-color: #36405a !important;
+    box-shadow: none !important;
+  }
+
+  .released-doc-actions-group {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+  }
+
+  .released-doc-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    padding: 0.45rem;
+    white-space: nowrap;
+  }
+
+  .released-doc-action-btn svg,
+  .released-doc-action-btn i {
+    width: 16px;
+    height: 16px;
   }
 
   .released-doc-loading-spacer-row > td {
@@ -408,11 +492,14 @@
             <th>JM</th>
             <th>Cijena</th>
             <th>Napomena</th>
+            @if(!empty($canDeleteReleasedMaterialDocuments))
+              <th class="released-doc-action-cell">Akcija</th>
+            @endif
           </tr>
         </thead>
         <tbody>
           <tr class="released-doc-loading-spacer-row" aria-hidden="true">
-            <td colspan="11"></td>
+            <td colspan="{{ !empty($canDeleteReleasedMaterialDocuments) ? 12 : 11 }}"></td>
           </tr>
         </tbody>
       </table>
@@ -427,11 +514,12 @@
 <script src="{{ asset('vendors/js/tables/datatable/dataTables.responsive.min.js') }}"></script>
 <script src="{{ asset('vendors/js/tables/datatable/responsive.bootstrap5.js') }}"></script>
 <script src="{{ asset('vendors/js/pickers/flatpickr/flatpickr.min.js') }}"></script>
+<script src="{{ asset('vendors/js/extensions/sweetalert2.all.min.js') }}"></script>
 @endsection
 
 @section('page-script')
 <script>
   window.releasedMaterialsConfig = @json($releasedMaterialsConfig);
 </script>
-<script src="{{ asset('js/scripts/pages/app-released-material-documents.js?v=4') }}"></script>
+<script src="{{ asset('js/scripts/pages/app-released-material-documents.js?v=6') }}"></script>
 @endsection
