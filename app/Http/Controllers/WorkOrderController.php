@@ -19,6 +19,10 @@ class WorkOrderController extends Controller
     private const DEFAULT_SCAN_CREATE_DOC_TYPE = '6000';
     private const SCAN_CREATE_DOC_TYPES = ['6000', '6001'];
     private const DEFAULT_SCAN_CREATE_SEQUENCE_LENGTH = 7;
+    private const RELEASED_MATERIAL_DOC_TYPE = '6400';
+    private const RELEASED_MATERIAL_SEQUENCE_LENGTH = 7;
+    private const RELEASED_MATERIAL_CURRENCY = 'KM';
+    private const RELEASED_MATERIAL_DEFAULT_ISSUER = 'Skladište sirovina';
     private const MATERIALS_SETS = [
         '011',
         '020',
@@ -2328,12 +2332,17 @@ class WorkOrderController extends Controller
                     }
 
                     $this->newItemTableQuery()->insert($insertPayload);
+                    $insertedIdentity = $this->resolveInsertedWorkOrderItemIdentity(
+                        $workOrderKey,
+                        $nextNo,
+                        $componentId
+                    );
 
                     $saved[] = [
                         'action' => 'inserted',
                         'source' => $source,
-                        'anNo' => $nextNo,
-                        'anQId' => $nextQId,
+                        'anNo' => $insertedIdentity['anNo'] ?? $nextNo,
+                        'anQId' => $insertedIdentity['anQId'] ?? $nextQId,
                         'acIdent' => $componentId,
                         'acDescr' => $description,
                         'acNote' => $resolvedNote,
@@ -2365,6 +2374,17 @@ class WorkOrderController extends Controller
                     );
                 }
 
+                $releasedMaterialDocument = null;
+                if ($saveMode === 'barcode' && $this->savedRowsContainMaterialConsumption($saved)) {
+                    $releasedMaterialDocument = $this->createReleasedMaterialDocumentForBarcodeConsumption(
+                        $saved,
+                        $workOrderRow,
+                        $stockAdjustmentResults,
+                        $userId,
+                        $now
+                    );
+                }
+
                 $statusTransition = [
                     'changed' => false,
                 ];
@@ -2388,6 +2408,7 @@ class WorkOrderController extends Controller
                 return [
                     'saved' => $saved,
                     'stock_adjustments' => $stockAdjustmentResults,
+                    'released_material_document' => $releasedMaterialDocument,
                     'status_transition' => $statusTransition,
                 ];
             });
@@ -2401,6 +2422,9 @@ class WorkOrderController extends Controller
             $statusTransition = is_array($saveResult['status_transition'] ?? null)
                 ? $saveResult['status_transition']
                 : ['changed' => false];
+            $releasedMaterialDocument = is_array($saveResult['released_material_document'] ?? null)
+                ? $saveResult['released_material_document']
+                : null;
 
             foreach ($stockAdjustmentResults as &$stockAdjustmentResult) {
                 if (!is_array($stockAdjustmentResult)) {
@@ -2457,6 +2481,7 @@ class WorkOrderController extends Controller
                     'product_structure_created_count' => $productStructureCreatedCount,
                     'stock_adjusted_count' => count($stockAdjustmentResults),
                     'stock_adjustments' => $stockAdjustmentResults,
+                    'released_material_document' => $releasedMaterialDocument,
                     'status_transition' => $statusTransition,
                     'items' => $insertedRows,
                 ],
@@ -4810,6 +4835,63 @@ class WorkOrderController extends Controller
         return $this->findExistingMaterialItemsByCodes($workOrderKey, $materialCodes, $catalogSetsByCode);
     }
 
+    private function resolveInsertedWorkOrderItemIdentity(
+        string $workOrderKey,
+        ?int $lineNo,
+        string $componentId
+    ): array {
+        $columns = $this->itemTableColumns();
+
+        if (!in_array('acKey', $columns, true)) {
+            return [];
+        }
+
+        $selectColumns = $this->existingColumns($columns, ['anNo', 'anQId']);
+
+        if (empty($selectColumns)) {
+            return [];
+        }
+
+        $query = $this->newItemTableQuery()
+            ->select($selectColumns)
+            ->where('acKey', $workOrderKey);
+
+        if ($lineNo !== null && in_array('anNo', $columns, true)) {
+            $query->where('anNo', $lineNo);
+        }
+
+        $componentId = trim($componentId);
+        if ($componentId !== '' && in_array('acIdent', $columns, true)) {
+            $query->where('acIdent', substr($componentId, 0, 16));
+        }
+
+        foreach (['anQId', 'adTimeIns', 'anNo'] as $orderColumn) {
+            if (in_array($orderColumn, $columns, true)) {
+                $query->orderByDesc($orderColumn);
+            }
+        }
+
+        $row = $query->first();
+
+        if ($row === null) {
+            return [];
+        }
+
+        $identity = [];
+        foreach (['anNo', 'anQId'] as $identityColumn) {
+            if (!property_exists($row, $identityColumn)) {
+                continue;
+            }
+
+            $value = $this->positiveIntOrNull($row->{$identityColumn});
+            if ($value !== null) {
+                $identity[$identityColumn] = $value;
+            }
+        }
+
+        return $identity;
+    }
+
     private function findExistingMaterialItemsByCodes(
         string $workOrderKey,
         array $materialCodes,
@@ -4967,6 +5049,536 @@ class WorkOrderController extends Controller
         }
 
         return array_values($adjustmentsByCode);
+    }
+
+    private function createReleasedMaterialDocumentForBarcodeConsumption(
+        array $savedRows,
+        array $workOrderRow,
+        array $stockAdjustmentResults,
+        int $userId,
+        Carbon $now
+    ): ?array {
+        $releasedRows = $this->releasedMaterialRowsForDocument($savedRows, $stockAdjustmentResults);
+
+        if (empty($releasedRows)) {
+            return null;
+        }
+
+        $workOrderKey = trim((string) $this->valueTrimmed($workOrderRow, ['acKey'], ''));
+
+        if ($workOrderKey === '') {
+            throw new \RuntimeException('RN kljuc nije pronadjen za dokument razduzenja materijala.');
+        }
+
+        $catalogRows = $this->fetchReleasedMaterialCatalogRows(array_map(function (array $row) {
+            return (string) ($row['acIdent'] ?? '');
+        }, $releasedRows));
+        $preparedItems = [];
+        $totalValue = 0.0;
+
+        foreach ($releasedRows as $releasedRow) {
+            $materialCode = trim((string) ($releasedRow['acIdent'] ?? ''));
+            $materialKey = strtolower($materialCode);
+            $quantity = abs((float) ($this->toFloatOrNull($releasedRow['stock_consumed_qty'] ?? null) ?? 0.0));
+
+            if ($materialCode === '' || $quantity <= 0.000001) {
+                continue;
+            }
+
+            $catalogRow = $catalogRows[$materialKey] ?? [];
+            $identQId = $this->positiveIntOrNull($catalogRow['anQId'] ?? null);
+
+            if ($identQId === null) {
+                throw new \RuntimeException('Materijal ' . $materialCode . ' nije pronadjen u sifrantu artikala.');
+            }
+
+            $materialName = trim((string) ($releasedRow['acDescr'] ?? ''));
+            if ($materialName === '') {
+                $materialName = trim((string) ($catalogRow['acName'] ?? ''));
+            }
+            if ($materialName === '') {
+                $materialName = $materialCode;
+            }
+
+            $unit = strtoupper(substr(trim((string) ($releasedRow['acUM'] ?? '')), 0, 3));
+            if ($unit === '') {
+                $unit = strtoupper(substr(trim((string) ($catalogRow['acUM'] ?? '')), 0, 3));
+            }
+
+            $price = (float) ($this->toFloatOrNull($catalogRow['anBuyPrice'] ?? null) ?? 0.0);
+            $lineValue = round($quantity * $price, 4);
+            $totalValue += $lineValue;
+
+            $preparedItems[] = [
+                'material_code' => $materialCode,
+                'material_name' => $materialName,
+                'quantity' => $quantity,
+                'unit' => $unit,
+                'price' => $price,
+                'value' => $lineValue,
+                'note' => trim((string) ($releasedRow['acNote'] ?? '')),
+                'ident_qid' => $identQId,
+                'work_order_item_qid' => $this->positiveIntOrNull($releasedRow['anQId'] ?? null),
+            ];
+        }
+
+        if (empty($preparedItems)) {
+            return null;
+        }
+
+        $numberContext = $this->generateNextReleasedMaterialDocumentNumber($now);
+        $documentKey = (string) ($numberContext['next_raw'] ?? '');
+        $documentNumber = (string) ($numberContext['next_display'] ?? '');
+        $documentDate = $now->copy()->startOfDay();
+        $receiver = trim((string) $this->valueTrimmed($workOrderRow, ['acReceiver', 'acConsignee', 'acPartner'], ''));
+        $issuer = $this->resolveReleasedMaterialIssuer($stockAdjustmentResults, $workOrderRow);
+        $dept = trim((string) $this->valueTrimmed($workOrderRow, ['acDept', 'acLocation'], ''));
+        $receiverQId = $this->requiredReleasedMaterialSubjectQId(
+            'primaoca',
+            $receiver,
+            $this->positiveIntOrNull($this->valueTrimmed($workOrderRow, ['anReceiverQId', 'anConsigneeQId', 'anPartnerQId'], null))
+        );
+        $issuerQId = $this->requiredReleasedMaterialSubjectQId('izdavaoca', $issuer);
+        $deptQId = $this->requiredReleasedMaterialSubjectQId(
+            'odjela',
+            $dept,
+            $this->positiveIntOrNull($this->valueTrimmed($workOrderRow, ['anDeptQId'], null))
+        );
+        $orderNumber = trim((string) $this->valueTrimmed($workOrderRow, ['acLnkKey', 'acLnkKeyView'], ''));
+        $orderReference = $this->buildReleasedMaterialOrderReference($workOrderRow);
+        $workOrderNumber = $this->resolveReleasedMaterialWorkOrderNumber($workOrderRow);
+        $auditUserId = $userId > 0 ? $userId : 0;
+        $totalValue = round($totalValue, 4);
+
+        DB::table($this->qualifiedReleasedMaterialMoveTableName())->insert([
+            'acKey' => $documentKey,
+            'acDocType' => self::RELEASED_MATERIAL_DOC_TYPE,
+            'adDate' => $documentDate,
+            'acReceiver' => $this->limitReleasedMaterialString($receiver, 30),
+            'acIssuer' => $this->limitReleasedMaterialString($issuer, 30),
+            'acReceiverStock' => 'N',
+            'acIssuerStock' => 'Y',
+            'acPrsn3' => $this->limitReleasedMaterialString($receiver, 30),
+            'acDoc1' => $this->limitReleasedMaterialString($orderReference, 50),
+            'adDateDoc1' => $documentDate,
+            'acDoc2' => $this->limitReleasedMaterialString($workOrderNumber, 50),
+            'adDateDoc2' => $documentDate,
+            'acWayOfSale' => 'I',
+            'acPriceRate' => '1',
+            'adDateInv' => $documentDate,
+            'adDateDue' => $documentDate,
+            'anValue' => $totalValue,
+            'anVAT' => 0,
+            'anDiscount' => 0,
+            'anForPay' => $totalValue,
+            'acVerifiedPrices' => 'F',
+            'acCurrency' => self::RELEASED_MATERIAL_CURRENCY,
+            'anCurrValue' => $totalValue,
+            'acDept' => $this->limitReleasedMaterialString($dept, 30),
+            'acPosted' => 'F',
+            'anVATIn' => 0,
+            'acCreatFromWO' => 'T',
+            'anVATBase' => 0,
+            'acCreatePayOrd' => 'T',
+            'adTimeIns' => $now,
+            'anUserIns' => $auditUserId,
+            'adTimeChg' => $now,
+            'anUserChg' => $auditUserId,
+            'acRoundVATOnDoc' => 'F',
+            'acVerifyStatus' => 'N',
+            'acFiscStatus' => '0',
+            'acRetailSale' => 'F',
+            'acInsertedFrom' => 'D',
+            'anFXRate' => 1,
+            'anReceiverQId' => $receiverQId,
+            'anIssuerQId' => $issuerQId,
+            'anPrsn3QId' => $receiverQId,
+            'anDeptQId' => $deptQId,
+            'anCostDrvOutQId' => 1,
+        ]);
+
+        $moveQId = $this->positiveIntOrNull(
+            DB::table($this->qualifiedReleasedMaterialMoveTableName())
+                ->where('acKey', $documentKey)
+                ->value('anQId')
+        );
+
+        if ($moveQId === null) {
+            throw new \RuntimeException('Nije moguce procitati QId novog dokumenta razduzenja materijala.');
+        }
+
+        DB::table($this->qualifiedReleasedMaterialMoveFxRateTableName())->insert([
+            'acKey' => $documentKey,
+            'acCurrency1' => self::RELEASED_MATERIAL_CURRENCY,
+            'acBank' => 'S',
+            'anValue' => 0,
+            'anForPay' => 0,
+            'anVAT' => 0,
+            'adTimeIns' => $now,
+            'anUserIns' => $auditUserId,
+            'adTimeChg' => $now,
+            'anUserChg' => $auditUserId,
+            'anFXRate' => 1,
+            'anMoveQId' => $moveQId,
+        ]);
+
+        DB::table($this->qualifiedReleasedMaterialMoveWorkOrderLinkTableName())->insert([
+            'acKey' => $documentKey,
+            'anNo' => 0,
+            'acLnkKey' => $workOrderKey,
+            'anLnkNo' => 0,
+            'acType' => 'P',
+            'acTypeA' => '',
+            'acTypeB' => '',
+            'anFieldNA' => 0,
+            'anFieldNB' => 0,
+            'anUserId' => 0,
+            'anUserChg' => $auditUserId,
+            'adTimeIns' => $now,
+            'adTimeChg' => $now,
+            'anUserIns' => $auditUserId,
+            'anNoOperation' => 0,
+            'acExternalKey' => '',
+            'anMoveQId' => $moveQId,
+        ]);
+
+        foreach ($preparedItems as $index => $preparedItem) {
+            $lineNo = $index + 1;
+
+            DB::table($this->qualifiedReleasedMaterialMoveItemTableName())->insert([
+                'acKey' => $documentKey,
+                'anNo' => $lineNo,
+                'acIdent' => $this->limitReleasedMaterialString((string) $preparedItem['material_code'], 16),
+                'acName' => $this->limitReleasedMaterialString((string) $preparedItem['material_name'], 80),
+                'anQty' => (float) $preparedItem['quantity'],
+                'anQtyTemp' => (float) $preparedItem['quantity'],
+                'acUM' => $this->limitReleasedMaterialString((string) $preparedItem['unit'], 3),
+                'anPrice' => (float) $preparedItem['price'],
+                'anRebate' => 0,
+                'acVATCode' => 'I0',
+                'anVAT' => 0,
+                'anStockPrice' => (float) $preparedItem['price'],
+                'anPriceCurrency' => (float) $preparedItem['price'],
+                'acDept' => $this->limitReleasedMaterialString($dept, 30),
+                'adDate' => $documentDate,
+                'acNote' => $this->limitReleasedMaterialString((string) $preparedItem['note'], 4000),
+                'adTimeIns' => $now,
+                'anUserIns' => $auditUserId,
+                'adTimeChg' => $now,
+                'anUserChg' => $auditUserId,
+                'anMoveQId' => $moveQId,
+                'anCostDrvQId' => 1,
+                'anDeptQId' => $deptQId,
+                'anIdentQId' => (int) $preparedItem['ident_qid'],
+            ]);
+
+            $moveItemQId = $this->positiveIntOrNull(
+                DB::table($this->qualifiedReleasedMaterialMoveItemTableName())
+                    ->where('acKey', $documentKey)
+                    ->where('anNo', $lineNo)
+                    ->value('anQId')
+            );
+
+            $workOrderItemQId = $this->positiveIntOrNull($preparedItem['work_order_item_qid'] ?? null);
+
+            if ($moveItemQId === null || $workOrderItemQId === null) {
+                Log::warning('Skipping released material item WO link because QId is missing.', [
+                    'document_key' => $documentKey,
+                    'line_no' => $lineNo,
+                    'move_item_qid' => $moveItemQId,
+                    'work_order_item_qid' => $workOrderItemQId,
+                ]);
+
+                continue;
+            }
+
+            DB::table($this->qualifiedReleasedMaterialMoveItemWorkOrderItemLinkTableName())->insert([
+                'acKey' => $documentKey,
+                'anNo' => $lineNo,
+                'acType' => 'PP',
+                'acTypeA' => 'A ',
+                'acTypeB' => '   ',
+                'anFieldNA' => 0,
+                'anFieldNB' => 0,
+                'anUserId' => 0,
+                'anUserChg' => $auditUserId,
+                'adTimeIns' => $now,
+                'adTimeChg' => $now,
+                'anUserIns' => $auditUserId,
+                'acResursID' => '',
+                'acResursID2' => '',
+                'acExternalPositionKey' => '',
+                'anMoveItemQId' => $moveItemQId,
+                'anWOExItemQid' => $workOrderItemQId,
+            ]);
+        }
+
+        Log::info('Released material document created from barcode consumption.', [
+            'document_key' => $documentKey,
+            'document_number' => $documentNumber,
+            'work_order_key' => $workOrderKey,
+            'items_count' => count($preparedItems),
+            'total_value' => $totalValue,
+        ]);
+
+        return [
+            'document_key' => $documentKey,
+            'document_number' => $documentNumber,
+            'work_order_key' => $workOrderKey,
+            'work_order_number' => $workOrderNumber,
+            'order_number' => $orderNumber,
+            'order_reference' => $orderReference,
+            'items_count' => count($preparedItems),
+            'total_value' => $totalValue,
+        ];
+    }
+
+    private function releasedMaterialRowsForDocument(array $savedRows, array $stockAdjustmentResults): array
+    {
+        $successfulCodes = [];
+
+        foreach ($stockAdjustmentResults as $stockAdjustmentResult) {
+            if (!is_array($stockAdjustmentResult)) {
+                continue;
+            }
+
+            $action = strtolower(trim((string) ($stockAdjustmentResult['action'] ?? '')));
+            if (!in_array($action, ['updated', 'inserted'], true)) {
+                continue;
+            }
+
+            $materialCode = trim((string) ($stockAdjustmentResult['material_code'] ?? ''));
+            if ($materialCode !== '') {
+                $successfulCodes[strtolower($materialCode)] = true;
+            }
+        }
+
+        if (empty($successfulCodes)) {
+            return [];
+        }
+
+        return array_values(array_filter($savedRows, function (array $savedRow) use ($successfulCodes) {
+            $itemKind = strtolower(trim((string) ($savedRow['item_kind'] ?? '')));
+            $materialCode = trim((string) ($savedRow['acIdent'] ?? ''));
+            $consumedQty = abs((float) ($this->toFloatOrNull($savedRow['stock_consumed_qty'] ?? null) ?? 0.0));
+
+            return $itemKind === 'materials'
+                && $materialCode !== ''
+                && $consumedQty > 0.000001
+                && array_key_exists(strtolower($materialCode), $successfulCodes);
+        }));
+    }
+
+    private function generateNextReleasedMaterialDocumentNumber(Carbon $now): array
+    {
+        $yearPrefix = $now->format('y');
+        $prefix = $yearPrefix . self::RELEASED_MATERIAL_DOC_TYPE;
+        $lastRaw = '';
+        $lastSequence = 0;
+        $lastRow = DB::selectOne(
+            'SELECT TOP 1 LTRIM(RTRIM(acKey)) AS acKey FROM ' . $this->qualifiedReleasedMaterialMoveTableName() . ' WITH (UPDLOCK, HOLDLOCK) WHERE acDocType = ? AND acKey LIKE ? ORDER BY acKey DESC',
+            [self::RELEASED_MATERIAL_DOC_TYPE, $prefix . '%']
+        );
+
+        if ($lastRow !== null) {
+            $lastRaw = trim((string) ($lastRow->acKey ?? ''));
+            $lastDigits = preg_replace('/\D+/', '', $lastRaw);
+            $lastDigits = is_string($lastDigits) ? $lastDigits : '';
+
+            if ($lastDigits !== '' && str_starts_with($lastDigits, $prefix)) {
+                $lastSequence = (int) substr($lastDigits, strlen($prefix));
+            }
+        }
+
+        $nextSequence = $lastSequence + 1;
+        $nextRaw = $prefix . str_pad((string) $nextSequence, self::RELEASED_MATERIAL_SEQUENCE_LENGTH, '0', STR_PAD_LEFT);
+
+        return [
+            'year_prefix' => $yearPrefix,
+            'doc_type' => self::RELEASED_MATERIAL_DOC_TYPE,
+            'last_raw' => $lastRaw,
+            'last_display' => $this->formatReleasedMaterialPantheonNumber($lastRaw),
+            'next_raw' => $nextRaw,
+            'next_display' => $this->formatReleasedMaterialPantheonNumber($nextRaw),
+            'next_sequence' => $nextSequence,
+        ];
+    }
+
+    private function fetchReleasedMaterialCatalogRows(array $materialCodes): array
+    {
+        $normalizedCodes = array_values(array_unique(array_filter(array_map(function ($value) {
+            return trim((string) $value);
+        }, $materialCodes), function ($value) {
+            return $value !== '';
+        })));
+
+        if (empty($normalizedCodes)) {
+            return [];
+        }
+
+        return $this->newCatalogItemsTableQuery()
+            ->select(['acIdent', 'acName', 'acUM', 'anBuyPrice', 'anQId'])
+            ->whereIn('acIdent', $normalizedCodes)
+            ->get()
+            ->mapWithKeys(function ($row) {
+                $ident = strtolower(trim((string) ($row->acIdent ?? '')));
+
+                if ($ident === '') {
+                    return [];
+                }
+
+                return [
+                    $ident => [
+                        'acIdent' => trim((string) ($row->acIdent ?? '')),
+                        'acName' => trim((string) ($row->acName ?? '')),
+                        'acUM' => strtoupper(substr(trim((string) ($row->acUM ?? '')), 0, 3)),
+                        'anBuyPrice' => $row->anBuyPrice ?? null,
+                        'anQId' => $row->anQId ?? null,
+                    ],
+                ];
+            })
+            ->all();
+    }
+
+    private function resolveReleasedMaterialIssuer(array $stockAdjustmentResults, array $workOrderRow): string
+    {
+        foreach ($stockAdjustmentResults as $stockAdjustmentResult) {
+            if (!is_array($stockAdjustmentResult)) {
+                continue;
+            }
+
+            $warehouse = trim((string) ($stockAdjustmentResult['warehouse'] ?? ''));
+            if ($warehouse !== '') {
+                return $warehouse;
+            }
+        }
+
+        $preferredWarehouse = $this->resolveWorkOrderWarehouse($workOrderRow);
+
+        return $preferredWarehouse !== '' ? $preferredWarehouse : self::RELEASED_MATERIAL_DEFAULT_ISSUER;
+    }
+
+    private function buildReleasedMaterialOrderReference(array $workOrderRow): string
+    {
+        $orderNumber = trim((string) $this->valueTrimmed($workOrderRow, ['acLnkKey', 'acLnkKeyView'], ''));
+        $orderPosition = (int) ($this->toFloatOrNull($this->valueTrimmed($workOrderRow, ['anLnkNo'], 0)) ?? 0);
+
+        if ($orderNumber === '') {
+            return '';
+        }
+
+        return $orderPosition > 0 ? $orderNumber . ' - ' . $orderPosition : $orderNumber;
+    }
+
+    private function resolveReleasedMaterialWorkOrderNumber(array $workOrderRow): string
+    {
+        $workOrderNumber = trim((string) $this->valueTrimmed($workOrderRow, ['acKeyView', 'acRefNo1', 'acKey'], ''));
+
+        return $this->formatReleasedMaterialPantheonNumber($workOrderNumber);
+    }
+
+    private function requiredReleasedMaterialSubjectQId(string $label, string $subject, ?int $candidateQId = null): int
+    {
+        if ($candidateQId !== null && $candidateQId > 0) {
+            return $candidateQId;
+        }
+
+        $resolvedQId = $this->resolveReleasedMaterialSubjectQId($subject);
+
+        if ($resolvedQId !== null) {
+            return $resolvedQId;
+        }
+
+        throw new \RuntimeException('Nije moguce pronaci Pantheon QId za ' . $label . ': ' . ($subject !== '' ? $subject : '[prazno]'));
+    }
+
+    private function resolveReleasedMaterialSubjectQId(string $subject): ?int
+    {
+        try {
+            return $this->positiveIntOrNull(
+                DB::table($this->qualifiedReleasedMaterialSubjectTableName())
+                    ->whereRaw("LTRIM(RTRIM(ISNULL(acSubject, ''))) = ?", [trim($subject)])
+                    ->orderBy('anQId')
+                    ->value('anQId')
+            );
+        } catch (Throwable $exception) {
+            Log::warning('Unable to resolve Pantheon subject QId for released material document.', [
+                'subject' => $subject,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function positiveIntOrNull(mixed $value): ?int
+    {
+        $numericValue = $this->toFloatOrNull($value);
+
+        if ($numericValue === null || $numericValue <= 0) {
+            return null;
+        }
+
+        return (int) $numericValue;
+    }
+
+    private function formatReleasedMaterialPantheonNumber(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        $digits = preg_replace('/\D+/', '', $value);
+        $digits = is_string($digits) ? $digits : '';
+
+        if (strlen($digits) >= 12) {
+            return substr($digits, 0, 2) . '-' . substr($digits, 2, 4) . '-' . substr($digits, -6);
+        }
+
+        return $value;
+    }
+
+    private function limitReleasedMaterialString(string $value, int $maxLength): string
+    {
+        $value = trim($value);
+
+        if ($value === '' || $maxLength < 1) {
+            return $value;
+        }
+
+        return Str::substr($value, 0, $maxLength);
+    }
+
+    private function qualifiedReleasedMaterialMoveTableName(): string
+    {
+        return $this->tableSchema() . '.tHE_Move';
+    }
+
+    private function qualifiedReleasedMaterialMoveItemTableName(): string
+    {
+        return $this->tableSchema() . '.tHE_MoveItem';
+    }
+
+    private function qualifiedReleasedMaterialMoveFxRateTableName(): string
+    {
+        return $this->tableSchema() . '.tHE_MoveFXRate';
+    }
+
+    private function qualifiedReleasedMaterialMoveWorkOrderLinkTableName(): string
+    {
+        return $this->tableSchema() . '.tHF_LinkMoveWOEx';
+    }
+
+    private function qualifiedReleasedMaterialMoveItemWorkOrderItemLinkTableName(): string
+    {
+        return $this->tableSchema() . '.tHF_LinkMoveItemWOExItem';
+    }
+
+    private function qualifiedReleasedMaterialSubjectTableName(): string
+    {
+        return $this->tableSchema() . '.tHE_SetSubj';
     }
 
     private function workOrderItemStatementAdjustsStock(string $statement): bool

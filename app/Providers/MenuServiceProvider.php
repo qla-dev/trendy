@@ -110,6 +110,8 @@ class MenuServiceProvider extends ServiceProvider
             'app-barcode-generator',
             'app-orders-navheader',
             'app-orders',
+            'app-documents-navheader',
+            'app-released-material-documents',
         ];
 
         $menuData->menu = array_values(array_filter($menuData->menu, function ($menu) use ($adminOnlySlugs) {
