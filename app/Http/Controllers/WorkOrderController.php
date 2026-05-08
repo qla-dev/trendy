@@ -684,6 +684,7 @@ class WorkOrderController extends Controller
                     'napomena' => trim((string) ($bomRow['napomena'] ?? '')),
                     'acUM' => trim((string) ($bomRow['acUM'] ?? '')),
                     'acOperationType' => trim((string) ($bomRow['acOperationType'] ?? '')),
+                    'acDelayType' => trim((string) ($bomRow['acDelayType'] ?? '')),
                 ];
             }, $bomRows)));
 
@@ -1851,6 +1852,7 @@ class WorkOrderController extends Controller
             'components.*.acUM' => ['nullable', 'string', 'max:8'],
             'components.*.acUMSource' => ['nullable', 'string', 'max:8'],
             'components.*.acOperationType' => ['nullable', 'string', 'max:8'],
+            'components.*.acDelayType' => ['nullable', 'string', 'max:8'],
             'components.*.row_uid' => ['nullable', 'string', 'max:64'],
             'components.*.anPlanQty' => ['nullable', 'numeric', 'min:0'],
         ]);
@@ -1930,6 +1932,7 @@ class WorkOrderController extends Controller
                 $manualUnit = $manualUnitRaw === 'AUTO' ? '' : strtoupper(substr($manualUnitRaw, 0, 3));
                 $manualUnitSourceRaw = strtoupper(trim((string) ($component['acUMSource'] ?? '')));
                 $manualUnitSource = $manualUnitSourceRaw === 'AUTO' ? '' : strtoupper(substr($manualUnitSourceRaw, 0, 3));
+                $manualDelayType = strtoupper(substr(trim((string) ($component['acDelayType'] ?? '')), 0, 1));
                 $componentNote = trim((string) ($component['napomena'] ?? ''));
 
                 Log::info('normalize- planned consumption component', [
@@ -1948,6 +1951,7 @@ class WorkOrderController extends Controller
                     'acUM' => $manualUnit,
                     'acUMSource' => $manualUnitSource,
                     'acOperationType' => $manualOperationType,
+                    'acDelayType' => $manualDelayType,
                     'anPlanQty' => $this->toFloatOrNull($component['anPlanQty'] ?? null),
                 ];
             }
@@ -1995,6 +1999,7 @@ class WorkOrderController extends Controller
                         (string) ($component['acOperationType'] ?? ''),
                         $catalogSet
                     ),
+                    'acDelayType' => strtoupper(substr(trim((string) ($component['acDelayType'] ?? '')), 0, 1)),
                     'catalog_set' => $catalogSet,
                     'anPlanQty' => $this->toFloatOrNull($component['anPlanQty'] ?? null),
                 ];
@@ -2125,6 +2130,7 @@ class WorkOrderController extends Controller
                 $userDescription,
                 $itemNoteColumn,
                 $hasStatementColumn,
+                $itemColumns,
                 $manualNoInsert,
                 $manualQIdInsert,
                 $suppressStatusTransition,
@@ -2162,6 +2168,7 @@ class WorkOrderController extends Controller
                     $resolvedNote = $componentNote !== ''
                         ? $componentNote
                         : ($bomNote !== '' ? $bomNote : $userDescription);
+                    $catalogSet = (string) ($requestedRow['catalog_set'] ?? '');
 
                     Log::info('save-planned-consumption resolved component note', [
                         'componentId' => $componentId,
@@ -2171,14 +2178,23 @@ class WorkOrderController extends Controller
                         'resolvedNote' => $resolvedNote,
                         'source' => $source,
                     ]);
-                    $operationType = strtoupper(substr(trim((string) ($requestedRow['acOperationType'] ?? '')), 0, 1));
-                    if ($operationType === '') {
-                        $operationType = strtoupper(substr(trim((string) ($bomRow['acOperationType'] ?? '')), 0, 1));
+                    $sourceOperationType = strtoupper(substr(trim((string) ($requestedRow['acOperationType'] ?? '')), 0, 1));
+                    if ($sourceOperationType === '') {
+                        $sourceOperationType = strtoupper(substr(trim((string) ($bomRow['acOperationType'] ?? '')), 0, 1));
                     }
 
-                    if ($operationType === '') {
-                        $operationType = $this->resolveOperationTypeForSave('', (string) ($requestedRow['catalog_set'] ?? ''));
+                    if ($sourceOperationType === '') {
+                        $sourceOperationType = $this->resolveOperationTypeForSave('', $catalogSet);
                     }
+
+                    $itemKind = $this->resolveItemKindForPreview($sourceOperationType, $catalogSet);
+                    $operationType = $this->resolveWorkOrderItemOperationTypeForSave($sourceOperationType, $catalogSet);
+                    $delayType = $this->resolveWorkOrderItemDelayTypeForSave(
+                        (string) ($requestedRow['acDelayType'] ?? ($bomRow['acDelayType'] ?? '')),
+                        $itemKind,
+                        $saveMode
+                    );
+                    $issuePercent = $this->resolveWorkOrderItemIssuePercentForSave($saveMode, $itemKind);
 
                     $baseQty = $this->toFloatOrNull($bomRow['anGrossQty'] ?? null) ?? 0.0;
                     $manualPlanQty = $this->toFloatOrNull($requestedRow['anPlanQty'] ?? null);
@@ -2198,6 +2214,8 @@ class WorkOrderController extends Controller
                         // Barcode/weight-confirm mode always treats entered quantity as the absolute value,
                         // not as a BOM multiplier.
                         $plannedQty = $quantityFactor;
+                    } elseif ($itemKind === 'operations') {
+                        $plannedQty = abs($baseQty) > 0.000001 ? ($baseQty * $quantityFactor) : 0.0;
                     } elseif ($source === 'bom') {
                         // Fallback to entered quantity when BOM gross qty is 0 to avoid saving 0 by default.
                         $plannedQty = abs($baseQty) > 0.000001 ? ($baseQty * $quantityFactor) : $quantityFactor;
@@ -2205,15 +2223,13 @@ class WorkOrderController extends Controller
                         $plannedQty = $quantityFactor;
                     }
 
+                    $actualQty = $saveMode === 'barcode' ? $plannedQty : 0.0;
+
                     if ($componentId === '') {
                         continue;
                     }
 
                     $componentKey = strtolower($componentId);
-                    $itemKind = $this->resolveItemKindForPreview(
-                        $operationType,
-                        (string) ($requestedRow['catalog_set'] ?? '')
-                    );
 
                     if ($saveMode === 'barcode' && $itemKind === 'materials' && array_key_exists($componentKey, $existingMaterialItemsByIdent)) {
                         $existingRow = $existingMaterialItemsByIdent[$componentKey];
@@ -2299,8 +2315,8 @@ class WorkOrderController extends Controller
                         'acDescr' => $description === '' ? null : substr($description, 0, 80),
                         'acOperationType' => $operationType === '' ? null : $operationType,
                         'anPlanQty' => $plannedQty,
-                        'anQty' => $plannedQty,
-                        'anQty1' => $plannedQty,
+                        'anQty' => $actualQty,
+                        'anQty1' => $actualQty,
                         'anQtyBase' => 0,
                         'adTimeIns' => $now,
                         'adTimeChg' => $now,
@@ -2323,6 +2339,14 @@ class WorkOrderController extends Controller
                         $insertPayload['acUM'] = $resolvedUnit;
                     }
 
+                    if ($delayType !== null && in_array('acDelayType', $itemColumns, true)) {
+                        $insertPayload['acDelayType'] = $delayType;
+                    }
+
+                    if ($issuePercent !== null && in_array('anIssuePerc', $itemColumns, true)) {
+                        $insertPayload['anIssuePerc'] = $issuePercent;
+                    }
+
                     if ($manualNoInsert && $nextNo !== null) {
                         $insertPayload['anNo'] = $nextNo;
                     }
@@ -2337,12 +2361,23 @@ class WorkOrderController extends Controller
                         $nextNo,
                         $componentId
                     );
+                    $insertedItemQId = $insertedIdentity['anQId'] ?? $nextQId;
+
+                    if ($itemKind === 'operations' && $insertedItemQId !== null) {
+                        $this->ensureWorkOrderOperationResourceRow(
+                            (int) $insertedItemQId,
+                            $plannedQty,
+                            $actualQty,
+                            $userId,
+                            $now
+                        );
+                    }
 
                     $saved[] = [
                         'action' => 'inserted',
                         'source' => $source,
                         'anNo' => $insertedIdentity['anNo'] ?? $nextNo,
-                        'anQId' => $insertedIdentity['anQId'] ?? $nextQId,
+                        'anQId' => $insertedItemQId,
                         'acIdent' => $componentId,
                         'acDescr' => $description,
                         'acNote' => $resolvedNote,
@@ -2840,6 +2875,7 @@ class WorkOrderController extends Controller
                 }
 
                 $itemNoteColumn = $this->workOrderItemNoteColumn($columns);
+                $shouldPersistActualQty = $this->workOrderItemRowShouldRestoreStockOnRemove($itemRow, $hasStatementColumn);
 
                 if ($hasNoteInput && $itemNoteColumn !== null) {
                     $fieldUpdates[$itemNoteColumn] = $this->resolveWorkOrderItemNoteForSave(
@@ -2850,13 +2886,24 @@ class WorkOrderController extends Controller
                 }
 
                 if ($hasQuantityInput) {
-                    $quantityColumns = $this->existingColumns($columns, ['anPlanQty', 'anQty', 'anQty1']);
-                    if (!empty($quantityColumns)) {
-                        $requestedQuantity = max(0, (float) ($this->toFloatOrNull($validated['kolicina'] ?? 0) ?? 0));
+                    $requestedQuantity = max(0, (float) ($this->toFloatOrNull($validated['kolicina'] ?? 0) ?? 0));
+                    $quantityColumns = $this->existingColumns($columns, ['anPlanQty']);
 
-                        foreach ($quantityColumns as $quantityColumn) {
-                            $fieldUpdates[$quantityColumn] = $requestedQuantity;
-                        }
+                    if ($shouldPersistActualQty) {
+                        $quantityColumns = array_merge($quantityColumns, $this->existingColumns($columns, ['anQty', 'anQty1']));
+                    }
+
+                    foreach (array_values(array_unique($quantityColumns)) as $quantityColumn) {
+                        $fieldUpdates[$quantityColumn] = $requestedQuantity;
+                    }
+
+                    if (
+                        !$shouldPersistActualQty
+                        && array_key_exists('anIssuePerc', $itemRow)
+                        && in_array('anIssuePerc', $columns, true)
+                        && !array_key_exists('anIssuePerc', $fieldUpdates)
+                    ) {
+                        $fieldUpdates['anIssuePerc'] = 100.0;
                     }
                 }
 
@@ -3247,6 +3294,7 @@ class WorkOrderController extends Controller
             'acUM',
             'anGrossQty',
             'acOperationType',
+            'acDelayType',
             'anNo',
             'acFieldSE',
             'acNote',
@@ -3259,6 +3307,7 @@ class WorkOrderController extends Controller
                 'acUM',
                 'anGrossQty',
                 'acOperationType',
+                'acDelayType',
                 'anNo',
             ];
         }
@@ -3297,6 +3346,7 @@ class WorkOrderController extends Controller
                     'acUM' => strtoupper(substr(trim((string) ($rowData['acUM'] ?? '')), 0, 3)),
                     'anGrossQty' => $this->toFloatOrNull($rowData['anGrossQty'] ?? null) ?? 0.0,
                     'acOperationType' => trim((string) ($rowData['acOperationType'] ?? '')),
+                    'acDelayType' => strtoupper(substr(trim((string) ($rowData['acDelayType'] ?? '')), 0, 1)),
                     'anNo' => (int) ($this->toFloatOrNull($rowData['anNo'] ?? null) ?? 0),
                 ];
             })
@@ -4892,6 +4942,150 @@ class WorkOrderController extends Controller
         return $identity;
     }
 
+    private function ensureWorkOrderOperationResourceRow(
+        int $itemQId,
+        float $plannedQty,
+        float $actualQty,
+        int $userId,
+        Carbon $now
+    ): void {
+        if ($itemQId < 1) {
+            return;
+        }
+
+        $columns = $this->itemResourcesTableColumns();
+        if (empty($columns)) {
+            return;
+        }
+
+        $itemQIdColumn = $this->firstExistingColumn($columns, ['anWOExItemQId', 'anItemQId', 'anQIdItem']);
+        if ($itemQIdColumn === null) {
+            return;
+        }
+
+        if ($this->newItemResourcesTableQuery()->where($itemQIdColumn, $itemQId)->exists()) {
+            return;
+        }
+
+        $parentItemRow = (array) ($this->newItemTableQuery()
+            ->where('anQId', $itemQId)
+            ->first() ?? []);
+        $parentWorkOrderKey = trim((string) ($parentItemRow['acKey'] ?? ''));
+        $parentItemNo = (int) ($this->toFloatOrNull($parentItemRow['anNo'] ?? null) ?? 0);
+        $parentVariant = (int) ($this->toFloatOrNull($parentItemRow['anVariant'] ?? null) ?? 0);
+
+        $payload = [
+            $itemQIdColumn => $itemQId,
+        ];
+
+        if ($parentWorkOrderKey !== '') {
+            foreach (['acKey', 'acWOKey', 'acDocKey', 'acLnkKey'] as $linkColumn) {
+                if (in_array($linkColumn, $columns, true)) {
+                    $payload[$linkColumn] = $parentWorkOrderKey;
+                }
+            }
+        }
+
+        foreach (['anNo', 'anLineNo', 'anResNo'] as $numberColumn) {
+            if (in_array($numberColumn, $columns, true)) {
+                $payload[$numberColumn] = $parentItemNo;
+            }
+        }
+
+        if (in_array('anVariant', $columns, true)) {
+            $payload['anVariant'] = $parentVariant;
+        }
+
+        if (in_array('anPriority', $columns, true)) {
+            $payload['anPriority'] = 0;
+        }
+
+        if (in_array('acPriority', $columns, true)) {
+            $payload['acPriority'] = '5';
+        }
+
+        if (in_array('priority', $columns, true)) {
+            $payload['priority'] = '5';
+        }
+
+        if (in_array('acResursID', $columns, true)) {
+            $payload['acResursID'] = '';
+        }
+
+        if (in_array('acResType', $columns, true)) {
+            $payload['acResType'] = '';
+        }
+
+        foreach (['acETAdditive', 'acIncomeGrp', 'acQtyFormula', 'acSubContractor'] as $emptyStringColumn) {
+            if (in_array($emptyStringColumn, $columns, true)) {
+                $payload[$emptyStringColumn] = '';
+            }
+        }
+
+        if (in_array('anPlanQty', $columns, true)) {
+            $payload['anPlanQty'] = $plannedQty;
+        }
+
+        if (in_array('anQty', $columns, true)) {
+            $payload['anQty'] = $actualQty;
+        }
+
+        if (in_array('anQty1', $columns, true)) {
+            $payload['anQty1'] = $actualQty;
+        }
+
+        foreach (['anQtyBase', 'anNormQty', 'anWasteQty', 'anShift', 'anPlanArea', 'anArea', 'anQty2'] as $zeroColumn) {
+            if (in_array($zeroColumn, $columns, true)) {
+                $payload[$zeroColumn] = 0;
+            }
+        }
+
+        foreach (['anBatch', 'anNoOfWorkers'] as $oneColumn) {
+            if (in_array($oneColumn, $columns, true)) {
+                $payload[$oneColumn] = 1;
+            }
+        }
+
+        if (in_array('acIssueFinished', $columns, true)) {
+            $payload['acIssueFinished'] = 'N';
+        }
+
+        if (in_array('anExecutionPerc', $columns, true)) {
+            $payload['anExecutionPerc'] = 100.0;
+        }
+
+        if (in_array('abActive', $columns, true)) {
+            $payload['abActive'] = 1;
+        }
+
+        if (in_array('adDateIns', $columns, true)) {
+            $payload['adDateIns'] = $now;
+        }
+
+        if (in_array('adTimeIns', $columns, true)) {
+            $payload['adTimeIns'] = $now;
+        }
+
+        if (in_array('adTimeChg', $columns, true)) {
+            $payload['adTimeChg'] = $now;
+        }
+
+        if ($userId > 0 && in_array('anUserIns', $columns, true)) {
+            $payload['anUserIns'] = $userId;
+        }
+
+        if ($userId > 0 && in_array('anUserChg', $columns, true)) {
+            $payload['anUserChg'] = $userId;
+        }
+
+        $identityColumns = $this->itemResourcesTableIdentityColumns();
+        if (in_array('anQId', $columns, true) && !in_array('anQId', $identityColumns, true)) {
+            $payload['anQId'] = ((int) ($this->newItemResourcesTableQuery()->max('anQId') ?? 0)) + 1;
+        }
+
+        $this->newItemResourcesTableQuery()->insert($payload);
+    }
+
     private function findExistingMaterialItemsByCodes(
         string $workOrderKey,
         array $materialCodes,
@@ -4960,6 +5154,13 @@ class WorkOrderController extends Controller
     {
         return (float) ($this->toFloatOrNull(
             $row['anPlanQty'] ?? $row['anQty'] ?? $row['anQty1'] ?? 0
+        ) ?? 0);
+    }
+
+    private function workOrderItemActualQuantity(array $row): float
+    {
+        return (float) ($this->toFloatOrNull(
+            $row['anQty'] ?? $row['anQty1'] ?? 0
         ) ?? 0);
     }
 
@@ -5599,13 +5800,24 @@ class WorkOrderController extends Controller
 
     private function workOrderItemRowShouldRestoreStockOnRemove(array $row, bool $hasStatementColumn): bool
     {
+        $issueFinished = strtoupper(trim((string) ($row['acIssueFinished'] ?? '')));
+        $actualQty = $this->workOrderItemActualQuantity($row);
+
         if (!$hasStatementColumn) {
+            if ($issueFinished !== 'Y' && abs($actualQty) <= 0.000001) {
+                return false;
+            }
+
             return true;
         }
 
         $statement = strtoupper(trim((string) ($row['acStatement'] ?? '')));
 
         if ($statement === '') {
+            if ($issueFinished !== 'Y' && abs($actualQty) <= 0.000001) {
+                return false;
+            }
+
             return true;
         }
 
@@ -7312,7 +7524,7 @@ class WorkOrderController extends Controller
             'artikal' => (string) $this->value($row, ['acIdent'], ''),
             'opis' => (string) $this->value($row, ['acDescr'], ''),
             'napomena' => $displayNote,
-            'kolicina' => $this->normalizeNumber($this->value($row, ['anQty', 'anQty1', 'anPlanQty'], 0)),
+            'kolicina' => $this->normalizeNumber($this->value($row, ['anPlanQty', 'anQty', 'anQty1'], 0)),
             'mj' => (string) $this->value($row, ['acUM'], ''),
             'serija' => $this->normalizeNumber($this->value($row, ['anQtySE', 'anBatch'], 0)),
             'normativna_osnova' => $this->normalizeNumber($this->value($row, ['anQtyBase', 'anQtyBase3'], 0)),
@@ -7592,7 +7804,7 @@ class WorkOrderController extends Controller
             'pozicija' => (string) $this->valueTrimmed($row, ['anNo', 'anLineNo', 'anResNo', '__item_no'], ''),
             'materijal' => (string) $this->valueTrimmed($row, ['acResursID', 'acIdent', 'acResIdent', 'acResource', 'acCode', '__item_ident'], ''),
             'naziv' => (string) $this->valueTrimmed($row, ['acResType', 'acDescr', 'acName', 'acResDescr', '__item_descr', '__item_ident'], ''),
-            'kolicina' => $this->normalizeNumber($this->valueTrimmed($row, ['anQty', 'anPlanQty', 'anNormQty', '__item_qty', '__item_plan_qty'], 0)),
+            'kolicina' => $this->normalizeNumber($this->valueTrimmed($row, ['anPlanQty', 'anQty', 'anNormQty', '__item_plan_qty', '__item_qty'], 0)),
             'mj' => (string) $this->valueTrimmed($row, ['acUM', 'acUMRes', '__item_um'], ''),
             'napomena' => $this->plannedConsumptionDisplayNote((string) $this->valueTrimmed($row, ['acNote'], '')),
         ];
@@ -7606,7 +7818,7 @@ class WorkOrderController extends Controller
             'pozicija' => (string) $this->valueTrimmed($row, ['anNo'], ''),
             'materijal' => (string) $this->valueTrimmed($row, ['acIdent'], ''),
             'naziv' => (string) $this->valueTrimmed($row, ['acDescr', 'acName', 'acIdent'], ''),
-            'kolicina' => $this->normalizeNumber($this->valueTrimmed($row, ['anQty', 'anPlanQty', 'anNormQty'], 0)),
+            'kolicina' => $this->normalizeNumber($this->valueTrimmed($row, ['anPlanQty', 'anQty', 'anNormQty'], 0)),
             'mj' => (string) $this->valueTrimmed($row, ['acUM'], ''),
             'napomena' => $this->workOrderItemDisplayNote($row),
         ];
@@ -7703,6 +7915,11 @@ class WorkOrderController extends Controller
 
     private function resolveOperationTypeForSave(string $operationType, string $catalogSet): string
     {
+        $normalizedType = strtoupper(substr(trim($operationType), 0, 1));
+        if ($normalizedType !== '') {
+            return $normalizedType;
+        }
+
         $normalizedSet = strtoupper(trim($catalogSet));
         if ($normalizedSet === self::OPERATIONS_SET) {
             return 'O';
@@ -7712,12 +7929,48 @@ class WorkOrderController extends Controller
             return 'M';
         }
 
-        $normalizedType = strtoupper(substr(trim($operationType), 0, 1));
-        if ($normalizedType !== '') {
-            return $normalizedType;
+        return '';
+    }
+
+    private function resolveWorkOrderItemOperationTypeForSave(string $operationType, string $catalogSet): string
+    {
+        $itemKind = $this->resolveItemKindForPreview($operationType, $catalogSet);
+
+        if ($itemKind === 'operations') {
+            return 'D';
         }
 
-        return '';
+        if ($itemKind === 'materials') {
+            return 'M';
+        }
+
+        $normalizedType = strtoupper(substr(trim($operationType), 0, 1));
+
+        return $normalizedType;
+    }
+
+    private function resolveWorkOrderItemDelayTypeForSave(string $delayType, string $itemKind, string $saveMode): ?string
+    {
+        $normalizedDelayType = strtoupper(substr(trim($delayType), 0, 1));
+
+        if ($normalizedDelayType !== '') {
+            return $normalizedDelayType;
+        }
+
+        if ($saveMode === 'manual' && in_array($itemKind, ['materials', 'operations'], true)) {
+            return 'Z';
+        }
+
+        return null;
+    }
+
+    private function resolveWorkOrderItemIssuePercentForSave(string $saveMode, string $itemKind): ?float
+    {
+        if ($saveMode === 'manual' && in_array($itemKind, ['materials', 'operations'], true)) {
+            return 100.0;
+        }
+
+        return null;
     }
 
     private function resolveItemKindForPreview(string $operationType, string $catalogSet): string
@@ -9389,6 +9642,36 @@ class WorkOrderController extends Controller
             Log::warning('Unable to resolve item table identity columns.', [
                 'connection' => config('database.default'),
                 'items_table' => $this->qualifiedItemTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [];
+        }
+    }
+
+    private function itemResourcesTableIdentityColumns(): array
+    {
+        if (DB::getDriverName() !== 'sqlsrv') {
+            return [];
+        }
+
+        try {
+            return DB::table('sys.columns as c')
+                ->join('sys.tables as t', 'c.object_id', '=', 't.object_id')
+                ->join('sys.schemas as s', 't.schema_id', '=', 's.schema_id')
+                ->where('s.name', $this->tableSchema())
+                ->where('t.name', $this->itemResourcesTableName())
+                ->where('c.is_identity', 1)
+                ->pluck('c.name')
+                ->map(function ($columnName) {
+                    return (string) $columnName;
+                })
+                ->values()
+                ->all();
+        } catch (Throwable $exception) {
+            Log::warning('Unable to resolve item resources table identity columns.', [
+                'connection' => config('database.default'),
+                'item_resources_table' => $this->qualifiedItemResourcesTableName(),
                 'message' => $exception->getMessage(),
             ]);
 
