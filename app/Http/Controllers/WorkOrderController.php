@@ -2,16 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\InsufficientRawMaterialStockException;
 use App\Models\Material;
 use App\Models\Product;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use RuntimeException;
 use Throwable;
 
 class WorkOrderController extends Controller
@@ -23,6 +26,8 @@ class WorkOrderController extends Controller
     private const RELEASED_MATERIAL_SEQUENCE_LENGTH = 7;
     private const RELEASED_MATERIAL_CURRENCY = 'KM';
     private const RELEASED_MATERIAL_DEFAULT_ISSUER = 'Skladište sirovina';
+    private const ADDITIONAL_RAW_MATERIAL_WAREHOUSE = 'Skladište dodatnih sirovina';
+    private const RAW_MATERIAL_SHORTAGE_ALERT_EMAIL = 'colakovic.vedad@qla.dev';
     private const MATERIALS_SETS = [
         '011',
         '020',
@@ -2402,10 +2407,17 @@ class WorkOrderController extends Controller
                 $stockAdjustments = $this->buildPlannedConsumptionStockAdjustments($saved);
 
                 if ($saveMode === 'barcode' && !empty($stockAdjustments)) {
+                    $stockAdjustments = $this->applyRawMaterialsWarehouseToStockAdjustments($stockAdjustments);
+                    $this->assertRawMaterialsWarehouseStockAvailable(
+                        $stockAdjustments,
+                        $workOrderRow,
+                        $this->buildStockAdjustmentMaterialMeta($saved)
+                    );
                     $stockAdjustmentResults = Material::bulkAdjustStock(
                         $stockAdjustments,
                         $userId,
-                        $preferredWarehouse
+                        '',
+                        ['strict_warehouse_match' => true]
                     );
                 }
 
@@ -2470,6 +2482,11 @@ class WorkOrderController extends Controller
                 if ($consumedQty !== null) {
                     $stockAdjustmentResult['consumed_qty'] = abs($consumedQty);
                 }
+
+                $remainingStockQty = $this->toFloatOrNull($stockAdjustmentResult['row_stock_value'] ?? null);
+                if ($remainingStockQty !== null) {
+                    $stockAdjustmentResult['remaining_stock_qty'] = $remainingStockQty;
+                }
             }
             unset($stockAdjustmentResult);
 
@@ -2521,6 +2538,19 @@ class WorkOrderController extends Controller
                     'items' => $insertedRows,
                 ],
             ], 201);
+        } catch (InsufficientRawMaterialStockException $exception) {
+            Log::warning('Planned consumption save blocked due to raw warehouse shortage.', [
+                'id' => $id,
+                'detail' => $exception->detail(),
+                'request_save_mode' => strtolower(trim((string) $request->input('save_mode', 'manual'))),
+                'request_components_count' => count((array) $request->input('components', [])),
+                'user_id' => (int) (auth()->id() ?? 0),
+            ]);
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'detail' => $exception->detail(),
+            ], 422);
         } catch (Throwable $exception) {
             Log::error('Planned consumption save failed.', [
                 'id' => $id,
@@ -2650,10 +2680,12 @@ class WorkOrderController extends Controller
                     $reverseAdjustment = $this->buildRemovedPlannedConsumptionStockAdjustment($rowData, $preferredWarehouse);
 
                     if ($reverseAdjustment !== null) {
+                        $stockAdjustments = $this->applyRawMaterialsWarehouseToStockAdjustments([$reverseAdjustment]);
                         $stockAdjustments = Material::bulkAdjustStock(
-                            [$reverseAdjustment],
+                            $stockAdjustments,
                             $userId,
-                            $preferredWarehouse
+                            '',
+                            ['strict_warehouse_match' => true]
                         );
                     }
                 }
@@ -2855,7 +2887,8 @@ class WorkOrderController extends Controller
                 $now,
                 $userId,
                 $preferredWarehouse,
-                $hasStatementColumn
+                $hasStatementColumn,
+                $workOrderRow
             ) {
                 $row = (clone $updateQuery)->lockForUpdate()->first();
 
@@ -2965,10 +2998,17 @@ class WorkOrderController extends Controller
                 }
 
                 if ($stockAdjustment !== null) {
+                    $stockAdjustments = $this->applyRawMaterialsWarehouseToStockAdjustments([$stockAdjustment]);
+                    $this->assertRawMaterialsWarehouseStockAvailable(
+                        $stockAdjustments,
+                        $workOrderRow,
+                        $this->buildStockAdjustmentMaterialMeta([$itemRow])
+                    );
                     $stockAdjustmentResults = Material::bulkAdjustStock(
-                        [$stockAdjustment],
+                        $stockAdjustments,
                         $userId,
-                        $preferredWarehouse
+                        '',
+                        ['strict_warehouse_match' => true]
                     );
                 }
 
@@ -3043,6 +3083,19 @@ class WorkOrderController extends Controller
                     'stock_adjustments' => $stockAdjustmentResults,
                 ],
             ]);
+        } catch (InsufficientRawMaterialStockException $exception) {
+            Log::warning('Work order item update blocked due to raw warehouse shortage.', [
+                'id' => $id,
+                'detail' => $exception->detail(),
+                'request_item_id' => $this->toFloatOrNull($request->input('item_id')),
+                'request_item_no' => $this->toFloatOrNull($request->input('item_no')),
+                'user_id' => (int) (auth()->id() ?? 0),
+            ]);
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'detail' => $exception->detail(),
+            ], 422);
         } catch (Throwable $exception) {
             Log::error('Work order item update failed.', [
                 'id' => $id,
@@ -5213,6 +5266,306 @@ class WorkOrderController extends Controller
             ['acWarehouse', 'linked_document', 'acWarehouseFrom'],
             ''
         ));
+    }
+
+    private function applyRawMaterialsWarehouseToStockAdjustments(array $stockAdjustments): array
+    {
+        return array_values(array_map(function ($stockAdjustment) {
+            if (!is_array($stockAdjustment)) {
+                return $stockAdjustment;
+            }
+
+            $stockAdjustment['warehouse'] = self::RELEASED_MATERIAL_DEFAULT_ISSUER;
+
+            return $stockAdjustment;
+        }, $stockAdjustments));
+    }
+
+    private function buildStockAdjustmentMaterialMeta(array $rows): array
+    {
+        $metaByCode = [];
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $materialCode = trim((string) ($row['acIdent'] ?? $row['material_code'] ?? ''));
+            if ($materialCode === '') {
+                continue;
+            }
+
+            $materialKey = strtolower($materialCode);
+            $materialName = trim((string) ($row['acDescr'] ?? $row['material_name'] ?? $row['naziv'] ?? ''));
+            $materialUnit = strtoupper(substr(trim((string) ($row['acUM'] ?? $row['material_um'] ?? $row['mj'] ?? '')), 0, 8));
+
+            if (!array_key_exists($materialKey, $metaByCode)) {
+                $metaByCode[$materialKey] = [
+                    'material_name' => $materialName,
+                    'material_unit' => $materialUnit,
+                ];
+                continue;
+            }
+
+            if (($metaByCode[$materialKey]['material_name'] ?? '') === '' && $materialName !== '') {
+                $metaByCode[$materialKey]['material_name'] = $materialName;
+            }
+
+            if (($metaByCode[$materialKey]['material_unit'] ?? '') === '' && $materialUnit !== '') {
+                $metaByCode[$materialKey]['material_unit'] = $materialUnit;
+            }
+        }
+
+        return $metaByCode;
+    }
+
+    private function assertRawMaterialsWarehouseStockAvailable(
+        array $stockAdjustments,
+        array $workOrderRow,
+        array $materialMetaByCode = []
+    ): void {
+        $consumptionAdjustments = [];
+
+        foreach ($stockAdjustments as $stockAdjustment) {
+            if (!is_array($stockAdjustment)) {
+                continue;
+            }
+
+            $materialCode = trim((string) ($stockAdjustment['material_code'] ?? ''));
+            $requestedQty = (float) ($this->toFloatOrNull($stockAdjustment['value'] ?? null) ?? 0);
+
+            if ($materialCode === '' || $requestedQty <= 0.000001) {
+                continue;
+            }
+
+            $consumptionAdjustments[] = [
+                'material_code' => $materialCode,
+                'requested_qty' => $requestedQty,
+            ];
+        }
+
+        if (empty($consumptionAdjustments)) {
+            return;
+        }
+
+        $stockSummary = Material::stockSummaryByCodes(array_map(function (array $adjustment) {
+            return (string) ($adjustment['material_code'] ?? '');
+        }, $consumptionAdjustments));
+        $blockedItems = [];
+
+        foreach ($consumptionAdjustments as $adjustment) {
+            $materialCode = trim((string) ($adjustment['material_code'] ?? ''));
+            $requestedQty = (float) ($adjustment['requested_qty'] ?? 0);
+            $materialKey = strtolower($materialCode);
+            $summary = $stockSummary[$materialKey] ?? [
+                'warehouses' => [],
+            ];
+            $warehouses = (array) ($summary['warehouses'] ?? []);
+            $rawStockQty = $this->resolveNamedWarehouseStockQty($warehouses, self::RELEASED_MATERIAL_DEFAULT_ISSUER);
+
+            if ($rawStockQty + 0.000001 >= $requestedQty) {
+                continue;
+            }
+
+            $meta = is_array($materialMetaByCode[$materialKey] ?? null)
+                ? $materialMetaByCode[$materialKey]
+                : [];
+
+            $blockedItems[] = [
+                'material_code' => $materialCode,
+                'material_name' => trim((string) ($meta['material_name'] ?? '')),
+                'material_unit' => trim((string) ($meta['material_unit'] ?? '')),
+                'requested_qty' => $requestedQty,
+                'raw_stock_qty' => $rawStockQty,
+                'additional_raw_stock_qty' => $this->resolveNamedWarehouseStockQty(
+                    $warehouses,
+                    self::ADDITIONAL_RAW_MATERIAL_WAREHOUSE
+                ),
+            ];
+        }
+
+        if (empty($blockedItems)) {
+            return;
+        }
+
+        $this->sendRawMaterialShortageAlertEmail($blockedItems, $workOrderRow);
+
+        throw new InsufficientRawMaterialStockException(
+            $this->buildRawMaterialShortageClientDetail($blockedItems)
+        );
+    }
+
+    private function buildRawMaterialShortageClientDetail(array $blockedItems): string
+    {
+        $lines = [];
+
+        foreach ($blockedItems as $blockedItem) {
+            if (!is_array($blockedItem)) {
+                continue;
+            }
+
+            $materialCode = trim((string) ($blockedItem['material_code'] ?? ''));
+            $materialName = trim((string) ($blockedItem['material_name'] ?? ''));
+            $materialUnit = trim((string) ($blockedItem['material_unit'] ?? ''));
+            $requestedQty = $this->formatStockAlertQuantity((float) ($blockedItem['requested_qty'] ?? 0));
+            $rawStockQty = $this->formatStockAlertQuantity((float) ($blockedItem['raw_stock_qty'] ?? 0));
+            $additionalStockQty = $this->formatStockAlertQuantity((float) ($blockedItem['additional_raw_stock_qty'] ?? 0));
+            $label = $materialName !== ''
+                ? $materialName . ' (' . $materialCode . ')'
+                : $materialCode;
+
+            if ($materialUnit !== '') {
+                $requestedQty .= ' ' . $materialUnit;
+            }
+
+            $lines[] = implode(' | ', array_filter([
+                $label,
+                'traženo: ' . $requestedQty,
+                'skladište sirovina: ' . $rawStockQty,
+                'skladište dodatnih sirovina: ' . $additionalStockQty,
+            ]));
+        }
+
+        return !empty($lines)
+            ? implode("\n", $lines)
+            : 'Nedostaje zaliha na skladištu sirovina.';
+    }
+
+    private function sendRawMaterialShortageAlertEmail(array $blockedItems, array $workOrderRow): void
+    {
+        if (!filter_var(self::RAW_MATERIAL_SHORTAGE_ALERT_EMAIL, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
+
+        $workOrderNumber = $this->resolveReleasedMaterialWorkOrderNumber($workOrderRow);
+        if ($workOrderNumber === '') {
+            $workOrderNumber = $this->formatWorkOrderNumberForCalendar((string) $this->valueTrimmed(
+                $workOrderRow,
+                ['acKeyView', 'acRefNo1', 'acKey'],
+                ''
+            ));
+        }
+
+        $subject = 'Pokušaj razduženja bez zalihe na skladištu sirovina';
+        if ($workOrderNumber !== '') {
+            $subject .= ' - RN ' . $workOrderNumber;
+        }
+
+        $fromAddress = $this->resolveRawMaterialShortageAlertFromAddress();
+        $fromName = trim((string) config('mail.from.name', config('app.name', 'eNalog.app')));
+        $body = $this->buildRawMaterialShortageAlertBody($blockedItems, $workOrderNumber);
+        $mailer = $this->resolveRawMaterialShortageAlertMailer();
+
+        try {
+            Mail::mailer((string) $mailer)->raw($body, function ($message) use ($subject, $fromAddress, $fromName) {
+                $message->to(self::RAW_MATERIAL_SHORTAGE_ALERT_EMAIL)
+                    ->subject($subject)
+                    ->from($fromAddress, $fromName !== '' ? $fromName : 'eNalog.app');
+            });
+        } catch (Throwable $exception) {
+            Log::error('Unable to send raw material shortage alert email.', [
+                'recipient' => self::RAW_MATERIAL_SHORTAGE_ALERT_EMAIL,
+                'mailer' => $mailer,
+                'mail_host' => (string) config('mail.mailers.smtp.host', config('mail.host', '')),
+                'message' => $exception->getMessage(),
+                'exception_class' => get_class($exception),
+                'work_order_key' => trim((string) $this->valueTrimmed($workOrderRow, ['acKey'], '')),
+            ]);
+        }
+    }
+
+    private function buildRawMaterialShortageAlertBody(array $blockedItems, string $workOrderNumber): string
+    {
+        $user = auth()->user();
+        $userName = trim((string) ($user->name ?? ''));
+        $userEmail = trim((string) ($user->email ?? ''));
+        $userId = (int) ($user->id ?? 0);
+        $userLabel = $userName !== ''
+            ? $userName
+            : ($userEmail !== '' ? $userEmail : ($userId > 0 ? 'ID ' . $userId : 'Nepoznat korisnik'));
+
+        if ($userName !== '' && $userEmail !== '') {
+            $userLabel .= ' <' . $userEmail . '>';
+        }
+
+        $lines = [
+            'Bio je pokušaj da se razduži materijal bez dovoljne zalihe na skladištu sirovina.',
+            'Radni nalog: ' . ($workOrderNumber !== '' ? $workOrderNumber : '-'),
+            'Korisnik: ' . $userLabel,
+            'Vrijeme: ' . Carbon::now()->format('d.m.Y H:i:s'),
+            '',
+            'Stavke:',
+        ];
+
+        foreach ($blockedItems as $blockedItem) {
+            if (!is_array($blockedItem)) {
+                continue;
+            }
+
+            $materialCode = trim((string) ($blockedItem['material_code'] ?? ''));
+            $materialName = trim((string) ($blockedItem['material_name'] ?? ''));
+            $materialUnit = trim((string) ($blockedItem['material_unit'] ?? ''));
+            $requestedQty = $this->formatStockAlertQuantity((float) ($blockedItem['requested_qty'] ?? 0));
+
+            if ($materialUnit !== '') {
+                $requestedQty .= ' ' . $materialUnit;
+            }
+
+            $lines[] = '- Materijal: ' . ($materialName !== '' ? $materialName : $materialCode)
+                . ' | Šifra: ' . ($materialCode !== '' ? $materialCode : '-')
+                . ' | Količina: ' . $requestedQty
+                . ' | ' . self::RELEASED_MATERIAL_DEFAULT_ISSUER . ': '
+                . $this->formatStockAlertQuantity((float) ($blockedItem['raw_stock_qty'] ?? 0))
+                . ' | ' . self::ADDITIONAL_RAW_MATERIAL_WAREHOUSE . ': '
+                . $this->formatStockAlertQuantity((float) ($blockedItem['additional_raw_stock_qty'] ?? 0));
+        }
+
+        return implode(PHP_EOL, $lines);
+    }
+
+    private function resolveNamedWarehouseStockQty(array $warehouseStocks, string $warehouseName): float
+    {
+        $normalizedTarget = Str::lower(trim($warehouseName));
+        if ($normalizedTarget === '') {
+            return 0.0;
+        }
+
+        $resolvedQty = 0.0;
+
+        foreach ($warehouseStocks as $candidateWarehouse => $stockQty) {
+            if (Str::lower(trim((string) $candidateWarehouse)) !== $normalizedTarget) {
+                continue;
+            }
+
+            $resolvedQty += is_numeric((string) $stockQty)
+                ? (float) $stockQty
+                : 0.0;
+        }
+
+        return $resolvedQty;
+    }
+
+    private function formatStockAlertQuantity(float $quantity): string
+    {
+        return rtrim(rtrim(number_format($quantity, 3, '.', ''), '0'), '.');
+    }
+
+    private function resolveRawMaterialShortageAlertFromAddress(): string
+    {
+        $configuredFrom = trim((string) config('mail.from.address', ''));
+
+        if (filter_var($configuredFrom, FILTER_VALIDATE_EMAIL)) {
+            return $configuredFrom;
+        }
+
+        return 'no-reply@qla.dev';
+    }
+
+    private function resolveRawMaterialShortageAlertMailer(): string
+    {
+        $configuredMailer = trim((string) config('mail.default', 'smtp'));
+
+        return $configuredMailer !== '' ? $configuredMailer : 'smtp';
     }
 
     private function buildPlannedConsumptionStockAdjustments(array $savedRows): array

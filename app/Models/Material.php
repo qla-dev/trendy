@@ -405,7 +405,12 @@ class Material extends Model
         return (int) DB::query()->fromSub($grouped, 'm')->count();
     }
 
-    public static function bulkAdjustStock(array $items, int $userId = 0, string $preferredWarehouse = ''): array
+    public static function bulkAdjustStock(
+        array $items,
+        int $userId = 0,
+        string $preferredWarehouse = '',
+        array $options = []
+    ): array
     {
         $normalizedItems = self::normalizeStockAdjustments($items);
 
@@ -415,28 +420,20 @@ class Material extends Model
 
         $stockTable = self::sourceSchema() . '.' . self::stockTable();
         $normalizedPreferredWarehouse = trim($preferredWarehouse);
+        $strictWarehouseMatch = (bool) ($options['strict_warehouse_match'] ?? false);
 
-        return DB::transaction(function () use ($normalizedItems, $userId, $stockTable, $normalizedPreferredWarehouse) {
+        return DB::transaction(function () use (
+            $normalizedItems,
+            $userId,
+            $stockTable,
+            $normalizedPreferredWarehouse,
+            $strictWarehouseMatch
+        ) {
             $codes = array_values(array_unique(array_map(function (array $item) {
                 return (string) ($item['material_code'] ?? '');
             }, $normalizedItems)));
 
-            $stockRows = DB::table($stockTable)
-                ->selectRaw("CAST(ISNULL(anQId, 0) as int) as stock_qid")
-                ->selectRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) as material_code")
-                ->selectRaw("LTRIM(RTRIM(ISNULL(acWarehouse, ''))) as warehouse")
-                ->selectRaw("CAST(ISNULL(anStock, 0) as float) as stock_qty")
-                ->whereIn(DB::raw("LTRIM(RTRIM(ISNULL(acIdent, '')))"), $codes)
-                ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(acIdent, '')))) ASC")
-                ->orderByRaw("CASE WHEN CAST(ISNULL(anStock, 0) as float) > 0 THEN 0 ELSE 1 END ASC")
-                ->orderByRaw("CAST(ISNULL(anStock, 0) as float) DESC")
-                ->orderBy('anQId')
-                ->get()
-                ->map(function ($row) {
-                    return (array) $row;
-                })
-                ->values()
-                ->all();
+            $stockRows = self::fetchStockRowsForCodes($codes);
 
             $rowsByCode = [];
             foreach ($stockRows as $row) {
@@ -505,6 +502,8 @@ class Material extends Model
                             'current_stock_value' => $currentTotal,
                             'new_stock_value' => $targetTotal,
                             'warehouse' => $resolvedWarehouse,
+                            'previous_row_stock_value' => 0.0,
+                            'row_stock_value' => 0.0,
                         ];
                         continue;
                     }
@@ -533,14 +532,67 @@ class Material extends Model
                         'new_stock_value' => $targetTotal,
                         'stock_qid' => null,
                         'warehouse' => $resolvedWarehouse,
+                        'previous_row_stock_value' => 0.0,
+                        'row_stock_value' => $targetTotal,
                     ];
                     continue;
                 }
 
+                $resolvedWarehouse = $warehouse !== ''
+                    ? $warehouse
+                    : $normalizedPreferredWarehouse;
                 $primaryRow = self::selectPrimaryStockRow(
                     $materialRows,
-                    $warehouse !== '' ? $warehouse : $normalizedPreferredWarehouse
+                    $resolvedWarehouse,
+                    $strictWarehouseMatch
                 );
+
+                if ($primaryRow === null && $strictWarehouseMatch && $resolvedWarehouse !== '') {
+                    $updatedPrimaryStock = $delta;
+
+                    if (abs($updatedPrimaryStock) <= 0.000001) {
+                        $results[] = [
+                            'action' => 'unchanged',
+                            'material_code' => $materialCode,
+                            'value' => $deltaValue,
+                            'current_stock_value' => $currentTotal,
+                            'new_stock_value' => $targetTotal,
+                            'warehouse' => $resolvedWarehouse,
+                            'previous_row_stock_value' => 0.0,
+                            'row_stock_value' => 0.0,
+                        ];
+                        continue;
+                    }
+
+                    $insertRows[] = [
+                        'acWarehouse' => $resolvedWarehouse,
+                        'acIdent' => $materialCode,
+                        'anStock' => $updatedPrimaryStock,
+                        'anValue' => 0,
+                        'anLastPrice' => 0,
+                        'anReserved' => 0,
+                        'adTimeChg' => $now,
+                        'adTimeIns' => $now,
+                        'anUserIns' => $userId > 0 ? $userId : null,
+                        'anUserChg' => $userId > 0 ? $userId : null,
+                        'anMinStock' => -1,
+                        'anOptStock' => -1,
+                        'anMaxStock' => -1,
+                    ];
+
+                    $results[] = [
+                        'action' => 'inserted',
+                        'material_code' => $materialCode,
+                        'value' => $deltaValue,
+                        'current_stock_value' => $currentTotal,
+                        'new_stock_value' => $targetTotal,
+                        'stock_qid' => null,
+                        'warehouse' => $resolvedWarehouse,
+                        'previous_row_stock_value' => 0.0,
+                        'row_stock_value' => $updatedPrimaryStock,
+                    ];
+                    continue;
+                }
 
                 if ($primaryRow === null) {
                     $results[] = [
@@ -587,6 +639,59 @@ class Material extends Model
 
             return $results;
         });
+    }
+
+    public static function stockSummaryByCodes(array $materialCodes): array
+    {
+        $normalizedCodes = array_values(array_unique(array_filter(array_map(function ($value) {
+            return trim((string) $value);
+        }, $materialCodes), function ($value) {
+            return $value !== '';
+        })));
+
+        if (empty($normalizedCodes)) {
+            return [];
+        }
+
+        $summary = [];
+        foreach ($normalizedCodes as $materialCode) {
+            $summary[strtolower($materialCode)] = [
+                'material_code' => $materialCode,
+                'total_stock' => 0.0,
+                'warehouses' => [],
+            ];
+        }
+
+        foreach (self::fetchStockRowsForCodes($normalizedCodes) as $row) {
+            $materialCode = trim((string) ($row['material_code'] ?? ''));
+            if ($materialCode === '') {
+                continue;
+            }
+
+            $codeKey = strtolower($materialCode);
+            $warehouse = trim((string) ($row['warehouse'] ?? ''));
+            $stockQty = is_numeric((string) ($row['stock_qty'] ?? null))
+                ? (float) $row['stock_qty']
+                : 0.0;
+
+            if (!array_key_exists($codeKey, $summary)) {
+                $summary[$codeKey] = [
+                    'material_code' => $materialCode,
+                    'total_stock' => 0.0,
+                    'warehouses' => [],
+                ];
+            }
+
+            $summary[$codeKey]['total_stock'] += $stockQty;
+
+            if ($warehouse !== '') {
+                $summary[$codeKey]['warehouses'][$warehouse] = (float) (
+                    ($summary[$codeKey]['warehouses'][$warehouse] ?? 0.0) + $stockQty
+                );
+            }
+        }
+
+        return $summary;
     }
 
     public static function createCatalogMaterial(array $payload, int $userId = 0): array
@@ -862,7 +967,11 @@ class Material extends Model
         return array_values($normalized);
     }
 
-    private static function selectPrimaryStockRow(array $rows, string $preferredWarehouse = ''): ?array
+    private static function selectPrimaryStockRow(
+        array $rows,
+        string $preferredWarehouse = '',
+        bool $strictWarehouseMatch = false
+    ): ?array
     {
         if (empty($rows)) {
             return null;
@@ -876,9 +985,45 @@ class Material extends Model
                     return $row;
                 }
             }
+
+            if ($strictWarehouseMatch) {
+                return null;
+            }
         }
 
         return $rows[0] ?? null;
+    }
+
+    private static function fetchStockRowsForCodes(array $codes): array
+    {
+        $normalizedCodes = array_values(array_unique(array_filter(array_map(function ($value) {
+            return trim((string) $value);
+        }, $codes), function ($value) {
+            return $value !== '';
+        })));
+
+        if (empty($normalizedCodes)) {
+            return [];
+        }
+
+        $stockTable = self::sourceSchema() . '.' . self::stockTable();
+
+        return DB::table($stockTable)
+            ->selectRaw("CAST(ISNULL(anQId, 0) as int) as stock_qid")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) as material_code")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(acWarehouse, ''))) as warehouse")
+            ->selectRaw("CAST(ISNULL(anStock, 0) as float) as stock_qty")
+            ->whereIn(DB::raw("LTRIM(RTRIM(ISNULL(acIdent, '')))"), $normalizedCodes)
+            ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(acIdent, '')))) ASC")
+            ->orderByRaw("CASE WHEN CAST(ISNULL(anStock, 0) as float) > 0 THEN 0 ELSE 1 END ASC")
+            ->orderByRaw("CAST(ISNULL(anStock, 0) as float) DESC")
+            ->orderBy('anQId')
+            ->get()
+            ->map(function ($row) {
+                return (array) $row;
+            })
+            ->values()
+            ->all();
     }
 
     private static function bulkUpdateStockRows(array $updatesByQId, int $userId, $timestamp): void
