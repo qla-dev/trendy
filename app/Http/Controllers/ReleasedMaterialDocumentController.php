@@ -210,11 +210,19 @@ class ReleasedMaterialDocumentController extends Controller
 
     private function baseQuery(): Builder
     {
+        $catalogBuyPriceExpr = $this->releasedMaterialCatalogBuyPriceExpr();
+        $expectedRnPriceExpr = $this->releasedMaterialExpectedRnPriceExpr();
+
         return DB::connection('sqlsrv')
             ->table('dbo.tHE_Move as m')
             ->join('dbo.tHE_MoveItem as mi', 'mi.acKey', '=', 'm.acKey')
             ->leftJoin('dbo.tHF_LinkMoveWOEx as move_wo', 'move_wo.acKey', '=', 'm.acKey')
             ->leftJoin('dbo.tHF_WOEx as wo', 'wo.acKey', '=', 'move_wo.acLnkKey')
+            ->leftJoin('dbo.tHE_SetItem as item_qid', 'item_qid.anQId', '=', 'mi.anIdentQId')
+            ->leftJoin('dbo.tHE_SetItem as item_code', function ($join) {
+                $join->whereRaw('item_qid.anQId IS NULL')
+                    ->whereRaw("LTRIM(RTRIM(ISNULL(item_code.acIdent, ''))) = LTRIM(RTRIM(ISNULL(mi.acIdent, '')))");
+            })
             ->where('m.acDocType', self::DOCUMENT_TYPE)
             ->selectRaw($this->trimExpr('m.acKey') . ' as document_key')
             ->selectRaw($this->trimExpr('m.acKeyView') . ' as document_number')
@@ -233,6 +241,9 @@ class ReleasedMaterialDocumentController extends Controller
             ->selectRaw('CAST(mi.anQty as float) as quantity')
             ->selectRaw($this->trimExpr('mi.acUM') . ' as unit')
             ->selectRaw('CAST(mi.anPrice as float) as document_price')
+            ->selectRaw('CAST(mi.anWOPrice as float) as stored_rn_price')
+            ->selectRaw("CAST({$catalogBuyPriceExpr} as float) as buy_price")
+            ->selectRaw("CAST({$expectedRnPriceExpr} as float) as expected_rn_price")
             ->selectRaw("COALESCE(NULLIF({$this->trimExpr('mi.acNote')}, ''), NULLIF({$this->trimExpr('m.acNote')}, ''), '') as raw_note");
     }
 
@@ -311,7 +322,7 @@ class ReleasedMaterialDocumentController extends Controller
             6 => 'mi.acName',
             7 => 'mi.anQty',
             8 => 'mi.acUM',
-            9 => 'mi.anPrice',
+            9 => $this->releasedMaterialExpectedRnPriceExpr(),
             10 => 'mi.acNote',
         ];
 
@@ -323,7 +334,7 @@ class ReleasedMaterialDocumentController extends Controller
         }
 
         $sortColumn = $sortMap[$columnIndex] ?? 'm.acKey';
-        if ($columnIndex === 1) {
+        if (in_array($columnIndex, [1, 9], true)) {
             $query->orderByRaw($sortColumn . ' ' . $direction);
         } else {
             $query->orderBy($sortColumn, $direction);
@@ -367,8 +378,13 @@ class ReleasedMaterialDocumentController extends Controller
         $orderReference = $this->resolveOrderReference($row);
         $orderNumber = trim((string) ($row->order_number ?? ''));
         $resolvedOrderNumber = $orderNumber !== '' ? $orderNumber : $this->extractOrderNumberFromReference($orderReference);
-        $documentPrice = $this->nullableFloat($row->document_price ?? null);
-        $roundedDocumentPrice = $documentPrice === null ? null : round($documentPrice, 2);
+        $unitPrice = $this->nullableFloat($row->document_price ?? null);
+        $storedRnPrice = $this->nullableFloat($row->stored_rn_price ?? null);
+        $buyPrice = $this->nullableFloat($row->buy_price ?? null);
+        $expectedRnPrice = $this->nullableFloat($row->expected_rn_price ?? null);
+        $resolvedRnPrice = $expectedRnPrice ?? $storedRnPrice;
+        $roundedRnPrice = $resolvedRnPrice === null ? null : round($resolvedRnPrice, 2);
+        $roundedUnitPrice = $unitPrice === null ? null : round($unitPrice, 2);
         $note = $this->resolveReleasedMaterialNote($row, $workOrderNumber);
 
         return [
@@ -389,11 +405,32 @@ class ReleasedMaterialDocumentController extends Controller
             'naziv' => trim((string) ($row->material_name ?? '')),
             'kolicina' => $this->nullableFloat($row->quantity ?? null),
             'jm' => strtoupper(trim((string) ($row->unit ?? ''))),
-            'cijena' => $roundedDocumentPrice,
-            'cijena_display' => $this->formatMoney($roundedDocumentPrice),
-            'cijena_u_dokumentu' => $roundedDocumentPrice,
-            'cijena_u_dokumentu_display' => $this->formatMoney($roundedDocumentPrice),
+            'cijena' => $roundedRnPrice,
+            'cijena_display' => $this->formatMoney($roundedRnPrice),
+            'cijena_rn' => $roundedRnPrice,
+            'cijena_rn_display' => $this->formatMoney($roundedRnPrice),
+            'cijena_u_dokumentu' => $roundedUnitPrice,
+            'cijena_u_dokumentu_display' => $this->formatMoney($roundedUnitPrice),
+            'buy_price' => $buyPrice,
+            'buy_price_display' => $buyPrice === null ? '' : number_format($buyPrice, 4, '.', '') . ' KM',
+            'upisana_cijena_rn' => $storedRnPrice,
+            'upisana_cijena_rn_display' => $this->formatMoney($storedRnPrice === null ? null : round($storedRnPrice, 2)),
         ];
+    }
+
+    private function releasedMaterialCatalogMatchExpr(): string
+    {
+        return 'CASE WHEN item_qid.anQId IS NULL AND item_code.anQId IS NULL THEN 0 ELSE 1 END';
+    }
+
+    private function releasedMaterialCatalogBuyPriceExpr(): string
+    {
+        return 'CASE WHEN ' . $this->releasedMaterialCatalogMatchExpr() . ' = 0 THEN NULL ELSE COALESCE(CAST(item_qid.anBuyPrice as float), CAST(item_code.anBuyPrice as float), 0) END';
+    }
+
+    private function releasedMaterialExpectedRnPriceExpr(): string
+    {
+        return 'CASE WHEN ' . $this->releasedMaterialCatalogMatchExpr() . ' = 0 THEN NULL ELSE ROUND(CAST(ISNULL(mi.anQty, 0) as float) * COALESCE(CAST(item_qid.anBuyPrice as float), CAST(item_code.anBuyPrice as float), 0), 4) END';
     }
 
     private function resolveOrderReference(object $row): string

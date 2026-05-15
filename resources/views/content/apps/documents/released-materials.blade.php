@@ -490,7 +490,7 @@
             <th>Naziv</th>
             <th>Količina</th>
             <th>JM</th>
-            <th>Cijena</th>
+            <th>Cijena RN</th>
             <th>Napomena</th>
             @if(!empty($canDeleteReleasedMaterialDocuments))
               <th class="released-doc-action-cell">Akcija</th>
@@ -521,5 +521,5 @@
 <script>
   window.releasedMaterialsConfig = @json($releasedMaterialsConfig);
 </script>
-<script src="{{ asset('js/scripts/pages/app-released-material-documents.js?v=6') }}"></script>
+<script src="{{ asset('js/scripts/pages/app-released-material-documents.js?v=7') }}"></script>
 @endsection
