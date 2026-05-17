@@ -3487,10 +3487,11 @@ class WorkOrderController extends Controller
     ): array {
         $resolvedLimit = $this->resolveLimit($limit);
         $resolvedPage = max(1, (int) ($page ?? 1));
-        $totalQuery = $this->newOrderLinkageGroupQuery([]);
+        $totalCountQuery = $this->newOrderLinkageCountQuery([]);
+        $filteredCountQuery = $this->newOrderLinkageCountQuery($filters);
         $filteredQuery = $this->newOrderLinkageGroupQuery($filters);
-        $total = $totalQuery === null ? 0 : (int) DB::query()->fromSub($totalQuery, 'order_linkage_total')->count();
-        $filteredTotal = $filteredQuery === null ? 0 : (int) DB::query()->fromSub($filteredQuery, 'order_linkage_filtered')->count();
+        $total = $totalCountQuery === null ? 0 : (int) $totalCountQuery->count();
+        $filteredTotal = $filteredCountQuery === null ? 0 : (int) $filteredCountQuery->count();
         $lastPage = $resolvedLimit > 0 ? max(1, (int) ceil($filteredTotal / $resolvedLimit)) : 1;
 
         if ($filteredQuery === null || $filteredTotal < 1) {
@@ -3533,6 +3534,25 @@ class WorkOrderController extends Controller
                 'last_page' => $lastPage,
             ],
         ];
+    }
+
+    private function newOrderLinkageCountQuery(array $filters = []): ?Builder
+    {
+        $orderColumns = $this->orderTableColumns();
+        $query = DB::table($this->qualifiedOrderTableName() . ' as ord');
+        $orderNumberExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($orderColumns, ['acKey', 'acRefNo1', 'acKeyView']), 'ord')
+        );
+
+        if ($orderNumberExpression === null) {
+            return null;
+        }
+
+        $this->applyOrderLinkageFilters($query, $orderColumns, $filters, 'ord');
+        $query->whereRaw($this->orderLinkageDisplaySqlExpression($orderNumberExpression) . " <> ''");
+
+        return $query;
     }
 
     private function extractOrderLinkageFilters(Request $request): array
@@ -3608,29 +3628,238 @@ class WorkOrderController extends Controller
 
     private function newOrderLinkageGroupQuery(array $filters = []): ?Builder
     {
-        $baseQuery = $this->newOrderLinkageBaseQuery($filters);
+        $orderColumns = $this->orderTableColumns();
+        $query = DB::table($this->qualifiedOrderTableName() . ' as ord');
+        $orderNumberExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($orderColumns, ['acKey', 'acRefNo1', 'acKeyView']), 'ord')
+        );
 
-        if ($baseQuery === null) {
+        if ($orderNumberExpression === null) {
             return null;
         }
 
-        // SQL Server is much more stable when the normalized order number is aliased once in a derived table.
-        $query = DB::query()->fromSub($baseQuery, 'order_linkage_source');
-        $query->where('normalized_order_number', '<>', '');
-        $this->applyOrderLinkageSourceQuickSearchFilter($query, (string) ($filters['search'] ?? ''));
-        $query->select('normalized_order_number');
-        $query->selectRaw('MAX(resolved_order_number) as narudzba');
-        $query->selectRaw('MAX(naziv_source) as naziv_sort');
-        $query->selectRaw('MAX(sifra_source) as sifra_sort');
-        $query->selectRaw('MAX(klijent_source) as klijent_sort');
-        $query->selectRaw('MIN(datum_source) as datum_sort');
-        $query->selectRaw('SUM(COALESCE(quantity_source, 0)) as total_kolicina_sort');
-        $query->selectRaw('SUM(CASE WHEN position_source IS NULL THEN 0 ELSE 1 END) as broj_pozicija_sort');
-        $query->selectRaw('COUNT(*) as broj_rn_sort');
-        $query->selectRaw('MAX(jedinica_source) as jedinica_sort');
-        $query->groupBy('normalized_order_number');
+        $normalizedOrderExpression = $this->orderLinkageDisplaySqlExpression($orderNumberExpression);
+        $customerExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($orderColumns, ['acConsignee', 'acReceiver', 'acPartner']), 'ord')
+        ) ?? "''";
+        $createdDateColumn = $this->firstExistingColumn($orderColumns, ['adDate', 'adDateIns']);
+        $itemAggregateQuery = $this->newOrderLinkageItemAggregateQuery();
+        $workOrderAggregateQuery = $this->newOrderLinkageWorkOrderAggregateQuery();
+
+        $this->applyOrderLinkageFilters($query, $orderColumns, $filters, 'ord');
+        $query->whereRaw($normalizedOrderExpression . " <> ''");
+
+        if ($itemAggregateQuery !== null) {
+            $query->leftJoinSub($itemAggregateQuery, 'item_agg', function ($join) use ($normalizedOrderExpression) {
+                $join->whereRaw('item_agg.normalized_order_number = ' . $normalizedOrderExpression);
+            });
+        }
+
+        if ($workOrderAggregateQuery !== null) {
+            $query->leftJoinSub($workOrderAggregateQuery, 'wo_agg', function ($join) use ($normalizedOrderExpression) {
+                $join->whereRaw('wo_agg.normalized_order_number = ' . $normalizedOrderExpression);
+            });
+        }
+
+        $query->selectRaw($orderNumberExpression . ' as narudzba');
+        $query->selectRaw($customerExpression . ' as klijent_sort');
+        $query->selectRaw("COALESCE(item_agg.naziv_sort, '') as naziv_sort");
+        $query->selectRaw("COALESCE(item_agg.sifra_sort, '') as sifra_sort");
+        $query->selectRaw("COALESCE(item_agg.total_kolicina_sort, 0) as total_kolicina_sort");
+        $query->selectRaw("COALESCE(item_agg.broj_pozicija_sort, 0) as broj_pozicija_sort");
+        $query->selectRaw("COALESCE(item_agg.jedinica_sort, '') as jedinica_sort");
+        $query->selectRaw("COALESCE(wo_agg.broj_rn_sort, 0) as broj_rn_sort");
+
+        if ($createdDateColumn !== null) {
+            $query->selectRaw('CAST(' . $query->getGrammar()->wrap('ord.' . $createdDateColumn) . ' AS DATE) as datum_sort');
+        } else {
+            $query->selectRaw('NULL as datum_sort');
+        }
 
         return $query;
+    }
+
+    private function newOrderLinkageItemAggregateQuery(): ?Builder
+    {
+        $itemColumns = $this->orderItemTableColumns();
+        $query = DB::table($this->qualifiedOrderItemTableName() . ' as oi');
+        $itemRelationExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns(
+                $this->existingColumns($itemColumns, ['acKey', 'acLnkKey', 'acOrderKey', 'order_key', 'acKeyView', 'acRefNo1', 'acOrderNo', 'order_number']),
+                'oi'
+            )
+        );
+
+        if ($itemRelationExpression === null) {
+            return null;
+        }
+
+        $normalizedItemRelationExpression = $this->orderLinkageDisplaySqlExpression($itemRelationExpression);
+        $quantityExpression = $this->firstNonNullNumericExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($itemColumns, ['anQty', 'anQty1', 'quantity']), 'oi')
+        ) ?? '0';
+        $unitExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($itemColumns, ['acUM', 'acUMConverted', 'unit']), 'oi'),
+            32
+        ) ?? "''";
+        $nameExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($itemColumns, ['acName', 'acDescr']), 'oi')
+        ) ?? "''";
+        $codeExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($itemColumns, ['acIdent', 'acCode', 'product_code']), 'oi')
+        ) ?? "''";
+
+        $query->whereRaw($normalizedItemRelationExpression . " <> ''");
+        $query->selectRaw($normalizedItemRelationExpression . ' as normalized_order_number');
+        $query->selectRaw('COUNT(*) as broj_pozicija_sort');
+        $query->selectRaw('COALESCE(SUM(' . $quantityExpression . '), 0) as total_kolicina_sort');
+        $query->selectRaw("MAX(NULLIF(LTRIM(RTRIM(CAST(($unitExpression) AS NVARCHAR(32)))), '')) as jedinica_sort");
+        $query->selectRaw("MAX(NULLIF(LTRIM(RTRIM(CAST(($nameExpression) AS NVARCHAR(255)))), '')) as naziv_sort");
+        $query->selectRaw("MAX(NULLIF(LTRIM(RTRIM(CAST(($codeExpression) AS NVARCHAR(255)))), '')) as sifra_sort");
+        $query->groupByRaw($normalizedItemRelationExpression);
+
+        return $query;
+    }
+
+    private function newOrderLinkageWorkOrderAggregateQuery(): ?Builder
+    {
+        $workOrderColumns = $this->tableColumns();
+        $query = DB::table($this->qualifiedTableName() . ' as wo');
+        $workOrderRelationExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($workOrderColumns, ['acLnkKey', 'acLnkKeyView']), 'wo')
+        );
+
+        if ($workOrderRelationExpression === null) {
+            return null;
+        }
+
+        $normalizedWorkOrderRelationExpression = $this->orderLinkageDisplaySqlExpression($workOrderRelationExpression);
+
+        $query->whereRaw($normalizedWorkOrderRelationExpression . " <> ''");
+        $query->selectRaw($normalizedWorkOrderRelationExpression . ' as normalized_order_number');
+        $query->selectRaw('COUNT(*) as broj_rn_sort');
+        $query->groupByRaw($normalizedWorkOrderRelationExpression);
+
+        return $query;
+    }
+
+    private function applyOrderLinkageOrderItemRelationQuery(
+        Builder $query,
+        array $orderColumns,
+        array $itemColumns,
+        string $outerOrderNumberExpression,
+        string $outerOrderAlias = 'ord'
+    ): void {
+        $outerOrderKeyColumn = $this->firstExistingColumn($orderColumns, ['acKey']);
+        $itemKeyColumns = $this->qualifyColumns(
+            $this->existingColumns($itemColumns, ['acKey', 'acLnkKey', 'acOrderKey', 'order_key']),
+            'oi'
+        );
+        $itemNumberExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($itemColumns, ['acKeyView', 'acRefNo1', 'acOrderNo', 'order_number']), 'oi')
+        );
+        $normalizedOuterOrderExpression = $this->orderLinkageDisplaySqlExpression($outerOrderNumberExpression);
+
+        $query->where(function (Builder $relationQuery) use (
+            $outerOrderKeyColumn,
+            $outerOrderAlias,
+            $itemKeyColumns,
+            $itemNumberExpression,
+            $normalizedOuterOrderExpression
+        ) {
+            $hasRelation = false;
+
+            if ($outerOrderKeyColumn !== null) {
+                foreach ($itemKeyColumns as $itemKeyColumn) {
+                    if ($hasRelation) {
+                        $relationQuery->orWhereColumn($itemKeyColumn, $this->qualifyColumn($outerOrderKeyColumn, $outerOrderAlias));
+                    } else {
+                        $relationQuery->whereColumn($itemKeyColumn, $this->qualifyColumn($outerOrderKeyColumn, $outerOrderAlias));
+                        $hasRelation = true;
+                    }
+                }
+            }
+
+            if ($itemNumberExpression !== null) {
+                $normalizedItemOrderExpression = $this->orderLinkageDisplaySqlExpression($itemNumberExpression);
+
+                if ($hasRelation) {
+                    $relationQuery->orWhereRaw($normalizedItemOrderExpression . ' = ' . $normalizedOuterOrderExpression);
+                } else {
+                    $relationQuery->whereRaw($normalizedItemOrderExpression . ' = ' . $normalizedOuterOrderExpression);
+                    $hasRelation = true;
+                }
+            }
+
+            if (!$hasRelation) {
+                $relationQuery->whereRaw('1 = 0');
+            }
+        });
+    }
+
+    private function applyOrderLinkageWorkOrderRelationQuery(
+        Builder $query,
+        array $orderColumns,
+        array $workOrderColumns,
+        string $outerOrderNumberExpression,
+        string $outerOrderAlias = 'ord'
+    ): void {
+        $outerOrderKeyColumn = $this->firstExistingColumn($orderColumns, ['acKey']);
+        $workOrderLinkColumns = $this->qualifyColumns(
+            $this->existingColumns($workOrderColumns, ['acLnkKey', 'acLnkKeyView']),
+            'wo'
+        );
+        $workOrderKeyColumns = $this->qualifyColumns(
+            $this->existingColumns($workOrderColumns, ['acLnkKey']),
+            'wo'
+        );
+        $workOrderNumberExpression = $this->firstNonEmptyStringExpression($query, $workOrderLinkColumns);
+        $normalizedOuterOrderExpression = $this->orderLinkageDisplaySqlExpression($outerOrderNumberExpression);
+
+        $query->where(function (Builder $relationQuery) use (
+            $outerOrderKeyColumn,
+            $outerOrderAlias,
+            $workOrderKeyColumns,
+            $workOrderNumberExpression,
+            $normalizedOuterOrderExpression
+        ) {
+            $hasRelation = false;
+
+            if ($outerOrderKeyColumn !== null) {
+                foreach ($workOrderKeyColumns as $workOrderKeyColumn) {
+                    if ($hasRelation) {
+                        $relationQuery->orWhereColumn($workOrderKeyColumn, $this->qualifyColumn($outerOrderKeyColumn, $outerOrderAlias));
+                    } else {
+                        $relationQuery->whereColumn($workOrderKeyColumn, $this->qualifyColumn($outerOrderKeyColumn, $outerOrderAlias));
+                        $hasRelation = true;
+                    }
+                }
+            }
+
+            if ($workOrderNumberExpression !== null) {
+                $normalizedWorkOrderExpression = $this->orderLinkageDisplaySqlExpression($workOrderNumberExpression);
+
+                if ($hasRelation) {
+                    $relationQuery->orWhereRaw($normalizedWorkOrderExpression . ' = ' . $normalizedOuterOrderExpression);
+                } else {
+                    $relationQuery->whereRaw($normalizedWorkOrderExpression . ' = ' . $normalizedOuterOrderExpression);
+                    $hasRelation = true;
+                }
+            }
+
+            if (!$hasRelation) {
+                $relationQuery->whereRaw('1 = 0');
+            }
+        });
     }
 
     private function newOrderLinkageBaseQuery(array $filters = []): ?Builder
