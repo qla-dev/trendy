@@ -95,7 +95,7 @@ class MockOrderAiScanProvider implements OrderAiScanProvider
                 'product_code' => trim((string) ($item['product_code'] ?? '')),
                 'product_name' => trim((string) ($item['product_name'] ?? '')),
                 'quantity' => (float) ($item['quantity'] ?? 0),
-                'unit' => trim((string) ($item['unit'] ?? 'KO')),
+                'unit' => trim((string) ($item['unit'] ?? config('ai-order-scan.default_unit', 'KO'))),
                 'unit_price' => (float) ($item['unit_price'] ?? 0),
                 'vat_rate' => (float) ($item['vat_rate'] ?? config('ai-order-scan.default_vat_rate', 17)),
                 'vat_code' => trim((string) ($item['vat_code'] ?? config('ai-order-scan.default_vat_code', 'P1'))),

@@ -6,14 +6,23 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
 class PantheonOrderTransferService
 {
+    public function previewFromNormalizedPayload(array $normalizedPayload, mixed $user = null): array
+    {
+        $prepared = $this->prepareTransferData($normalizedPayload);
+
+        return $this->buildTransferPayload($prepared, $user);
+    }
+
     public function createFromNormalizedPayload(array $normalizedPayload, mixed $user = null): array
     {
-        return DB::connection('sqlsrv')->transaction(function () use ($normalizedPayload, $user) {
+        try {
+            return DB::connection('sqlsrv')->transaction(function () use ($normalizedPayload, $user) {
             $prepared = $this->prepareTransferData($normalizedPayload);
             $numberContext = $this->generateNextOrderNumber($prepared['document_type']);
             $headerTemplate = $this->resolveHeaderTemplate($prepared['document_type']);
@@ -57,16 +66,40 @@ class PantheonOrderTransferService
                 OrderItem::newSourceQuery()->insert($itemPayloads);
             }
 
-            return [
+                Log::info('Order AI Pantheon transfer prepared.', [
+                    'pantheon_order_key' => $headerPayload['acKey'] ?? null,
+                    'pantheon_order_view' => $headerPayload['acKeyView'] ?? ($numberContext['display_key'] ?? null),
+                    'header_payload' => $headerPayload,
+                    'item_payloads' => $itemPayloads,
+                ]);
+
+                $result = [
                 'payload' => $prepared,
                 'pantheon_order_key' => (string) ($headerPayload['acKey'] ?? ''),
-                'pantheon_order_view' => (string) ($headerPayload['acKeyView'] ?? ''),
+                'pantheon_order_view' => (string) ($headerPayload['acKeyView'] ?? ($numberContext['display_key'] ?? '')),
                 'pantheon_order_qid' => $headerPayload['anQId'] ?? null,
                 'item_count' => count($itemPayloads),
                 'header_payload' => $headerPayload,
                 'item_payloads' => $itemPayloads,
-            ];
-        }, 3);
+                ];
+
+                Log::info('Order AI Pantheon transfer completed.', [
+                    'pantheon_order_key' => $result['pantheon_order_key'] ?? null,
+                    'pantheon_order_qid' => $result['pantheon_order_qid'] ?? null,
+                    'item_count' => $result['item_count'] ?? 0,
+                    'header_payload' => $result['header_payload'] ?? [],
+                    'item_payloads' => $result['item_payloads'] ?? [],
+                ]);
+
+                return $result;
+            }, 3);
+        } catch (\Throwable $exception) {
+            Log::error('Order AI Pantheon transfer failed.', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            throw $exception;
+        }
     }
 
     public function isTransferReady(array $normalizedPayload): bool
@@ -78,6 +111,55 @@ class PantheonOrderTransferService
         }
 
         return !empty($prepared['items']);
+    }
+
+    private function buildTransferPayload(array $prepared, mixed $user = null): array
+    {
+        $numberContext = $this->generateNextOrderNumber($prepared['document_type']);
+        $headerTemplate = $this->resolveHeaderTemplate($prepared['document_type']);
+        $itemTemplate = $this->resolveItemTemplate($headerTemplate['acKey'] ?? null);
+
+        if (empty($headerTemplate)) {
+            throw new RuntimeException('Nije moguÄ‡e pronaÄ‡i template narudÅ¾be za Pantheon.');
+        }
+
+        if (empty($itemTemplate)) {
+            throw new RuntimeException('Nije moguÄ‡e pronaÄ‡i template stavke narudÅ¾be za Pantheon.');
+        }
+
+        $headerQid = $this->nextIntegerValue(Order::newSourceQuery(), Order::sourceColumns(), Order::sourceNonInsertableColumns(), 'anQId');
+        $itemQid = $this->nextIntegerValue(OrderItem::newSourceQuery(), OrderItem::sourceColumns(), OrderItem::sourceNonInsertableColumns(), 'anQId');
+
+        $headerPayload = $this->buildHeaderPayload(
+            $headerTemplate,
+            $prepared,
+            $numberContext,
+            $headerQid,
+            $user
+        );
+
+        $itemPayloads = [];
+        foreach ($prepared['items'] as $index => $item) {
+            $itemPayloads[] = $this->buildItemPayload(
+                $itemTemplate,
+                $item,
+                $headerPayload,
+                $headerQid,
+                $itemQid !== null ? ($itemQid + $index) : null,
+                $index + 1,
+                $user
+            );
+        }
+
+        return [
+            'payload' => $prepared,
+            'pantheon_order_key' => (string) ($headerPayload['acKey'] ?? ''),
+            'pantheon_order_view' => (string) ($headerPayload['acKeyView'] ?? ($numberContext['display_key'] ?? '')),
+            'pantheon_order_qid' => $headerPayload['anQId'] ?? null,
+            'item_count' => count($itemPayloads),
+            'header_payload' => $headerPayload,
+            'item_payloads' => $itemPayloads,
+        ];
     }
 
     private function prepareTransferData(array $normalizedPayload, bool $strict = true): array
@@ -120,7 +202,7 @@ class PantheonOrderTransferService
                 'product_code' => $productCode,
                 'product_name' => $productName,
                 'quantity' => $quantity,
-                'unit' => trim((string) ($rawItem['unit'] ?? 'KO')) ?: 'KO',
+                'unit' => trim((string) ($rawItem['unit'] ?? config('ai-order-scan.default_unit', 'KO'))) ?: (string) config('ai-order-scan.default_unit', 'KO'),
                 'unit_price' => $unitPrice,
                 'vat_rate' => $vatRate,
                 'vat_code' => trim((string) ($rawItem['vat_code'] ?? config('ai-order-scan.default_vat_code', 'P1'))) ?: (string) config('ai-order-scan.default_vat_code', 'P1'),
@@ -151,7 +233,7 @@ class PantheonOrderTransferService
             'receiver_name' => trim((string) ($order['receiver_name'] ?? $customerName)) ?: $customerName,
             'contact_name' => trim((string) ($order['contact_name'] ?? '')),
             'external_document_number' => trim((string) ($order['external_document_number'] ?? '')),
-            'document_type' => trim((string) ($order['document_type'] ?? config('ai-order-scan.default_doc_type', '0200'))) ?: (string) config('ai-order-scan.default_doc_type', '0200'),
+            'document_type' => $this->resolvePantheonDocType((string) ($order['document_type'] ?? '')),
             'currency' => trim((string) ($order['currency'] ?? config('ai-order-scan.default_currency', 'KM'))) ?: (string) config('ai-order-scan.default_currency', 'KM'),
             'delivery_deadline' => trim((string) ($order['delivery_deadline'] ?? '')),
             'note' => trim((string) ($order['note'] ?? '')),
@@ -162,6 +244,38 @@ class PantheonOrderTransferService
             'grand_total' => $grandTotal,
             'items' => $preparedItems,
         ];
+    }
+
+    private function resolvePantheonDocType(string $candidate): string
+    {
+        $fallback = strtoupper(trim((string) config('ai-order-scan.default_doc_type', '0200'))) ?: '0200';
+        $candidate = strtoupper(trim($candidate));
+
+        if ($candidate === '') {
+            return $fallback;
+        }
+
+        $maxLength = (int) (Order::sourceStringLengths()['acDocType'] ?? 4);
+
+        if ($maxLength > 0 && strlen($candidate) > $maxLength) {
+            Log::info('Order AI doc type fallback applied because extracted document type is not a Pantheon code.', [
+                'source_document_type' => $candidate,
+                'pantheon_document_type' => $fallback,
+            ]);
+
+            return $fallback;
+        }
+
+        if (!empty($this->resolveHeaderTemplate($candidate))) {
+            return $candidate;
+        }
+
+        Log::info('Order AI doc type fallback applied because Pantheon template was not found.', [
+            'source_document_type' => $candidate,
+            'pantheon_document_type' => $fallback,
+        ]);
+
+        return $fallback;
     }
 
     private function generateNextOrderNumber(string $docType): array
@@ -412,13 +526,15 @@ class PantheonOrderTransferService
         $now = Carbon::now();
         $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
 
+        $resolvedUnit = $this->resolvePantheonItemUnit($item, $template, $stringLengths);
+
         $payload['acKey'] = $this->fitString('acKey', (string) ($headerPayload['acKey'] ?? ''), $stringLengths);
         $payload['anNo'] = $lineNumber;
         $payload['acIdent'] = $this->fitString('acIdent', $item['product_code'], $stringLengths);
         $payload['acName'] = $this->fitString('acName', $item['product_name'], $stringLengths);
         $payload['anQty'] = $item['quantity'];
         $payload['anQtyDispDoc'] = 0;
-        $payload['acUM'] = $this->fitString('acUM', $item['unit'], $stringLengths);
+        $payload['acUM'] = $this->fitString('acUM', $resolvedUnit, $stringLengths);
         $payload['anPrice'] = $item['unit_price'];
         $payload['anRebate'] = $item['discount_percent'];
         $payload['acVATCode'] = $this->fitString('acVATCode', $item['vat_code'], $stringLengths);
@@ -441,7 +557,7 @@ class PantheonOrderTransferService
         $payload['anPVOCVAT'] = $item['vat_value'];
         $payload['anPVOCForPay'] = $item['grand_total'];
         $payload['anQtyConverted'] = $item['quantity'];
-        $payload['acUMConverted'] = $this->fitString('acUMConverted', $item['unit'], $stringLengths);
+        $payload['acUMConverted'] = $this->fitString('acUMConverted', $resolvedUnit, $stringLengths);
         $payload['adDeliveryDeadline'] = $headerPayload['adDeliveryDeadline'] ?? null;
         $payload['adDeliveryDate'] = $headerPayload['adDeliveryDeadline'] ?? null;
 
@@ -518,6 +634,126 @@ class PantheonOrderTransferService
         }
 
         return ((int) ($query->max($column) ?? 0)) + 1;
+    }
+
+    private function resolvePantheonItemUnit(array $item, array $template, array $stringLengths): string
+    {
+        $sourceUnit = $this->normalizeUnitCode((string) ($item['unit'] ?? ''), $stringLengths);
+        $productCode = trim((string) ($item['product_code'] ?? ''));
+        $productUnit = $this->resolveRecentProductUnit($productCode, $stringLengths);
+        $templateUnit = $this->normalizeUnitCode((string) ($template['acUM'] ?? ($template['acUMConverted'] ?? '')), $stringLengths);
+        $fallbackUnit = $this->normalizeUnitCode((string) config('ai-order-scan.default_unit', 'KO'), $stringLengths);
+
+        if ($sourceUnit !== '' && $this->isValidPantheonUnit($sourceUnit)) {
+            return $sourceUnit;
+        }
+
+        if ($productUnit !== '') {
+            Log::info('Order AI item unit fallback applied from existing Pantheon item.', [
+                'product_code' => $productCode,
+                'source_unit' => $sourceUnit,
+                'pantheon_unit' => $productUnit,
+            ]);
+
+            return $productUnit;
+        }
+
+        if ($templateUnit !== '' && $this->isValidPantheonUnit($templateUnit)) {
+            Log::info('Order AI item unit fallback applied from Pantheon template.', [
+                'product_code' => $productCode,
+                'source_unit' => $sourceUnit,
+                'pantheon_unit' => $templateUnit,
+            ]);
+
+            return $templateUnit;
+        }
+
+        if ($fallbackUnit !== '' && $this->isValidPantheonUnit($fallbackUnit)) {
+            Log::info('Order AI item unit fallback applied from config default.', [
+                'product_code' => $productCode,
+                'source_unit' => $sourceUnit,
+                'pantheon_unit' => $fallbackUnit,
+            ]);
+
+            return $fallbackUnit;
+        }
+
+        return 'KO';
+    }
+
+    private function resolveRecentProductUnit(string $productCode, array $stringLengths): string
+    {
+        $productCode = trim($productCode);
+
+        if ($productCode === '') {
+            return '';
+        }
+
+        $unit = (string) (OrderItem::newSourceQuery()
+            ->where('acIdent', $productCode)
+            ->whereRaw("LTRIM(RTRIM(ISNULL(acUM, ''))) <> ''")
+            ->orderByDesc('anQId')
+            ->value('acUM') ?? '');
+
+        $unit = $this->normalizeUnitCode($unit, $stringLengths);
+
+        return $this->isValidPantheonUnit($unit) ? $unit : '';
+    }
+
+    private function isValidPantheonUnit(string $unit): bool
+    {
+        $unit = strtoupper(trim($unit));
+
+        if ($unit === '') {
+            return false;
+        }
+
+        static $knownUnits = null;
+
+        if ($knownUnits === null) {
+            $knownUnits = DB::connection('sqlsrv')
+                ->table(Order::sourceSchema() . '.tHE_SetUM')
+                ->select('acUM')
+                ->get()
+                ->map(function ($row) {
+                    return strtoupper(trim((string) ($row->acUM ?? '')));
+                })
+                ->filter()
+                ->values()
+                ->all();
+        }
+
+        return in_array($unit, $knownUnits, true);
+    }
+
+    private function normalizeUnitCode(string $unit, array $stringLengths): string
+    {
+        $unit = strtoupper(trim($unit));
+
+        if ($unit === '') {
+            return '';
+        }
+
+        $aliases = [
+            'ST' => (string) config('ai-order-scan.default_unit', 'KO'),
+            'STK' => (string) config('ai-order-scan.default_unit', 'KO'),
+            'STUECK' => (string) config('ai-order-scan.default_unit', 'KO'),
+            'STUCK' => (string) config('ai-order-scan.default_unit', 'KO'),
+            'PCS' => (string) config('ai-order-scan.default_unit', 'KO'),
+            'PIECE' => (string) config('ai-order-scan.default_unit', 'KO'),
+        ];
+
+        if (array_key_exists($unit, $aliases)) {
+            $unit = strtoupper(trim((string) $aliases[$unit]));
+        }
+
+        $maxLength = $stringLengths['acUM'] ?? null;
+
+        if (is_int($maxLength) && $maxLength > 0) {
+            $unit = substr($unit, 0, $maxLength);
+        }
+
+        return $unit;
     }
 
     private function trimPayloadToInsertableColumns(array $payload, array $insertableColumns): array

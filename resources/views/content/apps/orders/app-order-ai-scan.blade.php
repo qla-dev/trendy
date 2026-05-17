@@ -1,15 +1,13 @@
 @extends('layouts/contentLayoutMaster')
 
-@section('title', 'AI Skeniranje Narudžbi')
+@section('title', 'AI Skeniranje Narudzbi')
 
 @section('page-style')
   <style>
     .order-ai-shell {
       --order-ai-ink: #16344d;
       --order-ai-accent: #0e7a6b;
-      --order-ai-accent-soft: rgba(14, 122, 107, 0.12);
       --order-ai-border: rgba(18, 52, 77, 0.12);
-      --order-ai-warm: #f7f1e3;
     }
 
     .order-ai-hero {
@@ -214,17 +212,17 @@
                 <i data-feather="cpu"></i>
                 AI Order Intake
               </span>
-              <h2 class="mb-75" style="color:#16344d;">Skeniraj narudžbu sa AI</h2>
+              <h2 class="mb-75" style="color:#16344d;">Skeniraj narudzbu sa AI</h2>
               <p class="mb-0 order-ai-subtle" style="max-width:720px;">
                 Ubaci PDF, sliku ili izvoz dokumenta. Fajl ostaje na istoj stranici, AI odradi ekstrakciju,
-                a kada je payload spreman koristi se novi Pantheon API za kreiranje narudžbe.
+                a Pantheon preview payload ostaje lokalno dok korisnik rucno ne potvrdi transfer u Pantheon.
               </p>
             </div>
             <div class="d-flex flex-column justify-content-between">
               <div class="badge rounded-pill bg-light-primary text-primary px-1 py-75">Provider: {{ strtoupper($scanProvider) }}</div>
               <div class="badge rounded-pill bg-light-secondary text-secondary px-1 py-75">Model: {{ $scanModel }}</div>
               <div class="badge rounded-pill {{ $autoTransferEnabled ? 'bg-light-success text-success' : 'bg-light-warning text-warning' }} px-1 py-75">
-                {{ $autoTransferEnabled ? 'Auto transfer uključen' : 'Auto transfer isključen' }}
+                {{ $autoTransferEnabled ? 'Auto transfer ukljucen' : 'Pantheon create iskljucen' }}
               </div>
             </div>
           </div>
@@ -232,101 +230,111 @@
       </div>
     </div>
 
-    <div class="col-lg-7 col-12">
-      <div class="card border-0 shadow-sm">
-        <div class="card-body p-2 p-md-3">
-          <div class="order-ai-dropzone" id="order-ai-dropzone" tabindex="0" role="button" aria-label="Učitaj dokument za AI skeniranje">
-            <input type="file" class="d-none" id="order-ai-file-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.json,.txt,.csv,.xls,.xlsx,.doc,.docx">
-            <div class="order-ai-dropzone-icon">
-              <i data-feather="upload-cloud"></i>
+    <div class="col-12">
+      <div class="row g-2 align-items-stretch mb-2">
+        <div class="col-lg-7 col-12">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-2 p-md-3">
+              <div class="order-ai-dropzone" id="order-ai-dropzone" tabindex="0" role="button" aria-label="Ucitaj dokument za AI skeniranje">
+                <input type="file" class="d-none" id="order-ai-file-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.json,.txt,.csv,.xls,.xlsx,.doc,.docx">
+                <div class="order-ai-dropzone-icon">
+                  <i data-feather="upload-cloud"></i>
+                </div>
+                <h3 class="mb-75">Prevuci dokument ovdje</h3>
+                <p class="order-ai-subtle mb-1">ili klikni da odaberes fajl za AI obradu narudzbe</p>
+                <small class="text-muted">PDF, slike i izvozi do 50 MB</small>
+              </div>
             </div>
-            <h3 class="mb-75">Prevuci dokument ovdje</h3>
-            <p class="order-ai-subtle mb-1">ili klikni da odabereš fajl za AI obradu narudžbe</p>
-            <small class="text-muted">PDF, slike i izvozi do 50 MB</small>
+          </div>
+        </div>
+
+        <div class="col-lg-5 col-12">
+          <div class="card order-ai-progress-card h-100" id="order-ai-progress-card">
+            <div class="card-body p-2">
+              <div class="d-flex align-items-start justify-content-between gap-1 mb-1">
+                <div>
+                  <h4 class="mb-25">Status obrade</h4>
+                  <p class="mb-0 order-ai-subtle" id="order-ai-progress-label">Cekam upload...</p>
+                </div>
+                <div class="text-end">
+                  <div class="fw-bolder" id="order-ai-progress-percent">0%</div>
+                  <small class="text-muted" id="order-ai-file-name"></small>
+                </div>
+              </div>
+              <div class="order-ai-progress-track mb-2">
+                <div class="order-ai-progress-bar" id="order-ai-progress-bar"></div>
+              </div>
+
+              <div class="order-ai-stage-list" id="order-ai-stage-list">
+                <div class="order-ai-stage" data-stage="upload">
+                  <span class="order-ai-stage-bullet"></span>
+                  <div>
+                    <strong>Upload</strong>
+                    <div class="small text-muted">Fajl se salje na lokalni staging.</div>
+                  </div>
+                </div>
+                <div class="order-ai-stage" data-stage="extract">
+                  <span class="order-ai-stage-bullet"></span>
+                  <div>
+                    <strong>AI ekstrakcija</strong>
+                    <div class="small text-muted">Prompt pretvara dokument u strukturirani payload.</div>
+                  </div>
+                </div>
+                <div class="order-ai-stage" data-stage="transfer">
+                  <span class="order-ai-stage-bullet"></span>
+                  <div>
+                    <strong>{{ $autoTransferEnabled ? 'Pantheon transfer' : 'Pantheon preview' }}</strong>
+                    <div class="small text-muted">
+                      {{ $autoTransferEnabled ? 'Novi order API ubacuje header i stavke u Pantheon.' : 'Pantheon payload se priprema i loguje lokalno bez kreiranja narudzbe.' }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="alert alert-warning order-ai-alert mt-2 mb-0 order-ai-hidden" id="order-ai-progress-warning"></div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="card order-ai-progress-card order-ai-hidden" id="order-ai-progress-card">
-        <div class="card-body p-2">
-          <div class="d-flex align-items-start justify-content-between gap-1 mb-1">
-            <div>
-              <h4 class="mb-25">Status obrade</h4>
-              <p class="mb-0 order-ai-subtle" id="order-ai-progress-label">Čekam upload...</p>
-            </div>
-            <div class="text-end">
-              <div class="fw-bolder" id="order-ai-progress-percent">0%</div>
-              <small class="text-muted" id="order-ai-file-name"></small>
-            </div>
-          </div>
-          <div class="order-ai-progress-track mb-2">
-            <div class="order-ai-progress-bar" id="order-ai-progress-bar"></div>
-          </div>
+      <div class="row g-2">
+        <div class="col-12">
+          <div class="card order-ai-result-card order-ai-hidden" id="order-ai-result-card">
+            <div class="card-body p-2">
+              <div class="d-flex flex-wrap align-items-start justify-content-between gap-1 mb-2">
+                <div>
+                  <h4 class="mb-25">Rezultat AI skena</h4>
+                  <p class="mb-0 order-ai-subtle" id="order-ai-result-caption">Nema obradjenog dokumenta.</p>
+                </div>
+                <span class="badge rounded-pill bg-light-primary text-primary" id="order-ai-result-status">Spremno</span>
+              </div>
 
-          <div class="order-ai-stage-list" id="order-ai-stage-list">
-            <div class="order-ai-stage" data-stage="upload">
-              <span class="order-ai-stage-bullet"></span>
-              <div>
-                <strong>Upload</strong>
-                <div class="small text-muted">Fajl se šalje na lokalni staging.</div>
+              <div class="order-ai-facts mb-2" id="order-ai-facts"></div>
+
+              <div class="alert alert-info order-ai-alert mb-2 order-ai-hidden" id="order-ai-warnings"></div>
+              <div class="alert alert-danger order-ai-alert mb-2 order-ai-hidden" id="order-ai-error"></div>
+              <div class="alert alert-success order-ai-alert mb-2 order-ai-hidden" id="order-ai-success"></div>
+
+              <div class="table-responsive mb-2 order-ai-hidden" id="order-ai-lines-shell">
+                <table class="table table-sm order-ai-lines-table mb-0">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Sifra</th>
+                      <th class="order-ai-wrap">Naziv</th>
+                      <th>Kolicina</th>
+                      <th>JM</th>
+                      <th>Cijena</th>
+                    </tr>
+                  </thead>
+                  <tbody id="order-ai-lines-body"></tbody>
+                </table>
+              </div>
+
+              <div class="d-flex flex-wrap gap-1 order-ai-hidden" id="order-ai-actions">
+                <button type="button" class="btn btn-primary" id="order-ai-transfer-button">Transfer u bazu</button>
               </div>
             </div>
-            <div class="order-ai-stage" data-stage="extract">
-              <span class="order-ai-stage-bullet"></span>
-              <div>
-                <strong>AI ekstrakcija</strong>
-                <div class="small text-muted">Prompt pretvara dokument u strukturirani payload.</div>
-              </div>
-            </div>
-            <div class="order-ai-stage" data-stage="transfer">
-              <span class="order-ai-stage-bullet"></span>
-              <div>
-                <strong>Pantheon transfer</strong>
-                <div class="small text-muted">Novi order API ubacuje header i stavke u Pantheon.</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="alert alert-warning order-ai-alert mt-2 mb-0 order-ai-hidden" id="order-ai-progress-warning"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-lg-5 col-12">
-      <div class="card order-ai-result-card order-ai-hidden" id="order-ai-result-card">
-        <div class="card-body p-2">
-          <div class="d-flex flex-wrap align-items-start justify-content-between gap-1 mb-2">
-            <div>
-              <h4 class="mb-25">Rezultat AI skena</h4>
-              <p class="mb-0 order-ai-subtle" id="order-ai-result-caption">Nema obrađenog dokumenta.</p>
-            </div>
-            <span class="badge rounded-pill bg-light-primary text-primary" id="order-ai-result-status">Spremno</span>
-          </div>
-
-          <div class="order-ai-facts mb-2" id="order-ai-facts"></div>
-
-          <div class="alert alert-info order-ai-alert mb-2 order-ai-hidden" id="order-ai-warnings"></div>
-          <div class="alert alert-danger order-ai-alert mb-2 order-ai-hidden" id="order-ai-error"></div>
-          <div class="alert alert-success order-ai-alert mb-2 order-ai-hidden" id="order-ai-success"></div>
-
-          <div class="table-responsive mb-2 order-ai-hidden" id="order-ai-lines-shell">
-            <table class="table table-sm order-ai-lines-table mb-0">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Šifra</th>
-                  <th class="order-ai-wrap">Naziv</th>
-                  <th>Količina</th>
-                  <th>JM</th>
-                  <th>Cijena</th>
-                </tr>
-              </thead>
-              <tbody id="order-ai-lines-body"></tbody>
-            </table>
-          </div>
-
-          <div class="d-flex flex-wrap gap-1 order-ai-hidden" id="order-ai-actions">
-            <button type="button" class="btn btn-primary" id="order-ai-transfer-button">Prebaci u Pantheon</button>
           </div>
         </div>
       </div>
@@ -402,7 +410,7 @@
         }
       }
 
-      function setStageState(stageName) {
+      function setStageState(stageName, finalize) {
         const order = ['upload', 'extract', 'transfer'];
         const activeIndex = order.indexOf(stageName);
 
@@ -411,7 +419,7 @@
           if (activeIndex === -1) {
             return;
           }
-          if (index < activeIndex) {
+          if (index < activeIndex || (finalize && index === activeIndex)) {
             node.classList.add('is-done');
           } else if (index === activeIndex) {
             node.classList.add('is-active');
@@ -419,12 +427,21 @@
         });
       }
 
-      function detectStage(status) {
-        if (status === 'uploaded' || status === 'extracting') {
+      function detectStage(status, autoTransfer, progress, step) {
+        if (status === 'transferred' || status === 'ready_for_transfer' || status === 'transferring') {
+          return 'transfer';
+        }
+        if (status === 'completed') {
+          return autoTransfer ? 'transfer' : 'extract';
+        }
+        if (status === 'failed' && /pantheon/i.test(String(step || ''))) {
+          return 'transfer';
+        }
+        if (status === 'failed' && Number(progress || 0) >= 25) {
           return 'extract';
         }
-        if (status === 'ready_for_transfer' || status === 'transferring' || status === 'transferred') {
-          return 'transfer';
+        if (status === 'uploaded' || status === 'extracting') {
+          return 'extract';
         }
         return 'upload';
       }
@@ -440,8 +457,8 @@
           { label: 'Valuta', value: order.currency || '-' },
           { label: 'Iznos', value: Number(summary.grand_total || 0).toFixed(2) },
           { label: 'AI krediti', value: Number(statusData.credits_spent || 0).toFixed(2) },
-          { label: 'Pantheon ključ', value: pantheon.key || '-' },
-          { label: 'Pantheon prikaz', value: pantheon.view || '-' },
+          { label: 'Pantheon kljuc', value: pantheon.key || '-' },
+          { label: 'Pantheon prikaz', value: pantheon.view || '-' }
         ];
 
         facts.innerHTML = factsMarkup.map((fact) => `
@@ -483,51 +500,53 @@
 
       function renderStatus(data) {
         latestStatusPayload = data;
-        setVisible(resultCard, true);
-
         const payload = data.result || {};
+        const autoTransfer = Boolean(data.auto_transfer);
         const effectiveProgress = Math.max(uploadProgress, Number(data.current_progress || 0));
+        const stageName = detectStage(data.status, autoTransfer, data.current_progress, data.processing_step);
+        const finalizeStage = (data.status === 'completed' && stageName === 'extract' && !autoTransfer)
+          || (data.status === 'transferred' && stageName === 'transfer');
+
+        setVisible(resultCard, true);
+        resetMessages();
         setProgress(effectiveProgress, data.processing_step || 'AI obrada je u toku.');
-        setStageState(detectStage(data.status));
+        setStageState(stageName, finalizeStage);
         renderFacts(payload, data);
         renderLines(payload);
         renderWarnings(data.warnings || []);
 
         resultCaption.textContent = data.processing_step || 'Status nije dostupan.';
         resultStatus.textContent = data.status || 'nepoznato';
-
-        resetMessages();
-        renderWarnings(data.warnings || []);
+        setVisible(actions, false);
 
         if (data.status === 'failed') {
           errorBox.textContent = data.error_message || 'AI obrada nije uspjela.';
           setVisible(errorBox, true);
-          setVisible(actions, false);
           return;
         }
 
         if (data.status === 'completed') {
-          const transferReady = Boolean(data.transfer_ready);
-          const autoTransfer = Boolean(data.auto_transfer);
-          if (!autoTransfer && transferReady) {
-            setVisible(actions, true);
-          } else {
-            setVisible(actions, false);
-          }
-
           if (!autoTransfer) {
-            progressWarning.textContent = 'Automatski transfer je preskočen. Pregledaj rezultat i ručno pokreni Pantheon unos kada budeš spreman.';
+            if (data.transfer_ready && data.transfer_preview_error) {
+              progressWarning.textContent = 'Pantheon preview priprema nije uspjela, ali i dalje mozes pokusati rucni transfer.';
+            } else if (data.transfer_ready && data.transfer_preview_available) {
+              progressWarning.textContent = 'Pantheon preview payload je upisan u laravel.log. Provjeri rezultat i pokreni rucni transfer kada budes spreman.';
+            } else if (data.transfer_ready) {
+              progressWarning.textContent = 'Rezultat je spreman za Pantheon. Pokreni rucni transfer kada budes spreman.';
+            } else {
+              progressWarning.textContent = 'Ekstrakcija je zavrsena. Pregledaj rezultat i dopuni podatke ako nesto nedostaje.';
+            }
             setVisible(progressWarning, true);
+            setVisible(actions, Boolean(data.transfer_ready));
           }
-        } else {
-          setVisible(actions, false);
+          return;
         }
 
         if (data.status === 'transferred') {
           const orderView = data.pantheon_order && data.pantheon_order.view ? data.pantheon_order.view : data.pantheon_order.key;
           successBox.textContent = orderView
-            ? `Narudžba je prebačena u Pantheon kao ${orderView}.`
-            : 'Narudžba je prebačena u Pantheon.';
+            ? `Narudzba je prebacena u Pantheon kao ${orderView}.`
+            : 'Narudzba je prebacena u Pantheon.';
           setVisible(successBox, true);
           setVisible(actions, false);
         }
@@ -583,15 +602,15 @@
         }
 
         resetMessages();
-        latestStatusPayload = null;
         currentScanId = null;
+        latestStatusPayload = null;
         uploadProgress = 0;
         fileNameEl.textContent = file.name;
         setVisible(progressCard, true);
         setVisible(resultCard, false);
         setVisible(actions, false);
         setProgress(0, 'Priprema lokalnog staging uploada...');
-        setStageState('upload');
+        setStageState('upload', false);
 
         const formData = new FormData();
         formData.append('file', file);
@@ -608,8 +627,8 @@
           }
 
           uploadProgress = Math.round((event.loaded / event.total) * 100);
-          setProgress(uploadProgress, uploadProgress >= 100 ? 'Upload završen, pokrećem AI obradu...' : 'Dokument se učitava na server...');
-          setStageState('upload');
+          setProgress(uploadProgress, uploadProgress >= 100 ? 'Upload zavrsen, pokrecem AI obradu...' : 'Dokument se ucitava na server...');
+          setStageState('upload', uploadProgress >= 100);
         });
 
         xhr.addEventListener('load', function () {
@@ -623,13 +642,13 @@
           const response = xhr.response || {};
           currentScanId = response.scan_id;
           uploadProgress = 100;
-          setProgress(100, 'Upload završen. Dokument čeka AI ekstrakciju.');
-          setStageState('extract');
+          setProgress(100, 'Upload zavrsen. Dokument ceka AI ekstrakciju.');
+          setStageState('extract', false);
           startPolling(response.scan_id);
         });
 
         xhr.addEventListener('error', function () {
-          errorBox.textContent = 'Greška pri uploadu dokumenta.';
+          errorBox.textContent = 'Greska pri uploadu dokumenta.';
           setVisible(errorBox, true);
         });
 
@@ -666,7 +685,7 @@
 
           if (latestStatusPayload) {
             latestStatusPayload.status = 'transferred';
-            latestStatusPayload.processing_step = 'Narudžba je ručno prebačena u Pantheon.';
+            latestStatusPayload.processing_step = 'Narudzba je rucno prebacena u Pantheon.';
             latestStatusPayload.pantheon_order = {
               key: payload.data ? payload.data.pantheon_order_key : '',
               view: payload.data ? payload.data.pantheon_order_view : '',
@@ -677,9 +696,10 @@
         } catch (error) {
           errorBox.textContent = error.message || 'Pantheon transfer nije uspio.';
           setVisible(errorBox, true);
+          setVisible(actions, true);
         } finally {
           transferButton.disabled = false;
-          transferButton.textContent = 'Prebaci u Pantheon';
+        transferButton.textContent = 'Transfer u bazu';
         }
       }
 
@@ -723,6 +743,9 @@
       });
 
       transferButton.addEventListener('click', transferToPantheon);
+
+      setProgress(0, 'Cekam upload...');
+      setStageState('upload', false);
     })();
   </script>
 @endsection

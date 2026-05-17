@@ -8,6 +8,8 @@
       'positionsUrl' => (string) ($ordersLinkagePositionsUrl ?? route('app-orders-positions')),
       'workOrdersUrl' => (string) ($ordersLinkageWorkOrdersUrl ?? route('app-orders-work-orders')),
       'workOrdersApiUrl' => (string) ($ordersLinkageWorkOrdersApiUrl ?? route('app-orders-radni-nalozi')),
+      'deleteUrl' => (string) ($ordersLinkageDeleteUrl ?? route('app-orders-destroy')),
+      'canDelete' => (bool) ($canDeleteLinkedOrders ?? false),
   ];
 @endphp
 

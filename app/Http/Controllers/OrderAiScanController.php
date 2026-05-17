@@ -17,7 +17,7 @@ class OrderAiScanController extends Controller
             'pageConfigs' => $pageConfigs,
             'scanProvider' => (string) config('ai-order-scan.provider', 'mock'),
             'scanModel' => (string) config('ai-order-scan.model', 'gpt-5'),
-            'autoTransferEnabled' => filter_var(config('ai-order-scan.auto_transfer', true), FILTER_VALIDATE_BOOL),
+            'autoTransferEnabled' => filter_var(config('ai-order-scan.auto_transfer', false), FILTER_VALIDATE_BOOL),
         ]);
     }
 

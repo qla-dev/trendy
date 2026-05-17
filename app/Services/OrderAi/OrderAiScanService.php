@@ -6,6 +6,7 @@ use App\Models\OrderAiScan;
 use App\Services\OrderAi\Contracts\OrderAiScanProvider;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -29,7 +30,7 @@ class OrderAiScanService
             'provider' => $provider,
             'model' => $model !== '' ? $model : null,
             'status' => 'uploaded',
-            'processing_step' => 'Fajl je uspješno učitan.',
+            'processing_step' => 'Fajl je uspjesno ucitan.',
             'progress_current' => 10,
             'progress_total' => 100,
             'source_file_name' => $file->getClientOriginalName(),
@@ -59,7 +60,7 @@ class OrderAiScanService
         }
 
         if ($scan->status === 'extracting') {
-            return $this->runExtraction($scan);
+            return $this->runExtraction($scan, $user);
         }
 
         if ($scan->status === 'ready_for_transfer') {
@@ -97,6 +98,10 @@ class OrderAiScanService
             'warnings' => $warnings,
             'transfer_ready' => $transferReady,
             'auto_transfer' => $autoTransfer,
+            'transfer_preview_available' => !empty($scan->pantheon_transfer_payload),
+            'transfer_preview_error' => is_array($scan->pantheon_transfer_payload)
+                ? (string) ($scan->pantheon_transfer_payload['preview_error'] ?? '')
+                : '',
             'pantheon_order' => [
                 'key' => (string) ($scan->pantheon_order_key ?? ''),
                 'view' => (string) ($scan->pantheon_order_view ?? ''),
@@ -107,7 +112,7 @@ class OrderAiScanService
         ];
     }
 
-    private function runExtraction(OrderAiScan $scan): OrderAiScan
+    private function runExtraction(OrderAiScan $scan, mixed $user = null): OrderAiScan
     {
         try {
             $provider = $this->resolveProvider($scan);
@@ -115,6 +120,11 @@ class OrderAiScanService
             $normalizedPayload = $this->normalizePayload($result['normalized_payload'] ?? []);
             $transferReady = app(PantheonOrderTransferService::class)->isTransferReady($normalizedPayload);
             $autoTransfer = $transferReady && $this->shouldAutoTransfer($scan) && $provider->supportsLiveTransfer();
+            $transferPreview = null;
+
+            if ($transferReady && !$autoTransfer) {
+                $transferPreview = $this->buildTransferPreview($scan, $normalizedPayload, $user);
+            }
 
             $scan->forceFill([
                 'provider' => (string) ($result['provider'] ?? $scan->provider),
@@ -122,12 +132,11 @@ class OrderAiScanService
                 'provider_task_id' => trim((string) ($result['provider_task_id'] ?? '')) ?: null,
                 'raw_provider_response' => $result['raw_response'] ?? null,
                 'normalized_payload' => $normalizedPayload,
+                'pantheon_transfer_payload' => $transferPreview,
                 'credits_spent' => (float) ($result['credits_spent'] ?? 0),
                 'processed_at' => now(),
                 'status' => $autoTransfer ? 'ready_for_transfer' : 'completed',
-                'processing_step' => $autoTransfer
-                    ? 'AI analiza završena. Dokument je spreman za transfer.'
-                    : 'AI analiza završena. Automatski transfer je preskočen.',
+                'processing_step' => $this->resolveCompletedProcessingStep($autoTransfer, $transferReady, $transferPreview),
                 'progress_current' => $autoTransfer ? 70 : 100,
                 'completed_at' => $autoTransfer ? null : now(),
                 'error_message' => null,
@@ -152,7 +161,7 @@ class OrderAiScanService
 
             $scan->forceFill([
                 'status' => 'transferred',
-                'processing_step' => 'Narudžba je prebačena u Pantheon.',
+                'processing_step' => 'Narudzba je prebacena u Pantheon.',
                 'progress_current' => 100,
                 'pantheon_transfer_payload' => $result,
                 'pantheon_order_key' => $result['pantheon_order_key'] ?? null,
@@ -176,8 +185,53 @@ class OrderAiScanService
 
     private function shouldAutoTransfer(OrderAiScan $scan): bool
     {
-        return filter_var(config('ai-order-scan.auto_transfer', true), FILTER_VALIDATE_BOOL)
+        return filter_var(config('ai-order-scan.auto_transfer', false), FILTER_VALIDATE_BOOL)
             && $scan->provider !== 'mock';
+    }
+
+    private function buildTransferPreview(OrderAiScan $scan, array $normalizedPayload, mixed $user = null): ?array
+    {
+        try {
+            $preview = app(PantheonOrderTransferService::class)->previewFromNormalizedPayload($normalizedPayload, $user);
+
+            Log::info('Order AI Pantheon preview prepared.', [
+                'scan_id' => $scan->id,
+                'user_id' => $scan->user_id,
+                'pantheon_order_key' => $preview['pantheon_order_key'] ?? null,
+                'pantheon_order_qid' => $preview['pantheon_order_qid'] ?? null,
+                'item_count' => $preview['item_count'] ?? 0,
+                'preview' => $preview,
+            ]);
+
+            return $preview;
+        } catch (\Throwable $exception) {
+            Log::warning('Order AI Pantheon preview failed.', [
+                'scan_id' => $scan->id,
+                'user_id' => $scan->user_id,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [
+                'preview_error' => $exception->getMessage(),
+            ];
+        }
+    }
+
+    private function resolveCompletedProcessingStep(bool $autoTransfer, bool $transferReady, mixed $transferPreview): string
+    {
+        if ($autoTransfer) {
+            return 'AI analiza zavrsena. Dokument je spreman za transfer.';
+        }
+
+        if (!$transferReady) {
+            return 'AI analiza zavrsena. Pregledaj rezultat prije Pantheon pripreme.';
+        }
+
+        if (is_array($transferPreview) && !empty($transferPreview['preview_error'])) {
+            return 'AI analiza zavrsena. Pantheon preview nije pripremljen, provjeri log.';
+        }
+
+        return 'AI analiza zavrsena. Pantheon kreiranje je iskljuceno, preview je logovan.';
     }
 
     private function resolveProvider(OrderAiScan $scan): OrderAiScanProvider
@@ -226,7 +280,7 @@ class OrderAiScanService
                     'product_code' => trim((string) ($item['product_code'] ?? '')),
                     'product_name' => trim((string) ($item['product_name'] ?? '')),
                     'quantity' => (float) ($item['quantity'] ?? 0),
-                    'unit' => trim((string) ($item['unit'] ?? 'KO')),
+                    'unit' => trim((string) ($item['unit'] ?? config('ai-order-scan.default_unit', 'KO'))),
                     'unit_price' => (float) ($item['unit_price'] ?? 0),
                     'vat_rate' => (float) ($item['vat_rate'] ?? config('ai-order-scan.default_vat_rate', 17)),
                     'vat_code' => trim((string) ($item['vat_code'] ?? config('ai-order-scan.default_vat_code', 'P1'))),
