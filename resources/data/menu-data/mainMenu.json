@@ -28,7 +28,7 @@
     },
     {
       "name": "Skeniraj narudzbu sa AI",
-      "icon": "cpu",
+      "icon": "fa fa-magic",
       "url": "app/orders/ai-scan",
       "slug": "app-order-ai-scan"
     },

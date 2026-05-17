@@ -1,6 +1,6 @@
 @extends('layouts/contentLayoutMaster')
 
-@section('title', 'AI Skeniranje Narudzbi')
+@section('title', __('locale.Skeniraj narudzbu sa AI'))
 
 @section('page-style')
   <style>
@@ -194,6 +194,7 @@
 @endsection
 
 @section('content')
+@php($aiOrderLabel = __('locale.Skeniraj narudzbu sa AI'))
 <section
   class="order-ai-shell"
   id="order-ai-app"
@@ -209,10 +210,10 @@
           <div class="d-flex flex-column flex-lg-row justify-content-between gap-2">
             <div class="pe-lg-4">
               <span class="order-ai-chip mb-1">
-                <i data-feather="cpu"></i>
-                AI Order Intake
+                <i class="fa fa-magic" aria-hidden="true"></i>
+                {{ $aiOrderLabel }}
               </span>
-              <h2 class="mb-75" style="color:#16344d;">Skeniraj narudzbu sa AI</h2>
+              <h2 class="mb-75" style="color:#16344d;">{{ $aiOrderLabel }}</h2>
               <p class="mb-0 order-ai-subtle" style="max-width:720px;">
                 Ubaci PDF, sliku ili izvoz dokumenta. Fajl ostaje na istoj stranici, AI odradi ekstrakciju,
                 a Pantheon preview payload ostaje lokalno dok korisnik rucno ne potvrdi transfer u Pantheon.
