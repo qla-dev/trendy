@@ -89,6 +89,9 @@ return [
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
+            'encrypt' => env('DB_ENCRYPT', 'false'),
+            'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', true),
+            'login_timeout' => env('DB_LOGIN_TIMEOUT', 10),
         ],
 
     ],

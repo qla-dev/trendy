@@ -7,6 +7,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 class DashboardController extends Controller
@@ -43,6 +44,7 @@ class DashboardController extends Controller
       'work_orders_total' => 0,
       'customers_total' => 0,
       'products_total' => 0,
+      'ai_credits_month' => 0,
     ];
 
     try {
@@ -120,6 +122,19 @@ class DashboardController extends Controller
         });
     } catch (Throwable $exception) {
       Log::error('Dashboard latest work orders query failed.', [
+        'message' => $exception->getMessage(),
+      ]);
+    }
+
+    try {
+      if (Schema::connection('mysql')->hasTable('order_ai_scans')) {
+        $dashboardStats['ai_credits_month'] = (float) DB::connection('mysql')
+          ->table('order_ai_scans')
+          ->whereBetween('created_at', [now()->copy()->startOfMonth(), now()->copy()->endOfMonth()])
+          ->sum('credits_spent');
+      }
+    } catch (Throwable $exception) {
+      Log::warning('Dashboard AI credits query failed.', [
         'message' => $exception->getMessage(),
       ]);
     }

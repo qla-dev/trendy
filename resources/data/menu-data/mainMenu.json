@@ -27,6 +27,12 @@
       "slug": "app-orders"
     },
     {
+      "name": "Skeniraj narudzbu sa AI",
+      "icon": "cpu",
+      "url": "app/orders/ai-scan",
+      "slug": "app-order-ai-scan"
+    },
+    {
       "navheader": "Dokumenti",
       "slug": "app-documents-navheader"
     },

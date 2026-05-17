@@ -67,6 +67,9 @@
       <li class="nav-item d-none d-md-block"><a class="nav-link" href="{{ url('app/invoice/preview') }}"
           data-bs-toggle="tooltip" data-bs-placement="bottom" title="Skeniraj nalog"><i class="ficon"
             data-feather="camera"></i></a></li>
+      <li class="nav-item d-none d-md-block"><a class="nav-link" href="{{ url('app/orders/ai-scan') }}"
+          data-bs-toggle="tooltip" data-bs-placement="bottom" title="AI sken narudžbe"><i class="ficon"
+            data-feather="cpu"></i></a></li>
     </ul>
   </div>
   <ul class="nav navbar-nav align-items-center ms-auto">
