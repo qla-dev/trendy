@@ -390,9 +390,11 @@
   .order-linkage-action-btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.35rem;
     min-width: 98px;
     white-space: nowrap;
+    text-align: center;
   }
 
   .order-linkage-action-btn.order-linkage-positions-btn {
