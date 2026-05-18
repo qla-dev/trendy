@@ -27,7 +27,8 @@ class WorkOrderController extends Controller
     private const RELEASED_MATERIAL_CURRENCY = 'KM';
     private const RELEASED_MATERIAL_DEFAULT_ISSUER = 'Skladište sirovina';
     private const ADDITIONAL_RAW_MATERIAL_WAREHOUSE = 'Skladište dodatnih sirovina';
-    private const RAW_MATERIAL_SHORTAGE_ALERT_EMAIL = 'colakovic.vedad@qla.dev';
+    private const RAW_MATERIAL_SHORTAGE_ALERT_EMAIL = 'skladiste.trendy@gmail.com';
+    private const RAW_MATERIAL_SHORTAGE_ALERT_CC_EMAIL = 'lejla.krnjic@trendy-doo.com';
     private const MATERIALS_SETS = [
         '011',
         '020',
@@ -1791,6 +1792,16 @@ class WorkOrderController extends Controller
                 (string) ($material['material_code'] ?? ''),
                 (string) ($material['material_set'] ?? '')
             );
+            $materialCode = trim((string) ($material['material_code'] ?? ''));
+            $rawMaterialStockSummary = $materialCode !== ''
+                ? Material::stockSummaryByCodes([$materialCode])
+                : [];
+            $rawMaterialStockQty = $materialCode !== ''
+                ? $this->resolveNamedWarehouseStockQty(
+                    (array) (($rawMaterialStockSummary[strtolower($materialCode)]['warehouses'] ?? [])),
+                    self::RELEASED_MATERIAL_DEFAULT_ISSUER
+                )
+                : 0.0;
 
             return response()->json([
                 'data' => [
@@ -1814,6 +1825,7 @@ class WorkOrderController extends Controller
                     'material_changed_at' => (string) ($material['material_changed_at'] ?? ''),
                     'material_changed_display' => $this->formatMetaDate($material['material_changed_at'] ?? null),
                     'stock_qty' => (float) ($material['material_qty'] ?? 0),
+                    'raw_material_stock_qty' => $rawMaterialStockQty,
                     'action' => $existingItem === null ? 'insert' : 'update',
                     'exists_on_work_order' => $existingItem !== null,
                     'existing_item' => $existingItem === null ? null : [
@@ -5458,13 +5470,19 @@ class WorkOrderController extends Controller
 
         try {
             Mail::mailer((string) $mailer)->raw($body, function ($message) use ($subject, $fromAddress, $fromName) {
-                $message->to(self::RAW_MATERIAL_SHORTAGE_ALERT_EMAIL)
-                    ->subject($subject)
+                $message->to(self::RAW_MATERIAL_SHORTAGE_ALERT_EMAIL);
+
+                if (filter_var(self::RAW_MATERIAL_SHORTAGE_ALERT_CC_EMAIL, FILTER_VALIDATE_EMAIL)) {
+                    $message->cc(self::RAW_MATERIAL_SHORTAGE_ALERT_CC_EMAIL);
+                }
+
+                $message->subject($subject)
                     ->from($fromAddress, $fromName !== '' ? $fromName : 'eNalog.app');
             });
         } catch (Throwable $exception) {
             Log::error('Unable to send raw material shortage alert email.', [
                 'recipient' => self::RAW_MATERIAL_SHORTAGE_ALERT_EMAIL,
+                'cc_recipient' => self::RAW_MATERIAL_SHORTAGE_ALERT_CC_EMAIL,
                 'mailer' => $mailer,
                 'mail_host' => (string) config('mail.mailers.smtp.host', config('mail.host', '')),
                 'message' => $exception->getMessage(),
@@ -5669,7 +5687,7 @@ class WorkOrderController extends Controller
                 'quantity' => $quantity,
                 'unit' => $unit,
                 'price' => $price,
-                'rn_price' => $lineValue,
+                'rn_price' => $price,
                 'value' => $lineValue,
                 'note' => trim((string) ($releasedRow['acNote'] ?? '')),
                 'ident_qid' => $identQId,

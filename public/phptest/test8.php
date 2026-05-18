@@ -2,7 +2,8 @@
 
 /*
  * test8.php
- * Checks released-material RN price rows by comparing stored RN price with qty * buy price from the catalog.
+ * Checks released-material RN price rows by comparing stored RN unit price with buy price from the catalog
+ * and shows the Pantheon linked-doc value formula: quantity * anWOPrice.
  */
 
 require __DIR__ . '/_conn.php';
@@ -32,7 +33,7 @@ function phptest8_fail($error): void
         exit(1);
     }
 
-    echo '<!doctype html><html><head><meta charset="utf-8"><title>Released material RN price test</title></head><body>';
+    echo '<!doctype html><html><head><meta charset="utf-8"><title>Released material RN price/value test</title></head><body>';
     echo '<pre>' . phptest8_h($message) . '</pre>';
     echo '</body></html>';
     exit;
@@ -206,9 +207,12 @@ $trimOrderExpr = "LTRIM(RTRIM(ISNULL(CONVERT(nvarchar(255), wo.acLnkKey), '')))"
 $trimMaterialCodeExpr = "LTRIM(RTRIM(ISNULL(CONVERT(nvarchar(255), mi.acIdent), '')))";
 $trimMaterialNameExpr = "LTRIM(RTRIM(ISNULL(CONVERT(nvarchar(255), mi.acName), '')))";
 $catalogBuyPriceExpr = 'COALESCE(CAST(catalog_qid.anBuyPrice as float), CAST(catalog_code.anBuyPrice as float), 0)';
-$expectedRnPriceExpr = 'ROUND(CAST(ISNULL(mi.anQty, 0) as float) * ' . $catalogBuyPriceExpr . ', 4)';
+$expectedRnPriceExpr = $catalogBuyPriceExpr;
 $storedRnPriceExpr = 'CAST(ISNULL(mi.anWOPrice, 0) as float)';
 $priceDiffExpr = 'ROUND(' . $storedRnPriceExpr . ' - ' . $expectedRnPriceExpr . ', 4)';
+$storedViewValueExpr = 'ROUND(CAST(ISNULL(mi.anQty, 0) as float) * ' . $storedRnPriceExpr . ', 4)';
+$expectedViewValueExpr = 'ROUND(CAST(ISNULL(mi.anQty, 0) as float) * ' . $expectedRnPriceExpr . ', 4)';
+$valueDiffExpr = 'ROUND(' . $storedViewValueExpr . ' - ' . $expectedViewValueExpr . ', 4)';
 $catalogMatchExpr = 'CASE WHEN catalog_qid.anQId IS NULL AND catalog_code.anQId IS NULL THEN 0 ELSE 1 END';
 $workOrderDisplayExpr = "COALESCE(NULLIF({$trimWorkOrderExpr}, ''), NULLIF({$trimWorkOrderViewExpr}, ''), NULLIF(LTRIM(RTRIM(ISNULL(CONVERT(nvarchar(255), m.acDoc2), ''))), ''), '')";
 
@@ -224,6 +228,9 @@ $sortMap = [
     'stored_rn_price' => $storedRnPriceExpr,
     'expected_rn_price' => $expectedRnPriceExpr,
     'diff' => $priceDiffExpr,
+    'stored_view_value' => $storedViewValueExpr,
+    'expected_view_value' => $expectedViewValueExpr,
+    'value_diff' => $valueDiffExpr,
 ];
 
 $sortExpr = $sortMap[$sort] ?? $sortMap['doc_date'];
@@ -285,7 +292,7 @@ if ($dateTo !== '') {
 }
 
 if ($onlyDiff) {
-    $where[] = 'ABS(' . $priceDiffExpr . ') > 0.0001';
+    $where[] = '(ABS(' . $priceDiffExpr . ') > 0.0001 OR ABS(' . $valueDiffExpr . ') > 0.0001)';
 }
 
 $whereSql = 'WHERE ' . implode("\n    AND ", $where);
@@ -295,6 +302,7 @@ $summarySql = "
         COUNT(*) AS total_rows,
         SUM(CASE WHEN ABS({$priceDiffExpr}) > 0.0001 THEN 1 ELSE 0 END) AS diff_rows,
         SUM(CASE WHEN ABS({$priceDiffExpr}) <= 0.0001 THEN 1 ELSE 0 END) AS match_rows,
+        SUM(CASE WHEN ABS({$valueDiffExpr}) > 0.0001 THEN 1 ELSE 0 END) AS value_diff_rows,
         SUM(CASE WHEN {$catalogMatchExpr} = 0 THEN 1 ELSE 0 END) AS no_catalog_rows,
         SUM(CASE WHEN {$storedRnPriceExpr} = 0 THEN 1 ELSE 0 END) AS zero_rn_price_rows
     {$joins}
@@ -319,9 +327,12 @@ $rowsSql = "
         CAST({$storedRnPriceExpr} as float) AS stored_rn_price,
         CAST({$expectedRnPriceExpr} as float) AS expected_rn_price,
         CAST({$priceDiffExpr} as float) AS price_diff,
+        CAST({$storedViewValueExpr} as float) AS stored_view_value,
+        CAST({$expectedViewValueExpr} as float) AS expected_view_value,
+        CAST({$valueDiffExpr} as float) AS value_diff,
         CASE
             WHEN {$catalogMatchExpr} = 0 THEN 'NO_CATALOG'
-            WHEN ABS({$priceDiffExpr}) <= 0.0001 THEN 'MATCH'
+            WHEN ABS({$priceDiffExpr}) <= 0.0001 AND ABS({$valueDiffExpr}) <= 0.0001 THEN 'MATCH'
             ELSE 'DIFF'
         END AS status,
         CONVERT(varchar(19), COALESCE(catalog_qid.adTimeChg, catalog_code.adTimeChg), 120) AS item_changed_at
@@ -338,6 +349,7 @@ $summaryTable = [[
     'rows' => (int) ($summaryRow['total_rows'] ?? 0),
     'diff_rows' => (int) ($summaryRow['diff_rows'] ?? 0),
     'match_rows' => (int) ($summaryRow['match_rows'] ?? 0),
+    'value_diff_rows' => (int) ($summaryRow['value_diff_rows'] ?? 0),
     'no_catalog_rows' => (int) ($summaryRow['no_catalog_rows'] ?? 0),
     'zero_rn_price_rows' => (int) ($summaryRow['zero_rn_price_rows'] ?? 0),
     'search' => $search !== '' ? $search : '-',
@@ -422,7 +434,10 @@ if (PHP_SAPI !== 'cli') {
                     <option value="buy_price"' . ($sort === 'buy_price' ? ' selected' : '') . '>Buy price</option>
                     <option value="stored_rn_price"' . ($sort === 'stored_rn_price' ? ' selected' : '') . '>Upisana RN cijena</option>
                     <option value="expected_rn_price"' . ($sort === 'expected_rn_price' ? ' selected' : '') . '>Ocekivana RN cijena</option>
-                    <option value="diff"' . ($sort === 'diff' ? ' selected' : '') . '>Razlika</option>
+                    <option value="diff"' . ($sort === 'diff' ? ' selected' : '') . '>Razlika cijena</option>
+                    <option value="stored_view_value"' . ($sort === 'stored_view_value' ? ' selected' : '') . '>Upisana vrijednost view</option>
+                    <option value="expected_view_value"' . ($sort === 'expected_view_value' ? ' selected' : '') . '>Ocekivana vrijednost view</option>
+                    <option value="value_diff"' . ($sort === 'value_diff' ? ' selected' : '') . '>Razlika vrijednosti</option>
                 </select>
             </label>
             <label>Dir
@@ -442,7 +457,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 if (PHP_SAPI !== 'cli') {
-    echo '<!doctype html><html><head><meta charset="utf-8"><title>Released material RN price test</title>';
+    echo '<!doctype html><html><head><meta charset="utf-8"><title>Released material RN price/value test</title>';
     echo '<style>
         body{font-family:Arial,sans-serif;font-size:14px;line-height:1.45;margin:20px;color:#222}
         h1,h2,h3{margin:16px 0 8px}
@@ -459,13 +474,13 @@ if (PHP_SAPI !== 'cli') {
     </style></head><body>';
 }
 
-phptest8_render_heading('Released material RN price test', 1);
+phptest8_render_heading('Released material RN price/value test', 1);
 phptest8_render_note(
-    'Cijena RN se provjerava kao Kolicina * buy price iz dbo.tHE_SetItem. Upisana RN cijena se cita iz dbo.tHE_MoveItem.anWOPrice.',
+    'Pantheon za povezane dokumente cita RN cijenu iz dbo.tHE_MoveItem.anWOPrice, a vrijednost izvodi kao Kolicina * anWOPrice kroz dbo.vHF_WOLnkDocIssMate i dbo.vHE_ViewDocWOExDet.',
     'note'
 );
 phptest8_render_note(
-    'Parametri: search, document, rn, material, name, date_from, date_to, limit, all=1, only_diff=1, sort=doc_date|doc|rn|order|code|name|qty|buy_price|stored_rn_price|expected_rn_price|diff, dir=asc|desc',
+    'Parametri: search, document, rn, material, name, date_from, date_to, limit, all=1, only_diff=1, sort=doc_date|doc|rn|order|code|name|qty|buy_price|stored_rn_price|expected_rn_price|diff|stored_view_value|expected_view_value|value_diff, dir=asc|desc',
     'meta'
 );
 

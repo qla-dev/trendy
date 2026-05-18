@@ -2306,6 +2306,16 @@
         });
     }
 
+    function resolveBarcodeMaterialStockQty(materialPayload) {
+      var stockValue = materialPayload && materialPayload.raw_material_stock_qty !== undefined && materialPayload.raw_material_stock_qty !== null
+        ? materialPayload.raw_material_stock_qty
+        : (materialPayload && materialPayload.stock_qty !== undefined && materialPayload.stock_qty !== null
+          ? materialPayload.stock_qty
+          : 0);
+      var parsedStockValue = Number(stockValue);
+      return Number.isFinite(parsedStockValue) ? parsedStockValue : 0;
+    }
+
     function buildBarcodeSelectionRow(materialPayload) {
       return {
         anNo: Number(materialPayload && materialPayload.existing_item && materialPayload.existing_item.no
@@ -2316,7 +2326,7 @@
         acUM: String(materialPayload && materialPayload.material_um ? materialPayload.material_um : 'AUTO').trim() || 'AUTO',
         acUMSource: String(materialPayload && materialPayload.material_um ? materialPayload.material_um : '').trim(),
         acOperationType: 'M',
-        anGrossQty: Number(materialPayload && materialPayload.stock_qty ? materialPayload.stock_qty : 0)
+        anGrossQty: resolveBarcodeMaterialStockQty(materialPayload)
       };
     }
 
@@ -2638,10 +2648,10 @@
       }
 
       if (state.confirmContext && state.confirmContext.material && stockLookupKey(state.confirmContext.material.material_code || '') === key) {
-        state.confirmContext.material.stock_qty = parsedValue;
+        state.confirmContext.material.raw_material_stock_qty = parsedValue;
 
         if (confirmMaterialStockQtyEl) {
-          confirmMaterialStockQtyEl.textContent = formatQuantity(parsedValue);
+          confirmMaterialStockQtyEl.textContent = formatQuantity(resolveBarcodeMaterialStockQty(state.confirmContext.material));
         }
       }
 
@@ -5627,7 +5637,7 @@
         confirmMaterialCurrentQtyEl.textContent = formatQuantity(existingItem && existingItem.qty ? existingItem.qty : 0);
       }
       if (confirmMaterialStockQtyEl) {
-        confirmMaterialStockQtyEl.textContent = formatQuantity(material.stock_qty || 0);
+        confirmMaterialStockQtyEl.textContent = formatQuantity(resolveBarcodeMaterialStockQty(material));
       }
       if (confirmMaterialActionEl) {
         confirmMaterialActionEl.classList.toggle('is-update', action === 'update');
@@ -6143,7 +6153,7 @@
       }
 
       if (confirmMaterialStockQtyEl) {
-        confirmMaterialStockQtyEl.textContent = formatQuantity(material.stock_qty || 0);
+        confirmMaterialStockQtyEl.textContent = formatQuantity(resolveBarcodeMaterialStockQty(material));
       }
 
       if (confirmMaterialDeadlineEl) {

@@ -430,7 +430,7 @@ class ReleasedMaterialDocumentController extends Controller
 
     private function releasedMaterialExpectedRnPriceExpr(): string
     {
-        return 'CASE WHEN ' . $this->releasedMaterialCatalogMatchExpr() . ' = 0 THEN NULL ELSE ROUND(CAST(ISNULL(mi.anQty, 0) as float) * COALESCE(CAST(item_qid.anBuyPrice as float), CAST(item_code.anBuyPrice as float), 0), 4) END';
+        return 'CASE WHEN ' . $this->releasedMaterialCatalogMatchExpr() . ' = 0 THEN NULL ELSE COALESCE(CAST(item_qid.anBuyPrice as float), CAST(item_code.anBuyPrice as float), 0) END';
     }
 
     private function resolveOrderReference(object $row): string
