@@ -5906,7 +5906,7 @@ class WorkOrderController extends Controller
                 $unit = strtoupper(substr(trim((string) ($catalogRow['acUM'] ?? '')), 0, 3));
             }
 
-            $price = (float) ($this->toFloatOrNull($catalogRow['anBuyPrice'] ?? null) ?? 0.0);
+            $price = round((float) ($this->toFloatOrNull($catalogRow['anBuyPrice'] ?? null) ?? 0.0), 4);
             $lineValue = round($quantity * $price, 4);
             $totalValue += $lineValue;
 
@@ -5916,6 +5916,9 @@ class WorkOrderController extends Controller
                 'quantity' => $quantity,
                 'unit' => $unit,
                 'price' => $price,
+                // Pantheon reads RN unit price from tHE_MoveItem.anWOPrice and derives
+                // the linked-doc value as quantity * anWOPrice, so keep anWOPrice aligned
+                // with the document line unit price.
                 'rn_price' => $price,
                 'value' => $lineValue,
                 'note' => trim((string) ($releasedRow['acNote'] ?? '')),

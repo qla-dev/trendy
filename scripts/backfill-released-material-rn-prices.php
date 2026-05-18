@@ -6,8 +6,8 @@
  *
  * Purpose:
  *   - reads existing 6400 rows from dbo.tHE_Move / dbo.tHE_MoveItem
- *   - resolves the expected RN unit price from the item catalog buy price
- *     (`tHE_SetItem.anBuyPrice`) using `mi.anIdentQId`, or `mi.acIdent` as a fallback
+ *   - resolves the expected RN unit price from the released-material document line
+ *     (`tHE_MoveItem.anPrice`)
  *   - compares that expected unit price with the stored `mi.anWOPrice`
  *   - optionally updates only the rows where the stored and expected values differ
  *
@@ -44,8 +44,7 @@
  * Defaults:
  *   - no writes unless --execute is passed
  *   - only released-material documents with `acDocType = 6400` are considered
- *   - rows without a catalog match are skipped
- *   - only rows whose stored `anWOPrice` differs from the expected catalog price are updated
+ *   - only rows whose stored `anWOPrice` differs from the document line unit price are updated
  */
 
 use Carbon\Carbon;
@@ -115,10 +114,9 @@ final class ReleasedMaterialRnPriceBackfill
         foreach ($rows as $row) {
             if (!$this->hasCatalogMatch($row)) {
                 $stats['missing_catalog']++;
-                // We cannot safely backfill the RN price if the released-material item
-                // cannot be matched to a catalog row.
-                $this->printRow('SKIP no catalog', $row);
-                continue;
+                if ($this->verbose) {
+                    $this->printRow('WARN no catalog', $row);
+                }
             }
 
             if (!$this->needsUpdate($row)) {
@@ -137,8 +135,8 @@ final class ReleasedMaterialRnPriceBackfill
             }
 
             try {
-                // Keep Pantheon's RN unit-price field in sync with the current expected
-                // catalog buy price for the released-material item.
+                // Keep Pantheon's RN unit-price field in sync with the released-material
+                // document line unit price.
                 $affected = $this->db
                     ->table($this->qualified('tHE_MoveItem'))
                     ->where('anQId', (int) ($row['move_item_qid'] ?? 0))
@@ -201,13 +199,14 @@ final class ReleasedMaterialRnPriceBackfill
         $trimMaterialCodeExpr = "LTRIM(RTRIM(ISNULL(CONVERT(nvarchar(255), mi.acIdent), '')))";
         $trimMaterialNameExpr = "LTRIM(RTRIM(ISNULL(CONVERT(nvarchar(255), mi.acName), '')))";
         $catalogBuyPriceExpr = 'COALESCE(CAST(catalog_qid.anBuyPrice as float), CAST(catalog_code.anBuyPrice as float), 0)';
-        $expectedRnPriceExpr = $catalogBuyPriceExpr;
+        $expectedRnPriceExpr = 'CAST(ISNULL(mi.anPrice, 0) as float)';
         $storedRnPriceExpr = 'CAST(ISNULL(mi.anWOPrice, 0) as float)';
         $priceDiffExpr = 'ROUND(' . $storedRnPriceExpr . ' - ' . $expectedRnPriceExpr . ', 4)';
         $catalogMatchExpr = 'CASE WHEN catalog_qid.anQId IS NULL AND catalog_code.anQId IS NULL THEN 0 ELSE 1 END';
 
         // Read released-material document items, calculate the expected RN unit price
-        // from the catalog, and compare it with the currently stored mi.anWOPrice value.
+        // from the document line unit price, and compare it with the currently stored
+        // mi.anWOPrice value.
         $query = $this->db
             ->table($this->qualified('tHE_Move') . ' as m')
             ->join($this->qualified('tHE_MoveItem') . ' as mi', 'mi.acKey', '=', 'm.acKey')
