@@ -580,12 +580,12 @@
               <div class="d-flex flex-row">
                 <div class="avatar bg-light-success me-2">
                   <div class="avatar-content">
-                    <i data-feather="dollar-sign" class="avatar-icon"></i>
+                    <i data-feather="cpu" class="avatar-icon"></i>
                   </div>
                 </div>
                 <div class="my-auto">
-                  <h4 class="fw-bolder mb-0">9745 KM</h4>
-                  <p class="card-text font-small-3 mb-0">Prihodi</p>
+                  <h4 class="fw-bolder mb-0">{{ number_format((float) ($dashboardStats['ai_credits_month'] ?? 0), 2, ',', '.') }}</h4>
+                  <p class="card-text font-small-3 mb-0">AI krediti / mjesec</p>
                 </div>
               </div>
             </div>

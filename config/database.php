@@ -89,6 +89,9 @@ return [
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
+            'encrypt' => filter_var(env('DB_ENCRYPT', false), FILTER_VALIDATE_BOOL) ? 'yes' : 'no',
+            'trust_server_certificate' => filter_var(env('DB_TRUST_SERVER_CERTIFICATE', true), FILTER_VALIDATE_BOOL),
+            'login_timeout' => (int) env('DB_LOGIN_TIMEOUT', 10),
         ],
 
     ],

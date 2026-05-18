@@ -8,6 +8,9 @@ $(function () {
   var positionsUrl = (config.positionsUrl || '').toString().trim();
   var workOrdersUrl = (config.workOrdersUrl || '').toString().trim();
   var workOrdersApiUrl = (config.workOrdersApiUrl || '').toString().trim();
+  var deleteUrl = (config.deleteUrl || '').toString().trim();
+  var canDelete = !!config.canDelete;
+  var csrfToken = $('meta[name="csrf-token"]').attr('content') || '';
   var modalElement = document.getElementById('order-linkage-modal');
   var modalTitleElement = document.getElementById('order-linkage-modal-label');
   var modalSubtitleElement = document.getElementById('order-linkage-modal-subtitle');
@@ -108,6 +111,26 @@ $(function () {
 
   function escapeHtml(value) {
     return $('<div/>').text(value === null || value === undefined ? '' : String(value)).html();
+  }
+
+  function extractAjaxErrorMessage(xhr, fallbackMessage) {
+    var responseJson = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+    var errors = responseJson && responseJson.errors ? responseJson.errors : null;
+    var firstErrorKey;
+
+    if (responseJson && responseJson.message) {
+      return responseJson.message;
+    }
+
+    if (errors) {
+      firstErrorKey = Object.keys(errors)[0];
+
+      if (firstErrorKey && errors[firstErrorKey] && errors[firstErrorKey][0]) {
+        return errors[firstErrorKey][0];
+      }
+    }
+
+    return fallbackMessage;
   }
 
   function replaceFeather() {
@@ -407,6 +430,16 @@ $(function () {
   }
 
   function buildActionsHtml() {
+    var deleteButtonHtml = '';
+
+    if (canDelete && deleteUrl) {
+      deleteButtonHtml =
+        '<button type="button" class="btn btn-sm btn-outline-danger order-linkage-action-btn order-linkage-delete-btn">' +
+          '<i class="fa fa-trash"></i>' +
+          '<span>Obrisi</span>' +
+        '</button>';
+    }
+
     return (
       '<div class="order-linkage-actions-group">' +
         '<button type="button" class="btn btn-sm btn-outline-primary order-linkage-action-btn order-linkage-positions-btn">' +
@@ -417,8 +450,89 @@ $(function () {
           '<i class="fa fa-industry"></i>' +
           '<span>Veze</span>' +
         '</button>' +
+        deleteButtonHtml +
       '</div>'
     );
+  }
+
+  function deleteOrder(row) {
+    var orderNumber = row && (row.narudzba || row.order_number || '');
+    var displayNumber = resolveRowOrderNumberDisplay(row) || orderNumber || '-';
+    var requestHeaders = {
+      Accept: 'application/json'
+    };
+
+    if (!orderNumber || !deleteUrl || !canDelete) {
+      return;
+    }
+
+    if (csrfToken) {
+      requestHeaders['X-CSRF-TOKEN'] = csrfToken;
+    }
+
+    Swal.fire({
+      title: 'Obrisati narudzbu?',
+      html: '<div class="small">Ova akcija je trajna.<br><strong>' + escapeHtml(displayNumber) + '</strong></div>',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Obrisi',
+      cancelButtonText: 'Odustani',
+      customClass: {
+        confirmButton: 'btn btn-danger',
+        cancelButton: 'btn btn-outline-secondary ms-1'
+      },
+      buttonsStyling: false
+    }).then(function (result) {
+      if (!result.isConfirmed) {
+        return;
+      }
+
+      showTableLoadingOverlay();
+      hidePageError();
+
+      $.ajax({
+        url: deleteUrl,
+        method: 'DELETE',
+        dataType: 'json',
+        headers: requestHeaders,
+        data: {
+          order_number: orderNumber
+        },
+        success: function (response) {
+          Swal.fire({
+            title: 'Obrisano',
+            text: response && response.message ? response.message : 'Narudzba je obrisana.',
+            icon: 'success',
+            confirmButtonText: 'U redu',
+            customClass: {
+              confirmButton: 'btn btn-primary'
+            },
+            buttonsStyling: false
+          });
+
+          if (dataTable) {
+            dataTable.ajax.reload(null, false);
+          }
+        },
+        error: function (xhr) {
+          var message = extractAjaxErrorMessage(xhr, 'Greska pri brisanju narudzbe.');
+
+          Swal.fire({
+            title: 'Brisanje nije uspjelo',
+            text: message,
+            icon: 'error',
+            confirmButtonText: 'U redu',
+            customClass: {
+              confirmButton: 'btn btn-primary'
+            },
+            buttonsStyling: false
+          });
+        },
+        complete: function () {
+          hideTableLoadingOverlay();
+        }
+      });
+    });
   }
 
   function resolveRowDataFromTrigger(trigger) {
@@ -602,11 +716,13 @@ $(function () {
 
   function showTableLoadingOverlay() {
     var overlay = ensureTableLoadingOverlay();
+    var overlayHost = tableElement.closest('.card-datatable');
 
     if (!overlay || !overlay.length) {
       return;
     }
 
+    overlayHost.addClass('order-linkage-table-loading-active');
     updateTableLoadingOverlayBounds();
     overlay.addClass('is-visible').attr('aria-hidden', 'false');
     window.requestAnimationFrame(updateTableLoadingOverlayBounds);
@@ -627,6 +743,7 @@ $(function () {
     }
 
     overlay.removeClass('is-visible').attr('aria-hidden', 'true');
+    overlayHost.removeClass('order-linkage-table-loading-active');
     setQuickSearchHeaderLoading(false);
   }
 
@@ -1215,6 +1332,19 @@ $(function () {
       }
 
       loadWorkOrdersModalContent(row);
+    });
+
+    tableElement.find('tbody').on('click', '.order-linkage-delete-btn', function (event) {
+      var row = resolveRowDataFromTrigger(this);
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (!row) {
+        return;
+      }
+
+      deleteOrder(row);
     });
 
   }
