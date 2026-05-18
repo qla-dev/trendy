@@ -236,6 +236,7 @@
 
   .order-linkage-table-overlay-host {
     position: relative;
+    isolation: isolate;
   }
 
   .order-linkage-table-loading-overlay {
@@ -245,8 +246,16 @@
     justify-content: center;
     background: rgba(255, 255, 255, 0.74);
     backdrop-filter: blur(1px);
-    z-index: 9;
+    z-index: 30;
     pointer-events: none;
+  }
+
+  .order-linkage-table-overlay-host.order-linkage-table-loading-active .order-linkage-actions-cell {
+    z-index: 1 !important;
+  }
+
+  .order-linkage-table-overlay-host.order-linkage-table-loading-active .order-linkage-table thead .order-linkage-actions-cell {
+    z-index: 2 !important;
   }
 
   .order-linkage-table-loading-overlay.is-visible {
@@ -852,5 +861,5 @@
 <script>
   window.orderLinkageConfig = @json($orderLinkageConfig);
 </script>
-<script src="{{ asset('js/scripts/pages/app-orders.js?v=8') }}"></script>
+<script src="{{ asset('js/scripts/pages/app-orders.js?v=10') }}"></script>
 @endsection

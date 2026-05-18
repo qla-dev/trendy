@@ -10,6 +10,7 @@ $(function () {
   var workOrdersApiUrl = (config.workOrdersApiUrl || '').toString().trim();
   var deleteUrl = (config.deleteUrl || '').toString().trim();
   var canDelete = !!config.canDelete;
+  var csrfToken = $('meta[name="csrf-token"]').attr('content') || '';
   var modalElement = document.getElementById('order-linkage-modal');
   var modalTitleElement = document.getElementById('order-linkage-modal-label');
   var modalSubtitleElement = document.getElementById('order-linkage-modal-subtitle');
@@ -110,6 +111,26 @@ $(function () {
 
   function escapeHtml(value) {
     return $('<div/>').text(value === null || value === undefined ? '' : String(value)).html();
+  }
+
+  function extractAjaxErrorMessage(xhr, fallbackMessage) {
+    var responseJson = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+    var errors = responseJson && responseJson.errors ? responseJson.errors : null;
+    var firstErrorKey;
+
+    if (responseJson && responseJson.message) {
+      return responseJson.message;
+    }
+
+    if (errors) {
+      firstErrorKey = Object.keys(errors)[0];
+
+      if (firstErrorKey && errors[firstErrorKey] && errors[firstErrorKey][0]) {
+        return errors[firstErrorKey][0];
+      }
+    }
+
+    return fallbackMessage;
   }
 
   function replaceFeather() {
@@ -437,9 +458,16 @@ $(function () {
   function deleteOrder(row) {
     var orderNumber = row && (row.narudzba || row.order_number || '');
     var displayNumber = resolveRowOrderNumberDisplay(row) || orderNumber || '-';
+    var requestHeaders = {
+      Accept: 'application/json'
+    };
 
     if (!orderNumber || !deleteUrl || !canDelete) {
       return;
+    }
+
+    if (csrfToken) {
+      requestHeaders['X-CSRF-TOKEN'] = csrfToken;
     }
 
     Swal.fire({
@@ -466,6 +494,7 @@ $(function () {
         url: deleteUrl,
         method: 'DELETE',
         dataType: 'json',
+        headers: requestHeaders,
         data: {
           order_number: orderNumber
         },
@@ -486,8 +515,7 @@ $(function () {
           }
         },
         error: function (xhr) {
-          var responseJson = xhr && xhr.responseJSON ? xhr.responseJSON : null;
-          var message = responseJson && responseJson.message ? responseJson.message : 'Greska pri brisanju narudzbe.';
+          var message = extractAjaxErrorMessage(xhr, 'Greska pri brisanju narudzbe.');
 
           Swal.fire({
             title: 'Brisanje nije uspjelo',
@@ -688,11 +716,13 @@ $(function () {
 
   function showTableLoadingOverlay() {
     var overlay = ensureTableLoadingOverlay();
+    var overlayHost = tableElement.closest('.card-datatable');
 
     if (!overlay || !overlay.length) {
       return;
     }
 
+    overlayHost.addClass('order-linkage-table-loading-active');
     updateTableLoadingOverlayBounds();
     overlay.addClass('is-visible').attr('aria-hidden', 'false');
     window.requestAnimationFrame(updateTableLoadingOverlayBounds);
@@ -713,6 +743,7 @@ $(function () {
     }
 
     overlay.removeClass('is-visible').attr('aria-hidden', 'true');
+    overlayHost.removeClass('order-linkage-table-loading-active');
     setQuickSearchHeaderLoading(false);
   }
 
