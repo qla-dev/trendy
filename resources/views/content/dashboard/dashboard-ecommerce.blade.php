@@ -585,7 +585,7 @@
                 </div>
                 <div class="my-auto">
                   <h4 class="fw-bolder mb-0">{{ number_format((float) ($dashboardStats['ai_credits_month'] ?? 0), 2, ',', '.') }}</h4>
-                  <p class="card-text font-small-3 mb-0">AI krediti / mjesec</p>
+                  <p class="card-text font-small-3 mb-0">AI krediti</p>
                 </div>
               </div>
             </div>
