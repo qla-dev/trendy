@@ -37,6 +37,7 @@ class MenuServiceProvider extends ServiceProvider
         $self = $this;
         \View::composer('*', function ($view) use ($verticalMenuData, $horizontalMenuData, $self) {
             $verticalMenuCopy = json_decode(json_encode($verticalMenuData));
+            $verticalMenuCopy = $self->filterHiddenMenuItems($verticalMenuCopy);
             $verticalMenuCopy = $self->filterAdminOnlyMenuItems($verticalMenuCopy);
 
             if (Auth::check() && Auth::user()->hasRole('user')) {
@@ -116,6 +117,23 @@ class MenuServiceProvider extends ServiceProvider
 
         $menuData->menu = array_values(array_filter($menuData->menu, function ($menu) use ($adminOnlySlugs) {
             return !isset($menu->slug) || !in_array($menu->slug, $adminOnlySlugs, true);
+        }));
+
+        return $menuData;
+    }
+
+    private function filterHiddenMenuItems($menuData)
+    {
+        if (!isset($menuData->menu) || empty($menuData->menu)) {
+            return $menuData;
+        }
+
+        $hiddenSlugs = [
+            'app-order-ai-scan',
+        ];
+
+        $menuData->menu = array_values(array_filter($menuData->menu, function ($menu) use ($hiddenSlugs) {
+            return !isset($menu->slug) || !in_array($menu->slug, $hiddenSlugs, true);
         }));
 
         return $menuData;
