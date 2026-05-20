@@ -2,16 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\InsufficientRawMaterialStockException;
 use App\Models\Material;
 use App\Models\Product;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
+use RuntimeException;
 use Throwable;
 
 class WorkOrderController extends Controller
@@ -23,6 +26,9 @@ class WorkOrderController extends Controller
     private const RELEASED_MATERIAL_SEQUENCE_LENGTH = 7;
     private const RELEASED_MATERIAL_CURRENCY = 'KM';
     private const RELEASED_MATERIAL_DEFAULT_ISSUER = 'Skladište sirovina';
+    private const ADDITIONAL_RAW_MATERIAL_WAREHOUSE = 'Skladište dodatnih sirovina';
+    private const RAW_MATERIAL_SHORTAGE_ALERT_EMAIL = 'skladiste.trendy@gmail.com';
+    private const RAW_MATERIAL_SHORTAGE_ALERT_CC_EMAIL = 'lejla.krnjic@trendy-doo.com';
     private const MATERIALS_SETS = [
         '011',
         '020',
@@ -1786,6 +1792,16 @@ class WorkOrderController extends Controller
                 (string) ($material['material_code'] ?? ''),
                 (string) ($material['material_set'] ?? '')
             );
+            $materialCode = trim((string) ($material['material_code'] ?? ''));
+            $rawMaterialStockSummary = $materialCode !== ''
+                ? Material::stockSummaryByCodes([$materialCode])
+                : [];
+            $rawMaterialStockQty = $materialCode !== ''
+                ? $this->resolveNamedWarehouseStockQty(
+                    (array) (($rawMaterialStockSummary[strtolower($materialCode)]['warehouses'] ?? [])),
+                    self::RELEASED_MATERIAL_DEFAULT_ISSUER
+                )
+                : 0.0;
 
             return response()->json([
                 'data' => [
@@ -1809,6 +1825,7 @@ class WorkOrderController extends Controller
                     'material_changed_at' => (string) ($material['material_changed_at'] ?? ''),
                     'material_changed_display' => $this->formatMetaDate($material['material_changed_at'] ?? null),
                     'stock_qty' => (float) ($material['material_qty'] ?? 0),
+                    'raw_material_stock_qty' => $rawMaterialStockQty,
                     'action' => $existingItem === null ? 'insert' : 'update',
                     'exists_on_work_order' => $existingItem !== null,
                     'existing_item' => $existingItem === null ? null : [
@@ -2402,10 +2419,17 @@ class WorkOrderController extends Controller
                 $stockAdjustments = $this->buildPlannedConsumptionStockAdjustments($saved);
 
                 if ($saveMode === 'barcode' && !empty($stockAdjustments)) {
+                    $stockAdjustments = $this->applyRawMaterialsWarehouseToStockAdjustments($stockAdjustments);
+                    $this->assertRawMaterialsWarehouseStockAvailable(
+                        $stockAdjustments,
+                        $workOrderRow,
+                        $this->buildStockAdjustmentMaterialMeta($saved)
+                    );
                     $stockAdjustmentResults = Material::bulkAdjustStock(
                         $stockAdjustments,
                         $userId,
-                        $preferredWarehouse
+                        '',
+                        ['strict_warehouse_match' => true]
                     );
                 }
 
@@ -2470,6 +2494,11 @@ class WorkOrderController extends Controller
                 if ($consumedQty !== null) {
                     $stockAdjustmentResult['consumed_qty'] = abs($consumedQty);
                 }
+
+                $remainingStockQty = $this->toFloatOrNull($stockAdjustmentResult['row_stock_value'] ?? null);
+                if ($remainingStockQty !== null) {
+                    $stockAdjustmentResult['remaining_stock_qty'] = $remainingStockQty;
+                }
             }
             unset($stockAdjustmentResult);
 
@@ -2521,6 +2550,19 @@ class WorkOrderController extends Controller
                     'items' => $insertedRows,
                 ],
             ], 201);
+        } catch (InsufficientRawMaterialStockException $exception) {
+            Log::warning('Planned consumption save blocked due to raw warehouse shortage.', [
+                'id' => $id,
+                'detail' => $exception->detail(),
+                'request_save_mode' => strtolower(trim((string) $request->input('save_mode', 'manual'))),
+                'request_components_count' => count((array) $request->input('components', [])),
+                'user_id' => (int) (auth()->id() ?? 0),
+            ]);
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'detail' => $exception->detail(),
+            ], 422);
         } catch (Throwable $exception) {
             Log::error('Planned consumption save failed.', [
                 'id' => $id,
@@ -2650,10 +2692,12 @@ class WorkOrderController extends Controller
                     $reverseAdjustment = $this->buildRemovedPlannedConsumptionStockAdjustment($rowData, $preferredWarehouse);
 
                     if ($reverseAdjustment !== null) {
+                        $stockAdjustments = $this->applyRawMaterialsWarehouseToStockAdjustments([$reverseAdjustment]);
                         $stockAdjustments = Material::bulkAdjustStock(
-                            [$reverseAdjustment],
+                            $stockAdjustments,
                             $userId,
-                            $preferredWarehouse
+                            '',
+                            ['strict_warehouse_match' => true]
                         );
                     }
                 }
@@ -2855,7 +2899,8 @@ class WorkOrderController extends Controller
                 $now,
                 $userId,
                 $preferredWarehouse,
-                $hasStatementColumn
+                $hasStatementColumn,
+                $workOrderRow
             ) {
                 $row = (clone $updateQuery)->lockForUpdate()->first();
 
@@ -2965,10 +3010,17 @@ class WorkOrderController extends Controller
                 }
 
                 if ($stockAdjustment !== null) {
+                    $stockAdjustments = $this->applyRawMaterialsWarehouseToStockAdjustments([$stockAdjustment]);
+                    $this->assertRawMaterialsWarehouseStockAvailable(
+                        $stockAdjustments,
+                        $workOrderRow,
+                        $this->buildStockAdjustmentMaterialMeta([$itemRow])
+                    );
                     $stockAdjustmentResults = Material::bulkAdjustStock(
-                        [$stockAdjustment],
+                        $stockAdjustments,
                         $userId,
-                        $preferredWarehouse
+                        '',
+                        ['strict_warehouse_match' => true]
                     );
                 }
 
@@ -3043,6 +3095,19 @@ class WorkOrderController extends Controller
                     'stock_adjustments' => $stockAdjustmentResults,
                 ],
             ]);
+        } catch (InsufficientRawMaterialStockException $exception) {
+            Log::warning('Work order item update blocked due to raw warehouse shortage.', [
+                'id' => $id,
+                'detail' => $exception->detail(),
+                'request_item_id' => $this->toFloatOrNull($request->input('item_id')),
+                'request_item_no' => $this->toFloatOrNull($request->input('item_no')),
+                'user_id' => (int) (auth()->id() ?? 0),
+            ]);
+
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'detail' => $exception->detail(),
+            ], 422);
         } catch (Throwable $exception) {
             Log::error('Work order item update failed.', [
                 'id' => $id,
@@ -3487,10 +3552,11 @@ class WorkOrderController extends Controller
     ): array {
         $resolvedLimit = $this->resolveLimit($limit);
         $resolvedPage = max(1, (int) ($page ?? 1));
-        $totalQuery = $this->newOrderLinkageGroupQuery([]);
+        $totalCountQuery = $this->newOrderLinkageCountQuery([]);
+        $filteredCountQuery = $this->newOrderLinkageCountQuery($filters);
         $filteredQuery = $this->newOrderLinkageGroupQuery($filters);
-        $total = $totalQuery === null ? 0 : (int) DB::query()->fromSub($totalQuery, 'order_linkage_total')->count();
-        $filteredTotal = $filteredQuery === null ? 0 : (int) DB::query()->fromSub($filteredQuery, 'order_linkage_filtered')->count();
+        $total = $totalCountQuery === null ? 0 : (int) $totalCountQuery->count();
+        $filteredTotal = $filteredCountQuery === null ? 0 : (int) $filteredCountQuery->count();
         $lastPage = $resolvedLimit > 0 ? max(1, (int) ceil($filteredTotal / $resolvedLimit)) : 1;
 
         if ($filteredQuery === null || $filteredTotal < 1) {
@@ -3533,6 +3599,25 @@ class WorkOrderController extends Controller
                 'last_page' => $lastPage,
             ],
         ];
+    }
+
+    private function newOrderLinkageCountQuery(array $filters = []): ?Builder
+    {
+        $orderColumns = $this->orderTableColumns();
+        $query = DB::table($this->qualifiedOrderTableName() . ' as ord');
+        $orderNumberExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($orderColumns, ['acKey', 'acRefNo1', 'acKeyView']), 'ord')
+        );
+
+        if ($orderNumberExpression === null) {
+            return null;
+        }
+
+        $this->applyOrderLinkageFilters($query, $orderColumns, $filters, 'ord');
+        $query->whereRaw($this->orderLinkageDisplaySqlExpression($orderNumberExpression) . " <> ''");
+
+        return $query;
     }
 
     private function extractOrderLinkageFilters(Request $request): array
@@ -3608,29 +3693,238 @@ class WorkOrderController extends Controller
 
     private function newOrderLinkageGroupQuery(array $filters = []): ?Builder
     {
-        $baseQuery = $this->newOrderLinkageBaseQuery($filters);
+        $orderColumns = $this->orderTableColumns();
+        $query = DB::table($this->qualifiedOrderTableName() . ' as ord');
+        $orderNumberExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($orderColumns, ['acKey', 'acRefNo1', 'acKeyView']), 'ord')
+        );
 
-        if ($baseQuery === null) {
+        if ($orderNumberExpression === null) {
             return null;
         }
 
-        // SQL Server is much more stable when the normalized order number is aliased once in a derived table.
-        $query = DB::query()->fromSub($baseQuery, 'order_linkage_source');
-        $query->where('normalized_order_number', '<>', '');
-        $this->applyOrderLinkageSourceQuickSearchFilter($query, (string) ($filters['search'] ?? ''));
-        $query->select('normalized_order_number');
-        $query->selectRaw('MAX(resolved_order_number) as narudzba');
-        $query->selectRaw('MAX(naziv_source) as naziv_sort');
-        $query->selectRaw('MAX(sifra_source) as sifra_sort');
-        $query->selectRaw('MAX(klijent_source) as klijent_sort');
-        $query->selectRaw('MIN(datum_source) as datum_sort');
-        $query->selectRaw('SUM(COALESCE(quantity_source, 0)) as total_kolicina_sort');
-        $query->selectRaw('SUM(CASE WHEN position_source IS NULL THEN 0 ELSE 1 END) as broj_pozicija_sort');
-        $query->selectRaw('COUNT(*) as broj_rn_sort');
-        $query->selectRaw('MAX(jedinica_source) as jedinica_sort');
-        $query->groupBy('normalized_order_number');
+        $normalizedOrderExpression = $this->orderLinkageDisplaySqlExpression($orderNumberExpression);
+        $customerExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($orderColumns, ['acConsignee', 'acReceiver', 'acPartner']), 'ord')
+        ) ?? "''";
+        $createdDateColumn = $this->firstExistingColumn($orderColumns, ['adDate', 'adDateIns']);
+        $itemAggregateQuery = $this->newOrderLinkageItemAggregateQuery();
+        $workOrderAggregateQuery = $this->newOrderLinkageWorkOrderAggregateQuery();
+
+        $this->applyOrderLinkageFilters($query, $orderColumns, $filters, 'ord');
+        $query->whereRaw($normalizedOrderExpression . " <> ''");
+
+        if ($itemAggregateQuery !== null) {
+            $query->leftJoinSub($itemAggregateQuery, 'item_agg', function ($join) use ($normalizedOrderExpression) {
+                $join->whereRaw('item_agg.normalized_order_number = ' . $normalizedOrderExpression);
+            });
+        }
+
+        if ($workOrderAggregateQuery !== null) {
+            $query->leftJoinSub($workOrderAggregateQuery, 'wo_agg', function ($join) use ($normalizedOrderExpression) {
+                $join->whereRaw('wo_agg.normalized_order_number = ' . $normalizedOrderExpression);
+            });
+        }
+
+        $query->selectRaw($orderNumberExpression . ' as narudzba');
+        $query->selectRaw($customerExpression . ' as klijent_sort');
+        $query->selectRaw("COALESCE(item_agg.naziv_sort, '') as naziv_sort");
+        $query->selectRaw("COALESCE(item_agg.sifra_sort, '') as sifra_sort");
+        $query->selectRaw("COALESCE(item_agg.total_kolicina_sort, 0) as total_kolicina_sort");
+        $query->selectRaw("COALESCE(item_agg.broj_pozicija_sort, 0) as broj_pozicija_sort");
+        $query->selectRaw("COALESCE(item_agg.jedinica_sort, '') as jedinica_sort");
+        $query->selectRaw("COALESCE(wo_agg.broj_rn_sort, 0) as broj_rn_sort");
+
+        if ($createdDateColumn !== null) {
+            $query->selectRaw('CAST(' . $query->getGrammar()->wrap('ord.' . $createdDateColumn) . ' AS DATE) as datum_sort');
+        } else {
+            $query->selectRaw('NULL as datum_sort');
+        }
 
         return $query;
+    }
+
+    private function newOrderLinkageItemAggregateQuery(): ?Builder
+    {
+        $itemColumns = $this->orderItemTableColumns();
+        $query = DB::table($this->qualifiedOrderItemTableName() . ' as oi');
+        $itemRelationExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns(
+                $this->existingColumns($itemColumns, ['acKey', 'acLnkKey', 'acOrderKey', 'order_key', 'acKeyView', 'acRefNo1', 'acOrderNo', 'order_number']),
+                'oi'
+            )
+        );
+
+        if ($itemRelationExpression === null) {
+            return null;
+        }
+
+        $normalizedItemRelationExpression = $this->orderLinkageDisplaySqlExpression($itemRelationExpression);
+        $quantityExpression = $this->firstNonNullNumericExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($itemColumns, ['anQty', 'anQty1', 'quantity']), 'oi')
+        ) ?? '0';
+        $unitExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($itemColumns, ['acUM', 'acUMConverted', 'unit']), 'oi'),
+            32
+        ) ?? "''";
+        $nameExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($itemColumns, ['acName', 'acDescr']), 'oi')
+        ) ?? "''";
+        $codeExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($itemColumns, ['acIdent', 'acCode', 'product_code']), 'oi')
+        ) ?? "''";
+
+        $query->whereRaw($normalizedItemRelationExpression . " <> ''");
+        $query->selectRaw($normalizedItemRelationExpression . ' as normalized_order_number');
+        $query->selectRaw('COUNT(*) as broj_pozicija_sort');
+        $query->selectRaw('COALESCE(SUM(' . $quantityExpression . '), 0) as total_kolicina_sort');
+        $query->selectRaw("MAX(NULLIF(LTRIM(RTRIM(CAST(($unitExpression) AS NVARCHAR(32)))), '')) as jedinica_sort");
+        $query->selectRaw("MAX(NULLIF(LTRIM(RTRIM(CAST(($nameExpression) AS NVARCHAR(255)))), '')) as naziv_sort");
+        $query->selectRaw("MAX(NULLIF(LTRIM(RTRIM(CAST(($codeExpression) AS NVARCHAR(255)))), '')) as sifra_sort");
+        $query->groupByRaw($normalizedItemRelationExpression);
+
+        return $query;
+    }
+
+    private function newOrderLinkageWorkOrderAggregateQuery(): ?Builder
+    {
+        $workOrderColumns = $this->tableColumns();
+        $query = DB::table($this->qualifiedTableName() . ' as wo');
+        $workOrderRelationExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($workOrderColumns, ['acLnkKey', 'acLnkKeyView']), 'wo')
+        );
+
+        if ($workOrderRelationExpression === null) {
+            return null;
+        }
+
+        $normalizedWorkOrderRelationExpression = $this->orderLinkageDisplaySqlExpression($workOrderRelationExpression);
+
+        $query->whereRaw($normalizedWorkOrderRelationExpression . " <> ''");
+        $query->selectRaw($normalizedWorkOrderRelationExpression . ' as normalized_order_number');
+        $query->selectRaw('COUNT(*) as broj_rn_sort');
+        $query->groupByRaw($normalizedWorkOrderRelationExpression);
+
+        return $query;
+    }
+
+    private function applyOrderLinkageOrderItemRelationQuery(
+        Builder $query,
+        array $orderColumns,
+        array $itemColumns,
+        string $outerOrderNumberExpression,
+        string $outerOrderAlias = 'ord'
+    ): void {
+        $outerOrderKeyColumn = $this->firstExistingColumn($orderColumns, ['acKey']);
+        $itemKeyColumns = $this->qualifyColumns(
+            $this->existingColumns($itemColumns, ['acKey', 'acLnkKey', 'acOrderKey', 'order_key']),
+            'oi'
+        );
+        $itemNumberExpression = $this->firstNonEmptyStringExpression(
+            $query,
+            $this->qualifyColumns($this->existingColumns($itemColumns, ['acKeyView', 'acRefNo1', 'acOrderNo', 'order_number']), 'oi')
+        );
+        $normalizedOuterOrderExpression = $this->orderLinkageDisplaySqlExpression($outerOrderNumberExpression);
+
+        $query->where(function (Builder $relationQuery) use (
+            $outerOrderKeyColumn,
+            $outerOrderAlias,
+            $itemKeyColumns,
+            $itemNumberExpression,
+            $normalizedOuterOrderExpression
+        ) {
+            $hasRelation = false;
+
+            if ($outerOrderKeyColumn !== null) {
+                foreach ($itemKeyColumns as $itemKeyColumn) {
+                    if ($hasRelation) {
+                        $relationQuery->orWhereColumn($itemKeyColumn, $this->qualifyColumn($outerOrderKeyColumn, $outerOrderAlias));
+                    } else {
+                        $relationQuery->whereColumn($itemKeyColumn, $this->qualifyColumn($outerOrderKeyColumn, $outerOrderAlias));
+                        $hasRelation = true;
+                    }
+                }
+            }
+
+            if ($itemNumberExpression !== null) {
+                $normalizedItemOrderExpression = $this->orderLinkageDisplaySqlExpression($itemNumberExpression);
+
+                if ($hasRelation) {
+                    $relationQuery->orWhereRaw($normalizedItemOrderExpression . ' = ' . $normalizedOuterOrderExpression);
+                } else {
+                    $relationQuery->whereRaw($normalizedItemOrderExpression . ' = ' . $normalizedOuterOrderExpression);
+                    $hasRelation = true;
+                }
+            }
+
+            if (!$hasRelation) {
+                $relationQuery->whereRaw('1 = 0');
+            }
+        });
+    }
+
+    private function applyOrderLinkageWorkOrderRelationQuery(
+        Builder $query,
+        array $orderColumns,
+        array $workOrderColumns,
+        string $outerOrderNumberExpression,
+        string $outerOrderAlias = 'ord'
+    ): void {
+        $outerOrderKeyColumn = $this->firstExistingColumn($orderColumns, ['acKey']);
+        $workOrderLinkColumns = $this->qualifyColumns(
+            $this->existingColumns($workOrderColumns, ['acLnkKey', 'acLnkKeyView']),
+            'wo'
+        );
+        $workOrderKeyColumns = $this->qualifyColumns(
+            $this->existingColumns($workOrderColumns, ['acLnkKey']),
+            'wo'
+        );
+        $workOrderNumberExpression = $this->firstNonEmptyStringExpression($query, $workOrderLinkColumns);
+        $normalizedOuterOrderExpression = $this->orderLinkageDisplaySqlExpression($outerOrderNumberExpression);
+
+        $query->where(function (Builder $relationQuery) use (
+            $outerOrderKeyColumn,
+            $outerOrderAlias,
+            $workOrderKeyColumns,
+            $workOrderNumberExpression,
+            $normalizedOuterOrderExpression
+        ) {
+            $hasRelation = false;
+
+            if ($outerOrderKeyColumn !== null) {
+                foreach ($workOrderKeyColumns as $workOrderKeyColumn) {
+                    if ($hasRelation) {
+                        $relationQuery->orWhereColumn($workOrderKeyColumn, $this->qualifyColumn($outerOrderKeyColumn, $outerOrderAlias));
+                    } else {
+                        $relationQuery->whereColumn($workOrderKeyColumn, $this->qualifyColumn($outerOrderKeyColumn, $outerOrderAlias));
+                        $hasRelation = true;
+                    }
+                }
+            }
+
+            if ($workOrderNumberExpression !== null) {
+                $normalizedWorkOrderExpression = $this->orderLinkageDisplaySqlExpression($workOrderNumberExpression);
+
+                if ($hasRelation) {
+                    $relationQuery->orWhereRaw($normalizedWorkOrderExpression . ' = ' . $normalizedOuterOrderExpression);
+                } else {
+                    $relationQuery->whereRaw($normalizedWorkOrderExpression . ' = ' . $normalizedOuterOrderExpression);
+                    $hasRelation = true;
+                }
+            }
+
+            if (!$hasRelation) {
+                $relationQuery->whereRaw('1 = 0');
+            }
+        });
     }
 
     private function newOrderLinkageBaseQuery(array $filters = []): ?Builder
@@ -5215,6 +5509,312 @@ class WorkOrderController extends Controller
         ));
     }
 
+    private function applyRawMaterialsWarehouseToStockAdjustments(array $stockAdjustments): array
+    {
+        return array_values(array_map(function ($stockAdjustment) {
+            if (!is_array($stockAdjustment)) {
+                return $stockAdjustment;
+            }
+
+            $stockAdjustment['warehouse'] = self::RELEASED_MATERIAL_DEFAULT_ISSUER;
+
+            return $stockAdjustment;
+        }, $stockAdjustments));
+    }
+
+    private function buildStockAdjustmentMaterialMeta(array $rows): array
+    {
+        $metaByCode = [];
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $materialCode = trim((string) ($row['acIdent'] ?? $row['material_code'] ?? ''));
+            if ($materialCode === '') {
+                continue;
+            }
+
+            $materialKey = strtolower($materialCode);
+            $materialName = trim((string) ($row['acDescr'] ?? $row['material_name'] ?? $row['naziv'] ?? ''));
+            $materialUnit = strtoupper(substr(trim((string) ($row['acUM'] ?? $row['material_um'] ?? $row['mj'] ?? '')), 0, 8));
+
+            if (!array_key_exists($materialKey, $metaByCode)) {
+                $metaByCode[$materialKey] = [
+                    'material_name' => $materialName,
+                    'material_unit' => $materialUnit,
+                ];
+                continue;
+            }
+
+            if (($metaByCode[$materialKey]['material_name'] ?? '') === '' && $materialName !== '') {
+                $metaByCode[$materialKey]['material_name'] = $materialName;
+            }
+
+            if (($metaByCode[$materialKey]['material_unit'] ?? '') === '' && $materialUnit !== '') {
+                $metaByCode[$materialKey]['material_unit'] = $materialUnit;
+            }
+        }
+
+        return $metaByCode;
+    }
+
+    private function assertRawMaterialsWarehouseStockAvailable(
+        array $stockAdjustments,
+        array $workOrderRow,
+        array $materialMetaByCode = []
+    ): void {
+        $consumptionAdjustments = [];
+
+        foreach ($stockAdjustments as $stockAdjustment) {
+            if (!is_array($stockAdjustment)) {
+                continue;
+            }
+
+            $materialCode = trim((string) ($stockAdjustment['material_code'] ?? ''));
+            $requestedQty = (float) ($this->toFloatOrNull($stockAdjustment['value'] ?? null) ?? 0);
+
+            if ($materialCode === '' || $requestedQty <= 0.000001) {
+                continue;
+            }
+
+            $consumptionAdjustments[] = [
+                'material_code' => $materialCode,
+                'requested_qty' => $requestedQty,
+            ];
+        }
+
+        if (empty($consumptionAdjustments)) {
+            return;
+        }
+
+        $stockSummary = Material::stockSummaryByCodes(array_map(function (array $adjustment) {
+            return (string) ($adjustment['material_code'] ?? '');
+        }, $consumptionAdjustments));
+        $blockedItems = [];
+
+        foreach ($consumptionAdjustments as $adjustment) {
+            $materialCode = trim((string) ($adjustment['material_code'] ?? ''));
+            $requestedQty = (float) ($adjustment['requested_qty'] ?? 0);
+            $materialKey = strtolower($materialCode);
+            $summary = $stockSummary[$materialKey] ?? [
+                'warehouses' => [],
+            ];
+            $warehouses = (array) ($summary['warehouses'] ?? []);
+            $rawStockQty = $this->resolveNamedWarehouseStockQty($warehouses, self::RELEASED_MATERIAL_DEFAULT_ISSUER);
+
+            if ($rawStockQty + 0.000001 >= $requestedQty) {
+                continue;
+            }
+
+            $meta = is_array($materialMetaByCode[$materialKey] ?? null)
+                ? $materialMetaByCode[$materialKey]
+                : [];
+
+            $blockedItems[] = [
+                'material_code' => $materialCode,
+                'material_name' => trim((string) ($meta['material_name'] ?? '')),
+                'material_unit' => trim((string) ($meta['material_unit'] ?? '')),
+                'requested_qty' => $requestedQty,
+                'raw_stock_qty' => $rawStockQty,
+                'additional_raw_stock_qty' => $this->resolveNamedWarehouseStockQty(
+                    $warehouses,
+                    self::ADDITIONAL_RAW_MATERIAL_WAREHOUSE
+                ),
+            ];
+        }
+
+        if (empty($blockedItems)) {
+            return;
+        }
+
+        $this->sendRawMaterialShortageAlertEmail($blockedItems, $workOrderRow);
+
+        throw new InsufficientRawMaterialStockException(
+            $this->buildRawMaterialShortageClientDetail($blockedItems)
+        );
+    }
+
+    private function buildRawMaterialShortageClientDetail(array $blockedItems): string
+    {
+        $lines = [];
+
+        foreach ($blockedItems as $blockedItem) {
+            if (!is_array($blockedItem)) {
+                continue;
+            }
+
+            $materialCode = trim((string) ($blockedItem['material_code'] ?? ''));
+            $materialName = trim((string) ($blockedItem['material_name'] ?? ''));
+            $materialUnit = trim((string) ($blockedItem['material_unit'] ?? ''));
+            $requestedQty = $this->formatStockAlertQuantity((float) ($blockedItem['requested_qty'] ?? 0));
+            $rawStockQty = $this->formatStockAlertQuantity((float) ($blockedItem['raw_stock_qty'] ?? 0));
+            $additionalStockQty = $this->formatStockAlertQuantity((float) ($blockedItem['additional_raw_stock_qty'] ?? 0));
+            $label = $materialName !== ''
+                ? $materialName . ' (' . $materialCode . ')'
+                : $materialCode;
+
+            if ($materialUnit !== '') {
+                $requestedQty .= ' ' . $materialUnit;
+            }
+
+            $lines[] = implode(' | ', array_filter([
+                $label,
+                'traženo: ' . $requestedQty,
+                'skladište sirovina: ' . $rawStockQty,
+                'skladište dodatnih sirovina: ' . $additionalStockQty,
+            ]));
+        }
+
+        return !empty($lines)
+            ? implode("\n", $lines)
+            : 'Nedostaje zaliha na skladištu sirovina.';
+    }
+
+    private function sendRawMaterialShortageAlertEmail(array $blockedItems, array $workOrderRow): void
+    {
+        if (!filter_var(self::RAW_MATERIAL_SHORTAGE_ALERT_EMAIL, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
+
+        $workOrderNumber = $this->resolveReleasedMaterialWorkOrderNumber($workOrderRow);
+        if ($workOrderNumber === '') {
+            $workOrderNumber = $this->formatWorkOrderNumberForCalendar((string) $this->valueTrimmed(
+                $workOrderRow,
+                ['acKeyView', 'acRefNo1', 'acKey'],
+                ''
+            ));
+        }
+
+        $subject = 'Pokušaj razduženja bez zalihe na skladištu sirovina';
+        if ($workOrderNumber !== '') {
+            $subject .= ' - RN ' . $workOrderNumber;
+        }
+
+        $fromAddress = $this->resolveRawMaterialShortageAlertFromAddress();
+        $fromName = trim((string) config('mail.from.name', config('app.name', 'eNalog.app')));
+        $body = $this->buildRawMaterialShortageAlertBody($blockedItems, $workOrderNumber);
+        $mailer = $this->resolveRawMaterialShortageAlertMailer();
+
+        try {
+            Mail::mailer((string) $mailer)->raw($body, function ($message) use ($subject, $fromAddress, $fromName) {
+                $message->to(self::RAW_MATERIAL_SHORTAGE_ALERT_EMAIL);
+
+                if (filter_var(self::RAW_MATERIAL_SHORTAGE_ALERT_CC_EMAIL, FILTER_VALIDATE_EMAIL)) {
+                    $message->cc(self::RAW_MATERIAL_SHORTAGE_ALERT_CC_EMAIL);
+                }
+
+                $message->subject($subject)
+                    ->from($fromAddress, $fromName !== '' ? $fromName : 'eNalog.app');
+            });
+        } catch (Throwable $exception) {
+            Log::error('Unable to send raw material shortage alert email.', [
+                'recipient' => self::RAW_MATERIAL_SHORTAGE_ALERT_EMAIL,
+                'cc_recipient' => self::RAW_MATERIAL_SHORTAGE_ALERT_CC_EMAIL,
+                'mailer' => $mailer,
+                'mail_host' => (string) config('mail.mailers.smtp.host', config('mail.host', '')),
+                'message' => $exception->getMessage(),
+                'exception_class' => get_class($exception),
+                'work_order_key' => trim((string) $this->valueTrimmed($workOrderRow, ['acKey'], '')),
+            ]);
+        }
+    }
+
+    private function buildRawMaterialShortageAlertBody(array $blockedItems, string $workOrderNumber): string
+    {
+        $user = auth()->user();
+        $userName = trim((string) ($user->name ?? ''));
+        $userEmail = trim((string) ($user->email ?? ''));
+        $userId = (int) ($user->id ?? 0);
+        $userLabel = $userName !== ''
+            ? $userName
+            : ($userEmail !== '' ? $userEmail : ($userId > 0 ? 'ID ' . $userId : 'Nepoznat korisnik'));
+
+        if ($userName !== '' && $userEmail !== '') {
+            $userLabel .= ' <' . $userEmail . '>';
+        }
+
+        $lines = [
+            'Bio je pokušaj da se razduži materijal bez dovoljne zalihe na skladištu sirovina.',
+            'Radni nalog: ' . ($workOrderNumber !== '' ? $workOrderNumber : '-'),
+            'Korisnik: ' . $userLabel,
+            'Vrijeme: ' . Carbon::now()->format('d.m.Y H:i:s'),
+            '',
+            'Stavke:',
+        ];
+
+        foreach ($blockedItems as $blockedItem) {
+            if (!is_array($blockedItem)) {
+                continue;
+            }
+
+            $materialCode = trim((string) ($blockedItem['material_code'] ?? ''));
+            $materialName = trim((string) ($blockedItem['material_name'] ?? ''));
+            $materialUnit = trim((string) ($blockedItem['material_unit'] ?? ''));
+            $requestedQty = $this->formatStockAlertQuantity((float) ($blockedItem['requested_qty'] ?? 0));
+
+            if ($materialUnit !== '') {
+                $requestedQty .= ' ' . $materialUnit;
+            }
+
+            $lines[] = '- Materijal: ' . ($materialName !== '' ? $materialName : $materialCode)
+                . ' | Šifra: ' . ($materialCode !== '' ? $materialCode : '-')
+                . ' | Količina: ' . $requestedQty
+                . ' | ' . self::RELEASED_MATERIAL_DEFAULT_ISSUER . ': '
+                . $this->formatStockAlertQuantity((float) ($blockedItem['raw_stock_qty'] ?? 0))
+                . ' | ' . self::ADDITIONAL_RAW_MATERIAL_WAREHOUSE . ': '
+                . $this->formatStockAlertQuantity((float) ($blockedItem['additional_raw_stock_qty'] ?? 0));
+        }
+
+        return implode(PHP_EOL, $lines);
+    }
+
+    private function resolveNamedWarehouseStockQty(array $warehouseStocks, string $warehouseName): float
+    {
+        $normalizedTarget = Str::lower(trim($warehouseName));
+        if ($normalizedTarget === '') {
+            return 0.0;
+        }
+
+        $resolvedQty = 0.0;
+
+        foreach ($warehouseStocks as $candidateWarehouse => $stockQty) {
+            if (Str::lower(trim((string) $candidateWarehouse)) !== $normalizedTarget) {
+                continue;
+            }
+
+            $resolvedQty += is_numeric((string) $stockQty)
+                ? (float) $stockQty
+                : 0.0;
+        }
+
+        return $resolvedQty;
+    }
+
+    private function formatStockAlertQuantity(float $quantity): string
+    {
+        return rtrim(rtrim(number_format($quantity, 3, '.', ''), '0'), '.');
+    }
+
+    private function resolveRawMaterialShortageAlertFromAddress(): string
+    {
+        $configuredFrom = trim((string) config('mail.from.address', ''));
+
+        if (filter_var($configuredFrom, FILTER_VALIDATE_EMAIL)) {
+            return $configuredFrom;
+        }
+
+        return 'no-reply@qla.dev';
+    }
+
+    private function resolveRawMaterialShortageAlertMailer(): string
+    {
+        $configuredMailer = trim((string) config('mail.default', 'smtp'));
+
+        return $configuredMailer !== '' ? $configuredMailer : 'smtp';
+    }
+
     private function buildPlannedConsumptionStockAdjustments(array $savedRows): array
     {
         $adjustmentsByCode = [];
@@ -5306,7 +5906,7 @@ class WorkOrderController extends Controller
                 $unit = strtoupper(substr(trim((string) ($catalogRow['acUM'] ?? '')), 0, 3));
             }
 
-            $price = (float) ($this->toFloatOrNull($catalogRow['anBuyPrice'] ?? null) ?? 0.0);
+            $price = round((float) ($this->toFloatOrNull($catalogRow['anBuyPrice'] ?? null) ?? 0.0), 4);
             $lineValue = round($quantity * $price, 4);
             $totalValue += $lineValue;
 
@@ -5316,6 +5916,10 @@ class WorkOrderController extends Controller
                 'quantity' => $quantity,
                 'unit' => $unit,
                 'price' => $price,
+                // Pantheon reads RN unit price from tHE_MoveItem.anWOPrice and derives
+                // the linked-doc value as quantity * anWOPrice, so keep anWOPrice aligned
+                // with the document line unit price.
+                'rn_price' => $price,
                 'value' => $lineValue,
                 'note' => trim((string) ($releasedRow['acNote'] ?? '')),
                 'ident_qid' => $identQId,
@@ -5460,6 +6064,7 @@ class WorkOrderController extends Controller
                 'anVAT' => 0,
                 'anStockPrice' => (float) $preparedItem['price'],
                 'anPriceCurrency' => (float) $preparedItem['price'],
+                'anWOPrice' => (float) $preparedItem['rn_price'],
                 'acDept' => $this->limitReleasedMaterialString($dept, 30),
                 'adDate' => $documentDate,
                 'acNote' => $this->limitReleasedMaterialString((string) $preparedItem['note'], 4000),

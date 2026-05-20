@@ -1,5 +1,10 @@
 <?php
 
+/*
+ * test6.php
+ * Compares two Pantheon work-order snapshots and shows related RN, order, move, and resource data.
+ */
+
 require __DIR__ . '/_conn.php';
 
 if (PHP_SAPI === 'cli') {

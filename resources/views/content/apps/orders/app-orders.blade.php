@@ -8,6 +8,8 @@
       'positionsUrl' => (string) ($ordersLinkagePositionsUrl ?? route('app-orders-positions')),
       'workOrdersUrl' => (string) ($ordersLinkageWorkOrdersUrl ?? route('app-orders-work-orders')),
       'workOrdersApiUrl' => (string) ($ordersLinkageWorkOrdersApiUrl ?? route('app-orders-radni-nalozi')),
+      'deleteUrl' => (string) ($ordersLinkageDeleteUrl ?? route('app-orders-destroy')),
+      'canDelete' => (bool) ($canDeleteLinkedOrders ?? false),
   ];
 @endphp
 
@@ -234,6 +236,7 @@
 
   .order-linkage-table-overlay-host {
     position: relative;
+    isolation: isolate;
   }
 
   .order-linkage-table-loading-overlay {
@@ -243,8 +246,16 @@
     justify-content: center;
     background: rgba(255, 255, 255, 0.74);
     backdrop-filter: blur(1px);
-    z-index: 9;
+    z-index: 30;
     pointer-events: none;
+  }
+
+  .order-linkage-table-overlay-host.order-linkage-table-loading-active .order-linkage-actions-cell {
+    z-index: 1 !important;
+  }
+
+  .order-linkage-table-overlay-host.order-linkage-table-loading-active .order-linkage-table thead .order-linkage-actions-cell {
+    z-index: 2 !important;
   }
 
   .order-linkage-table-loading-overlay.is-visible {
@@ -388,9 +399,11 @@
   .order-linkage-action-btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.35rem;
     min-width: 98px;
     white-space: nowrap;
+    text-align: center;
   }
 
   .order-linkage-action-btn.order-linkage-positions-btn {
@@ -848,5 +861,5 @@
 <script>
   window.orderLinkageConfig = @json($orderLinkageConfig);
 </script>
-<script src="{{ asset('js/scripts/pages/app-orders.js?v=8') }}"></script>
+<script src="{{ asset('js/scripts/pages/app-orders.js?v=10') }}"></script>
 @endsection

@@ -2,6 +2,9 @@
 
 /*
  * test8.php
+ * Checks released-material RN price rows by comparing stored RN unit price with
+ * the document line unit price, and shows the Pantheon linked-doc value formula:
+ * quantity * anWOPrice.
  * Checks released-material RN price rows by comparing stored RN unit price with buy price from the catalog
  * and shows the Pantheon linked-doc value formula: quantity * anWOPrice.
  */

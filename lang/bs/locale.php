@@ -162,6 +162,7 @@ return [
     "Upravljanje nalozima" => "Upravljanje nalozima",
     "Upravljanje narudžbama" => "Upravljanje narudžbama",
     "Skeniraj radni nalog" => "Skeniraj nalog",
+    "Skeniraj narudzbu sa AI" => "AI narudžba",
     "Barcode generator" => "Barcode generator",
     "View" => "Pregled",
     "Edit" => "Uredi",
