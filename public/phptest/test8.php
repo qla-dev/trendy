@@ -5,6 +5,8 @@
  * Checks released-material RN price rows by comparing stored RN unit price with
  * the document line unit price, and shows the Pantheon linked-doc value formula:
  * quantity * anWOPrice.
+ * Checks released-material RN price rows by comparing stored RN unit price with buy price from the catalog
+ * and shows the Pantheon linked-doc value formula: quantity * anWOPrice.
  */
 
 require __DIR__ . '/_conn.php';
@@ -208,7 +210,7 @@ $trimOrderExpr = "LTRIM(RTRIM(ISNULL(CONVERT(nvarchar(255), wo.acLnkKey), '')))"
 $trimMaterialCodeExpr = "LTRIM(RTRIM(ISNULL(CONVERT(nvarchar(255), mi.acIdent), '')))";
 $trimMaterialNameExpr = "LTRIM(RTRIM(ISNULL(CONVERT(nvarchar(255), mi.acName), '')))";
 $catalogBuyPriceExpr = 'COALESCE(CAST(catalog_qid.anBuyPrice as float), CAST(catalog_code.anBuyPrice as float), 0)';
-$expectedRnPriceExpr = 'CAST(ISNULL(mi.anPrice, 0) as float)';
+$expectedRnPriceExpr = $catalogBuyPriceExpr;
 $storedRnPriceExpr = 'CAST(ISNULL(mi.anWOPrice, 0) as float)';
 $priceDiffExpr = 'ROUND(' . $storedRnPriceExpr . ' - ' . $expectedRnPriceExpr . ', 4)';
 $storedViewValueExpr = 'ROUND(CAST(ISNULL(mi.anQty, 0) as float) * ' . $storedRnPriceExpr . ', 4)';
