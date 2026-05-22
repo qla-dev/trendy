@@ -8,6 +8,7 @@
   $plannedEndpoint = (string) ($plannedConsumptionStoreUrl ?? '');
   $defaultProduct = trim((string) ($defaultProductIdent ?? ''));
   $defaultProductLabel = trim((string) ($defaultProductLabel ?? ''));
+  $defaultWorkOrderQuantity = trim((string) ($defaultWorkOrderQuantity ?? ($workOrder['kolicina'] ?? '')));
   $currentUser = auth()->user();
   $isAdminUser = $currentUser
     ? (method_exists($currentUser, 'isAdmin')
@@ -45,6 +46,7 @@
   data-stock-adjust-warehouse="{{ $stockAdjustWarehouse }}"
   data-default-product="{{ $defaultProduct }}"
   data-default-product-label="{{ $defaultProductLabel }}"
+  data-work-order-quantity="{{ $defaultWorkOrderQuantity }}"
   data-csrf-token="{{ csrf_token() }}"
   data-require-manual-camera-start="{{ $scannerRequiresManualCameraStart ? '1' : '0' }}"
   data-allow-manual-stock-adjust="{{ $allowManualStockAdjust ? '1' : '0' }}"
@@ -1436,6 +1438,7 @@
     var saveUrl = modalEl.getAttribute('data-save-url') || '';
     var stockAdjustUrl = modalEl.getAttribute('data-stock-adjust-url') || '';
     var stockAdjustWarehouse = modalEl.getAttribute('data-stock-adjust-warehouse') || '';
+    var workOrderQuantityRaw = modalEl.getAttribute('data-work-order-quantity') || '';
     var csrfToken = modalEl.getAttribute('data-csrf-token') || '';
     var defaultProduct = modalEl.getAttribute('data-default-product') || '';
     var defaultProductLabel = modalEl.getAttribute('data-default-product-label') || '';
@@ -1705,6 +1708,40 @@
       }
 
       syncConfirmUnitButtons();
+    }
+
+    function resolveBarcodeWorkOrderQuantity() {
+      var normalized = normalizeQuantityInputValue(workOrderQuantityRaw);
+      var quantity = normalized ? Number(normalized) : 0;
+
+      if (Number.isFinite(quantity) && quantity > 0) {
+        return quantity;
+      }
+
+      return 1;
+    }
+
+    function formatQuantityInputNumber(value) {
+      if (!Number.isFinite(value)) {
+        return '';
+      }
+
+      var rounded = Math.round(value * 1000000) / 1000000;
+      var text = rounded.toFixed(6).replace(/\.?0+$/, '');
+      return normalizeQuantityInputValue(text);
+    }
+
+    function resolveBarcodeExistingUnitQuantity(existingTotalQty) {
+      var existingQty = Number(existingTotalQty || 0);
+
+      if (!(Number.isFinite(existingQty) && existingQty > 0)) {
+        return '';
+      }
+
+      var workOrderQty = resolveBarcodeWorkOrderQuantity();
+      var unitQty = workOrderQty > 0 ? (existingQty / workOrderQty) : existingQty;
+
+      return formatQuantityInputNumber(unitQty);
     }
 
     function appendQuantityInputToken(token) {
@@ -6178,6 +6215,34 @@
           : 'Unesite količinu i mjernu jedinicu skeniranog materijala koji se dodaje na RN';
       }
 
+      if (resolvedContext.mode === 'barcode') {
+        var barcodeWorkOrderQtyLabel = formatQuantity(resolveBarcodeWorkOrderQuantity());
+
+        if (confirmMaterialActionEl) {
+          confirmMaterialActionEl.textContent = action === 'update'
+            ? 'PostojeÄ‡a stavka na RN biÄ‡e aĹľurirana novom ukupnom koliÄŤinom.'
+            : 'Materijal ne postoji na RN i biÄ‡e dodan kao nova stavka sastavnice';
+        }
+
+        if (confirmHelpTextEl) {
+          confirmHelpTextEl.textContent = 'Unesite jediniÄŤnu koliÄŤinu za jedan proizvod. Ukupna koliÄŤina za RN i razduĹľenje sa skladiĹˇta biÄ‡e unos Ã— ' + barcodeWorkOrderQtyLabel + '.';
+        }
+      }
+
+      if (resolvedContext.mode === 'barcode') {
+        var barcodeWorkOrderQtyLabelAscii = formatQuantity(resolveBarcodeWorkOrderQuantity());
+
+        if (confirmMaterialActionEl) {
+          confirmMaterialActionEl.textContent = action === 'update'
+            ? 'Postoje\u0107a stavka na RN bi\u0107e a\u017Eurirana novom ukupnom koli\u010Dinom.'
+            : 'Materijal ne postoji na RN i bi\u0107e dodan kao nova stavka sastavnice';
+        }
+
+        if (confirmHelpTextEl) {
+          confirmHelpTextEl.textContent = 'Unesite jedini\u010Dnu koli\u010Dinu za jedan proizvod. Ukupna koli\u010Dina za RN i razdu\u017Eenje sa skladi\u0161ta bi\u0107e unos \u00D7 ' + barcodeWorkOrderQtyLabelAscii + '.';
+        }
+      }
+
       setQuantityUnitValue(resolveBarcodeQuantityUnit(material));
 
       if (confirmSaveBtn) {
@@ -6208,6 +6273,15 @@
           : 0;
         if (Number.isFinite(existingQty) && existingQty > 0) {
           prefillValue = String(existingQty);
+        }
+      }
+      if (context && context.mode === 'barcode') {
+        var existingTotalQty = context && context.material && context.material.existing_item
+          ? Number(context.material.existing_item.qty || 0)
+          : 0;
+        var barcodeUnitQty = resolveBarcodeExistingUnitQuantity(existingTotalQty);
+        if (barcodeUnitQty !== '') {
+          prefillValue = barcodeUnitQty;
         }
       }
       setQuantityInputValue(prefillValue);

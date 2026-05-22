@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Throwable;
 
 class OrderController extends WorkOrderController
 {
@@ -418,6 +419,7 @@ class OrderController extends WorkOrderController
         $validated = $validator->validated();
         $scan = null;
         $normalizedPayload = [];
+        $overridePayload = is_array($validated['payload'] ?? null) ? $validated['payload'] : null;
 
         if (!empty($validated['scan_id'])) {
             $scan = OrderAiScan::query()->find((int) $validated['scan_id']);
@@ -441,9 +443,9 @@ class OrderController extends WorkOrderController
                 ]);
             }
 
-            $normalizedPayload = is_array($scan->normalized_payload) ? $scan->normalized_payload : [];
-        } elseif (is_array($validated['payload'] ?? null)) {
-            $normalizedPayload = $validated['payload'];
+            $normalizedPayload = $overridePayload ?? (is_array($scan->normalized_payload) ? $scan->normalized_payload : []);
+        } elseif ($overridePayload !== null) {
+            $normalizedPayload = $overridePayload;
         }
 
         if (empty($normalizedPayload)) {
@@ -452,7 +454,26 @@ class OrderController extends WorkOrderController
             ], 422);
         }
 
-        $result = $transferService->createFromNormalizedPayload($normalizedPayload, $request->user());
+        try {
+            $result = $transferService->createFromNormalizedPayload($normalizedPayload, $request->user());
+        } catch (Throwable $exception) {
+            $reason = $this->humanizeTransferFailureReason($exception->getMessage());
+
+            if ($scan !== null) {
+                $scan->forceFill([
+                    'status' => 'failed',
+                    'processing_step' => 'Transfer u bazu nije uspio.',
+                    'error_message' => $reason,
+                    'completed_at' => now(),
+                ])->save();
+            }
+
+            return response()->json([
+                'message' => 'Transfer u bazu nije uspio.',
+                'reason' => $reason,
+                'technical_reason' => $exception->getMessage(),
+            ], 422);
+        }
 
         if ($scan !== null) {
             $scan->forceFill([
@@ -488,6 +509,21 @@ class OrderController extends WorkOrderController
     protected function orderItemTableName(): string
     {
         return Order::sourceItemTableName();
+    }
+
+    private function humanizeTransferFailureReason(string $message): string
+    {
+        $message = trim($message);
+
+        if ($message === '') {
+            return 'Baza je odbila transfer, ali detaljan razlog nije vracen.';
+        }
+
+        if (str_contains($message, 'rtHE_Order_tHE_SetSubj_21') || str_contains($message, 'anConsigneeQId')) {
+            return 'Pantheon nije prihvatio narucitelja jer nije bio postavljen validan subject za anConsigneeQId.';
+        }
+
+        return $message;
     }
 
     protected function workOrderOrderItemLinkTableName(): string

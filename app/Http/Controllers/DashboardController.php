@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\OrderAiScan;
+use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -44,7 +46,7 @@ class DashboardController extends Controller
       'work_orders_total' => 0,
       'customers_total' => 0,
       'products_total' => 0,
-      'ai_credits_month' => 0,
+      'ai_billed_tokens_month' => 0,
     ];
 
     try {
@@ -128,10 +130,38 @@ class DashboardController extends Controller
 
     try {
       if (Schema::connection('mysql')->hasTable('order_ai_scans')) {
-        $dashboardStats['ai_credits_month'] = (float) DB::connection('mysql')
-          ->table('order_ai_scans')
+        $documentMetrics = app(OrderAiDocumentMetrics::class);
+        $monthlyScans = OrderAiScan::query()
           ->whereBetween('created_at', [now()->copy()->startOfMonth(), now()->copy()->endOfMonth()])
-          ->sum('credits_spent');
+          ->get();
+
+        $dashboardStats['ai_billed_tokens_month'] = (int) $monthlyScans->sum(function (OrderAiScan $scan) use ($documentMetrics) {
+          $pageCount = max(0, (int) ($scan->page_count ?? 0));
+          $billedTokens = max(0, (int) ($scan->billed_tokens ?? 0));
+
+          if ($pageCount <= 0 || $billedTokens <= 0) {
+            $resolvedMetrics = $documentMetrics->resolveForStoredFile(
+              (string) config('ai-order-scan.storage_disk', 'local'),
+              (string) ($scan->source_file_path ?? ''),
+              (string) ($scan->source_mime_type ?? ''),
+              (string) ($scan->source_file_name ?? '')
+            );
+
+            if ($pageCount <= 0) {
+              $pageCount = $resolvedMetrics['page_count'];
+            }
+
+            if ($billedTokens <= 0) {
+              $billedTokens = $resolvedMetrics['billed_tokens'];
+            }
+          }
+
+          if ($pageCount > 0 && $billedTokens <= 0) {
+            $billedTokens = $documentMetrics->calculateBilledTokens($pageCount);
+          }
+
+          return max(0, $billedTokens);
+        });
       }
     } catch (Throwable $exception) {
       Log::warning('Dashboard AI credits query failed.', [

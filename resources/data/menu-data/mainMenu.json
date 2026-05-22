@@ -33,6 +33,16 @@
       "slug": "app-order-ai-scan"
     },
     {
+      "navheader": "AI tokeni",
+      "slug": "app-ai-tokens-navheader"
+    },
+    {
+      "name": "Historija",
+      "icon": "activity",
+      "url": "app/ai-tokens/history",
+      "slug": "app-ai-token-history"
+    },
+    {
       "navheader": "Dokumenti",
       "slug": "app-documents-navheader"
     },

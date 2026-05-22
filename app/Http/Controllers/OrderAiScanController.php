@@ -9,20 +9,35 @@ use Illuminate\Http\Request;
 
 class OrderAiScanController extends Controller
 {
-    public function index()
+    public function index(Request $request, OrderAiScanService $scanService)
     {
+        $this->authorizeModuleAccess($request);
+
         $pageConfigs = ['pageHeader' => false];
+        $initialScan = null;
+        $initialScanState = null;
+        $requestedScanId = (int) $request->query('scan', 0);
+
+        if ($requestedScanId > 0) {
+            $initialScan = OrderAiScan::query()->findOrFail($requestedScanId);
+            $this->authorizeScan($request, $initialScan);
+            $initialScanState = $scanService->buildStatusPayload($initialScan);
+        }
 
         return view('content.apps.orders.app-order-ai-scan', [
             'pageConfigs' => $pageConfigs,
             'scanProvider' => (string) config('ai-order-scan.provider', 'mock'),
             'scanModel' => (string) config('ai-order-scan.model', 'gpt-5'),
             'autoTransferEnabled' => filter_var(config('ai-order-scan.auto_transfer', false), FILTER_VALIDATE_BOOL),
+            'initialScanId' => $initialScan?->id,
+            'initialScanState' => $initialScanState,
         ]);
     }
 
     public function store(Request $request, OrderAiScanService $scanService): JsonResponse
     {
+        $this->authorizeModuleAccess($request);
+
         $validated = $request->validate([
             'file' => ['required', 'file', 'max:51200'],
         ]);
@@ -39,9 +54,14 @@ class OrderAiScanController extends Controller
 
     public function status(Request $request, OrderAiScan $scan, OrderAiScanService $scanService): JsonResponse
     {
+        $this->authorizeModuleAccess($request);
         $this->authorizeScan($request, $scan);
 
-        $scan = $scanService->advance($scan, $request->user());
+        if ((string) ($scan->source_origin ?? 'manual') === 'imap') {
+            $scan = $scan->fresh();
+        } else {
+            $scan = $scanService->advance($scan, $request->user());
+        }
 
         return response()->json([
             'message' => 'Status AI skena je osvježen.',
@@ -57,12 +77,32 @@ class OrderAiScanController extends Controller
             abort(403);
         }
 
-        if (($user->role ?? null) === 'admin') {
+        if ($this->userCanAccessAiOrderModule($user)) {
             return;
         }
 
         if ((int) ($scan->user_id ?? 0) !== (int) ($user->id ?? 0)) {
             abort(403);
         }
+    }
+
+    private function authorizeModuleAccess(Request $request): void
+    {
+        $user = $request->user();
+
+        if (!$this->userCanAccessAiOrderModule($user)) {
+            abort(403);
+        }
+    }
+
+    private function userCanAccessAiOrderModule($user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        return method_exists($user, 'canAccessAiOrderModule')
+            ? (bool) $user->canAccessAiOrderModule()
+            : false;
     }
 }

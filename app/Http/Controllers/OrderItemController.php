@@ -226,6 +226,10 @@ class OrderItemController extends OrderItemMoveLinkController
             ['adDeliveryDeadline', 'adDeliveryDate', 'adDateOut', 'adDateValid'],
             null
         ));
+        $displayName = $this->composeOrderItemDisplayName(
+            (string) $this->valueTrimmed($row, ['acName', 'acDescr'], ''),
+            (string) $this->valueTrimmed($row, ['acNote'], '')
+        );
 
         return [
             'order_key' => (string) $this->valueTrimmed($row, ['acKey'], ''),
@@ -233,8 +237,8 @@ class OrderItemController extends OrderItemMoveLinkController
             'sifra' => (string) $this->valueTrimmed($row, ['acIdent'], ''),
             'artikal' => (string) $this->valueTrimmed($row, ['acIdent'], ''),
             'alt' => $this->normalizeNullableNumber($this->value($row, ['anVariant'], null)),
-            'naziv' => (string) $this->valueTrimmed($row, ['acName', 'acDescr'], ''),
-            'opis' => (string) $this->valueTrimmed($row, ['acName', 'acDescr'], ''),
+            'naziv' => $displayName,
+            'opis' => $displayName,
             'jm' => (string) $this->valueTrimmed($row, ['acUM'], ''),
             'kolicina' => $quantity,
             'cijena' => $this->normalizeNullableNumber($this->value($row, ['anPrice'], null)),
@@ -257,6 +261,49 @@ class OrderItemController extends OrderItemMoveLinkController
             'cijena_s_rabatom' => $this->normalizeNullableNumber($this->value($row, ['anRTPrice', 'anSalePrice', 'anPrice'], null)),
             'order_item_qid' => $this->normalizeNullableNumber($this->value($row, ['anQId'], null)),
         ];
+    }
+
+    protected function composeOrderItemDisplayName(string $name, string $note = ''): string
+    {
+        $name = trim((string) preg_replace('/\s+/', ' ', $name));
+        $note = trim((string) preg_replace('/\s+/', ' ', $note));
+
+        if ($note === '') {
+            return $name;
+        }
+
+        $segments = array_values(array_filter(array_map(function ($segment) {
+            return trim((string) $segment);
+        }, preg_split('/\s*\|\s*/', $note) ?: [])));
+        $descriptiveSegments = [];
+
+        foreach ($segments as $segment) {
+            if (preg_match('/^lieferdatum\b/i', $segment) === 1) {
+                break;
+            }
+
+            $descriptiveSegments[] = $segment;
+        }
+
+        if (empty($descriptiveSegments)) {
+            return $name;
+        }
+
+        $suffix = implode(' ', $descriptiveSegments);
+
+        if ($suffix === '') {
+            return $name;
+        }
+
+        if ($name === '') {
+            return $suffix;
+        }
+
+        if (stripos($suffix, $name) === 0) {
+            return $suffix;
+        }
+
+        return trim($name . ' ' . $suffix);
     }
 
     protected function addTransferStatusToOrderItems(array $items, string $normalizedOrderNumber): array
