@@ -36,9 +36,19 @@ return [
 
         'database' => [
             'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION', env('DB_CONNECTION', 'mysql')),
             'table' => 'jobs',
             'queue' => 'default',
             'retry_after' => 90,
+            'after_commit' => false,
+        ],
+
+        'database_ai_inbox' => [
+            'driver' => 'database',
+            'connection' => env('AI_INBOX_QUEUE_DB_CONNECTION', 'mysql'),
+            'table' => 'jobs',
+            'queue' => env('AI_INBOX_QUEUE_NAME', 'ai-inbox'),
+            'retry_after' => 180,
             'after_commit' => false,
         ],
 

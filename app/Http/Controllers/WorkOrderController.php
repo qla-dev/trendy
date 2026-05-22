@@ -2132,9 +2132,13 @@ class WorkOrderController extends Controller
             ]);
 
             $workOrderColumns = $this->tableColumns();
+            $barcodeWorkOrderQuantity = $saveMode === 'barcode'
+                ? $this->resolveBarcodeConsumptionWorkOrderQuantity($workOrderRow)
+                : 1.0;
             $saveResult = DB::transaction(function () use (
                 $resolvedRows,
                 $quantityFactor,
+                $barcodeWorkOrderQuantity,
                 $workOrderKey,
                 $preferredWarehouse,
                 $workOrderRow,
@@ -2228,9 +2232,9 @@ class WorkOrderController extends Controller
                     if ($manualPlanQty !== null) {
                         $plannedQty = max(0, $manualPlanQty);
                     } elseif ($saveMode === 'barcode') {
-                        // Barcode/weight-confirm mode always treats entered quantity as the absolute value,
-                        // not as a BOM multiplier.
-                        $plannedQty = $quantityFactor;
+                        // Barcode/weight-confirm mode accepts the unit quantity for one finished product
+                        // and expands it to the total work-order quantity before saving and stock issue.
+                        $plannedQty = $quantityFactor * $barcodeWorkOrderQuantity;
                     } elseif ($itemKind === 'operations') {
                         $plannedQty = abs($baseQty) > 0.000001 ? ($baseQty * $quantityFactor) : 0.0;
                     } elseif ($source === 'bom') {
@@ -2314,6 +2318,8 @@ class WorkOrderController extends Controller
                             'acOperationType' => $operationType,
                             'item_kind' => $itemKind,
                             'anGrossQty' => $baseQty,
+                            'unit_input_qty' => $saveMode === 'barcode' ? $quantityFactor : null,
+                            'work_order_qty' => $saveMode === 'barcode' ? $barcodeWorkOrderQuantity : null,
                             'previous_anPlanQty' => $existingQty,
                             'stock_consumed_qty' => $plannedQty,
                             'anPlanQty' => $updatedQty,
@@ -2402,6 +2408,8 @@ class WorkOrderController extends Controller
                         'acOperationType' => $operationType,
                         'item_kind' => $itemKind,
                         'anGrossQty' => $baseQty,
+                        'unit_input_qty' => $saveMode === 'barcode' ? $quantityFactor : null,
+                        'work_order_qty' => $saveMode === 'barcode' ? $barcodeWorkOrderQuantity : null,
                         'stock_consumed_qty' => $saveMode === 'barcode' ? $plannedQty : 0.0,
                         'anPlanQty' => $plannedQty,
                     ];
@@ -5451,6 +5459,33 @@ class WorkOrderController extends Controller
         ) ?? 0);
     }
 
+    private function workOrderHeaderQuantity(array $row): float
+    {
+        return (float) ($this->toFloatOrNull(
+            $row['anPlanQty'] ?? $row['anQty'] ?? $row['anQty1'] ?? 0
+        ) ?? 0);
+    }
+
+    private function resolveBarcodeConsumptionWorkOrderQuantity(array $workOrderRow): float
+    {
+        $quantity = $this->workOrderHeaderQuantity($workOrderRow);
+
+        return $quantity > 0.000001 ? $quantity : 1.0;
+    }
+
+    private function resolveReleasedMaterialQuantity(array $row): float
+    {
+        foreach (['anPlanQty', 'anQty', 'anQty1', 'stock_consumed_qty'] as $column) {
+            $quantity = abs((float) ($this->toFloatOrNull($row[$column] ?? null) ?? 0.0));
+
+            if ($quantity > 0.000001) {
+                return $quantity;
+            }
+        }
+
+        return 0.0;
+    }
+
     private function workOrderItemActualQuantity(array $row): float
     {
         return (float) ($this->toFloatOrNull(
@@ -5880,7 +5915,7 @@ class WorkOrderController extends Controller
         foreach ($releasedRows as $releasedRow) {
             $materialCode = trim((string) ($releasedRow['acIdent'] ?? ''));
             $materialKey = strtolower($materialCode);
-            $quantity = abs((float) ($this->toFloatOrNull($releasedRow['stock_consumed_qty'] ?? null) ?? 0.0));
+            $quantity = $this->resolveReleasedMaterialQuantity($releasedRow);
 
             if ($materialCode === '' || $quantity <= 0.000001) {
                 continue;

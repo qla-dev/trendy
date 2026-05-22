@@ -37,8 +37,8 @@ class MenuServiceProvider extends ServiceProvider
         $self = $this;
         \View::composer('*', function ($view) use ($verticalMenuData, $horizontalMenuData, $self) {
             $verticalMenuCopy = json_decode(json_encode($verticalMenuData));
-            $verticalMenuCopy = $self->filterHiddenMenuItems($verticalMenuCopy);
             $verticalMenuCopy = $self->filterAdminOnlyMenuItems($verticalMenuCopy);
+            $verticalMenuCopy = $self->filterAiOrderModuleMenuItems($verticalMenuCopy);
 
             if (Auth::check() && Auth::user()->hasRole('user')) {
                 $verticalMenuCopy = $self->filterMenuForUserRole($verticalMenuCopy);
@@ -74,6 +74,18 @@ class MenuServiceProvider extends ServiceProvider
             return $menuData;
         }
 
+        $canAccessAiOrderModule = $this->canAccessAiOrderModule(Auth::user());
+        $allowedSlugs = ['app-invoice-preview'];
+
+        if ($canAccessAiOrderModule) {
+            $allowedSlugs = array_merge($allowedSlugs, [
+                'app-orders-navheader',
+                'app-order-ai-scan',
+                'app-ai-tokens-navheader',
+                'app-ai-token-history',
+            ]);
+        }
+
         $filteredMenu = [];
         $filteredMenu[] = (object)[
             'navheader' => 'RADNI NALOZI',
@@ -81,7 +93,7 @@ class MenuServiceProvider extends ServiceProvider
         ];
 
         foreach ($menuData->menu as $menu) {
-            if (isset($menu->slug) && $menu->slug === 'app-invoice-preview') {
+            if (isset($menu->slug) && in_array($menu->slug, $allowedSlugs, true)) {
                 $filteredMenu[] = $menu;
             }
         }
@@ -111,6 +123,8 @@ class MenuServiceProvider extends ServiceProvider
             'app-barcode-generator',
             'app-orders-navheader',
             'app-orders',
+            'app-ai-tokens-navheader',
+            'app-ai-token-history',
             'app-documents-navheader',
             'app-released-material-documents',
         ];
@@ -122,20 +136,35 @@ class MenuServiceProvider extends ServiceProvider
         return $menuData;
     }
 
-    private function filterHiddenMenuItems($menuData)
+    private function filterAiOrderModuleMenuItems($menuData)
     {
         if (!isset($menuData->menu) || empty($menuData->menu)) {
             return $menuData;
         }
 
-        $hiddenSlugs = [
-            'app-order-ai-scan',
-        ];
+        if ($this->canAccessAiOrderModule(Auth::user())) {
+            return $menuData;
+        }
 
-        $menuData->menu = array_values(array_filter($menuData->menu, function ($menu) use ($hiddenSlugs) {
-            return !isset($menu->slug) || !in_array($menu->slug, $hiddenSlugs, true);
+        $menuData->menu = array_values(array_filter($menuData->menu, function ($menu) {
+            return !isset($menu->slug) || !in_array($menu->slug, [
+                'app-order-ai-scan',
+                'app-ai-tokens-navheader',
+                'app-ai-token-history',
+            ], true);
         }));
 
         return $menuData;
+    }
+
+    private function canAccessAiOrderModule($user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        return method_exists($user, 'canAccessAiOrderModule')
+            ? (bool) $user->canAccessAiOrderModule()
+            : false;
     }
 }

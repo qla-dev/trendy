@@ -16,6 +16,8 @@ class OrderAiResponseSchema
                     'additionalProperties' => false,
                     'required' => [
                         'customer_name',
+                        'supplier_name',
+                        'page_count',
                         'receiver_name',
                         'contact_name',
                         'external_document_number',
@@ -29,6 +31,11 @@ class OrderAiResponseSchema
                     ],
                     'properties' => [
                         'customer_name' => ['type' => 'string'],
+                        'supplier_name' => ['type' => 'string'],
+                        'page_count' => [
+                            'type' => 'integer',
+                            'description' => 'Total number of pages in the uploaded file.',
+                        ],
                         'receiver_name' => ['type' => 'string'],
                         'contact_name' => ['type' => 'string'],
                         'external_document_number' => ['type' => 'string'],
@@ -56,6 +63,7 @@ class OrderAiResponseSchema
                             'quantity',
                             'unit',
                             'unit_price',
+                            'line_total',
                             'vat_rate',
                             'vat_code',
                             'discount_percent',
@@ -64,16 +72,32 @@ class OrderAiResponseSchema
                         ],
                         'properties' => [
                             'line_number' => ['type' => 'integer'],
-                            'product_code' => ['type' => 'string'],
-                            'product_name' => ['type' => 'string'],
+                            'product_code' => [
+                                'type' => 'string',
+                                'description' => 'Visible item/material code only. Keep it separate from the long item description.',
+                            ],
+                            'product_name' => [
+                                'type' => 'string',
+                                'description' => 'Full visible item description. Merge all continuation description lines that belong to the same item, even across a page break if there is no new position/code.',
+                            ],
                             'quantity' => ['type' => 'number'],
                             'unit' => ['type' => 'string'],
-                            'unit_price' => ['type' => 'number'],
+                            'unit_price' => [
+                                'type' => 'number',
+                                'description' => 'Final visible Nettopreis for the item. If a page ends with Bruttopreis and the next page continues the same item without a new position/code, use the continued Nettopreis instead.',
+                            ],
+                            'line_total' => [
+                                'type' => 'number',
+                                'description' => 'Final visible row total/Wert for the item. Include continuation amounts that belong to the previous item and do not leave them only in the summary.',
+                            ],
                             'vat_rate' => ['type' => 'number'],
                             'vat_code' => ['type' => 'string'],
                             'discount_percent' => ['type' => 'number'],
                             'priority' => ['type' => 'string'],
-                            'note' => ['type' => 'string'],
+                            'note' => [
+                                'type' => 'string',
+                                'description' => 'Optional extra note that belongs to the item, such as delivery/date notes that continue the same line.',
+                            ],
                         ],
                     ],
                 ],

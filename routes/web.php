@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AiInboxController;
+use App\Http\Controllers\AiTokenHistoryController;
 use App\Http\Controllers\LanguageController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AppsController;
@@ -89,9 +91,12 @@ Route::middleware('auth:web')->group(function () {
         Route::get('orders/work-orders', [WorkOrderOrderItemLinkController::class, 'ordersLinkageWorkOrders'])->name('app-orders-work-orders');
         Route::get('orders/radni-nalozi', [OrderController::class, 'ordersLinkageWorkOrdersApi'])->name('app-orders-radni-nalozi');
         Route::delete('orders', [OrderController::class, 'destroyLinkedOrder'])->name('app-orders-destroy');
+        Route::get('orders/ai-inbox', [AiInboxController::class, 'index'])->name('app-order-ai-inbox');
+        Route::post('orders/ai-inbox/refresh', [AiInboxController::class, 'refresh'])->name('app-order-ai-inbox-refresh');
         Route::get('orders/ai-scan', [OrderAiScanController::class, 'index'])->name('app-order-ai-scan');
         Route::post('orders/ai-scan/upload', [OrderAiScanController::class, 'store'])->name('app-order-ai-scan-upload');
         Route::get('orders/ai-scan/{scan}/status', [OrderAiScanController::class, 'status'])->name('app-order-ai-scan-status');
+        Route::get('ai-tokens/history', [AiTokenHistoryController::class, 'index'])->name('app-ai-token-history');
         Route::get('documents/released-materials', [ReleasedMaterialDocumentController::class, 'index'])->name('app-released-material-documents');
         Route::get('documents/released-materials/data', [ReleasedMaterialDocumentController::class, 'data'])->name('app-released-material-documents-data');
         Route::delete('documents/released-materials', [ReleasedMaterialDocumentController::class, 'destroy'])->name('app-released-material-documents-destroy');

@@ -2,22 +2,29 @@
 
 namespace App\Services\OrderAi;
 
+use App\Jobs\ProcessImportedOrderAiScanJob;
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\Contracts\OrderAiScanProvider;
+use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 
 class OrderAiScanService
 {
+    private ?array $orderAiScanColumns = null;
+
     public function createScan(UploadedFile $file, mixed $user = null): OrderAiScan
     {
         $provider = trim((string) config('ai-order-scan.provider', 'mock')) ?: 'mock';
         $model = trim((string) config('ai-order-scan.model', 'gpt-5'));
         $disk = (string) config('ai-order-scan.storage_disk', 'local');
         $directory = trim((string) config('ai-order-scan.storage_directory', 'order-ai-scans'), '/');
+        $documentMetrics = app(OrderAiDocumentMetrics::class)->resolveForUpload($file);
         $storedName = Str::uuid()->toString() . '.' . ($file->guessExtension() ?: $file->extension() ?: 'bin');
         $relativePath = $file->storeAs($directory . '/' . Carbon::now()->format('Y/m'), $storedName, $disk);
 
@@ -25,20 +32,73 @@ class OrderAiScanService
             throw new RuntimeException('Upload fajla nije uspio.');
         }
 
-        return OrderAiScan::query()->create([
-            'user_id' => is_object($user) ? ($user->id ?? null) : null,
-            'provider' => $provider,
-            'model' => $model !== '' ? $model : null,
-            'status' => 'uploaded',
-            'processing_step' => 'Fajl je uspjesno ucitan.',
-            'progress_current' => 10,
-            'progress_total' => 100,
-            'source_file_name' => $file->getClientOriginalName(),
-            'source_file_path' => $relativePath,
-            'source_mime_type' => $file->getMimeType(),
-            'source_file_size' => $file->getSize(),
-            'request_prompt' => (string) config('ai-order-scan.prompt'),
-        ]);
+        return $this->createScanRecord(
+            relativePath: $relativePath,
+            originalName: $file->getClientOriginalName(),
+            mimeType: (string) $file->getMimeType(),
+            fileSize: $file->getSize(),
+            documentMetrics: $documentMetrics,
+            user: $user
+        );
+    }
+
+    public function createScanFromBinary(
+        string $originalName,
+        string $binaryContent,
+        ?string $mimeType = null,
+        mixed $user = null,
+        array $attributes = []
+    ): OrderAiScan {
+        $disk = (string) config('ai-order-scan.storage_disk', 'local');
+        $directory = trim((string) config('ai-order-scan.storage_directory', 'order-ai-scans'), '/');
+        $extension = pathinfo($originalName, PATHINFO_EXTENSION);
+        $storedName = Str::uuid()->toString() . '.' . ($extension !== '' ? $extension : $this->guessExtensionFromMimeType($mimeType));
+        $relativePath = trim($directory . '/' . Carbon::now()->format('Y/m') . '/' . $storedName, '/');
+        $stored = Storage::disk($disk)->put($relativePath, $binaryContent);
+
+        if ($stored === false) {
+            throw new RuntimeException('Spremanje email privitka nije uspjelo.');
+        }
+
+        $resolvedMimeType = trim((string) $mimeType) !== ''
+            ? trim((string) $mimeType)
+            : $this->guessMimeTypeFromName($originalName);
+        $documentMetrics = app(OrderAiDocumentMetrics::class)->resolveForStoredFile(
+            $disk,
+            $relativePath,
+            $resolvedMimeType,
+            $originalName
+        );
+
+        return $this->createScanRecord(
+            relativePath: $relativePath,
+            originalName: $originalName,
+            mimeType: $resolvedMimeType,
+            fileSize: strlen($binaryContent),
+            documentMetrics: $documentMetrics,
+            user: $user,
+            attributes: $attributes
+        );
+    }
+
+    public function dispatchBackgroundProcessing(OrderAiScan $scan): void
+    {
+        ProcessImportedOrderAiScanJob::dispatch((int) $scan->id)
+            ->onConnection((string) config('ai-order-scan.inbox.queue_connection', 'database_ai_inbox'))
+            ->onQueue((string) config('ai-order-scan.inbox.queue_name', 'ai-inbox'));
+    }
+
+    public function processUntilReviewed(OrderAiScan $scan, mixed $user = null): OrderAiScan
+    {
+        $current = $scan->fresh();
+        $safety = 0;
+
+        while ($current instanceof OrderAiScan && !$current->isTerminal() && $safety < 5) {
+            $current = $this->advance($current, $user);
+            $safety++;
+        }
+
+        return $current instanceof OrderAiScan ? $current->fresh() : $scan->fresh();
     }
 
     public function advance(OrderAiScan $scan, mixed $user = null): OrderAiScan
@@ -66,7 +126,7 @@ class OrderAiScanService
         if ($scan->status === 'ready_for_transfer') {
             $scan->forceFill([
                 'status' => 'transferring',
-                'processing_step' => 'Priprema transfera prema Pantheonu.',
+                'processing_step' => 'Priprema transfera u bazu.',
                 'progress_current' => 82,
             ])->save();
 
@@ -83,6 +143,7 @@ class OrderAiScanService
     public function buildStatusPayload(OrderAiScan $scan): array
     {
         $payload = is_array($scan->normalized_payload) ? $scan->normalized_payload : [];
+        $payload = $this->overlayTransferPreview($payload, $scan->pantheon_transfer_payload);
         $warnings = is_array($payload['order']['warnings'] ?? null) ? $payload['order']['warnings'] : [];
         $transferService = app(PantheonOrderTransferService::class);
         $transferReady = $transferService->isTransferReady($payload);
@@ -102,6 +163,11 @@ class OrderAiScanService
             'transfer_preview_error' => is_array($scan->pantheon_transfer_payload)
                 ? (string) ($scan->pantheon_transfer_payload['preview_error'] ?? '')
                 : '',
+            'source_origin' => (string) ($scan->source_origin ?? 'manual'),
+            'source_file_name' => (string) ($scan->source_file_name ?? ''),
+            'source_email_subject' => (string) ($scan->source_email_subject ?? ''),
+            'source_email_from' => (string) ($scan->source_email_from ?? ''),
+            'source_email_received_at' => $scan->source_email_received_at?->toIso8601String(),
             'pantheon_order' => [
                 'key' => (string) ($scan->pantheon_order_key ?? ''),
                 'view' => (string) ($scan->pantheon_order_view ?? ''),
@@ -118,6 +184,10 @@ class OrderAiScanService
             $provider = $this->resolveProvider($scan);
             $result = $provider->scan($scan);
             $normalizedPayload = $this->normalizePayload($result['normalized_payload'] ?? []);
+            $pageCount = max(0, (int) data_get($normalizedPayload, 'order.page_count', 0));
+            $billedTokens = $pageCount > 0
+                ? app(OrderAiDocumentMetrics::class)->calculateBilledTokens($pageCount)
+                : 0;
             $transferReady = app(PantheonOrderTransferService::class)->isTransferReady($normalizedPayload);
             $autoTransfer = $transferReady && $this->shouldAutoTransfer($scan) && $provider->supportsLiveTransfer();
             $transferPreview = null;
@@ -126,7 +196,7 @@ class OrderAiScanService
                 $transferPreview = $this->buildTransferPreview($scan, $normalizedPayload, $user);
             }
 
-            $scan->forceFill([
+            $attributes = [
                 'provider' => (string) ($result['provider'] ?? $scan->provider),
                 'model' => (string) ($result['model'] ?? $scan->model),
                 'provider_task_id' => trim((string) ($result['provider_task_id'] ?? '')) ?: null,
@@ -140,7 +210,17 @@ class OrderAiScanService
                 'progress_current' => $autoTransfer ? 70 : 100,
                 'completed_at' => $autoTransfer ? null : now(),
                 'error_message' => null,
-            ])->save();
+            ];
+
+            if ($pageCount > 0 && $this->orderAiScanColumnExists('page_count')) {
+                $attributes['page_count'] = $pageCount;
+            }
+
+            if ($billedTokens > 0 && $this->orderAiScanColumnExists('billed_tokens')) {
+                $attributes['billed_tokens'] = $billedTokens;
+            }
+
+            $scan->forceFill($attributes)->save();
         } catch (\Throwable $exception) {
             $scan->forceFill([
                 'status' => 'failed',
@@ -161,7 +241,7 @@ class OrderAiScanService
 
             $scan->forceFill([
                 'status' => 'transferred',
-                'processing_step' => 'Narudzba je prebacena u Pantheon.',
+                'processing_step' => 'Narudzba je prebacena u bazu.',
                 'progress_current' => 100,
                 'pantheon_transfer_payload' => $result,
                 'pantheon_order_key' => $result['pantheon_order_key'] ?? null,
@@ -174,7 +254,7 @@ class OrderAiScanService
         } catch (\Throwable $exception) {
             $scan->forceFill([
                 'status' => 'failed',
-                'processing_step' => 'Transfer prema Pantheonu nije uspio.',
+                'processing_step' => 'Transfer u bazu nije uspio.',
                 'error_message' => $exception->getMessage(),
                 'completed_at' => now(),
             ])->save();
@@ -185,6 +265,10 @@ class OrderAiScanService
 
     private function shouldAutoTransfer(OrderAiScan $scan): bool
     {
+        if ((string) ($scan->source_origin ?? 'manual') === 'imap') {
+            return false;
+        }
+
         return filter_var(config('ai-order-scan.auto_transfer', false), FILTER_VALIDATE_BOOL)
             && $scan->provider !== 'mock';
     }
@@ -224,14 +308,14 @@ class OrderAiScanService
         }
 
         if (!$transferReady) {
-            return 'AI analiza zavrsena. Pregledaj rezultat prije Pantheon pripreme.';
+            return 'AI analiza zavrsena. Pregledaj rezultat prije pripreme transfera.';
         }
 
         if (is_array($transferPreview) && !empty($transferPreview['preview_error'])) {
-            return 'AI analiza zavrsena. Pantheon preview nije pripremljen, provjeri log.';
+            return 'AI analiza zavrsena. Preview transfera nije pripremljen, provjeri log.';
         }
 
-        return 'AI analiza zavrsena. Pantheon kreiranje je iskljuceno, preview je logovan.';
+        return 'AI analiza zavrsena. Transfer u bazu je spreman.';
     }
 
     private function resolveProvider(OrderAiScan $scan): OrderAiScanProvider
@@ -253,10 +337,37 @@ class OrderAiScanService
     {
         $order = is_array($payload['order'] ?? null) ? $payload['order'] : [];
         $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];
+        $normalizedItems = array_values(array_filter(array_map(function ($item, int $index) {
+            if (!is_array($item)) {
+                return null;
+            }
+
+            return [
+                'line_number' => (int) ($item['line_number'] ?? ($index + 1)),
+                'product_code' => trim((string) ($item['product_code'] ?? '')),
+                'product_name' => trim((string) ($item['product_name'] ?? '')),
+                'quantity' => (float) ($item['quantity'] ?? 0),
+                'unit' => trim((string) ($item['unit'] ?? config('ai-order-scan.default_unit', 'KO'))),
+                'unit_price' => (float) ($item['unit_price'] ?? 0),
+                'line_total' => (float) ($item['line_total'] ?? 0),
+                'vat_rate' => (float) ($item['vat_rate'] ?? config('ai-order-scan.default_vat_rate', 17)),
+                'vat_code' => trim((string) ($item['vat_code'] ?? config('ai-order-scan.default_vat_code', 'P1'))),
+                'discount_percent' => (float) ($item['discount_percent'] ?? 0),
+                'priority' => trim((string) ($item['priority'] ?? '')),
+                'note' => trim((string) ($item['note'] ?? '')),
+            ];
+        }, $items, array_keys($items))));
+        $supplierName = $this->normalizeSupplierName((string) ($order['supplier_name'] ?? ''));
+        $warnings = array_values(array_filter(array_map(function ($warning) {
+            return trim((string) $warning);
+        }, is_array($order['warnings'] ?? null) ? $order['warnings'] : [])));
+        $summary = $this->normalizeSummary($payload, $normalizedItems, $supplierName, $warnings);
 
         return [
             'order' => [
                 'customer_name' => trim((string) ($order['customer_name'] ?? '')),
+                'supplier_name' => $supplierName,
+                'page_count' => max(0, (int) ($order['page_count'] ?? 0)),
                 'receiver_name' => trim((string) ($order['receiver_name'] ?? ($order['customer_name'] ?? ''))),
                 'contact_name' => trim((string) ($order['contact_name'] ?? '')),
                 'external_document_number' => trim((string) ($order['external_document_number'] ?? '')),
@@ -266,34 +377,232 @@ class OrderAiScanService
                 'note' => trim((string) ($order['note'] ?? '')),
                 'way_of_sale' => trim((string) ($order['way_of_sale'] ?? config('ai-order-scan.default_way_of_sale', 'D'))),
                 'confidence' => (float) ($order['confidence'] ?? 0),
-                'warnings' => array_values(array_filter(array_map(function ($warning) {
-                    return trim((string) $warning);
-                }, is_array($order['warnings'] ?? null) ? $order['warnings'] : []))),
+                'warnings' => $warnings,
             ],
-            'items' => array_values(array_filter(array_map(function ($item, int $index) {
-                if (!is_array($item)) {
-                    return null;
-                }
-
-                return [
-                    'line_number' => (int) ($item['line_number'] ?? ($index + 1)),
-                    'product_code' => trim((string) ($item['product_code'] ?? '')),
-                    'product_name' => trim((string) ($item['product_name'] ?? '')),
-                    'quantity' => (float) ($item['quantity'] ?? 0),
-                    'unit' => trim((string) ($item['unit'] ?? config('ai-order-scan.default_unit', 'KO'))),
-                    'unit_price' => (float) ($item['unit_price'] ?? 0),
-                    'vat_rate' => (float) ($item['vat_rate'] ?? config('ai-order-scan.default_vat_rate', 17)),
-                    'vat_code' => trim((string) ($item['vat_code'] ?? config('ai-order-scan.default_vat_code', 'P1'))),
-                    'discount_percent' => (float) ($item['discount_percent'] ?? 0),
-                    'priority' => trim((string) ($item['priority'] ?? '')),
-                    'note' => trim((string) ($item['note'] ?? '')),
-                ];
-            }, $items, array_keys($items)))),
-            'summary' => [
-                'subtotal' => (float) ($payload['summary']['subtotal'] ?? 0),
-                'vat_total' => (float) ($payload['summary']['vat_total'] ?? 0),
-                'grand_total' => (float) ($payload['summary']['grand_total'] ?? 0),
-            ],
+            'items' => $normalizedItems,
+            'summary' => $summary,
         ];
+    }
+
+    private function normalizeSummary(array $payload, array $items, string $supplierName, array &$warnings): array
+    {
+        $summarySubtotal = (float) ($payload['summary']['subtotal'] ?? 0);
+        $summaryVatTotal = (float) ($payload['summary']['vat_total'] ?? 0);
+        $summaryGrandTotal = (float) ($payload['summary']['grand_total'] ?? 0);
+        $computedSubtotal = 0.0;
+        $computedVatTotal = 0.0;
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $quantity = max(0, (float) ($item['quantity'] ?? 0));
+            $unitPrice = max(0, (float) ($item['unit_price'] ?? 0));
+            $lineTotal = max(0, (float) ($item['line_total'] ?? 0));
+            $discountPercent = max(0, (float) ($item['discount_percent'] ?? 0));
+            $vatRate = max(0, (float) ($item['vat_rate'] ?? 0));
+            $discountFactor = max(0, 1 - ($discountPercent / 100));
+            $baseValue = $lineTotal > 0 ? $lineTotal : ($quantity * $unitPrice * $discountFactor);
+
+            $computedSubtotal += $baseValue;
+            $computedVatTotal += $baseValue * ($vatRate / 100);
+        }
+
+        $computedSubtotal = round($computedSubtotal, 4);
+        $computedVatTotal = round($computedVatTotal, 4);
+        $computedGrandTotal = round($computedSubtotal + $computedVatTotal, 4);
+        $subtotalDelta = round($summarySubtotal - $computedSubtotal, 4);
+
+        if (abs($subtotalDelta) >= 0.01) {
+            $warnings[] = $this->buildSubtotalMismatchWarning($subtotalDelta, $supplierName);
+        }
+
+        if ($summarySubtotal <= 0 && $computedSubtotal > 0) {
+            $summarySubtotal = $computedSubtotal;
+        }
+
+        if ($summaryVatTotal <= 0 && $computedVatTotal > 0) {
+            $summaryVatTotal = $computedVatTotal;
+        }
+
+        if ($summaryGrandTotal <= 0) {
+            $summaryGrandTotal = round($summarySubtotal + $summaryVatTotal, 4);
+        }
+
+        if ($summaryGrandTotal <= 0 && $computedGrandTotal > 0) {
+            $summaryGrandTotal = $computedGrandTotal;
+        }
+
+        $warnings = array_values(array_unique(array_filter($warnings)));
+
+        return [
+            'subtotal' => $summarySubtotal,
+            'vat_total' => $summaryVatTotal,
+            'grand_total' => $summaryGrandTotal,
+        ];
+    }
+
+    private function buildSubtotalMismatchWarning(float $subtotalDelta, string $supplierName): string
+    {
+        $amount = number_format(abs($subtotalDelta), 2, '.', '');
+
+        if ($subtotalDelta > 0 && stripos($supplierName, 'grob') !== false) {
+            return 'AI summary je veci od zbira stavki za ' . $amount
+                . '. Provjeri GROB page-break continuation redove poput Ruesten/Termin abs. i Nettopreis, jer vjerovatno pripadaju prethodnoj stavci.';
+        }
+
+        if ($subtotalDelta > 0) {
+            return 'AI summary je veci od zbira stavki za ' . $amount
+                . '. Moguc je continuation red na prelomu stranice koji pripada prethodnoj stavci.';
+        }
+
+        return 'AI summary se razlikuje od zbira stavki za ' . $amount . '. Provjeri ekstraktovane cijene i totale.';
+    }
+
+    private function overlayTransferPreview(array $payload, mixed $transferPreview): array
+    {
+        if (!is_array($transferPreview)) {
+            return $payload;
+        }
+
+        $prepared = is_array($transferPreview['payload'] ?? null) ? $transferPreview['payload'] : [];
+
+        if (empty($prepared)) {
+            return $payload;
+        }
+
+        $order = is_array($payload['order'] ?? null) ? $payload['order'] : [];
+        $summary = is_array($payload['summary'] ?? null) ? $payload['summary'] : [];
+        $items = is_array($payload['items'] ?? null) ? array_values($payload['items']) : [];
+        $preparedItems = is_array($prepared['items'] ?? null) ? array_values($prepared['items']) : [];
+
+        $payload['order'] = array_merge($order, [
+            'customer_name' => trim((string) ($prepared['customer_name'] ?? ($order['customer_name'] ?? ''))),
+            'supplier_name' => $this->normalizeSupplierName((string) ($prepared['supplier_name'] ?? ($order['supplier_name'] ?? ''))),
+            'receiver_name' => trim((string) ($prepared['receiver_name'] ?? ($order['receiver_name'] ?? ''))),
+            'contact_name' => trim((string) ($prepared['contact_name'] ?? ($order['contact_name'] ?? ''))),
+            'external_document_number' => trim((string) ($prepared['external_document_number'] ?? ($order['external_document_number'] ?? ''))),
+            'document_type' => trim((string) ($prepared['document_type'] ?? ($order['document_type'] ?? ''))),
+            'currency' => trim((string) ($prepared['currency'] ?? ($order['currency'] ?? ''))),
+            'delivery_deadline' => trim((string) ($prepared['delivery_deadline'] ?? ($order['delivery_deadline'] ?? ''))),
+            'note' => trim((string) ($prepared['note'] ?? ($order['note'] ?? ''))),
+            'way_of_sale' => trim((string) ($prepared['way_of_sale'] ?? ($order['way_of_sale'] ?? ''))),
+            'warnings' => array_values(array_unique(array_filter(
+                is_array($prepared['warnings'] ?? null)
+                    ? array_map('strval', $prepared['warnings'])
+                    : (is_array($order['warnings'] ?? null) ? array_map('strval', $order['warnings']) : [])
+            ))),
+        ]);
+
+        foreach ($preparedItems as $index => $preparedItem) {
+            $existingItem = is_array($items[$index] ?? null) ? $items[$index] : [];
+
+            $items[$index] = array_merge($existingItem, [
+                'line_number' => (int) ($preparedItem['line_number'] ?? ($existingItem['line_number'] ?? ($index + 1))),
+                'product_code' => trim((string) ($preparedItem['product_code'] ?? ($existingItem['product_code'] ?? ''))),
+                'product_name' => trim((string) ($preparedItem['product_name'] ?? ($existingItem['product_name'] ?? ''))),
+                'quantity' => (float) ($preparedItem['quantity'] ?? ($existingItem['quantity'] ?? 0)),
+                'unit' => trim((string) ($preparedItem['unit'] ?? ($existingItem['unit'] ?? ''))),
+                'unit_price' => (float) ($existingItem['unit_price'] ?? ($preparedItem['unit_price'] ?? 0)),
+                'line_total' => (float) ($existingItem['line_total'] ?? ($preparedItem['line_total'] ?? 0)),
+                'vat_rate' => (float) ($preparedItem['vat_rate'] ?? ($existingItem['vat_rate'] ?? 0)),
+                'vat_code' => trim((string) ($preparedItem['vat_code'] ?? ($existingItem['vat_code'] ?? ''))),
+                'discount_percent' => (float) ($preparedItem['discount_percent'] ?? ($existingItem['discount_percent'] ?? 0)),
+                'priority' => trim((string) ($preparedItem['priority'] ?? ($existingItem['priority'] ?? ''))),
+                'note' => trim((string) ($preparedItem['note'] ?? ($existingItem['note'] ?? ''))),
+            ]);
+        }
+
+        $payload['items'] = $items;
+        $payload['summary'] = array_merge($summary, [
+            'subtotal' => (float) ($prepared['subtotal'] ?? ($summary['subtotal'] ?? 0)),
+            'vat_total' => (float) ($prepared['vat_total'] ?? ($summary['vat_total'] ?? 0)),
+            'grand_total' => (float) ($prepared['grand_total'] ?? ($summary['grand_total'] ?? 0)),
+        ]);
+
+        return $payload;
+    }
+
+    private function normalizeSupplierName(string $value): string
+    {
+        $value = trim((string) preg_replace('/\s+/', ' ', str_replace(["\r", "\n"], ' ', $value)));
+
+        if ($value === '') {
+            return '';
+        }
+
+        $value = preg_replace('/\s+GMBH\s*&\s*CO\.\s*KG.*$/i', '', $value) ?? $value;
+        $value = preg_replace('/\s+GMBH.*$/i', '', $value) ?? $value;
+        $value = preg_replace('/\s+D\.O\.O\..*$/i', '', $value) ?? $value;
+        return trim((string) $value, " \t\n\r\0\x0B,.-");
+    }
+
+    private function orderAiScanColumnExists(string $column): bool
+    {
+        if ($this->orderAiScanColumns === null) {
+            $this->orderAiScanColumns = [];
+
+            foreach (['page_count', 'billed_tokens'] as $candidate) {
+                $this->orderAiScanColumns[$candidate] = Schema::connection('mysql')->hasColumn('order_ai_scans', $candidate);
+            }
+        }
+
+        return (bool) ($this->orderAiScanColumns[$column] ?? false);
+    }
+
+    private function createScanRecord(
+        string $relativePath,
+        string $originalName,
+        string $mimeType,
+        int $fileSize,
+        array $documentMetrics,
+        mixed $user = null,
+        array $attributes = []
+    ): OrderAiScan {
+        $provider = trim((string) config('ai-order-scan.provider', 'mock')) ?: 'mock';
+        $model = trim((string) config('ai-order-scan.model', 'gpt-5'));
+
+        $baseAttributes = [
+            'user_id' => is_object($user) ? ($user->id ?? null) : null,
+            'provider' => $provider,
+            'model' => $model !== '' ? $model : null,
+            'status' => 'uploaded',
+            'processing_step' => 'Fajl je uspjesno ucitan.',
+            'progress_current' => 10,
+            'progress_total' => 100,
+            'source_file_name' => $originalName,
+            'source_file_path' => $relativePath,
+            'source_mime_type' => $mimeType,
+            'source_file_size' => $fileSize,
+            'source_origin' => 'manual',
+            'request_prompt' => (string) config('ai-order-scan.prompt'),
+        ];
+
+        if ($this->orderAiScanColumnExists('page_count')) {
+            $baseAttributes['page_count'] = $documentMetrics['page_count'];
+        }
+
+        if ($this->orderAiScanColumnExists('billed_tokens')) {
+            $baseAttributes['billed_tokens'] = $documentMetrics['billed_tokens'];
+        }
+
+        return OrderAiScan::query()->create(array_merge($baseAttributes, $attributes));
+    }
+
+    private function guessExtensionFromMimeType(?string $mimeType): string
+    {
+        if (stripos((string) $mimeType, 'pdf') !== false) {
+            return 'pdf';
+        }
+
+        return 'bin';
+    }
+
+    private function guessMimeTypeFromName(string $originalName): string
+    {
+        return strtolower(pathinfo($originalName, PATHINFO_EXTENSION)) === 'pdf'
+            ? 'application/pdf'
+            : 'application/octet-stream';
     }
 }

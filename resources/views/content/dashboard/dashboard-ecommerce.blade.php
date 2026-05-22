@@ -118,6 +118,90 @@
       color: inherit;
     }
 
+    .dashboard-ai-credits-avatar {
+      width: 48px;
+      height: 48px;
+      min-width: 48px;
+      border-radius: 50%;
+      flex: 0 0 48px;
+      background: linear-gradient(135deg, rgba(255, 245, 205, 0.96) 0%, rgba(255, 232, 166, 0.72) 100%) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+
+    .dashboard-ai-credits-avatar .avatar-content {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dashboard-ai-coin-stack {
+      position: relative;
+      width: 1.56rem;
+      height: 1.56rem;
+      display: inline-block;
+    }
+
+    .dashboard-ai-coin {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 28%, #fff4be 0%, #ffd95e 38%, #f3b114 72%, #d98800 100%);
+      border: 1px solid rgba(180, 122, 0, 0.28);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.88),
+        inset 0 -2px 0 rgba(166, 102, 0, 0.18),
+        0 0.24rem 0.4rem rgba(240, 161, 0, 0.18);
+    }
+
+    .dashboard-ai-coin::before,
+    .dashboard-ai-coin::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+    }
+
+    .dashboard-ai-coin::before {
+      inset: 0.14rem;
+      border: 1px solid rgba(160, 100, 0, 0.24);
+      background: radial-gradient(circle at 30% 28%, rgba(255, 249, 214, 0.72) 0%, rgba(255, 230, 133, 0.4) 42%, rgba(246, 179, 21, 0.08) 100%);
+    }
+
+    .dashboard-ai-coin::after {
+      inset: 0.04rem;
+      border: 1px solid rgba(255, 247, 205, 0.5);
+      opacity: 0.6;
+    }
+
+    .dashboard-ai-coin-front {
+      width: 1.48rem;
+      height: 1.48rem;
+      top: 0.04rem;
+      left: 0.04rem;
+      z-index: 1;
+    }
+
+    .dashboard-ai-coin-inner {
+      position: relative;
+      z-index: 3;
+      font-size: 0.5rem;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: 0.06em;
+      color: #a36400;
+      text-shadow: 0 1px 0 rgba(255, 247, 208, 0.72);
+    }
+
+    .dark-layout .dashboard-ai-credits-avatar,
+    .semi-dark-layout .dashboard-ai-credits-avatar {
+      background: linear-gradient(135deg, rgba(255, 214, 102, 0.18) 0%, rgba(214, 165, 44, 0.14) 100%) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
     .dashboard-report-hover-row {
       display: flex;
       align-items: center;
@@ -576,19 +660,25 @@
                 </div>
               </div>
             </div>
-            <div class="col-xl-3 col-sm-6 col-12">
-              <div class="d-flex flex-row">
-                <div class="avatar bg-light-success me-2">
-                  <div class="avatar-content">
-                    <i data-feather="cpu" class="avatar-icon"></i>
+            @if(auth()->check() && method_exists(auth()->user(), 'canAccessAiOrderModule') && auth()->user()->canAccessAiOrderModule())
+              <div class="col-xl-3 col-sm-6 col-12">
+                <div class="d-flex flex-row">
+                  <div class="avatar dashboard-ai-credits-avatar me-2">
+                    <div class="avatar-content">
+                      <span class="dashboard-ai-coin-stack" aria-hidden="true">
+                        <span class="dashboard-ai-coin dashboard-ai-coin-front">
+                          <span class="dashboard-ai-coin-inner">AI</span>
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                  <div class="my-auto">
+                    <h4 class="fw-bolder mb-0">{{ number_format((int) ($dashboardStats['ai_billed_tokens_month'] ?? 0), 0, ',', '.') }}</h4>
+                    <p class="card-text font-small-3 mb-0">AI tokeni</p>
                   </div>
                 </div>
-                <div class="my-auto">
-                  <h4 class="fw-bolder mb-0">{{ number_format((float) ($dashboardStats['ai_credits_month'] ?? 0), 2, ',', '.') }}</h4>
-                  <p class="card-text font-small-3 mb-0">AI krediti</p>
-                </div>
               </div>
-            </div>
+            @endif
           </div>
         </div>
       </div>

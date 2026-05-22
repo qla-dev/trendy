@@ -658,9 +658,19 @@
 <section class="order-linkage-wrapper">
   <div class="content-header row">
     <div class="content-header-left col-12 mb-2">
-      <div class="row breadcrumbs-top">
-        <div class="col-12">
+      <div class="row breadcrumbs-top align-items-center">
+        <div class="col-md-6 col-12">
           <h2 class="content-header-title float-start mb-0">Narud&#382;be</h2>
+        </div>
+        <div class="col-md-6 col-12">
+          @php($showAiInboxButton = auth()->check() && ((method_exists(auth()->user(), 'isAdmin') && auth()->user()->isAdmin()) || (string) (auth()->user()->role ?? '') === 'admin'))
+          @if ($showAiInboxButton)
+            <div class="d-flex justify-content-md-end justify-content-start mt-1 mt-md-0">
+              <a href="{{ route('app-order-ai-inbox') }}" class="btn btn-outline-primary btn-sm">
+                <i data-feather="inbox" class="me-50"></i> AI Inbox
+              </a>
+            </div>
+          @endif
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ namespace App\Services\OrderAi;
 
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\Contracts\OrderAiScanProvider;
+use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use Illuminate\Support\Facades\Storage;
 
 class MockOrderAiScanProvider implements OrderAiScanProvider
@@ -43,9 +44,19 @@ class MockOrderAiScanProvider implements OrderAiScanProvider
 
     private function buildFallbackPayload(OrderAiScan $scan, string $rawContent): array
     {
+        $documentMetrics = app(OrderAiDocumentMetrics::class)->resolveForStoredFile(
+            (string) config('ai-order-scan.storage_disk', 'local'),
+            (string) ($scan->source_file_path ?? ''),
+            (string) ($scan->source_mime_type ?? ''),
+            (string) ($scan->source_file_name ?? '')
+        );
         $decoded = json_decode($rawContent, true);
 
         if (is_array($decoded) && isset($decoded['order'], $decoded['items']) && is_array($decoded['items'])) {
+            if (!isset($decoded['order']['page_count'])) {
+                $decoded['order']['page_count'] = $documentMetrics['page_count'];
+            }
+
             return $this->normalizePayload($decoded, [
                 'Mock provider loaded a JSON file directly. Verify values before transfer.',
             ]);
@@ -59,6 +70,8 @@ class MockOrderAiScanProvider implements OrderAiScanProvider
         return $this->normalizePayload([
             'order' => [
                 'customer_name' => $customerName,
+                'supplier_name' => '',
+                'page_count' => $documentMetrics['page_count'],
                 'receiver_name' => $customerName,
                 'contact_name' => '',
                 'external_document_number' => '',
@@ -97,6 +110,7 @@ class MockOrderAiScanProvider implements OrderAiScanProvider
                 'quantity' => (float) ($item['quantity'] ?? 0),
                 'unit' => trim((string) ($item['unit'] ?? config('ai-order-scan.default_unit', 'KO'))),
                 'unit_price' => (float) ($item['unit_price'] ?? 0),
+                'line_total' => (float) ($item['line_total'] ?? 0),
                 'vat_rate' => (float) ($item['vat_rate'] ?? config('ai-order-scan.default_vat_rate', 17)),
                 'vat_code' => trim((string) ($item['vat_code'] ?? config('ai-order-scan.default_vat_code', 'P1'))),
                 'discount_percent' => (float) ($item['discount_percent'] ?? 0),
@@ -108,6 +122,8 @@ class MockOrderAiScanProvider implements OrderAiScanProvider
         return [
             'order' => [
                 'customer_name' => trim((string) ($order['customer_name'] ?? '')),
+                'supplier_name' => trim((string) ($order['supplier_name'] ?? '')),
+                'page_count' => max(0, (int) ($order['page_count'] ?? 0)),
                 'receiver_name' => trim((string) ($order['receiver_name'] ?? ($order['customer_name'] ?? ''))),
                 'contact_name' => trim((string) ($order['contact_name'] ?? '')),
                 'external_document_number' => trim((string) ($order['external_document_number'] ?? '')),

@@ -85,4 +85,16 @@ class User extends Authenticatable
     {
         return $this->hasRole('employee');
     }
+
+    /**
+     * Check if user can access AI order module.
+     */
+    public function canAccessAiOrderModule(): bool
+    {
+        $username = strtolower(trim((string) ($this->username ?? '')));
+        $email = strtolower(trim((string) ($this->email ?? '')));
+
+        return $username === 'qla.dev'
+            || $email === 'colakovic.vedad@qla.dev';
+    }
 }
