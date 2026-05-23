@@ -5,6 +5,7 @@ namespace App\Services\OrderAi;
 use App\Models\Material;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Support\Utf8Sanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -980,8 +981,8 @@ class PantheonOrderTransferService
 
     private function resolveCatalogMaterial(string $productCode, string $productName): array
     {
-        $productCode = trim($productCode);
-        $productName = trim($productName);
+        $productCode = trim(Utf8Sanitizer::clean($productCode, 120));
+        $productName = trim(Utf8Sanitizer::clean($productName));
 
         $codeCandidate = $this->resolveCatalogMaterialByCode($productCode);
         $nameCandidate = $this->resolveCatalogMaterialByName($productName);
@@ -1055,6 +1056,7 @@ class PantheonOrderTransferService
 
     private function resolveCatalogMaterialByName(string $productName): array
     {
+        $productName = Utf8Sanitizer::clean($productName);
         $cacheKey = $this->normalizeCatalogLookupValue($productName);
 
         if ($cacheKey === '') {
@@ -1156,7 +1158,8 @@ class PantheonOrderTransferService
 
     private function buildCatalogMaterialSearchTerms(string $productName): array
     {
-        $productName = trim(preg_replace('/\s+/', ' ', $productName));
+        $productName = Utf8Sanitizer::clean($productName);
+        $productName = trim((string) (preg_replace('/\s+/', ' ', $productName) ?? $productName));
 
         if ($productName === '') {
             return [];
@@ -1171,11 +1174,11 @@ class PantheonOrderTransferService
             $terms[] = str_replace('/', '-', $signature);
         }
 
-        $tokens = preg_split('/\s+/', strtoupper($productName)) ?: [];
+        $tokens = preg_split('/\s+/', mb_strtoupper($productName, 'UTF-8')) ?: [];
         $filteredTokens = array_values(array_filter($tokens, function ($token) {
             $token = trim((string) $token);
 
-            if ($token === '' || strlen($token) < 3) {
+            if ($token === '' || mb_strlen($token, 'UTF-8') < 3) {
                 return false;
             }
 
@@ -1197,14 +1200,14 @@ class PantheonOrderTransferService
         $normalizedTerms = [];
 
         foreach ($terms as $term) {
-            $term = trim((string) $term);
+            $term = trim(Utf8Sanitizer::clean($term));
 
             if ($term === '') {
                 continue;
             }
 
-            if (strlen($term) > 120) {
-                $term = substr($term, 0, 120);
+            if (mb_strlen($term, 'UTF-8') > 120) {
+                $term = mb_substr($term, 0, 120, 'UTF-8');
             }
 
             $normalizedTerms[$term] = $term;
@@ -1284,12 +1287,16 @@ class PantheonOrderTransferService
 
     private function normalizeCatalogLookupValue(string $value): string
     {
+        $value = Utf8Sanitizer::clean($value);
+
         return preg_replace('/[^A-Z0-9]+/', '', strtoupper(trim($value))) ?? '';
     }
 
     private function normalizePantheonText(string $value): string
     {
-        return trim((string) preg_replace('/\s+/', ' ', str_replace(["\r", "\n"], ' ', $value)));
+        $value = Utf8Sanitizer::clean($value);
+
+        return trim((string) (preg_replace('/\s+/', ' ', str_replace(["\r", "\n"], ' ', $value)) ?? $value));
     }
 
     private function mergePantheonTextParts(array $parts): string
