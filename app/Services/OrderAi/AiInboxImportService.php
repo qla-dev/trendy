@@ -14,6 +14,8 @@ use Webklex\PHPIMAP\Message;
 
 class AiInboxImportService
 {
+    private ?string $mailboxDelimiter = null;
+
     public function __construct(private readonly OrderAiScanService $scanService)
     {
     }
@@ -39,7 +41,7 @@ class AiInboxImportService
         $client->connect();
 
         try {
-            $sourceFolderPath = $this->folderPath('source');
+            $sourceFolderPath = $this->folderPath('source', $client);
             $sourceFolder = $client->getFolderByPath($sourceFolderPath, false, true);
 
             if ($sourceFolder === null) {
@@ -250,16 +252,16 @@ class AiInboxImportService
 
     private function moveMessage(Message $message, string $targetKey): void
     {
-        $targetPath = $this->folderPath($targetKey);
-        $sourcePath = $this->folderPath('source');
-
-        if ($targetPath === '' || $targetPath === $sourcePath) {
-            return;
-        }
-
         $client = $message->getClient();
 
         if (!$client instanceof ImapClient) {
+            return;
+        }
+
+        $targetPath = $this->folderPath($targetKey, $client);
+        $sourcePath = $this->folderPath('source', $client);
+
+        if ($targetPath === '' || $targetPath === $sourcePath) {
             return;
         }
 
@@ -312,9 +314,15 @@ class AiInboxImportService
         ];
     }
 
-    private function folderPath(string $key): string
+    private function folderPath(string $key, ?ImapClient $client = null): string
     {
-        return trim((string) config('ai-order-scan.inbox.folders.' . $key, ''));
+        $path = trim((string) config('ai-order-scan.inbox.folders.' . $key, ''));
+
+        if ($path === '' || !$client instanceof ImapClient) {
+            return $path;
+        }
+
+        return $this->normalizeFolderPath($path, $client);
     }
 
     private function inboxConfig(): array
@@ -329,5 +337,47 @@ class AiInboxImportService
         return trim((string) ($imap['host'] ?? '')) !== ''
             && trim((string) ($imap['username'] ?? '')) !== ''
             && trim((string) ($imap['password'] ?? '')) !== '';
+    }
+
+    private function normalizeFolderPath(string $path, ImapClient $client): string
+    {
+        $delimiter = $this->resolveMailboxDelimiter($client);
+
+        if ($delimiter === '') {
+            return trim($path);
+        }
+
+        return preg_replace('#[\\\\/]#', preg_quote($delimiter, '#') === '\.' ? '.' : $delimiter, trim($path)) ?? trim($path);
+    }
+
+    private function resolveMailboxDelimiter(ImapClient $client): string
+    {
+        if ($this->mailboxDelimiter !== null) {
+            return $this->mailboxDelimiter;
+        }
+
+        $folders = $client->getFolders(false, null, true);
+        $inboxFolder = $folders->first(function ($folder) {
+            return $folder instanceof \Webklex\PHPIMAP\Folder
+                && strtoupper((string) $folder->path) === 'INBOX';
+        });
+
+        if ($inboxFolder instanceof \Webklex\PHPIMAP\Folder && trim((string) $inboxFolder->delimiter) !== '') {
+            $this->mailboxDelimiter = (string) $inboxFolder->delimiter;
+
+            return $this->mailboxDelimiter;
+        }
+
+        $firstFolder = $folders->first();
+
+        if ($firstFolder instanceof \Webklex\PHPIMAP\Folder && trim((string) $firstFolder->delimiter) !== '') {
+            $this->mailboxDelimiter = (string) $firstFolder->delimiter;
+
+            return $this->mailboxDelimiter;
+        }
+
+        $this->mailboxDelimiter = '/';
+
+        return $this->mailboxDelimiter;
     }
 }
