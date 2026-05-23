@@ -3,6 +3,7 @@
 namespace App\Services\OrderAi;
 
 use App\Models\OrderAiScan;
+use App\Support\Utf8Sanitizer;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -156,12 +157,13 @@ class AiInboxImportService
             } catch (Throwable $exception) {
                 $hasFailures = true;
                 $result['failed_items']++;
+                $sanitizedMessage = Utf8Sanitizer::cleanExceptionMessage($exception);
 
                 if ($scan instanceof OrderAiScan) {
                     $scan->forceFill([
                         'status' => 'failed',
                         'processing_step' => 'AI inbox import nije uspio.',
-                        'error_message' => $exception->getMessage(),
+                        'error_message' => $sanitizedMessage,
                         'completed_at' => now(),
                     ])->save();
                 }
@@ -170,7 +172,7 @@ class AiInboxImportService
                     'message_uid' => $uid,
                     'attachment_index' => $attachmentIndex,
                     'subject' => $subject,
-                    'message' => $exception->getMessage(),
+                    'message' => $sanitizedMessage,
                 ]);
             }
         }

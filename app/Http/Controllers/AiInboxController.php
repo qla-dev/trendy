@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\AiInboxImportService;
+use App\Support\Utf8Sanitizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -55,7 +56,7 @@ class AiInboxController extends Controller
         } catch (Throwable $exception) {
             return redirect()
                 ->route('app-order-ai-inbox')
-                ->with('error', 'AI Inbox osvjezavanje nije uspjelo: ' . $exception->getMessage());
+                ->with('error', 'AI Inbox osvjezavanje nije uspjelo: ' . Utf8Sanitizer::cleanExceptionMessage($exception));
         }
     }
 

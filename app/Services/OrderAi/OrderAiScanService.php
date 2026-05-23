@@ -6,6 +6,7 @@ use App\Jobs\ProcessImportedOrderAiScanJob;
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\Contracts\OrderAiScanProvider;
 use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
+use App\Support\Utf8Sanitizer;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -143,7 +144,9 @@ class OrderAiScanService
     public function buildStatusPayload(OrderAiScan $scan): array
     {
         $payload = is_array($scan->normalized_payload) ? $scan->normalized_payload : [];
-        $payload = $this->overlayTransferPreview($payload, $scan->pantheon_transfer_payload);
+        $transferPreview = Utf8Sanitizer::cleanRecursive($scan->pantheon_transfer_payload);
+        $payload = $this->overlayTransferPreview($payload, $transferPreview);
+        $payload = Utf8Sanitizer::cleanRecursive($payload);
         $warnings = is_array($payload['order']['warnings'] ?? null) ? $payload['order']['warnings'] : [];
         $transferService = app(PantheonOrderTransferService::class);
         $transferReady = $transferService->isTransferReady($payload);
@@ -151,30 +154,30 @@ class OrderAiScanService
 
         return [
             'id' => $scan->id,
-            'status' => $scan->status,
-            'processing_step' => $scan->processing_step,
+            'status' => Utf8Sanitizer::clean((string) ($scan->status ?? ''), 40),
+            'processing_step' => Utf8Sanitizer::clean((string) ($scan->processing_step ?? ''), 160),
             'current_progress' => (int) $scan->progress_current,
             'max_progress_steps' => (int) $scan->progress_total,
             'credits_spent' => (float) $scan->credits_spent,
             'warnings' => $warnings,
             'transfer_ready' => $transferReady,
             'auto_transfer' => $autoTransfer,
-            'transfer_preview_available' => !empty($scan->pantheon_transfer_payload),
-            'transfer_preview_error' => is_array($scan->pantheon_transfer_payload)
-                ? (string) ($scan->pantheon_transfer_payload['preview_error'] ?? '')
+            'transfer_preview_available' => !empty($transferPreview),
+            'transfer_preview_error' => is_array($transferPreview)
+                ? (string) ($transferPreview['preview_error'] ?? '')
                 : '',
-            'source_origin' => (string) ($scan->source_origin ?? 'manual'),
-            'source_file_name' => (string) ($scan->source_file_name ?? ''),
-            'source_email_subject' => (string) ($scan->source_email_subject ?? ''),
-            'source_email_from' => (string) ($scan->source_email_from ?? ''),
+            'source_origin' => Utf8Sanitizer::clean((string) ($scan->source_origin ?? 'manual'), 40),
+            'source_file_name' => Utf8Sanitizer::clean((string) ($scan->source_file_name ?? '')),
+            'source_email_subject' => Utf8Sanitizer::clean((string) ($scan->source_email_subject ?? '')),
+            'source_email_from' => Utf8Sanitizer::clean((string) ($scan->source_email_from ?? '')),
             'source_email_received_at' => $scan->source_email_received_at?->toIso8601String(),
             'pantheon_order' => [
-                'key' => (string) ($scan->pantheon_order_key ?? ''),
-                'view' => (string) ($scan->pantheon_order_view ?? ''),
+                'key' => Utf8Sanitizer::clean((string) ($scan->pantheon_order_key ?? '')),
+                'view' => Utf8Sanitizer::clean((string) ($scan->pantheon_order_view ?? '')),
                 'qid' => $scan->pantheon_order_qid,
             ],
             'result' => $payload,
-            'error_message' => $scan->error_message,
+            'error_message' => Utf8Sanitizer::clean((string) ($scan->error_message ?? '')),
         ];
     }
 
@@ -183,7 +186,9 @@ class OrderAiScanService
         try {
             $provider = $this->resolveProvider($scan);
             $result = $provider->scan($scan);
-            $normalizedPayload = $this->normalizePayload($result['normalized_payload'] ?? []);
+            $normalizedPayload = Utf8Sanitizer::cleanRecursive(
+                $this->normalizePayload($result['normalized_payload'] ?? [])
+            );
             $pageCount = max(0, (int) data_get($normalizedPayload, 'order.page_count', 0));
             $billedTokens = $pageCount > 0
                 ? app(OrderAiDocumentMetrics::class)->calculateBilledTokens($pageCount)
@@ -197,10 +202,10 @@ class OrderAiScanService
             }
 
             $attributes = [
-                'provider' => (string) ($result['provider'] ?? $scan->provider),
-                'model' => (string) ($result['model'] ?? $scan->model),
-                'provider_task_id' => trim((string) ($result['provider_task_id'] ?? '')) ?: null,
-                'raw_provider_response' => $result['raw_response'] ?? null,
+                'provider' => Utf8Sanitizer::clean((string) ($result['provider'] ?? $scan->provider), 40),
+                'model' => Utf8Sanitizer::clean((string) ($result['model'] ?? $scan->model), 120),
+                'provider_task_id' => trim(Utf8Sanitizer::clean((string) ($result['provider_task_id'] ?? ''))) ?: null,
+                'raw_provider_response' => Utf8Sanitizer::cleanRecursive($result['raw_response'] ?? null),
                 'normalized_payload' => $normalizedPayload,
                 'pantheon_transfer_payload' => $transferPreview,
                 'credits_spent' => (float) ($result['credits_spent'] ?? 0),
@@ -225,7 +230,7 @@ class OrderAiScanService
             $scan->forceFill([
                 'status' => 'failed',
                 'processing_step' => 'AI analiza nije uspjela.',
-                'error_message' => $exception->getMessage(),
+                'error_message' => Utf8Sanitizer::cleanExceptionMessage($exception),
                 'completed_at' => now(),
             ])->save();
         }
@@ -236,8 +241,10 @@ class OrderAiScanService
     private function runTransfer(OrderAiScan $scan, mixed $user = null): OrderAiScan
     {
         try {
-            $result = app(PantheonOrderTransferService::class)
-                ->createFromNormalizedPayload((array) $scan->normalized_payload, $user);
+            $result = Utf8Sanitizer::cleanRecursive(
+                app(PantheonOrderTransferService::class)
+                    ->createFromNormalizedPayload((array) $scan->normalized_payload, $user)
+            );
 
             $scan->forceFill([
                 'status' => 'transferred',
@@ -255,7 +262,7 @@ class OrderAiScanService
             $scan->forceFill([
                 'status' => 'failed',
                 'processing_step' => 'Transfer u bazu nije uspio.',
-                'error_message' => $exception->getMessage(),
+                'error_message' => Utf8Sanitizer::cleanExceptionMessage($exception),
                 'completed_at' => now(),
             ])->save();
         }
@@ -277,6 +284,7 @@ class OrderAiScanService
     {
         try {
             $preview = app(PantheonOrderTransferService::class)->previewFromNormalizedPayload($normalizedPayload, $user);
+            $preview = Utf8Sanitizer::cleanRecursive($preview);
 
             Log::info('Order AI Pantheon preview prepared.', [
                 'scan_id' => $scan->id,
@@ -289,14 +297,16 @@ class OrderAiScanService
 
             return $preview;
         } catch (\Throwable $exception) {
+            $sanitizedMessage = Utf8Sanitizer::cleanExceptionMessage($exception);
+
             Log::warning('Order AI Pantheon preview failed.', [
                 'scan_id' => $scan->id,
                 'user_id' => $scan->user_id,
-                'message' => $exception->getMessage(),
+                'message' => $sanitizedMessage,
             ]);
 
             return [
-                'preview_error' => $exception->getMessage(),
+                'preview_error' => $sanitizedMessage,
             ];
         }
     }
@@ -526,7 +536,8 @@ class OrderAiScanService
 
     private function normalizeSupplierName(string $value): string
     {
-        $value = trim((string) preg_replace('/\s+/', ' ', str_replace(["\r", "\n"], ' ', $value)));
+        $value = Utf8Sanitizer::clean($value);
+        $value = trim((string) (preg_replace('/\s+/', ' ', str_replace(["\r", "\n"], ' ', $value)) ?? $value));
 
         if ($value === '') {
             return '';
@@ -560,8 +571,8 @@ class OrderAiScanService
         mixed $user = null,
         array $attributes = []
     ): OrderAiScan {
-        $provider = trim((string) config('ai-order-scan.provider', 'mock')) ?: 'mock';
-        $model = trim((string) config('ai-order-scan.model', 'gpt-5'));
+        $provider = trim(Utf8Sanitizer::clean((string) config('ai-order-scan.provider', 'mock'), 40)) ?: 'mock';
+        $model = trim(Utf8Sanitizer::clean((string) config('ai-order-scan.model', 'gpt-5'), 120));
 
         $baseAttributes = [
             'user_id' => is_object($user) ? ($user->id ?? null) : null,
@@ -571,12 +582,12 @@ class OrderAiScanService
             'processing_step' => 'Fajl je uspjesno ucitan.',
             'progress_current' => 10,
             'progress_total' => 100,
-            'source_file_name' => $originalName,
+            'source_file_name' => Utf8Sanitizer::clean($originalName, 255),
             'source_file_path' => $relativePath,
-            'source_mime_type' => $mimeType,
+            'source_mime_type' => Utf8Sanitizer::clean($mimeType, 150),
             'source_file_size' => $fileSize,
             'source_origin' => 'manual',
-            'request_prompt' => (string) config('ai-order-scan.prompt'),
+            'request_prompt' => Utf8Sanitizer::clean((string) config('ai-order-scan.prompt')),
         ];
 
         if ($this->orderAiScanColumnExists('page_count')) {
@@ -587,7 +598,9 @@ class OrderAiScanService
             $baseAttributes['billed_tokens'] = $documentMetrics['billed_tokens'];
         }
 
-        return OrderAiScan::query()->create(array_merge($baseAttributes, $attributes));
+        return OrderAiScan::query()->create(
+            array_merge($baseAttributes, Utf8Sanitizer::cleanRecursive($attributes))
+        );
     }
 
     private function guessExtensionFromMimeType(?string $mimeType): string

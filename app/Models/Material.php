@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Utf8Sanitizer;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder;
@@ -851,7 +852,7 @@ class Material extends Model
 
     private static function applyLikeAny(Builder $query, array $columns, string $value): void
     {
-        $value = trim($value);
+        $value = trim(Utf8Sanitizer::clean($value));
 
         if ($value === '' || empty($columns)) {
             return;
