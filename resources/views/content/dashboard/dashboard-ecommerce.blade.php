@@ -621,7 +621,7 @@
      
         <div class="card-body statistics-body">
           <div class="row">
-            <div class="col-xl-3 col-sm-6 col-12 mb-2 mb-xl-0">
+            <div class="col-xl-4 col-sm-6 col-12 mb-2 mb-xl-0">
               <div class="d-flex flex-row">
                 <div class="avatar bg-light-warning me-2">
                   <div class="avatar-content">
@@ -634,7 +634,7 @@
                 </div>
               </div>
             </div>
-            <div class="col-xl-3 col-sm-6 col-12 mb-2 mb-xl-0">
+            <div class="col-xl-4 col-sm-6 col-12 mb-2 mb-xl-0">
               <div class="d-flex flex-row">
                 <div class="avatar bg-light-info me-2">
                   <div class="avatar-content">
@@ -647,7 +647,7 @@
                 </div>
               </div>
             </div>
-            <div class="col-xl-3 col-sm-6 col-12 mb-2 mb-sm-0">
+            <div class="col-xl-4 col-sm-6 col-12 mb-2 mb-sm-0">
               <div class="d-flex flex-row">
                 <div class="avatar bg-light-danger me-2">
                   <div class="avatar-content">
@@ -660,25 +660,6 @@
                 </div>
               </div>
             </div>
-            @if(auth()->check() && method_exists(auth()->user(), 'canAccessAiOrderModule') && auth()->user()->canAccessAiOrderModule())
-              <div class="col-xl-3 col-sm-6 col-12">
-                <div class="d-flex flex-row">
-                  <div class="avatar dashboard-ai-credits-avatar me-2">
-                    <div class="avatar-content">
-                      <span class="dashboard-ai-coin-stack" aria-hidden="true">
-                        <span class="dashboard-ai-coin dashboard-ai-coin-front">
-                          <span class="dashboard-ai-coin-inner">AI</span>
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-                  <div class="my-auto">
-                    <h4 class="fw-bolder mb-0">{{ number_format((int) ($dashboardStats['ai_billed_tokens_month'] ?? 0), 0, ',', '.') }}</h4>
-                    <p class="card-text font-small-3 mb-0">AI tokeni</p>
-                  </div>
-                </div>
-              </div>
-            @endif
           </div>
         </div>
       </div>

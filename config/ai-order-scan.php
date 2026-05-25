@@ -25,6 +25,11 @@ return [
         'poll_interval_minutes' => max(1, (int) env('AI_ORDER_SCAN_INBOX_POLL_INTERVAL', 15)),
         'queue_connection' => env('AI_ORDER_SCAN_INBOX_QUEUE_CONNECTION', 'database_ai_inbox'),
         'queue_name' => env('AI_ORDER_SCAN_INBOX_QUEUE_NAME', 'ai-inbox'),
+        'enforce_sender_whitelist' => env('AI_ORDER_SCAN_INBOX_ENFORCE_SENDER_WHITELIST'),
+        'allowed_senders' => array_values(array_filter(array_map(
+            'trim',
+            preg_split('/[\r\n,;]+/', (string) env('AI_ORDER_SCAN_INBOX_ALLOWED_SENDERS', '')) ?: []
+        ))),
         'imap' => [
             'host' => env('AI_ORDER_SCAN_INBOX_IMAP_HOST', env('IMAP_HOST', '')),
             'port' => (int) env('AI_ORDER_SCAN_INBOX_IMAP_PORT', env('IMAP_PORT', 993)),

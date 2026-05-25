@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -67,6 +68,43 @@ class AiTokenHistoryController extends Controller
             'tokenHistoryYearOptions' => $this->resolveYearOptions(),
             'tokenHistoryPerPage' => $perPage,
             'tokenHistoryPerPageOptions' => self::PER_PAGE_OPTIONS,
+            'tokenHistoryLastLoadedAtDisplay' => now()->format('d.m.Y H:i:s'),
+        ]);
+    }
+
+    public function statuses(Request $request): JsonResponse
+    {
+        $this->authorizeModuleAccess($request);
+
+        $ids = $this->resolveRequestedIds($request);
+
+        if ($ids === []) {
+            return response()->json([
+                'rows' => [],
+                'last_loaded_at' => now()->toIso8601String(),
+                'last_loaded_at_display' => now()->format('d.m.Y H:i:s'),
+            ]);
+        }
+
+        $rows = OrderAiScan::query()
+            ->whereIn('id', $ids)
+            ->get([
+                'id',
+                'status',
+                'error_message',
+                'processed_at',
+                'transferred_at',
+                'pantheon_order_key',
+                'pantheon_order_view',
+                'pantheon_order_qid',
+            ]);
+
+        return response()->json([
+            'rows' => $rows->mapWithKeys(function (OrderAiScan $scan) {
+                return [(string) $scan->id => $this->mapHistoryStatusRow($scan)];
+            })->all(),
+            'last_loaded_at' => now()->toIso8601String(),
+            'last_loaded_at_display' => now()->format('d.m.Y H:i:s'),
         ]);
     }
 
@@ -218,17 +256,14 @@ class AiTokenHistoryController extends Controller
     private function mapHistoryRow(OrderAiScan $scan): array
     {
         $eventTimestamp = $this->resolveEventTimestamp($scan);
-        $statusMeta = $this->resolveStatusMeta($scan);
         $metrics = $this->resolveDocumentMetrics($scan);
         $usageCostUsd = $this->resolveUsageCostUsd($scan);
 
-        return [
+        return array_merge([
             'id' => (int) $scan->id,
             'event_time_display' => $eventTimestamp ? $eventTimestamp->format('d.m.Y H:i') : '-',
             'usage_label' => (string) ($scan->source_origin ?? 'manual') === 'imap' ? 'AI Inbox' : 'AI narudzba',
             'activity_label' => 'AI scan',
-            'status_label' => $statusMeta['label'],
-            'status_tone' => $statusMeta['tone'],
             'file_name' => trim((string) ($scan->source_file_name ?? '')) ?: '-',
             'page_count' => $metrics['page_count'],
             'page_count_display' => $metrics['page_count'] > 0
@@ -242,6 +277,18 @@ class AiTokenHistoryController extends Controller
             'usage_cost_usd_display' => $usageCostUsd !== null
                 ? $this->formatUsd($usageCostUsd)
                 : '-',
+            'open_scan_url' => route('app-order-ai-scan', ['scan' => $scan->id]),
+        ], $this->mapHistoryStatusRow($scan));
+    }
+
+    private function mapHistoryStatusRow(OrderAiScan $scan): array
+    {
+        $statusMeta = $this->resolveStatusMeta($scan);
+
+        return [
+            'id' => (int) $scan->id,
+            'status_label' => $statusMeta['label'],
+            'status_tone' => $statusMeta['tone'],
         ];
     }
 
@@ -388,5 +435,26 @@ class AiTokenHistoryController extends Controller
             'start' => $start,
             'end' => $start->copy()->endOfMonth(),
         ];
+    }
+
+    private function resolveRequestedIds(Request $request): array
+    {
+        $values = $request->query('ids', []);
+
+        if (!is_array($values)) {
+            $values = [$values];
+        }
+
+        return collect($values)
+            ->map(function ($value) {
+                return (int) $value;
+            })
+            ->filter(function (int $value) {
+                return $value > 0;
+            })
+            ->unique()
+            ->take(100)
+            ->values()
+            ->all();
     }
 }

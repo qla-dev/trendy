@@ -196,6 +196,7 @@ return [
     "Roles" => "Funções",
     "Permission" => "Permissão",
     "Cover" => "Cobrir",
+    "AI Inbox" => "AI Inbox",
     "AI tokeni" => "AI tokeni",
     "Historija" => "Historija",
     "message" => "O sésamo do bolo agarra dinamarquês do pão-de-espécie do queque eu amo o pão-de-espécie. Torta de torta de maçã jujubes chupa chups  pirulito halvah muffin. Ameixa do açúcar do maçapão do tiramisu do bolo da aveia do bolo de chocolate. Donut doce aveia torta dragée fruitcake algodão doce gotas de limão."

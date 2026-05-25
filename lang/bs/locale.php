@@ -163,6 +163,7 @@ return [
     "Upravljanje narudžbama" => "Upravljanje narudžbama",
     "Skeniraj radni nalog" => "Skeniraj nalog",
     "Skeniraj narudzbu sa AI" => "AI narudžba",
+    "AI Inbox" => "AI Inbox",
     "AI tokeni" => "AI tokeni",
     "Historija" => "Historija",
     "Barcode generator" => "Barcode generator",

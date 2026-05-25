@@ -123,6 +123,7 @@ class MenuServiceProvider extends ServiceProvider
             'app-barcode-generator',
             'app-orders-navheader',
             'app-orders',
+            'app-order-ai-inbox',
             'app-ai-tokens-navheader',
             'app-ai-token-history',
             'app-documents-navheader',

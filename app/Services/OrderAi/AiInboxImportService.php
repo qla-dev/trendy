@@ -17,7 +17,10 @@ class AiInboxImportService
 {
     private ?string $mailboxDelimiter = null;
 
-    public function __construct(private readonly OrderAiScanService $scanService)
+    public function __construct(
+        private readonly OrderAiScanService $scanService,
+        private readonly AiInboxSenderDirectory $senderDirectory
+    )
     {
     }
 
@@ -28,6 +31,7 @@ class AiInboxImportService
             'imported_messages' => 0,
             'imported_pdfs' => 0,
             'duplicates_skipped' => 0,
+            'blocked_messages' => 0,
             'failed_items' => 0,
         ];
 
@@ -64,7 +68,23 @@ class AiInboxImportService
                 }
 
                 $summary['matched_messages']++;
-                $messageResult = $this->importMessage($message, $subject);
+                $sender = $this->resolveSenderMeta($message);
+
+                if (!$this->senderDirectory->isAllowed($sender['email'] ?? '')) {
+                    $summary['blocked_messages']++;
+                    $this->moveMessage($message, 'review');
+
+                    Log::warning('AI inbox message skipped because sender is not whitelisted.', [
+                        'subject' => $subject,
+                        'sender_email' => $sender['email'] ?? '',
+                        'sender_name' => $sender['name'] ?? '',
+                        'message_uid' => trim((string) $message->getUid()),
+                    ]);
+
+                    continue;
+                }
+
+                $messageResult = $this->importMessage($message, $subject, $sender);
 
                 $summary['imported_pdfs'] += $messageResult['imported_pdfs'];
                 $summary['duplicates_skipped'] += $messageResult['duplicates_skipped'];
@@ -87,7 +107,7 @@ class AiInboxImportService
             && $this->isConfigured($this->inboxConfig());
     }
 
-    private function importMessage(Message $message, string $subject): array
+    private function importMessage(Message $message, string $subject, array $sender): array
     {
         $pdfAttachments = collect($message->getAttachments()->all())
             ->filter(function ($attachment) {
@@ -112,7 +132,6 @@ class AiInboxImportService
         }
 
         $uid = trim((string) $message->getUid());
-        $from = $this->resolveSender($message);
         $messageId = trim((string) $message->getMessageId());
         $receivedAt = $this->resolveMessageDate($message);
         $hasFailures = false;
@@ -121,7 +140,7 @@ class AiInboxImportService
             $attachmentIndex = $index + 1;
             $scan = null;
 
-            if ($this->scanAlreadyImported($uid, $attachmentIndex)) {
+            if ($this->scanAlreadyImported($uid, $attachmentIndex, $messageId)) {
                 $result['duplicates_skipped']++;
                 continue;
             }
@@ -143,7 +162,7 @@ class AiInboxImportService
                     attributes: [
                         'source_origin' => 'imap',
                         'source_email_subject' => $subject,
-                        'source_email_from' => $from,
+                        'source_email_from' => $this->formatSenderStorageValue($sender),
                         'source_email_message_id' => $messageId !== '' ? $messageId : null,
                         'source_email_uid' => $uid !== '' ? $uid : null,
                         'source_email_received_at' => $receivedAt,
@@ -182,15 +201,23 @@ class AiInboxImportService
         return $result;
     }
 
-    private function scanAlreadyImported(string $uid, int $attachmentIndex): bool
+    private function scanAlreadyImported(string $uid, int $attachmentIndex, string $messageId = ''): bool
     {
-        if ($uid === '') {
+        if ($uid === '' && $messageId === '') {
             return false;
         }
 
         return OrderAiScan::query()
             ->where('source_origin', 'imap')
-            ->where('source_email_uid', $uid)
+            ->where(function ($query) use ($uid, $messageId) {
+                if ($uid !== '') {
+                    $query->orWhere('source_email_uid', $uid);
+                }
+
+                if ($messageId !== '') {
+                    $query->orWhere('source_email_message_id', $messageId);
+                }
+            })
             ->where('source_attachment_index', $attachmentIndex)
             ->exists();
     }
@@ -206,28 +233,62 @@ class AiInboxImportService
         return 'bestellung-' . $attachmentIndex . '.pdf';
     }
 
-    private function resolveSender(Message $message): string
+    private function resolveSenderMeta(Message $message): array
     {
         $from = $message->getFrom();
         $address = is_object($from) && method_exists($from, 'first')
             ? $from->first()
             : null;
 
-        if (is_object($address)) {
-            $full = trim((string) ($address->full ?? ''));
-
-            if ($full !== '') {
-                return $full;
-            }
-
-            $mail = trim((string) ($address->mail ?? ''));
-
-            if ($mail !== '') {
-                return $mail;
-            }
+        if (!is_object($address)) {
+            return [
+                'email' => '',
+                'name' => '',
+                'raw' => '',
+            ];
         }
 
-        return '';
+        $parsedFull = $this->senderDirectory->parseAddress((string) ($address->full ?? ''));
+        $parsedMail = $this->senderDirectory->parseAddress((string) ($address->mail ?? ''));
+        $displayName = $this->senderDirectory->decodeHeaderText((string) ($address->personal ?? ($parsedFull['name'] ?? '')));
+
+        if ($displayName === '') {
+            $displayName = trim((string) ($parsedFull['name'] ?? ($parsedMail['name'] ?? '')));
+        }
+
+        $email = $parsedFull['email'] !== ''
+            ? $parsedFull['email']
+            : $parsedMail['email'];
+        $raw = $this->senderDirectory->decodeHeaderText((string) ($address->full ?? ''));
+
+        if ($raw === '') {
+            $raw = $displayName !== '' && $email !== ''
+                ? $displayName . ' <' . $email . '>'
+                : $email;
+        }
+
+        return [
+            'email' => $email,
+            'name' => $displayName,
+            'raw' => $raw,
+        ];
+    }
+
+    private function formatSenderStorageValue(array $sender): string
+    {
+        $email = $this->senderDirectory->normalizeEmail($sender['email'] ?? '');
+        $name = $this->senderDirectory->decodeHeaderText($sender['name'] ?? '');
+        $raw = $this->senderDirectory->decodeHeaderText($sender['raw'] ?? '');
+
+        if ($name !== '' && $email !== '') {
+            return $name . ' <' . $email . '>';
+        }
+
+        if ($email !== '') {
+            return $email;
+        }
+
+        return $raw;
     }
 
     private function resolveMessageDate(Message $message): ?Carbon

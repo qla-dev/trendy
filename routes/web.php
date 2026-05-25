@@ -92,11 +92,13 @@ Route::middleware('auth:web')->group(function () {
         Route::get('orders/radni-nalozi', [OrderController::class, 'ordersLinkageWorkOrdersApi'])->name('app-orders-radni-nalozi');
         Route::delete('orders', [OrderController::class, 'destroyLinkedOrder'])->name('app-orders-destroy');
         Route::get('orders/ai-inbox', [AiInboxController::class, 'index'])->name('app-order-ai-inbox');
+        Route::get('orders/ai-inbox/statuses', [AiInboxController::class, 'statuses'])->name('app-order-ai-inbox-statuses');
         Route::post('orders/ai-inbox/refresh', [AiInboxController::class, 'refresh'])->name('app-order-ai-inbox-refresh');
         Route::get('orders/ai-scan', [OrderAiScanController::class, 'index'])->name('app-order-ai-scan');
         Route::post('orders/ai-scan/upload', [OrderAiScanController::class, 'store'])->name('app-order-ai-scan-upload');
         Route::get('orders/ai-scan/{scan}/status', [OrderAiScanController::class, 'status'])->name('app-order-ai-scan-status');
         Route::get('ai-tokens/history', [AiTokenHistoryController::class, 'index'])->name('app-ai-token-history');
+        Route::get('ai-tokens/history/statuses', [AiTokenHistoryController::class, 'statuses'])->name('app-ai-token-history-statuses');
         Route::get('documents/released-materials', [ReleasedMaterialDocumentController::class, 'index'])->name('app-released-material-documents');
         Route::get('documents/released-materials/data', [ReleasedMaterialDocumentController::class, 'data'])->name('app-released-material-documents-data');
         Route::delete('documents/released-materials', [ReleasedMaterialDocumentController::class, 'destroy'])->name('app-released-material-documents-destroy');
