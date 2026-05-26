@@ -81,6 +81,7 @@ class MenuServiceProvider extends ServiceProvider
             $allowedSlugs = array_merge($allowedSlugs, [
                 'app-orders-navheader',
                 'app-order-ai-scan',
+                'app-order-ai-inbox',
                 'app-ai-tokens-navheader',
                 'app-ai-token-history',
             ]);
@@ -123,7 +124,6 @@ class MenuServiceProvider extends ServiceProvider
             'app-barcode-generator',
             'app-orders-navheader',
             'app-orders',
-            'app-order-ai-inbox',
             'app-ai-tokens-navheader',
             'app-ai-token-history',
             'app-documents-navheader',
@@ -150,6 +150,7 @@ class MenuServiceProvider extends ServiceProvider
         $menuData->menu = array_values(array_filter($menuData->menu, function ($menu) {
             return !isset($menu->slug) || !in_array($menu->slug, [
                 'app-order-ai-scan',
+                'app-order-ai-inbox',
                 'app-ai-tokens-navheader',
                 'app-ai-token-history',
             ], true);

@@ -20,7 +20,7 @@ class AiInboxController extends Controller
 
     public function index(Request $request)
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeModuleAccess($request);
 
         $pageConfigs = ['pageHeader' => false];
         $rows = OrderAiScan::query()
@@ -45,7 +45,7 @@ class AiInboxController extends Controller
 
     public function statuses(Request $request): JsonResponse
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeModuleAccess($request);
 
         $ids = $this->resolveRequestedIds($request);
 
@@ -80,7 +80,7 @@ class AiInboxController extends Controller
 
     public function refresh(Request $request, AiInboxImportService $importService): RedirectResponse
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeModuleAccess($request);
 
         try {
             $summary = $importService->importNewMail();
@@ -103,21 +103,24 @@ class AiInboxController extends Controller
         }
     }
 
-    private function authorizeAdmin(Request $request): void
+    private function authorizeModuleAccess(Request $request): void
     {
         $user = $request->user();
 
+        if (!$this->userCanAccessAiOrderModule($user)) {
+            abort(403);
+        }
+    }
+
+    private function userCanAccessAiOrderModule($user): bool
+    {
         if ($user === null) {
-            abort(403);
+            return false;
         }
 
-        $isAdmin = method_exists($user, 'isAdmin')
-            ? (bool) $user->isAdmin()
-            : (string) ($user->role ?? '') === 'admin';
-
-        if (!$isAdmin) {
-            abort(403);
-        }
+        return method_exists($user, 'canAccessAiOrderModule')
+            ? (bool) $user->canAccessAiOrderModule()
+            : false;
     }
 
     private function mapRow(OrderAiScan $scan): array
