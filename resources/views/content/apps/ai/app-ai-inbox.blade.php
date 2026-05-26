@@ -17,6 +17,11 @@
     gap: 0.75rem;
   }
 
+  .ai-inbox-last-loaded {
+    color: #6e6b7b;
+    font-size: 0.82rem;
+  }
+
   .ai-inbox-table thead th {
     font-size: 0.78rem;
     letter-spacing: 0.02em;
@@ -96,7 +101,11 @@
 @endsection
 
 @section('content')
-<section class="ai-inbox-shell">
+<section
+  class="ai-inbox-shell"
+  id="ai-inbox-app"
+  data-status-poll-url="{{ route('app-order-ai-inbox-statuses') }}"
+  data-last-loaded-display="{{ $aiInboxLastLoadedAtDisplay ?? now()->format('d.m.Y H:i:s') }}">
   <div class="content-header row">
     <div class="content-header-left col-12 mb-2">
       <div class="row breadcrumbs-top align-items-center">
@@ -105,9 +114,6 @@
         </div>
         <div class="col-md-6 col-12">
           <div class="d-flex justify-content-md-end justify-content-start align-items-center flex-wrap ai-inbox-header-actions">
-            <a href="{{ route('app-orders') }}" class="btn btn-outline-secondary btn-sm">
-              <i data-feather="arrow-left" class="me-50"></i> Narudžbe
-            </a>
             <form method="POST" action="{{ route('app-order-ai-inbox-refresh') }}">
               @csrf
               <button type="submit" class="btn btn-primary btn-sm">
@@ -128,6 +134,12 @@
     <div class="alert alert-danger">{{ session('error') }}</div>
   @endif
 
+  <div class="d-flex justify-content-end mb-1">
+    <div class="ai-inbox-last-loaded" id="ai-inbox-last-loaded">
+      Zadnji put u&#269;itano: <span>{{ $aiInboxLastLoadedAtDisplay ?? now()->format('d.m.Y H:i:s') }}</span>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-body p-0">
       <div class="table-responsive">
@@ -145,17 +157,17 @@
           </thead>
           <tbody>
             @forelse ($aiInboxRows as $row)
-              <tr>
+              <tr data-scan-id="{{ $row['id'] }}">
                 <td>{{ $row['received_at_display'] }}</td>
                 <td>{{ $row['from'] }}</td>
                 <td class="ai-inbox-subject">{{ $row['subject'] }}</td>
                 <td class="ai-inbox-file">{{ $row['file_name'] }}</td>
-                <td>
+                <td data-ai-status-cell>
                   <span class="ai-inbox-badge ai-inbox-badge-{{ $row['ai_status_tone'] }}">
                     {{ $row['ai_status_label'] }}
                   </span>
                 </td>
-                <td>
+                <td data-transfer-status-cell>
                   <span class="ai-inbox-badge ai-inbox-badge-{{ $row['transfer_status_tone'] }}">
                     {{ $row['transfer_status_label'] }}
                   </span>
@@ -182,5 +194,118 @@
     @endif
   </div>
 </section>
+@endsection
+
+@section('page-script')
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const app = document.getElementById('ai-inbox-app');
+
+    if (!app) {
+      return;
+    }
+
+    const pollUrl = app.dataset.statusPollUrl || '';
+    const lastLoadedEl = document.getElementById('ai-inbox-last-loaded');
+    let pollTimer = null;
+
+    function collectIds() {
+      return Array.from(app.querySelectorAll('tbody tr[data-scan-id]'))
+        .map(function (row) {
+          return String(row.dataset.scanId || '').trim();
+        })
+        .filter(Boolean);
+    }
+
+    function updateLastLoaded(displayValue) {
+      if (!lastLoadedEl) {
+        return;
+      }
+
+      const target = lastLoadedEl.querySelector('span');
+
+      if (target) {
+        target.textContent = displayValue || app.dataset.lastLoadedDisplay || '';
+      }
+    }
+
+    function renderBadge(label, tone) {
+      return '<span class="ai-inbox-badge ai-inbox-badge-' + String(tone || 'secondary') + '">' + String(label || '-') + '</span>';
+    }
+
+    function scheduleNextPoll() {
+      pollTimer = window.setTimeout(pollStatuses, 5000);
+    }
+
+    async function pollStatuses() {
+      const ids = collectIds();
+
+      if (!pollUrl || !ids.length) {
+        scheduleNextPoll();
+        return;
+      }
+
+      if (document.hidden) {
+        scheduleNextPoll();
+        return;
+      }
+
+      try {
+        const query = new URLSearchParams();
+        ids.forEach(function (id) {
+          query.append('ids[]', id);
+        });
+
+        const response = await fetch(pollUrl + '?' + query.toString(), {
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+        });
+
+        if (!response.ok) {
+          throw new Error('Polling nije uspio.');
+        }
+
+        const payload = await response.json();
+        const rows = payload.rows || {};
+
+        app.querySelectorAll('tbody tr[data-scan-id]').forEach(function (row) {
+          const rowPayload = rows[String(row.dataset.scanId || '')];
+
+          if (!rowPayload) {
+            return;
+          }
+
+          const aiStatusCell = row.querySelector('[data-ai-status-cell]');
+          const transferStatusCell = row.querySelector('[data-transfer-status-cell]');
+
+          if (aiStatusCell) {
+            aiStatusCell.innerHTML = renderBadge(rowPayload.ai_status_label, rowPayload.ai_status_tone);
+          }
+
+          if (transferStatusCell) {
+            transferStatusCell.innerHTML = renderBadge(rowPayload.transfer_status_label, rowPayload.transfer_status_tone);
+          }
+        });
+
+        updateLastLoaded(payload.last_loaded_at_display || '');
+      } catch (error) {
+      } finally {
+        scheduleNextPoll();
+      }
+    }
+
+    updateLastLoaded(app.dataset.lastLoadedDisplay || '');
+    scheduleNextPoll();
+
+    window.addEventListener('beforeunload', function () {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+      }
+    });
+  });
+</script>
 @endsection
 

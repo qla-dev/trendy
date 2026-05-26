@@ -69,7 +69,7 @@
       background-image:
         url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 520 240'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2318cbb7'/%3E%3Cstop offset='55%25' stop-color='%23347cf7'/%3E%3Cstop offset='100%25' stop-color='%2331c46d'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg fill='none' stroke='url(%23g)' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round' opacity='.95'%3E%3Cpath d='M134 28h84a36 36 0 0 1 36 36v44a36 36 0 0 1-36 36h-84a36 36 0 0 1-36-36V64a36 36 0 0 1 36-36Z'/%3E%3Cpath d='M176 8v20'/%3E%3Cpath d='M132 144l-16 32'/%3E%3Cpath d='M220 144l16 32'/%3E%3Cpath d='M110 176h132'/%3E%3Ccircle cx='148' cy='84' r='14'/%3E%3Ccircle cx='204' cy='84' r='14'/%3E%3Cpath d='M148 116c14 10 42 10 56 0'/%3E%3Cpath d='M98 76H66'/%3E%3Cpath d='M286 76h-32'/%3E%3Cpath d='M98 106H72'/%3E%3Cpath d='M280 106h-26'/%3E%3Cpath d='M112 48L84 28'/%3E%3Cpath d='M240 48l28-20'/%3E%3Cpath d='M254 62h88'/%3E%3Cpath d='M254 102h72'/%3E%3Cpath d='M326 102l20-18'/%3E%3Cpath d='M58 146l40-22'/%3E%3Cpath d='M60 146H24'/%3E%3Ccircle cx='354' cy='62' r='10'/%3E%3Ccircle cx='356' cy='102' r='10'/%3E%3Ccircle cx='8' cy='146' r='8'/%3E%3Cpath d='M300 160h88'/%3E%3Cpath d='M388 160l26 18'/%3E%3Ccircle cx='428' cy='188' r='11'/%3E%3Cpath d='M236 182h64'/%3E%3Cpath d='M56 188h88'/%3E%3Cpath d='M144 188l22-18'/%3E%3Ccircle cx='46' cy='188' r='10'/%3E%3C/g%3E%3Cg fill='url(%23g)' opacity='.18'%3E%3Ccircle cx='148' cy='84' r='6'/%3E%3Ccircle cx='204' cy='84' r='6'/%3E%3Ccircle cx='354' cy='62' r='5'/%3E%3Ccircle cx='356' cy='102' r='5'/%3E%3C/g%3E%3C/svg%3E");
       background-repeat: no-repeat;
-      background-position: left 1.2rem center;
+      background-position: right 1.2rem center;
       background-size: 22rem auto;
       opacity: 0.16;
       pointer-events: none;
@@ -450,6 +450,25 @@
       border: 1px solid rgba(22, 52, 77, 0.08);
     }
 
+    .order-ai-fact.is-match {
+      border-color: rgba(22, 163, 74, 0.24);
+      background: rgba(22, 163, 74, 0.08);
+      color: #17683b;
+    }
+
+    .order-ai-fact.is-mismatch {
+      border-color: rgba(220, 38, 38, 0.22);
+      background: rgba(220, 38, 38, 0.08);
+      color: #8b1e1e;
+    }
+
+    .order-ai-fact-meta {
+      margin-top: 0.45rem;
+      font-size: 0.76rem;
+      font-weight: 600;
+      opacity: 0.88;
+    }
+
     .order-ai-lines-table td,
     .order-ai-lines-table th {
       white-space: nowrap;
@@ -587,6 +606,12 @@
     .order-ai-alert {
       border-radius: 1rem;
       border: 0;
+    }
+
+    .order-ai-alert.is-preview-ready {
+      color: #c45b12;
+      background: rgba(249, 115, 22, 0.12);
+      box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.18);
     }
 
     .order-ai-saved-preview {
@@ -730,6 +755,13 @@
 
     .order-ai-hidden {
       display: none !important;
+    }
+
+    @media (min-width: 992px) {
+      .order-ai-progress-shell.order-ai-progress-shell-wide {
+        flex: 0 0 100%;
+        max-width: 100%;
+      }
     }
 
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-shell {
@@ -878,6 +910,7 @@
       border-color: rgba(22, 163, 74, 0.16);
     }
 
+    html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-fact.is-match,
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-line-total-trigger.is-match,
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-total-check-banner.is-match {
       border-color: rgba(22, 163, 74, 0.28);
@@ -885,6 +918,7 @@
       color: #17683b;
     }
 
+    html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-fact.is-mismatch,
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-line-total-trigger.is-mismatch,
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-total-check-banner.is-mismatch {
       border-color: rgba(220, 38, 38, 0.25);
@@ -1119,8 +1153,17 @@
       border-color: rgba(24, 203, 183, 0.22);
     }
 
+    html.dark-layout .order-ai-alert.is-preview-ready,
+    html.semi-dark-layout .order-ai-alert.is-preview-ready {
+      color: #ffd2a9;
+      background: rgba(249, 115, 22, 0.18);
+      box-shadow: inset 0 0 0 1px rgba(251, 146, 60, 0.22);
+    }
+
+    html.dark-layout .order-ai-fact.is-match,
     html.dark-layout .order-ai-line-total-trigger.is-match,
     html.dark-layout .order-ai-total-check-banner.is-match,
+    html.semi-dark-layout .order-ai-fact.is-match,
     html.semi-dark-layout .order-ai-line-total-trigger.is-match,
     html.semi-dark-layout .order-ai-total-check-banner.is-match {
       border-color: rgba(49, 196, 109, 0.26);
@@ -1128,8 +1171,10 @@
       color: #9de8b8;
     }
 
+    html.dark-layout .order-ai-fact.is-mismatch,
     html.dark-layout .order-ai-line-total-trigger.is-mismatch,
     html.dark-layout .order-ai-total-check-banner.is-mismatch,
+    html.semi-dark-layout .order-ai-fact.is-mismatch,
     html.semi-dark-layout .order-ai-line-total-trigger.is-mismatch,
     html.semi-dark-layout .order-ai-total-check-banner.is-mismatch {
       border-color: rgba(248, 113, 113, 0.28);
@@ -1234,7 +1279,7 @@
 
       .order-ai-hero-story::before {
         background-size: 16rem auto;
-        background-position: left 0.4rem top 1rem;
+        background-position: right 0.4rem top 1rem;
         opacity: 0.13;
       }
 
@@ -1341,7 +1386,7 @@
 
     <div class="col-12">
       <div class="row g-2 align-items-stretch mb-2">
-        <div class="col-lg-7 col-12">
+        <div class="col-lg-7 col-12" id="order-ai-dropzone-shell">
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body p-2 p-md-3">
               <div class="order-ai-dropzone" id="order-ai-dropzone" tabindex="0" role="button" aria-label="Ucitaj dokument za AI skeniranje">
@@ -1357,7 +1402,7 @@
           </div>
         </div>
 
-        <div class="col-lg-5 col-12">
+        <div class="col-lg-5 col-12 order-ai-progress-shell" id="order-ai-progress-shell">
           <div class="card order-ai-progress-card h-100" id="order-ai-progress-card">
             <div class="card-body p-2">
               <div class="order-ai-progress-head mb-1">
@@ -1419,7 +1464,7 @@
               </div>
 
               <div class="order-ai-transfer-followup order-ai-hidden" id="order-ai-transfer-followup">
-                <button type="button" class="btn btn-outline-primary" id="order-ai-view-order-button">Vidi narudzbu</button>
+                <button type="button" class="btn btn-outline-primary order-ai-hidden" id="order-ai-view-order-button">Vidi narudzbu</button>
                 <button type="button" class="btn btn-outline-success" id="order-ai-new-order-button">Nova narudzba</button>
               </div>
 
@@ -1606,6 +1651,8 @@
       const initialScanId = Number(app.dataset.initialScanId || 0) || null;
       const initialScanState = @json($initialScanState ?? null);
       const csrfToken = app.dataset.csrf;
+      const dropzoneShell = document.getElementById('order-ai-dropzone-shell');
+      const progressShell = document.getElementById('order-ai-progress-shell');
       const dropzone = document.getElementById('order-ai-dropzone');
       const fileInput = document.getElementById('order-ai-file-input');
       const progressCard = document.getElementById('order-ai-progress-card');
@@ -1672,6 +1719,7 @@
       let extractFillTimer = null;
       let extractVisualProgress = 0;
       let activeLineTotalIndex = null;
+      let openedFromExistingScan = Boolean(initialScanId);
 
       function escapeHtml(value) {
         return String(value ?? '')
@@ -1688,6 +1736,17 @@
         }
 
         node.classList.toggle('order-ai-hidden', !visible);
+      }
+
+      function syncDropzoneVisibility(status) {
+        const resolvedStatus = String(status || (latestStatusPayload && latestStatusPayload.status) || '').trim();
+        const shouldHide = openedFromExistingScan || ['completed', 'ready_for_transfer', 'transferring', 'transferred', 'failed'].includes(resolvedStatus);
+
+        setVisible(dropzoneShell, !shouldHide);
+
+        if (progressShell) {
+          progressShell.classList.toggle('order-ai-progress-shell-wide', shouldHide);
+        }
       }
 
       function toFiniteNumber(value, fallback) {
@@ -1749,6 +1808,33 @@
           source: source,
           difference: difference,
           matches: absoluteDifference <= 0.01,
+        };
+      }
+
+      function resolveDocumentDisplayedTotal(summary) {
+        const subtotal = toFiniteNumber(summary && summary.subtotal, 0);
+        const grandTotal = toFiniteNumber(summary && summary.grand_total, 0);
+
+        return subtotal > 0 ? roundMoney(subtotal) : roundMoney(grandTotal);
+      }
+
+      function resolveDocumentTotalComparison(payload) {
+        const result = payload || {};
+        const summary = result.summary || {};
+        const items = Array.isArray(result.items) ? result.items : [];
+        const documentTotal = resolveDocumentDisplayedTotal(summary);
+        const itemsTotal = roundMoney(items.reduce(function (carry, item) {
+          return carry + resolveLineSourceTotal(item);
+        }, 0));
+        const difference = roundMoney(documentTotal - itemsTotal);
+        const hasComparableValues = documentTotal > 0 || itemsTotal > 0;
+
+        return {
+          documentTotal: documentTotal,
+          itemsTotal: itemsTotal,
+          difference: difference,
+          hasComparableValues: hasComparableValues,
+          matches: hasComparableValues && Math.abs(difference) <= 0.01,
         };
       }
 
@@ -1861,6 +1947,23 @@
           node.textContent = '';
           setVisible(node, false);
         });
+
+        if (progressWarning) {
+          progressWarning.classList.remove('is-preview-ready');
+        }
+      }
+
+      function setProgressWarningMessage(message, options) {
+        const config = options || {};
+        const text = String(message || '').trim();
+
+        if (!progressWarning) {
+          return;
+        }
+
+        progressWarning.textContent = text;
+        progressWarning.classList.toggle('is-preview-ready', Boolean(config.previewReady) && text !== '');
+        setVisible(progressWarning, text !== '');
       }
 
       function setProgress(percent, label) {
@@ -2041,23 +2144,32 @@
 
       function renderFacts(payload, statusData) {
         const order = payload.order || {};
-        const summary = payload.summary || {};
         const pantheon = statusData.pantheon_order || {};
+        const totalComparison = resolveDocumentTotalComparison(payload);
+        const amountMeta = totalComparison.hasComparableValues && !totalComparison.matches
+          ? `Razlika: ${formatAmount(totalComparison.difference)}`
+          : '';
         const factsMarkup = [
           { label: 'Kupac', value: order.customer_name || '-' },
           { label: 'Narucitelj', value: order.supplier_name || '-' },
           { label: 'Referenca', value: order.external_document_number || '-' },
           { label: 'Doc type', value: order.document_type || '-' },
           { label: 'Valuta', value: order.currency || '-' },
-          { label: 'Iznos', value: formatAmount(summary.grand_total || 0) },
+          {
+            label: 'Iznos',
+            value: formatAmount(totalComparison.documentTotal || 0),
+            stateClass: totalComparison.hasComparableValues ? (totalComparison.matches ? 'is-match' : 'is-mismatch') : '',
+            meta: amountMeta,
+          },
           { label: 'AI krediti', value: formatAmount(statusData.credits_spent || 0) },
           { label: 'Pantheon kljuc', value: pantheon.key || '-' }
         ];
 
         facts.innerHTML = factsMarkup.map((fact) => `
-          <div class="order-ai-fact">
+          <div class="order-ai-fact ${escapeHtml(fact.stateClass || '')}">
             <div class="text-muted small mb-50">${escapeHtml(fact.label)}</div>
             <div class="fw-bolder">${escapeHtml(fact.value)}</div>
+            ${fact.meta ? `<div class="order-ai-fact-meta">${escapeHtml(fact.meta)}</div>` : ''}
           </div>
         `).join('');
       }
@@ -2503,6 +2615,7 @@
         setVisible(savedPreview, false);
         setVisible(actions, false);
         setVisible(transferFollowup, false);
+        setVisible(viewOrderButton, false);
         resetMessages();
         setPositionsModalState({
           loading: false,
@@ -2521,9 +2634,11 @@
           label: 'Transfer u bazu',
           hint: 'Dugme se aktivira kada AI zavrsi ekstrakciju i pripremi payload.'
         });
+        syncDropzoneVisibility('');
       }
 
       function startNewOrder() {
+        openedFromExistingScan = false;
         closeSavedOrderModal();
         closePositionsModal();
         closeTransferErrorModal();
@@ -2540,6 +2655,7 @@
         const finalizeStage = (data.status === 'completed' && stageName === 'extract' && !autoTransfer)
           || (data.status === 'transferred' && stageName === 'transfer');
 
+        syncDropzoneVisibility(data.status);
         setVisible(resultCard, true);
         resetMessages();
         if (data.source_file_name) {
@@ -2558,10 +2674,12 @@
         setVisible(savedPreview, false);
         setVisible(actions, false);
         setVisible(transferFollowup, false);
+        setVisible(viewOrderButton, false);
 
         if (data.status === 'failed') {
           errorBox.textContent = data.error_message || 'AI obrada nije uspjela.';
           setVisible(errorBox, true);
+          setVisible(transferFollowup, true);
           if (/(transfer|baza|pantheon)/i.test(String(data.processing_step || '')) || /(anConsigneeQId|SetSubj|Pantheon)/i.test(String(data.error_message || ''))) {
             showTransferErrorModal(data.error_message || 'Transfer u bazu nije uspio.', data.error_message || '');
           }
@@ -2584,15 +2702,17 @@
 
           if (!autoTransfer) {
             if (data.transfer_ready && data.transfer_preview_error) {
-              progressWarning.textContent = 'Priprema preview-a nije uspjela, ali i dalje mozes pokusati rucni transfer u bazu.';
+              setProgressWarningMessage('Priprema preview-a nije uspjela, ali i dalje mozes pokusati rucni transfer u bazu.');
             } else if (data.transfer_ready && data.transfer_preview_available) {
-              progressWarning.textContent = 'Preview payload je pripremljen. Pregledaj rezultat i pokreni transfer u bazu kada budes spreman.';
+              setProgressWarningMessage('Preview payload je pripremljen. Pregledaj rezultat i pokreni transfer u bazu kada budes spreman.', {
+                previewReady: true
+              });
             } else if (data.transfer_ready) {
-              progressWarning.textContent = 'Rezultat je spreman za upis u bazu. Pokreni transfer kada budes spreman.';
+              setProgressWarningMessage('Rezultat je spreman za upis u bazu. Pokreni transfer kada budes spreman.');
             } else {
-              progressWarning.textContent = 'Ekstrakcija je zavrsena. Pregledaj rezultat i dopuni podatke ako nesto nedostaje.';
+              setProgressWarningMessage('Ekstrakcija je zavrsena. Pregledaj rezultat i dopuni podatke ako nesto nedostaje.');
             }
-            setVisible(progressWarning, true);
+            setVisible(transferFollowup, true);
           }
           return;
         }
@@ -2618,6 +2738,7 @@
           renderSavedPreview(data);
           setVisible(actions, true);
           setVisible(transferFollowup, true);
+          setVisible(viewOrderButton, true);
           setTransferButtonState({
             enabled: false,
             label: 'Prebaceno u bazu',
@@ -2666,8 +2787,7 @@
 
           pollTimer = window.setTimeout(pollStatus, 1300);
         } catch (error) {
-          progressWarning.textContent = 'Status AI obrade trenutno nije dostupan.';
-          setVisible(progressWarning, true);
+          setProgressWarningMessage('Status AI obrade trenutno nije dostupan.');
           updateActivityState(null);
           stopPolling();
         }
@@ -2693,6 +2813,7 @@
         latestStatusPayload = null;
         uploadProgress = 0;
         isTransferBusy = false;
+        openedFromExistingScan = false;
         fileNameEl.textContent = file.name;
         setVisible(progressCard, true);
         setVisible(resultCard, false);
@@ -2749,8 +2870,7 @@
         xhr.addEventListener('load', function () {
           if (xhr.status < 200 || xhr.status >= 300) {
             const response = xhr.response || {};
-            progressWarning.textContent = response.message || 'Upload nije uspio.';
-            setVisible(progressWarning, true);
+            setProgressWarningMessage(response.message || 'Upload nije uspio.');
             updateActivityState(null);
             return;
           }
@@ -2767,8 +2887,7 @@
         });
 
         xhr.addEventListener('error', function () {
-          progressWarning.textContent = 'Greska pri uploadu dokumenta.';
-          setVisible(progressWarning, true);
+          setProgressWarningMessage('Greska pri uploadu dokumenta.');
           updateActivityState(null);
         });
 
@@ -2944,6 +3063,7 @@
       if (initialScanId) {
         currentScanId = initialScanId;
         setVisible(progressCard, true);
+        syncDropzoneVisibility(initialScanState && typeof initialScanState === 'object' ? initialScanState.status : '');
 
         if (initialScanState && typeof initialScanState === 'object') {
           if (initialScanState.source_file_name) {

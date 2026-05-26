@@ -81,6 +81,11 @@
     margin-bottom: 1.5rem;
   }
 
+  .ai-token-history-last-loaded {
+    display: block;
+    margin-top: 0.2rem;
+  }
+
   .ai-token-history-length-form {
     display: inline-flex;
     align-items: center;
@@ -185,6 +190,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: 500;
+  }
+
+  .ai-token-history-action-cell {
+    white-space: nowrap;
   }
 
   .ai-token-history-empty {
@@ -310,7 +319,11 @@
 @endsection
 
 @section('content')
-<section class="ai-token-history-wrapper">
+<section
+  class="ai-token-history-wrapper"
+  id="ai-token-history-app"
+  data-status-poll-url="{{ route('app-ai-token-history-statuses') }}"
+  data-last-loaded-display="{{ $tokenHistoryLastLoadedAtDisplay ?? now()->format('d.m.Y H:i:s') }}">
   <div class="content-header row">
     <div class="content-header-left col-12 mb-2">
       <div class="row breadcrumbs-top">
@@ -502,6 +515,9 @@
         </div>
         <div class="col-md-6 col-12 text-md-end">
           <span class="text-muted small">{{ number_format($tokenHistoryRows->total(), 0, ',', '.') }} zapisa</span>
+          <span class="text-muted small ai-token-history-last-loaded" id="ai-token-history-last-loaded">
+            Zadnji put u&#269;itano: <span>{{ $tokenHistoryLastLoadedAtDisplay ?? now()->format('d.m.Y H:i:s') }}</span>
+          </span>
         </div>
       </div>
     </div>
@@ -518,11 +534,12 @@
             <th>Broj stranica</th>
             <th>Napla&#263;eni tokeni</th>
             <th>Potro&#353;nja ($)</th>
+            <th class="text-end">Akcija</th>
           </tr>
         </thead>
         <tbody>
           @forelse ($tokenHistoryRows as $row)
-            <tr>
+            <tr data-scan-id="{{ $row['id'] }}">
               <td>{{ $row['event_time_display'] }}</td>
               <td>
                 <span class="ai-token-history-badge ai-token-history-badge-primary">{{ $row['usage_label'] }}</span>
@@ -530,7 +547,7 @@
               <td>
                 <span class="ai-token-history-badge ai-token-history-badge-warning">{{ $row['activity_label'] }}</span>
               </td>
-              <td>
+              <td data-history-status-cell>
                 <span class="ai-token-history-badge ai-token-history-badge-{{ $row['status_tone'] }}">{{ $row['status_label'] }}</span>
               </td>
               <td>
@@ -539,10 +556,15 @@
               <td>{{ $row['page_count_display'] }}</td>
               <td>{{ $row['billed_tokens_display'] }}</td>
               <td>{{ $row['usage_cost_usd_display'] }}</td>
+              <td class="text-end ai-token-history-action-cell">
+                <a href="{{ $row['open_scan_url'] }}" class="btn btn-outline-primary btn-sm">
+                  <i data-feather="eye" class="me-50"></i> Otvori scan
+                </a>
+              </td>
             </tr>
           @empty
             <tr>
-              <td colspan="8" class="ai-token-history-empty">
+              <td colspan="9" class="ai-token-history-empty">
                 Nema AI token historije za odabrane filtere.
               </td>
             </tr>
@@ -575,8 +597,12 @@
 @section('page-script')
 <script>
   document.addEventListener('DOMContentLoaded', function () {
+    const app = document.getElementById('ai-token-history-app');
     const filterBody = document.getElementById('filters-body');
     const toggleButton = document.getElementById('btn-toggle-filters');
+    const lastLoadedEl = document.getElementById('ai-token-history-last-loaded');
+    const pollUrl = app ? (app.dataset.statusPollUrl || '') : '';
+    let pollTimer = null;
 
     if (toggleButton && filterBody) {
       const syncToggleState = function () {
@@ -607,6 +633,102 @@
         });
       });
     }
+
+    function collectIds() {
+      if (!app) {
+        return [];
+      }
+
+      return Array.from(app.querySelectorAll('tbody tr[data-scan-id]'))
+        .map(function (row) {
+          return String(row.dataset.scanId || '').trim();
+        })
+        .filter(Boolean);
+    }
+
+    function updateLastLoaded(displayValue) {
+      if (!lastLoadedEl) {
+        return;
+      }
+
+      const target = lastLoadedEl.querySelector('span');
+
+      if (target) {
+        target.textContent = displayValue || (app ? app.dataset.lastLoadedDisplay || '' : '');
+      }
+    }
+
+    function renderStatusBadge(label, tone) {
+      return '<span class="ai-token-history-badge ai-token-history-badge-' + String(tone || 'secondary') + '">' + String(label || '-') + '</span>';
+    }
+
+    function scheduleNextPoll() {
+      pollTimer = window.setTimeout(pollStatuses, 5000);
+    }
+
+    async function pollStatuses() {
+      const ids = collectIds();
+
+      if (!app || !pollUrl || !ids.length) {
+        scheduleNextPoll();
+        return;
+      }
+
+      if (document.hidden) {
+        scheduleNextPoll();
+        return;
+      }
+
+      try {
+        const query = new URLSearchParams();
+        ids.forEach(function (id) {
+          query.append('ids[]', id);
+        });
+
+        const response = await fetch(pollUrl + '?' + query.toString(), {
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+        });
+
+        if (!response.ok) {
+          throw new Error('Polling nije uspio.');
+        }
+
+        const payload = await response.json();
+        const rows = payload.rows || {};
+
+        app.querySelectorAll('tbody tr[data-scan-id]').forEach(function (row) {
+          const rowPayload = rows[String(row.dataset.scanId || '')];
+
+          if (!rowPayload) {
+            return;
+          }
+
+          const statusCell = row.querySelector('[data-history-status-cell]');
+
+          if (statusCell) {
+            statusCell.innerHTML = renderStatusBadge(rowPayload.status_label, rowPayload.status_tone);
+          }
+        });
+
+        updateLastLoaded(payload.last_loaded_at_display || '');
+      } catch (error) {
+      } finally {
+        scheduleNextPoll();
+      }
+    }
+
+    updateLastLoaded(app ? app.dataset.lastLoadedDisplay || '' : '');
+    scheduleNextPoll();
+
+    window.addEventListener('beforeunload', function () {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+      }
+    });
   });
 </script>
 @endsection

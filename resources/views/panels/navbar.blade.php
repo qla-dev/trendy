@@ -1,3 +1,9 @@
+@php
+  $showAiHistoryQuickLink = Auth::check()
+    && method_exists(Auth::user(), 'canAccessAiOrderModule')
+    && Auth::user()->canAccessAiOrderModule();
+@endphp
+
 @if ($configData['mainLayoutType'] === 'horizontal' && isset($configData['mainLayoutType']))
   <nav
     class="header-navbar navbar-expand-lg navbar navbar-fixed align-items-center navbar-shadow navbar-brand-center {{ $configData['navbarColor'] }}"
@@ -70,7 +76,19 @@
     </ul>
   </div>
   <ul class="nav navbar-nav align-items-center ms-auto">
-    
+    @if ($showAiHistoryQuickLink)
+      <li class="nav-item d-none d-md-block">
+        <a
+          class="nav-link"
+          href="{{ route('app-ai-token-history') }}"
+          data-bs-toggle="tooltip"
+          data-bs-placement="bottom"
+          title="Historija"
+          aria-label="Historija">
+          <i class="ficon" data-feather="activity"></i>
+        </a>
+      </li>
+    @endif
     <li class="nav-item d-none d-md-block"><a class="nav-link nav-link-style"><i class="ficon"
           data-feather="{{ $configData['theme'] === 'dark' ? 'sun' : 'moon' }}"></i></a></li>
     @if (!(Auth::check() && Auth::user()->role === 'user'))

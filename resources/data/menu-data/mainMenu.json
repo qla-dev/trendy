@@ -33,6 +33,12 @@
       "slug": "app-order-ai-scan"
     },
     {
+      "name": "AI Inbox",
+      "icon": "inbox",
+      "url": "app/orders/ai-inbox",
+      "slug": "app-order-ai-inbox"
+    },
+    {
       "navheader": "AI tokeni",
       "slug": "app-ai-tokens-navheader"
     },
