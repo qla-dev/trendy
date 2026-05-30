@@ -233,6 +233,12 @@
     display: block;
   }
 
+  .material-barcode-modal-preview img {
+    width: min(100%, 320px);
+    height: auto;
+    display: block;
+  }
+
   .material-barcode-modal-empty {
     text-align: center;
     color: var(--barcode-modal-text-muted);
@@ -282,6 +288,16 @@
 
   .material-action-btn.material-barcode-preview-btn:hover {
     background-color: rgba(30, 136, 229, 0.1) !important;
+  }
+
+  .material-action-btn.material-qr-preview-btn {
+    border-color: #f59e0b !important;
+    color: #f59e0b !important;
+    background-color: transparent !important;
+  }
+
+  .material-action-btn.material-qr-preview-btn:hover {
+    background-color: rgba(245, 158, 11, 0.12) !important;
   }
 
   .material-action-btn.material-stock-adjust-btn {
@@ -692,7 +708,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <div>
-          <h5 class="modal-title mb-0" id="material-barcode-modal-label">Barcode etiketa materijala</h5>
+          <h5 class="modal-title mb-0" id="material-barcode-modal-label">Etiketa materijala</h5>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
       </div>
@@ -701,7 +717,7 @@
         <div class="material-barcode-modal-code" id="material-barcode-modal-code">-</div>
         <div class="alert alert-danger d-none" id="material-barcode-modal-error"></div>
         <div class="material-barcode-modal-preview" id="material-barcode-modal-preview">
-          <div class="material-barcode-modal-empty">Kliknite materijal u tabeli za pregled barcode etikete.</div>
+          <div class="material-barcode-modal-empty">Kliknite materijal u tabeli za pregled etikete.</div>
         </div>
       </div>
       <div class="modal-footer">
@@ -734,5 +750,5 @@
 <script>
   window.materialBarcodeGeneratorConfig = @json($materialBarcodeGeneratorConfig);
 </script>
-<script src="{{asset('js/scripts/pages/app-material.js?v=14')}}"></script>
+<script src="{{asset('js/scripts/pages/app-material.js?v=16')}}"></script>
 @endsection

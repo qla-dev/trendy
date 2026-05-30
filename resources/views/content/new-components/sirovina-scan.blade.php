@@ -67,7 +67,7 @@
           <div class="row g-4 align-items-stretch">
             <div class="col-12 col-lg-4 wo-bom-scanner-col">
               <div class="wo-bom-card wo-bom-dummy-qr-card">
-                <h5 class="text-white mb-1">Skenirajte BARCODE artikla</h5>
+                <h5 class="text-white mb-1">Skenirajte BARCODE ili QR kod artikla</h5>
 
                 <div class="qr-scanner-container position-relative wo-bom-dummy-qr-wrap">
                   <div id="sirovina-qr-scanner-frame" class="qr-scanner-frame position-relative">
@@ -78,7 +78,7 @@
                     <div class="qr-corner qr-corner-bottom-left"></div>
                     <div class="qr-corner qr-corner-bottom-right"></div>
                     <div class="qr-barcode-window"></div>
-                    <div class="qr-barcode-window-label">Barcode može biti bilo gdje u okviru</div>
+                    <div class="qr-barcode-window-label">Barcode ili QR kod može biti bilo gdje u okviru</div>
 
                     <div class="qr-scan-line"></div>
 
@@ -136,7 +136,7 @@
                   </div>
 
                   <div class="wo-qr-feedback-wrap">
-                    <div class="small wo-qr-status" id="sirovina-qr-scanner-status">Dozvoli pristup kameri za barcode skeniranje.</div>
+                    <div class="small wo-qr-status" id="sirovina-qr-scanner-status">Dozvoli pristup kameri za barcode / QR skeniranje.</div>
                     <div class="small wo-qr-error text-danger d-none" id="sirovina-qr-scanner-error"></div>
                   </div>
                 </div>
@@ -2063,7 +2063,8 @@
         Html5QrcodeSupportedFormats.EAN_13,
         Html5QrcodeSupportedFormats.EAN_8,
         Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.QR_CODE
       ].filter(function (value) {
         return value !== undefined && value !== null;
       });
@@ -2321,11 +2322,11 @@
       var resolvedBarcode = normalizeBarcodeText(barcodeText);
 
       if (!barcodeLookupUrl) {
-        return Promise.reject(new Error('Barcode lookup ruta nije dostupna.'));
+        return Promise.reject(new Error('Ruta za barcode / QR lookup nije dostupna.'));
       }
 
       if (!resolvedBarcode) {
-        return Promise.reject(new Error('Skenirani barcode je prazan.'));
+        return Promise.reject(new Error('Skenirani kod je prazan.'));
       }
 
       return fetch(buildUrl(barcodeLookupUrl, {
@@ -2371,6 +2372,10 @@
       var selectedRow = buildBarcodeSelectionRow(materialPayload);
 
       if (!selectedRow.acIdentChild) {
+        throw new Error('Materijal za skenirani kod nije pronađen');
+      }
+
+      if (!selectedRow.acIdentChild) {
         throw new Error('Materijal za skenirani barcode nije pronađen');
       }
 
@@ -2403,7 +2408,7 @@
       lastDecodedBarcodeAt = now;
       barcodeScannerBusy = true;
       clearScannerError();
-      setScannerStatus('Barcode prepoznat. Provjeravam materijal...', 'success');
+      setScannerStatus('Kod prepoznat. Provjeravam materijal...', 'success');
 
       lookupMaterialByBarcode(normalizedBarcode)
         .then(function (materialPayload) {
@@ -2416,6 +2421,9 @@
             });
         })
         .catch(function (error) {
+          setScannerStatus('Postavi barcode ili QR kod bilo gdje u okviru i zadrži fokus na etiketi', 'warning');
+          showScannerError(error && error.message ? error.message : 'Materijal za skenirani kod nije pronađen');
+          return;
           setScannerStatus('Postavi barcode bilo gdje u okviru i zadrži fokus na etiketi', 'warning');
           showScannerError(error && error.message ? error.message : 'Barcode materijal nije pronađen');
         })
@@ -2431,7 +2439,7 @@
 
       if (typeof Html5Qrcode === 'undefined') {
         setScannerStatus('Skener nije spreman.', 'danger');
-        showScannerError('Barcode biblioteka nije dostupna. Osvjezi stranicu i pokusaj ponovo.');
+        showScannerError('Barcode / QR biblioteka nije dostupna. Osvjezi stranicu i pokusaj ponovo.');
         return Promise.resolve();
       }
 
@@ -2465,6 +2473,7 @@
             applyScannerMirrorState();
             captureScannerTrackState();
             return applyScannerAutoEnhancements().then(function () {
+              setScannerStatus('Postavi barcode ili QR kod bilo gdje u okviru i drži etiketu 10-20 cm od kamere.');
               setScannerStatus('Postavi barcode bilo gdje u okviru i drži etiketu 10-20 cm od kamere.');
             });
           });
@@ -2474,6 +2483,7 @@
           resetScannerEnhancementControls();
           setScannerStatus('Skener nije pokrenut.', 'danger');
           console.error(error);
+          showScannerError(error && error.message ? error.message : 'Ne mogu pokrenuti kameru za barcode / QR skeniranje.');
           showScannerError(error && error.message ? error.message : 'Ne mogu pokrenuti kameru za barcode skeniranje.');
         });
     }
@@ -7053,7 +7063,7 @@
       setScannerStatus(
         requiresManualCameraStartForCurrentView()
           ? 'Još uvijek nije dostupno.'
-          : 'Dozvoli pristup kameri i pokreni skeniranje barcodova.' ,
+          : 'Dozvoli pristup kameri i pokreni skeniranje barcode ili QR kodova.' ,
       );
       applyScannerMirrorState();
 

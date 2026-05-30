@@ -1376,7 +1376,7 @@
 
               <div class="order-ai-stat">
                 <span class="order-ai-stat-label">Status transfera</span>
-                <span class="order-ai-stat-value">{{ $autoTransferEnabled ? 'Auto transfer ukljucen' : 'Rucni transfer aktivan' }}</span>
+                <span class="order-ai-stat-value">{{ $autoTransferEnabled ? 'Auto transfer uključen' : 'Ručni transfer aktivan' }}</span>
               </div>
             </div>
           </div>
@@ -1389,13 +1389,13 @@
         <div class="col-lg-7 col-12" id="order-ai-dropzone-shell">
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body p-2 p-md-3">
-              <div class="order-ai-dropzone" id="order-ai-dropzone" tabindex="0" role="button" aria-label="Ucitaj dokument za AI skeniranje">
+              <div class="order-ai-dropzone" id="order-ai-dropzone" tabindex="0" role="button" aria-label="Učitaj dokument za AI skeniranje">
                 <input type="file" class="d-none" id="order-ai-file-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.json,.txt,.csv,.xls,.xlsx,.doc,.docx">
                 <div class="order-ai-dropzone-icon">
                   <i data-feather="upload-cloud"></i>
                 </div>
                 <h3 class="mb-75">Prevuci dokument ovdje</h3>
-                <p class="order-ai-subtle mb-1">ili klikni da odaberes fajl za AI obradu narudzbe</p>
+                <p class="order-ai-subtle mb-1">ili klikni da odabereš fajl za AI obradu narudžbe</p>
                 <small class="text-muted">PDF, slike i izvozi do 50 MB</small>
               </div>
             </div>
@@ -1408,7 +1408,7 @@
               <div class="order-ai-progress-head mb-1">
                 <div class="order-ai-progress-copy">
                   <h4 class="mb-25">Status obrade</h4>
-                  <p class="mb-0 order-ai-subtle" id="order-ai-progress-label">Cekam upload...</p>
+                  <p class="mb-0 order-ai-subtle" id="order-ai-progress-label">Čekam upload...</p>
                 </div>
                 <div class="order-ai-progress-status">
                   <span class="order-ai-activity order-ai-hidden" id="order-ai-activity-indicator">
@@ -1432,7 +1432,7 @@
                     <span class="order-ai-stage-bullet"></span>
                     <div class="order-ai-stage-main">
                       <strong>Upload</strong>
-                      <div class="small text-muted">Fajl se salje na lokalni staging.</div>
+                      <div class="small text-muted">Fajl se šalje na lokalni staging.</div>
                     </div>
                   </div>
                 </div>
@@ -1453,7 +1453,7 @@
                     <div class="order-ai-stage-main">
                       <strong>Transfer u bazu</strong>
                       <div class="small text-muted" id="order-ai-transfer-hint">
-                        Dugme se aktivira kada AI zavrsi ekstrakciju i pripremi payload.
+                        Dugme se aktivira kada AI završi ekstrakciju i pripremi payload.
                       </div>
                     </div>
                     <div class="order-ai-stage-side">
@@ -1464,8 +1464,8 @@
               </div>
 
               <div class="order-ai-transfer-followup order-ai-hidden" id="order-ai-transfer-followup">
-                <button type="button" class="btn btn-outline-primary order-ai-hidden" id="order-ai-view-order-button">Vidi narudzbu</button>
-                <button type="button" class="btn btn-outline-success" id="order-ai-new-order-button">Nova narudzba</button>
+                <button type="button" class="btn btn-outline-primary order-ai-hidden" id="order-ai-view-order-button">Vidi narudžbu</button>
+                <button type="button" class="btn btn-outline-success" id="order-ai-new-order-button">Nova narudžba</button>
               </div>
 
               <div class="alert alert-warning order-ai-alert mt-2 mb-0 order-ai-hidden" id="order-ai-progress-warning"></div>
@@ -1481,7 +1481,7 @@
               <div class="d-flex flex-wrap align-items-start justify-content-between gap-1 mb-2">
                 <div>
                   <h4 class="mb-25">Rezultat AI skena</h4>
-                  <p class="mb-0 order-ai-subtle" id="order-ai-result-caption">Nema obradjenog dokumenta.</p>
+                  <p class="mb-0 order-ai-subtle" id="order-ai-result-caption">Nema obrađenog dokumenta.</p>
                 </div>
                 <span class="badge rounded-pill bg-light-primary text-primary" id="order-ai-result-status">Spremno</span>
               </div>
@@ -1512,7 +1512,7 @@
 
               <div class="d-flex flex-wrap gap-1 order-ai-hidden" id="order-ai-actions">
                 <button type="button" class="btn btn-primary" id="order-ai-view-positions-button">Pozicije</button>
-                <a href="{{ route('app-orders') }}" class="btn btn-outline-secondary">Upravljanje narudzbama</a>
+                <a href="{{ route('app-orders') }}" class="btn btn-outline-secondary">Upravljanje narudžbama</a>
               </div>
             </div>
           </div>
@@ -1527,15 +1527,15 @@
     <div class="modal-content">
       <div class="modal-header">
         <div>
-          <h5 class="modal-title mb-0" id="order-ai-order-modal-label">Pregled spremljene narudzbe</h5>
-          <div class="small text-muted">Kratki pregled narudzbe nakon upisa u bazu</div>
+          <h5 class="modal-title mb-0" id="order-ai-order-modal-label">Pregled spremljene narudžbe</h5>
+          <div class="small text-muted">Kratki pregled narudžbe nakon upisa u bazu</div>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
       </div>
       <div class="modal-body" id="order-ai-order-modal-body"></div>
       <div class="modal-footer">
-        <a href="{{ route('app-orders') }}" class="btn btn-outline-primary">Upravljanje narudzbama</a>
-        <button type="button" class="btn btn-success" id="order-ai-modal-new-order-button">Nova narudzba</button>
+        <a href="{{ route('app-orders') }}" class="btn btn-outline-primary">Upravljanje narudžbama</a>
+        <button type="button" class="btn btn-success" id="order-ai-modal-new-order-button">Nova narudžba</button>
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zatvori</button>
       </div>
     </div>
@@ -1547,7 +1547,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <div>
-          <h5 class="modal-title mb-0" id="order-ai-positions-modal-label">Pozicije spremljene narudzbe</h5>
+          <h5 class="modal-title mb-0" id="order-ai-positions-modal-label">Pozicije spremljene narudžbe</h5>
           <div class="small text-muted" id="order-ai-positions-modal-subtitle">Pregled pozicija upisanih u bazu</div>
         </div>
         <div class="d-flex align-items-center gap-1">
@@ -1558,14 +1558,14 @@
       <div class="modal-body order-ai-positions-body">
         <div class="order-ai-positions-loading" id="order-ai-positions-loading">
           <span class="spinner-border text-primary" role="status" aria-hidden="true"></span>
-          <div>Ucitam pozicije spremljene narudzbe...</div>
+          <div>Učitavam pozicije spremljene narudžbe...</div>
         </div>
         <div class="alert alert-danger mb-0 order-ai-hidden" id="order-ai-positions-error"></div>
         <div id="order-ai-positions-content" class="order-ai-hidden"></div>
       </div>
       <div class="modal-footer">
-        <a href="{{ route('app-orders') }}" class="btn btn-outline-primary">Upravljanje narudzbama</a>
-        <button type="button" class="btn btn-success" id="order-ai-positions-new-order-button">Nova narudzba</button>
+        <a href="{{ route('app-orders') }}" class="btn btn-outline-primary">Upravljanje narudžbama</a>
+        <button type="button" class="btn btn-success" id="order-ai-positions-new-order-button">Nova narudžba</button>
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zatvori</button>
       </div>
     </div>
@@ -1578,7 +1578,7 @@
       <div class="modal-header">
         <div>
           <h5 class="modal-title mb-0" id="order-ai-transfer-error-modal-label">Transfer u bazu nije uspio</h5>
-          <div class="small text-muted">Prikaz razloga zbog kojeg Pantheon nije prihvatio narudzbu</div>
+          <div class="small text-muted">Prikaz razloga zbog kojeg Pantheon nije prihvatio narudžbu</div>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
       </div>
@@ -1586,7 +1586,7 @@
         <div class="order-ai-transfer-error-copy" id="order-ai-transfer-error-modal-body"></div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-primary" id="order-ai-transfer-error-retry-button">Pokusaj ponovo</button>
+        <button type="button" class="btn btn-outline-primary" id="order-ai-transfer-error-retry-button">Pokušaj ponovo</button>
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zatvori</button>
       </div>
     </div>
@@ -1936,7 +1936,7 @@
         }
 
         if (/rtHE_Order_tHE_SetSubj_21|anConsigneeQId/i.test(message)) {
-          return 'Pantheon nije prihvatio narucitelja jer nije bio postavljen validan subject za anConsigneeQId.';
+          return 'Pantheon nije prihvatio naručitelja jer nije bio postavljen validan subject za anConsigneeQId.';
         }
 
         return message;
@@ -2093,7 +2093,7 @@
           completed: 'Spremno za pregled',
           ready_for_transfer: 'Spremno za transfer',
           transferring: 'Transfer u toku',
-          transferred: 'Sacuvano u bazi',
+          transferred: 'Sačuvano u bazi',
           failed: 'Neuspjelo'
         };
 
@@ -2119,7 +2119,7 @@
         }
 
         if (transferHint) {
-          transferHint.textContent = config.hint || 'Dugme se aktivira kada AI zavrsi ekstrakciju i pripremi payload.';
+          transferHint.textContent = config.hint || 'Dugme se aktivira kada AI završi ekstrakciju i pripremi payload.';
         }
       }
 
@@ -2151,7 +2151,7 @@
           : '';
         const factsMarkup = [
           { label: 'Kupac', value: order.customer_name || '-' },
-          { label: 'Narucitelj', value: order.supplier_name || '-' },
+          { label: 'Naručitelj', value: order.supplier_name || '-' },
           { label: 'Referenca', value: order.external_document_number || '-' },
           { label: 'Doc type', value: order.document_type || '-' },
           { label: 'Valuta', value: order.currency || '-' },
@@ -2238,9 +2238,9 @@
         savedPreview.innerHTML = `
           <div class="order-ai-saved-preview-header">
             <div>
-              <span class="badge rounded-pill bg-light-success text-success px-1 py-75">Sacuvano u bazi</span>
-              <h5 class="mb-50 mt-1">Narudzba ${escapeHtml(displayNumber)} je uspjesno upisana u bazu.</h5>
-              <p class="mb-0 text-muted">Otvoris preview ili pozicije jednim klikom, pa odmah nastavis na upravljanje narudzbama.</p>
+              <span class="badge rounded-pill bg-light-success text-success px-1 py-75">Sačuvano u bazi</span>
+              <h5 class="mb-50 mt-1">Narudžba ${escapeHtml(displayNumber)} je uspješno upisana u bazu.</h5>
+              <p class="mb-0 text-muted">Otvoriš preview ili pozicije jednim klikom, pa odmah nastaviš na upravljanje narudžbama.</p>
             </div>
           </div>
           <div class="order-ai-saved-grid">
@@ -2249,7 +2249,7 @@
               <div class="fw-bolder">${escapeHtml(order.customer_name || '-')}</div>
             </div>
             <div class="order-ai-saved-item">
-              <div class="text-muted small mb-50">Narucitelj</div>
+              <div class="text-muted small mb-50">Naručitelj</div>
               <div class="fw-bolder">${escapeHtml(order.supplier_name || '-')}</div>
             </div>
             <div class="order-ai-saved-item">
@@ -2287,7 +2287,7 @@
         return `
           <div class="order-ai-modal-summary mb-2">
             <div class="order-ai-modal-summary-card">
-              <div class="text-muted small mb-50">Narudzba u bazi</div>
+              <div class="text-muted small mb-50">Narudžba u bazi</div>
               <div class="fw-bolder">${escapeHtml(pantheon.view || pantheon.key || '-')}</div>
             </div>
             <div class="order-ai-modal-summary-card">
@@ -2295,7 +2295,7 @@
               <div class="fw-bolder">${escapeHtml(order.customer_name || '-')}</div>
             </div>
             <div class="order-ai-modal-summary-card">
-              <div class="text-muted small mb-50">Narucitelj</div>
+              <div class="text-muted small mb-50">Naručitelj</div>
               <div class="fw-bolder">${escapeHtml(order.supplier_name || '-')}</div>
             </div>
             <div class="order-ai-modal-summary-card">
@@ -2395,7 +2395,7 @@
           </div>
           ${technical && technical !== friendlyReason ? `
             <div>
-              <div class="small text-muted mb-50">Tehnicki detalj</div>
+              <div class="small text-muted mb-50">Tehnički detalj</div>
               <code>${escapeHtml(technical)}</code>
             </div>
           ` : ''}
@@ -2533,7 +2533,7 @@
           setPositionsModalState({
             loading: false,
             showContent: false,
-            subtitle: orderNumber ? `Narudzba ${orderNumber}` : 'Pregled pozicija upisanih u bazu',
+            subtitle: orderNumber ? `Narudžba ${orderNumber}` : 'Pregled pozicija upisanih u bazu',
             error: 'Ruta za pozicije trenutno nije dostupna.'
           });
           return;
@@ -2543,7 +2543,7 @@
           setPositionsModalState({
             loading: false,
             showContent: false,
-            error: 'Broj spremljene narudzbe nije dostupan.'
+            error: 'Broj spremljene narudžbe nije dostupan.'
           });
           return;
         }
@@ -2553,7 +2553,7 @@
           showContent: false,
           html: '',
           error: '',
-          subtitle: `Narudzba ${orderNumber}`
+          subtitle: `Narudžba ${orderNumber}`
         });
 
         try {
@@ -2572,15 +2572,15 @@
             showContent: true,
             html: html,
             error: '',
-            subtitle: `Narudzba ${orderNumber}`
+            subtitle: `Narudžba ${orderNumber}`
           });
           syncFeatherIcons();
         } catch (error) {
           setPositionsModalState({
             loading: false,
             showContent: false,
-            subtitle: `Narudzba ${orderNumber}`,
-            error: 'Pozicije trenutno nije moguce ucitati. Pokusaj ponovo za nekoliko trenutaka.'
+            subtitle: `Narudžba ${orderNumber}`,
+            error: 'Pozicije trenutno nije moguće učitati. Pokušaj ponovo za nekoliko trenutaka.'
           });
         }
       }
@@ -2608,7 +2608,7 @@
         if (lineTotalInput) {
           lineTotalInput.value = '';
         }
-        resultCaption.textContent = 'Nema obradjenog dokumenta.';
+        resultCaption.textContent = 'Nema obrađenog dokumenta.';
         resultStatus.textContent = 'Spremno';
         setVisible(resultCard, false);
         setVisible(linesShell, false);
@@ -2624,7 +2624,7 @@
           error: '',
           subtitle: 'Pregled pozicija upisanih u bazu'
         });
-        setProgress(0, 'Cekam upload...');
+        setProgress(0, 'Čekam upload...');
         setStageState('upload', false);
         setStageFill('upload', 0);
         setStageFill('transfer', 0);
@@ -2632,7 +2632,7 @@
         setTransferButtonState({
           enabled: false,
           label: 'Transfer u bazu',
-          hint: 'Dugme se aktivira kada AI zavrsi ekstrakciju i pripremi payload.'
+          hint: 'Dugme se aktivira kada AI završi ekstrakciju i pripremi payload.'
         });
         syncDropzoneVisibility('');
       }
@@ -2686,7 +2686,7 @@
           setTransferButtonState({
             enabled: false,
             label: 'Transfer u bazu',
-            hint: 'AI obrada nije uspjela. Ucitaj novi dokument i pokusaj ponovo.'
+            hint: 'AI obrada nije uspjela. Učitaj novi dokument i pokušaj ponovo.'
           });
           return;
         }
@@ -2702,15 +2702,15 @@
 
           if (!autoTransfer) {
             if (data.transfer_ready && data.transfer_preview_error) {
-              setProgressWarningMessage('Priprema preview-a nije uspjela, ali i dalje mozes pokusati rucni transfer u bazu.');
+              setProgressWarningMessage('Priprema preview-a nije uspjela, ali i dalje možeš pokušati ručni transfer u bazu.');
             } else if (data.transfer_ready && data.transfer_preview_available) {
-              setProgressWarningMessage('Preview payload je pripremljen. Pregledaj rezultat i pokreni transfer u bazu kada budes spreman.', {
+              setProgressWarningMessage('Preview payload je pripremljen. Pregledaj rezultat i pokreni transfer u bazu kada budeš spreman.', {
                 previewReady: true
               });
             } else if (data.transfer_ready) {
-              setProgressWarningMessage('Rezultat je spreman za upis u bazu. Pokreni transfer kada budes spreman.');
+              setProgressWarningMessage('Rezultat je spreman za upis u bazu. Pokreni transfer kada budeš spreman.');
             } else {
-              setProgressWarningMessage('Ekstrakcija je zavrsena. Pregledaj rezultat i dopuni podatke ako nesto nedostaje.');
+              setProgressWarningMessage('Ekstrakcija je završena. Pregledaj rezultat i dopuni podatke ako nešto nedostaje.');
             }
             setVisible(transferFollowup, true);
           }
@@ -2723,8 +2723,8 @@
             busy: true,
             label: autoTransfer ? 'Auto transfer radi...' : 'Transfer u toku...',
             hint: autoTransfer
-              ? 'AI trenutno samostalno salje narudzbu prema bazi.'
-              : 'Narudzba se upravo upisuje u bazu.'
+              ? 'AI trenutno samostalno šalje narudžbu prema bazi.'
+              : 'Narudžba se upravo upisuje u bazu.'
           });
           return;
         }
@@ -2732,8 +2732,8 @@
         if (data.status === 'transferred') {
           const orderView = data.pantheon_order && data.pantheon_order.view ? data.pantheon_order.view : data.pantheon_order.key;
           successBox.textContent = orderView
-            ? `Narudzba je uspjesno spremljena u bazu kao ${orderView}.`
-            : 'Narudzba je uspjesno spremljena u bazu.';
+            ? `Narudžba je uspješno spremljena u bazu kao ${orderView}.`
+            : 'Narudžba je uspješno spremljena u bazu.';
           setVisible(successBox, true);
           renderSavedPreview(data);
           setVisible(actions, true);
@@ -2741,8 +2741,8 @@
           setVisible(viewOrderButton, true);
           setTransferButtonState({
             enabled: false,
-            label: 'Prebaceno u bazu',
-            hint: 'Narudzba je spremljena. Otvori preview, pregledaj pozicije ili zapocni novu narudzbu.',
+            label: 'Prebačeno u bazu',
+            hint: 'Narudžba je spremljena. Otvori preview, pregledaj pozicije ili započni novu narudžbu.',
             complete: true
           });
           return;
@@ -2751,7 +2751,7 @@
         setTransferButtonState({
           enabled: false,
           label: 'Transfer u bazu',
-          hint: 'AI trenutno cita dokument i priprema strukturu narudzbe.'
+          hint: 'AI trenutno čita dokument i priprema strukturu narudžbe.'
         });
       }
 
@@ -2862,7 +2862,7 @@
           }
 
           uploadProgress = Math.round((event.loaded / event.total) * 100);
-          setProgress(mapUploadProgressToOverall(uploadProgress), uploadProgress >= 100 ? 'Upload zavrsen, pokrecem AI obradu...' : 'Dokument se ucitava na server...');
+          setProgress(mapUploadProgressToOverall(uploadProgress), uploadProgress >= 100 ? 'Upload završen, pokrećem AI obradu...' : 'Dokument se učitava na server...');
           setStageState('upload', uploadProgress >= 100);
           setStageFill('upload', uploadProgress);
         });
@@ -2878,7 +2878,7 @@
           const response = xhr.response || {};
           currentScanId = response.scan_id;
           uploadProgress = 100;
-          setProgress(18, 'Upload zavrsen. Dokument ceka AI ekstrakciju.');
+          setProgress(18, 'Upload završen. Dokument čeka AI ekstrakciju.');
           setStageState('extract', false);
           setStageFill('upload', 100);
           startExtractFillAnimation(14);
@@ -2887,7 +2887,7 @@
         });
 
         xhr.addEventListener('error', function () {
-          setProgressWarningMessage('Greska pri uploadu dokumenta.');
+          setProgressWarningMessage('Greška pri uploadu dokumenta.');
           updateActivityState(null);
         });
 
@@ -2912,7 +2912,7 @@
           enabled: false,
           busy: true,
           label: 'Transfer u toku...',
-          hint: 'Narudzba se upravo upisuje u bazu.'
+          hint: 'Narudžba se upravo upisuje u bazu.'
         });
 
         try {
@@ -2951,7 +2951,7 @@
           if (latestStatusPayload) {
             latestStatusPayload.current_progress = 100;
             latestStatusPayload.status = 'transferred';
-            latestStatusPayload.processing_step = 'Narudzba je rucno prebacena u bazu.';
+            latestStatusPayload.processing_step = 'Narudžba je ručno prebačena u bazu.';
             latestStatusPayload.pantheon_order = {
               key: payload.data ? payload.data.pantheon_order_key : '',
               view: payload.data ? payload.data.pantheon_order_view : '',
@@ -2970,8 +2970,8 @@
           updateStageFills(latestStatusPayload);
           setTransferButtonState({
             enabled: true,
-            label: 'Pokusaj ponovo',
-            hint: 'Transfer nije uspio. Pregledaj gresku i pokusaj ponovo.'
+            label: 'Pokušaj ponovo',
+            hint: 'Transfer nije uspio. Pregledaj grešku i pokušaj ponovo.'
           });
         }
       }
