@@ -2,7 +2,86 @@
   $showAiHistoryQuickLink = Auth::check()
     && method_exists(Auth::user(), 'canAccessAiOrderModule')
     && Auth::user()->canAccessAiOrderModule();
+  $aiTokenNavCountDisplay = (string) ($aiTokenNavbarCountDisplay ?? '0');
 @endphp
+
+<style>
+  .navbar-ai-token-link {
+    padding-left: 0.2rem !important;
+    padding-right: 0.2rem !important;
+  }
+
+  .navbar-ai-token-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 2.9rem;
+    padding: 0.42rem 0.9rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(115, 103, 240, 0.18);
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 10px 24px rgba(34, 41, 47, 0.08);
+    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+  }
+
+  .navbar-ai-token-pill:hover,
+  .navbar-ai-token-link:focus .navbar-ai-token-pill {
+    transform: translateY(-1px);
+    box-shadow: 0 14px 28px rgba(34, 41, 47, 0.12);
+    border-color: rgba(115, 103, 240, 0.28);
+  }
+
+  .navbar-ai-token-pill__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #f5b301;
+    font-size: 1rem;
+  }
+
+  .navbar-ai-token-pill__label {
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: #6e6b7b;
+    line-height: 1;
+  }
+
+  .navbar-ai-token-pill__value {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.7rem;
+    padding-left: 0.85rem;
+    border-left: 1px solid rgba(111, 107, 125, 0.18);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #4b5d78;
+  }
+
+  .dark-layout .navbar-ai-token-pill,
+  .semi-dark-layout .navbar-ai-token-pill {
+    background: rgba(40, 48, 70, 0.92);
+    border-color: rgba(184, 190, 220, 0.22);
+    box-shadow: 0 12px 24px rgba(9, 13, 23, 0.24);
+  }
+
+  .dark-layout .navbar-ai-token-pill__icon,
+  .semi-dark-layout .navbar-ai-token-pill__icon {
+    color: #ffcb45;
+  }
+
+  .dark-layout .navbar-ai-token-pill__label,
+  .semi-dark-layout .navbar-ai-token-pill__label {
+    color: #d0d4df;
+  }
+
+  .dark-layout .navbar-ai-token-pill__value,
+  .semi-dark-layout .navbar-ai-token-pill__value {
+    color: #ffffff;
+    border-left-color: rgba(184, 190, 220, 0.22);
+  }
+</style>
 
 @if ($configData['mainLayoutType'] === 'horizontal' && isset($configData['mainLayoutType']))
   <nav
@@ -79,13 +158,17 @@
     @if ($showAiHistoryQuickLink)
       <li class="nav-item d-none d-md-block">
         <a
-          class="nav-link"
+          class="nav-link navbar-ai-token-link"
           href="{{ route('app-ai-token-history') }}"
           data-bs-toggle="tooltip"
           data-bs-placement="bottom"
-          title="Historija"
-          aria-label="Historija">
-          <i class="ficon" data-feather="activity"></i>
+          title="AI token historija"
+          aria-label="AI token historija">
+          <span class="navbar-ai-token-pill">
+            <span class="navbar-ai-token-pill__icon"><i class="fa fa-coins" aria-hidden="true"></i></span>
+            <span class="navbar-ai-token-pill__label">Token Count</span>
+            <span class="navbar-ai-token-pill__value">{{ $aiTokenNavCountDisplay }}</span>
+          </span>
         </a>
       </li>
     @endif

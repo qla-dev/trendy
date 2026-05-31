@@ -89,7 +89,7 @@ class AiInboxController extends Controller
                 ->route('app-order-ai-inbox')
                 ->with('aiInboxRefreshSummary', $summary)
                 ->with('success', sprintf(
-                    'AI Inbox osvjezen: %d mailova, %d PDF-ova, %d duplikata, %d blokiranih, %d gresaka.',
+                    'AI Inbox osvježen: %d mailova, %d PDF-ova, %d duplikata, %d blokiranih, %d grešaka.',
                     (int) ($summary['imported_messages'] ?? 0),
                     (int) ($summary['imported_pdfs'] ?? 0),
                     (int) ($summary['duplicates_skipped'] ?? 0),
@@ -99,7 +99,7 @@ class AiInboxController extends Controller
         } catch (Throwable $exception) {
             return redirect()
                 ->route('app-order-ai-inbox')
-                ->with('error', 'AI Inbox osvjezavanje nije uspjelo: ' . Utf8Sanitizer::cleanExceptionMessage($exception));
+                ->with('error', 'AI Inbox osvježavanje nije uspjelo: ' . Utf8Sanitizer::cleanExceptionMessage($exception));
         }
     }
 
@@ -157,13 +157,13 @@ class AiInboxController extends Controller
     private function resolveAiStatus(OrderAiScan $scan): array
     {
         return match ((string) ($scan->status ?? '')) {
-            'uploaded' => ['label' => 'Ucitan', 'tone' => 'secondary'],
+            'uploaded' => ['label' => 'Učitan', 'tone' => 'secondary'],
             'extracting' => ['label' => 'AI obrada', 'tone' => 'info'],
             'completed' => ['label' => 'Spremno za pregled', 'tone' => 'success'],
             'ready_for_transfer' => ['label' => 'Spremno za transfer', 'tone' => 'success'],
             'transferring' => ['label' => 'Transfer u toku', 'tone' => 'warning'],
-            'transferred' => ['label' => 'Zavrseno', 'tone' => 'success'],
-            'failed' => ['label' => 'Neuspjesno', 'tone' => 'danger'],
+            'transferred' => ['label' => 'Završeno', 'tone' => 'success'],
+            'failed' => ['label' => 'Neuspješno', 'tone' => 'danger'],
             default => ['label' => 'Nepoznato', 'tone' => 'secondary'],
         };
     }
@@ -171,15 +171,15 @@ class AiInboxController extends Controller
     private function resolveTransferStatus(OrderAiScan $scan): array
     {
         if ($scan->transferred_at !== null || trim((string) ($scan->pantheon_order_key ?? '')) !== '') {
-            return ['label' => 'Prebaceno u bazu', 'tone' => 'success'];
+            return ['label' => 'Prebačeno u bazu', 'tone' => 'success'];
         }
 
         if ((string) ($scan->status ?? '') === 'failed' && $this->isTransferFailure($scan)) {
-            return ['label' => 'Transfer neuspjesan', 'tone' => 'danger'];
+            return ['label' => 'Transfer neuspješan', 'tone' => 'danger'];
         }
 
         if (in_array((string) ($scan->status ?? ''), ['completed', 'ready_for_transfer'], true)) {
-            return ['label' => 'Rucni pregled', 'tone' => 'primary'];
+            return ['label' => 'Ručni pregled', 'tone' => 'primary'];
         }
 
         if ((string) ($scan->status ?? '') === 'transferring') {

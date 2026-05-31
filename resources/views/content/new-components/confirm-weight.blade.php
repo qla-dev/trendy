@@ -868,4 +868,300 @@
       grid-template-columns: minmax(0, 1fr) 4.2rem;
     }
   }
+
+  @media (max-width: 575.98px) {
+    #confirm-weight-modal .modal-dialog {
+      max-width: none;
+      width: 100vw;
+      height: 100vh;
+      max-height: 100vh;
+      min-height: 100vh;
+      margin: 0;
+      align-items: stretch;
+    }
+
+    #confirm-weight-modal .modal-content {
+      height: 100%;
+      min-height: 100%;
+      max-height: 100%;
+      border-radius: 0;
+      border-left: 0;
+      border-right: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #confirm-weight-modal .modal-header {
+      align-items: flex-start;
+      gap: 0.7rem;
+      padding: 0.75rem 0.85rem 0.55rem;
+    }
+
+    #confirm-weight-modal .modal-body {
+      display: block;
+      flex: 1 1 auto;
+      min-height: 0;
+      padding: 0 0.75rem 0.75rem;
+      overflow: hidden;
+    }
+
+    #confirm-weight-modal .confirm-weight-header-copy {
+      gap: 0.18rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-kicker {
+      font-size: 0.92rem;
+      line-height: 1.2;
+      letter-spacing: 0.08em;
+    }
+
+    #confirm-weight-modal #confirm-weight-help-text {
+      font-size: 0.72rem;
+      line-height: 1.28;
+    }
+
+    #confirm-weight-modal .confirm-weight-close-btn {
+      width: 2.95rem;
+      height: 2.95rem;
+      border-radius: 0.75rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-close-btn span {
+      font-size: 1.35rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-layout {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      height: 100%;
+      min-height: 0;
+    }
+
+    #confirm-weight-modal .confirm-weight-info-panel {
+      flex: 0 0 auto;
+      gap: 0.6rem;
+      min-height: 0;
+    }
+
+    #confirm-weight-modal .confirm-weight-console {
+      flex: 1 1 auto;
+      min-height: 0;
+      gap: 0.6rem;
+      justify-content: flex-start;
+    }
+
+    #confirm-weight-modal .confirm-material-action-indicator {
+      padding: 0.55rem 0.65rem;
+      border-radius: 0.75rem;
+      font-size: 0.74rem;
+      line-height: 1.28;
+    }
+
+    #confirm-weight-modal .confirm-weight-selection-name {
+      min-height: auto;
+      padding: 0.75rem 0.85rem;
+      border-radius: 0.85rem;
+      font-size: 1.05rem;
+      line-height: 1.12;
+    }
+
+    #confirm-weight-modal .confirm-material-code-card,
+    #confirm-weight-modal .confirm-material-details {
+      padding: 0.72rem 0.82rem;
+      border-radius: 0.85rem;
+    }
+
+    #confirm-weight-modal .confirm-material-meta-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      row-gap: 0.45rem;
+      column-gap: 0.65rem;
+    }
+
+    #confirm-weight-modal .confirm-material-meta-item {
+      gap: 0.45rem;
+    }
+
+    #confirm-weight-modal .confirm-material-meta-icon {
+      width: 2rem;
+      height: 2rem;
+      flex: 0 0 2rem;
+      border-radius: 0.65rem;
+      font-size: 0.9rem;
+    }
+
+    #confirm-weight-modal .confirm-material-meta-copy {
+      gap: 0.16rem;
+    }
+
+    #confirm-weight-modal .confirm-material-meta-label {
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+    }
+
+    #confirm-weight-modal .confirm-material-meta-item strong {
+      font-size: 0.92rem;
+      line-height: 1.1;
+    }
+
+    #confirm-weight-modal .confirm-weight-screen-shell {
+      padding: 0.7rem;
+      border-radius: 0.9rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-screen-head {
+      flex-direction: row;
+      align-items: center;
+      margin-bottom: 0.55rem;
+      gap: 0.5rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-screen-caption {
+      font-size: 0.68rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-unit-switch {
+      flex-wrap: nowrap;
+      justify-content: flex-start;
+      gap: 0.3rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-unit-btn {
+      min-width: 3.15rem;
+      padding: 0.38rem 0.3rem;
+      border-radius: 0.65rem;
+      font-size: 0.72rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-screen {
+      gap: 0.5rem;
+      grid-template-columns: minmax(0, 1fr) 3.5rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-screen-readout {
+      min-height: clamp(4.7rem, 11vh, 5.6rem);
+      padding: 0.7rem 0.8rem;
+      border-radius: 0.85rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-screen-value {
+      font-size: clamp(1.8rem, 7vw, 2.55rem);
+    }
+
+    #confirm-weight-modal .confirm-weight-screen-unit {
+      font-size: 0.82rem;
+      padding-bottom: 0.18rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-screen-delete {
+      width: 3.5rem;
+      min-height: clamp(4.7rem, 11vh, 5.6rem);
+      border-radius: 0.85rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-screen-delete span {
+      font-size: 1.5rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-keypad {
+      --confirm-keypad-gap: 0.45rem;
+      --confirm-key-height: clamp(2.95rem, 6.6vh, 3.55rem);
+      gap: var(--confirm-keypad-gap);
+    }
+
+    #confirm-weight-modal .confirm-weight-key {
+      min-height: var(--confirm-key-height);
+      border-radius: 0.75rem;
+      font-size: 1.25rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-key--clear {
+      font-size: 0.78rem;
+      line-height: 1.05;
+    }
+
+    #confirm-weight-modal .confirm-weight-key--ok {
+      gap: 0.18rem;
+      min-height: calc((var(--confirm-key-height) * 3) + (var(--confirm-keypad-gap) * 2));
+    }
+
+    #confirm-weight-modal .confirm-weight-ok-label {
+      font-size: 1.65rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-ok-subtitle {
+      font-size: 0.58rem;
+      line-height: 1.15;
+      letter-spacing: 0.08em;
+    }
+  }
+
+  @media (max-width: 575.98px) and (max-height: 760px) {
+    #confirm-weight-modal .confirm-weight-selection-name {
+      font-size: 0.98rem;
+      padding-top: 0.65rem;
+      padding-bottom: 0.65rem;
+    }
+
+    #confirm-weight-modal .confirm-material-code-card,
+    #confirm-weight-modal .confirm-material-details {
+      padding-top: 0.62rem;
+      padding-bottom: 0.62rem;
+    }
+
+    #confirm-weight-modal .confirm-material-meta-item strong {
+      font-size: 0.86rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-screen-readout,
+    #confirm-weight-modal .confirm-weight-screen-delete {
+      min-height: clamp(4.2rem, 10vh, 5rem);
+    }
+
+    #confirm-weight-modal .confirm-weight-keypad {
+      --confirm-key-height: clamp(2.7rem, 6vh, 3.2rem);
+      --confirm-keypad-gap: 0.38rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-key {
+      font-size: 1.08rem;
+    }
+
+    #confirm-weight-modal .confirm-weight-ok-label {
+      font-size: 1.45rem;
+    }
+  }
+
+  @supports (height: 100dvh) {
+    @media (max-width: 575.98px) {
+      #confirm-weight-modal .modal-dialog {
+        height: 100dvh;
+        max-height: 100dvh;
+        min-height: 100dvh;
+      }
+
+      #confirm-weight-modal .confirm-weight-screen-readout {
+        min-height: clamp(4.7rem, 11dvh, 5.6rem);
+      }
+
+      #confirm-weight-modal .confirm-weight-screen-delete {
+        min-height: clamp(4.7rem, 11dvh, 5.6rem);
+      }
+
+      #confirm-weight-modal .confirm-weight-keypad {
+        --confirm-key-height: clamp(2.95rem, 6.6dvh, 3.55rem);
+      }
+    }
+
+    @media (max-width: 575.98px) and (max-height: 760px) {
+      #confirm-weight-modal .confirm-weight-screen-readout,
+      #confirm-weight-modal .confirm-weight-screen-delete {
+        min-height: clamp(4.2rem, 10dvh, 5rem);
+      }
+
+      #confirm-weight-modal .confirm-weight-keypad {
+        --confirm-key-height: clamp(2.7rem, 6dvh, 3.2rem);
+      }
+    }
+  }
 </style>

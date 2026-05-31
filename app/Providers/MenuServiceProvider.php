@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\OrderAiScan;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Carbon;
 
 class MenuServiceProvider extends ServiceProvider
 {
@@ -36,14 +38,31 @@ class MenuServiceProvider extends ServiceProvider
 
         $self = $this;
         \View::composer('*', function ($view) use ($verticalMenuData, $horizontalMenuData, $self) {
+            static $aiTokenNavbarCountCache = [];
+
             $verticalMenuCopy = json_decode(json_encode($verticalMenuData));
             $verticalMenuCopy = $self->filterAdminOnlyMenuItems($verticalMenuCopy);
             $verticalMenuCopy = $self->filterAiOrderModuleMenuItems($verticalMenuCopy);
+            $canAccessAiOrderModule = $self->canAccessAiOrderModule(Auth::user());
+            $userCacheKey = Auth::check() ? (string) (Auth::id() ?? 'auth') : 'guest';
+
+            if (!array_key_exists($userCacheKey, $aiTokenNavbarCountCache)) {
+                $aiTokenNavbarCountCache[$userCacheKey] = $canAccessAiOrderModule
+                    ? $self->resolveAiTokenNavbarCount()
+                    : 0;
+            }
+
+            $aiTokenNavbarCount = (int) $aiTokenNavbarCountCache[$userCacheKey];
 
             if (Auth::check() && Auth::user()->hasRole('user')) {
                 $verticalMenuCopy = $self->filterMenuForUserRole($verticalMenuCopy);
             }
-            $view->with('menuData', [$verticalMenuCopy, $horizontalMenuData]);
+
+            $view->with([
+                'menuData' => [$verticalMenuCopy, $horizontalMenuData],
+                'aiTokenNavbarCount' => $aiTokenNavbarCount,
+                'aiTokenNavbarCountDisplay' => number_format($aiTokenNavbarCount, 0, ',', '.'),
+            ]);
         });
     }
 
@@ -168,5 +187,29 @@ class MenuServiceProvider extends ServiceProvider
         return method_exists($user, 'canAccessAiOrderModule')
             ? (bool) $user->canAccessAiOrderModule()
             : false;
+    }
+
+    private function resolveAiTokenNavbarCount(): int
+    {
+        try {
+            $now = Carbon::now();
+
+            return (int) OrderAiScan::query()
+                ->where(function ($query) {
+                    $query
+                        ->where('credits_spent', '>', 0)
+                        ->orWhereNotNull('processed_at')
+                        ->orWhere('status', 'failed');
+                })
+                ->whereRaw('COALESCE(processed_at, completed_at, created_at) >= ?', [
+                    $now->copy()->startOfMonth()->toDateTimeString(),
+                ])
+                ->whereRaw('COALESCE(processed_at, completed_at, created_at) <= ?', [
+                    $now->copy()->endOfMonth()->toDateTimeString(),
+                ])
+                ->sum('billed_tokens');
+        } catch (\Throwable $exception) {
+            return 0;
+        }
     }
 }

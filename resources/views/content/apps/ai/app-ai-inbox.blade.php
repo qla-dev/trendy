@@ -15,14 +15,74 @@
 
   .ai-inbox-header-actions {
     gap: 0.75rem;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+  }
+
+  .ai-inbox-header-actions form {
+    order: 2;
+    margin-bottom: 0;
+  }
+
+  .ai-inbox-header-actions .ai-inbox-last-loaded {
+    order: 1;
+  }
+
+  @media (max-width: 767.98px) {
+    .ai-inbox-header-actions {
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
   }
 
   .ai-inbox-last-loaded {
+    display: inline-flex;
+    align-items: center;
     color: #6e6b7b;
     font-size: 0.82rem;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .ai-inbox-table-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--app-scroll-thumb-flat) var(--app-scroll-track);
+    scrollbar-gutter: auto;
+    padding-right: 0 !important;
+    background: #ffffff;
+  }
+
+  .ai-inbox-table-wrap::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .ai-inbox-table-wrap::-webkit-scrollbar-track {
+    background: var(--app-scroll-track);
+    border-radius: 999px;
+  }
+
+  .ai-inbox-table-wrap::-webkit-scrollbar-thumb {
+    background: var(--app-scroll-thumb-flat);
+    border-radius: 999px;
+    border: 1px solid var(--app-scroll-thumb-border);
+  }
+
+  .ai-inbox-table-wrap::-webkit-scrollbar-thumb:hover {
+    background: var(--app-scroll-thumb-flat-hover);
+  }
+
+  .ai-inbox-table {
+    width: 100%;
+    min-width: 1080px;
+    margin-right: 0;
   }
 
   .ai-inbox-table thead th {
+    background: #f8f8fa;
+    background-color: #f8f8fa;
     font-size: 0.78rem;
     letter-spacing: 0.02em;
     text-transform: uppercase;
@@ -32,6 +92,10 @@
 
   .ai-inbox-table tbody td {
     vertical-align: middle;
+  }
+
+  .ai-inbox-table.table tbody tr:hover > * {
+    background-color: #f8f8fc;
   }
 
   .ai-inbox-subject {
@@ -86,9 +150,46 @@
     color: #ea5455;
   }
 
+  .ai-inbox-action-cell {
+    width: 1% !important;
+    position: sticky !important;
+    right: 0 !important;
+    z-index: 10 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-clip: border-box !important;
+    opacity: 1 !important;
+    isolation: isolate !important;
+    box-shadow: none !important;
+    border-left: 1px solid #ebe9f1 !important;
+    white-space: nowrap;
+  }
+
+  .ai-inbox-table thead .ai-inbox-action-cell {
+    z-index: 11 !important;
+    background: #f8f8fa !important;
+    background-color: #f8f8fa !important;
+    box-shadow: none !important;
+  }
+
+  .ai-inbox-table.table tbody tr:hover > .ai-inbox-action-cell {
+    background: #f8f8fc !important;
+    background-color: #f8f8fc !important;
+    box-shadow: none !important;
+  }
+
   html.dark-layout .ai-inbox-table thead th,
   html.semi-dark-layout .ai-inbox-table thead th {
+    background: #2f3854;
+    background-color: #2f3854;
     color: #b4bfd9;
+  }
+
+  html.dark-layout .ai-inbox-table-wrap,
+  html.semi-dark-layout .ai-inbox-table-wrap,
+  body.dark-layout .ai-inbox-table-wrap,
+  body.semi-dark-layout .ai-inbox-table-wrap {
+    background: #283046;
   }
 
   html.dark-layout .ai-inbox-file,
@@ -96,6 +197,45 @@
   html.dark-layout .ai-inbox-subject,
   html.semi-dark-layout .ai-inbox-subject {
     color: #d8def1;
+  }
+
+  html.dark-layout .ai-inbox-table.table tbody tr:hover > *,
+  html.semi-dark-layout .ai-inbox-table.table tbody tr:hover > * {
+    background-color: #36405a !important;
+  }
+
+  body.dark-layout .ai-inbox-table .ai-inbox-action-cell,
+  body.semi-dark-layout .ai-inbox-table .ai-inbox-action-cell,
+  html.dark-layout .ai-inbox-table .ai-inbox-action-cell,
+  html.semi-dark-layout .ai-inbox-table .ai-inbox-action-cell,
+  .dark-layout .ai-inbox-table .ai-inbox-action-cell,
+  .semi-dark-layout .ai-inbox-table .ai-inbox-action-cell {
+    background: #283046 !important;
+    background-color: #283046 !important;
+    box-shadow: none !important;
+    border-left-color: rgba(184, 190, 220, 0.22) !important;
+  }
+
+  body.dark-layout .ai-inbox-table thead .ai-inbox-action-cell,
+  body.semi-dark-layout .ai-inbox-table thead .ai-inbox-action-cell,
+  html.dark-layout .ai-inbox-table thead .ai-inbox-action-cell,
+  html.semi-dark-layout .ai-inbox-table thead .ai-inbox-action-cell,
+  .dark-layout .ai-inbox-table thead .ai-inbox-action-cell,
+  .semi-dark-layout .ai-inbox-table thead .ai-inbox-action-cell {
+    background: #2f3854 !important;
+    background-color: #2f3854 !important;
+    box-shadow: none !important;
+  }
+
+  body.dark-layout .ai-inbox-table.table tbody tr:hover > .ai-inbox-action-cell,
+  body.semi-dark-layout .ai-inbox-table.table tbody tr:hover > .ai-inbox-action-cell,
+  html.dark-layout .ai-inbox-table.table tbody tr:hover > .ai-inbox-action-cell,
+  html.semi-dark-layout .ai-inbox-table.table tbody tr:hover > .ai-inbox-action-cell,
+  .dark-layout .ai-inbox-table.table tbody tr:hover > .ai-inbox-action-cell,
+  .semi-dark-layout .ai-inbox-table.table tbody tr:hover > .ai-inbox-action-cell {
+    background: #36405a !important;
+    background-color: #36405a !important;
+    box-shadow: none !important;
   }
 </style>
 @endsection
@@ -120,6 +260,9 @@
                 <i data-feather="refresh-cw" class="me-50"></i> Osvježi
               </button>
             </form>
+            <div class="ai-inbox-last-loaded" id="ai-inbox-last-loaded">
+              Zadnji put u&#269;itano: <span class="ms-25">{{ $aiInboxLastLoadedAtDisplay ?? now()->format('d.m.Y H:i:s') }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -134,15 +277,9 @@
     <div class="alert alert-danger">{{ session('error') }}</div>
   @endif
 
-  <div class="d-flex justify-content-end mb-1">
-    <div class="ai-inbox-last-loaded" id="ai-inbox-last-loaded">
-      Zadnji put u&#269;itano: <span>{{ $aiInboxLastLoadedAtDisplay ?? now()->format('d.m.Y H:i:s') }}</span>
-    </div>
-  </div>
-
   <div class="card">
     <div class="card-body p-0">
-      <div class="table-responsive">
+      <div class="table-responsive ai-inbox-table-wrap">
         <table class="table ai-inbox-table mb-0">
           <thead>
             <tr>
@@ -152,7 +289,7 @@
               <th>Naziv PDF-a</th>
               <th>AI status</th>
               <th>Transfer status</th>
-              <th class="text-end">Akcija</th>
+              <th class="text-end ai-inbox-action-cell">Akcija</th>
             </tr>
           </thead>
           <tbody>
@@ -172,7 +309,7 @@
                     {{ $row['transfer_status_label'] }}
                   </span>
                 </td>
-                <td class="text-end">
+                <td class="text-end ai-inbox-action-cell">
                   <a href="{{ $row['edit_url'] }}" class="btn btn-outline-primary btn-sm">
                     <i data-feather="eye" class="me-50"></i> Pregledaj / Uredi
                   </a>

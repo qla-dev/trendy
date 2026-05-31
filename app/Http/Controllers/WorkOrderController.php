@@ -25,6 +25,8 @@ class WorkOrderController extends Controller
     private const RELEASED_MATERIAL_DOC_TYPE = '6400';
     private const RELEASED_MATERIAL_SEQUENCE_LENGTH = 7;
     private const RELEASED_MATERIAL_CURRENCY = 'KM';
+    private const MATERIAL_ISSUED_PRIORITY_CODE = 7;
+    private const MATERIAL_ISSUED_PRIORITY_NAME = 'Materijal razdužen';
     private const RELEASED_MATERIAL_DEFAULT_ISSUER = 'Skladište sirovina';
     private const ADDITIONAL_RAW_MATERIAL_WAREHOUSE = 'Skladište dodatnih sirovina';
     private const RAW_MATERIAL_SHORTAGE_ALERT_EMAIL = 'skladiste.trendy@gmail.com';
@@ -2245,6 +2247,7 @@ class WorkOrderController extends Controller
                     }
 
                     $actualQty = $saveMode === 'barcode' ? $plannedQty : 0.0;
+                    $displayQty = $saveMode === 'barcode' ? $quantityFactor : $plannedQty;
 
                     if ($componentId === '') {
                         continue;
@@ -2257,7 +2260,7 @@ class WorkOrderController extends Controller
                         $existingQty = $this->workOrderItemQuantity($existingRow);
                         $updatedQty = $plannedQty;
                         $updatePayload = [
-                            'anPlanQty' => $updatedQty,
+                            'anPlanQty' => $displayQty,
                             'anQty' => $updatedQty,
                             'anQty1' => $updatedQty,
                             'adTimeChg' => $now,
@@ -2299,9 +2302,10 @@ class WorkOrderController extends Controller
                         $updateQuery->update($updatePayload);
 
                         $existingMaterialItemsByIdent[$componentKey] = array_merge($existingRow, [
-                            'anPlanQty' => $updatedQty,
+                            'anPlanQty' => $displayQty,
                             'anQty' => $updatedQty,
                             'anQty1' => $updatedQty,
+                            'acStatement' => $updatePayload['acStatement'] ?? ($existingRow['acStatement'] ?? null),
                             'acUM' => $updatePayload['acUM'] ?? ($existingRow['acUM'] ?? null),
                             'acDescr' => $updatePayload['acDescr'] ?? ($existingRow['acDescr'] ?? null),
                         ]);
@@ -2322,7 +2326,9 @@ class WorkOrderController extends Controller
                             'work_order_qty' => $saveMode === 'barcode' ? $barcodeWorkOrderQuantity : null,
                             'previous_anPlanQty' => $existingQty,
                             'stock_consumed_qty' => $plannedQty,
-                            'anPlanQty' => $updatedQty,
+                            'anPlanQty' => $displayQty,
+                            'anQty' => $updatedQty,
+                            'anQty1' => $updatedQty,
                         ];
 
                         continue;
@@ -2337,7 +2343,7 @@ class WorkOrderController extends Controller
                         'acIdent' => substr($componentId, 0, 16),
                         'acDescr' => $description === '' ? null : substr($description, 0, 80),
                         'acOperationType' => $operationType === '' ? null : $operationType,
-                        'anPlanQty' => $plannedQty,
+                        'anPlanQty' => $displayQty,
                         'anQty' => $actualQty,
                         'anQty1' => $actualQty,
                         'anQtyBase' => 0,
@@ -2411,7 +2417,9 @@ class WorkOrderController extends Controller
                         'unit_input_qty' => $saveMode === 'barcode' ? $quantityFactor : null,
                         'work_order_qty' => $saveMode === 'barcode' ? $barcodeWorkOrderQuantity : null,
                         'stock_consumed_qty' => $saveMode === 'barcode' ? $plannedQty : 0.0,
-                        'anPlanQty' => $plannedQty,
+                        'anPlanQty' => $displayQty,
+                        'anQty' => $actualQty,
+                        'anQty1' => $actualQty,
                     ];
 
                     if ($manualNoInsert && $nextNo !== null) {
@@ -2455,6 +2463,9 @@ class WorkOrderController extends Controller
                 $statusTransition = [
                     'changed' => false,
                 ];
+                $priorityTransition = [
+                    'changed' => false,
+                ];
 
                 if ($this->savedRowsContainMaterialConsumption($saved) && $shouldTransitionStatus) {
                     $statusTransition = $this->transitionWorkOrderStatusAfterConsumption(
@@ -2472,11 +2483,21 @@ class WorkOrderController extends Controller
                     ];
                 }
 
+                if ($releasedMaterialDocument !== null) {
+                    $priorityTransition = $this->transitionWorkOrderPriorityAfterMaterialIssue(
+                        $workOrderRow,
+                        $workOrderColumns,
+                        $userId,
+                        $now
+                    );
+                }
+
                 return [
                     'saved' => $saved,
                     'stock_adjustments' => $stockAdjustmentResults,
                     'released_material_document' => $releasedMaterialDocument,
                     'status_transition' => $statusTransition,
+                    'priority_transition' => $priorityTransition,
                 ];
             });
 
@@ -2488,6 +2509,9 @@ class WorkOrderController extends Controller
                 : [];
             $statusTransition = is_array($saveResult['status_transition'] ?? null)
                 ? $saveResult['status_transition']
+                : ['changed' => false];
+            $priorityTransition = is_array($saveResult['priority_transition'] ?? null)
+                ? $saveResult['priority_transition']
                 : ['changed' => false];
             $releasedMaterialDocument = is_array($saveResult['released_material_document'] ?? null)
                 ? $saveResult['released_material_document']
@@ -2555,6 +2579,7 @@ class WorkOrderController extends Controller
                     'stock_adjustments' => $stockAdjustmentResults,
                     'released_material_document' => $releasedMaterialDocument,
                     'status_transition' => $statusTransition,
+                    'priority_transition' => $priorityTransition,
                     'items' => $insertedRows,
                 ],
             ], 201);
@@ -2679,7 +2704,7 @@ class WorkOrderController extends Controller
             $userId = (int) (auth()->id() ?? 0);
             $hasStatementColumn = in_array('acStatement', $columns, true);
 
-            $deleteResult = DB::transaction(function () use ($deleteQuery, $preferredWarehouse, $userId, $hasStatementColumn) {
+            $deleteResult = DB::transaction(function () use ($deleteQuery, $preferredWarehouse, $userId, $hasStatementColumn, $workOrderRow) {
                 $row = (clone $deleteQuery)->lockForUpdate()->first();
 
                 if ($row === null) {
@@ -2697,7 +2722,12 @@ class WorkOrderController extends Controller
                 $reverseAdjustment = null;
 
                 if ($this->workOrderItemRowShouldRestoreStockOnRemove($rowData, $hasStatementColumn)) {
-                    $reverseAdjustment = $this->buildRemovedPlannedConsumptionStockAdjustment($rowData, $preferredWarehouse);
+                    $reverseAdjustment = $this->buildRemovedPlannedConsumptionStockAdjustment(
+                        $rowData,
+                        $preferredWarehouse,
+                        null,
+                        $this->resolveBarcodeConsumptionWorkOrderQuantity($workOrderRow)
+                    );
 
                     if ($reverseAdjustment !== null) {
                         $stockAdjustments = $this->applyRawMaterialsWarehouseToStockAdjustments([$reverseAdjustment]);
@@ -2921,6 +2951,8 @@ class WorkOrderController extends Controller
                 $itemRow = (array) $row;
                 $fieldUpdates = [];
                 $requestedQuantity = null;
+                $requestedDisplayQuantity = null;
+                $requestedStockQuantity = null;
 
                 if ($hasDescriptionInput && in_array('acDescr', $columns, true)) {
                     $description = trim((string) ($validated['opis'] ?? ''));
@@ -2929,6 +2961,11 @@ class WorkOrderController extends Controller
 
                 $itemNoteColumn = $this->workOrderItemNoteColumn($columns);
                 $shouldPersistActualQty = $this->workOrderItemRowShouldRestoreStockOnRemove($itemRow, $hasStatementColumn);
+                $workOrderQuantity = $this->resolveBarcodeConsumptionWorkOrderQuantity($workOrderRow);
+                $usesUnitInputQuantity = $this->workOrderItemUsesUnitInputQuantity($itemRow, $workOrderQuantity);
+                $barcodeWorkOrderQuantity = $usesUnitInputQuantity
+                    ? $workOrderQuantity
+                    : 1.0;
 
                 if ($hasNoteInput && $itemNoteColumn !== null) {
                     $fieldUpdates[$itemNoteColumn] = $this->resolveWorkOrderItemNoteForSave(
@@ -2940,6 +2977,8 @@ class WorkOrderController extends Controller
 
                 if ($hasQuantityInput) {
                     $requestedQuantity = max(0, (float) ($this->toFloatOrNull($validated['kolicina'] ?? 0) ?? 0));
+                    $requestedDisplayQuantity = $requestedQuantity;
+                    $requestedStockQuantity = $requestedQuantity;
                     $quantityColumns = $this->existingColumns($columns, ['anPlanQty']);
 
                     if ($shouldPersistActualQty) {
@@ -2947,6 +2986,17 @@ class WorkOrderController extends Controller
                     }
 
                     foreach (array_values(array_unique($quantityColumns)) as $quantityColumn) {
+                        if ($quantityColumn === 'anPlanQty' && $usesUnitInputQuantity) {
+                            $fieldUpdates[$quantityColumn] = $requestedDisplayQuantity;
+                            continue;
+                        }
+
+                        if (($quantityColumn === 'anQty' || $quantityColumn === 'anQty1') && $usesUnitInputQuantity) {
+                            $fieldUpdates[$quantityColumn] = $requestedDisplayQuantity * $barcodeWorkOrderQuantity;
+                            $requestedStockQuantity = $fieldUpdates[$quantityColumn];
+                            continue;
+                        }
+
                         $fieldUpdates[$quantityColumn] = $requestedQuantity;
                     }
 
@@ -2996,8 +3046,11 @@ class WorkOrderController extends Controller
                 $stockAdjustment = null;
 
                 if ($requestedQuantity !== null) {
-                    $previousQuantity = $this->workOrderItemQuantity($itemRow);
-                    $quantityDelta = $requestedQuantity - $previousQuantity;
+                    $previousQuantity = $usesUnitInputQuantity
+                        ? $this->workOrderItemStockQuantity($itemRow, $workOrderQuantity)
+                        : $this->workOrderItemQuantity($itemRow);
+                    $resolvedRequestedStockQuantity = $requestedStockQuantity ?? $requestedQuantity;
+                    $quantityDelta = $resolvedRequestedStockQuantity - $previousQuantity;
 
                     if (
                         abs($quantityDelta) > 0.000001
@@ -5473,9 +5526,34 @@ class WorkOrderController extends Controller
         return $quantity > 0.000001 ? $quantity : 1.0;
     }
 
+    private function workOrderItemUsesUnitInputQuantity(array $row, ?float $workOrderQuantity = null): bool
+    {
+        $statement = strtoupper(trim((string) ($row['acStatement'] ?? '')));
+
+        if (in_array($statement, ['PLANNED_BARCODE', 'PLANNED_BARCODE_UPDATE'], true)) {
+            return true;
+        }
+
+        if ($workOrderQuantity === null || $workOrderQuantity <= 1.000001) {
+            return false;
+        }
+
+        $displayQuantity = abs((float) ($this->toFloatOrNull($row['anPlanQty'] ?? null) ?? 0.0));
+        $actualQuantity = abs($this->workOrderItemActualQuantity($row));
+
+        if ($displayQuantity <= 0.000001 || $actualQuantity <= 0.000001) {
+            return false;
+        }
+
+        $expectedActualQuantity = $displayQuantity * $workOrderQuantity;
+        $tolerance = max(0.0001, $expectedActualQuantity * 0.0001);
+
+        return abs($actualQuantity - $expectedActualQuantity) <= $tolerance;
+    }
+
     private function resolveReleasedMaterialQuantity(array $row): float
     {
-        foreach (['anPlanQty', 'anQty', 'anQty1', 'stock_consumed_qty'] as $column) {
+        foreach (['stock_consumed_qty', 'anQty', 'anQty1', 'anPlanQty'] as $column) {
             $quantity = abs((float) ($this->toFloatOrNull($row[$column] ?? null) ?? 0.0));
 
             if ($quantity > 0.000001) {
@@ -5493,10 +5571,24 @@ class WorkOrderController extends Controller
         ) ?? 0);
     }
 
+    private function workOrderItemStockQuantity(array $row, ?float $workOrderQuantity = null): float
+    {
+        if ($this->workOrderItemUsesUnitInputQuantity($row, $workOrderQuantity)) {
+            $actualQuantity = abs($this->workOrderItemActualQuantity($row));
+
+            if ($actualQuantity > 0.000001) {
+                return $actualQuantity;
+            }
+        }
+
+        return abs($this->workOrderItemQuantity($row));
+    }
+
     private function buildRemovedPlannedConsumptionStockAdjustment(
         array $row,
         string $preferredWarehouse = '',
-        ?float $valueOverride = null
+        ?float $valueOverride = null,
+        ?float $workOrderQuantity = null
     ): ?array
     {
         $materialCode = trim((string) ($row['acIdent'] ?? ''));
@@ -5516,7 +5608,7 @@ class WorkOrderController extends Controller
         $value = $valueOverride;
 
         if ($value === null) {
-            $removedQty = $this->workOrderItemQuantity($row);
+            $removedQty = $this->workOrderItemStockQuantity($row, $workOrderQuantity);
             if ($removedQty <= 0) {
                 return null;
             }
@@ -9611,6 +9703,7 @@ class WorkOrderController extends Controller
         $fallbackMap = [
             1 => '1 - Visoki prioritet',
             5 => '5 - Uobičajeni prioritet',
+            7 => '7 - Materijal razdužen',
             10 => '10 - Niski prioritet',
             15 => '15 - Uzorci',
         ];
@@ -9644,6 +9737,62 @@ class WorkOrderController extends Controller
         }
 
         return $this->deliveryPriorityMap;
+    }
+
+    private function materialIssuedPriorityLabel(): string
+    {
+        return self::MATERIAL_ISSUED_PRIORITY_CODE . ' - ' . self::MATERIAL_ISSUED_PRIORITY_NAME;
+    }
+
+    private function ensureMaterialIssuedPriorityLookup(int $userId, Carbon $now): void
+    {
+        try {
+            $qualifiedTable = $this->tableSchema() . '.tHE_SetDeliveryPriority';
+            $targetCode = self::MATERIAL_ISSUED_PRIORITY_CODE;
+            $targetName = self::MATERIAL_ISSUED_PRIORITY_NAME;
+            $existing = DB::table($qualifiedTable)
+                ->where('anPriority', $targetCode)
+                ->first();
+
+            if ($existing !== null) {
+                $updates = [];
+
+                if (trim((string) ($existing->acName ?? '')) !== $targetName) {
+                    $updates['acName'] = $targetName;
+                }
+
+                if ((int) ($existing->abActive ?? 0) !== 1) {
+                    $updates['abActive'] = 1;
+                }
+
+                if (!empty($updates)) {
+                    $updates['adTimeChg'] = $now;
+                    $updates['anUserChg'] = $userId > 0 ? $userId : 0;
+
+                    DB::table($qualifiedTable)
+                        ->where('anPriority', $targetCode)
+                        ->update($updates);
+                }
+
+                return;
+            }
+
+            DB::table($qualifiedTable)->insert([
+                'anPriority' => $targetCode,
+                'acName' => $targetName,
+                'abDefault' => 0,
+                'abActive' => 1,
+                'adTimeIns' => $now,
+                'anUserIns' => $userId > 0 ? $userId : 0,
+                'adTimeChg' => $now,
+                'anUserChg' => $userId > 0 ? $userId : 0,
+            ]);
+        } catch (Throwable $exception) {
+            Log::warning('Unable to ensure material-issued priority lookup row.', [
+                'priority_code' => self::MATERIAL_ISSUED_PRIORITY_CODE,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     private function applyRequestedOrdering(Builder $query, array $columns, array $sort): bool
@@ -9957,6 +10106,67 @@ class WorkOrderController extends Controller
             'reason' => $changed ? 'updated' : 'update_failed',
             'from' => $currentLabel,
             'to' => 'U radu',
+        ];
+    }
+
+    private function transitionWorkOrderPriorityAfterMaterialIssue(array &$row, array $columns, int $userId, Carbon $now): array
+    {
+        $priorityCodeColumn = $this->firstExistingColumn($columns, ['anPriority']);
+        $priorityTextColumns = $this->existingColumns($columns, ['acPriority', 'priority']);
+
+        if ($priorityCodeColumn === null && empty($priorityTextColumns)) {
+            return [
+                'changed' => false,
+                'reason' => 'missing_priority_columns',
+            ];
+        }
+
+        $this->ensureMaterialIssuedPriorityLookup($userId, $now);
+
+        $targetCode = self::MATERIAL_ISSUED_PRIORITY_CODE;
+        $targetLabel = $this->materialIssuedPriorityLabel();
+        $currentValue = $this->valueTrimmed($row, ['anPriority', 'acPriority', 'priority'], '');
+        $currentLabel = $this->mapPriority($currentValue);
+        $updates = [];
+
+        if ($priorityCodeColumn !== null) {
+            $updates[$priorityCodeColumn] = $targetCode;
+        }
+
+        foreach ($priorityTextColumns as $priorityTextColumn) {
+            $updates[$priorityTextColumn] = $targetLabel;
+        }
+
+        if (in_array('adTimeChg', $columns, true)) {
+            $updates['adTimeChg'] = $now;
+        }
+
+        if (in_array('anUserChg', $columns, true)) {
+            $updates['anUserChg'] = $userId;
+        }
+
+        if ($this->rowAlreadyHasUpdates($row, $updates)) {
+            return [
+                'changed' => false,
+                'reason' => 'already_in_target_state',
+                'from' => $currentLabel,
+                'to' => $targetLabel,
+                'priority_code' => $targetCode,
+            ];
+        }
+
+        $changed = $this->updateWorkOrderRow($row, $updates);
+
+        if ($changed) {
+            $row = array_merge($row, $updates);
+        }
+
+        return [
+            'changed' => $changed,
+            'reason' => $changed ? 'updated' : 'update_failed',
+            'from' => $currentLabel,
+            'to' => $targetLabel,
+            'priority_code' => $targetCode,
         ];
     }
 

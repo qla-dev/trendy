@@ -21,6 +21,7 @@
             $priorityOptions = [
               '1 - Visoki prioritet',
               '5 - Uobičajeni prioritet',
+              '7 - Materijal razdužen',
               '10 - Niski prioritet',
               '15 - Uzorci',
             ];

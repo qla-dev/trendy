@@ -101,7 +101,9 @@
     overflow-y: hidden;
     scrollbar-width: thin;
     scrollbar-color: var(--app-scroll-thumb-flat) var(--app-scroll-track);
-    scrollbar-gutter: stable;
+    scrollbar-gutter: auto;
+    padding-right: 0 !important;
+    background: #ffffff;
   }
 
   .ai-token-history-table-wrap::-webkit-scrollbar {
@@ -125,11 +127,15 @@
   }
 
   .ai-token-history-table {
+    width: 100%;
     min-width: 1120px;
     margin-bottom: 0;
+    margin-right: 0;
   }
 
   .ai-token-history-table thead th {
+    background: #f8f8fa;
+    background-color: #f8f8fa;
     white-space: nowrap;
     font-size: 0.9rem;
     text-transform: uppercase;
@@ -193,7 +199,31 @@
   }
 
   .ai-token-history-action-cell {
+    width: 1% !important;
+    position: sticky !important;
+    right: 0 !important;
+    z-index: 10 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-clip: border-box !important;
+    opacity: 1 !important;
+    isolation: isolate !important;
+    box-shadow: none !important;
+    border-left: 1px solid #ebe9f1 !important;
     white-space: nowrap;
+  }
+
+  .ai-token-history-table thead .ai-token-history-action-cell {
+    z-index: 11 !important;
+    background: #f8f8fa !important;
+    background-color: #f8f8fa !important;
+    box-shadow: none !important;
+  }
+
+  .ai-token-history-table.table tbody tr:hover > .ai-token-history-action-cell {
+    background: #f8f8fc !important;
+    background-color: #f8f8fc !important;
+    box-shadow: none !important;
   }
 
   .ai-token-history-empty {
@@ -255,6 +285,47 @@
   .dark-layout .ai-token-history-table.table tbody tr:hover > *,
   .semi-dark-layout .ai-token-history-table.table tbody tr:hover > * {
     background-color: #36405a !important;
+  }
+
+  .dark-layout .ai-token-history-table thead th,
+  .semi-dark-layout .ai-token-history-table thead th {
+    background: #2f3854;
+    background-color: #2f3854;
+  }
+
+  .dark-layout .ai-token-history-table-wrap,
+  .semi-dark-layout .ai-token-history-table-wrap,
+  body.dark-layout .ai-token-history-table-wrap,
+  body.semi-dark-layout .ai-token-history-table-wrap {
+    background: #283046;
+  }
+
+  body.dark-layout .ai-token-history-table .ai-token-history-action-cell,
+  body.semi-dark-layout .ai-token-history-table .ai-token-history-action-cell,
+  .dark-layout .ai-token-history-table .ai-token-history-action-cell,
+  .semi-dark-layout .ai-token-history-table .ai-token-history-action-cell {
+    background: #283046 !important;
+    background-color: #283046 !important;
+    box-shadow: none !important;
+    border-left-color: rgba(184, 190, 220, 0.22) !important;
+  }
+
+  body.dark-layout .ai-token-history-table thead .ai-token-history-action-cell,
+  body.semi-dark-layout .ai-token-history-table thead .ai-token-history-action-cell,
+  .dark-layout .ai-token-history-table thead .ai-token-history-action-cell,
+  .semi-dark-layout .ai-token-history-table thead .ai-token-history-action-cell {
+    background: #2f3854 !important;
+    background-color: #2f3854 !important;
+    box-shadow: none !important;
+  }
+
+  body.dark-layout .ai-token-history-table.table tbody tr:hover > .ai-token-history-action-cell,
+  body.semi-dark-layout .ai-token-history-table.table tbody tr:hover > .ai-token-history-action-cell,
+  .dark-layout .ai-token-history-table.table tbody tr:hover > .ai-token-history-action-cell,
+  .semi-dark-layout .ai-token-history-table.table tbody tr:hover > .ai-token-history-action-cell {
+    background: #36405a !important;
+    background-color: #36405a !important;
+    box-shadow: none !important;
   }
 
   .dark-layout .ai-token-history-badge-primary,
@@ -534,7 +605,7 @@
             <th>Broj stranica</th>
             <th>Napla&#263;eni tokeni</th>
             <th>Potro&#353;nja ($)</th>
-            <th class="text-end">Akcija</th>
+            <th class="text-end ai-token-history-action-cell">Akcija</th>
           </tr>
         </thead>
         <tbody>
@@ -609,7 +680,7 @@
         const isHidden = filterBody.classList.contains('d-none');
         toggleButton.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
         toggleButton.innerHTML = isHidden
-          ? '<i data-feather="filter" class="me-50"></i> Pokazi filtere'
+          ? '<i data-feather="filter" class="me-50"></i> Pokaži filtere'
           : '<i data-feather="filter" class="me-50"></i> Sakrij filtere';
 
         if (typeof feather !== 'undefined') {

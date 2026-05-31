@@ -262,7 +262,7 @@ class AiTokenHistoryController extends Controller
         return array_merge([
             'id' => (int) $scan->id,
             'event_time_display' => $eventTimestamp ? $eventTimestamp->format('d.m.Y H:i') : '-',
-            'usage_label' => (string) ($scan->source_origin ?? 'manual') === 'imap' ? 'AI Inbox' : 'AI narudzba',
+            'usage_label' => (string) ($scan->source_origin ?? 'manual') === 'imap' ? 'AI Inbox' : 'AI narudžba',
             'activity_label' => 'AI scan',
             'file_name' => trim((string) ($scan->source_file_name ?? '')) ?: '-',
             'page_count' => $metrics['page_count'],
@@ -392,11 +392,11 @@ class AiTokenHistoryController extends Controller
             || $status === 'transferred';
 
         if ($status === 'failed' || (!$hasTransfer && trim((string) ($scan->error_message ?? '')) !== '')) {
-            return ['label' => 'Neuspjesno', 'tone' => 'danger'];
+            return ['label' => 'Neuspješno', 'tone' => 'danger'];
         }
 
         if ($hasTransfer) {
-            return ['label' => 'Zavrseno', 'tone' => 'success'];
+            return ['label' => 'Završeno', 'tone' => 'success'];
         }
 
         if (in_array($status, ['completed', 'ready_for_transfer'], true) || $scan->processed_at !== null) {
