@@ -91,6 +91,11 @@ class User extends Authenticatable
      */
     public function canAccessAiOrderModule(): bool
     {
+        return $this->isQlaDevUser();
+    }
+
+    public function isQlaDevUser(): bool
+    {
         $username = strtolower(trim((string) ($this->username ?? '')));
         $email = strtolower(trim((string) ($this->email ?? '')));
 

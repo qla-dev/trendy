@@ -14,72 +14,121 @@
   .navbar-ai-token-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.75rem;
-    min-height: 2.9rem;
-    padding: 0.42rem 0.9rem;
+    gap: 0.45rem;
+    min-height: 2.7rem;
+    padding: 0.38rem 0.8rem;
     border-radius: 1rem;
-    border: 1px solid rgba(115, 103, 240, 0.18);
     background: rgba(255, 255, 255, 0.95);
     box-shadow: 0 10px 24px rgba(34, 41, 47, 0.08);
-    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+    transition: transform 0.16s ease, box-shadow 0.16s ease;
   }
 
   .navbar-ai-token-pill:hover,
   .navbar-ai-token-link:focus .navbar-ai-token-pill {
     transform: translateY(-1px);
     box-shadow: 0 14px 28px rgba(34, 41, 47, 0.12);
-    border-color: rgba(115, 103, 240, 0.28);
   }
 
   .navbar-ai-token-pill__icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: #f5b301;
-    font-size: 1rem;
+    position: relative;
+    display: inline-grid;
+    width: 1.3rem;
+    height: 1.35rem;
+    place-items: center;
+    flex: 0 0 auto;
   }
 
-  .navbar-ai-token-pill__label {
-    font-size: 0.92rem;
-    font-weight: 500;
-    color: #6e6b7b;
+  .navbar-ai-token-pill__label,
+  .navbar-ai-token-pill__divider {
+    display: inline-flex;
+    align-items: center;
     line-height: 1;
+    color: #6e7f91;
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+
+  .navbar-ai-token-pill__divider {
+    opacity: 0.7;
   }
 
   .navbar-ai-token-pill__value {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 2.7rem;
-    padding-left: 0.85rem;
-    border-left: 1px solid rgba(111, 107, 125, 0.18);
+    min-width: 2.2rem;
     font-size: 1rem;
     font-weight: 700;
     line-height: 1;
     color: #4b5d78;
   }
 
+  .navbar-ai-token-coin {
+    position: absolute;
+    width: 0.95rem;
+    height: 0.42rem;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #ffd86f 0%, #f5b301 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      0 2px 4px rgba(196, 140, 0, 0.2);
+  }
+
+  .navbar-ai-token-coin::after {
+    content: "";
+    position: absolute;
+    inset: 0.09rem 0.12rem;
+    border-radius: 999px;
+    border: 1px solid rgba(160, 110, 0, 0.18);
+  }
+
+  .navbar-ai-token-coin--top {
+    transform: translateY(-0.34rem);
+  }
+
+  .navbar-ai-token-coin--mid {
+    width: 1.05rem;
+  }
+
+  .navbar-ai-token-coin--bottom {
+    transform: translateY(0.34rem);
+  }
+
   .dark-layout .navbar-ai-token-pill,
   .semi-dark-layout .navbar-ai-token-pill {
     background: rgba(40, 48, 70, 0.92);
-    border-color: rgba(184, 190, 220, 0.22);
     box-shadow: 0 12px 24px rgba(9, 13, 23, 0.24);
-  }
-
-  .dark-layout .navbar-ai-token-pill__icon,
-  .semi-dark-layout .navbar-ai-token-pill__icon {
-    color: #ffcb45;
-  }
-
-  .dark-layout .navbar-ai-token-pill__label,
-  .semi-dark-layout .navbar-ai-token-pill__label {
-    color: #d0d4df;
   }
 
   .dark-layout .navbar-ai-token-pill__value,
   .semi-dark-layout .navbar-ai-token-pill__value {
     color: #ffffff;
-    border-left-color: rgba(184, 190, 220, 0.22);
+  }
+
+  .dark-layout .navbar-ai-token-pill__label,
+  .dark-layout .navbar-ai-token-pill__divider,
+  .semi-dark-layout .navbar-ai-token-pill__label,
+  .semi-dark-layout .navbar-ai-token-pill__divider {
+    color: #dbe6f5;
+  }
+
+  @media (max-width: 767.98px) {
+    .navbar-ai-token-link {
+      padding-left: 0.1rem !important;
+      padding-right: 0.1rem !important;
+    }
+
+    .navbar-ai-token-pill {
+      min-height: 2.3rem;
+      padding: 0.3rem 0.6rem;
+      border-radius: 0.85rem;
+      gap: 0.35rem;
+    }
+
+    .navbar-ai-token-pill__value {
+      min-width: 0;
+      font-size: 0.92rem;
+    }
   }
 </style>
 
@@ -156,7 +205,7 @@
   </div>
   <ul class="nav navbar-nav align-items-center ms-auto">
     @if ($showAiHistoryQuickLink)
-      <li class="nav-item d-none d-md-block">
+      <li class="nav-item">
         <a
           class="nav-link navbar-ai-token-link"
           href="{{ route('app-ai-token-history') }}"
@@ -165,8 +214,13 @@
           title="AI token historija"
           aria-label="AI token historija">
           <span class="navbar-ai-token-pill">
-            <span class="navbar-ai-token-pill__icon"><i class="fa fa-coins" aria-hidden="true"></i></span>
-            <span class="navbar-ai-token-pill__label">Token Count</span>
+            <span class="navbar-ai-token-pill__label">Tokeni</span>
+            <span class="navbar-ai-token-pill__icon" aria-hidden="true">
+              <span class="navbar-ai-token-coin navbar-ai-token-coin--top"></span>
+              <span class="navbar-ai-token-coin navbar-ai-token-coin--mid"></span>
+              <span class="navbar-ai-token-coin navbar-ai-token-coin--bottom"></span>
+            </span>
+            <span class="navbar-ai-token-pill__divider" aria-hidden="true">|</span>
             <span class="navbar-ai-token-pill__value">{{ $aiTokenNavCountDisplay }}</span>
           </span>
         </a>

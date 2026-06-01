@@ -2,6 +2,10 @@
 
 @section('title', __('locale.Skeniraj narudzbu sa AI'))
 
+@section('vendor-style')
+  <link rel="stylesheet" href="{{ asset('vendors/css/extensions/sweetalert2.min.css') }}">
+@endsection
+
 @section('page-style')
   <style>
     .order-ai-shell {
@@ -18,6 +22,42 @@
       --order-ai-card-strong: #eef3f7;
       --order-ai-chip-bg: rgba(22, 52, 77, 0.08);
       --order-ai-panel-shadow: 0 16px 32px rgba(16, 31, 48, 0.06);
+    }
+
+    .order-ai-shell.is-initializing {
+      position: relative;
+      min-height: 420px;
+    }
+
+    .order-ai-shell.is-initializing > .row {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .order-ai-initial-loader {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 5;
+      padding: 2rem;
+    }
+
+    .order-ai-shell.is-initializing .order-ai-initial-loader {
+      display: flex;
+    }
+
+    .order-ai-initial-loader-card {
+      display: grid;
+      gap: 0.65rem;
+      min-width: min(26rem, 100%);
+      padding: 1.1rem 1.2rem;
+      border-radius: 1rem;
+      border: 1px solid rgba(22, 52, 77, 0.08);
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 18px 32px rgba(16, 31, 48, 0.08);
+      text-align: center;
     }
 
     .order-ai-hero {
@@ -66,12 +106,11 @@
       content: "";
       position: absolute;
       inset: 0;
-      background-image:
-        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 520 240'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2318cbb7'/%3E%3Cstop offset='55%25' stop-color='%23347cf7'/%3E%3Cstop offset='100%25' stop-color='%2331c46d'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg fill='none' stroke='url(%23g)' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round' opacity='.95'%3E%3Cpath d='M134 28h84a36 36 0 0 1 36 36v44a36 36 0 0 1-36 36h-84a36 36 0 0 1-36-36V64a36 36 0 0 1 36-36Z'/%3E%3Cpath d='M176 8v20'/%3E%3Cpath d='M132 144l-16 32'/%3E%3Cpath d='M220 144l16 32'/%3E%3Cpath d='M110 176h132'/%3E%3Ccircle cx='148' cy='84' r='14'/%3E%3Ccircle cx='204' cy='84' r='14'/%3E%3Cpath d='M148 116c14 10 42 10 56 0'/%3E%3Cpath d='M98 76H66'/%3E%3Cpath d='M286 76h-32'/%3E%3Cpath d='M98 106H72'/%3E%3Cpath d='M280 106h-26'/%3E%3Cpath d='M112 48L84 28'/%3E%3Cpath d='M240 48l28-20'/%3E%3Cpath d='M254 62h88'/%3E%3Cpath d='M254 102h72'/%3E%3Cpath d='M326 102l20-18'/%3E%3Cpath d='M58 146l40-22'/%3E%3Cpath d='M60 146H24'/%3E%3Ccircle cx='354' cy='62' r='10'/%3E%3Ccircle cx='356' cy='102' r='10'/%3E%3Ccircle cx='8' cy='146' r='8'/%3E%3Cpath d='M300 160h88'/%3E%3Cpath d='M388 160l26 18'/%3E%3Ccircle cx='428' cy='188' r='11'/%3E%3Cpath d='M236 182h64'/%3E%3Cpath d='M56 188h88'/%3E%3Cpath d='M144 188l22-18'/%3E%3Ccircle cx='46' cy='188' r='10'/%3E%3C/g%3E%3Cg fill='url(%23g)' opacity='.18'%3E%3Ccircle cx='148' cy='84' r='6'/%3E%3Ccircle cx='204' cy='84' r='6'/%3E%3Ccircle cx='354' cy='62' r='5'/%3E%3Ccircle cx='356' cy='102' r='5'/%3E%3C/g%3E%3C/svg%3E");
+      background-image: var(--order-ai-hero-illustration, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 640 300'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='8%25' x2='100%25' y2='92%25'%3E%3Cstop offset='0%25' stop-color='%2318cbb7'/%3E%3Cstop offset='52%25' stop-color='%23347cf7'/%3E%3Cstop offset='100%25' stop-color='%2331c46d'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg fill='none' stroke='url(%23g)' stroke-width='4.2' stroke-linecap='round' stroke-linejoin='round' opacity='.96'%3E%3Crect x='246' y='42' width='148' height='102' rx='30'/%3E%3Cpath d='M320 18v24'/%3E%3Ccircle cx='320' cy='10' r='8'/%3E%3Ccircle cx='286' cy='88' r='13'/%3E%3Ccircle cx='354' cy='88' r='13'/%3E%3Cpath d='M286 118h68'/%3E%3Crect x='256' y='156' width='128' height='72' rx='26'/%3E%3Cpath d='M256 184h-48'/%3E%3Cpath d='M384 184h48'/%3E%3Cpath d='M208 184h-34'/%3E%3Cpath d='M432 184h34'/%3E%3Cpath d='M292 228v50'/%3E%3Cpath d='M348 228v50'/%3E%3Cpath d='M292 278h-20'/%3E%3Cpath d='M348 278h20'/%3E%3Cpath d='M224 72h-54'/%3E%3Cpath d='M224 108h-68'/%3E%3Cpath d='M416 72h54'/%3E%3Cpath d='M416 108h68'/%3E%3C/g%3E%3Cg fill='url(%23g)' opacity='.22'%3E%3Ccircle cx='174' cy='184' r='12'/%3E%3Ccircle cx='466' cy='184' r='12'/%3E%3Ccircle cx='272' cy='278' r='12'/%3E%3Ccircle cx='368' cy='278' r='12'/%3E%3Ccircle cx='286' cy='88' r='6'/%3E%3Ccircle cx='354' cy='88' r='6'/%3E%3Ccircle cx='320' cy='10' r='5'/%3E%3C/g%3E%3C/svg%3E"));
       background-repeat: no-repeat;
-      background-position: right 1.2rem center;
-      background-size: 22rem auto;
-      opacity: 0.16;
+      background-position: var(--order-ai-hero-illustration-position, right 0.6rem center);
+      background-size: var(--order-ai-hero-illustration-size, 26rem auto);
+      opacity: var(--order-ai-hero-illustration-opacity, 0.2);
       pointer-events: none;
     }
 
@@ -226,6 +265,19 @@
       box-shadow: var(--order-ai-panel-shadow);
     }
 
+    .order-ai-progress-shell {
+      align-self: flex-start;
+    }
+
+    .order-ai-progress-shell:not(.order-ai-progress-shell-wide) .order-ai-extract-live-grid {
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(170px, 1fr);
+      grid-template-columns: unset;
+      grid-template-rows: repeat(2, minmax(0, 1fr));
+      overflow-x: auto;
+      padding-bottom: 0.15rem;
+    }
+
     .order-ai-progress-head {
       display: flex;
       align-items: flex-start;
@@ -247,6 +299,33 @@
       flex: 0 0 auto;
       min-width: 5rem;
       text-align: right;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.3rem;
+    }
+
+    .order-ai-progress-runtime {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.45rem;
+      margin-top: 0.2rem;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .order-ai-progress-runtime-label {
+      color: var(--order-ai-subtle);
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    .order-ai-progress-runtime-value {
+      color: var(--order-ai-ink);
+      font-size: 0.82rem;
+      font-weight: 700;
+      line-height: 1;
     }
 
     .order-ai-activity {
@@ -276,21 +355,24 @@
 
     .order-ai-progress-bar {
       height: 100%;
-      width: 0;
+      width: 100%;
       border-radius: 999px;
       background: linear-gradient(90deg, #0e7a6b 0%, #1ca28f 100%);
-      transition: width 0.25s ease;
+      transform: scaleX(0);
+      transform-origin: left center;
+      will-change: transform;
+      transition: transform 0.26s linear;
     }
 
     .order-ai-stage-list {
       display: grid;
-      gap: 0.75rem;
+      gap: 0.6rem;
     }
 
     .order-ai-stage {
       position: relative;
       overflow: hidden;
-      padding: 0.85rem 1rem;
+      padding: 0.78rem 0.95rem;
       border-radius: 1rem;
       background: var(--order-ai-card-soft);
       border: 1px solid rgba(22, 52, 77, 0.08);
@@ -301,9 +383,12 @@
       top: 0;
       left: 0;
       bottom: 0;
-      width: 0;
+      width: 100%;
       background: linear-gradient(90deg, rgba(49, 196, 109, 0.18), rgba(14, 122, 107, 0.08));
-      transition: width 0.35s ease;
+      transform: scaleX(0);
+      transform-origin: left center;
+      will-change: transform;
+      transition: transform 0.32s linear;
       pointer-events: none;
     }
 
@@ -325,6 +410,8 @@
       flex: 0 0 auto;
       align-self: center;
       margin-left: auto;
+      display: flex;
+      justify-content: flex-end;
     }
 
     .order-ai-stage-bullet {
@@ -370,15 +457,308 @@
       font-weight: 700;
     }
 
+    .order-ai-extract-live {
+      display: grid;
+      gap: 0.7rem;
+      margin-top: 0.7rem;
+      padding: 0.8rem;
+      border-radius: 0.95rem;
+      border: 1px solid rgba(22, 52, 77, 0.08);
+      background: rgba(255, 255, 255, 0.56);
+    }
+
+    .order-ai-extract-live-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+    }
+
+    .order-ai-extract-live-title {
+      color: var(--order-ai-ink);
+      font-size: 0.86rem;
+      font-weight: 700;
+    }
+
+    .order-ai-extract-live-copy {
+      display: grid;
+      gap: 0.18rem;
+    }
+
+    .order-ai-extract-live-description {
+      color: var(--order-ai-subtle);
+      font-size: 0.78rem;
+    }
+
+    .order-ai-extract-live-meta {
+      color: var(--order-ai-subtle);
+      font-size: 0.78rem;
+    }
+
+    .order-ai-extract-global-progress {
+      height: 0.55rem;
+      border-radius: 999px;
+      background: rgba(18, 52, 77, 0.08);
+      overflow: hidden;
+    }
+
+    .order-ai-extract-global-progress-bar {
+      display: block;
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, rgba(14, 122, 107, 0.95), rgba(24, 203, 183, 0.88));
+      transition: width 0.22s linear;
+    }
+
+    .order-ai-extract-focus {
+      display: grid;
+      gap: 0.1rem;
+    }
+
+    .order-ai-extract-focus-label {
+      color: var(--order-ai-subtle);
+      font-size: 0.71rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .order-ai-extract-focus-value {
+      color: var(--order-ai-ink);
+      font-size: 0.96rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .order-ai-extract-live-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+    }
+
+    .order-ai-extract-page-chip {
+      min-width: 2.5rem;
+      height: 2.1rem;
+      padding: 0 0.72rem;
+      border-radius: 999px;
+      border: 1px solid rgba(18, 52, 77, 0.1);
+      background: rgba(255, 255, 255, 0.88);
+      color: var(--order-ai-subtle);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      line-height: 1;
+      white-space: nowrap;
+      transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+    }
+
+    .order-ai-extract-page-chip.is-done {
+      border-color: rgba(18, 129, 74, 0.24);
+      background: rgba(221, 246, 231, 0.92);
+      color: #17683b;
+    }
+
+    .order-ai-extract-page-chip.is-active {
+      border-color: rgba(14, 122, 107, 0.24);
+      background: linear-gradient(135deg, rgba(226, 255, 247, 0.96), rgba(233, 244, 255, 0.92));
+      color: var(--order-ai-accent);
+      box-shadow: 0 10px 18px rgba(16, 31, 48, 0.08);
+      animation: order-ai-page-pulse 1.25s ease-in-out infinite;
+    }
+
+    .order-ai-extract-page-chip.is-error {
+      border-color: rgba(220, 38, 38, 0.22);
+      background: rgba(220, 38, 38, 0.08);
+      color: #8b1e1e;
+    }
+
+    .order-ai-extract-page-chip-state {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1rem;
+      height: 1rem;
+      border-radius: 999px;
+      background: rgba(18, 52, 77, 0.08);
+      font-size: 0.74rem;
+      line-height: 1;
+      flex: 0 0 auto;
+    }
+
+    .order-ai-extract-page-chip.is-done .order-ai-extract-page-chip-state {
+      background: rgba(18, 129, 74, 0.16);
+    }
+
+    .order-ai-extract-page-chip.is-active .order-ai-extract-page-chip-state {
+      background: rgba(14, 122, 107, 0.12);
+    }
+
+    .order-ai-extract-page-chip.is-error .order-ai-extract-page-chip-state {
+      background: rgba(220, 38, 38, 0.12);
+    }
+
+    @keyframes order-ai-page-pulse {
+      0%,
+      100% {
+        transform: translateY(0);
+        box-shadow: 0 10px 18px rgba(16, 31, 48, 0.08);
+      }
+      50% {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 24px rgba(14, 122, 107, 0.16);
+      }
+    }
+
+    .order-ai-extract-step {
+      display: grid;
+      gap: 0.45rem;
+      padding: 0.78rem 0.72rem;
+      min-height: 7.2rem;
+      border-radius: 0.9rem;
+      border: 1px solid rgba(22, 52, 77, 0.1);
+      background: rgba(255, 255, 255, 0.84);
+      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .order-ai-extract-step-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .order-ai-extract-step-progress {
+      height: 0.34rem;
+      border-radius: 999px;
+      background: rgba(18, 52, 77, 0.08);
+      overflow: hidden;
+    }
+
+    .order-ai-extract-step-progress-bar {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, rgba(14, 122, 107, 0.92), rgba(24, 203, 183, 0.9));
+      transition: width 0.22s linear;
+    }
+
+    .order-ai-extract-phase-list {
+      display: grid;
+      gap: 0.2rem;
+    }
+
+    .order-ai-extract-phase {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.4rem;
+      font-size: 0.67rem;
+      line-height: 1.2;
+    }
+
+    .order-ai-extract-phase-name {
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .order-ai-extract-phase-state {
+      opacity: 0.88;
+      white-space: nowrap;
+    }
+
+    .order-ai-extract-phase.is-done {
+      color: #17683b;
+    }
+
+    .order-ai-extract-phase.is-active {
+      color: var(--order-ai-accent);
+    }
+
+    .order-ai-extract-step.is-done {
+      border-color: rgba(18, 129, 74, 0.24);
+      background: rgba(221, 246, 231, 0.9);
+      color: #17683b;
+    }
+
+    .order-ai-extract-step.is-active {
+      border-color: rgba(14, 122, 107, 0.24);
+      background: linear-gradient(135deg, rgba(226, 255, 247, 0.96), rgba(233, 244, 255, 0.92));
+      box-shadow: 0 12px 24px rgba(16, 31, 48, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .order-ai-extract-step.is-pending {
+      color: var(--order-ai-subtle);
+    }
+
+    .order-ai-extract-step-index {
+      font-size: 0.98rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .order-ai-extract-step-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .order-ai-extract-step-status {
+      font-size: 0.74rem;
+      opacity: 0.88;
+    }
+
+    .order-ai-primary-action {
+      min-width: 170px;
+      border: 1px solid rgba(14, 122, 107, 0.16);
+      border-radius: 0.9rem;
+      background: rgba(14, 122, 107, 0.08);
+      color: #166458;
+      font-weight: 700;
+      box-shadow: 0 12px 24px rgba(14, 122, 107, 0.08);
+    }
+
+    .order-ai-primary-action:hover,
+    .order-ai-primary-action:focus {
+      color: #12584d;
+      background: rgba(14, 122, 107, 0.12);
+      transform: translateY(-1px);
+    }
+
+    .order-ai-primary-action:disabled,
+    .order-ai-primary-action:disabled:hover,
+    .order-ai-primary-action:disabled:focus {
+      background: rgba(133, 148, 163, 0.16);
+      border-color: rgba(133, 148, 163, 0.18);
+      color: #8da0b0;
+      box-shadow: none;
+      transform: none;
+      cursor: not-allowed !important;
+    }
+
     .order-ai-transfer-cta {
       min-width: 170px;
       border-radius: 0.9rem;
       font-weight: 700;
-      box-shadow: 0 14px 28px rgba(22, 163, 74, 0.22);
+      background: linear-gradient(180deg, #4aa075 0%, #397f62 100%);
+      border-color: #397f62;
+      box-shadow: 0 14px 28px rgba(57, 127, 98, 0.18);
+    }
+
+    .order-ai-transfer-cta:hover,
+    .order-ai-transfer-cta:focus {
+      background: linear-gradient(180deg, #57aa7f 0%, #3e8768 100%);
+      border-color: #3e8768;
     }
 
     .order-ai-transfer-cta.is-ready {
-      animation: order-ai-pulse 2.2s ease-in-out infinite;
+      animation: none;
     }
 
     .order-ai-transfer-cta.is-busy,
@@ -388,8 +768,8 @@
     }
 
     .order-ai-transfer-cta.is-busy {
-      background: linear-gradient(180deg, #16a34a 0%, #12813d 100%);
-      border-color: #12813d;
+      background: linear-gradient(180deg, #4da17a 0%, #397f62 100%);
+      border-color: #397f62;
     }
 
     .order-ai-transfer-cta.is-complete {
@@ -398,9 +778,9 @@
     }
 
     .order-ai-transfer-cta:disabled:not(.is-busy):not(.is-complete) {
-      background: linear-gradient(180deg, #62707f 0%, #495464 100%);
-      border-color: #495464;
-      color: #eef4f7;
+      background: linear-gradient(180deg, #dce3ea 0%, #cfd7df 100%);
+      border-color: #cfd7df;
+      color: #7f8d9b;
       opacity: 1;
       box-shadow: none;
       cursor: not-allowed !important;
@@ -421,6 +801,46 @@
       margin-top: 1rem;
     }
 
+    .order-ai-bottom-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding-top: 0.55rem;
+      border-top: 1px solid rgba(22, 52, 77, 0.08);
+    }
+
+    .order-ai-bottom-actions-secondary {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .order-ai-bottom-action-primary {
+      margin-left: auto;
+      flex: 0 0 auto;
+    }
+
+    .order-ai-secondary-action {
+      border-radius: 0.9rem;
+      border: 1px solid rgba(74, 160, 117, 0.24);
+      background: transparent;
+      color: var(--order-ai-ink);
+      font-weight: 600;
+    }
+
+    .order-ai-secondary-action:hover,
+    .order-ai-secondary-action:focus {
+      color: var(--order-ai-ink);
+      background: rgba(74, 160, 117, 0.08);
+      border-color: rgba(74, 160, 117, 0.34);
+    }
+
+    #order-ai-lines-shell {
+      margin-bottom: 0.5rem !important;
+    }
+
     .order-ai-transfer-error-copy {
       display: grid;
       gap: 0.9rem;
@@ -439,7 +859,7 @@
 
     .order-ai-facts {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      grid-template-columns: repeat(8, minmax(0, 1fr));
       gap: 0.85rem;
     }
 
@@ -594,13 +1014,14 @@
 
     .order-ai-total-check-edit {
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       align-items: center;
       gap: 0.75rem;
     }
 
     .order-ai-total-check-edit input {
       min-width: 9rem;
+      flex: 1 1 auto;
     }
 
     .order-ai-alert {
@@ -753,6 +1174,11 @@
       display: none !important;
     }
 
+    #order-ai-result-card,
+    #order-ai-actions {
+      scroll-margin-top: 6rem;
+    }
+
     .order-ai-hidden {
       display: none !important;
     }
@@ -782,6 +1208,12 @@
       box-shadow: 0 16px 32px rgba(16, 31, 48, 0.06);
     }
 
+    html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-initial-loader-card {
+      background: rgba(255, 255, 255, 0.96);
+      border-color: rgba(18, 52, 77, 0.08);
+      color: var(--order-ai-ink);
+    }
+
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-hero {
       background:
         radial-gradient(circle at top right, rgba(255, 207, 107, 0.3), transparent 32%),
@@ -802,7 +1234,7 @@
     }
 
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-hero-story::before {
-      opacity: 0.16;
+      opacity: var(--order-ai-hero-illustration-opacity, 0.16);
       filter: none;
     }
 
@@ -881,12 +1313,13 @@
     }
 
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-transfer-cta:disabled:not(.is-busy):not(.is-complete) {
-      background: linear-gradient(180deg, #778492 0%, #5d6977 100%);
-      border-color: #5d6977;
-      color: #f4f7fa;
+      background: linear-gradient(180deg, #e2e8ef 0%, #d0d8e0 100%);
+      border-color: #d0d8e0;
+      color: #7f8d9b;
     }
 
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-transfer-error-copy code,
+    html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-extract-live,
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-fact,
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-line-total-trigger,
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-total-check-banner,
@@ -903,6 +1336,11 @@
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-transfer-error-copy code {
       background: var(--order-ai-card-muted);
       color: #284257;
+    }
+
+    html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-extract-step {
+      background: rgba(255, 255, 255, 0.92);
+      border-color: rgba(18, 52, 77, 0.08);
     }
 
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-saved-preview {
@@ -997,6 +1435,14 @@
       box-shadow: 0 18px 36px rgba(2, 6, 23, 0.24);
     }
 
+    html.dark-layout .order-ai-initial-loader-card,
+    html.semi-dark-layout .order-ai-initial-loader-card {
+      background: rgba(27, 37, 61, 0.96);
+      border-color: rgba(126, 153, 194, 0.16);
+      color: var(--order-ai-ink);
+      box-shadow: 0 18px 36px rgba(2, 6, 23, 0.26);
+    }
+
     html.dark-layout .order-ai-hero,
     html.semi-dark-layout .order-ai-hero {
       background:
@@ -1021,7 +1467,7 @@
 
     html.dark-layout .order-ai-hero-story::before,
     html.semi-dark-layout .order-ai-hero-story::before {
-      opacity: 0.14;
+      opacity: var(--order-ai-hero-illustration-opacity, 0.14);
       filter: saturate(1.12);
     }
 
@@ -1119,12 +1565,13 @@
 
     html.dark-layout .order-ai-transfer-cta:disabled:not(.is-busy):not(.is-complete),
     html.semi-dark-layout .order-ai-transfer-cta:disabled:not(.is-busy):not(.is-complete) {
-      background: linear-gradient(180deg, #556277 0%, #424d61 100%);
-      border-color: #4a576d;
-      color: #dce6f5;
+      background: linear-gradient(180deg, #8390a4 0%, #728094 100%);
+      border-color: #728094;
+      color: #eef4ff;
     }
 
     html.dark-layout .order-ai-transfer-error-copy code,
+    html.dark-layout .order-ai-extract-live,
     html.dark-layout .order-ai-fact,
     html.dark-layout .order-ai-line-total-trigger,
     html.dark-layout .order-ai-total-check-banner,
@@ -1151,6 +1598,53 @@
     html.semi-dark-layout .order-ai-saved-preview {
       background: linear-gradient(135deg, rgba(14, 122, 107, 0.18), rgba(27, 37, 61, 0.98));
       border-color: rgba(24, 203, 183, 0.22);
+    }
+
+    html.dark-layout .order-ai-extract-step,
+    html.semi-dark-layout .order-ai-extract-step {
+      background: rgba(30, 41, 64, 0.94);
+      border-color: rgba(126, 153, 194, 0.16);
+    }
+
+    html.dark-layout .order-ai-secondary-action,
+    html.semi-dark-layout .order-ai-secondary-action {
+      border-color: rgba(108, 176, 140, 0.28);
+      color: var(--order-ai-ink);
+    }
+
+    html.dark-layout .order-ai-secondary-action:hover,
+    html.dark-layout .order-ai-secondary-action:focus,
+    html.semi-dark-layout .order-ai-secondary-action:hover,
+    html.semi-dark-layout .order-ai-secondary-action:focus {
+      background: rgba(108, 176, 140, 0.12);
+      border-color: rgba(108, 176, 140, 0.38);
+      color: var(--order-ai-ink);
+    }
+
+    html.dark-layout .order-ai-primary-action,
+    html.semi-dark-layout .order-ai-primary-action {
+      background: rgba(24, 203, 183, 0.1);
+      border-color: rgba(24, 203, 183, 0.18);
+      color: #9ef1e0;
+    }
+
+    html.dark-layout .order-ai-primary-action:hover,
+    html.dark-layout .order-ai-primary-action:focus,
+    html.semi-dark-layout .order-ai-primary-action:hover,
+    html.semi-dark-layout .order-ai-primary-action:focus {
+      background: rgba(24, 203, 183, 0.16);
+      color: #c7fff4;
+    }
+
+    html.dark-layout .order-ai-primary-action:disabled,
+    html.dark-layout .order-ai-primary-action:disabled:hover,
+    html.dark-layout .order-ai-primary-action:disabled:focus,
+    html.semi-dark-layout .order-ai-primary-action:disabled,
+    html.semi-dark-layout .order-ai-primary-action:disabled:hover,
+    html.semi-dark-layout .order-ai-primary-action:disabled:focus {
+      background: rgba(126, 153, 194, 0.12);
+      border-color: rgba(126, 153, 194, 0.16);
+      color: #8ea0bd;
     }
 
     html.dark-layout .order-ai-alert.is-preview-ready,
@@ -1278,9 +1772,9 @@
       }
 
       .order-ai-hero-story::before {
-        background-size: 16rem auto;
-        background-position: right 0.4rem top 1rem;
-        opacity: 0.13;
+        background-size: var(--order-ai-hero-illustration-size, 19rem auto);
+        background-position: var(--order-ai-hero-illustration-position, right 0.4rem top 1rem);
+        opacity: var(--order-ai-hero-illustration-opacity, 0.13);
       }
 
       .order-ai-hero-story-inner {
@@ -1306,15 +1800,56 @@
 
       .order-ai-progress-meta {
         text-align: left;
+        align-items: flex-start;
+      }
+
+      .order-ai-progress-runtime {
+        justify-content: flex-start;
+        text-align: left;
       }
 
       .order-ai-stage-side,
-      .order-ai-transfer-cta {
+      .order-ai-transfer-cta,
+      .order-ai-primary-action {
         width: 100%;
       }
 
-      .order-ai-transfer-followup {
+      .order-ai-total-check-edit {
+        flex-wrap: wrap;
+      }
+
+      .order-ai-bottom-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .order-ai-bottom-actions-secondary,
+      .order-ai-bottom-action-primary {
+        width: 100%;
+      }
+
+      .order-ai-bottom-actions-secondary {
+        display: grid;
         grid-template-columns: 1fr;
+      }
+
+      .order-ai-bottom-actions-secondary .btn,
+      .order-ai-bottom-actions-secondary a,
+      .order-ai-bottom-action-primary .btn {
+        width: 100%;
+      }
+
+      .order-ai-facts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .order-ai-extract-live-grid {
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(170px, 1fr);
+        grid-template-columns: unset;
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+        overflow-x: auto;
+        padding-bottom: 0.15rem;
       }
 
       .order-linkage-modal-summary-grid {
@@ -1322,42 +1857,196 @@
       }
     }
 
+    @media (min-width: 768px) and (max-width: 991.98px) {
+      .order-ai-facts {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .order-ai-bottom-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .order-ai-bottom-actions-secondary {
+        width: 100%;
+      }
+
+      .order-ai-bottom-action-primary {
+        width: 100%;
+        margin-left: 0;
+      }
+
+      .order-ai-bottom-action-primary .btn {
+        width: 100%;
+      }
+    }
+
     @media (max-width: 575.98px) {
+      .order-ai-extract-live-grid {
+        grid-template-rows: 1fr;
+        grid-auto-columns: minmax(190px, 78vw);
+      }
+
       .order-linkage-modal-summary-grid {
         grid-template-columns: 1fr;
       }
     }
-  </style>
+</style>
+<style>
+    .order-ai-extract-live-header {
+        justify-content: flex-start;
+        align-items: center;
+        margin-bottom: 0.65rem;
+        width: 100%;
+    }
+
+    .order-ai-extract-live-copy {
+        display: none !important;
+    }
+
+    .order-ai-extract-live-grid {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-auto-flow: row !important;
+        grid-auto-columns: unset !important;
+        grid-template-rows: none !important;
+        gap: 0.5rem;
+        align-content: start;
+        justify-content: stretch;
+        width: 100%;
+        overflow: visible !important;
+        padding-bottom: 0 !important;
+    }
+
+    .order-ai-extract-live-row {
+        --order-ai-row-columns: 8;
+        display: grid;
+        grid-template-columns: repeat(var(--order-ai-row-columns), minmax(0, 1fr));
+        gap: 0.5rem;
+        width: 100%;
+    }
+
+    .order-ai-extract-page-chip {
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        height: 2.15rem;
+        padding: 0 0.45rem;
+        display: grid;
+        grid-template-columns: 0.82rem 1fr;
+        align-items: center;
+        justify-items: center;
+        gap: 0.2rem;
+        box-sizing: border-box;
+    }
+
+    .order-ai-extract-page-chip-state {
+        width: 0.82rem;
+        min-width: 0.82rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        line-height: 1;
+    }
+
+    .order-ai-extract-page-chip-state.is-empty {
+        visibility: hidden;
+    }
+
+    .order-ai-extract-page-chip-number {
+        min-width: 0;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+    }
+
+    @media (max-width: 991.98px) {
+        .order-ai-extract-live-grid {
+            gap: 0.45rem;
+        }
+
+        .order-ai-extract-live-row {
+            gap: 0.45rem;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .order-ai-extract-live-grid {
+            gap: 0.42rem;
+        }
+
+        .order-ai-extract-live-row {
+            gap: 0.42rem;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        .order-ai-extract-live-grid {
+            gap: 0.38rem;
+        }
+
+        .order-ai-extract-live-row {
+            gap: 0.38rem;
+        }
+
+        .order-ai-extract-page-chip {
+            height: 2.05rem;
+            padding: 0 0.4rem;
+        }
+    }
+</style>
 @endsection
 
 @section('content')
-@php($aiOrderLabel = __('locale.Skeniraj narudzbu sa AI'))
+@php
+  $heroRobotAsset = null;
+  foreach ([
+    'images/order-ai/hero-robot.webp',
+    'images/order-ai/hero-robot.png',
+    'images/order-ai/hero-robot.jpg',
+    'images/order-ai/hero-robot.jpeg',
+    'images/order-ai/hero-robot.svg',
+  ] as $heroRobotCandidate) {
+    if (file_exists(public_path($heroRobotCandidate))) {
+      $heroRobotAsset = asset($heroRobotCandidate);
+      break;
+    }
+  }
+@endphp
 <section
-  class="order-ai-shell"
+  class="order-ai-shell {{ !empty($initialScanId) ? 'is-initializing' : '' }}"
   id="order-ai-app"
   data-upload-url="{{ route('app-order-ai-scan-upload') }}"
   data-transfer-url="{{ route('app-orders-store') }}"
   data-positions-url="{{ route('app-orders-positions') }}"
   data-status-template="{{ route('app-order-ai-scan-status', ['scan' => '__SCAN__']) }}"
   data-initial-scan-id="{{ (int) ($initialScanId ?? 0) }}"
+  data-opened-from-history="{{ !empty($openedFromHistory) ? '1' : '0' }}"
   data-csrf="{{ csrf_token() }}"
 >
+  <div class="order-ai-initial-loader" id="order-ai-initial-loader">
+    <div class="order-ai-initial-loader-card">
+      <span class="spinner-border text-primary mx-auto" role="status" aria-hidden="true"></span>
+      <strong>Ucitavam odabrani scan...</strong>
+      <span class="order-ai-subtle small">Rezultat ce biti prikazan odmah nakon ucitavanja podataka.</span>
+    </div>
+  </div>
   <div class="row">
     <div class="col-12">
       <div class="card order-ai-hero mb-2">
         <div class="card-body p-2 p-md-3">
           <div class="order-ai-hero-grid">
-            <div class="order-ai-hero-story">
+            <div class="order-ai-hero-story"@if(!empty($heroRobotAsset)) style="--order-ai-hero-illustration:url('{{ $heroRobotAsset }}'); --order-ai-hero-illustration-size: 11.75rem auto; --order-ai-hero-illustration-position: right 1.1rem center; --order-ai-hero-illustration-opacity: 0.92;"@endif>
               <div class="order-ai-hero-story-inner">
                 <div class="order-ai-hero-copy">
                   <span class="order-ai-chip mb-1">
                     <i class="fa fa-magic" aria-hidden="true"></i>
-                    {{ $aiOrderLabel }}
+                    {{ __('locale.Skeniraj narudzbu sa AI') }}
                   </span>
-                  <h2 class="mb-75 order-ai-title">{{ $aiOrderLabel }}</h2>
+                  <h2 class="mb-75 order-ai-title">{{ __('locale.Skeniraj narudzbu sa AI') }}</h2>
                   <p class="mb-0 order-ai-subtle" style="max-width:720px;">
-                    Ubaci PDF, sliku ili izvoz dokumenta. Dokument ostaje na istoj stranici, AI odradi ekstrakciju,
-                    a upis u bazu ostaje pod tvojom kontrolom dok rucno ne potvrdis transfer.
+                    Ubaci PDF, sliku ili izvoz dokumenta. Dokument se zadrzava na istoj stranici, AI obrada se izvrsava,
+                    a upis u bazu se pokrece tek nakon rucne potvrde transfera.
                   </p>
                 </div>
               </div>
@@ -1385,7 +2074,7 @@
     </div>
 
     <div class="col-12">
-      <div class="row g-2 align-items-stretch mb-2">
+      <div class="row g-2 align-items-start mb-2">
         <div class="col-lg-7 col-12" id="order-ai-dropzone-shell">
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body p-2 p-md-3">
@@ -1395,7 +2084,7 @@
                   <i data-feather="upload-cloud"></i>
                 </div>
                 <h3 class="mb-75">Prevuci dokument ovdje</h3>
-                <p class="order-ai-subtle mb-1">ili klikni da odabereš fajl za AI obradu narudžbe</p>
+                <p class="order-ai-subtle mb-1">ili se klikom odabire fajl za AI obradu narudzbe</p>
                 <small class="text-muted">PDF, slike i izvozi do 50 MB</small>
               </div>
             </div>
@@ -1403,7 +2092,7 @@
         </div>
 
         <div class="col-lg-5 col-12 order-ai-progress-shell" id="order-ai-progress-shell">
-          <div class="card order-ai-progress-card h-100" id="order-ai-progress-card">
+          <div class="card order-ai-progress-card" id="order-ai-progress-card">
             <div class="card-body p-2">
               <div class="order-ai-progress-head mb-1">
                 <div class="order-ai-progress-copy">
@@ -1419,6 +2108,10 @@
                 <div class="order-ai-progress-meta">
                   <div class="fw-bolder" id="order-ai-progress-percent">0%</div>
                   <small class="text-muted" id="order-ai-file-name"></small>
+                  <span class="order-ai-progress-runtime" id="order-ai-progress-runtime">
+                    <span class="order-ai-progress-runtime-label">Proteklo vrijeme:</span>
+                    <span class="order-ai-progress-runtime-value" id="order-ai-elapsed-time">0s</span>
+                  </span>
                 </div>
               </div>
               <div class="order-ai-progress-track mb-2">
@@ -1432,7 +2125,7 @@
                     <span class="order-ai-stage-bullet"></span>
                     <div class="order-ai-stage-main">
                       <strong>Upload</strong>
-                      <div class="small text-muted">Fajl se šalje na lokalni staging.</div>
+                      <div class="small text-muted">Fajl se salje u lokalni prihvat.</div>
                     </div>
                   </div>
                 </div>
@@ -1442,7 +2135,20 @@
                     <span class="order-ai-stage-bullet"></span>
                     <div class="order-ai-stage-main">
                       <strong>AI ekstrakcija</strong>
-                      <div class="small text-muted">Prompt pretvara dokument u strukturirani payload.</div>
+                      <div class="small text-muted">Dokument se cita i pretvara se u preglednu narudzbu za provjeru.</div>
+                      <div class="order-ai-extract-live order-ai-hidden" id="order-ai-extract-live">
+                        <div class="order-ai-extract-live-header">
+                          <span class="order-ai-extract-live-meta" id="order-ai-extract-live-meta">Cekam dokument.</span>
+                        </div>
+                        <div class="order-ai-extract-global-progress">
+                          <span class="order-ai-extract-global-progress-bar" id="order-ai-extract-live-progress-bar"></span>
+                        </div>
+                        <div class="order-ai-extract-focus">
+                          <span class="order-ai-extract-focus-label">Tok obrade</span>
+                          <strong class="order-ai-extract-focus-value" id="order-ai-extract-current-step">Priprema dokumenta</strong>
+                        </div>
+                        <div class="order-ai-extract-live-grid" id="order-ai-extract-live-grid"></div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1453,19 +2159,14 @@
                     <div class="order-ai-stage-main">
                       <strong>Transfer u bazu</strong>
                       <div class="small text-muted" id="order-ai-transfer-hint">
-                        Dugme se aktivira kada AI završi ekstrakciju i pripremi payload.
+                        Akcije su na dnu stranice. Nakon zavrsetka obrade omogucava se upis u bazu.
                       </div>
                     </div>
                     <div class="order-ai-stage-side">
-                      <button type="button" class="btn btn-success order-ai-transfer-cta" id="order-ai-transfer-button" disabled>Transfer u bazu</button>
+                      <button type="button" class="btn order-ai-primary-action" id="order-ai-primary-action-button" disabled>Poduzmi akciju</button>
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <div class="order-ai-transfer-followup order-ai-hidden" id="order-ai-transfer-followup">
-                <button type="button" class="btn btn-outline-primary order-ai-hidden" id="order-ai-view-order-button">Vidi narudžbu</button>
-                <button type="button" class="btn btn-outline-success" id="order-ai-new-order-button">Nova narudžba</button>
               </div>
 
               <div class="alert alert-warning order-ai-alert mt-2 mb-0 order-ai-hidden" id="order-ai-progress-warning"></div>
@@ -1510,9 +2211,17 @@
                 </table>
               </div>
 
-              <div class="d-flex flex-wrap gap-1 order-ai-hidden" id="order-ai-actions">
-                <button type="button" class="btn btn-primary" id="order-ai-view-positions-button">Pozicije</button>
-                <a href="{{ route('app-orders') }}" class="btn btn-outline-secondary">Upravljanje narudžbama</a>
+              <div class="order-ai-bottom-actions order-ai-hidden" id="order-ai-actions">
+                <div class="order-ai-bottom-actions-secondary">
+                  <button type="button" class="btn order-ai-secondary-action" id="order-ai-new-order-button">Nova narudzba</button>
+                  <a href="{{ route('app-ai-token-history') }}" class="btn order-ai-secondary-action">Historija</a>
+                  <a href="{{ route('app-orders') }}" class="btn order-ai-secondary-action">Moje narudzbe</a>
+                  <button type="button" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-order-button">Vidi narudzbu</button>
+                  <button type="button" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-positions-button">Pozicije</button>
+                </div>
+                <div class="order-ai-bottom-action-primary">
+                  <button type="button" class="btn btn-success order-ai-transfer-cta" id="order-ai-transfer-button" disabled>Transfer u bazu</button>
+                </div>
               </div>
             </div>
           </div>
@@ -1636,6 +2345,10 @@
 </div>
 @endsection
 
+@section('vendor-script')
+  <script src="{{ asset('vendors/js/extensions/sweetalert2.all.min.js') }}"></script>
+@endsection
+
 @section('page-script')
   <script>
     (function () {
@@ -1650,7 +2363,9 @@
       const statusTemplate = app.dataset.statusTemplate;
       const initialScanId = Number(app.dataset.initialScanId || 0) || null;
       const initialScanState = @json($initialScanState ?? null);
+      const openedFromHistory = app.dataset.openedFromHistory === '1';
       const csrfToken = app.dataset.csrf;
+      const initialLoader = document.getElementById('order-ai-initial-loader');
       const dropzoneShell = document.getElementById('order-ai-dropzone-shell');
       const progressShell = document.getElementById('order-ai-progress-shell');
       const dropzone = document.getElementById('order-ai-dropzone');
@@ -1663,7 +2378,12 @@
       const activityIndicator = document.getElementById('order-ai-activity-indicator');
       const activityText = document.getElementById('order-ai-activity-text');
       const extractLive = document.getElementById('order-ai-extract-live');
+      const extractLiveMeta = document.getElementById('order-ai-extract-live-meta');
+      const extractLiveProgressBar = document.getElementById('order-ai-extract-live-progress-bar');
+      const extractCurrentStep = document.getElementById('order-ai-extract-current-step');
+      const extractLiveGrid = document.getElementById('order-ai-extract-live-grid');
       const progressWarning = document.getElementById('order-ai-progress-warning');
+      const elapsedTimeEl = document.getElementById('order-ai-elapsed-time');
       const resultCard = document.getElementById('order-ai-result-card');
       const resultCaption = document.getElementById('order-ai-result-caption');
       const resultStatus = document.getElementById('order-ai-result-status');
@@ -1676,8 +2396,8 @@
       const linesBody = document.getElementById('order-ai-lines-body');
       const actions = document.getElementById('order-ai-actions');
       const transferButton = document.getElementById('order-ai-transfer-button');
+      const primaryActionButton = document.getElementById('order-ai-primary-action-button');
       const transferHint = document.getElementById('order-ai-transfer-hint');
-      const transferFollowup = document.getElementById('order-ai-transfer-followup');
       const viewPositionsButton = document.getElementById('order-ai-view-positions-button');
       const viewOrderButton = document.getElementById('order-ai-view-order-button');
       const newOrderButton = document.getElementById('order-ai-new-order-button');
@@ -1718,8 +2438,34 @@
       let isTransferBusy = false;
       let extractFillTimer = null;
       let extractVisualProgress = 0;
+      let elapsedTimer = null;
       let activeLineTotalIndex = null;
       let openedFromExistingScan = Boolean(initialScanId);
+      let hasAutoScrolledToResult = false;
+      let lastRenderedStatus = '';
+      let progressAnimationFrame = null;
+      let pendingProgressState = null;
+      let lastProgressPercent = null;
+      let lastProgressLabel = '';
+      let lastFactsSignature = '';
+      let lastLinesSignature = '';
+      let lastWarningsSignature = '';
+      let lastExtractLiveSignature = '';
+      let extractSimulationStartedAt = null;
+      let extractSimulationPageCount = 1;
+      let extractSimulationStatus = '';
+      const stageFillState = {
+        upload: null,
+        extract: null,
+        transfer: null,
+      };
+      const EXTRACTION_STEPS = [
+        'Priprema dokumenta',
+        'Prepoznavanje sadrzaja',
+        'Klasifikacija stavki',
+        'Ekstrakcija podataka',
+        'Provjera rezultata',
+      ];
 
       function escapeHtml(value) {
         return String(value ?? '')
@@ -1736,6 +2482,13 @@
         }
 
         node.classList.toggle('order-ai-hidden', !visible);
+      }
+
+      function setInitializingState(active) {
+        app.classList.toggle('is-initializing', Boolean(active));
+        if (initialLoader) {
+          initialLoader.setAttribute('aria-hidden', active ? 'false' : 'true');
+        }
       }
 
       function syncDropzoneVisibility(status) {
@@ -1774,6 +2527,252 @@
         const parsed = Number(normalized);
 
         return Number.isFinite(parsed) ? roundMoney(Math.max(0, parsed)) : 0;
+      }
+
+      function resolveLoadedScanLabel(fileName) {
+        const name = String(fileName || '').trim();
+
+        if (name === '') {
+          return 'Scan dokumenta uspjesno ucitan.';
+        }
+
+        return /\.pdf$/i.test(name)
+          ? `Scan PDF-a "${name}" uspjesno ucitan.`
+          : `Scan dokumenta "${name}" uspjesno ucitan.`;
+      }
+
+      function showLoadedScanToast(fileName) {
+        if (!window.Swal || typeof window.Swal.fire !== 'function') {
+          return;
+        }
+
+        window.Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: resolveLoadedScanLabel(fileName),
+          showConfirmButton: false,
+          timer: 2200,
+          timerProgressBar: true,
+        });
+      }
+
+      function parseTimestamp(value) {
+        const raw = String(value || '').trim();
+
+        if (raw === '') {
+          return null;
+        }
+
+        const timestamp = Date.parse(raw);
+
+        return Number.isFinite(timestamp) ? timestamp : null;
+      }
+
+      function formatElapsedRuntime(totalSeconds) {
+        const safeSeconds = Math.max(0, Math.round(totalSeconds || 0));
+        const hours = Math.floor(safeSeconds / 3600);
+        const minutes = Math.floor((safeSeconds % 3600) / 60);
+        const seconds = safeSeconds % 60;
+
+        if (hours > 0) {
+          return `${hours}h ${minutes}m`;
+        }
+
+        if (minutes > 0) {
+          return `${minutes}m ${seconds}s`;
+        }
+
+        return `${seconds}s`;
+      }
+
+      function stopElapsedTimer() {
+        if (elapsedTimer) {
+          clearInterval(elapsedTimer);
+          elapsedTimer = null;
+        }
+      }
+
+      function renderElapsedRuntime(data) {
+        if (!elapsedTimeEl) {
+          return;
+        }
+
+        const status = String(data && data.status || '').trim();
+        const startedAt = parseTimestamp(data && data.started_at);
+        const finishedAt = parseTimestamp(data && data.finished_at);
+        const elapsedSeconds = Math.max(0, Math.round(toFiniteNumber(data && data.elapsed_seconds, 0)));
+        const elapsedDisplay = String(data && data.elapsed_display || '').trim();
+        const isFinal = ['completed', 'failed', 'ready_for_transfer', 'transferring', 'transferred'].includes(status) || Boolean(finishedAt);
+
+        if (!startedAt && elapsedSeconds === 0) {
+          stopElapsedTimer();
+          elapsedTimeEl.textContent = '0s';
+          return;
+        }
+
+        if (isFinal) {
+          stopElapsedTimer();
+          elapsedTimeEl.textContent = elapsedDisplay || formatElapsedRuntime(elapsedSeconds);
+          return;
+        }
+
+        const syncElapsed = function () {
+          const liveSeconds = startedAt ? Math.max(elapsedSeconds, Math.floor((Date.now() - startedAt) / 1000)) : elapsedSeconds;
+          elapsedTimeEl.textContent = formatElapsedRuntime(liveSeconds);
+        };
+
+        syncElapsed();
+
+        if (!elapsedTimer) {
+          elapsedTimer = window.setInterval(syncElapsed, 1000);
+        }
+      }
+
+      function scrollToNode(node, blockPosition) {
+        if (!node) {
+          return;
+        }
+
+        node.scrollIntoView({
+          behavior: 'smooth',
+          block: blockPosition || 'start',
+        });
+      }
+
+      function scrollToResultSection() {
+        scrollToNode(resultCard);
+      }
+
+      function scrollToActionSection() {
+        scrollToNode(actions, 'end');
+      }
+
+      function resolvePageCount(data) {
+        const payload = data && data.result ? data.result : {};
+        const payloadPageCount = toFiniteNumber(payload && payload.order && payload.order.page_count, 0);
+        const statusPageCount = toFiniteNumber(data && data.page_count, payloadPageCount);
+
+        return Math.max(0, Math.round(statusPageCount));
+      }
+
+      function resolveExtractRowSizes(model) {
+        const totalPages = Math.max(1, Number(model && model.totalPages || 1));
+        const isDesktop = window.matchMedia('(min-width: 992px)').matches;
+        const isTablet = window.matchMedia('(min-width: 576px) and (max-width: 991.98px)').matches;
+        const isComplete = String(model && model.status || '') === 'done';
+        let rowCount = 1;
+
+        if (isDesktop) {
+          rowCount = isComplete || totalPages <= 8 ? 1 : 2;
+        } else if (isTablet) {
+          rowCount = Math.max(1, Math.ceil(totalPages / 6));
+        } else {
+          rowCount = Math.max(1, Math.ceil(totalPages / 4));
+        }
+
+        const baseSize = Math.floor(totalPages / rowCount);
+        const extraItems = totalPages % rowCount;
+
+        return Array.from({ length: rowCount }, function (_, index) {
+          return baseSize + (index < extraItems ? 1 : 0);
+        }).filter(function (size) {
+          return size > 0;
+        });
+      }
+
+      function renderExtractLive(data) {
+        if (!extractLive || !extractLiveGrid || !extractLiveMeta) {
+          return;
+        }
+
+        const status = String(data && data.status || '').trim();
+        const visibleStatuses = ['uploaded', 'extracting', 'completed', 'ready_for_transfer', 'transferring', 'transferred'];
+
+        if (!visibleStatuses.includes(status)) {
+          extractLiveGrid.innerHTML = '';
+          extractLiveMeta.textContent = 'Cekam dokument.';
+          setVisible(extractLive, false);
+          return;
+        }
+
+        const pageCount = Math.max(1, resolvePageCount(data) || 1);
+        const isComplete = ['completed', 'ready_for_transfer', 'transferring', 'transferred'].includes(status);
+        const normalizedProgress = isComplete
+          ? 1
+          : Math.max(0.08, Math.min(0.95, extractVisualProgress / 100));
+        const completedPages = isComplete ? pageCount : Math.min(pageCount, Math.floor(normalizedProgress * pageCount));
+        const activePage = isComplete ? 0 : Math.min(pageCount, completedPages + 1);
+        const pageLabel = pageCount === 1 ? 'stranica' : 'stranice';
+
+        extractLiveMeta.textContent = `${pageCount} ${pageLabel} · ${String(data && data.processing_step || 'AI obrada je u toku.').trim()}`;
+        extractLiveGrid.innerHTML = Array.from({ length: pageCount }).map(function (_, index) {
+          const pageNumber = index + 1;
+          let stateClass = 'is-pending';
+          let stateLabel = 'Ceka';
+
+          if (isComplete || pageNumber <= completedPages) {
+            stateClass = 'is-done';
+            stateLabel = 'Obradjeno';
+          } else if (pageNumber === activePage) {
+            stateClass = 'is-active';
+            stateLabel = 'U obradi';
+          }
+
+          return `
+            <div class="order-ai-extract-step ${stateClass}">
+              <span class="order-ai-extract-step-index">Str ${pageNumber}</span>
+              <span class="order-ai-extract-step-label">Ekstrakcija</span>
+              <span class="order-ai-extract-step-status">${stateLabel}</span>
+            </div>
+          `;
+        }).join('');
+
+        setVisible(extractLive, true);
+      }
+
+      function showPendingExtractionState(data) {
+        const statusData = data && typeof data === 'object' ? data : {};
+
+        latestStatusPayload = statusData;
+
+        if (statusData.source_file_name) {
+          fileNameEl.textContent = statusData.source_file_name;
+        }
+
+        syncDropzoneVisibility('extracting');
+        setProgress(Math.max(18, toFiniteNumber(statusData.current_progress, 18)), 'AI obrada je pokrenuta. Dokument se analizira...');
+        setStageState('extract', false);
+        setStageFill('upload', 100);
+        startExtractFillAnimation(18);
+        updateActivityState({ status: 'extracting' });
+        renderExtractLive(Object.assign({}, statusData, {
+          status: 'extracting',
+          processing_step: 'AI obrada je pokrenuta. Dokument se analizira...'
+        }));
+        renderElapsedRuntime(Object.assign({}, statusData, {
+          status: 'extracting'
+        }));
+        setTransferButtonState({
+          enabled: false,
+          label: 'Transfer u bazu',
+          hint: 'Dokument se cita i priprema se pregled narudzbe.'
+        });
+        setPrimaryActionButtonState({
+          enabled: false,
+          label: 'Poduzmi akciju'
+        });
+      }
+
+      function setPrimaryActionButtonState(options) {
+        const config = options || {};
+
+        if (!primaryActionButton) {
+          return;
+        }
+
+        primaryActionButton.disabled = !Boolean(config.enabled);
+        primaryActionButton.textContent = config.label || 'Poduzmi akciju';
       }
 
       function canEditLineTotals() {
@@ -2045,7 +3044,6 @@
       function updateStageFills(data) {
         const status = (data && data.status) || '';
         const progress = toFiniteNumber(data && data.current_progress, 0);
-        const transferReady = Boolean(data && data.transfer_ready);
 
         setStageFill('upload', uploadProgress);
 
@@ -2063,10 +3061,6 @@
           setStageFill('transfer', 100);
         } else if (status === 'transferring' || isTransferBusy) {
           setStageFill('transfer', 72);
-        } else if (status === 'completed' && transferReady) {
-          setStageFill('transfer', 26);
-        } else if (status === 'completed') {
-          setStageFill('transfer', 8);
         } else {
           setStageFill('transfer', 0);
         }
@@ -2779,6 +3773,7 @@
           const payload = await response.json();
           const data = payload.data || {};
           renderStatus(data);
+          setInitializingState(false);
 
           if (['completed', 'transferred', 'failed'].includes(data.status)) {
             stopPolling();
@@ -2789,6 +3784,7 @@
         } catch (error) {
           setProgressWarningMessage('Status AI obrade trenutno nije dostupan.');
           updateActivityState(null);
+          setInitializingState(false);
           stopPolling();
         }
       }
@@ -2976,6 +3972,1451 @@
         }
       }
 
+      function normalizeTransferFailureReason(reason) {
+        const message = String(reason || '').trim();
+
+        if (!message) {
+          return 'Transfer u bazu nije uspio, ali detaljan razlog nije vracen.';
+        }
+
+        if (/rtHE_Order_tHE_SetSubj_21|anConsigneeQId/i.test(message)) {
+          return 'Pantheon nije prihvatio narucioca jer nije bio postavljen validan subject za anConsigneeQId.';
+        }
+
+        return message;
+      }
+
+      function updateActivityState(data) {
+        const status = String(data && data.status || '').trim();
+        const extractionBusy = status === 'uploaded' || status === 'extracting';
+        const transferBusy = status === 'transferring' || isTransferBusy;
+        const visible = extractionBusy || transferBusy;
+
+        if (activityText) {
+          activityText.textContent = transferBusy ? 'Transfer u bazu je u toku...' : 'AI ekstrakcija radi...';
+        }
+
+        setVisible(activityIndicator, visible);
+      }
+
+      function resolveStatusLabel(status) {
+        const map = {
+          uploaded: 'Uploadovan',
+          extracting: 'AI radi',
+          completed: 'Spremno za pregled',
+          ready_for_transfer: 'Spremno za transfer',
+          transferring: 'Transfer u toku',
+          transferred: 'Sacuvano u bazi',
+          failed: 'Neuspjelo',
+        };
+
+        return map[status] || status || 'Spremno';
+      }
+
+      function setTransferButtonState(options) {
+        const config = options || {};
+        const busy = Boolean(config.busy);
+        const complete = Boolean(config.complete);
+        const enabled = Boolean(config.enabled) && !busy && !complete;
+        const label = config.label || 'Transfer u bazu';
+
+        if (!transferButton) {
+          return;
+        }
+
+        transferButton.disabled = !enabled;
+        transferButton.classList.toggle('is-ready', enabled);
+        transferButton.classList.toggle('is-busy', busy);
+        transferButton.classList.toggle('is-complete', complete);
+
+        if (busy) {
+          transferButton.innerHTML = '<span class="spinner-border spinner-border-sm me-50" role="status" aria-hidden="true"></span> ' + escapeHtml(label);
+        } else {
+          transferButton.textContent = label;
+        }
+
+        if (transferHint) {
+          transferHint.textContent = config.hint || 'Akcije su na dnu stranice. Nakon zavrsetka obrade omogucava se upis u bazu.';
+        }
+      }
+
+      function renderFacts(payload, statusData) {
+        const order = payload.order || {};
+        const pantheon = statusData.pantheon_order || {};
+        const totalComparison = resolveDocumentTotalComparison(payload);
+        const amountMeta = totalComparison.hasComparableValues && !totalComparison.matches
+          ? `Razlika: ${formatAmount(totalComparison.difference)}`
+          : '';
+        const factsMarkup = [
+          { label: 'Kupac', value: order.customer_name || '-' },
+          { label: 'Narucilac', value: order.supplier_name || '-' },
+          { label: 'Referenca', value: order.external_document_number || '-' },
+          { label: 'Vrsta dokumenta', value: order.document_type || '-' },
+          { label: 'Valuta', value: order.currency || '-' },
+          {
+            label: 'Iznos',
+            value: formatAmount(totalComparison.documentTotal || 0),
+            stateClass: totalComparison.hasComparableValues ? (totalComparison.matches ? 'is-match' : 'is-mismatch') : '',
+            meta: amountMeta,
+          },
+          { label: 'AI krediti', value: formatAmount(statusData.credits_spent || 0) },
+          { label: 'Pantheon kljuc', value: pantheon.key || '-' },
+        ];
+
+        facts.innerHTML = factsMarkup.map((fact) => `
+          <div class="order-ai-fact ${escapeHtml(fact.stateClass || '')}">
+            <div class="text-muted small mb-50">${escapeHtml(fact.label)}</div>
+            <div class="fw-bolder">${escapeHtml(fact.value)}</div>
+            ${fact.meta ? `<div class="order-ai-fact-meta">${escapeHtml(fact.meta)}</div>` : ''}
+          </div>
+        `).join('');
+      }
+
+      function renderLines(payload) {
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        const currency = String((payload.order && payload.order.currency) || '').trim();
+        const allowLineEdit = canEditLineTotals();
+
+        if (!items.length) {
+          linesBody.innerHTML = '';
+          setVisible(linesShell, false);
+          return;
+        }
+
+        linesBody.innerHTML = items.map((item, index) => {
+          const comparison = resolveLineComparison(item);
+          const buttonClasses = comparison.matches ? 'is-match' : 'is-mismatch';
+          const readOnlyClass = allowLineEdit ? '' : ' is-readonly';
+          const diffPrefix = comparison.difference > 0 ? '+' : '';
+
+          return `
+            <tr>
+              <td>${escapeHtml(item.line_number || '')}</td>
+              <td>${escapeHtml(item.product_code || '-')}</td>
+              <td class="order-ai-wrap">${escapeHtml(item.product_name || '-')}</td>
+              <td>${escapeHtml(formatAmount(item.quantity || 0))}</td>
+              <td>${escapeHtml(item.unit || '-')}</td>
+              <td>${escapeHtml(formatAmount(item.unit_price || 0))}</td>
+              <td class="order-ai-wrap">
+                <button
+                  type="button"
+                  class="order-ai-line-total-trigger ${buttonClasses}${readOnlyClass}"
+                  data-line-total-index="${index}"
+                  ${allowLineEdit ? '' : 'tabindex="-1"'}
+                >
+                  <span class="order-ai-line-total-meta">
+                    <span class="order-ai-line-total-computed">${escapeHtml(formatAmount(item.unit_price || 0))} x ${escapeHtml(formatAmount(item.quantity || 0))} = ${escapeHtml(formatAmountWithCurrency(comparison.computed, currency))}</span>
+                    <span class="order-ai-line-total-source">Skenirani total: ${escapeHtml(formatAmountWithCurrency(comparison.source, currency))}</span>
+                    <span class="order-ai-line-total-diff">Razlika: ${escapeHtml(diffPrefix + formatAmountWithCurrency(comparison.difference, currency))}</span>
+                  </span>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        setVisible(linesShell, true);
+      }
+
+      function renderSavedPreview(data) {
+        const payload = (data && data.result) || {};
+        const order = payload.order || {};
+        const summary = payload.summary || {};
+        const pantheon = (data && data.pantheon_order) || {};
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        const itemCount = toFiniteNumber(data && data.transfer_meta && data.transfer_meta.item_count, items.length);
+        const displayNumber = pantheon.view || pantheon.key || '-';
+
+        savedPreview.innerHTML = `
+          <div class="order-ai-saved-preview-header">
+            <div>
+              <span class="badge rounded-pill bg-light-success text-success px-1 py-75">Sacuvano u bazi</span>
+              <h5 class="mb-50 mt-1">Narudzba ${escapeHtml(displayNumber)} je uspjesno upisana u bazu.</h5>
+              <p class="mb-0 text-muted">Pregled ili pozicije mogu se otvoriti jednim klikom, a zatim se moze nastaviti na sljedecu narudzbu.</p>
+            </div>
+          </div>
+          <div class="order-ai-saved-grid">
+            <div class="order-ai-saved-item">
+              <div class="text-muted small mb-50">Kupac</div>
+              <div class="fw-bolder">${escapeHtml(order.customer_name || '-')}</div>
+            </div>
+            <div class="order-ai-saved-item">
+              <div class="text-muted small mb-50">Narucilac</div>
+              <div class="fw-bolder">${escapeHtml(order.supplier_name || '-')}</div>
+            </div>
+            <div class="order-ai-saved-item">
+              <div class="text-muted small mb-50">Pozicije</div>
+              <div class="fw-bolder">${escapeHtml(itemCount)}</div>
+            </div>
+            <div class="order-ai-saved-item">
+              <div class="text-muted small mb-50">Ukupan iznos</div>
+              <div class="fw-bolder">${escapeHtml(formatAmount(summary.grand_total || 0))}</div>
+            </div>
+          </div>
+        `;
+
+        setVisible(savedPreview, true);
+      }
+
+      function showTransferErrorModal(reason, technicalReason) {
+        if (!transferErrorModalBody) {
+          return;
+        }
+
+        const friendlyReason = normalizeTransferFailureReason(reason);
+        const technical = String(technicalReason || '').trim();
+
+        transferErrorModalBody.innerHTML = `
+          <div class="alert alert-danger mb-0">
+            <strong>Razlog:</strong> ${escapeHtml(friendlyReason)}
+          </div>
+          ${technical && technical !== friendlyReason ? `
+            <div>
+              <div class="small text-muted mb-50">Tehnicki detalj</div>
+              <code>${escapeHtml(technical)}</code>
+            </div>
+          ` : ''}
+        `;
+
+        if (transferErrorModalElement && window.bootstrap && window.bootstrap.Modal) {
+          window.bootstrap.Modal.getOrCreateInstance(transferErrorModalElement).show();
+        }
+      }
+
+      function openLineTotalModal(index) {
+        if (!lineTotalModalElement || !window.bootstrap || !window.bootstrap.Modal) {
+          return;
+        }
+
+        const payload = latestStatusPayload && latestStatusPayload.result ? latestStatusPayload.result : null;
+        const items = payload && Array.isArray(payload.items) ? payload.items : [];
+        const item = items[index];
+
+        if (!item) {
+          return;
+        }
+
+        const order = payload.order || {};
+        const comparison = resolveLineComparison(item);
+        const currency = String(order.currency || '').trim();
+
+        activeLineTotalIndex = index;
+
+        if (lineTotalModalSubtitle) {
+          lineTotalModalSubtitle.textContent = `${String(item.product_code || '-').trim()} - ${String(item.product_name || '-').trim()}`;
+        }
+
+        if (lineTotalStatusBox) {
+          lineTotalStatusBox.className = `order-ai-total-check-banner ${comparison.matches ? 'is-match' : 'is-mismatch'}`;
+          lineTotalStatusBox.innerHTML = comparison.matches
+            ? '<strong>Provjera nije potrebna.</strong><div class="mt-50">Skenirani total se podudara sa preracunom iz kolicine i jed. cijene.</div>'
+            : '<strong>Provjera je preporucena.</strong><div class="mt-50">Skenirani total odstupa od preracuna iz kolicine i jed. cijene.</div>';
+        }
+
+        if (lineTotalSourceValue) {
+          lineTotalSourceValue.textContent = formatAmountWithCurrency(comparison.source, currency);
+        }
+
+        if (lineTotalComputedValue) {
+          lineTotalComputedValue.textContent = formatAmountWithCurrency(comparison.computed, currency);
+        }
+
+        if (lineTotalDifferenceValue) {
+          lineTotalDifferenceValue.textContent = formatAmountWithCurrency(comparison.difference, currency);
+        }
+
+        if (lineTotalInput) {
+          lineTotalInput.value = formatAmount(comparison.source);
+          lineTotalInput.disabled = !canEditLineTotals();
+        }
+
+        if (lineTotalSaveButton) {
+          lineTotalSaveButton.disabled = !canEditLineTotals();
+        }
+
+        window.bootstrap.Modal.getOrCreateInstance(lineTotalModalElement).show();
+      }
+
+      function resetInterface() {
+        stopPolling();
+        stopExtractFillAnimation(0);
+        stopElapsedTimer();
+        currentScanId = null;
+        uploadProgress = 0;
+        latestStatusPayload = null;
+        isTransferBusy = false;
+        activeLineTotalIndex = null;
+        hasAutoScrolledToResult = false;
+        lastRenderedStatus = '';
+        fileNameEl.textContent = '';
+        fileInput.value = '';
+        facts.innerHTML = '';
+        linesBody.innerHTML = '';
+        savedPreview.innerHTML = '';
+        orderModalBody.innerHTML = '';
+        if (positionsModalContent) {
+          positionsModalContent.innerHTML = '';
+        }
+        if (transferErrorModalBody) {
+          transferErrorModalBody.innerHTML = '';
+        }
+        if (lineTotalInput) {
+          lineTotalInput.value = '';
+        }
+        if (extractLiveGrid) {
+          extractLiveGrid.innerHTML = '';
+        }
+        if (extractLiveMeta) {
+          extractLiveMeta.textContent = 'Cekam dokument.';
+        }
+        resultCaption.textContent = 'Nema obradjenog dokumenta.';
+        resultStatus.textContent = 'Spremno';
+        setVisible(resultCard, false);
+        setVisible(linesShell, false);
+        setVisible(savedPreview, false);
+        setVisible(actions, false);
+        setVisible(viewOrderButton, false);
+        setVisible(viewPositionsButton, false);
+        setVisible(extractLive, false);
+        resetMessages();
+        setPositionsModalState({
+          loading: false,
+          showContent: false,
+          html: '',
+          error: '',
+          subtitle: 'Pregled pozicija upisanih u bazu'
+        });
+        setProgress(0, 'Cekam upload...');
+        setStageState('upload', false);
+        setStageFill('upload', 0);
+        setStageFill('transfer', 0);
+        updateActivityState(null);
+        renderElapsedRuntime(null);
+        setTransferButtonState({
+          enabled: false,
+          label: 'Transfer u bazu',
+          hint: 'Akcije su na dnu stranice. Nakon zavrsetka obrade omogucava se upis u bazu.'
+        });
+        setPrimaryActionButtonState({
+          enabled: false,
+          label: 'Poduzmi akciju'
+        });
+        syncDropzoneVisibility('');
+      }
+
+      function handleUpload(file) {
+        if (!file) {
+          return;
+        }
+
+        stopPolling();
+        stopElapsedTimer();
+        closeSavedOrderModal();
+        closePositionsModal();
+        closeLineTotalModal();
+        resetMessages();
+        currentScanId = null;
+        latestStatusPayload = null;
+        uploadProgress = 0;
+        isTransferBusy = false;
+        openedFromExistingScan = false;
+        hasAutoScrolledToResult = false;
+        lastRenderedStatus = '';
+        fileNameEl.textContent = file.name;
+        setVisible(progressCard, true);
+        setVisible(resultCard, false);
+        setVisible(actions, false);
+        setVisible(savedPreview, false);
+        setVisible(viewOrderButton, false);
+        setVisible(viewPositionsButton, false);
+        setVisible(extractLive, false);
+        facts.innerHTML = '';
+        linesBody.innerHTML = '';
+        savedPreview.innerHTML = '';
+        orderModalBody.innerHTML = '';
+        if (positionsModalContent) {
+          positionsModalContent.innerHTML = '';
+        }
+        if (extractLiveGrid) {
+          extractLiveGrid.innerHTML = '';
+        }
+        if (extractLiveMeta) {
+          extractLiveMeta.textContent = 'Cekam dokument.';
+        }
+        setVisible(linesShell, false);
+        setPositionsModalState({
+          loading: false,
+          showContent: false,
+          html: '',
+          error: '',
+          subtitle: 'Pregled pozicija upisanih u bazu'
+        });
+        renderElapsedRuntime(null);
+        setProgress(0, 'Priprema lokalnog prihvata fajla...');
+        setStageState('upload', false);
+        setStageFill('upload', 0);
+        setStageFill('transfer', 0);
+        stopExtractFillAnimation(0);
+        updateActivityState(null);
+        setTransferButtonState({
+          enabled: false,
+          label: 'Transfer u bazu',
+          hint: 'Dokument se priprema za AI ekstrakciju.'
+        });
+        setPrimaryActionButtonState({
+          enabled: false,
+          label: 'Poduzmi akciju'
+        });
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', uploadUrl, true);
+        xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.responseType = 'json';
+
+        xhr.upload.addEventListener('progress', function (event) {
+          if (!event.lengthComputable) {
+            return;
+          }
+
+          uploadProgress = Math.round((event.loaded / event.total) * 100);
+          setProgress(
+            mapUploadProgressToOverall(uploadProgress),
+            uploadProgress >= 100 ? 'Upload je zavrsen. Pokrece se AI obrada...' : 'Dokument se ucitava na server...'
+          );
+          setStageState('upload', uploadProgress >= 100);
+          setStageFill('upload', uploadProgress);
+        });
+
+        xhr.addEventListener('load', function () {
+          if (xhr.status < 200 || xhr.status >= 300) {
+            const response = xhr.response || {};
+            setProgressWarningMessage(response.message || 'Upload nije uspio.');
+            updateActivityState(null);
+            return;
+          }
+
+          const response = xhr.response || {};
+          currentScanId = response.scan_id;
+          uploadProgress = 100;
+          showPendingExtractionState(response.data || {
+            source_file_name: file.name,
+            page_count: 1,
+            current_progress: 18,
+          });
+          startPolling(response.scan_id);
+        });
+
+        xhr.addEventListener('error', function () {
+          setProgressWarningMessage('Greska pri uploadu dokumenta.');
+          updateActivityState(null);
+        });
+
+        xhr.send(formData);
+      }
+
+      function renderStatus(data) {
+        const previousStatus = lastRenderedStatus;
+        latestStatusPayload = data || {};
+        const payload = latestStatusPayload.result || {};
+        const autoTransfer = Boolean(latestStatusPayload.auto_transfer);
+        const effectiveProgress = toFiniteNumber(latestStatusPayload.current_progress, 0);
+        const status = String(latestStatusPayload.status || '').trim();
+        const hasItems = Array.isArray(payload.items) && payload.items.length > 0;
+        const order = payload.order || {};
+        const hasOrderFacts = ['customer_name', 'supplier_name', 'external_document_number', 'document_type', 'currency'].some(function (key) {
+          return String(order && order[key] || '').trim() !== '';
+        });
+        const showResultCard = hasItems
+          || hasOrderFacts
+          || ['completed', 'ready_for_transfer', 'transferring', 'transferred', 'failed'].includes(status);
+        const stageName = detectStage(status, autoTransfer, latestStatusPayload.current_progress, latestStatusPayload.processing_step);
+        const finalizeStage = (status === 'completed' && stageName === 'extract' && !autoTransfer)
+          || (status === 'transferred' && stageName === 'transfer');
+        const extractionProgressState = (status === 'uploaded' || status === 'extracting')
+          ? buildExtractPhaseModel(latestStatusPayload)
+          : null;
+
+        syncDropzoneVisibility(status);
+        setVisible(resultCard, showResultCard);
+        setVisible(actions, showResultCard);
+        resetMessages();
+
+        if (latestStatusPayload.source_file_name) {
+          fileNameEl.textContent = latestStatusPayload.source_file_name;
+        }
+
+        setProgress(
+          extractionProgressState ? extractionProgressState.progressPercent : effectiveProgress,
+          latestStatusPayload.processing_step || 'AI obrada je u toku.'
+        );
+        setStageState(stageName, finalizeStage);
+        updateStageFills(latestStatusPayload);
+        updateActivityState(latestStatusPayload);
+        renderExtractLive(latestStatusPayload);
+        renderElapsedRuntime(latestStatusPayload);
+        renderFacts(payload, latestStatusPayload);
+        renderLines(payload);
+        renderWarnings(latestStatusPayload.warnings || []);
+
+        resultCaption.textContent = latestStatusPayload.processing_step || 'Status nije dostupan.';
+        resultStatus.textContent = resolveStatusLabel(status);
+        setVisible(savedPreview, false);
+        setVisible(viewOrderButton, false);
+        setVisible(viewPositionsButton, false);
+
+        setPrimaryActionButtonState({
+          enabled: ['completed', 'ready_for_transfer', 'transferring', 'transferred', 'failed'].includes(status),
+          label: 'Poduzmi akciju'
+        });
+
+        if (status === 'failed') {
+          errorBox.textContent = latestStatusPayload.error_message || 'AI obrada nije uspjela.';
+          setVisible(errorBox, true);
+          setTransferButtonState({
+            enabled: false,
+            label: 'Transfer u bazu',
+            hint: 'AI obrada nije uspjela. Ucitaj novi dokument i pokusaj ponovo.'
+          });
+
+          if (/(transfer|baza|pantheon)/i.test(String(latestStatusPayload.processing_step || '')) || /(anConsigneeQId|SetSubj|Pantheon)/i.test(String(latestStatusPayload.error_message || ''))) {
+            showTransferErrorModal(latestStatusPayload.error_message || 'Transfer u bazu nije uspio.', latestStatusPayload.error_message || '');
+          }
+
+          lastRenderedStatus = status;
+          return;
+        }
+
+        if (status === 'completed') {
+          setTransferButtonState({
+            enabled: Boolean(latestStatusPayload.transfer_ready),
+            label: 'Transfer u bazu',
+            hint: latestStatusPayload.transfer_ready
+              ? 'Rezultat je spreman. Nakon pregleda podataka moze se pokrenuti upis u bazu.'
+              : 'Transfer ostaje zakljucan dok se svi obavezni podaci ne pripreme.'
+          });
+
+          if (!autoTransfer) {
+            if (latestStatusPayload.transfer_ready && latestStatusPayload.transfer_preview_error) {
+              setProgressWarningMessage('Priprema provjere za bazu nije uspjela, ali se i dalje moze pokusati rucni transfer.');
+            } else if (latestStatusPayload.transfer_ready && latestStatusPayload.transfer_preview_available) {
+              setProgressWarningMessage('AI obrada je zavrsena. Narudzba je spremna za provjeru i upis u bazu.', {
+                previewReady: true
+              });
+            } else if (latestStatusPayload.transfer_ready) {
+              setProgressWarningMessage('AI obrada je zavrsena. Narudzba je spremna za provjeru i upis u bazu.');
+            } else {
+              setProgressWarningMessage('AI obrada je zavrsena. Narudzba je spremna za provjeru i dopunu podataka.');
+            }
+          }
+        } else if (status === 'ready_for_transfer' || status === 'transferring') {
+          setTransferButtonState({
+            enabled: false,
+            busy: true,
+            label: autoTransfer ? 'Auto transfer radi...' : 'Transfer u toku...',
+            hint: autoTransfer
+              ? 'AI trenutno samostalno salje narudzbu prema bazi.'
+              : 'Narudzba se upravo upisuje u bazu.'
+          });
+        } else if (status === 'transferred') {
+          const orderView = latestStatusPayload.pantheon_order && latestStatusPayload.pantheon_order.view
+            ? latestStatusPayload.pantheon_order.view
+            : latestStatusPayload.pantheon_order && latestStatusPayload.pantheon_order.key
+              ? latestStatusPayload.pantheon_order.key
+              : '';
+
+          successBox.textContent = orderView
+            ? `Narudzba je uspjesno spremljena u bazu kao ${orderView}.`
+            : 'Narudzba je uspjesno spremljena u bazu.';
+          setVisible(successBox, true);
+          renderSavedPreview(latestStatusPayload);
+          setVisible(viewOrderButton, true);
+          setVisible(viewPositionsButton, true);
+          setTransferButtonState({
+            enabled: false,
+            label: 'Prebaceno u bazu',
+            hint: 'Narudzba je spremljena. Pregled i pozicije mogu se otvoriti ili se moze zapoceti nova narudzba.',
+            complete: true
+          });
+        } else {
+          setTransferButtonState({
+            enabled: false,
+            label: 'Transfer u bazu',
+            hint: 'Dokument se cita i priprema se pregled narudzbe.'
+          });
+          setPrimaryActionButtonState({
+            enabled: false,
+            label: 'Poduzmi akciju'
+          });
+        }
+
+        const completionStatuses = ['completed', 'ready_for_transfer', 'transferring', 'transferred'];
+        const shouldAutoScroll = !openedFromExistingScan
+          && !hasAutoScrolledToResult
+          && completionStatuses.includes(status)
+          && !completionStatuses.includes(previousStatus);
+
+        if (shouldAutoScroll) {
+          hasAutoScrolledToResult = true;
+          window.setTimeout(scrollToResultSection, 220);
+        }
+
+        lastRenderedStatus = status;
+      }
+
+      function resetRenderStateCaches() {
+        lastFactsSignature = '';
+        lastLinesSignature = '';
+        lastWarningsSignature = '';
+        lastExtractLiveSignature = '';
+        lastProgressPercent = null;
+        lastProgressLabel = '';
+        extractSimulationStartedAt = null;
+        extractSimulationPageCount = 1;
+        extractSimulationStatus = '';
+        stageFillState.upload = null;
+        stageFillState.extract = null;
+        stageFillState.transfer = null;
+
+        if (progressAnimationFrame) {
+          window.cancelAnimationFrame(progressAnimationFrame);
+          progressAnimationFrame = null;
+        }
+
+        pendingProgressState = null;
+      }
+
+      function setProgress(percent, label) {
+        const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+        const nextLabel = typeof label === 'string' ? label : null;
+
+        pendingProgressState = {
+          percent: safePercent,
+          label: nextLabel,
+        };
+
+        if (progressAnimationFrame) {
+          return;
+        }
+
+        progressAnimationFrame = window.requestAnimationFrame(function () {
+          const nextState = pendingProgressState;
+
+          progressAnimationFrame = null;
+          pendingProgressState = null;
+
+          if (!nextState) {
+            return;
+          }
+
+          if (nextState.percent !== lastProgressPercent) {
+            progressPercent.textContent = nextState.percent + '%';
+            progressBar.style.transform = `scaleX(${nextState.percent / 100})`;
+            lastProgressPercent = nextState.percent;
+          }
+
+          if (nextState.label !== null && nextState.label !== lastProgressLabel) {
+            progressLabel.textContent = nextState.label;
+            lastProgressLabel = nextState.label;
+          }
+        });
+      }
+
+      function setStageFill(stageName, percent) {
+        const fillNode = stageFillNodes[stageName];
+        const normalizedPercent = Math.round(Math.max(0, Math.min(100, percent)) * 10) / 10;
+
+        if (!fillNode) {
+          return;
+        }
+
+        if (stageFillState[stageName] === normalizedPercent) {
+          return;
+        }
+
+        stageFillState[stageName] = normalizedPercent;
+        fillNode.style.transform = `scaleX(${normalizedPercent / 100})`;
+      }
+
+      function resolveExtractProgressRatio(data) {
+        const status = String(data && data.status || '').trim();
+
+        if (['completed', 'ready_for_transfer', 'transferring', 'transferred'].includes(status)) {
+          return 1;
+        }
+
+        const numericProgress = Math.max(
+          toFiniteNumber(data && data.current_progress, 0),
+          toFiniteNumber(extractVisualProgress, 0)
+        );
+
+        return Math.max(0, Math.min(1, (numericProgress - 18) / 82));
+      }
+
+      function buildExtractPhaseModel(data) {
+        const status = String(data && data.status || '').trim();
+        const totalSteps = EXTRACTION_STEPS.length;
+        const totalPages = Math.max(1, resolvePageCount(data) || 1);
+        const terminalStatuses = ['completed', 'ready_for_transfer', 'transferring', 'transferred'];
+        const isTerminal = terminalStatuses.includes(status);
+        const backendProgress = data && data.extraction_progress && typeof data.extraction_progress === 'object'
+          ? data.extraction_progress
+          : null;
+        let currentStepIndex = 0;
+        let processedPages = 0;
+        let currentPage = 1;
+        let progressPercent = 0;
+        let stateStatus = status === 'failed' ? 'error' : (isTerminal ? 'done' : 'active');
+
+        if (backendProgress) {
+          currentStepIndex = Math.max(0, Math.min(totalSteps - 1, Math.round(toFiniteNumber(backendProgress.currentStepIndex, 0))));
+          processedPages = Math.max(0, Math.min(totalPages, Math.round(toFiniteNumber(backendProgress.processedPages, 0))));
+          currentPage = Math.max(1, Math.min(totalPages, Math.round(toFiniteNumber(backendProgress.currentPage, processedPages + 1))));
+          progressPercent = Math.max(0, Math.min(100, toFiniteNumber(backendProgress.progressPercent, 0)));
+          stateStatus = String(backendProgress.status || stateStatus).trim() || stateStatus;
+        } else {
+          if (status === 'uploaded' || status === 'extracting') {
+            if (!extractSimulationStartedAt || extractSimulationPageCount !== totalPages || !['uploaded', 'extracting'].includes(extractSimulationStatus)) {
+              extractSimulationStartedAt = parseTimestamp(data && data.started_at) || Date.now();
+              extractSimulationPageCount = totalPages;
+            }
+
+            extractSimulationStatus = status;
+
+            const totalUnits = totalSteps * totalPages;
+            const elapsedMs = Math.max(0, Date.now() - extractSimulationStartedAt);
+            const durationMs = Math.max(10000, Math.min(65000, totalUnits * 420));
+            const simulatedRatio = Math.min(0.985, elapsedMs / durationMs);
+            const backendRatio = Math.max(0, Math.min(0.96, (toFiniteNumber(data && data.current_progress, 18) - 18) / 82));
+            const effectiveRatio = Math.max(backendRatio, simulatedRatio);
+            const completedUnitsFloat = Math.min((totalUnits - 0.001), Math.max(0, effectiveRatio * totalUnits));
+
+            currentStepIndex = Math.max(0, Math.min(totalSteps - 1, Math.floor(completedUnitsFloat / totalPages)));
+
+            const withinStepUnits = Math.max(0, completedUnitsFloat - (currentStepIndex * totalPages));
+            processedPages = Math.max(0, Math.min(totalPages, Math.floor(withinStepUnits)));
+            currentPage = Math.max(1, Math.min(totalPages, processedPages + 1));
+
+            const withinStepRatio = Math.max(0.05, Math.min(0.99, withinStepUnits / totalPages));
+            progressPercent = (((currentStepIndex) + withinStepRatio) / totalSteps) * 100;
+          } else if (isTerminal) {
+            currentStepIndex = totalSteps - 1;
+            processedPages = totalPages;
+            currentPage = totalPages;
+            progressPercent = 100;
+            extractSimulationStatus = status;
+          } else if (status === 'failed') {
+            currentStepIndex = Math.max(0, Math.min(totalSteps - 1, Math.floor(Math.max(0, toFiniteNumber(extractVisualProgress, 0)) / (100 / totalSteps))));
+            processedPages = Math.max(0, Math.min(totalPages, Math.round((toFiniteNumber(extractVisualProgress, 0) / 100) * totalPages)));
+            currentPage = Math.max(1, Math.min(totalPages, processedPages + 1));
+            progressPercent = Math.max(0, Math.min(99, toFiniteNumber(extractVisualProgress, 0)));
+            extractSimulationStatus = status;
+          } else {
+            extractSimulationStartedAt = null;
+            extractSimulationPageCount = totalPages;
+            extractSimulationStatus = '';
+          }
+        }
+
+        const currentStepLabel = EXTRACTION_STEPS[currentStepIndex] || EXTRACTION_STEPS[0];
+        const pageStates = Array.from({ length: totalPages }).map(function (_, index) {
+          const pageNumber = index + 1;
+          let chipStatus = 'pending';
+          let symbol = '';
+
+          if (stateStatus === 'error' && pageNumber === currentPage) {
+            chipStatus = 'error';
+            symbol = '!';
+          } else if (isTerminal || pageNumber <= processedPages) {
+            chipStatus = 'done';
+            symbol = '✓';
+          } else if (pageNumber === currentPage && stateStatus === 'active') {
+            chipStatus = 'active';
+            symbol = '⟳';
+          }
+
+          return {
+            pageNumber: pageNumber,
+            chipStatus: chipStatus,
+            symbol: symbol,
+          };
+        });
+
+        return {
+          currentStepIndex: currentStepIndex,
+          totalSteps: totalSteps,
+          currentStepLabel: currentStepLabel,
+          currentPage: currentPage,
+          totalPages: totalPages,
+          processedPages: processedPages,
+          status: stateStatus,
+          progressPercent: Math.max(0, Math.min(100, progressPercent)),
+          pages: pageStates,
+        };
+      }
+
+      function renderExtractLive(data) {
+        if (!extractLive || !extractLiveGrid || !extractLiveMeta) {
+          return;
+        }
+
+        const status = String(data && data.status || '').trim();
+        const visibleStatuses = ['uploaded', 'extracting', 'completed', 'ready_for_transfer', 'transferring', 'transferred', 'failed'];
+
+        if (!visibleStatuses.includes(status)) {
+          if (lastExtractLiveSignature !== 'hidden') {
+            extractLiveGrid.innerHTML = '';
+            extractLiveMeta.textContent = 'Cekam dokument.';
+            if (extractCurrentStep) {
+              extractCurrentStep.textContent = 'Priprema dokumenta';
+            }
+            if (extractLiveProgressBar) {
+              extractLiveProgressBar.style.width = '0%';
+            }
+            lastExtractLiveSignature = 'hidden';
+          }
+          setVisible(extractLive, false);
+          return;
+        }
+
+        const model = buildExtractPhaseModel(data);
+        const rowSizes = resolveExtractRowSizes(model);
+        const renderSignature = JSON.stringify({
+          model: model,
+          rowSizes: rowSizes,
+        });
+
+        if (renderSignature === lastExtractLiveSignature) {
+          setVisible(extractLive, true);
+          return;
+        }
+
+        lastExtractLiveSignature = renderSignature;
+
+        if (extractCurrentStep) {
+          extractCurrentStep.textContent = model.currentStepLabel;
+        }
+
+        if (extractLiveProgressBar) {
+          extractLiveProgressBar.style.width = `${model.progressPercent}%`;
+        }
+
+        extractLiveMeta.textContent = `Korak ${model.currentStepIndex + 1}/${model.totalSteps} - ${model.currentStepLabel} - Stranica ${model.currentPage}/${model.totalPages}`;
+        extractLiveGrid.classList.toggle('is-complete', model.status === 'done');
+        let pageOffset = 0;
+        extractLiveGrid.innerHTML = rowSizes.map(function (rowSize) {
+          const rowPages = model.pages.slice(pageOffset, pageOffset + rowSize);
+
+          pageOffset += rowSize;
+
+          return `
+            <div class="order-ai-extract-live-row" style="--order-ai-row-columns:${rowPages.length};">
+              ${rowPages.map(function (page) {
+                const symbol = page.symbol || '.';
+                const symbolClass = page.symbol ? '' : ' is-empty';
+
+                return `
+                  <span class="order-ai-extract-page-chip is-${page.chipStatus}" title="Stranica ${page.pageNumber}">
+                    <span class="order-ai-extract-page-chip-state${symbolClass}">${symbol}</span>
+                    <span class="order-ai-extract-page-chip-number">${page.pageNumber}</span>
+                  </span>
+                `;
+              }).join('')}
+            </div>
+          `;
+        }).join('');
+
+        setVisible(extractLive, true);
+      }
+
+      window.addEventListener('resize', function () {
+        if (!extractLive || extractLive.hidden || !latestStatusPayload) {
+          return;
+        }
+
+        renderExtractLive(latestStatusPayload);
+      });
+
+      function stopExtractFillAnimation(finalPercent) {
+        if (extractFillTimer) {
+          clearInterval(extractFillTimer);
+          extractFillTimer = null;
+        }
+
+        extractVisualProgress = Math.max(0, Math.min(100, finalPercent));
+      }
+
+      function startExtractFillAnimation() {
+        if (extractFillTimer) {
+          return;
+        }
+
+        extractFillTimer = window.setInterval(function () {
+          if (!latestStatusPayload) {
+            return;
+          }
+
+          const status = String(latestStatusPayload.status || '').trim();
+
+          if (!['uploaded', 'extracting'].includes(status)) {
+            stopExtractFillAnimation(extractVisualProgress);
+            return;
+          }
+
+          const model = buildExtractPhaseModel(latestStatusPayload);
+          extractVisualProgress = model.progressPercent;
+          setStageFill('extract', model.progressPercent);
+          renderExtractLive(latestStatusPayload);
+        }, 260);
+      }
+
+      function updateStageFills(data) {
+        const status = String(data && data.status || '').trim();
+
+        setStageFill('upload', uploadProgress);
+
+        if (status === 'uploaded' || status === 'extracting') {
+          const model = buildExtractPhaseModel(data || {});
+
+          extractVisualProgress = model.progressPercent;
+          setStageFill('extract', model.progressPercent);
+          startExtractFillAnimation();
+        } else if (status === 'completed' || status === 'ready_for_transfer' || status === 'transferring' || status === 'transferred') {
+          stopExtractFillAnimation(100);
+          setStageFill('extract', 100);
+        } else if (status === 'failed') {
+          stopExtractFillAnimation(extractVisualProgress);
+          setStageFill('extract', Math.max(0, Math.min(100, extractVisualProgress || 0)));
+        } else {
+          stopExtractFillAnimation(0);
+          setStageFill('extract', 0);
+        }
+
+        if (status === 'transferred') {
+          setStageFill('transfer', 100);
+        } else if (status === 'transferring' || isTransferBusy) {
+          setStageFill('transfer', 72);
+        } else {
+          setStageFill('transfer', 0);
+        }
+      }
+
+      function showPendingExtractionState(data) {
+        const statusData = data && typeof data === 'object' ? data : {};
+
+        latestStatusPayload = statusData;
+        extractSimulationStartedAt = parseTimestamp(statusData.started_at) || Date.now();
+        extractSimulationPageCount = Math.max(1, resolvePageCount(statusData) || 1);
+        extractSimulationStatus = 'extracting';
+
+        if (statusData.source_file_name) {
+          fileNameEl.textContent = statusData.source_file_name;
+        }
+
+        syncDropzoneVisibility('extracting');
+        setProgress(Math.max(20, toFiniteNumber(statusData.current_progress, 20)), 'AI obrada je pokrenuta. Dokument se analizira...');
+        setStageState('extract', false);
+        setStageFill('upload', 100);
+        updateStageFills(Object.assign({}, statusData, {
+          status: 'extracting',
+        }));
+        updateActivityState({ status: 'extracting' });
+        renderExtractLive(Object.assign({}, statusData, {
+          status: 'extracting',
+          processing_step: 'AI obrada je pokrenuta. Dokument se analizira...'
+        }));
+        renderElapsedRuntime(Object.assign({}, statusData, {
+          status: 'extracting'
+        }));
+        setTransferButtonState({
+          enabled: false,
+          label: 'Transfer u bazu',
+          hint: 'Dokument se cita i priprema se pregled narudzbe.'
+        });
+        setPrimaryActionButtonState({
+          enabled: false,
+          label: 'Poduzmi akciju'
+        });
+      }
+
+      function renderFacts(payload, statusData) {
+        const order = payload.order || {};
+        const pantheon = statusData.pantheon_order || {};
+        const totalComparison = resolveDocumentTotalComparison(payload);
+        const amountMeta = totalComparison.hasComparableValues && !totalComparison.matches
+          ? `Razlika: ${formatAmount(totalComparison.difference)}`
+          : '';
+        const factsMarkup = [
+          { label: 'Kupac', value: order.customer_name || '-' },
+          { label: 'Narucilac', value: order.supplier_name || '-' },
+          { label: 'Referenca', value: order.external_document_number || '-' },
+          { label: 'Vrsta dokumenta', value: order.document_type || '-' },
+          { label: 'Valuta', value: order.currency || '-' },
+          {
+            label: 'Iznos',
+            value: formatAmount(totalComparison.documentTotal || 0),
+            stateClass: totalComparison.hasComparableValues ? (totalComparison.matches ? 'is-match' : 'is-mismatch') : '',
+            meta: amountMeta,
+          },
+          { label: 'AI krediti', value: formatAmount(statusData.credits_spent || 0) },
+          { label: 'Pantheon kljuc', value: pantheon.key || '-' },
+        ];
+        const renderSignature = JSON.stringify(factsMarkup);
+
+        if (renderSignature === lastFactsSignature) {
+          return;
+        }
+
+        lastFactsSignature = renderSignature;
+        facts.innerHTML = factsMarkup.map((fact) => `
+          <div class="order-ai-fact ${escapeHtml(fact.stateClass || '')}">
+            <div class="text-muted small mb-50">${escapeHtml(fact.label)}</div>
+            <div class="fw-bolder">${escapeHtml(fact.value)}</div>
+            ${fact.meta ? `<div class="order-ai-fact-meta">${escapeHtml(fact.meta)}</div>` : ''}
+          </div>
+        `).join('');
+      }
+
+      function renderLines(payload) {
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        const currency = String((payload.order && payload.order.currency) || '').trim();
+        const allowLineEdit = canEditLineTotals();
+
+        if (!items.length) {
+          if (lastLinesSignature !== 'empty') {
+            linesBody.innerHTML = '';
+            lastLinesSignature = 'empty';
+          }
+          setVisible(linesShell, false);
+          return;
+        }
+
+        const renderSignature = JSON.stringify({
+          currency: currency,
+          editable: allowLineEdit,
+          items: items.map(function (item) {
+            const comparison = resolveLineComparison(item);
+
+            return {
+              line_number: item.line_number || '',
+              product_code: item.product_code || '',
+              product_name: item.product_name || '',
+              quantity: formatAmount(item.quantity || 0),
+              unit: item.unit || '-',
+              unit_price: formatAmount(item.unit_price || 0),
+              computed: comparison.computed,
+              source: comparison.source,
+              difference: comparison.difference,
+              matches: comparison.matches,
+            };
+          }),
+        });
+
+        if (renderSignature === lastLinesSignature) {
+          setVisible(linesShell, true);
+          return;
+        }
+
+        lastLinesSignature = renderSignature;
+        linesBody.innerHTML = items.map((item, index) => {
+          const comparison = resolveLineComparison(item);
+          const buttonClasses = comparison.matches ? 'is-match' : 'is-mismatch';
+          const readOnlyClass = allowLineEdit ? '' : ' is-readonly';
+          const diffPrefix = comparison.difference > 0 ? '+' : '';
+
+          return `
+            <tr>
+              <td>${escapeHtml(item.line_number || '')}</td>
+              <td>${escapeHtml(item.product_code || '-')}</td>
+              <td class="order-ai-wrap">${escapeHtml(item.product_name || '-')}</td>
+              <td>${escapeHtml(formatAmount(item.quantity || 0))}</td>
+              <td>${escapeHtml(item.unit || '-')}</td>
+              <td>${escapeHtml(formatAmount(item.unit_price || 0))}</td>
+              <td class="order-ai-wrap">
+                <button
+                  type="button"
+                  class="order-ai-line-total-trigger ${buttonClasses}${readOnlyClass}"
+                  data-line-total-index="${index}"
+                  ${allowLineEdit ? '' : 'tabindex="-1"'}
+                >
+                  <span class="order-ai-line-total-meta">
+                    <span class="order-ai-line-total-computed">${escapeHtml(formatAmount(item.unit_price || 0))} x ${escapeHtml(formatAmount(item.quantity || 0))} = ${escapeHtml(formatAmountWithCurrency(comparison.computed, currency))}</span>
+                    <span class="order-ai-line-total-source">Skenirani total: ${escapeHtml(formatAmountWithCurrency(comparison.source, currency))}</span>
+                    <span class="order-ai-line-total-diff">Razlika: ${escapeHtml(diffPrefix + formatAmountWithCurrency(comparison.difference, currency))}</span>
+                  </span>
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        setVisible(linesShell, true);
+      }
+
+      function renderWarnings(warnings) {
+        const validWarnings = Array.isArray(warnings) ? warnings.filter(Boolean) : [];
+        const renderSignature = JSON.stringify(validWarnings);
+
+        if (renderSignature === lastWarningsSignature && (validWarnings.length === 0 || warningsBox.innerHTML !== '')) {
+          setVisible(warningsBox, validWarnings.length > 0);
+          return;
+        }
+
+        lastWarningsSignature = renderSignature;
+        warningsBox.innerHTML = validWarnings.map((warning) => `<div>${escapeHtml(warning)}</div>`).join('');
+        setVisible(warningsBox, validWarnings.length > 0);
+      }
+
+      function resetInterface() {
+        stopPolling();
+        stopExtractFillAnimation(0);
+        stopElapsedTimer();
+        currentScanId = null;
+        uploadProgress = 0;
+        latestStatusPayload = null;
+        isTransferBusy = false;
+        activeLineTotalIndex = null;
+        hasAutoScrolledToResult = false;
+        lastRenderedStatus = '';
+        resetRenderStateCaches();
+        fileNameEl.textContent = '';
+        fileInput.value = '';
+        facts.innerHTML = '';
+        linesBody.innerHTML = '';
+        savedPreview.innerHTML = '';
+        orderModalBody.innerHTML = '';
+        if (positionsModalContent) {
+          positionsModalContent.innerHTML = '';
+        }
+        if (transferErrorModalBody) {
+          transferErrorModalBody.innerHTML = '';
+        }
+        if (lineTotalInput) {
+          lineTotalInput.value = '';
+        }
+        if (extractLiveGrid) {
+          extractLiveGrid.innerHTML = '';
+        }
+        if (extractLiveMeta) {
+          extractLiveMeta.textContent = 'Cekam dokument.';
+        }
+        resultCaption.textContent = 'Nema obradjenog dokumenta.';
+        resultStatus.textContent = 'Spremno';
+        setVisible(resultCard, false);
+        setVisible(linesShell, false);
+        setVisible(savedPreview, false);
+        setVisible(actions, false);
+        setVisible(viewOrderButton, false);
+        setVisible(viewPositionsButton, false);
+        setVisible(extractLive, false);
+        resetMessages();
+        setPositionsModalState({
+          loading: false,
+          showContent: false,
+          html: '',
+          error: '',
+          subtitle: 'Pregled pozicija upisanih u bazu'
+        });
+        setProgress(0, 'Cekam upload...');
+        setStageState('upload', false);
+        setStageFill('upload', 0);
+        setStageFill('transfer', 0);
+        updateActivityState(null);
+        renderElapsedRuntime(null);
+        setTransferButtonState({
+          enabled: false,
+          label: 'Transfer u bazu',
+          hint: 'Akcije su na dnu stranice. Nakon zavrsetka obrade omogucava se upis u bazu.'
+        });
+        setPrimaryActionButtonState({
+          enabled: false,
+          label: 'Poduzmi akciju'
+        });
+        syncDropzoneVisibility('');
+      }
+
+      function handleUpload(file) {
+        if (!file) {
+          return;
+        }
+
+        stopPolling();
+        stopElapsedTimer();
+        closeSavedOrderModal();
+        closePositionsModal();
+        closeLineTotalModal();
+        resetMessages();
+        currentScanId = null;
+        latestStatusPayload = null;
+        uploadProgress = 0;
+        isTransferBusy = false;
+        openedFromExistingScan = false;
+        hasAutoScrolledToResult = false;
+        lastRenderedStatus = '';
+        resetRenderStateCaches();
+        fileNameEl.textContent = file.name;
+        setVisible(progressCard, true);
+        setVisible(resultCard, false);
+        setVisible(actions, false);
+        setVisible(savedPreview, false);
+        setVisible(viewOrderButton, false);
+        setVisible(viewPositionsButton, false);
+        setVisible(extractLive, false);
+        facts.innerHTML = '';
+        linesBody.innerHTML = '';
+        savedPreview.innerHTML = '';
+        orderModalBody.innerHTML = '';
+        if (positionsModalContent) {
+          positionsModalContent.innerHTML = '';
+        }
+        if (extractLiveGrid) {
+          extractLiveGrid.innerHTML = '';
+        }
+        if (extractLiveMeta) {
+          extractLiveMeta.textContent = 'Cekam dokument.';
+        }
+        setVisible(linesShell, false);
+        setPositionsModalState({
+          loading: false,
+          showContent: false,
+          html: '',
+          error: '',
+          subtitle: 'Pregled pozicija upisanih u bazu'
+        });
+        renderElapsedRuntime(null);
+        setProgress(0, 'Priprema lokalnog prihvata fajla...');
+        setStageState('upload', false);
+        setStageFill('upload', 0);
+        setStageFill('transfer', 0);
+        stopExtractFillAnimation(0);
+        updateActivityState(null);
+        setTransferButtonState({
+          enabled: false,
+          label: 'Transfer u bazu',
+          hint: 'Dokument se priprema za AI ekstrakciju.'
+        });
+        setPrimaryActionButtonState({
+          enabled: false,
+          label: 'Poduzmi akciju'
+        });
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', uploadUrl, true);
+        xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.responseType = 'json';
+
+        xhr.upload.addEventListener('progress', function (event) {
+          if (!event.lengthComputable) {
+            return;
+          }
+
+          uploadProgress = Math.round((event.loaded / event.total) * 100);
+          setProgress(
+            mapUploadProgressToOverall(uploadProgress),
+            uploadProgress >= 100 ? 'Upload je zavrsen. Pokrece se AI obrada...' : 'Dokument se ucitava na server...'
+          );
+          setStageState('upload', uploadProgress >= 100);
+          setStageFill('upload', uploadProgress);
+        });
+
+        xhr.addEventListener('load', function () {
+          if (xhr.status < 200 || xhr.status >= 300) {
+            const response = xhr.response || {};
+            setProgressWarningMessage(response.message || 'Upload nije uspio.');
+            updateActivityState(null);
+            return;
+          }
+
+          const response = xhr.response || {};
+          currentScanId = response.scan_id;
+          uploadProgress = 100;
+          showPendingExtractionState(response.data || {
+            source_file_name: file.name,
+            page_count: 1,
+            current_progress: 18,
+          });
+          startPolling(response.scan_id);
+        });
+
+        xhr.addEventListener('error', function () {
+          setProgressWarningMessage('Greska pri uploadu dokumenta.');
+          updateActivityState(null);
+        });
+
+        xhr.send(formData);
+      }
+
+      function renderStatus(data) {
+        const previousStatus = lastRenderedStatus;
+        latestStatusPayload = data || {};
+        const payload = latestStatusPayload.result || {};
+        const autoTransfer = Boolean(latestStatusPayload.auto_transfer);
+        const effectiveProgress = toFiniteNumber(latestStatusPayload.current_progress, 0);
+        const status = String(latestStatusPayload.status || '').trim();
+        const order = payload.order || {};
+        const hasItems = Array.isArray(payload.items) && payload.items.length > 0;
+        const hasOrderFacts = ['customer_name', 'supplier_name', 'external_document_number', 'document_type', 'currency'].some(function (key) {
+          return String(order && order[key] || '').trim() !== '';
+        });
+        const showResultCard = hasItems
+          || hasOrderFacts
+          || ['completed', 'ready_for_transfer', 'transferring', 'transferred', 'failed'].includes(status);
+        const stageName = detectStage(status, autoTransfer, latestStatusPayload.current_progress, latestStatusPayload.processing_step);
+        const finalizeStage = (status === 'completed' && stageName === 'extract' && !autoTransfer)
+          || (status === 'transferred' && stageName === 'transfer');
+
+        syncDropzoneVisibility(status);
+        setVisible(resultCard, showResultCard);
+        setVisible(actions, showResultCard);
+
+        if (progressWarning) {
+          progressWarning.textContent = '';
+          progressWarning.classList.remove('is-preview-ready');
+          setVisible(progressWarning, false);
+        }
+
+        if (errorBox) {
+          errorBox.textContent = '';
+          setVisible(errorBox, false);
+        }
+
+        if (successBox) {
+          successBox.textContent = '';
+          setVisible(successBox, false);
+        }
+
+        if (latestStatusPayload.source_file_name) {
+          fileNameEl.textContent = latestStatusPayload.source_file_name;
+        }
+
+        setProgress(effectiveProgress, latestStatusPayload.processing_step || 'AI obrada je u toku.');
+        setStageState(stageName, finalizeStage);
+        updateStageFills(latestStatusPayload);
+        updateActivityState(latestStatusPayload);
+        renderExtractLive(latestStatusPayload);
+        renderElapsedRuntime(latestStatusPayload);
+
+        if (showResultCard) {
+          renderFacts(payload, latestStatusPayload);
+          renderLines(payload);
+        } else {
+          setVisible(linesShell, false);
+        }
+
+        renderWarnings(latestStatusPayload.warnings || []);
+
+        resultCaption.textContent = latestStatusPayload.processing_step || 'Status nije dostupan.';
+        resultStatus.textContent = resolveStatusLabel(status);
+        setVisible(savedPreview, false);
+        setVisible(viewOrderButton, false);
+        setVisible(viewPositionsButton, false);
+
+        setPrimaryActionButtonState({
+          enabled: ['completed', 'ready_for_transfer', 'transferring', 'transferred', 'failed'].includes(status),
+          label: 'Poduzmi akciju'
+        });
+
+        if (status === 'failed') {
+          errorBox.textContent = latestStatusPayload.error_message || 'AI obrada nije uspjela.';
+          setVisible(errorBox, true);
+          setTransferButtonState({
+            enabled: false,
+            label: 'Transfer u bazu',
+            hint: 'AI obrada nije uspjela. Ucitaj novi dokument i pokusaj ponovo.'
+          });
+
+          if (/(transfer|baza|pantheon)/i.test(String(latestStatusPayload.processing_step || '')) || /(anConsigneeQId|SetSubj|Pantheon)/i.test(String(latestStatusPayload.error_message || ''))) {
+            showTransferErrorModal(latestStatusPayload.error_message || 'Transfer u bazu nije uspio.', latestStatusPayload.error_message || '');
+          }
+
+          lastRenderedStatus = status;
+          return;
+        }
+
+        if (status === 'completed') {
+          setTransferButtonState({
+            enabled: Boolean(latestStatusPayload.transfer_ready),
+            label: 'Transfer u bazu',
+            hint: latestStatusPayload.transfer_ready
+              ? 'Rezultat je spreman. Nakon pregleda podataka moze se pokrenuti upis u bazu.'
+              : 'Transfer ostaje zakljucan dok se svi obavezni podaci ne pripreme.'
+          });
+
+          if (!autoTransfer) {
+            if (latestStatusPayload.transfer_ready && latestStatusPayload.transfer_preview_error) {
+              setProgressWarningMessage('Priprema provjere za bazu nije uspjela, ali se i dalje moze pokusati rucni transfer.');
+            } else if (latestStatusPayload.transfer_ready && latestStatusPayload.transfer_preview_available) {
+              setProgressWarningMessage('Provjera za bazu je spremna. Nakon pregleda rezultata moze se pokrenuti transfer.', {
+                previewReady: true
+              });
+            } else if (latestStatusPayload.transfer_ready) {
+              setProgressWarningMessage('Rezultat je spreman za upis u bazu. Pokreni transfer kada budes spreman.');
+            } else {
+              setProgressWarningMessage('Ekstrakcija je zavrsena. Rezultat moze biti pregledan i podaci se mogu dopuniti ako nesto nedostaje.');
+            }
+          }
+        } else if (status === 'ready_for_transfer' || status === 'transferring') {
+          setTransferButtonState({
+            enabled: false,
+            busy: true,
+            label: autoTransfer ? 'Auto transfer radi...' : 'Transfer u toku...',
+            hint: autoTransfer
+              ? 'AI trenutno samostalno salje narudzbu prema bazi.'
+              : 'Narudzba se upravo upisuje u bazu.'
+          });
+        } else if (status === 'transferred') {
+          const orderView = latestStatusPayload.pantheon_order && latestStatusPayload.pantheon_order.view
+            ? latestStatusPayload.pantheon_order.view
+            : latestStatusPayload.pantheon_order && latestStatusPayload.pantheon_order.key
+              ? latestStatusPayload.pantheon_order.key
+              : '';
+
+          successBox.textContent = orderView
+            ? `Narudzba je uspjesno spremljena u bazu kao ${orderView}.`
+            : 'Narudzba je uspjesno spremljena u bazu.';
+          setVisible(successBox, true);
+          renderSavedPreview(latestStatusPayload);
+          setVisible(viewOrderButton, true);
+          setVisible(viewPositionsButton, true);
+          setTransferButtonState({
+            enabled: false,
+            label: 'Prebaceno u bazu',
+            hint: 'Narudzba je spremljena. Pregled i pozicije mogu se otvoriti ili se moze zapoceti nova narudzba.',
+            complete: true
+          });
+        } else {
+          setTransferButtonState({
+            enabled: false,
+            label: 'Transfer u bazu',
+            hint: 'Dokument se cita i priprema se pregled narudzbe.'
+          });
+          setPrimaryActionButtonState({
+            enabled: false,
+            label: 'Poduzmi akciju'
+          });
+        }
+
+        const completionStatuses = ['completed', 'ready_for_transfer', 'transferring', 'transferred'];
+        const shouldAutoScroll = !openedFromExistingScan
+          && !hasAutoScrolledToResult
+          && completionStatuses.includes(status)
+          && !completionStatuses.includes(previousStatus);
+
+        if (shouldAutoScroll) {
+          hasAutoScrolledToResult = true;
+          window.setTimeout(scrollToActionSection, 220);
+        }
+
+        lastRenderedStatus = status;
+      }
+
       dropzone.addEventListener('click', function () {
         fileInput.click();
       });
@@ -3032,6 +5473,9 @@
       });
 
       transferButton.addEventListener('click', transferToPantheon);
+      if (primaryActionButton) {
+        primaryActionButton.addEventListener('click', scrollToActionSection);
+      }
       viewPositionsButton.addEventListener('click', openPositionsModal);
       viewOrderButton.addEventListener('click', openSavedOrderModal);
       newOrderButton.addEventListener('click', startNewOrder);
@@ -3071,6 +5515,11 @@
           }
 
           renderStatus(initialScanState);
+          setInitializingState(false);
+
+          if (openedFromHistory) {
+            showLoadedScanToast(initialScanState.source_file_name || '');
+          }
 
           if (!['completed', 'transferred', 'failed'].includes(String(initialScanState.status || ''))) {
             startPolling(initialScanId);
@@ -3078,9 +5527,11 @@
         } else {
           startPolling(initialScanId);
         }
+      } else {
+        setInitializingState(false);
       }
 
       syncFeatherIcons();
     })();
-  </script>
+</script>
 @endsection

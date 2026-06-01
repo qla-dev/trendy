@@ -2432,7 +2432,14 @@ class WorkOrderController extends Controller
                 }
 
                 $stockAdjustmentResults = [];
+                $releasedMaterialCatalogRows = [];
                 $stockAdjustments = $this->buildPlannedConsumptionStockAdjustments($saved);
+
+                if ($saveMode === 'barcode' && $this->savedRowsContainMaterialConsumption($saved)) {
+                    $releasedMaterialCatalogRows = $this->fetchReleasedMaterialCatalogRows(
+                        $this->releasedMaterialCodesForDocument($saved)
+                    );
+                }
 
                 if ($saveMode === 'barcode' && !empty($stockAdjustments)) {
                     $stockAdjustments = $this->applyRawMaterialsWarehouseToStockAdjustments($stockAdjustments);
@@ -2454,6 +2461,7 @@ class WorkOrderController extends Controller
                     $releasedMaterialDocument = $this->createReleasedMaterialDocumentForBarcodeConsumption(
                         $saved,
                         $workOrderRow,
+                        $releasedMaterialCatalogRows,
                         $stockAdjustmentResults,
                         $userId,
                         $now
@@ -5982,6 +5990,7 @@ class WorkOrderController extends Controller
     private function createReleasedMaterialDocumentForBarcodeConsumption(
         array $savedRows,
         array $workOrderRow,
+        array $catalogRows,
         array $stockAdjustmentResults,
         int $userId,
         Carbon $now
@@ -5998,9 +6007,11 @@ class WorkOrderController extends Controller
             throw new \RuntimeException('RN kljuc nije pronadjen za dokument razduzenja materijala.');
         }
 
-        $catalogRows = $this->fetchReleasedMaterialCatalogRows(array_map(function (array $row) {
-            return (string) ($row['acIdent'] ?? '');
-        }, $releasedRows));
+        if (empty($catalogRows)) {
+            $catalogRows = $this->fetchReleasedMaterialCatalogRows(array_map(function (array $row) {
+                return (string) ($row['acIdent'] ?? '');
+            }, $releasedRows));
+        }
         $preparedItems = [];
         $totalValue = 0.0;
 
@@ -6033,7 +6044,7 @@ class WorkOrderController extends Controller
                 $unit = strtoupper(substr(trim((string) ($catalogRow['acUM'] ?? '')), 0, 3));
             }
 
-            $price = round((float) ($this->toFloatOrNull($catalogRow['anBuyPrice'] ?? null) ?? 0.0), 4);
+            $price = $this->resolveReleasedMaterialDocumentUnitPrice($catalogRow);
             $lineValue = round($quantity * $price, 4);
             $totalValue += $lineValue;
 
@@ -6302,6 +6313,29 @@ class WorkOrderController extends Controller
         }));
     }
 
+    private function releasedMaterialCodesForDocument(array $savedRows): array
+    {
+        $codes = [];
+
+        foreach ($savedRows as $savedRow) {
+            if (!is_array($savedRow)) {
+                continue;
+            }
+
+            $itemKind = strtolower(trim((string) ($savedRow['item_kind'] ?? '')));
+            $materialCode = trim((string) ($savedRow['acIdent'] ?? ''));
+            $consumedQty = abs((float) ($this->toFloatOrNull($savedRow['stock_consumed_qty'] ?? null) ?? 0.0));
+
+            if ($itemKind !== 'materials' || $materialCode === '' || $consumedQty <= 0.000001) {
+                continue;
+            }
+
+            $codes[] = $materialCode;
+        }
+
+        return array_values(array_unique($codes));
+    }
+
     private function generateNextReleasedMaterialDocumentNumber(Carbon $now): array
     {
         $yearPrefix = $now->format('y');
@@ -6349,9 +6383,26 @@ class WorkOrderController extends Controller
             return [];
         }
 
-        return $this->newCatalogItemsTableQuery()
-            ->select(['acIdent', 'acName', 'acUM', 'anBuyPrice', 'anQId'])
-            ->whereIn('acIdent', $normalizedCodes)
+        $catalogCodeExpr = "LTRIM(RTRIM(ISNULL(i.acIdent, '')))";
+        $stockQtyExpr = "COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0)";
+        $stockValueExpr = "COALESCE(SUM(CAST(ISNULL(s.anValue, 0) as float)), 0)";
+        $avgPriceExpr = "CASE
+            WHEN ABS({$stockQtyExpr}) < 0.000001 THEN NULL
+            ELSE {$stockValueExpr} / NULLIF({$stockQtyExpr}, 0)
+        END";
+
+        return DB::table($this->qualifiedCatalogItemsTableName() . ' as i')
+            ->leftJoin($this->qualifiedStockTableName() . ' as s', function ($join) use ($catalogCodeExpr) {
+                $join->whereRaw("LTRIM(RTRIM(ISNULL(s.acIdent, ''))) = {$catalogCodeExpr}");
+            })
+            ->whereIn(DB::raw($catalogCodeExpr), $normalizedCodes)
+            ->selectRaw("{$catalogCodeExpr} as acIdent")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acName, ''))) as acName")
+            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as acUM")
+            ->selectRaw("CAST(ISNULL(i.anBuyPrice, 0) as float) as anBuyPrice")
+            ->selectRaw("CAST(ISNULL(i.anQId, 0) as bigint) as anQId")
+            ->selectRaw("CAST({$avgPriceExpr} as float) as avg_price")
+            ->groupBy('i.acIdent', 'i.acName', 'i.acUM', 'i.anBuyPrice', 'i.anQId')
             ->get()
             ->mapWithKeys(function ($row) {
                 $ident = strtolower(trim((string) ($row->acIdent ?? '')));
@@ -6366,11 +6417,17 @@ class WorkOrderController extends Controller
                         'acName' => trim((string) ($row->acName ?? '')),
                         'acUM' => strtoupper(substr(trim((string) ($row->acUM ?? '')), 0, 3)),
                         'anBuyPrice' => $row->anBuyPrice ?? null,
+                        'avg_price' => $row->avg_price ?? null,
                         'anQId' => $row->anQId ?? null,
                     ],
                 ];
             })
             ->all();
+    }
+
+    private function resolveReleasedMaterialDocumentUnitPrice(array $catalogRow): float
+    {
+        return round((float) ($this->toFloatOrNull($catalogRow['avg_price'] ?? null) ?? 0.0), 4);
     }
 
     private function resolveReleasedMaterialIssuer(array $stockAdjustmentResults, array $workOrderRow): string
@@ -11054,6 +11111,11 @@ class WorkOrderController extends Controller
         return (string) config('workorders.catalog_items_table', 'tHE_SetItem');
     }
 
+    private function stockTableName(): string
+    {
+        return (string) config('workorders.stock_table', 'tHE_Stock');
+    }
+
     private function qualifiedTableName(): string
     {
         return $this->tableSchema() . '.' . $this->tableName();
@@ -11102,6 +11164,11 @@ class WorkOrderController extends Controller
     private function qualifiedCatalogItemsTableName(): string
     {
         return $this->tableSchema() . '.' . $this->catalogItemsTableName();
+    }
+
+    private function qualifiedStockTableName(): string
+    {
+        return $this->tableSchema() . '.' . $this->stockTableName();
     }
 
     private function buildOrdersLinkageSummary(?string $normalizedOrderNumber = null): array
