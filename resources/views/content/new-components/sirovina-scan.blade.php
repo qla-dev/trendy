@@ -4749,6 +4749,58 @@
       });
     }
 
+    function collapseFineAdjustPositions(rows, removedPosition) {
+      if (!Array.isArray(rows) || !Number.isFinite(removedPosition)) {
+        return rows;
+      }
+
+      rows.forEach(function (row) {
+        if (!row || typeof row !== 'object') {
+          return;
+        }
+
+        var position = normalizeFineAdjustPosition(row.pozicija);
+        if (position === null || position <= removedPosition) {
+          return;
+        }
+
+        row.pozicija = String(position - 1);
+      });
+
+      return rows;
+    }
+
+    function removeFineAdjustRow(rowIndex) {
+      if (!Number.isFinite(rowIndex) || rowIndex < 0) {
+        return;
+      }
+
+      var currentRows = collectFineAdjustRowsFromDom();
+      if (!Array.isArray(currentRows) || rowIndex >= currentRows.length) {
+        return;
+      }
+
+      var removedRow = currentRows[rowIndex];
+      var removedPosition = normalizeFineAdjustPosition(removedRow && removedRow.pozicija);
+
+      currentRows.splice(rowIndex, 1);
+
+      if (removedPosition !== null) {
+        collapseFineAdjustPositions(currentRows, removedPosition);
+      }
+
+      state.fineAdjustRows = currentRows;
+      renderFineAdjustRows();
+
+      if (!currentRows.length) {
+        return;
+      }
+
+      window.requestAnimationFrame(function () {
+        focusFineAdjustInput(Math.min(rowIndex, currentRows.length - 1), 'alternativa');
+      });
+    }
+
     function renderFineAdjustRows() {
       var totalColumns = 13;
 
@@ -4845,9 +4897,14 @@
 
         var actionsCell = '' +
           '<td class="fine-adjust-action-cell d-none d-lg-table-cell">' +
-            '<button type="button" class="btn btn-outline-primary btn-sm fine-adjust-copy-row-btn" data-row="' + rowIndex + '" title="Kopiraj red" aria-label="Kopiraj red">' +
-              '<i class="fa fa-copy" aria-hidden="true"></i>' +
-            '</button>' +
+            '<div class="fine-adjust-action-buttons">' +
+              '<button type="button" class="btn btn-outline-primary btn-sm fine-adjust-copy-row-btn" data-row="' + rowIndex + '" title="Kopiraj red" aria-label="Kopiraj red">' +
+                '<i class="fa fa-copy" aria-hidden="true"></i>' +
+              '</button>' +
+              '<button type="button" class="btn btn-outline-danger btn-sm fine-adjust-delete-row-btn" data-row="' + rowIndex + '" title="Izbriši red" aria-label="Izbriši red">' +
+                '<i class="fa fa-trash" aria-hidden="true"></i>' +
+              '</button>' +
+            '</div>' +
           '</td>';
 
         return '<tr data-row="' + rowIndex + '">' + cells + actionsCell + '</tr>';
@@ -6897,6 +6954,22 @@
           }
 
           duplicateFineAdjustRow(copyRowIndex);
+          return;
+        }
+
+        var deleteButton = event.target && event.target.closest
+          ? event.target.closest('.fine-adjust-delete-row-btn')
+          : null;
+
+        if (deleteButton) {
+          event.preventDefault();
+
+          var deleteRowIndex = Number(deleteButton.getAttribute('data-row') || -1);
+          if (!Number.isFinite(deleteRowIndex) || deleteRowIndex < 0) {
+            return;
+          }
+
+          removeFineAdjustRow(deleteRowIndex);
           return;
         }
 

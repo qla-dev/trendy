@@ -246,9 +246,9 @@
       position: sticky;
       right: 0;
       z-index: 4;
-      min-width: 4.5rem !important;
-      width: 4.5rem !important;
-      max-width: 4.5rem !important;
+      min-width: 7rem !important;
+      width: 7rem !important;
+      max-width: 7rem !important;
       padding: 0.5rem !important;
       text-align: center;
       border-left: 1px solid rgba(186, 194, 210, 0.16) !important;
@@ -265,7 +265,15 @@
     }
   }
 
-  #fine-adjust-bom-modal .fine-adjust-copy-row-btn {
+  #fine-adjust-bom-modal .fine-adjust-action-buttons {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-copy-row-btn,
+  #fine-adjust-bom-modal .fine-adjust-delete-row-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -274,11 +282,7 @@
     padding: 0;
     border-radius: 0.375rem;
     white-space: nowrap;
-    margin-left: auto;
-    margin-right: auto;
     background: rgba(10, 18, 34, 0.96);
-    border: 2px solid rgba(96, 118, 154, 0.7);
-    color: #7f96bf;
     box-shadow: none;
     transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease;
   }
@@ -289,7 +293,14 @@
     color: #7f96bf;
   }
 
-  #fine-adjust-bom-modal .fine-adjust-copy-row-btn i {
+  #fine-adjust-bom-modal .fine-adjust-delete-row-btn.btn-outline-danger {
+    background: rgba(10, 18, 34, 0.96);
+    border: 2px solid rgba(160, 92, 110, 0.72);
+    color: #d18698;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-copy-row-btn i,
+  #fine-adjust-bom-modal .fine-adjust-delete-row-btn i {
     font-size: 1.2rem;
     line-height: 1;
   }
@@ -304,7 +315,18 @@
     box-shadow: none;
   }
 
-  #fine-adjust-bom-modal .fine-adjust-copy-row-btn:focus-visible {
+  #fine-adjust-bom-modal .fine-adjust-delete-row-btn:hover,
+  #fine-adjust-bom-modal .fine-adjust-delete-row-btn:focus,
+  #fine-adjust-bom-modal .fine-adjust-delete-row-btn.btn-outline-danger:hover,
+  #fine-adjust-bom-modal .fine-adjust-delete-row-btn.btn-outline-danger:focus {
+    background: rgba(28, 18, 28, 1);
+    border-color: rgba(216, 124, 146, 0.9);
+    color: #f0a7ba;
+    box-shadow: none;
+  }
+
+  #fine-adjust-bom-modal .fine-adjust-copy-row-btn:focus-visible,
+  #fine-adjust-bom-modal .fine-adjust-delete-row-btn:focus-visible {
     outline: none;
     box-shadow: 0 0 0 0.18rem rgba(112, 136, 178, 0.18);
   }

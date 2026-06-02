@@ -11,6 +11,7 @@
         "production": "mix --production"
     },
     "dependencies": {
+        "@lottiefiles/dotlottie-wc": "^0.9.16",
         "bootstrap": "~5.1.0"
     },
     "devDependencies": {

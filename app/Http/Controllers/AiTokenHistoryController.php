@@ -411,7 +411,7 @@ class AiTokenHistoryController extends Controller
         }
 
         if (in_array($status, ['completed', 'ready_for_transfer'], true) || $scan->processed_at !== null) {
-            return ['label' => 'Uspjesno', 'tone' => 'info'];
+            return ['label' => 'Uspješno', 'tone' => 'info'];
         }
 
         return ['label' => 'Obrada', 'tone' => 'secondary'];
