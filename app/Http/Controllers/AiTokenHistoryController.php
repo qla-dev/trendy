@@ -36,6 +36,7 @@ class AiTokenHistoryController extends Controller
         $this->authorizeModuleAccess($request);
 
         $pageConfigs = ['pageHeader' => false];
+        $showTokenUsage = $this->shouldShowTokenUsage($request);
         $filters = $this->resolveFilters($request);
         $perPage = $this->resolvePerPage($request);
         $baseQuery = $this->baseHistoryQuery();
@@ -69,6 +70,7 @@ class AiTokenHistoryController extends Controller
             'tokenHistoryPerPage' => $perPage,
             'tokenHistoryPerPageOptions' => self::PER_PAGE_OPTIONS,
             'tokenHistoryLastLoadedAtDisplay' => now()->format('d.m.Y H:i:s'),
+            'showAiTokenUsage' => $showTokenUsage,
         ]);
     }
 
@@ -123,6 +125,15 @@ class AiTokenHistoryController extends Controller
         if (!$canAccess) {
             abort(403);
         }
+    }
+
+    private function shouldShowTokenUsage(Request $request): bool
+    {
+        $user = $request->user();
+
+        return is_object($user)
+            && method_exists($user, 'isQlaDevUser')
+            && (bool) $user->isQlaDevUser();
     }
 
     private function baseHistoryQuery(): Builder
@@ -277,7 +288,7 @@ class AiTokenHistoryController extends Controller
             'usage_cost_usd_display' => $usageCostUsd !== null
                 ? $this->formatUsd($usageCostUsd)
                 : '-',
-            'open_scan_url' => route('app-order-ai-scan', ['scan' => $scan->id]),
+            'open_scan_url' => route('app-order-ai-scan', ['scan' => $scan->id, 'history' => 1]),
         ], $this->mapHistoryStatusRow($scan));
     }
 
@@ -400,7 +411,7 @@ class AiTokenHistoryController extends Controller
         }
 
         if (in_array($status, ['completed', 'ready_for_transfer'], true) || $scan->processed_at !== null) {
-            return ['label' => 'Uspjesno', 'tone' => 'info'];
+            return ['label' => 'Uspješno', 'tone' => 'info'];
         }
 
         return ['label' => 'Obrada', 'tone' => 'secondary'];

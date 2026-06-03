@@ -41,6 +41,7 @@ $(function () {
   var createModalOpenButton = document.getElementById('material-create-open-btn');
   var warehouseFilterInput = document.getElementById('material-warehouse-filter');
   var bulkDownloadButton = null;
+  var bulkQrDownloadButton = null;
   var createModalCodeInput = document.getElementById('material-create-code-input');
   var createModalNameInput = document.getElementById('material-create-name-input');
   var createModalUnitInput = document.getElementById('material-create-unit-input');
@@ -60,12 +61,14 @@ $(function () {
   var createRequestInFlight = false;
   var deleteRequestInFlight = false;
   var bulkDownloadInFlight = false;
+  var bulkDownloadActiveMode = '';
   var tableLoadingRequestCount = 0;
   var overlaySafetyTimer = null;
   var hasCompletedInitialTableLoad = false;
   var lastTableRecordsFiltered = 0;
   var dataTable;
   var bulkDownloadButtonDefaultHtml = '<i class="fa fa-download me-50"></i> Preuzmi sve etikete';
+  var bulkQrDownloadButtonDefaultHtml = '<i class="fa fa-qrcode me-50"></i> Preuzmi sve QR etikete';
   var barcodeDownloadButtonHtml = '<i class="fa fa-download me-50"></i> Preuzmi SVG';
   var qrDownloadButtonHtml = '<i class="fa fa-download me-50"></i> Preuzmi PNG';
   var defaultModalTitle = modalTitleElement ? modalTitleElement.textContent : 'Etiketa materijala';
@@ -284,16 +287,20 @@ $(function () {
     };
   }
 
-  function createBulkDownloadButton() {
+  function createBulkDownloadButton(mode) {
+    var isQrMode = mode === 'qr';
     var button = document.createElement('button');
 
     button.type = 'button';
-    button.id = 'material-bulk-download-btn';
-    button.className = 'btn material-action-btn material-barcode-preview-btn material-bulk-download-btn d-none';
+    button.id = isQrMode ? 'material-bulk-download-qr-btn' : 'material-bulk-download-btn';
+    button.className =
+      'btn material-action-btn ' +
+      (isQrMode ? 'material-qr-preview-btn' : 'material-barcode-preview-btn') +
+      ' material-bulk-download-btn';
     button.disabled = true;
-    button.innerHTML = bulkDownloadButtonDefaultHtml;
+    button.innerHTML = isQrMode ? bulkQrDownloadButtonDefaultHtml : bulkDownloadButtonDefaultHtml;
     button.addEventListener('click', function () {
-      downloadAllFilteredLabels();
+      downloadAllFilteredLabels(isQrMode ? 'qr' : 'barcode');
     });
 
     return button;
@@ -311,7 +318,11 @@ $(function () {
     }
 
     if (!bulkDownloadButton) {
-      bulkDownloadButton = createBulkDownloadButton();
+      bulkDownloadButton = createBulkDownloadButton('barcode');
+    }
+
+    if (!bulkQrDownloadButton) {
+      bulkQrDownloadButton = createBulkDownloadButton('qr');
     }
 
     firstRow = wrapper.children('.row').first();
@@ -342,11 +353,21 @@ $(function () {
       inlineControls.append(bulkDownloadButton);
     }
 
+    if (!inlineControls.find('#material-bulk-download-qr-btn').length) {
+      inlineControls.append(bulkQrDownloadButton);
+    }
+
     return bulkDownloadButton;
   }
 
-  function setBulkDownloadButtonLoadingState(active) {
-    var button = ensureBulkDownloadButton();
+  function getBulkDownloadButton(mode) {
+    ensureBulkDownloadButton();
+    return mode === 'qr' ? bulkQrDownloadButton : bulkDownloadButton;
+  }
+
+  function setBulkDownloadButtonLoadingState(active, mode) {
+    var button = getBulkDownloadButton(mode);
+    var isQrMode = mode === 'qr';
 
     if (!button) {
       return;
@@ -354,23 +375,34 @@ $(function () {
 
     if (active) {
       button.disabled = true;
-      button.innerHTML = '<span class="spinner-border spinner-border-sm me-50" role="status" aria-hidden="true"></span> Priprema ZIP-a';
+      button.innerHTML =
+        '<span class="spinner-border spinner-border-sm me-50" role="status" aria-hidden="true"></span> ' +
+        (isQrMode ? 'Priprema QR ZIP-a' : 'Priprema ZIP-a');
       return;
     }
 
-    button.innerHTML = bulkDownloadButtonDefaultHtml;
+    button.innerHTML = isQrMode ? bulkQrDownloadButtonDefaultHtml : bulkDownloadButtonDefaultHtml;
   }
 
   function updateBulkDownloadButtonState() {
-    var button = ensureBulkDownloadButton();
+    var buttons;
     var hasWarehouseFilter = !!getWarehouseFilterValue();
 
-    if (!button) {
+    ensureBulkDownloadButton();
+    buttons = [bulkDownloadButton, bulkQrDownloadButton];
+
+    if (!buttons[0] && !buttons[1]) {
       return;
     }
 
-    button.classList.toggle('d-none', !hasWarehouseFilter);
-    button.disabled = bulkDownloadInFlight || !hasWarehouseFilter || lastTableRecordsFiltered < 1;
+    buttons.forEach(function (button) {
+      if (!button) {
+        return;
+      }
+
+      button.classList.toggle('d-none', !hasWarehouseFilter);
+      button.disabled = !hasWarehouseFilter || bulkDownloadInFlight || lastTableRecordsFiltered < 1;
+    });
   }
 
   function normalizeBarcodeValue(value) {
@@ -1227,6 +1259,185 @@ $(function () {
       .then(function () {
         bulkDownloadInFlight = false;
         setBulkDownloadButtonLoadingState(false);
+        updateBulkDownloadButtonState();
+      });
+  }
+
+  function createZipFileName(warehouseName, labelMode) {
+    var prefix = labelMode === 'qr' ? 'qr-etikete' : 'etikete';
+    return prefix + '-' + sanitizeFileName(warehouseName || 'skladiste') + '.zip';
+  }
+
+  function resolveBulkDownloadScopeLabel(warehouseName) {
+    return warehouseName ? ('skladiste "' + warehouseName + '"') : 'trenutni prikaz';
+  }
+
+  function fetchQrLabelBlob(materialCode) {
+    var qrUrl = buildQrImageUrl(materialCode, 360);
+
+    if (!window.fetch) {
+      return Promise.reject(new Error('Browser ne podrzava bulk preuzimanje QR etiketa.'));
+    }
+
+    return window.fetch(qrUrl, { mode: 'cors' }).then(function (response) {
+      if (!response.ok) {
+        throw new Error('QR etiketa nije dostupna za preuzimanje.');
+      }
+
+      return response.blob();
+    });
+  }
+
+  function buildLabelsZip(materialRows, labelMode) {
+    var zip;
+    var usedNames = {};
+    var addedCount = 0;
+    var skippedCount = 0;
+    var resolvedMode = labelMode === 'qr' ? 'qr' : 'barcode';
+
+    if (!window.JSZip) {
+      return Promise.reject(new Error('ZIP biblioteka nije dostupna na stranici.'));
+    }
+
+    if (!Array.isArray(materialRows) || !materialRows.length) {
+      return Promise.reject(new Error('Nema materijala za preuzimanje etiketa.'));
+    }
+
+    zip = new window.JSZip();
+
+    if (resolvedMode !== 'qr') {
+      materialRows.forEach(function (row) {
+        var materialCode = row && row.material_code ? row.material_code : row && row.barcode_value ? row.barcode_value : '';
+        var materialName = row && row.material_name ? row.material_name : '';
+        var svgMarkup;
+        var zipEntryName;
+
+        try {
+          svgMarkup = buildBarcodeSvg(materialCode, materialName);
+          zipEntryName = resolveUniqueZipEntryName(materialCode || materialName, usedNames);
+          zip.file(zipEntryName + '.svg', svgMarkup);
+          addedCount += 1;
+        } catch (error) {
+          skippedCount += 1;
+        }
+      });
+
+      if (!addedCount) {
+        return Promise.reject(new Error('Nijedna barcode etiketa nije mogla biti generisana za odabrano skladište.'));
+      }
+
+      return zip.generateAsync({ type: 'blob' }).then(function (blob) {
+        return {
+          blob: blob,
+          addedCount: addedCount,
+          skippedCount: skippedCount
+        };
+      });
+    }
+
+    return Promise.all(
+      materialRows.map(function (row) {
+        var materialCode = row && row.material_code ? row.material_code : row && row.barcode_value ? row.barcode_value : '';
+        var materialName = row && row.material_name ? row.material_name : '';
+        var normalizedMaterialCode = normalizeBarcodeValue(materialCode);
+        var zipEntryName;
+
+        if (!normalizedMaterialCode) {
+          skippedCount += 1;
+          return Promise.resolve();
+        }
+
+        zipEntryName = resolveUniqueZipEntryName(normalizedMaterialCode || materialName, usedNames);
+
+        return fetchQrLabelBlob(normalizedMaterialCode)
+          .then(function (blob) {
+            zip.file(zipEntryName + '.png', blob);
+            addedCount += 1;
+          })
+          .catch(function () {
+            skippedCount += 1;
+          });
+      })
+    ).then(function () {
+      if (!addedCount) {
+        return Promise.reject(new Error('Nijedna QR etiketa nije mogla biti generisana za odabrano skladište.'));
+      }
+
+      return zip.generateAsync({ type: 'blob' }).then(function (blob) {
+        return {
+          blob: blob,
+          addedCount: addedCount,
+          skippedCount: skippedCount
+        };
+      });
+    });
+  }
+
+  function downloadAllFilteredLabels(labelMode) {
+    var resolvedMode = labelMode === 'qr' ? 'qr' : 'barcode';
+    var warehouseValue = getWarehouseFilterValue();
+    var currentOrder = dataTable && typeof dataTable.order === 'function' ? dataTable.order() : [];
+    var sortMeta = resolveSortMeta(currentOrder);
+    var snapshot;
+
+    if (bulkDownloadInFlight) {
+      return;
+    }
+
+    if (!warehouseValue) {
+      showBulkDownloadAlert('warning', 'Odaberite skladište', 'Bulk preuzimanje etiketa je dostupno tek nakon filtera po skladištu.');
+      return;
+    }
+
+    if (lastTableRecordsFiltered < 1) {
+      showBulkDownloadAlert('warning', 'Nema rezultata', 'Za odabrano skladište trenutno nema materijala za preuzimanje etiketa.');
+      return;
+    }
+
+    snapshot = {
+      warehouse: warehouseValue,
+      searchValue: dataTable && typeof dataTable.search === 'function' ? dataTable.search() : '',
+      sortBy: sortMeta.sortBy,
+      sortDir: sortMeta.sortDir,
+      orderColumnIndex: currentOrder && currentOrder.length ? parseInt(currentOrder[0][0], 10) : 0,
+      expectedTotal: lastTableRecordsFiltered
+    };
+
+    bulkDownloadInFlight = true;
+    bulkDownloadActiveMode = resolvedMode;
+    setBulkDownloadButtonLoadingState(true, resolvedMode);
+    updateBulkDownloadButtonState();
+
+    fetchAllFilteredMaterials(snapshot)
+      .then(function (materialRows) {
+        return buildLabelsZip(materialRows, resolvedMode);
+      })
+      .then(function (result) {
+        var labelDescription = resolvedMode === 'qr' ? 'QR etiketa' : 'barcode etiketa';
+        var resultMessage = 'Preuzeto ' + result.addedCount + ' ' + labelDescription + ' za skladište "' + snapshot.warehouse + '".';
+
+        triggerBlobDownload(result.blob, createZipFileName(snapshot.warehouse, resolvedMode));
+
+        if (result.skippedCount > 0) {
+          resultMessage += ' Preskoceno: ' + result.skippedCount + '.';
+          showBulkDownloadAlert('warning', 'ZIP je pripremljen', resultMessage);
+          return;
+        }
+
+        showBulkDownloadAlert('success', 'ZIP je pripremljen', resultMessage);
+      }, function (error) {
+        showBulkDownloadAlert(
+          'error',
+          'Preuzimanje nije uspjelo',
+          error && error.message
+            ? error.message
+            : (resolvedMode === 'qr' ? 'Ne mogu pripremiti ZIP sa QR etiketama.' : 'Ne mogu pripremiti ZIP sa etiketama.')
+        );
+      })
+      .then(function () {
+        bulkDownloadInFlight = false;
+        setBulkDownloadButtonLoadingState(false, bulkDownloadActiveMode || resolvedMode);
+        bulkDownloadActiveMode = '';
         updateBulkDownloadButtonState();
       });
   }

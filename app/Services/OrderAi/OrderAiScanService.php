@@ -113,7 +113,7 @@ class OrderAiScanService
         if ($scan->status === 'uploaded') {
             $scan->forceFill([
                 'status' => 'extracting',
-                'processing_step' => 'Pokrenuta je AI analiza dokumenta.',
+                'processing_step' => 'Pokrenuta je AI obrada dokumenta.',
                 'progress_current' => 25,
             ])->save();
 
@@ -127,7 +127,7 @@ class OrderAiScanService
         if ($scan->status === 'ready_for_transfer') {
             $scan->forceFill([
                 'status' => 'transferring',
-                'processing_step' => 'Priprema transfera u bazu.',
+                'processing_step' => 'Priprema upisa u bazu.',
                 'progress_current' => 82,
             ])->save();
 
@@ -148,9 +148,11 @@ class OrderAiScanService
         $payload = $this->overlayTransferPreview($payload, $transferPreview);
         $payload = Utf8Sanitizer::cleanRecursive($payload);
         $warnings = is_array($payload['order']['warnings'] ?? null) ? $payload['order']['warnings'] : [];
-        $transferService = app(PantheonOrderTransferService::class);
-        $transferReady = $transferService->isTransferReady($payload);
         $autoTransfer = $this->shouldAutoTransfer($scan);
+        $transferReady = $this->resolveTransferReadyForDisplay($scan, $payload, $transferPreview);
+        $elapsed = $this->resolveElapsedMeta($scan);
+        $pageCount = max(0, (int) ($scan->page_count ?? data_get($payload, 'order.page_count', 0)));
+        $billedTokens = max(0, (int) ($scan->billed_tokens ?? 0));
 
         return [
             'id' => $scan->id,
@@ -159,6 +161,12 @@ class OrderAiScanService
             'current_progress' => (int) $scan->progress_current,
             'max_progress_steps' => (int) $scan->progress_total,
             'credits_spent' => (float) $scan->credits_spent,
+            'page_count' => $pageCount,
+            'billed_tokens' => $billedTokens,
+            'started_at' => $elapsed['started_at'],
+            'finished_at' => $elapsed['finished_at'],
+            'elapsed_seconds' => $elapsed['seconds'],
+            'elapsed_display' => $elapsed['display'],
             'warnings' => $warnings,
             'transfer_ready' => $transferReady,
             'auto_transfer' => $autoTransfer,
@@ -314,18 +322,18 @@ class OrderAiScanService
     private function resolveCompletedProcessingStep(bool $autoTransfer, bool $transferReady, mixed $transferPreview): string
     {
         if ($autoTransfer) {
-            return 'AI analiza zavrsena. Dokument je spreman za transfer.';
+            return 'AI obrada je zavrsena. Dokument je spreman za upis u bazu.';
         }
 
         if (!$transferReady) {
-            return 'AI analiza zavrsena. Pregledaj rezultat prije pripreme transfera.';
+            return 'AI obrada je zavrsena. Pregledaj rezultat i dopuni podatke prije upisa u bazu.';
         }
 
         if (is_array($transferPreview) && !empty($transferPreview['preview_error'])) {
-            return 'AI analiza zavrsena. Preview transfera nije pripremljen, provjeri log.';
+            return 'AI obrada je zavrsena. Provjera podataka za bazu nije uspjela, ali mozes nastaviti rucno.';
         }
 
-        return 'AI analiza zavrsena. Transfer u bazu je spreman.';
+        return 'AI obrada je zavrsena. Narudzba je spremna za upis u bazu.';
     }
 
     private function resolveProvider(OrderAiScan $scan): OrderAiScanProvider
@@ -601,6 +609,89 @@ class OrderAiScanService
         return OrderAiScan::query()->create(
             array_merge($baseAttributes, Utf8Sanitizer::cleanRecursive($attributes))
         );
+    }
+
+    private function resolveTransferReadyForDisplay(OrderAiScan $scan, array $payload, mixed $transferPreview): bool
+    {
+        $status = trim((string) ($scan->status ?? ''));
+
+        if (in_array($status, ['ready_for_transfer', 'transferring', 'transferred'], true)) {
+            return true;
+        }
+
+        if ($status === 'completed') {
+            if (is_array($transferPreview)) {
+                return true;
+            }
+
+            return $this->looksTransferReady($payload);
+        }
+
+        return false;
+    }
+
+    private function looksTransferReady(array $payload): bool
+    {
+        $customerName = trim((string) data_get($payload, 'order.customer_name', ''));
+        $items = data_get($payload, 'items', []);
+
+        return $customerName !== ''
+            && is_array($items)
+            && !empty($items);
+    }
+
+    private function resolveElapsedMeta(OrderAiScan $scan): array
+    {
+        $startedAt = $this->normalizeScanTimestamp($scan->created_at);
+        $finishedAt = $this->normalizeScanTimestamp(
+            $scan->transferred_at ?? $scan->completed_at ?? $scan->processed_at
+        );
+        $endAt = $finishedAt ?? now();
+        $seconds = $startedAt instanceof Carbon
+            ? max(0, $startedAt->diffInSeconds($endAt))
+            : 0;
+
+        return [
+            'started_at' => $startedAt?->toIso8601String(),
+            'finished_at' => $finishedAt?->toIso8601String(),
+            'seconds' => $seconds,
+            'display' => $this->formatElapsedSeconds($seconds),
+        ];
+    }
+
+    private function normalizeScanTimestamp(mixed $value): ?Carbon
+    {
+        if ($value instanceof Carbon) {
+            return $value;
+        }
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value);
+        } catch (\Throwable $exception) {
+            return null;
+        }
+    }
+
+    private function formatElapsedSeconds(int $seconds): string
+    {
+        $seconds = max(0, $seconds);
+        $hours = intdiv($seconds, 3600);
+        $minutes = intdiv($seconds % 3600, 60);
+        $remainingSeconds = $seconds % 60;
+
+        if ($hours > 0) {
+            return sprintf('%dh %02dm', $hours, $minutes);
+        }
+
+        if ($minutes > 0) {
+            return sprintf('%dm %02ds', $minutes, $remainingSeconds);
+        }
+
+        return sprintf('%ds', $remainingSeconds);
     }
 
     private function guessExtensionFromMimeType(?string $mimeType): string

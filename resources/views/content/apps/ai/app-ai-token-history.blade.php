@@ -10,6 +10,7 @@
   $yearOptions = $tokenHistoryYearOptions ?? [];
   $perPage = (int) ($tokenHistoryPerPage ?? 10);
   $perPageOptions = $tokenHistoryPerPageOptions ?? [10, 25, 50, 100];
+  $showTokenUsage = (bool) ($showAiTokenUsage ?? false);
 @endphp
 
 @section('vendor-style')
@@ -158,6 +159,7 @@
     font-size: 0.76rem;
     font-weight: 600;
     line-height: 1;
+    white-space: nowrap;
   }
 
   .ai-token-history-badge-primary {
@@ -328,6 +330,30 @@
     box-shadow: none !important;
   }
 
+  body.dark-layout .ai-token-history-wrapper .btn.btn-outline-primary,
+  body.dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:hover,
+  body.dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:focus,
+  body.semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary,
+  body.semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:hover,
+  body.semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:focus,
+  .dark-layout .ai-token-history-wrapper .btn.btn-outline-primary,
+  .dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:hover,
+  .dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:focus,
+  .semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary,
+  .semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:hover,
+  .semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:focus {
+    color: #fff !important;
+    border-color: #fff !important;
+    background-color: transparent !important;
+  }
+
+  body.dark-layout .ai-token-history-wrapper .btn.btn-outline-primary svg,
+  body.semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary svg,
+  .dark-layout .ai-token-history-wrapper .btn.btn-outline-primary svg,
+  .semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary svg {
+    stroke: currentColor !important;
+  }
+
   .dark-layout .ai-token-history-badge-primary,
   .semi-dark-layout .ai-token-history-badge-primary {
     background: rgba(115, 103, 240, 0.22);
@@ -422,37 +448,39 @@
       </div>
     </div>
 
-    <div class="col-xl-4 col-md-6 col-12">
-      <div class="card ai-token-history-summary-card">
-        <div class="card-body d-flex align-items-center">
-          <div class="avatar bg-light-warning me-2">
-            <div class="avatar-content">
-              <i data-feather="activity" class="font-medium-3"></i>
+    @if ($showTokenUsage)
+      <div class="col-xl-4 col-md-6 col-12">
+        <div class="card ai-token-history-summary-card">
+          <div class="card-body d-flex align-items-center">
+            <div class="avatar bg-light-warning me-2">
+              <div class="avatar-content">
+                <i data-feather="activity" class="font-medium-3"></i>
+              </div>
             </div>
-          </div>
-          <div>
-            <h4 class="fw-bolder mb-0">{{ $summary['charged_tokens_display'] ?? '0' }}</h4>
-            <p class="card-text font-small-3 mb-0">Napla&#263;eni tokeni</p>
+            <div>
+              <h4 class="fw-bolder mb-0">{{ $summary['charged_tokens_display'] ?? '0' }}</h4>
+              <p class="card-text font-small-3 mb-0">Napla&#263;eni tokeni</p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="col-xl-4 col-md-6 col-12">
-      <div class="card ai-token-history-summary-card">
-        <div class="card-body d-flex align-items-center">
-          <div class="avatar bg-light-success me-2">
-            <div class="avatar-content">
-              <i data-feather="shield" class="font-medium-3"></i>
+      <div class="col-xl-4 col-md-6 col-12">
+        <div class="card ai-token-history-summary-card">
+          <div class="card-body d-flex align-items-center">
+            <div class="avatar bg-light-success me-2">
+              <div class="avatar-content">
+                <i data-feather="shield" class="font-medium-3"></i>
+              </div>
             </div>
-          </div>
-          <div>
-            <h4 class="fw-bolder mb-0">{{ $summary['usd_spent_display'] ?? '$0.00000' }}</h4>
-            <p class="card-text font-small-3 mb-0">Potro&#353;nja ($)</p>
+            <div>
+              <h4 class="fw-bolder mb-0">{{ $summary['usd_spent_display'] ?? '$0.00000' }}</h4>
+              <p class="card-text font-small-3 mb-0">Potro&#353;nja ($)</p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    @endif
   </div>
 
   <div class="card mb-2">
@@ -603,8 +631,10 @@
             <th>Status</th>
             <th>Fajl</th>
             <th>Broj stranica</th>
-            <th>Napla&#263;eni tokeni</th>
-            <th>Potro&#353;nja ($)</th>
+            @if ($showTokenUsage)
+              <th>Napla&#263;eni tokeni</th>
+              <th>Potro&#353;nja ($)</th>
+            @endif
             <th class="text-end ai-token-history-action-cell">Akcija</th>
           </tr>
         </thead>
@@ -625,8 +655,10 @@
                 <div class="ai-token-history-file-name" title="{{ $row['file_name'] }}">{{ $row['file_name'] }}</div>
               </td>
               <td>{{ $row['page_count_display'] }}</td>
-              <td>{{ $row['billed_tokens_display'] }}</td>
-              <td>{{ $row['usage_cost_usd_display'] }}</td>
+              @if ($showTokenUsage)
+                <td>{{ $row['billed_tokens_display'] }}</td>
+                <td>{{ $row['usage_cost_usd_display'] }}</td>
+              @endif
               <td class="text-end ai-token-history-action-cell">
                 <a href="{{ $row['open_scan_url'] }}" class="btn btn-outline-primary btn-sm">
                   <i data-feather="eye" class="me-50"></i> Otvori scan
@@ -635,7 +667,7 @@
             </tr>
           @empty
             <tr>
-              <td colspan="9" class="ai-token-history-empty">
+              <td colspan="{{ $showTokenUsage ? 9 : 7 }}" class="ai-token-history-empty">
                 Nema AI token historije za odabrane filtere.
               </td>
             </tr>

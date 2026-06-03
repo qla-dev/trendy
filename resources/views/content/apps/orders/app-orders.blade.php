@@ -651,6 +651,30 @@
       grid-template-columns: minmax(0, 1fr);
     }
   }
+
+  body.dark-layout #btn-toggle-filters,
+  body.dark-layout #btn-toggle-filters:hover,
+  body.dark-layout #btn-toggle-filters:focus,
+  body.semi-dark-layout #btn-toggle-filters,
+  body.semi-dark-layout #btn-toggle-filters:hover,
+  body.semi-dark-layout #btn-toggle-filters:focus,
+  .dark-layout #btn-toggle-filters,
+  .dark-layout #btn-toggle-filters:hover,
+  .dark-layout #btn-toggle-filters:focus,
+  .semi-dark-layout #btn-toggle-filters,
+  .semi-dark-layout #btn-toggle-filters:hover,
+  .semi-dark-layout #btn-toggle-filters:focus {
+    color: #fff !important;
+    border-color: #fff !important;
+    background-color: transparent !important;
+  }
+
+  body.dark-layout #btn-toggle-filters svg,
+  body.semi-dark-layout #btn-toggle-filters svg,
+  .dark-layout #btn-toggle-filters svg,
+  .semi-dark-layout #btn-toggle-filters svg {
+    stroke: currentColor !important;
+  }
 </style>
 @endsection
 
