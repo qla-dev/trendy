@@ -2380,10 +2380,17 @@
 @section('content')
 @php
   $heroRobotLottieAsset = null;
+  $heroRobotImageAsset = null;
   $heroRobotLottieScriptAsset = null;
+  $heroRobotLottiePath = resource_path('images/order-ai/hero-robot.lottie');
+  $heroRobotImagePath = resource_path('images/order-ai/hero-robot.png');
 
-  if (file_exists(public_path('images/order-ai/hero-robot.lottie'))) {
-    $heroRobotLottieAsset = asset('images/order-ai/hero-robot.lottie');
+  if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
+    $heroRobotLottieAsset = 'data:application/octet-stream;base64,' . base64_encode((string) file_get_contents($heroRobotLottiePath));
+  }
+
+  if (is_file($heroRobotImagePath) && is_readable($heroRobotImagePath)) {
+    $heroRobotImageAsset = 'data:image/png;base64,' . base64_encode((string) file_get_contents($heroRobotImagePath));
   }
 
   if (file_exists(public_path('vendors/js/order-ai/dotlottie/dotlottie-wc.js'))) {
@@ -2414,7 +2421,7 @@
       <div class="card order-ai-hero mb-2">
         <div class="card-body p-2 p-md-3">
           <div class="order-ai-hero-grid">
-            <div class="order-ai-hero-story{{ (!empty($heroRobotLottieAsset) && !empty($heroRobotLottieScriptAsset)) ? ' has-hero-visual' : '' }}">
+            <div class="order-ai-hero-story{{ ((!empty($heroRobotLottieAsset) && !empty($heroRobotLottieScriptAsset)) || !empty($heroRobotImageAsset)) ? ' has-hero-visual' : '' }}">
               <div class="order-ai-hero-story-inner">
                 <div class="order-ai-hero-copy">
                   <span class="order-ai-chip mb-1">
@@ -2430,6 +2437,10 @@
                 @if(!empty($heroRobotLottieAsset) && !empty($heroRobotLottieScriptAsset))
                   <div class="order-ai-hero-visual" aria-hidden="true">
                     <dotlottie-wc class="order-ai-hero-lottie" src="{{ $heroRobotLottieAsset }}" autoplay loop></dotlottie-wc>
+                  </div>
+                @elseif(!empty($heroRobotImageAsset))
+                  <div class="order-ai-hero-visual" aria-hidden="true">
+                    <img class="order-ai-hero-lottie" src="{{ $heroRobotImageAsset }}" alt="">
                   </div>
                 @endif
               </div>
