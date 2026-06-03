@@ -330,6 +330,30 @@
     box-shadow: none !important;
   }
 
+  body.dark-layout .ai-token-history-wrapper .btn.btn-outline-primary,
+  body.dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:hover,
+  body.dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:focus,
+  body.semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary,
+  body.semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:hover,
+  body.semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:focus,
+  .dark-layout .ai-token-history-wrapper .btn.btn-outline-primary,
+  .dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:hover,
+  .dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:focus,
+  .semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary,
+  .semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:hover,
+  .semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary:focus {
+    color: #fff !important;
+    border-color: #fff !important;
+    background-color: transparent !important;
+  }
+
+  body.dark-layout .ai-token-history-wrapper .btn.btn-outline-primary svg,
+  body.semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary svg,
+  .dark-layout .ai-token-history-wrapper .btn.btn-outline-primary svg,
+  .semi-dark-layout .ai-token-history-wrapper .btn.btn-outline-primary svg {
+    stroke: currentColor !important;
+  }
+
   .dark-layout .ai-token-history-badge-primary,
   .semi-dark-layout .ai-token-history-badge-primary {
     background: rgba(115, 103, 240, 0.22);

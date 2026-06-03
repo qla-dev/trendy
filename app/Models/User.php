@@ -91,7 +91,7 @@ class User extends Authenticatable
      */
     public function canAccessAiOrderModule(): bool
     {
-        return $this->isQlaDevUser();
+        return true;
     }
 
     public function isQlaDevUser(): bool

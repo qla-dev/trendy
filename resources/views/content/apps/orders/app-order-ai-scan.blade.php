@@ -507,6 +507,12 @@
       padding: 0;
     }
 
+    #order-ai-extract-live-shell .order-ai-extract-live {
+      background: transparent !important;
+      border-color: transparent !important;
+      box-shadow: none !important;
+    }
+
     .order-ai-extract-live[data-phase-index="1"] {
       --order-ai-phase-accent: #ea8f1f;
       --order-ai-phase-accent-rgb: 234, 143, 31;

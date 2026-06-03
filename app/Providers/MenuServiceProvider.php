@@ -141,10 +141,7 @@ class MenuServiceProvider extends ServiceProvider
 
         $adminOnlySlugs = [
             'app-barcode-generator',
-            'app-orders-navheader',
             'app-orders',
-            'app-ai-tokens-navheader',
-            'app-ai-token-history',
             'app-documents-navheader',
             'app-released-material-documents',
         ];

@@ -386,6 +386,7 @@ $(function () {
 
   function updateBulkDownloadButtonState() {
     var buttons;
+    var hasWarehouseFilter = !!getWarehouseFilterValue();
 
     ensureBulkDownloadButton();
     buttons = [bulkDownloadButton, bulkQrDownloadButton];
@@ -399,8 +400,8 @@ $(function () {
         return;
       }
 
-      button.classList.remove('d-none');
-      button.disabled = bulkDownloadInFlight || lastTableRecordsFiltered < 1;
+      button.classList.toggle('d-none', !hasWarehouseFilter);
+      button.disabled = !hasWarehouseFilter || bulkDownloadInFlight || lastTableRecordsFiltered < 1;
     });
   }
 
@@ -1264,7 +1265,7 @@ $(function () {
 
   function createZipFileName(warehouseName, labelMode) {
     var prefix = labelMode === 'qr' ? 'qr-etikete' : 'etikete';
-    return prefix + '-' + sanitizeFileName(warehouseName || 'sva-skladista') + '.zip';
+    return prefix + '-' + sanitizeFileName(warehouseName || 'skladiste') + '.zip';
   }
 
   function resolveBulkDownloadScopeLabel(warehouseName) {
@@ -1322,7 +1323,7 @@ $(function () {
       });
 
       if (!addedCount) {
-        return Promise.reject(new Error('Nijedna barcode etiketa nije mogla biti generisana za trenutni prikaz.'));
+        return Promise.reject(new Error('Nijedna barcode etiketa nije mogla biti generisana za odabrano skladište.'));
       }
 
       return zip.generateAsync({ type: 'blob' }).then(function (blob) {
@@ -1359,7 +1360,7 @@ $(function () {
       })
     ).then(function () {
       if (!addedCount) {
-        return Promise.reject(new Error('Nijedna QR etiketa nije mogla biti generisana za trenutni prikaz.'));
+        return Promise.reject(new Error('Nijedna QR etiketa nije mogla biti generisana za odabrano skladište.'));
       }
 
       return zip.generateAsync({ type: 'blob' }).then(function (blob) {
@@ -1383,8 +1384,13 @@ $(function () {
       return;
     }
 
+    if (!warehouseValue) {
+      showBulkDownloadAlert('warning', 'Odaberite skladište', 'Bulk preuzimanje etiketa je dostupno tek nakon filtera po skladištu.');
+      return;
+    }
+
     if (lastTableRecordsFiltered < 1) {
-      showBulkDownloadAlert('warning', 'Nema rezultata', 'Za trenutni prikaz trenutno nema materijala za preuzimanje etiketa.');
+      showBulkDownloadAlert('warning', 'Nema rezultata', 'Za odabrano skladište trenutno nema materijala za preuzimanje etiketa.');
       return;
     }
 
@@ -1408,7 +1414,7 @@ $(function () {
       })
       .then(function (result) {
         var labelDescription = resolvedMode === 'qr' ? 'QR etiketa' : 'barcode etiketa';
-        var resultMessage = 'Preuzeto ' + result.addedCount + ' ' + labelDescription + ' za ' + resolveBulkDownloadScopeLabel(snapshot.warehouse) + '.';
+        var resultMessage = 'Preuzeto ' + result.addedCount + ' ' + labelDescription + ' za skladište "' + snapshot.warehouse + '".';
 
         triggerBlobDownload(result.blob, createZipFileName(snapshot.warehouse, resolvedMode));
 

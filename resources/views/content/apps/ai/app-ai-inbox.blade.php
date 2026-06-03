@@ -80,6 +80,8 @@
     margin-right: 0;
   }
 
+  .ai-inbox-table thead,
+  .ai-inbox-table thead tr,
   .ai-inbox-table thead th {
     background: #f8f8fa;
     background-color: #f8f8fa;
@@ -88,6 +90,15 @@
     text-transform: uppercase;
     color: #6e6b7b;
     white-space: nowrap;
+    border-bottom: 0 !important;
+  }
+
+  .ai-inbox-table > :not(:first-child) {
+    border-top: 0 !important;
+  }
+
+  .ai-inbox-table tbody tr:first-child > * {
+    border-top: 0 !important;
   }
 
   .ai-inbox-table tbody td {
@@ -178,7 +189,11 @@
     box-shadow: none !important;
   }
 
+  html.dark-layout .ai-inbox-table thead,
+  html.dark-layout .ai-inbox-table thead tr,
   html.dark-layout .ai-inbox-table thead th,
+  html.semi-dark-layout .ai-inbox-table thead,
+  html.semi-dark-layout .ai-inbox-table thead tr,
   html.semi-dark-layout .ai-inbox-table thead th {
     background: #2f3854;
     background-color: #2f3854;
@@ -237,6 +252,30 @@
     background-color: #36405a !important;
     box-shadow: none !important;
   }
+
+  body.dark-layout .ai-inbox-shell .btn.btn-outline-primary,
+  body.dark-layout .ai-inbox-shell .btn.btn-outline-primary:hover,
+  body.dark-layout .ai-inbox-shell .btn.btn-outline-primary:focus,
+  body.semi-dark-layout .ai-inbox-shell .btn.btn-outline-primary,
+  body.semi-dark-layout .ai-inbox-shell .btn.btn-outline-primary:hover,
+  body.semi-dark-layout .ai-inbox-shell .btn.btn-outline-primary:focus,
+  .dark-layout .ai-inbox-shell .btn.btn-outline-primary,
+  .dark-layout .ai-inbox-shell .btn.btn-outline-primary:hover,
+  .dark-layout .ai-inbox-shell .btn.btn-outline-primary:focus,
+  .semi-dark-layout .ai-inbox-shell .btn.btn-outline-primary,
+  .semi-dark-layout .ai-inbox-shell .btn.btn-outline-primary:hover,
+  .semi-dark-layout .ai-inbox-shell .btn.btn-outline-primary:focus {
+    color: #fff !important;
+    border-color: #fff !important;
+    background-color: transparent !important;
+  }
+
+  body.dark-layout .ai-inbox-shell .btn.btn-outline-primary svg,
+  body.semi-dark-layout .ai-inbox-shell .btn.btn-outline-primary svg,
+  .dark-layout .ai-inbox-shell .btn.btn-outline-primary svg,
+  .semi-dark-layout .ai-inbox-shell .btn.btn-outline-primary svg {
+    stroke: currentColor !important;
+  }
 </style>
 @endsection
 
@@ -256,7 +295,7 @@
           <div class="d-flex justify-content-md-end justify-content-start align-items-center flex-wrap ai-inbox-header-actions">
             <form method="POST" action="{{ route('app-order-ai-inbox-refresh') }}">
               @csrf
-              <button type="submit" class="btn btn-primary btn-sm">
+              <button type="submit" class="btn btn-outline-primary btn-sm">
                 <i data-feather="refresh-cw" class="me-50"></i> Osvježi
               </button>
             </form>
@@ -311,7 +350,7 @@
                 </td>
                 <td class="text-end ai-inbox-action-cell">
                   <a href="{{ $row['edit_url'] }}" class="btn btn-outline-primary btn-sm">
-                    <i data-feather="eye" class="me-50"></i> Pregledaj / Uredi
+                    <i data-feather="eye" class="me-50"></i> Pregled
                   </a>
                 </td>
               </tr>
