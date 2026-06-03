@@ -36,7 +36,7 @@ class AiTokenHistoryController extends Controller
         $this->authorizeModuleAccess($request);
 
         $pageConfigs = ['pageHeader' => false];
-        $showTokenUsage = $this->shouldShowTokenUsage($request);
+        $showUsdSpend = $this->shouldShowUsdSpend($request);
         $filters = $this->resolveFilters($request);
         $perPage = $this->resolvePerPage($request);
         $baseQuery = $this->baseHistoryQuery();
@@ -70,7 +70,7 @@ class AiTokenHistoryController extends Controller
             'tokenHistoryPerPage' => $perPage,
             'tokenHistoryPerPageOptions' => self::PER_PAGE_OPTIONS,
             'tokenHistoryLastLoadedAtDisplay' => now()->format('d.m.Y H:i:s'),
-            'showAiTokenUsage' => $showTokenUsage,
+            'showAiTokenUsdSpend' => $showUsdSpend,
         ]);
     }
 
@@ -127,7 +127,7 @@ class AiTokenHistoryController extends Controller
         }
     }
 
-    private function shouldShowTokenUsage(Request $request): bool
+    private function shouldShowUsdSpend(Request $request): bool
     {
         $user = $request->user();
 

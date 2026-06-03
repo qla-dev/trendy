@@ -10,7 +10,7 @@
   $yearOptions = $tokenHistoryYearOptions ?? [];
   $perPage = (int) ($tokenHistoryPerPage ?? 10);
   $perPageOptions = $tokenHistoryPerPageOptions ?? [10, 25, 50, 100];
-  $showTokenUsage = (bool) ($showAiTokenUsage ?? false);
+  $showUsdSpend = (bool) ($showAiTokenUsdSpend ?? false);
 @endphp
 
 @section('vendor-style')
@@ -448,23 +448,23 @@
       </div>
     </div>
 
-    @if ($showTokenUsage)
-      <div class="col-xl-4 col-md-6 col-12">
-        <div class="card ai-token-history-summary-card">
-          <div class="card-body d-flex align-items-center">
-            <div class="avatar bg-light-warning me-2">
-              <div class="avatar-content">
-                <i data-feather="activity" class="font-medium-3"></i>
-              </div>
+    <div class="col-xl-4 col-md-6 col-12">
+      <div class="card ai-token-history-summary-card">
+        <div class="card-body d-flex align-items-center">
+          <div class="avatar bg-light-warning me-2">
+            <div class="avatar-content">
+              <i data-feather="activity" class="font-medium-3"></i>
             </div>
-            <div>
-              <h4 class="fw-bolder mb-0">{{ $summary['charged_tokens_display'] ?? '0' }}</h4>
-              <p class="card-text font-small-3 mb-0">Napla&#263;eni tokeni</p>
-            </div>
+          </div>
+          <div>
+            <h4 class="fw-bolder mb-0">{{ $summary['charged_tokens_display'] ?? '0' }}</h4>
+            <p class="card-text font-small-3 mb-0">Napla&#263;eni tokeni</p>
           </div>
         </div>
       </div>
+    </div>
 
+    @if ($showUsdSpend)
       <div class="col-xl-4 col-md-6 col-12">
         <div class="card ai-token-history-summary-card">
           <div class="card-body d-flex align-items-center">
@@ -631,8 +631,8 @@
             <th>Status</th>
             <th>Fajl</th>
             <th>Broj stranica</th>
-            @if ($showTokenUsage)
               <th>Napla&#263;eni tokeni</th>
+            @if ($showUsdSpend)
               <th>Potro&#353;nja ($)</th>
             @endif
             <th class="text-end ai-token-history-action-cell">Akcija</th>
@@ -655,8 +655,8 @@
                 <div class="ai-token-history-file-name" title="{{ $row['file_name'] }}">{{ $row['file_name'] }}</div>
               </td>
               <td>{{ $row['page_count_display'] }}</td>
-              @if ($showTokenUsage)
-                <td>{{ $row['billed_tokens_display'] }}</td>
+              <td>{{ $row['billed_tokens_display'] }}</td>
+              @if ($showUsdSpend)
                 <td>{{ $row['usage_cost_usd_display'] }}</td>
               @endif
               <td class="text-end ai-token-history-action-cell">
@@ -667,7 +667,7 @@
             </tr>
           @empty
             <tr>
-              <td colspan="{{ $showTokenUsage ? 9 : 7 }}" class="ai-token-history-empty">
+              <td colspan="{{ $showUsdSpend ? 9 : 8 }}" class="ai-token-history-empty">
                 Nema AI token historije za odabrane filtere.
               </td>
             </tr>
