@@ -2607,6 +2607,7 @@
 
               <div class="order-ai-bottom-actions order-ai-hidden" id="order-ai-actions">
                 <div class="order-ai-bottom-actions-secondary">
+                  <a href="#" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-pdf-button" target="_blank" rel="noopener">Vidi PDF</a>
                   <button type="button" class="btn order-ai-secondary-action" id="order-ai-new-order-button">Nova narudžba</button>
                   <a href="{{ route('app-ai-token-history') }}" class="btn order-ai-secondary-action">Historija</a>
                   <a href="{{ route('app-orders') }}" class="btn order-ai-secondary-action">Moje narudžbe</a>
@@ -2797,6 +2798,8 @@
       const transferButton = document.getElementById('order-ai-transfer-button');
       const primaryActionButton = document.getElementById('order-ai-primary-action-button');
       const transferHint = document.getElementById('order-ai-transfer-hint');
+      const viewPdfButton = document.getElementById('order-ai-view-pdf-button');
+      const ordersPageUrl = @json(route('app-orders'));
       const viewPositionsButton = document.getElementById('order-ai-view-positions-button');
       const viewOrderButton = document.getElementById('order-ai-view-order-button');
       const newOrderButton = document.getElementById('order-ai-new-order-button');
@@ -2829,6 +2832,16 @@
 
         return carry;
       }, {});
+
+      if (actions && viewPdfButton) {
+        const ordersLink = Array.from(actions.querySelectorAll('.order-ai-bottom-actions-secondary a.order-ai-secondary-action')).find(function (link) {
+          return String(link.getAttribute('href') || '').trim() === ordersPageUrl;
+        });
+
+        if (ordersLink && ordersLink.parentNode) {
+          ordersLink.insertAdjacentElement('afterend', viewPdfButton);
+        }
+      }
 
       let pollTimer = null;
       let currentScanId = null;
@@ -4696,6 +4709,7 @@
         setVisible(linesShell, false);
         setVisible(savedPreview, false);
         setVisible(actions, false);
+        syncSourcePdfButton(null, false);
         setVisible(viewOrderButton, false);
         setVisible(viewPositionsButton, false);
         setVisible(extractLive, false);
@@ -4886,6 +4900,7 @@
         resultCaption.textContent = latestStatusPayload.processing_step || 'Status nije dostupan.';
         resultStatus.textContent = resolveStatusLabel(status);
         setVisible(savedPreview, false);
+        syncSourcePdfButton(latestStatusPayload, showResultCard);
         setVisible(viewOrderButton, false);
         setVisible(viewPositionsButton, false);
 
@@ -5599,6 +5614,21 @@
         setVisible(warningsBox, validWarnings.length > 0);
       }
 
+      function syncSourcePdfButton(statusData, visible) {
+        if (!viewPdfButton) {
+          return;
+        }
+
+        const href = statusData && typeof statusData.source_document_view_url === 'string'
+          ? statusData.source_document_view_url.trim()
+          : '';
+
+        viewPdfButton.href = href || '#';
+        viewPdfButton.setAttribute('aria-disabled', href ? 'false' : 'true');
+        viewPdfButton.tabIndex = href ? 0 : -1;
+        setVisible(viewPdfButton, Boolean(visible) && href !== '');
+      }
+
       function resetInterface() {
         stopPolling();
         stopExtractFillAnimation(0);
@@ -5645,6 +5675,7 @@
         setVisible(linesShell, false);
         setVisible(savedPreview, false);
         setVisible(actions, false);
+        syncSourcePdfButton(null, false);
         setVisible(viewOrderButton, false);
         setVisible(viewPositionsButton, false);
         setVisible(extractLiveShell, false);
@@ -5859,6 +5890,7 @@
         resultCaption.textContent = latestStatusPayload.processing_step || 'Status nije dostupan.';
         resultStatus.textContent = resolveStatusLabel(status);
         setVisible(savedPreview, false);
+        syncSourcePdfButton(latestStatusPayload, showResultCard);
         setVisible(viewOrderButton, false);
         setVisible(viewPositionsButton, false);
 

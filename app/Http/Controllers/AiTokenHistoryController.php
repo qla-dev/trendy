@@ -249,6 +249,12 @@ class AiTokenHistoryController extends Controller
         $chargedTokens = (int) $monthlyRows->sum(function (OrderAiScan $scan) {
             return $this->resolveDocumentMetrics($scan)['billed_tokens'];
         });
+        $successfulTotal = $monthlyRows->filter(function (OrderAiScan $scan) {
+            return $this->resolveStatusOutcome($scan) === 'success';
+        })->count();
+        $failedTotal = $monthlyRows->filter(function (OrderAiScan $scan) {
+            return $this->resolveStatusOutcome($scan) === 'failed';
+        })->count();
         $usdSpent = (float) $monthlyRows->sum(function (OrderAiScan $scan) {
             return $this->resolveUsageCostUsd($scan) ?? 0;
         });
@@ -259,6 +265,10 @@ class AiTokenHistoryController extends Controller
             'documents_total_display' => number_format($documentsTotal, 0, ',', '.'),
             'charged_tokens' => $chargedTokens,
             'charged_tokens_display' => number_format($chargedTokens, 0, ',', '.'),
+            'successful_total' => $successfulTotal,
+            'successful_total_display' => number_format($successfulTotal, 0, ',', '.'),
+            'failed_total' => $failedTotal,
+            'failed_total_display' => number_format($failedTotal, 0, ',', '.'),
             'usd_spent' => round($usdSpent, 5),
             'usd_spent_display' => $this->formatUsd($usdSpent),
         ];
@@ -289,6 +299,7 @@ class AiTokenHistoryController extends Controller
                 ? $this->formatUsd($usageCostUsd)
                 : '-',
             'open_scan_url' => route('app-order-ai-scan', ['scan' => $scan->id, 'history' => 1]),
+            'download_source_url' => $this->resolveSourceDownloadUrl($scan),
         ], $this->mapHistoryStatusRow($scan));
     }
 
@@ -396,13 +407,10 @@ class AiTokenHistoryController extends Controller
     private function resolveStatusMeta(OrderAiScan $scan): array
     {
         $status = trim((string) ($scan->status ?? ''));
-        $hasTransfer = $scan->transferred_at !== null
-            || trim((string) ($scan->pantheon_order_key ?? '')) !== ''
-            || trim((string) ($scan->pantheon_order_view ?? '')) !== ''
-            || (int) ($scan->pantheon_order_qid ?? 0) > 0
-            || $status === 'transferred';
+        $outcome = $this->resolveStatusOutcome($scan);
+        $hasTransfer = $this->hasTransferResult($scan, $status);
 
-        if ($status === 'failed' || (!$hasTransfer && trim((string) ($scan->error_message ?? '')) !== '')) {
+        if ($outcome === 'failed') {
             return ['label' => 'Neuspješno', 'tone' => 'danger'];
         }
 
@@ -410,11 +418,43 @@ class AiTokenHistoryController extends Controller
             return ['label' => 'Završeno', 'tone' => 'success'];
         }
 
-        if (in_array($status, ['completed', 'ready_for_transfer'], true) || $scan->processed_at !== null) {
+        if ($outcome === 'success') {
             return ['label' => 'Uspješno', 'tone' => 'info'];
         }
 
         return ['label' => 'Obrada', 'tone' => 'secondary'];
+    }
+
+    private function resolveStatusOutcome(OrderAiScan $scan): string
+    {
+        $status = trim((string) ($scan->status ?? ''));
+        $hasTransfer = $this->hasTransferResult($scan, $status);
+
+        if ($status === 'failed' || (!$hasTransfer && trim((string) ($scan->error_message ?? '')) !== '')) {
+            return 'failed';
+        }
+
+        if (in_array($status, ['completed', 'ready_for_transfer'], true) || $scan->processed_at !== null || $hasTransfer) {
+            return 'success';
+        }
+
+        return 'processing';
+    }
+
+    private function hasTransferResult(OrderAiScan $scan, string $status): bool
+    {
+        return $scan->transferred_at !== null
+            || trim((string) ($scan->pantheon_order_key ?? '')) !== ''
+            || trim((string) ($scan->pantheon_order_view ?? '')) !== ''
+            || (int) ($scan->pantheon_order_qid ?? 0) > 0
+            || $status === 'transferred';
+    }
+
+    private function resolveSourceDownloadUrl(OrderAiScan $scan): ?string
+    {
+        return trim((string) ($scan->source_file_path ?? '')) !== ''
+            ? route('app-order-ai-scan-source-download', ['scan' => $scan->id])
+            : null;
     }
 
     private function resolvePerPage(Request $request): int

@@ -42,6 +42,8 @@ $(function () {
   var warehouseFilterInput = document.getElementById('material-warehouse-filter');
   var bulkDownloadButton = null;
   var bulkQrDownloadButton = null;
+  var bulkDownloadToolbarRow = null;
+  var bulkDownloadToolbarContainer = null;
   var createModalCodeInput = document.getElementById('material-create-code-input');
   var createModalNameInput = document.getElementById('material-create-name-input');
   var createModalUnitInput = document.getElementById('material-create-unit-input');
@@ -64,6 +66,8 @@ $(function () {
   var bulkDownloadActiveMode = '';
   var tableLoadingRequestCount = 0;
   var overlaySafetyTimer = null;
+  var textMeasureCanvas = null;
+  var textMeasureContext = null;
   var hasCompletedInitialTableLoad = false;
   var lastTableRecordsFiltered = 0;
   var dataTable;
@@ -306,12 +310,63 @@ $(function () {
     return button;
   }
 
+  function resolveBulkDownloadLayoutMode(firstRow, inlineControls) {
+    var viewportWidth = window.innerWidth || 0;
+    var rightColumn = firstRow.children('[class*="col-"]').last();
+    var inlineControlsElement = inlineControls && inlineControls.length ? inlineControls.get(0) : null;
+    var inlineRequiredWidth;
+    var availableInlineWidth;
+    var gapAllowance = 24;
+
+    if (viewportWidth <= 767) {
+      return 'mobile';
+    }
+
+    if (viewportWidth <= 991) {
+      return 'tablet';
+    }
+
+    if (!inlineControlsElement || !rightColumn.length) {
+      return 'inline';
+    }
+
+    inlineRequiredWidth = inlineControlsElement.scrollWidth || inlineControls.outerWidth(true) || 0;
+    availableInlineWidth = (firstRow.innerWidth() || 0) - (rightColumn.outerWidth(true) || 0) - gapAllowance;
+
+    return inlineRequiredWidth > 0 && availableInlineWidth > 0 && inlineRequiredWidth <= availableInlineWidth
+      ? 'inline'
+      : 'row';
+  }
+
+  function ensureBulkDownloadToolbarContainer(wrapper, firstRow) {
+    if (!bulkDownloadToolbarRow || !bulkDownloadToolbarRow.length) {
+      bulkDownloadToolbarRow = wrapper.children('.material-bulk-download-toolbar-row').first();
+    }
+
+    if (!bulkDownloadToolbarRow || !bulkDownloadToolbarRow.length) {
+      bulkDownloadToolbarRow = $(
+        '<div class="row material-bulk-download-toolbar-row d-none">' +
+          '<div class="col-12">' +
+            '<div class="material-bulk-download-toolbar"></div>' +
+          '</div>' +
+        '</div>'
+      );
+      firstRow.after(bulkDownloadToolbarRow);
+    }
+
+    bulkDownloadToolbarContainer = bulkDownloadToolbarRow.find('.material-bulk-download-toolbar').first();
+
+    return bulkDownloadToolbarContainer;
+  }
+
   function ensureBulkDownloadButton() {
     var wrapper = tableElement.closest('.dataTables_wrapper');
     var firstRow;
     var leftColumn;
     var lengthContainer;
     var inlineControls;
+    var toolbarContainer;
+    var layoutMode;
 
     if (!wrapper.length) {
       return null;
@@ -355,6 +410,24 @@ $(function () {
 
     if (!inlineControls.find('#material-bulk-download-qr-btn').length) {
       inlineControls.append(bulkQrDownloadButton);
+    }
+
+    toolbarContainer = ensureBulkDownloadToolbarContainer(wrapper, firstRow);
+    layoutMode = resolveBulkDownloadLayoutMode(firstRow, inlineControls);
+
+    if (layoutMode === 'inline') {
+      if (bulkDownloadToolbarRow && bulkDownloadToolbarRow.length) {
+        bulkDownloadToolbarRow.addClass('d-none');
+      }
+    } else {
+      if (toolbarContainer && toolbarContainer.length) {
+        toolbarContainer.append(bulkDownloadButton);
+        toolbarContainer.append(bulkQrDownloadButton);
+      }
+
+      if (bulkDownloadToolbarRow && bulkDownloadToolbarRow.length) {
+        bulkDownloadToolbarRow.removeClass('d-none');
+      }
     }
 
     return bulkDownloadButton;
@@ -416,6 +489,233 @@ $(function () {
     return normalizedValue || 'barcode-etiketa';
   }
 
+  function getTextMeasureContext() {
+    if (textMeasureContext) {
+      return textMeasureContext;
+    }
+
+    if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+      return null;
+    }
+
+    textMeasureCanvas = document.createElement('canvas');
+    textMeasureContext = typeof textMeasureCanvas.getContext === 'function'
+      ? textMeasureCanvas.getContext('2d')
+      : null;
+
+    return textMeasureContext;
+  }
+
+  function measureSvgTextWidth(text, fontSize, fontWeight, letterSpacing) {
+    var content = (text || '').toString();
+    var context = getTextMeasureContext();
+    var resolvedFontSize = Number(fontSize);
+    var resolvedLetterSpacing = Number(letterSpacing);
+    var width = 0;
+
+    if (!Number.isFinite(resolvedFontSize) || resolvedFontSize <= 0) {
+      resolvedFontSize = 16;
+    }
+
+    if (context) {
+      context.font = [fontWeight || '600', resolvedFontSize + 'px', 'Arial, Helvetica, sans-serif'].join(' ');
+      width = context.measureText(content).width;
+    } else {
+      width = content.length * resolvedFontSize * 0.58;
+    }
+
+    if (Number.isFinite(resolvedLetterSpacing) && resolvedLetterSpacing !== 0 && content.length > 1) {
+      width += resolvedLetterSpacing * (content.length - 1);
+    }
+
+    return width;
+  }
+
+  function splitSingleWordIntoTwoLines(word) {
+    var value = (word || '').toString().trim();
+    var midpoint;
+    var splitIndex;
+
+    if (!value) {
+      return [''];
+    }
+
+    midpoint = Math.ceil(value.length / 2);
+    splitIndex = Math.max(value.lastIndexOf('-', midpoint), value.lastIndexOf('/', midpoint));
+
+    if (splitIndex > 0 && splitIndex < value.length - 1) {
+      return [value.slice(0, splitIndex + 1), value.slice(splitIndex + 1)];
+    }
+
+    return [value.slice(0, midpoint), value.slice(midpoint)];
+  }
+
+  function findBestQrLabelSplit(label, fontSize, maxWidth, fontWeight) {
+    var normalizedLabel = (label || '').toString().replace(/\s+/g, ' ').trim();
+    var words = normalizedLabel ? normalizedLabel.split(' ') : [];
+    var bestCandidate = null;
+
+    if (!words.length) {
+      return null;
+    }
+
+    if (words.length === 1) {
+      bestCandidate = splitSingleWordIntoTwoLines(words[0]);
+
+      return {
+        lines: bestCandidate,
+        maxLineWidth: Math.max(
+          measureSvgTextWidth(bestCandidate[0], fontSize, fontWeight, 0),
+          measureSvgTextWidth(bestCandidate[1], fontSize, fontWeight, 0)
+        )
+      };
+    }
+
+    words.slice(1).forEach(function (_, index) {
+      var splitIndex = index + 1;
+      var firstLine = words.slice(0, splitIndex).join(' ');
+      var secondLine = words.slice(splitIndex).join(' ');
+      var firstLineWidth = measureSvgTextWidth(firstLine, fontSize, fontWeight, 0);
+      var secondLineWidth = measureSvgTextWidth(secondLine, fontSize, fontWeight, 0);
+      var overflow = Math.max(firstLineWidth - maxWidth, 0) + Math.max(secondLineWidth - maxWidth, 0);
+      var candidate = {
+        lines: [firstLine, secondLine],
+        maxLineWidth: Math.max(firstLineWidth, secondLineWidth),
+        overflow: overflow
+      };
+
+      if (!bestCandidate) {
+        bestCandidate = candidate;
+        return;
+      }
+
+      if (candidate.overflow < bestCandidate.overflow) {
+        bestCandidate = candidate;
+        return;
+      }
+
+      if (candidate.overflow === bestCandidate.overflow && candidate.maxLineWidth < bestCandidate.maxLineWidth) {
+        bestCandidate = candidate;
+      }
+    });
+
+    return bestCandidate;
+  }
+
+  function buildQrNameLayout(label, maxWidth) {
+    var normalizedLabel = (label || '').toString().replace(/\s+/g, ' ').trim();
+    var maxFontSize = 24;
+    var minFontSize = 18;
+    var fontWeight = '700';
+    var normalLineHeightRatio = 1.1;
+    var fontSize;
+    var singleLineWidth;
+    var splitCandidate;
+    var fallbackSplit;
+
+    if (!normalizedLabel) {
+      return {
+        lines: [],
+        fontSize: maxFontSize,
+        lineHeight: Math.round(maxFontSize * normalLineHeightRatio),
+        fontWeight: fontWeight,
+        blockHeight: 0
+      };
+    }
+
+    for (fontSize = maxFontSize; fontSize >= minFontSize; fontSize -= 1) {
+      singleLineWidth = measureSvgTextWidth(normalizedLabel, fontSize, fontWeight, 0);
+      if (singleLineWidth <= maxWidth) {
+        return {
+          lines: [normalizedLabel],
+          fontSize: fontSize,
+          lineHeight: Math.round(fontSize * normalLineHeightRatio),
+          fontWeight: fontWeight,
+          blockHeight: fontSize
+        };
+      }
+
+      splitCandidate = findBestQrLabelSplit(normalizedLabel, fontSize, maxWidth, fontWeight);
+      if (splitCandidate && splitCandidate.maxLineWidth <= maxWidth) {
+        return {
+          lines: splitCandidate.lines,
+          fontSize: fontSize,
+          lineHeight: Math.round(fontSize * normalLineHeightRatio),
+          fontWeight: fontWeight,
+          blockHeight: fontSize + Math.round(fontSize * normalLineHeightRatio)
+        };
+      }
+    }
+
+    fallbackSplit = findBestQrLabelSplit(normalizedLabel, minFontSize, maxWidth, fontWeight);
+
+    if (fallbackSplit && fallbackSplit.lines.length) {
+      return {
+        lines: fallbackSplit.lines,
+        fontSize: minFontSize,
+        lineHeight: Math.round(minFontSize * normalLineHeightRatio),
+        fontWeight: fontWeight,
+        blockHeight: minFontSize + Math.round(minFontSize * normalLineHeightRatio)
+      };
+    }
+
+    return {
+      lines: [normalizedLabel],
+      fontSize: minFontSize,
+      lineHeight: Math.round(minFontSize * normalLineHeightRatio),
+      fontWeight: fontWeight,
+      blockHeight: minFontSize
+    };
+  }
+
+  function resolveQrCodeFontSize(codeLabel, maxWidth) {
+    var fontSize = 24;
+    var minFontSize = 18;
+    var fontWeight = '700';
+    var letterSpacing = 0.35;
+
+    while (fontSize > minFontSize && measureSvgTextWidth(codeLabel, fontSize, fontWeight, letterSpacing) > maxWidth) {
+      fontSize -= 1;
+    }
+
+    return {
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      letterSpacing: letterSpacing
+    };
+  }
+
+  function renderCenteredSvgText(lines, centerX, topY, fontSize, lineHeight, fontWeight, extraAttributes) {
+    var attributes = extraAttributes ? ' ' + extraAttributes : '';
+    var resolvedTopY = Number(topY);
+    var resolvedLineHeight = Number(lineHeight);
+    var resolvedFontSize = Number(fontSize);
+
+    if (!Array.isArray(lines) || !lines.length) {
+      return '';
+    }
+
+    if (!Number.isFinite(resolvedTopY)) {
+      resolvedTopY = 0;
+    }
+
+    if (!Number.isFinite(resolvedLineHeight) || resolvedLineHeight <= 0) {
+      resolvedLineHeight = resolvedFontSize;
+    }
+
+    return (
+      '<text x="' + centerX + '" y="' + (resolvedTopY + resolvedFontSize) + '" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="' + resolvedFontSize + '" font-weight="' + fontWeight + '" fill="#1f2430"' + attributes + '>' +
+        lines.map(function (line, index) {
+          if (index === 0) {
+            return '<tspan x="' + centerX + '" y="' + (resolvedTopY + resolvedFontSize) + '">' + escapeXml(line) + '</tspan>';
+          }
+
+          return '<tspan x="' + centerX + '" dy="' + resolvedLineHeight + '">' + escapeXml(line) + '</tspan>';
+        }).join('') +
+      '</text>'
+    );
+  }
+
   function buildQrImageUrl(value, size) {
     var qrValue = normalizeBarcodeValue(value);
     var resolvedSize = Number(size);
@@ -436,13 +736,17 @@ $(function () {
   function buildQrLabelSvg(qrSvgMarkup, materialCode, materialName) {
     var normalizedMaterialCode = normalizeBarcodeValue(materialCode);
     var label = (materialName || '').toString().trim();
-    var labelSize = labelFontSize(label);
     var width = 320;
     var qrSize = 220;
+    var maxTextWidth = width - 28;
+    var nameLayout = buildQrNameLayout(label, maxTextWidth);
+    var codeLayout = resolveQrCodeFontSize(normalizedMaterialCode, maxTextWidth);
+    var nameTopPadding = 10;
+    var qrY = nameTopPadding + nameLayout.blockHeight + (nameLayout.lines.length ? 10 : 0);
     var qrX = Math.round((width - qrSize) / 2);
-    var qrY = 34;
-    var bottomPadding = 36;
-    var height = qrY + qrSize + bottomPadding;
+    var codeGap = 10;
+    var codeTopY = qrY + qrSize + codeGap;
+    var height = codeTopY + codeLayout.fontSize + 8;
     var cleanedQrSvg = (qrSvgMarkup || '').toString().trim().replace(/^\s*<\?xml[\s\S]*?\?>\s*/i, '');
     var outerSvgMatch;
     var outerSvgAttributes = '';
@@ -494,11 +798,19 @@ $(function () {
       '<?xml version="1.0" encoding="UTF-8"?>',
       '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' + escapeXml(normalizedMaterialCode) + '">',
       '<rect width="100%" height="100%" fill="#ffffff" />',
-      '<text x="' + width / 2 + '" y="18" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="' + labelSize + '" font-weight="600" fill="#1f2430">' + escapeXml(label) + '</text>',
+      renderCenteredSvgText(nameLayout.lines, width / 2, nameTopPadding, nameLayout.fontSize, nameLayout.lineHeight, nameLayout.fontWeight),
       '<svg x="' + qrX + '" y="' + qrY + '" width="' + qrSize + '" height="' + qrSize + '"' + (qrViewBox ? ' viewBox="' + escapeXml(qrViewBox) + '"' : '') + ' preserveAspectRatio="xMidYMid meet">',
       qrInnerMarkup,
       '</svg>',
-      '<text x="' + width / 2 + '" y="' + (qrY + qrSize + 22) + '" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" letter-spacing="1.2" fill="#1f2430">' + escapeXml(normalizedMaterialCode) + '</text>',
+      renderCenteredSvgText(
+        [normalizedMaterialCode],
+        width / 2,
+        codeTopY,
+        codeLayout.fontSize,
+        codeLayout.fontSize,
+        codeLayout.fontWeight,
+        'letter-spacing="' + codeLayout.letterSpacing + '"'
+      ),
       '</svg>'
     ].join('');
   }
@@ -2127,6 +2439,8 @@ $(function () {
 
   $(window).on('resize.materialBarcodeTableOverlay', function () {
     updateTableLoadingOverlayBounds();
+    ensureBulkDownloadButton();
+    updateBulkDownloadButtonState();
   });
 
   dataTable = tableElement.DataTable({

@@ -96,6 +96,8 @@ Route::middleware('auth:web')->group(function () {
         Route::post('orders/ai-inbox/refresh', [AiInboxController::class, 'refresh'])->name('app-order-ai-inbox-refresh');
         Route::get('orders/ai-scan', [OrderAiScanController::class, 'index'])->name('app-order-ai-scan');
         Route::post('orders/ai-scan/upload', [OrderAiScanController::class, 'store'])->name('app-order-ai-scan-upload');
+        Route::get('orders/ai-scan/{scan}/source', [OrderAiScanController::class, 'source'])->name('app-order-ai-scan-source');
+        Route::get('orders/ai-scan/{scan}/source/download', [OrderAiScanController::class, 'downloadSource'])->name('app-order-ai-scan-source-download');
         Route::get('orders/ai-scan/{scan}/status', [OrderAiScanController::class, 'status'])->name('app-order-ai-scan-status');
         Route::get('ai-tokens/history', [AiTokenHistoryController::class, 'index'])->name('app-ai-token-history');
         Route::get('ai-tokens/history/statuses', [AiTokenHistoryController::class, 'statuses'])->name('app-ai-token-history-statuses');
