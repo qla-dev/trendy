@@ -360,10 +360,19 @@ class OrderAiScanService
                 return null;
             }
 
+            $itemMeta = $this->extractScannedItemMetadata(
+                (string) ($item['product_name'] ?? ''),
+                (string) ($item['note'] ?? ''),
+                (string) ($item['drawing_reference'] ?? ''),
+                (string) ($item['material_hint'] ?? '')
+            );
+
             return [
                 'line_number' => (int) ($item['line_number'] ?? ($index + 1)),
                 'product_code' => trim((string) ($item['product_code'] ?? '')),
-                'product_name' => trim((string) ($item['product_name'] ?? '')),
+                'product_name' => $itemMeta['product_name'],
+                'drawing_reference' => $itemMeta['drawing_reference'],
+                'material_hint' => $itemMeta['material_hint'],
                 'quantity' => (float) ($item['quantity'] ?? 0),
                 'unit' => trim((string) ($item['unit'] ?? config('ai-order-scan.default_unit', 'KO'))),
                 'unit_price' => (float) ($item['unit_price'] ?? 0),
@@ -372,7 +381,7 @@ class OrderAiScanService
                 'vat_code' => trim((string) ($item['vat_code'] ?? config('ai-order-scan.default_vat_code', 'P1'))),
                 'discount_percent' => (float) ($item['discount_percent'] ?? 0),
                 'priority' => trim((string) ($item['priority'] ?? '')),
-                'note' => trim((string) ($item['note'] ?? '')),
+                'note' => $itemMeta['note'],
             ];
         }, $items, array_keys($items))));
         $supplierName = $this->normalizeSupplierName((string) ($order['supplier_name'] ?? ''));
@@ -461,6 +470,85 @@ class OrderAiScanService
         ];
     }
 
+    private function extractScannedItemMetadata(
+        string $productName,
+        string $note = '',
+        string $drawingReference = '',
+        string $materialHint = ''
+    ): array {
+        $nameLines = [];
+        $drawingParts = [];
+        $noteParts = [];
+        $productName = trim($productName);
+        $note = trim($note);
+        $drawingReference = trim($drawingReference);
+        $materialHint = trim($materialHint);
+
+        foreach ($this->splitVisibleTextLines($productName) as $line) {
+            if (preg_match('/^werkstoff\s*:/iu', $line) === 1) {
+                if ($materialHint === '') {
+                    $materialHint = preg_replace('/^werkstoff\s*:\s*/iu', '', $line) ?? $line;
+                }
+
+                continue;
+            }
+
+            if (preg_match('/^zeichnung\b/iu', $line) === 1) {
+                $drawingParts[] = $line;
+                continue;
+            }
+
+            $nameLines[] = $line;
+        }
+
+        foreach ($this->splitVisibleTextLines($drawingReference) as $line) {
+            $drawingParts[] = $line;
+        }
+
+        foreach ($this->splitVisibleTextLines($note) as $line) {
+            if (preg_match('/^werkstoff\s*:/iu', $line) === 1) {
+                if ($materialHint === '') {
+                    $materialHint = preg_replace('/^werkstoff\s*:\s*/iu', '', $line) ?? $line;
+                }
+
+                continue;
+            }
+
+            $noteParts[] = $line;
+        }
+
+        $drawingReference = implode(' | ', array_values(array_unique(array_filter($drawingParts))));
+
+        if ($drawingReference !== '') {
+            $noteParts[] = $drawingReference;
+        }
+
+        $resolvedProductName = trim(implode(' ', array_values(array_filter($nameLines))));
+
+        if ($resolvedProductName === '') {
+            $resolvedProductName = $productName;
+        }
+
+        return [
+            'product_name' => $resolvedProductName,
+            'drawing_reference' => $drawingReference,
+            'material_hint' => trim((string) (preg_replace('/\s+/', ' ', $materialHint) ?? $materialHint)),
+            'note' => implode(' | ', array_values(array_unique(array_filter($noteParts)))),
+        ];
+    }
+
+    private function splitVisibleTextLines(string $value): array
+    {
+        $value = str_replace(["\r\n", "\r"], "\n", $value);
+        $lines = preg_split('/\n+/u', $value) ?: [];
+
+        return array_values(array_filter(array_map(function ($line) {
+            $line = trim((string) (preg_replace('/\s+/u', ' ', (string) $line) ?? $line));
+
+            return $line;
+        }, $lines)));
+    }
+
     private function buildSubtotalMismatchWarning(float $subtotalDelta, string $supplierName): string
     {
         $amount = number_format(abs($subtotalDelta), 2, '.', '');
@@ -520,6 +608,8 @@ class OrderAiScanService
                 'line_number' => (int) ($preparedItem['line_number'] ?? ($existingItem['line_number'] ?? ($index + 1))),
                 'product_code' => trim((string) ($preparedItem['product_code'] ?? ($existingItem['product_code'] ?? ''))),
                 'product_name' => trim((string) ($preparedItem['product_name'] ?? ($existingItem['product_name'] ?? ''))),
+                'drawing_reference' => trim((string) ($preparedItem['drawing_reference'] ?? ($existingItem['drawing_reference'] ?? ''))),
+                'material_hint' => trim((string) ($preparedItem['material_hint'] ?? ($existingItem['material_hint'] ?? ''))),
                 'quantity' => (float) ($preparedItem['quantity'] ?? ($existingItem['quantity'] ?? 0)),
                 'unit' => trim((string) ($preparedItem['unit'] ?? ($existingItem['unit'] ?? ''))),
                 'unit_price' => (float) ($existingItem['unit_price'] ?? ($preparedItem['unit_price'] ?? 0)),
@@ -529,6 +619,13 @@ class OrderAiScanService
                 'discount_percent' => (float) ($preparedItem['discount_percent'] ?? ($existingItem['discount_percent'] ?? 0)),
                 'priority' => trim((string) ($preparedItem['priority'] ?? ($existingItem['priority'] ?? ''))),
                 'note' => trim((string) ($preparedItem['note'] ?? ($existingItem['note'] ?? ''))),
+                'primary_classification' => trim((string) ($preparedItem['primary_classification'] ?? ($existingItem['primary_classification'] ?? ''))),
+                'catalog_item_exists' => (bool) ($preparedItem['catalog_item_exists'] ?? ($existingItem['catalog_item_exists'] ?? false)),
+                'catalog_item_missing' => (bool) ($preparedItem['catalog_item_missing'] ?? ($existingItem['catalog_item_missing'] ?? false)),
+                'catalog_item_auto_create' => (bool) ($preparedItem['catalog_item_auto_create'] ?? ($existingItem['catalog_item_auto_create'] ?? false)),
+                'catalog_item_created' => (bool) ($preparedItem['catalog_item_created'] ?? ($existingItem['catalog_item_created'] ?? false)),
+                'catalog_item_status' => trim((string) ($preparedItem['catalog_item_status'] ?? ($existingItem['catalog_item_status'] ?? ''))),
+                'catalog_item_notice' => trim((string) ($preparedItem['catalog_item_notice'] ?? ($existingItem['catalog_item_notice'] ?? ''))),
             ]);
         }
 

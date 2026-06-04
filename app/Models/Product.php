@@ -105,6 +105,7 @@ class Product extends Model
         $productName = trim((string) ($attributes['product_name'] ?? $attributes['acName'] ?? ''));
         $productUnit = strtoupper(substr(trim((string) ($attributes['product_um'] ?? $attributes['acUM'] ?? '')), 0, 3));
         $productSet = strtoupper(trim((string) ($attributes['product_set'] ?? $attributes['acSetOfItem'] ?? '')));
+        $productClassif = trim((string) ($attributes['product_classification'] ?? $attributes['product_classif'] ?? $attributes['acClassif'] ?? ''));
         $now = now();
         $itemsTable = self::sourceSchema() . '.' . self::itemsTable();
         $existingRow = DB::table($itemsTable)
@@ -134,6 +135,7 @@ class Product extends Model
             'acName' => $productName !== '' ? $productName : $productCode,
             'acUM' => $productUnit,
             'acSetOfItem' => $productSet,
+            'acClassif' => $productClassif,
             'anQId' => $nextQId,
             'anPLUCode' => 0,
             'anPLUCode2' => 0,

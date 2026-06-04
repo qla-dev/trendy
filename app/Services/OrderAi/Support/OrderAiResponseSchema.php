@@ -60,6 +60,8 @@ class OrderAiResponseSchema
                             'line_number',
                             'product_code',
                             'product_name',
+                            'drawing_reference',
+                            'material_hint',
                             'quantity',
                             'unit',
                             'unit_price',
@@ -78,7 +80,15 @@ class OrderAiResponseSchema
                             ],
                             'product_name' => [
                                 'type' => 'string',
-                                'description' => 'Full visible item description. Merge all continuation description lines that belong to the same item, even across a page break if there is no new position/code.',
+                                'description' => 'Visible article/name block only. Merge stacked article-name lines that belong to the same item, but exclude lines that begin with Zeichnung and exclude Werkstoff lines.',
+                            ],
+                            'drawing_reference' => [
+                                'type' => 'string',
+                                'description' => 'Optional drawing/reference text such as a line that starts with Zeichnung. Keep it separate from product_name.',
+                            ],
+                            'material_hint' => [
+                                'type' => 'string',
+                                'description' => 'The visible value after Werkstoff:, without the Werkstoff label.',
                             ],
                             'quantity' => ['type' => 'number'],
                             'unit' => ['type' => 'string'],

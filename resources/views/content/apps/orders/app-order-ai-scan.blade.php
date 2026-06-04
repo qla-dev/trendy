@@ -1075,6 +1075,44 @@
       white-space: normal;
     }
 
+    .order-ai-line-row.is-catalog-missing > td,
+    .order-ai-line-row.is-catalog-created > td {
+      transition: background-color 0.2s ease;
+    }
+
+    .order-ai-line-code-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.35rem;
+    }
+
+    .order-ai-line-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.2rem 0.55rem;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    .order-ai-line-name {
+      font-weight: 600;
+    }
+
+    .order-ai-line-note {
+      margin-top: 0.35rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      line-height: 1.45;
+      opacity: 0.92;
+    }
+
     .order-ai-line-total-trigger {
       width: 100%;
       border: 1px solid rgba(22, 52, 77, 0.12);
@@ -1594,6 +1632,26 @@
       background: rgba(238, 243, 247, 0.8);
     }
 
+    html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-line-row.is-catalog-missing > td {
+      background: rgba(255, 159, 67, 0.1);
+    }
+
+    html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-line-row.is-catalog-created > td {
+      background: rgba(22, 163, 74, 0.08);
+    }
+
+    html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-line-badge.is-missing {
+      background: rgba(255, 159, 67, 0.14);
+      border-color: rgba(245, 158, 11, 0.28);
+      color: #b45309;
+    }
+
+    html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-line-badge.is-created {
+      background: rgba(22, 163, 74, 0.12);
+      border-color: rgba(22, 163, 74, 0.26);
+      color: #17683b;
+    }
+
     html.light-layout:not(.dark-layout):not(.semi-dark-layout):not(.bordered-layout) .order-ai-shell .text-muted {
       color: var(--order-ai-subtle) !important;
     }
@@ -1908,6 +1966,30 @@
     html.semi-dark-layout .order-ai-shell .table thead th {
       color: #adc0dc;
       background: rgba(51, 65, 94, 0.36);
+    }
+
+    html.dark-layout .order-ai-line-row.is-catalog-missing > td,
+    html.semi-dark-layout .order-ai-line-row.is-catalog-missing > td {
+      background: rgba(251, 146, 60, 0.14);
+    }
+
+    html.dark-layout .order-ai-line-row.is-catalog-created > td,
+    html.semi-dark-layout .order-ai-line-row.is-catalog-created > td {
+      background: rgba(34, 197, 94, 0.12);
+    }
+
+    html.dark-layout .order-ai-line-badge.is-missing,
+    html.semi-dark-layout .order-ai-line-badge.is-missing {
+      background: rgba(251, 146, 60, 0.18);
+      border-color: rgba(251, 146, 60, 0.3);
+      color: #ffd59c;
+    }
+
+    html.dark-layout .order-ai-line-badge.is-created,
+    html.semi-dark-layout .order-ai-line-badge.is-created {
+      background: rgba(34, 197, 94, 0.18);
+      border-color: rgba(34, 197, 94, 0.28);
+      color: #b8f7c9;
     }
 
     html.dark-layout .order-ai-shell .text-muted,
@@ -3336,6 +3418,8 @@
               line_number: Math.round(toFiniteNumber(item.line_number, index + 1)),
               product_code: String(item.product_code || '').trim(),
               product_name: String(item.product_name || '').trim(),
+              drawing_reference: String(item.drawing_reference || '').trim(),
+              material_hint: String(item.material_hint || '').trim(),
               quantity: toFiniteNumber(item.quantity, 0),
               unit: String(item.unit || '').trim(),
               unit_price: toFiniteNumber(item.unit_price, 0),
@@ -4382,6 +4466,37 @@
             latestStatusPayload.current_progress = 100;
             latestStatusPayload.status = 'transferred';
             latestStatusPayload.processing_step = 'Narudžba je ručno prebačena u bazu.';
+            if (latestStatusPayload.result && Array.isArray(latestStatusPayload.result.items)) {
+              latestStatusPayload.result.items = latestStatusPayload.result.items.map(function (item) {
+                const isMissing = Boolean(item && item.catalog_item_missing);
+
+                if (!isMissing) {
+                  return item;
+                }
+
+                return Object.assign({}, item, {
+                  catalog_item_exists: true,
+                  catalog_item_missing: false,
+                  catalog_item_created: true,
+                  catalog_item_status: 'created',
+                  catalog_item_notice: `Artikal ${String(item.product_code || '').trim()} je automatski kreiran tokom transfera.`,
+                });
+              });
+            }
+            if (Array.isArray(latestStatusPayload.warnings)) {
+              latestStatusPayload.warnings = latestStatusPayload.warnings.map(function (warning) {
+                const message = String(warning || '').trim();
+
+                if (!message.includes('nije pronađen u bazi i biće automatski kreiran pri transferu')) {
+                  return message;
+                }
+
+                return message.replace(
+                  'nije pronađen u bazi i biće automatski kreiran pri transferu',
+                  'nije postojao u bazi i automatski je kreiran tokom transfera'
+                );
+              });
+            }
             latestStatusPayload.pantheon_order = {
               key: payload.data ? payload.data.pantheon_order_key : '',
               view: payload.data ? payload.data.pantheon_order_view : '',
@@ -5555,6 +5670,11 @@
               source: comparison.source,
               difference: comparison.difference,
               matches: comparison.matches,
+              catalog_item_missing: Boolean(item.catalog_item_missing),
+              catalog_item_created: Boolean(item.catalog_item_created),
+              catalog_item_status: item.catalog_item_status || '',
+              catalog_item_notice: item.catalog_item_notice || '',
+              primary_classification: item.primary_classification || '',
             };
           }),
         });
@@ -5570,12 +5690,42 @@
           const buttonClasses = comparison.matches ? 'is-match' : 'is-mismatch';
           const readOnlyClass = allowLineEdit ? '' : ' is-readonly';
           const diffPrefix = comparison.difference > 0 ? '+' : '';
+          const catalogStatus = String(item.catalog_item_status || '').trim();
+          const isCatalogMissing = Boolean(item.catalog_item_missing) || catalogStatus === 'missing';
+          const isCatalogCreated = Boolean(item.catalog_item_created) || catalogStatus === 'created';
+          const rowClass = isCatalogMissing
+            ? ' class="order-ai-line-row is-catalog-missing"'
+            : isCatalogCreated
+              ? ' class="order-ai-line-row is-catalog-created"'
+              : '';
+          const catalogBadge = isCatalogMissing
+            ? '<span class="order-ai-line-badge is-missing">Nije u bazi</span>'
+            : isCatalogCreated
+              ? '<span class="order-ai-line-badge is-created">Kreiran</span>'
+              : '';
+          const catalogMeta = [];
+
+          if (item.catalog_item_notice) {
+            catalogMeta.push(`<div class="order-ai-line-note">${escapeHtml(item.catalog_item_notice)}</div>`);
+          }
+
+          if (isCatalogMissing && item.primary_classification) {
+            catalogMeta.push(`<div class="order-ai-line-note">Primarna klasifikacija: ${escapeHtml(item.primary_classification)}</div>`);
+          }
 
           return `
-            <tr>
+            <tr${rowClass}>
               <td>${escapeHtml(item.line_number || '')}</td>
-              <td>${escapeHtml(item.product_code || '-')}</td>
-              <td class="order-ai-wrap">${escapeHtml(item.product_name || '-')}</td>
+              <td>
+                <div class="order-ai-line-code-stack">
+                  <span>${escapeHtml(item.product_code || '-')}</span>
+                  ${catalogBadge}
+                </div>
+              </td>
+              <td class="order-ai-wrap">
+                <div class="order-ai-line-name">${escapeHtml(item.product_name || '-')}</div>
+                ${catalogMeta.join('')}
+              </td>
               <td>${escapeHtml(formatAmount(item.quantity || 0))}</td>
               <td>${escapeHtml(item.unit || '-')}</td>
               <td>${escapeHtml(formatAmount(item.unit_price || 0))}</td>

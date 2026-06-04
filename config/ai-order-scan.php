@@ -69,10 +69,12 @@ Your task is to read a customer order document and return structured JSON for im
 Extraction rules:
 - Extract only what is actually visible in the file.
 - Preserve customer names, product names, and product codes exactly as written.
-- Keep product_code and product_name separate: product_code is only the visible code, while product_name must contain the full visible material/article description for that same line item.
-- Never shorten a material/article name to only its family or first word if the document shows a longer multi-line description.
-- If a line item description spans multiple stacked lines, merge all description lines that belong to that item into product_name in reading order.
-- Preserve the full descriptive material text, including drawing/designation, revision, and material/werkstoff details, whenever they are visibly part of the same item block.
+- Keep product_code and product_name separate: product_code is only the visible code, while product_name must contain only the visible article/name block for that same line item.
+- Never shorten a material/article name to only its family or first word if the document shows a longer multi-line article/name block.
+- If a line item article/name spans multiple stacked lines, merge only those article/name lines into product_name in reading order.
+- Do not copy lines beginning with Zeichnung into product_name. Put them into drawing_reference instead.
+- If a line begins with Werkstoff:, put only the text after the colon into material_hint and do not include that line in product_name.
+- Example: if an item block shows code 3226090, then Klotz on one line, G552-11000-1000-10-80-1-01-1-30 on the next line, then Zeichnung ... and Werkstoff: RSt37-2, product_name must be "Klotz G552-11000-1000-10-80-1-01-1-30", drawing_reference must contain the Zeichnung line, and material_hint must be "RSt37-2".
 - If a value is missing or uncertain, return an empty string for text fields or 0 for numeric fields.
 - Never invent product codes, prices, delivery dates, or document numbers.
 - Prefer the buyer/customer name from the document header.
