@@ -3011,6 +3011,10 @@
         return toFiniteNumber(value, 0).toFixed(2);
       }
 
+      function formatWholeNumber(value) {
+        return String(Math.max(0, Math.round(toFiniteNumber(value, 0))));
+      }
+
       function formatAmountWithCurrency(value, currency) {
         const suffix = String(currency || '').trim();
 
@@ -3052,6 +3056,25 @@
           title: resolveLoadedScanLabel(fileName),
           showConfirmButton: false,
           timer: 2200,
+          timerProgressBar: true,
+        });
+      }
+
+      function showTransferSuccessAlert(orderView) {
+        if (!window.Swal || typeof window.Swal.fire !== 'function') {
+          return;
+        }
+
+        const resolvedOrderView = String(orderView || '').trim();
+
+        window.Swal.fire({
+          icon: 'success',
+          title: 'Transfer uspješan',
+          text: resolvedOrderView !== ''
+            ? `Narudžba je uspješno prenesena u bazu kao ${resolvedOrderView}.`
+            : 'Narudžba je uspješno prenesena u bazu.',
+          showConfirmButton: false,
+          timer: 1000,
           timerProgressBar: true,
         });
       }
@@ -3207,7 +3230,7 @@
 
         if (!visibleStatuses.includes(status)) {
           extractLiveGrid.innerHTML = '';
-          extractLiveMeta.textContent = 'Cekam dokument.';
+          extractLiveMeta.textContent = 'Čekam dokument.';
           setVisible(extractLive, false);
           return;
         }
@@ -3225,11 +3248,11 @@
         extractLiveGrid.innerHTML = Array.from({ length: pageCount }).map(function (_, index) {
           const pageNumber = index + 1;
           let stateClass = 'is-pending';
-          let stateLabel = 'Ceka';
+          let stateLabel = 'Čeka';
 
           if (isComplete || pageNumber <= completedPages) {
             stateClass = 'is-done';
-            stateLabel = 'Obradjeno';
+            stateLabel = 'Obrađeno';
           } else if (pageNumber === activePage) {
             stateClass = 'is-active';
             stateLabel = 'U obradi';
@@ -3272,7 +3295,7 @@
         setTransferButtonState({
           enabled: false,
           label: 'Transfer u bazu',
-          hint: 'Dokument se cita i priprema se pregled narudzbe.'
+          hint: 'Dokument se čita i priprema se pregled narudžbe.'
         });
         setPrimaryActionButtonState({
           enabled: false,
@@ -3449,7 +3472,7 @@
         const message = String(reason || '').trim();
 
         if (!message) {
-          return 'Transfer u bazu nije uspio, ali detaljan razlog nije vracen.';
+          return 'Transfer u bazu nije uspio, ali detaljan razlog nije vraćen.';
         }
 
         if (/rtHE_Order_tHE_SetSubj_21|anConsigneeQId/i.test(message)) {
@@ -3673,8 +3696,8 @@
             stateClass: totalComparison.hasComparableValues ? (totalComparison.matches ? 'is-match' : 'is-mismatch') : '',
             meta: amountMeta,
           },
-          { label: 'AI krediti', value: formatAmount(statusData.credits_spent || 0) },
-          { label: 'Pantheon kljuc', value: pantheon.key || '-' }
+          { label: 'AI krediti', value: formatWholeNumber(statusData.billed_tokens || 0) },
+          { label: 'Pantheon ključ', value: pantheon.key || '-' }
         ];
 
         facts.innerHTML = factsMarkup.map((fact) => `
@@ -4209,7 +4232,7 @@
             label: 'Transfer u bazu',
             hint: data.transfer_ready
               ? 'AI payload je spreman. Pregledaj rezultat i klikni za upis u bazu.'
-              : 'Transfer ostaje zakljucan dok svi obavezni podaci nisu pripremljeni.'
+              : 'Transfer ostaje zaključan dok svi obavezni podaci nisu pripremljeni.'
           });
 
           if (!autoTransfer) {
@@ -4454,12 +4477,20 @@
             payload = null;
           }
 
+          const persistedStatusPayload = payload && payload.data && payload.data.scan_status && typeof payload.data.scan_status === 'object'
+            ? payload.data.scan_status
+            : null;
+
           if (!response.ok) {
             const failure = new Error((payload && (payload.reason || payload.message)) || 'Transfer u bazu nije uspio.');
             failure.technicalReason = payload && payload.technical_reason
               ? payload.technical_reason
               : (rawText || '');
             throw failure;
+          }
+
+          if (persistedStatusPayload) {
+            latestStatusPayload = persistedStatusPayload;
           }
 
           if (latestStatusPayload) {
@@ -4505,6 +4536,11 @@
             latestStatusPayload.transfer_meta = payload.data || {};
             isTransferBusy = false;
             renderStatus(latestStatusPayload);
+            showTransferSuccessAlert(latestStatusPayload.pantheon_order && latestStatusPayload.pantheon_order.view
+              ? latestStatusPayload.pantheon_order.view
+              : latestStatusPayload.pantheon_order && latestStatusPayload.pantheon_order.key
+                ? latestStatusPayload.pantheon_order.key
+                : '');
           }
         } catch (error) {
           isTransferBusy = false;
@@ -4529,7 +4565,7 @@
         }
 
         if (/rtHE_Order_tHE_SetSubj_21|anConsigneeQId/i.test(message)) {
-          return 'Pantheon nije prihvatio naručioca jer nije bio postavljen validan subject za anConsigneeQId.';
+          return 'Pantheon nije prihvatio naručitelja jer nije bio postavljen validan subject za anConsigneeQId.';
         }
 
         return message;
@@ -4608,7 +4644,7 @@
             stateClass: totalComparison.hasComparableValues ? (totalComparison.matches ? 'is-match' : 'is-mismatch') : '',
             meta: amountMeta,
           },
-          { label: 'AI krediti', value: formatAmount(statusData.credits_spent || 0) },
+          { label: 'AI krediti', value: formatWholeNumber(statusData.billed_tokens || 0) },
           { label: 'Pantheon ključ', value: pantheon.key || '-' },
         ];
 
@@ -4816,9 +4852,9 @@
           extractLiveGrid.innerHTML = '';
         }
         if (extractLiveMeta) {
-          extractLiveMeta.textContent = 'Cekam dokument.';
+          extractLiveMeta.textContent = 'Čekam dokument.';
         }
-        resultCaption.textContent = 'Nema obradjenog dokumenta.';
+        resultCaption.textContent = 'Nema obrađenog dokumenta.';
         resultStatus.textContent = 'Spremno';
         setVisible(resultCard, false);
         setVisible(linesShell, false);
@@ -4836,7 +4872,7 @@
           error: '',
           subtitle: 'Pregled pozicija upisanih u bazu'
         });
-        setProgress(0, 'Cekam upload...');
+        setProgress(0, 'Čekam upload...');
         setStageState('upload', false);
         setStageFill('upload', 0);
         setStageFill('transfer', 0);
@@ -4845,7 +4881,7 @@
         setTransferButtonState({
           enabled: false,
           label: 'Transfer u bazu',
-          hint: 'Akcije su na dnu stranice. Nakon zavrsetka obrade omogucava se upis u bazu.'
+          hint: 'Akcije su na dnu stranice. Nakon završetka obrade omogućava se upis u bazu.'
         });
         setPrimaryActionButtonState({
           enabled: false,
@@ -4891,7 +4927,7 @@
           extractLiveGrid.innerHTML = '';
         }
         if (extractLiveMeta) {
-          extractLiveMeta.textContent = 'Cekam dokument.';
+          extractLiveMeta.textContent = 'Čekam dokument.';
         }
         setVisible(linesShell, false);
         setPositionsModalState({
@@ -4935,7 +4971,7 @@
           uploadProgress = Math.round((event.loaded / event.total) * 100);
           setProgress(
             mapUploadProgressToOverall(uploadProgress),
-            uploadProgress >= 100 ? 'Upload je zavrsen. Pokrece se AI obrada...' : 'Dokument se ucitava na server...'
+            uploadProgress >= 100 ? 'Upload je završen. Pokreće se AI obrada...' : 'Dokument se učitava na server...'
           );
           setStageState('upload', uploadProgress >= 100);
           setStageFill('upload', uploadProgress);
@@ -5030,7 +5066,7 @@
           setTransferButtonState({
             enabled: false,
             label: 'Transfer u bazu',
-            hint: 'AI obrada nije uspjela. Ucitaj novi dokument i pokusaj ponovo.'
+            hint: 'AI obrada nije uspjela. Učitaj novi dokument i pokušaj ponovo.'
           });
 
           if (/(transfer|baza|pantheon)/i.test(String(latestStatusPayload.processing_step || '')) || /(anConsigneeQId|SetSubj|Pantheon)/i.test(String(latestStatusPayload.error_message || ''))) {
@@ -5046,21 +5082,21 @@
             enabled: Boolean(latestStatusPayload.transfer_ready),
             label: 'Transfer u bazu',
             hint: latestStatusPayload.transfer_ready
-              ? 'Rezultat je spreman. Nakon pregleda podataka moze se pokrenuti upis u bazu.'
-              : 'Transfer ostaje zakljucan dok se svi obavezni podaci ne pripreme.'
+              ? 'Rezultat je spreman. Nakon pregleda podataka može se pokrenuti upis u bazu.'
+              : 'Transfer ostaje zaključan dok se svi obavezni podaci ne pripreme.'
           });
 
           if (!autoTransfer) {
             if (latestStatusPayload.transfer_ready && latestStatusPayload.transfer_preview_error) {
-              setProgressWarningMessage('Priprema provjere za bazu nije uspjela, ali se i dalje moze pokusati rucni transfer.');
+              setProgressWarningMessage('Priprema provjere za bazu nije uspjela, ali se i dalje može pokušati ručni transfer.');
             } else if (latestStatusPayload.transfer_ready && latestStatusPayload.transfer_preview_available) {
-              setProgressWarningMessage('AI obrada je zavrsena. Narudzba je spremna za provjeru i upis u bazu.', {
+              setProgressWarningMessage('AI obrada je završena. Narudžba je spremna za provjeru i upis u bazu.', {
                 previewReady: true
               });
             } else if (latestStatusPayload.transfer_ready) {
-              setProgressWarningMessage('AI obrada je zavrsena. Narudzba je spremna za provjeru i upis u bazu.');
+              setProgressWarningMessage('AI obrada je završena. Narudžba je spremna za provjeru i upis u bazu.');
             } else {
-              setProgressWarningMessage('AI obrada je zavrsena. Narudzba je spremna za provjeru i dopunu podataka.');
+              setProgressWarningMessage('AI obrada je završena. Narudžba je spremna za provjeru i dopunu podataka.');
             }
           }
         } else if (status === 'ready_for_transfer' || status === 'transferring') {
@@ -5069,8 +5105,8 @@
             busy: true,
             label: autoTransfer ? 'Auto transfer radi...' : 'Transfer u toku...',
             hint: autoTransfer
-              ? 'AI trenutno samostalno salje narudzbu prema bazi.'
-              : 'Narudzba se upravo upisuje u bazu.'
+              ? 'AI trenutno samostalno šalje narudžbu prema bazi.'
+              : 'Narudžba se upravo upisuje u bazu.'
           });
         } else if (status === 'transferred') {
           const orderView = latestStatusPayload.pantheon_order && latestStatusPayload.pantheon_order.view
@@ -5080,23 +5116,23 @@
               : '';
 
           successBox.textContent = orderView
-            ? `Narudzba je uspjesno spremljena u bazu kao ${orderView}.`
-            : 'Narudzba je uspjesno spremljena u bazu.';
+            ? `Narudžba je uspješno spremljena u bazu kao ${orderView}.`
+            : 'Narudžba je uspješno spremljena u bazu.';
           setVisible(successBox, true);
           renderSavedPreview(latestStatusPayload);
           setVisible(viewOrderButton, true);
           setVisible(viewPositionsButton, true);
           setTransferButtonState({
             enabled: false,
-            label: 'Prebaceno u bazu',
-            hint: 'Narudzba je spremljena. Pregled i pozicije mogu se otvoriti ili se moze zapoceti nova narudzba.',
+            label: 'Prebačeno u bazu',
+            hint: 'Narudžba je spremljena. Pregled i pozicije mogu se otvoriti ili se može započeti nova narudžba.',
             complete: true
           });
         } else {
           setTransferButtonState({
             enabled: false,
             label: 'Transfer u bazu',
-            hint: 'Dokument se cita i priprema se pregled narudzbe.'
+            hint: 'Dokument se čita i priprema se pregled narudžbe.'
           });
           setPrimaryActionButtonState({
             enabled: false,
@@ -5620,7 +5656,7 @@
             stateClass: totalComparison.hasComparableValues ? (totalComparison.matches ? 'is-match' : 'is-mismatch') : '',
             meta: amountMeta,
           },
-          { label: 'AI krediti', value: formatAmount(statusData.credits_spent || 0) },
+          { label: 'AI krediti', value: formatWholeNumber(statusData.billed_tokens || 0) },
           { label: 'Pantheon ključ', value: pantheon.key || '-' },
         ];
         const renderSignature = JSON.stringify(factsMarkup);
@@ -6085,7 +6121,7 @@
             } else if (latestStatusPayload.transfer_ready) {
               setProgressWarningMessage('Rezultat je spreman za upis u bazu. Pokreni transfer kada budeš spreman.');
             } else {
-              setProgressWarningMessage('Ekstrakcija je završena. Rezultat može biti pregledan i podaci se mogu dopuniti ako nešto nedostaje.');
+              setProgressWarningMessage('Ekstrakcija je završena. Pregledaj rezultat i dopuni podatke ako nešto nedostaje.');
             }
           }
         } else if (status === 'ready_for_transfer' || status === 'transferring') {

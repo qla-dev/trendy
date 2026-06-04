@@ -133,11 +133,11 @@ class PantheonOrderTransferService
         $itemTemplate = $this->resolveItemTemplate($headerTemplate['acKey'] ?? null);
 
         if (empty($headerTemplate)) {
-            throw new RuntimeException('Nije moguÄ‡e pronaÄ‡i template narudÅ¾be za Pantheon.');
+            throw new RuntimeException('Nije moguće pronaći template narudžbe za Pantheon.');
         }
 
         if (empty($itemTemplate)) {
-            throw new RuntimeException('Nije moguÄ‡e pronaÄ‡i template stavke narudÅ¾be za Pantheon.');
+            throw new RuntimeException('Nije moguće pronaći template stavke narudžbe za Pantheon.');
         }
 
         $headerQid = $this->nextIntegerValue(Order::newSourceQuery(), Order::sourceColumns(), Order::sourceNonInsertableColumns(), 'anQId');
@@ -1097,6 +1097,7 @@ class PantheonOrderTransferService
             'STK' => (string) config('ai-order-scan.default_unit', 'KO'),
             'STUECK' => (string) config('ai-order-scan.default_unit', 'KO'),
             'STUCK' => (string) config('ai-order-scan.default_unit', 'KO'),
+            'STU' => (string) config('ai-order-scan.default_unit', 'KO'),
             'PCS' => (string) config('ai-order-scan.default_unit', 'KO'),
             'PIECE' => (string) config('ai-order-scan.default_unit', 'KO'),
         ];
@@ -1149,9 +1150,29 @@ class PantheonOrderTransferService
 
         $candidates = [$subject];
 
-        if (preg_match('/^grob-werke\b/i', $subject) === 1) {
-            $candidates[] = 'GROB-WERKE';
-            $candidates[] = 'GROB-WERKE GmbH & Co. KG';
+        foreach ((array) config('ai-order-scan.profiles', []) as $profileConfig) {
+            $aliases = is_array($profileConfig['subject_aliases'] ?? null)
+                ? $profileConfig['subject_aliases']
+                : [];
+
+            foreach ($aliases as $alias) {
+                $alias = trim((string) $alias);
+
+                if ($alias === '') {
+                    continue;
+                }
+
+                $normalizedSubject = $this->normalizeCatalogLookupValue($subject);
+                $normalizedAlias = $this->normalizeCatalogLookupValue($alias);
+
+                if ($normalizedSubject === '' || $normalizedAlias === '') {
+                    continue;
+                }
+
+                if (str_contains($normalizedSubject, $normalizedAlias) || str_contains($normalizedAlias, $normalizedSubject)) {
+                    $candidates[] = $alias;
+                }
+            }
         }
 
         return array_values(array_unique(array_filter(array_map('trim', $candidates))));

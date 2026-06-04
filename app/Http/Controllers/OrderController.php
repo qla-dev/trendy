@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\OrderAiScan;
 use App\Models\Order;
+use App\Services\OrderAi\OrderAiScanService;
 use App\Services\OrderAi\PantheonOrderTransferService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
@@ -402,7 +403,11 @@ class OrderController extends WorkOrderController
         }
     }
 
-    public function store(Request $request, PantheonOrderTransferService $transferService): JsonResponse
+    public function store(
+        Request $request,
+        PantheonOrderTransferService $transferService,
+        OrderAiScanService $orderAiScanService
+    ): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'scan_id' => ['nullable', 'integer', 'min:1'],
@@ -455,6 +460,16 @@ class OrderController extends WorkOrderController
         }
 
         try {
+            if ($scan !== null) {
+                $scan->forceFill([
+                    'status' => 'transferring',
+                    'processing_step' => 'Priprema upisa u bazu.',
+                    'progress_current' => 82,
+                    'transfer_started_at' => now(),
+                    'error_message' => null,
+                ])->save();
+            }
+
             $result = $transferService->createFromNormalizedPayload($normalizedPayload, $request->user());
         } catch (Throwable $exception) {
             $reason = $this->humanizeTransferFailureReason($exception->getMessage());
@@ -492,12 +507,15 @@ class OrderController extends WorkOrderController
 
         return response()->json([
             'message' => 'Narudžba je uspješno kreirana u Pantheonu.',
-            'data' => [
-                'pantheon_order_key' => $result['pantheon_order_key'] ?? '',
-                'pantheon_order_view' => $result['pantheon_order_view'] ?? '',
-                'pantheon_order_qid' => $result['pantheon_order_qid'] ?? null,
-                'item_count' => $result['item_count'] ?? 0,
-            ],
+                'data' => [
+                    'pantheon_order_key' => $result['pantheon_order_key'] ?? '',
+                    'pantheon_order_view' => $result['pantheon_order_view'] ?? '',
+                    'pantheon_order_qid' => $result['pantheon_order_qid'] ?? null,
+                    'item_count' => $result['item_count'] ?? 0,
+                    'scan_status' => $scan !== null
+                        ? $orderAiScanService->buildStatusPayload($scan->fresh())
+                        : null,
+                ],
         ], 201);
     }
 
@@ -516,11 +534,11 @@ class OrderController extends WorkOrderController
         $message = trim($message);
 
         if ($message === '') {
-            return 'Baza je odbila transfer, ali detaljan razlog nije vracen.';
+            return 'Baza je odbila transfer, ali detaljan razlog nije vraćen.';
         }
 
         if (str_contains($message, 'rtHE_Order_tHE_SetSubj_21') || str_contains($message, 'anConsigneeQId')) {
-            return 'Pantheon nije prihvatio narucitelja jer nije bio postavljen validan subject za anConsigneeQId.';
+            return 'Pantheon nije prihvatio naručitelja jer nije bio postavljen validan subject za anConsigneeQId.';
         }
 
         return $message;

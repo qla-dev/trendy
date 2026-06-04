@@ -5,6 +5,7 @@ namespace App\Services\OrderAi;
 use App\Jobs\ProcessImportedOrderAiScanJob;
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\Contracts\OrderAiScanProvider;
+use App\Services\OrderAi\Profiles\OrderDocumentProfileDetector;
 use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use App\Support\Utf8Sanitizer;
 use Illuminate\Http\UploadedFile;
@@ -17,6 +18,8 @@ use RuntimeException;
 
 class OrderAiScanService
 {
+    private const TRENDY_DE_PARTY_NAME = 'Trendy Germany GmbH';
+
     private ?array $orderAiScanColumns = null;
 
     public function createScan(UploadedFile $file, mixed $user = null): OrderAiScan
@@ -25,6 +28,11 @@ class OrderAiScanService
         $model = trim((string) config('ai-order-scan.model', 'gpt-5'));
         $disk = (string) config('ai-order-scan.storage_disk', 'local');
         $directory = trim((string) config('ai-order-scan.storage_directory', 'order-ai-scans'), '/');
+        $originalName = (string) $file->getClientOriginalName();
+        $mimeType = (string) ($file->getMimeType() ?: '');
+        $fileBytes = $this->readLocalFileBytes((string) $file->getRealPath());
+        $documentProfile = $this->detectDocumentProfile($originalName, $mimeType, $fileBytes);
+        $requestPrompt = $this->buildRequestPrompt($documentProfile);
         $documentMetrics = app(OrderAiDocumentMetrics::class)->resolveForUpload($file);
         $storedName = Str::uuid()->toString() . '.' . ($file->guessExtension() ?: $file->extension() ?: 'bin');
         $relativePath = $file->storeAs($directory . '/' . Carbon::now()->format('Y/m'), $storedName, $disk);
@@ -35,10 +43,12 @@ class OrderAiScanService
 
         return $this->createScanRecord(
             relativePath: $relativePath,
-            originalName: $file->getClientOriginalName(),
-            mimeType: (string) $file->getMimeType(),
+            originalName: $originalName,
+            mimeType: $mimeType,
             fileSize: $file->getSize(),
             documentMetrics: $documentMetrics,
+            documentProfile: $documentProfile,
+            requestPrompt: $requestPrompt,
             user: $user
         );
     }
@@ -64,6 +74,8 @@ class OrderAiScanService
         $resolvedMimeType = trim((string) $mimeType) !== ''
             ? trim((string) $mimeType)
             : $this->guessMimeTypeFromName($originalName);
+        $documentProfile = $this->detectDocumentProfile($originalName, $resolvedMimeType, $binaryContent);
+        $requestPrompt = $this->buildRequestPrompt($documentProfile);
         $documentMetrics = app(OrderAiDocumentMetrics::class)->resolveForStoredFile(
             $disk,
             $relativePath,
@@ -77,6 +89,8 @@ class OrderAiScanService
             mimeType: $resolvedMimeType,
             fileSize: strlen($binaryContent),
             documentMetrics: $documentMetrics,
+            documentProfile: $documentProfile,
+            requestPrompt: $requestPrompt,
             user: $user,
             attributes: $attributes
         );
@@ -125,11 +139,17 @@ class OrderAiScanService
         }
 
         if ($scan->status === 'ready_for_transfer') {
-            $scan->forceFill([
+            $attributes = [
                 'status' => 'transferring',
                 'processing_step' => 'Priprema upisa u bazu.',
                 'progress_current' => 82,
-            ])->save();
+            ];
+
+            if ($this->orderAiScanColumnExists('transfer_started_at')) {
+                $attributes['transfer_started_at'] = now();
+            }
+
+            $scan->forceFill($attributes)->save();
 
             return $scan->fresh();
         }
@@ -153,6 +173,10 @@ class OrderAiScanService
         $elapsed = $this->resolveElapsedMeta($scan);
         $pageCount = max(0, (int) ($scan->page_count ?? data_get($payload, 'order.page_count', 0)));
         $billedTokens = max(0, (int) ($scan->billed_tokens ?? 0));
+
+        if ($billedTokens <= 0 && $pageCount > 0) {
+            $billedTokens = app(OrderAiDocumentMetrics::class)->calculateBilledTokens($pageCount);
+        }
 
         return [
             'id' => $scan->id,
@@ -194,8 +218,12 @@ class OrderAiScanService
         try {
             $provider = $this->resolveProvider($scan);
             $result = $provider->scan($scan);
+            $profilePayload = $this->postProcessProfilePayload(
+                $scan,
+                is_array($result['normalized_payload'] ?? null) ? $result['normalized_payload'] : []
+            );
             $normalizedPayload = Utf8Sanitizer::cleanRecursive(
-                $this->normalizePayload($result['normalized_payload'] ?? [])
+                $this->normalizePayload($profilePayload)
             );
             $pageCount = max(0, (int) data_get($normalizedPayload, 'order.page_count', 0));
             $billedTokens = $pageCount > 0
@@ -256,7 +284,7 @@ class OrderAiScanService
 
             $scan->forceFill([
                 'status' => 'transferred',
-                'processing_step' => 'Narudzba je prebacena u bazu.',
+                'processing_step' => 'Narudžba je prebačena u bazu.',
                 'progress_current' => 100,
                 'pantheon_transfer_payload' => $result,
                 'pantheon_order_key' => $result['pantheon_order_key'] ?? null,
@@ -322,18 +350,18 @@ class OrderAiScanService
     private function resolveCompletedProcessingStep(bool $autoTransfer, bool $transferReady, mixed $transferPreview): string
     {
         if ($autoTransfer) {
-            return 'AI obrada je zavrsena. Dokument je spreman za upis u bazu.';
+            return 'AI obrada je završena. Dokument je spreman za upis u bazu.';
         }
 
         if (!$transferReady) {
-            return 'AI obrada je zavrsena. Pregledaj rezultat i dopuni podatke prije upisa u bazu.';
+            return 'AI obrada je završena. Pregledaj rezultat i dopuni podatke prije upisa u bazu.';
         }
 
         if (is_array($transferPreview) && !empty($transferPreview['preview_error'])) {
-            return 'AI obrada je zavrsena. Provjera podataka za bazu nije uspjela, ali mozes nastaviti rucno.';
+            return 'AI obrada je završena. Provjera podataka za bazu nije uspjela, ali možeš nastaviti ručno.';
         }
 
-        return 'AI obrada je zavrsena. Narudzba je spremna za upis u bazu.';
+        return 'AI obrada je završena. Narudžba je spremna za upis u bazu.';
     }
 
     private function resolveProvider(OrderAiScan $scan): OrderAiScanProvider
@@ -659,7 +687,7 @@ class OrderAiScanService
         if ($this->orderAiScanColumns === null) {
             $this->orderAiScanColumns = [];
 
-            foreach (['page_count', 'billed_tokens'] as $candidate) {
+            foreach (['page_count', 'billed_tokens', 'document_profile', 'transfer_started_at'] as $candidate) {
                 $this->orderAiScanColumns[$candidate] = Schema::connection('mysql')->hasColumn('order_ai_scans', $candidate);
             }
         }
@@ -673,18 +701,22 @@ class OrderAiScanService
         string $mimeType,
         int $fileSize,
         array $documentMetrics,
+        string $documentProfile,
+        string $requestPrompt,
         mixed $user = null,
         array $attributes = []
     ): OrderAiScan {
         $provider = trim(Utf8Sanitizer::clean((string) config('ai-order-scan.provider', 'mock'), 40)) ?: 'mock';
         $model = trim(Utf8Sanitizer::clean((string) config('ai-order-scan.model', 'gpt-5'), 120));
+        $documentProfile = $this->normalizeDocumentProfileKey($documentProfile);
+        $requestPrompt = trim(Utf8Sanitizer::clean($requestPrompt));
 
         $baseAttributes = [
             'user_id' => is_object($user) ? ($user->id ?? null) : null,
             'provider' => $provider,
             'model' => $model !== '' ? $model : null,
             'status' => 'uploaded',
-            'processing_step' => 'Fajl je uspjesno ucitan.',
+            'processing_step' => 'Fajl je uspješno učitan.',
             'progress_current' => 10,
             'progress_total' => 100,
             'source_file_name' => Utf8Sanitizer::clean($originalName, 255),
@@ -692,7 +724,7 @@ class OrderAiScanService
             'source_mime_type' => Utf8Sanitizer::clean($mimeType, 150),
             'source_file_size' => $fileSize,
             'source_origin' => 'manual',
-            'request_prompt' => Utf8Sanitizer::clean((string) config('ai-order-scan.prompt')),
+            'request_prompt' => $requestPrompt !== '' ? $requestPrompt : $this->buildRequestPrompt($documentProfile),
         ];
 
         if ($this->orderAiScanColumnExists('page_count')) {
@@ -703,9 +735,15 @@ class OrderAiScanService
             $baseAttributes['billed_tokens'] = $documentMetrics['billed_tokens'];
         }
 
-        return OrderAiScan::query()->create(
-            array_merge($baseAttributes, Utf8Sanitizer::cleanRecursive($attributes))
-        );
+        $payload = array_merge($baseAttributes, Utf8Sanitizer::cleanRecursive($attributes));
+
+        if ($this->orderAiScanColumnExists('document_profile')) {
+            $payload['document_profile'] = $documentProfile;
+        }
+
+        $payload['request_prompt'] = $baseAttributes['request_prompt'];
+
+        return OrderAiScan::query()->create($payload);
     }
 
     private function resolveTransferReadyForDisplay(OrderAiScan $scan, array $payload, mixed $transferPreview): bool
@@ -739,14 +777,29 @@ class OrderAiScanService
 
     private function resolveElapsedMeta(OrderAiScan $scan): array
     {
-        $startedAt = $this->normalizeScanTimestamp($scan->created_at);
-        $finishedAt = $this->normalizeScanTimestamp(
-            $scan->transferred_at ?? $scan->completed_at ?? $scan->processed_at
-        );
-        $endAt = $finishedAt ?? now();
-        $seconds = $startedAt instanceof Carbon
-            ? max(0, $startedAt->diffInSeconds($endAt))
+        $status = trim((string) ($scan->status ?? ''));
+        $createdAt = $this->normalizeScanTimestamp($scan->created_at);
+        $processedAt = $this->normalizeScanTimestamp($scan->processed_at);
+        $completedAt = $this->normalizeScanTimestamp($scan->completed_at);
+        $transferStartedAt = $this->normalizeScanTimestamp($scan->transfer_started_at);
+        $transferredAt = $this->normalizeScanTimestamp($scan->transferred_at);
+        $startedAt = $transferStartedAt ?? $createdAt;
+        $finishedAt = $transferredAt
+            ?? ($transferStartedAt instanceof Carbon ? $completedAt : null)
+            ?? $processedAt
+            ?? ($status === 'failed' ? $completedAt : null);
+        $extractionEndAt = $processedAt
+            ?? $transferStartedAt
+            ?? (($status === 'uploaded' || $status === 'extracting') ? now() : $completedAt);
+        $extractionSeconds = $createdAt instanceof Carbon && $extractionEndAt instanceof Carbon
+            ? max(0, $createdAt->diffInSeconds($extractionEndAt))
             : 0;
+        $transferEndAt = $transferredAt
+            ?? (($transferStartedAt instanceof Carbon && in_array($status, ['transferring', 'failed'], true)) ? ($completedAt ?? now()) : null);
+        $transferSeconds = $transferStartedAt instanceof Carbon && $transferEndAt instanceof Carbon
+            ? max(0, $transferStartedAt->diffInSeconds($transferEndAt))
+            : 0;
+        $seconds = $extractionSeconds + $transferSeconds;
 
         return [
             'started_at' => $startedAt?->toIso8601String(),
@@ -805,5 +858,212 @@ class OrderAiScanService
         return strtolower(pathinfo($originalName, PATHINFO_EXTENSION)) === 'pdf'
             ? 'application/pdf'
             : 'application/octet-stream';
+    }
+
+    private function detectDocumentProfile(string $originalName, ?string $mimeType, string $bytes): string
+    {
+        return $this->normalizeDocumentProfileKey(
+            app(OrderDocumentProfileDetector::class)->detect($originalName, $mimeType, $bytes)
+        );
+    }
+
+    private function buildRequestPrompt(string $documentProfile): string
+    {
+        $profileKey = $this->normalizeDocumentProfileKey($documentProfile);
+        $basePrompt = trim((string) config('ai-order-scan.prompt_base', config('ai-order-scan.prompt', '')));
+        $profileRules = trim((string) data_get(config('ai-order-scan.profiles', []), $profileKey . '.prompt_rules', ''));
+
+        return trim(implode(PHP_EOL, array_filter([
+            $basePrompt,
+            $profileRules,
+        ])));
+    }
+
+    private function normalizeDocumentProfileKey(string $documentProfile): string
+    {
+        $documentProfile = trim($documentProfile);
+        $profiles = config('ai-order-scan.profiles', []);
+
+        if ($documentProfile !== '' && array_key_exists($documentProfile, $profiles)) {
+            return $documentProfile;
+        }
+
+        $defaultProfile = trim((string) config('ai-order-scan.default_profile', 'grob'));
+
+        if ($defaultProfile !== '' && array_key_exists($defaultProfile, $profiles)) {
+            return $defaultProfile;
+        }
+
+        return array_key_first($profiles) ?: 'grob';
+    }
+
+    private function resolveDocumentProfileKey(OrderAiScan $scan): string
+    {
+        return $this->normalizeDocumentProfileKey((string) ($scan->document_profile ?? ''));
+    }
+
+    private function postProcessProfilePayload(OrderAiScan $scan, array $payload): array
+    {
+        if ($this->resolveDocumentProfileKey($scan) !== 'trendy_de') {
+            return $payload;
+        }
+
+        $bytes = $this->readStoredFileBytes($scan);
+        $searchableText = app(OrderDocumentProfileDetector::class)->extractSearchableText($bytes);
+
+        return $this->postProcessTrendyDePayload($payload, [
+            'file_name' => (string) ($scan->source_file_name ?? ''),
+            'mime_type' => (string) ($scan->source_mime_type ?? ''),
+            'searchable_text' => $searchableText,
+            'raw_content' => $bytes,
+        ]);
+    }
+
+    private function readLocalFileBytes(string $path): string
+    {
+        if ($path === '' || !is_file($path)) {
+            return '';
+        }
+
+        $bytes = @file_get_contents($path);
+
+        return is_string($bytes) ? $bytes : '';
+    }
+
+    private function readStoredFileBytes(OrderAiScan $scan): string
+    {
+        $disk = (string) config('ai-order-scan.storage_disk', 'local');
+        $path = trim((string) ($scan->source_file_path ?? ''));
+
+        if ($path === '' || !Storage::disk($disk)->exists($path)) {
+            return '';
+        }
+
+        return (string) Storage::disk($disk)->get($path);
+    }
+
+    private function postProcessTrendyDePayload(array $payload, array $context = []): array
+    {
+        $order = is_array($payload['order'] ?? null) ? $payload['order'] : [];
+        $searchableText = (string) ($context['searchable_text'] ?? '');
+        $fileName = (string) ($context['file_name'] ?? '');
+        $leftSupplierBlock = $this->extractProfileSectionText(
+            $searchableText,
+            '/Lieferant\s*:/i',
+            [
+                '/Anlieferadresse\s*:/i',
+                '/Datum\b/i',
+                '/Bestellung\b/i',
+            ]
+        );
+        $documentNumber = trim((string) ($order['external_document_number'] ?? ''));
+
+        if ($documentNumber === '') {
+            $documentNumber = $this->extractTrendyDeDocumentNumber($searchableText, $fileName);
+        }
+
+        $deliveryDeadline = trim((string) ($order['delivery_deadline'] ?? ''));
+
+        if ($deliveryDeadline === '') {
+            $deliveryDeadline = $this->extractProfileFieldValue($searchableText, 'Liefertermin');
+        }
+
+        $contactName = trim((string) ($order['contact_name'] ?? ''));
+
+        if ($contactName === '') {
+            $contactName = $this->extractProfileFieldValue($searchableText, 'Person responsible');
+        }
+
+        $receiverName = trim((string) ($order['receiver_name'] ?? ''));
+
+        if ($receiverName === '') {
+            $receiverName = $this->extractProfileFieldValue($searchableText, 'Anlieferadresse');
+        }
+
+        $noteParts = [];
+
+        foreach ([
+            trim((string) ($order['note'] ?? '')),
+            $leftSupplierBlock,
+        ] as $notePart) {
+            if ($notePart === '') {
+                continue;
+            }
+
+            $noteParts[$notePart] = $notePart;
+        }
+
+        $order['customer_name'] = self::TRENDY_DE_PARTY_NAME;
+        $order['supplier_name'] = self::TRENDY_DE_PARTY_NAME;
+        $order['external_document_number'] = $documentNumber;
+        $order['delivery_deadline'] = $deliveryDeadline;
+        $order['contact_name'] = $contactName;
+        $order['receiver_name'] = $receiverName !== '' ? $receiverName : self::TRENDY_DE_PARTY_NAME;
+        $order['note'] = implode(' | ', array_values($noteParts));
+
+        $payload['order'] = $order;
+
+        return $payload;
+    }
+
+    private function extractTrendyDeDocumentNumber(string $searchableText, string $fileName): string
+    {
+        foreach ([$searchableText, $fileName] as $source) {
+            if (preg_match('/Bestellung[\s_:-]*([0-9]{2}-[0-9]{3}-[0-9]+)/i', $source, $matches) === 1) {
+                return trim((string) ($matches[1] ?? ''));
+            }
+        }
+
+        return '';
+    }
+
+    private function extractProfileFieldValue(string $searchableText, string $fieldLabel): string
+    {
+        $pattern = '/' . preg_quote($fieldLabel, '/') . '\s*:?\s*([^\r\n]+)/i';
+
+        if (preg_match($pattern, $searchableText, $matches) === 1) {
+            return $this->normalizeProfileWhitespace((string) ($matches[1] ?? ''));
+        }
+
+        return '';
+    }
+
+    private function extractProfileSectionText(string $searchableText, string $startPattern, array $endPatterns): string
+    {
+        if (preg_match($startPattern, $searchableText, $startMatch, PREG_OFFSET_CAPTURE) !== 1) {
+            return '';
+        }
+
+        $startOffset = (int) ($startMatch[0][1] ?? 0);
+        $section = substr($searchableText, $startOffset);
+        $endOffset = strlen($section);
+
+        foreach ($endPatterns as $pattern) {
+            if (preg_match($pattern, $section, $endMatch, PREG_OFFSET_CAPTURE) === 1) {
+                $candidateOffset = (int) ($endMatch[0][1] ?? $endOffset);
+
+                if ($candidateOffset > 0 && $candidateOffset < $endOffset) {
+                    $endOffset = $candidateOffset;
+                }
+            }
+        }
+
+        $section = substr($section, 0, $endOffset);
+        $section = preg_replace($startPattern, '', $section, 1) ?? $section;
+
+        return $this->normalizeProfileWhitespace($section);
+    }
+
+    private function normalizeProfileWhitespace(string $value): string
+    {
+        $value = str_replace(["\r\n", "\r"], "\n", $value);
+        $lines = preg_split('/\n+/u', $value) ?: [];
+        $lines = array_values(array_filter(array_map(function ($line) {
+            $line = preg_replace('/\s+/', ' ', trim((string) $line)) ?? trim((string) $line);
+
+            return trim((string) $line);
+        }, $lines)));
+
+        return implode(' | ', $lines);
     }
 }

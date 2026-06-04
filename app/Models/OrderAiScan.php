@@ -15,6 +15,7 @@ class OrderAiScan extends Model
         'user_id',
         'provider',
         'model',
+        'document_profile',
         'status',
         'processing_step',
         'progress_current',
@@ -44,6 +45,7 @@ class OrderAiScan extends Model
         'pantheon_order_qid',
         'error_message',
         'processed_at',
+        'transfer_started_at',
         'transferred_at',
         'completed_at',
     ];
@@ -59,6 +61,7 @@ class OrderAiScan extends Model
         'page_count' => 'integer',
         'billed_tokens' => 'integer',
         'processed_at' => 'datetime',
+        'transfer_started_at' => 'datetime',
         'transferred_at' => 'datetime',
         'completed_at' => 'datetime',
     ];

@@ -35,6 +35,7 @@ class OpenRouterOrderAiScanProvider implements OrderAiScanProvider
         $mime = trim((string) ($scan->source_mime_type ?: 'application/octet-stream'));
         $model = trim((string) config('ai-order-scan.model', 'openai/gpt-4.1-mini'));
         $baseUrl = rtrim((string) config('ai-order-scan.openrouter.base_url', 'https://openrouter.ai/api/v1'), '/');
+        $prompt = trim((string) ($scan->request_prompt ?: config('ai-order-scan.prompt')));
 
         $client = Http::withToken($apiKey)
             ->timeout((int) config('ai-order-scan.timeout', 120))
@@ -69,7 +70,7 @@ class OpenRouterOrderAiScanProvider implements OrderAiScanProvider
             'messages' => [
                 [
                     'role' => 'system',
-                    'content' => (string) config('ai-order-scan.prompt'),
+                    'content' => $prompt,
                 ],
                 [
                     'role' => 'user',
