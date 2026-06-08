@@ -42,6 +42,8 @@ $(function () {
   var warehouseFilterInput = document.getElementById('material-warehouse-filter');
   var bulkDownloadButton = null;
   var bulkQrDownloadButton = null;
+  var bulkDownloadToolbarRow = null;
+  var bulkDownloadToolbarContainer = null;
   var createModalCodeInput = document.getElementById('material-create-code-input');
   var createModalNameInput = document.getElementById('material-create-name-input');
   var createModalUnitInput = document.getElementById('material-create-unit-input');
@@ -64,13 +66,15 @@ $(function () {
   var bulkDownloadActiveMode = '';
   var tableLoadingRequestCount = 0;
   var overlaySafetyTimer = null;
+  var textMeasureCanvas = null;
+  var textMeasureContext = null;
   var hasCompletedInitialTableLoad = false;
   var lastTableRecordsFiltered = 0;
   var dataTable;
   var bulkDownloadButtonDefaultHtml = '<i class="fa fa-download me-50"></i> Preuzmi sve etikete';
   var bulkQrDownloadButtonDefaultHtml = '<i class="fa fa-qrcode me-50"></i> Preuzmi sve QR etikete';
   var barcodeDownloadButtonHtml = '<i class="fa fa-download me-50"></i> Preuzmi SVG';
-  var qrDownloadButtonHtml = '<i class="fa fa-download me-50"></i> Preuzmi PNG';
+  var qrDownloadButtonHtml = '<i class="fa fa-download me-50"></i> Preuzmi SVG';
   var defaultModalTitle = modalTitleElement ? modalTitleElement.textContent : 'Etiketa materijala';
   var defaultCreateModalTitle = createModalTitleElement ? createModalTitleElement.textContent : 'Dodaj novi materijal';
   var defaultCreateModalSubtitle = createModalSubtitleElement
@@ -306,12 +310,63 @@ $(function () {
     return button;
   }
 
+  function resolveBulkDownloadLayoutMode(firstRow, inlineControls) {
+    var viewportWidth = window.innerWidth || 0;
+    var rightColumn = firstRow.children('[class*="col-"]').last();
+    var inlineControlsElement = inlineControls && inlineControls.length ? inlineControls.get(0) : null;
+    var inlineRequiredWidth;
+    var availableInlineWidth;
+    var gapAllowance = 24;
+
+    if (viewportWidth <= 767) {
+      return 'mobile';
+    }
+
+    if (viewportWidth <= 991) {
+      return 'tablet';
+    }
+
+    if (!inlineControlsElement || !rightColumn.length) {
+      return 'inline';
+    }
+
+    inlineRequiredWidth = inlineControlsElement.scrollWidth || inlineControls.outerWidth(true) || 0;
+    availableInlineWidth = (firstRow.innerWidth() || 0) - (rightColumn.outerWidth(true) || 0) - gapAllowance;
+
+    return inlineRequiredWidth > 0 && availableInlineWidth > 0 && inlineRequiredWidth <= availableInlineWidth
+      ? 'inline'
+      : 'row';
+  }
+
+  function ensureBulkDownloadToolbarContainer(wrapper, firstRow) {
+    if (!bulkDownloadToolbarRow || !bulkDownloadToolbarRow.length) {
+      bulkDownloadToolbarRow = wrapper.children('.material-bulk-download-toolbar-row').first();
+    }
+
+    if (!bulkDownloadToolbarRow || !bulkDownloadToolbarRow.length) {
+      bulkDownloadToolbarRow = $(
+        '<div class="row material-bulk-download-toolbar-row d-none">' +
+          '<div class="col-12">' +
+            '<div class="material-bulk-download-toolbar"></div>' +
+          '</div>' +
+        '</div>'
+      );
+      firstRow.after(bulkDownloadToolbarRow);
+    }
+
+    bulkDownloadToolbarContainer = bulkDownloadToolbarRow.find('.material-bulk-download-toolbar').first();
+
+    return bulkDownloadToolbarContainer;
+  }
+
   function ensureBulkDownloadButton() {
     var wrapper = tableElement.closest('.dataTables_wrapper');
     var firstRow;
     var leftColumn;
     var lengthContainer;
     var inlineControls;
+    var toolbarContainer;
+    var layoutMode;
 
     if (!wrapper.length) {
       return null;
@@ -355,6 +410,24 @@ $(function () {
 
     if (!inlineControls.find('#material-bulk-download-qr-btn').length) {
       inlineControls.append(bulkQrDownloadButton);
+    }
+
+    toolbarContainer = ensureBulkDownloadToolbarContainer(wrapper, firstRow);
+    layoutMode = resolveBulkDownloadLayoutMode(firstRow, inlineControls);
+
+    if (layoutMode === 'inline') {
+      if (bulkDownloadToolbarRow && bulkDownloadToolbarRow.length) {
+        bulkDownloadToolbarRow.addClass('d-none');
+      }
+    } else {
+      if (toolbarContainer && toolbarContainer.length) {
+        toolbarContainer.append(bulkDownloadButton);
+        toolbarContainer.append(bulkQrDownloadButton);
+      }
+
+      if (bulkDownloadToolbarRow && bulkDownloadToolbarRow.length) {
+        bulkDownloadToolbarRow.removeClass('d-none');
+      }
     }
 
     return bulkDownloadButton;
@@ -416,6 +489,233 @@ $(function () {
     return normalizedValue || 'barcode-etiketa';
   }
 
+  function getTextMeasureContext() {
+    if (textMeasureContext) {
+      return textMeasureContext;
+    }
+
+    if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+      return null;
+    }
+
+    textMeasureCanvas = document.createElement('canvas');
+    textMeasureContext = typeof textMeasureCanvas.getContext === 'function'
+      ? textMeasureCanvas.getContext('2d')
+      : null;
+
+    return textMeasureContext;
+  }
+
+  function measureSvgTextWidth(text, fontSize, fontWeight, letterSpacing) {
+    var content = (text || '').toString();
+    var context = getTextMeasureContext();
+    var resolvedFontSize = Number(fontSize);
+    var resolvedLetterSpacing = Number(letterSpacing);
+    var width = 0;
+
+    if (!Number.isFinite(resolvedFontSize) || resolvedFontSize <= 0) {
+      resolvedFontSize = 16;
+    }
+
+    if (context) {
+      context.font = [fontWeight || '600', resolvedFontSize + 'px', 'Arial, Helvetica, sans-serif'].join(' ');
+      width = context.measureText(content).width;
+    } else {
+      width = content.length * resolvedFontSize * 0.58;
+    }
+
+    if (Number.isFinite(resolvedLetterSpacing) && resolvedLetterSpacing !== 0 && content.length > 1) {
+      width += resolvedLetterSpacing * (content.length - 1);
+    }
+
+    return width;
+  }
+
+  function splitSingleWordIntoTwoLines(word) {
+    var value = (word || '').toString().trim();
+    var midpoint;
+    var splitIndex;
+
+    if (!value) {
+      return [''];
+    }
+
+    midpoint = Math.ceil(value.length / 2);
+    splitIndex = Math.max(value.lastIndexOf('-', midpoint), value.lastIndexOf('/', midpoint));
+
+    if (splitIndex > 0 && splitIndex < value.length - 1) {
+      return [value.slice(0, splitIndex + 1), value.slice(splitIndex + 1)];
+    }
+
+    return [value.slice(0, midpoint), value.slice(midpoint)];
+  }
+
+  function findBestQrLabelSplit(label, fontSize, maxWidth, fontWeight) {
+    var normalizedLabel = (label || '').toString().replace(/\s+/g, ' ').trim();
+    var words = normalizedLabel ? normalizedLabel.split(' ') : [];
+    var bestCandidate = null;
+
+    if (!words.length) {
+      return null;
+    }
+
+    if (words.length === 1) {
+      bestCandidate = splitSingleWordIntoTwoLines(words[0]);
+
+      return {
+        lines: bestCandidate,
+        maxLineWidth: Math.max(
+          measureSvgTextWidth(bestCandidate[0], fontSize, fontWeight, 0),
+          measureSvgTextWidth(bestCandidate[1], fontSize, fontWeight, 0)
+        )
+      };
+    }
+
+    words.slice(1).forEach(function (_, index) {
+      var splitIndex = index + 1;
+      var firstLine = words.slice(0, splitIndex).join(' ');
+      var secondLine = words.slice(splitIndex).join(' ');
+      var firstLineWidth = measureSvgTextWidth(firstLine, fontSize, fontWeight, 0);
+      var secondLineWidth = measureSvgTextWidth(secondLine, fontSize, fontWeight, 0);
+      var overflow = Math.max(firstLineWidth - maxWidth, 0) + Math.max(secondLineWidth - maxWidth, 0);
+      var candidate = {
+        lines: [firstLine, secondLine],
+        maxLineWidth: Math.max(firstLineWidth, secondLineWidth),
+        overflow: overflow
+      };
+
+      if (!bestCandidate) {
+        bestCandidate = candidate;
+        return;
+      }
+
+      if (candidate.overflow < bestCandidate.overflow) {
+        bestCandidate = candidate;
+        return;
+      }
+
+      if (candidate.overflow === bestCandidate.overflow && candidate.maxLineWidth < bestCandidate.maxLineWidth) {
+        bestCandidate = candidate;
+      }
+    });
+
+    return bestCandidate;
+  }
+
+  function buildQrNameLayout(label, maxWidth) {
+    var normalizedLabel = (label || '').toString().replace(/\s+/g, ' ').trim();
+    var maxFontSize = 24;
+    var minFontSize = 18;
+    var fontWeight = '700';
+    var normalLineHeightRatio = 1.1;
+    var fontSize;
+    var singleLineWidth;
+    var splitCandidate;
+    var fallbackSplit;
+
+    if (!normalizedLabel) {
+      return {
+        lines: [],
+        fontSize: maxFontSize,
+        lineHeight: Math.round(maxFontSize * normalLineHeightRatio),
+        fontWeight: fontWeight,
+        blockHeight: 0
+      };
+    }
+
+    for (fontSize = maxFontSize; fontSize >= minFontSize; fontSize -= 1) {
+      singleLineWidth = measureSvgTextWidth(normalizedLabel, fontSize, fontWeight, 0);
+      if (singleLineWidth <= maxWidth) {
+        return {
+          lines: [normalizedLabel],
+          fontSize: fontSize,
+          lineHeight: Math.round(fontSize * normalLineHeightRatio),
+          fontWeight: fontWeight,
+          blockHeight: fontSize
+        };
+      }
+
+      splitCandidate = findBestQrLabelSplit(normalizedLabel, fontSize, maxWidth, fontWeight);
+      if (splitCandidate && splitCandidate.maxLineWidth <= maxWidth) {
+        return {
+          lines: splitCandidate.lines,
+          fontSize: fontSize,
+          lineHeight: Math.round(fontSize * normalLineHeightRatio),
+          fontWeight: fontWeight,
+          blockHeight: fontSize + Math.round(fontSize * normalLineHeightRatio)
+        };
+      }
+    }
+
+    fallbackSplit = findBestQrLabelSplit(normalizedLabel, minFontSize, maxWidth, fontWeight);
+
+    if (fallbackSplit && fallbackSplit.lines.length) {
+      return {
+        lines: fallbackSplit.lines,
+        fontSize: minFontSize,
+        lineHeight: Math.round(minFontSize * normalLineHeightRatio),
+        fontWeight: fontWeight,
+        blockHeight: minFontSize + Math.round(minFontSize * normalLineHeightRatio)
+      };
+    }
+
+    return {
+      lines: [normalizedLabel],
+      fontSize: minFontSize,
+      lineHeight: Math.round(minFontSize * normalLineHeightRatio),
+      fontWeight: fontWeight,
+      blockHeight: minFontSize
+    };
+  }
+
+  function resolveQrCodeFontSize(codeLabel, maxWidth) {
+    var fontSize = 24;
+    var minFontSize = 18;
+    var fontWeight = '700';
+    var letterSpacing = 0.35;
+
+    while (fontSize > minFontSize && measureSvgTextWidth(codeLabel, fontSize, fontWeight, letterSpacing) > maxWidth) {
+      fontSize -= 1;
+    }
+
+    return {
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      letterSpacing: letterSpacing
+    };
+  }
+
+  function renderCenteredSvgText(lines, centerX, topY, fontSize, lineHeight, fontWeight, extraAttributes) {
+    var attributes = extraAttributes ? ' ' + extraAttributes : '';
+    var resolvedTopY = Number(topY);
+    var resolvedLineHeight = Number(lineHeight);
+    var resolvedFontSize = Number(fontSize);
+
+    if (!Array.isArray(lines) || !lines.length) {
+      return '';
+    }
+
+    if (!Number.isFinite(resolvedTopY)) {
+      resolvedTopY = 0;
+    }
+
+    if (!Number.isFinite(resolvedLineHeight) || resolvedLineHeight <= 0) {
+      resolvedLineHeight = resolvedFontSize;
+    }
+
+    return (
+      '<text x="' + centerX + '" y="' + (resolvedTopY + resolvedFontSize) + '" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="' + resolvedFontSize + '" font-weight="' + fontWeight + '" fill="#1f2430"' + attributes + '>' +
+        lines.map(function (line, index) {
+          if (index === 0) {
+            return '<tspan x="' + centerX + '" y="' + (resolvedTopY + resolvedFontSize) + '">' + escapeXml(line) + '</tspan>';
+          }
+
+          return '<tspan x="' + centerX + '" dy="' + resolvedLineHeight + '">' + escapeXml(line) + '</tspan>';
+        }).join('') +
+      '</text>'
+    );
+  }
+
   function buildQrImageUrl(value, size) {
     var qrValue = normalizeBarcodeValue(value);
     var resolvedSize = Number(size);
@@ -430,7 +730,138 @@ $(function () {
 
     return 'https://api.qrserver.com/v1/create-qr-code/?size=' +
       encodeURIComponent(String(Math.round(resolvedSize)) + 'x' + String(Math.round(resolvedSize))) +
-      '&margin=0&data=' + encodeURIComponent(qrValue);
+      '&margin=0&format=svg&data=' + encodeURIComponent(qrValue);
+  }
+
+  function buildQrLabelSvg(qrSvgMarkup, materialCode, materialName) {
+    var normalizedMaterialCode = normalizeBarcodeValue(materialCode);
+    var label = (materialName || '').toString().trim();
+    var width = 320;
+    var qrSize = 220;
+    var maxTextWidth = width - 28;
+    var nameLayout = buildQrNameLayout(label, maxTextWidth);
+    var codeLayout = resolveQrCodeFontSize(normalizedMaterialCode, maxTextWidth);
+    var nameTopPadding = 10;
+    var qrY = nameTopPadding + nameLayout.blockHeight + (nameLayout.lines.length ? 10 : 0);
+    var qrX = Math.round((width - qrSize) / 2);
+    var codeGap = 10;
+    var codeTopY = qrY + qrSize + codeGap;
+    var height = codeTopY + codeLayout.fontSize + 8;
+    var cleanedQrSvg = (qrSvgMarkup || '').toString().trim().replace(/^\s*<\?xml[\s\S]*?\?>\s*/i, '');
+    var outerSvgMatch;
+    var outerSvgAttributes = '';
+    var qrInnerMarkup = '';
+    var qrViewBox = '';
+    var qrWidthMatch;
+    var qrHeightMatch;
+    var qrWidthValue;
+    var qrHeightValue;
+
+    if (!normalizedMaterialCode) {
+      throw new Error('Materijal nema vrijednost za QR code.');
+    }
+
+    if (!cleanedQrSvg) {
+      throw new Error('QR code SVG nije dostupan.');
+    }
+
+    outerSvgMatch = cleanedQrSvg.match(/^<svg\b([^>]*)>/i);
+
+    if (!outerSvgMatch) {
+      throw new Error('QR code SVG format nije podrzan.');
+    }
+
+    outerSvgAttributes = outerSvgMatch[1] || '';
+    qrInnerMarkup = cleanedQrSvg
+      .replace(/^<svg\b[^>]*>/i, '')
+      .replace(/<\/svg>\s*$/i, '')
+      .trim();
+
+    qrViewBox = (
+      (outerSvgAttributes.match(/\bviewBox\s*=\s*"([^"]+)"/i) || [])[1] ||
+      (outerSvgAttributes.match(/\bviewBox\s*=\s*'([^']+)'/i) || [])[1] ||
+      ''
+    ).trim();
+
+    if (!qrViewBox) {
+      qrWidthMatch = outerSvgAttributes.match(/\bwidth\s*=\s*"([^"]+)"/i) || outerSvgAttributes.match(/\bwidth\s*=\s*'([^']+)'/i);
+      qrHeightMatch = outerSvgAttributes.match(/\bheight\s*=\s*"([^"]+)"/i) || outerSvgAttributes.match(/\bheight\s*=\s*'([^']+)'/i);
+      qrWidthValue = qrWidthMatch ? parseFloat((qrWidthMatch[1] || '').replace(/[^0-9.]+/g, '')) : NaN;
+      qrHeightValue = qrHeightMatch ? parseFloat((qrHeightMatch[1] || '').replace(/[^0-9.]+/g, '')) : NaN;
+
+      if (Number.isFinite(qrWidthValue) && qrWidthValue > 0 && Number.isFinite(qrHeightValue) && qrHeightValue > 0) {
+        qrViewBox = '0 0 ' + qrWidthValue + ' ' + qrHeightValue;
+      }
+    }
+
+    return [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' + escapeXml(normalizedMaterialCode) + '">',
+      '<rect width="100%" height="100%" fill="#ffffff" />',
+      renderCenteredSvgText(nameLayout.lines, width / 2, nameTopPadding, nameLayout.fontSize, nameLayout.lineHeight, nameLayout.fontWeight),
+      '<svg x="' + qrX + '" y="' + qrY + '" width="' + qrSize + '" height="' + qrSize + '"' + (qrViewBox ? ' viewBox="' + escapeXml(qrViewBox) + '"' : '') + ' preserveAspectRatio="xMidYMid meet">',
+      qrInnerMarkup,
+      '</svg>',
+      renderCenteredSvgText(
+        [normalizedMaterialCode],
+        width / 2,
+        codeTopY,
+        codeLayout.fontSize,
+        codeLayout.fontSize,
+        codeLayout.fontWeight,
+        'letter-spacing="' + codeLayout.letterSpacing + '"'
+      ),
+      '</svg>'
+    ].join('');
+  }
+
+  function wait(ms) {
+    return new Promise(function (resolve) {
+      window.setTimeout(resolve, ms);
+    });
+  }
+
+  function mapWithConcurrency(items, limit, worker) {
+    var list = Array.isArray(items) ? items : [];
+    var concurrency = Number(limit);
+    var nextIndex = 0;
+    var activeCount = 0;
+    var results = new Array(list.length);
+
+    if (!Number.isFinite(concurrency) || concurrency < 1) {
+      concurrency = 1;
+    }
+
+    return new Promise(function (resolve) {
+      function pumpQueue() {
+        if (nextIndex >= list.length && activeCount === 0) {
+          resolve(results);
+          return;
+        }
+
+        while (activeCount < concurrency && nextIndex < list.length) {
+          (function (currentIndex) {
+            activeCount += 1;
+
+            Promise.resolve(worker(list[currentIndex], currentIndex))
+              .then(function (result) {
+                results[currentIndex] = result;
+              })
+              .catch(function (error) {
+                results[currentIndex] = { error: error };
+              })
+              .finally(function () {
+                activeCount -= 1;
+                pumpQueue();
+              });
+          })(nextIndex);
+
+          nextIndex += 1;
+        }
+      }
+
+      pumpQueue();
+    });
   }
 
   function setDownloadButtonState(labelHtml, disabled) {
@@ -622,6 +1053,7 @@ $(function () {
     var materialCode = materialRow && materialRow.barcode_value ? materialRow.barcode_value : '';
     var materialName = materialRow && materialRow.material_name ? materialRow.material_name : '';
     var normalizedMaterialCode = normalizeBarcodeValue(materialCode);
+    var qrUrl;
 
     setModalPreviewMode('qr');
     resetModalError();
@@ -645,14 +1077,35 @@ $(function () {
 
     try {
       currentMaterialCode = normalizedMaterialCode;
-      currentQrImageUrl = buildQrImageUrl(normalizedMaterialCode, 360);
+      qrUrl = buildQrImageUrl(normalizedMaterialCode, 360);
+      currentQrImageUrl = qrUrl;
 
       if (modalPreviewElement) {
-        modalPreviewElement.innerHTML =
-          '<img src="' + escapeHtml(currentQrImageUrl) + '" alt="QR code ' + escapeHtml(normalizedMaterialCode) + '">';
+        modalPreviewElement.innerHTML = '<div class="material-barcode-modal-empty">Ucitavam QR etiketu...</div>';
       }
 
-      setDownloadButtonState(qrDownloadButtonHtml, false);
+      fetchQrLabelSvg(normalizedMaterialCode, materialName)
+        .then(function (svgMarkup) {
+          if (currentPreviewMode !== 'qr' || currentMaterialCode !== normalizedMaterialCode) {
+            return;
+          }
+
+          currentSvgMarkup = svgMarkup;
+
+          if (modalPreviewElement) {
+            modalPreviewElement.innerHTML = svgMarkup;
+          }
+
+          setDownloadButtonState(qrDownloadButtonHtml, false);
+        })
+        .catch(function (error) {
+          if (currentPreviewMode !== 'qr' || currentMaterialCode !== normalizedMaterialCode) {
+            return;
+          }
+
+          setEmptyPreview('QR code etiketa nije dostupna za odabrani materijal.');
+          showModalError(error && error.message ? error.message : 'Ne mogu generisati QR code etiketu.');
+        });
     } catch (error) {
       setEmptyPreview('QR code etiketa nije dostupna za odabrani materijal.');
       showModalError(error && error.message ? error.message : 'Ne mogu generisati QR code etiketu.');
@@ -709,12 +1162,19 @@ $(function () {
 
   function downloadCurrentQr() {
     var qrUrl = currentQrImageUrl;
+    var blob;
+
+    if (currentSvgMarkup) {
+      blob = new Blob([currentSvgMarkup], { type: 'image/svg+xml;charset=utf-8' });
+      triggerBlobDownload(blob, sanitizeFileName(currentMaterialCode) + '-qr.svg');
+      return;
+    }
 
     if (!qrUrl) {
       return;
     }
 
-    setDownloadButtonState('<span class="spinner-border spinner-border-sm me-50" role="status" aria-hidden="true"></span> Preuzimam PNG', true);
+    setDownloadButtonState('<span class="spinner-border spinner-border-sm me-50" role="status" aria-hidden="true"></span> Preuzimam SVG', true);
 
     if (!window.fetch) {
       openQrDownloadFallback(qrUrl);
@@ -731,7 +1191,7 @@ $(function () {
         return response.blob();
       })
       .then(function (blob) {
-        triggerBlobDownload(blob, sanitizeFileName(currentMaterialCode) + '-qr.png');
+        triggerBlobDownload(blob, sanitizeFileName(currentMaterialCode) + '-qr.svg');
       })
       .catch(function () {
         openQrDownloadFallback(qrUrl);
@@ -1195,7 +1655,7 @@ $(function () {
       return Promise.reject(new Error('Nijedna etiketa nije mogla biti generisana za odabrano skladište.'));
     }
 
-    return zip.generateAsync({ type: 'blob' }).then(function (blob) {
+    return generateZipBlob(zip).then(function (blob) {
       return {
         blob: blob,
         addedCount: addedCount,
@@ -1272,11 +1732,26 @@ $(function () {
     return warehouseName ? ('skladiste "' + warehouseName + '"') : 'trenutni prikaz';
   }
 
-  function fetchQrLabelBlob(materialCode) {
+  function generateZipBlob(zip) {
+    return zip.generateAsync({
+      type: 'blob',
+      compression: 'DEFLATE',
+      compressionOptions: {
+        level: 9
+      }
+    });
+  }
+
+  function fetchQrLabelSvg(materialCode, materialName, attempt) {
     var qrUrl = buildQrImageUrl(materialCode, 360);
+    var resolvedAttempt = Number(attempt);
 
     if (!window.fetch) {
       return Promise.reject(new Error('Browser ne podrzava bulk preuzimanje QR etiketa.'));
+    }
+
+    if (!Number.isFinite(resolvedAttempt) || resolvedAttempt < 1) {
+      resolvedAttempt = 1;
     }
 
     return window.fetch(qrUrl, { mode: 'cors' }).then(function (response) {
@@ -1284,7 +1759,17 @@ $(function () {
         throw new Error('QR etiketa nije dostupna za preuzimanje.');
       }
 
-      return response.blob();
+      return response.text();
+    }).then(function (svgMarkup) {
+      return buildQrLabelSvg(svgMarkup, materialCode, materialName);
+    }).catch(function (error) {
+      if (resolvedAttempt >= 2) {
+        throw error;
+      }
+
+      return wait(150).then(function () {
+        return fetchQrLabelSvg(materialCode, materialName, resolvedAttempt + 1);
+      });
     });
   }
 
@@ -1293,6 +1778,8 @@ $(function () {
     var usedNames = {};
     var addedCount = 0;
     var skippedCount = 0;
+    var skippedMissingCodeCount = 0;
+    var skippedRequestCount = 0;
     var resolvedMode = labelMode === 'qr' ? 'qr' : 'barcode';
 
     if (!window.JSZip) {
@@ -1326,17 +1813,21 @@ $(function () {
         return Promise.reject(new Error('Nijedna barcode etiketa nije mogla biti generisana za odabrano skladište.'));
       }
 
-      return zip.generateAsync({ type: 'blob' }).then(function (blob) {
+      return generateZipBlob(zip).then(function (blob) {
         return {
           blob: blob,
           addedCount: addedCount,
-          skippedCount: skippedCount
+          skippedCount: skippedCount,
+          skippedMissingCodeCount: 0,
+          skippedRequestCount: 0
         };
       });
     }
 
-    return Promise.all(
-      materialRows.map(function (row) {
+    return mapWithConcurrency(
+      materialRows,
+      6,
+      function (row) {
         var materialCode = row && row.material_code ? row.material_code : row && row.barcode_value ? row.barcode_value : '';
         var materialName = row && row.material_name ? row.material_name : '';
         var normalizedMaterialCode = normalizeBarcodeValue(materialCode);
@@ -1344,30 +1835,34 @@ $(function () {
 
         if (!normalizedMaterialCode) {
           skippedCount += 1;
+          skippedMissingCodeCount += 1;
           return Promise.resolve();
         }
 
         zipEntryName = resolveUniqueZipEntryName(normalizedMaterialCode || materialName, usedNames);
 
-        return fetchQrLabelBlob(normalizedMaterialCode)
-          .then(function (blob) {
-            zip.file(zipEntryName + '.png', blob);
+        return fetchQrLabelSvg(normalizedMaterialCode, materialName)
+          .then(function (svgMarkup) {
+            zip.file(zipEntryName + '.svg', svgMarkup);
             addedCount += 1;
           })
           .catch(function () {
             skippedCount += 1;
+            skippedRequestCount += 1;
           });
-      })
+      }
     ).then(function () {
       if (!addedCount) {
         return Promise.reject(new Error('Nijedna QR etiketa nije mogla biti generisana za odabrano skladište.'));
       }
 
-      return zip.generateAsync({ type: 'blob' }).then(function (blob) {
+      return generateZipBlob(zip).then(function (blob) {
         return {
           blob: blob,
           addedCount: addedCount,
-          skippedCount: skippedCount
+          skippedCount: skippedCount,
+          skippedMissingCodeCount: skippedMissingCodeCount,
+          skippedRequestCount: skippedRequestCount
         };
       });
     });
@@ -1420,6 +1915,15 @@ $(function () {
 
         if (result.skippedCount > 0) {
           resultMessage += ' Preskoceno: ' + result.skippedCount + '.';
+          if (resolvedMode === 'qr') {
+            if (result.skippedMissingCodeCount > 0) {
+              resultMessage += ' Bez sifre: ' + result.skippedMissingCodeCount + '.';
+            }
+
+            if (result.skippedRequestCount > 0) {
+              resultMessage += ' Neuspjelo generisanje sa QR servisa: ' + result.skippedRequestCount + '.';
+            }
+          }
           showBulkDownloadAlert('warning', 'ZIP je pripremljen', resultMessage);
           return;
         }
@@ -1935,6 +2439,8 @@ $(function () {
 
   $(window).on('resize.materialBarcodeTableOverlay', function () {
     updateTableLoadingOverlayBounds();
+    ensureBulkDownloadButton();
+    updateBulkDownloadButtonState();
   });
 
   dataTable = tableElement.DataTable({

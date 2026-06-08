@@ -6,6 +6,8 @@ use App\Models\OrderAiScan;
 use App\Services\OrderAi\OrderAiScanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OrderAiScanController extends Controller
 {
@@ -22,7 +24,7 @@ class OrderAiScanController extends Controller
         if ($requestedScanId > 0) {
             $initialScan = OrderAiScan::query()->findOrFail($requestedScanId);
             $this->authorizeScan($request, $initialScan);
-            $initialScanState = $scanService->buildStatusPayload($initialScan);
+            $initialScanState = $this->buildScanStatusPayload($scanService, $initialScan);
         }
 
         return view('content.apps.orders.app-order-ai-scan', [
@@ -51,7 +53,7 @@ class OrderAiScanController extends Controller
             'scan_id' => $scan->id,
             'status' => $scan->status,
             'status_url' => route('app-order-ai-scan-status', ['scan' => $scan->id]),
-            'data' => $scanService->buildStatusPayload($scan),
+            'data' => $this->buildScanStatusPayload($scanService, $scan),
         ], 201);
     }
 
@@ -68,8 +70,24 @@ class OrderAiScanController extends Controller
 
         return response()->json([
             'message' => 'Status AI skena je osvježen.',
-            'data' => $scanService->buildStatusPayload($scan),
+            'data' => $this->buildScanStatusPayload($scanService, $scan),
         ]);
+    }
+
+    public function source(Request $request, OrderAiScan $scan): StreamedResponse
+    {
+        $this->authorizeModuleAccess($request);
+        $this->authorizeScan($request, $scan);
+
+        return $this->buildSourceFileResponse($scan, false);
+    }
+
+    public function downloadSource(Request $request, OrderAiScan $scan): StreamedResponse
+    {
+        $this->authorizeModuleAccess($request);
+        $this->authorizeScan($request, $scan);
+
+        return $this->buildSourceFileResponse($scan, true);
     }
 
     private function authorizeScan(Request $request, OrderAiScan $scan): void
@@ -107,5 +125,43 @@ class OrderAiScanController extends Controller
         return method_exists($user, 'canAccessAiOrderModule')
             ? (bool) $user->canAccessAiOrderModule()
             : false;
+    }
+
+    private function buildScanStatusPayload(OrderAiScanService $scanService, OrderAiScan $scan): array
+    {
+        $payload = $scanService->buildStatusPayload($scan);
+        $sourceFilePath = trim((string) ($scan->source_file_path ?? ''));
+
+        $payload['source_document_view_url'] = $sourceFilePath !== ''
+            ? route('app-order-ai-scan-source', ['scan' => $scan->id])
+            : null;
+        $payload['source_document_download_url'] = $sourceFilePath !== ''
+            ? route('app-order-ai-scan-source-download', ['scan' => $scan->id])
+            : null;
+
+        return $payload;
+    }
+
+    private function buildSourceFileResponse(OrderAiScan $scan, bool $download): StreamedResponse
+    {
+        $disk = Storage::disk((string) config('ai-order-scan.storage_disk', 'local'));
+        $sourceFilePath = trim((string) ($scan->source_file_path ?? ''), '/');
+
+        if ($sourceFilePath === '' || !$disk->exists($sourceFilePath)) {
+            abort(404);
+        }
+
+        $downloadName = trim((string) ($scan->source_file_name ?? ''));
+        $downloadName = $downloadName !== '' ? $downloadName : ('ai-scan-' . (int) $scan->id . '.pdf');
+        $mimeType = trim((string) ($scan->source_mime_type ?? ''));
+        $headers = [];
+
+        if ($mimeType !== '') {
+            $headers['Content-Type'] = $mimeType;
+        }
+
+        return $download
+            ? $disk->download($sourceFilePath, $downloadName, $headers)
+            : $disk->response($sourceFilePath, $downloadName, $headers);
     }
 }

@@ -1,5 +1,74 @@
 <?php
 
+$promptBase = <<<'PROMPT'
+You are Trendy's order-intake extraction agent.
+
+Your task is to read a customer order document and return structured JSON for import into Pantheon.
+
+Extraction rules:
+- Extract only what is actually visible in the file.
+- Preserve customer names, product names, and product codes exactly as written.
+- Keep product_code and product_name separate: product_code is only the visible code, while product_name must contain only the visible article/name block for that same line item.
+- If a value is missing or uncertain, return an empty string for text fields or 0 for numeric fields.
+- Never invent product codes, prices, delivery dates, or document numbers.
+- Prefer the buyer/customer name from the document header.
+- Extract the supplier / sender / issuer name from the top header into supplier_name.
+- Extract the total page count of the uploaded document into page_count.
+- page_count must be the total number of pages in the uploaded file, not the current page number and not a subsection-local page counter.
+- Example: if the footer/header says "Seite 4 von 6", then page_count is 6.
+- Keep buyer/customer and supplier/sender separate when both are visible.
+- Prefer a purchase-order / narudzba / order reference number when present.
+- Normalize quantities, prices, rebates, and VAT rates into numeric values.
+- Extract both the visible line unit price and the visible line total price into unit_price and line_total whenever they are shown.
+- If the document shows a row total / amount / value for a line item, preserve that exact numeric value in line_total.
+- Keep item ordering as shown in the source document.
+- If a unit is missing, use "KO".
+- If the source uses piece-like labels such as ST, STK, STUECK, STUCK, STU, PCS, or PIECE, normalize them to "KO".
+- If a VAT code is missing, use "P1".
+- Use short operational warnings when the document is incomplete or ambiguous.
+- The response must be valid JSON that matches the supplied schema.
+PROMPT;
+
+$grobPromptRules = <<<'PROMPT'
+- Never shorten a material/article name to only its family or first word if the document shows a longer multi-line article/name block.
+- If a line item article/name spans multiple stacked lines, merge only those article/name lines into product_name in reading order.
+- Do not copy lines beginning with Zeichnung into product_name. Put them into drawing_reference instead.
+- If a line begins with Werkstoff:, put only the text after the colon into material_hint and do not include that line in product_name.
+- Example: if an item block shows code 3226090, then Klotz on one line, G552-11000-1000-10-80-1-01-1-30 on the next line, then Zeichnung ... and Werkstoff: RSt37-2, product_name must be "Klotz G552-11000-1000-10-80-1-01-1-30", drawing_reference must contain the Zeichnung line, and material_hint must be "RSt37-2".
+- Prefer Nettopreis / net unit price for unit_price when both Nettopreis and Bruttopreis are visible for the same item.
+- Continuation rows without a new position number or new product code belong to the previous numbered item, even across a page break.
+- Rows such as Ruesten/Termin abs., Nettopreis, Lieferdatum, Preis, Preiseinheit, pro, and Wert may continue the previous item and must not start a new item on their own.
+- If one page ends with Bruttopreis for an item and the next page continues the same item without a new position number, use the continued Nettopreis and continued Wert as the final unit_price and line_total for that same item.
+- Fold continuation amounts into the previous item instead of leaving them only in the summary.
+- Do not copy Bruttopreis, subtotal, footer totals, or prices from a previous page into the first unrelated item on the next page.
+- Respect page breaks strictly: page headers, footers, company signatures, and bank/contact blocks are not part of a line item.
+- Never treat a continuation amount row as a standalone summary-only adjustment if it visually belongs to the previous item.
+- Example: if line 70 ends on one page with Bruttopreis 138,70 and the next page continues that same line without a new Pos/code and shows Ruesten/Termin abs. plus Nettopreis 170,70 and Wert 341,40, then the correct JSON for line 70 uses unit_price 170.70 and line_total 341.40.
+- Ensure summary subtotal equals the sum of all item line_total values after continuation rows are folded into their parent item.
+PROMPT;
+
+$trendyDePromptRules = <<<'PROMPT'
+- This document profile is for Trendy Germany purchase orders.
+- If the document shows "Trendy Germany GmbH" in the upper-right header, set both customer_name and supplier_name to "Trendy Germany GmbH".
+- Extract the order reference number that appears after the heading "Bestellung" into external_document_number.
+- Extract Liefertermin into delivery_deadline.
+- Extract "Person responsible" into contact_name.
+- Extract "Anlieferadresse" into receiver_name.
+- Preserve the left-side "Lieferant" block as an operational note inside order.note when it is visible.
+- Use the line-item table columns as follows:
+- Pos. -> line_number
+- Artikel Nr. -> product_code
+- Beschreibung -> product_name
+- Menge -> quantity
+- Einheit -> unit
+- EK-Preis -> unit_price
+- VAT % -> vat_rate
+- Betrag -> line_total
+- If Beschreibung spans multiple lines for the same row, merge those lines into product_name in reading order.
+- Prefer the visible Betrag value as line_total for each row.
+- If footer totals are missing or unclear, leave summary totals at 0 and let downstream normalization compute them from items.
+PROMPT;
+
 return [
     'provider' => env('AI_ORDER_SCAN_PROVIDER', 'mock'),
     'model' => env('AI_ORDER_SCAN_MODEL', 'gpt-5'),
@@ -15,9 +84,10 @@ return [
     'default_vat_rate' => (float) env('AI_ORDER_SCAN_DEFAULT_VAT_RATE', 17),
     'default_unit' => env('AI_ORDER_SCAN_DEFAULT_UNIT', 'KO'),
     'default_way_of_sale' => env('AI_ORDER_SCAN_DEFAULT_WAY_OF_SALE', 'D'),
-    'default_warehouse' => env('AI_ORDER_SCAN_DEFAULT_WAREHOUSE', 'Veleprodajno skladište'),
+    'default_warehouse' => env('AI_ORDER_SCAN_DEFAULT_WAREHOUSE', 'Veleprodajno skladiĹˇte'),
     'default_ref_no' => env('AI_ORDER_SCAN_DEFAULT_REF_NO', '99'),
     'default_valid_days' => (int) env('AI_ORDER_SCAN_DEFAULT_VALID_DAYS', 5),
+    'default_profile' => env('AI_ORDER_SCAN_DEFAULT_PROFILE', 'grob'),
     'storage_disk' => env('AI_ORDER_SCAN_STORAGE_DISK', 'local'),
     'inbox' => [
         'enabled' => filter_var(env('AI_ORDER_SCAN_INBOX_ENABLED', true), FILTER_VALIDATE_BOOL),
@@ -50,7 +120,6 @@ return [
             'review' => env('AI_ORDER_SCAN_INBOX_REVIEW_FOLDER', 'INBOX/Review'),
         ],
     ],
-    'storage_directory' => 'order-ai-scans',
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
         'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
@@ -61,45 +130,22 @@ return [
         'http_referer' => env('OPENROUTER_HTTP_REFERER', env('APP_URL')),
         'title' => env('OPENROUTER_TITLE', env('APP_NAME')),
     ],
-    'prompt' => <<<'PROMPT'
-You are Trendy's order-intake extraction agent.
-
-Your task is to read a customer order document and return structured JSON for import into Pantheon.
-
-Extraction rules:
-- Extract only what is actually visible in the file.
-- Preserve customer names, product names, and product codes exactly as written.
-- Keep product_code and product_name separate: product_code is only the visible code, while product_name must contain the full visible material/article description for that same line item.
-- Never shorten a material/article name to only its family or first word if the document shows a longer multi-line description.
-- If a line item description spans multiple stacked lines, merge all description lines that belong to that item into product_name in reading order.
-- Preserve the full descriptive material text, including drawing/designation, revision, and material/werkstoff details, whenever they are visibly part of the same item block.
-- If a value is missing or uncertain, return an empty string for text fields or 0 for numeric fields.
-- Never invent product codes, prices, delivery dates, or document numbers.
-- Prefer the buyer/customer name from the document header.
-- Extract the supplier / sender / issuer name from the top header into supplier_name.
-- Extract the total page count of the uploaded document into page_count.
-- page_count must be the total number of pages in the uploaded file, not the current page number and not a subsection-local page counter.
-- Example: if the footer/header says "Seite 4 von 6", then page_count is 6.
-- Keep buyer/customer and supplier/sender separate when both are visible.
-- Prefer a purchase-order / narudzba / order reference number when present.
-- Normalize quantities, prices, rebates, and VAT rates into numeric values.
-- Extract both the visible line unit price and the visible line total price into unit_price and line_total whenever they are shown.
-- If the document shows a row total / amount / value for a line item, preserve that exact numeric value in line_total.
-- Prefer Nettopreis / net unit price for unit_price when both Nettopreis and Bruttopreis are visible for the same item.
-- Continuation rows without a new position number or new product code belong to the previous numbered item, even across a page break.
-- Rows such as Ruesten/Termin abs., Nettopreis, Lieferdatum, Preis, Preiseinheit, pro, and Wert may continue the previous item and must not start a new item on their own.
-- If one page ends with Bruttopreis for an item and the next page continues the same item without a new position number, use the continued Nettopreis and continued Wert as the final unit_price and line_total for that same item.
-- Fold continuation amounts into the previous item instead of leaving them only in the summary.
-- Do not copy Bruttopreis, subtotal, footer totals, or prices from a previous page into the first unrelated item on the next page.
-- Respect page breaks strictly: page headers, footers, company signatures, and bank/contact blocks are not part of a line item.
-- Never treat a continuation amount row as a standalone summary-only adjustment if it visually belongs to the previous item.
-- Example: if line 70 ends on one page with Bruttopreis 138,70 and the next page continues that same line without a new Pos/code and shows Ruesten/Termin abs. plus Nettopreis 170,70 and Wert 341,40, then the correct JSON for line 70 uses unit_price 170.70 and line_total 341.40.
-- Ensure summary subtotal equals the sum of all item line_total values after continuation rows are folded into their parent item.
-- Keep item ordering as shown in the source document.
-- If a unit is missing, use "KO".
-- If the source uses piece-like labels such as ST, STK, STUECK, STUCK, PCS, or PIECE, normalize them to "KO".
-- If a VAT code is missing, use "P1".
-- Use short operational warnings when the document is incomplete or ambiguous.
-- The response must be valid JSON that matches the supplied schema.
-PROMPT,
+    'prompt_base' => $promptBase,
+    'profiles' => [
+        'grob' => [
+            'prompt_rules' => $grobPromptRules,
+            'subject_aliases' => [
+                'GROB-WERKE',
+                'GROB-WERKE GmbH & Co. KG',
+            ],
+        ],
+        'trendy_de' => [
+            'prompt_rules' => $trendyDePromptRules,
+            'subject_aliases' => [
+                'Trendy Germany GmbH',
+                'Trendy Germany',
+            ],
+        ],
+    ],
+    'prompt' => trim($promptBase . PHP_EOL . $grobPromptRules),
 ];

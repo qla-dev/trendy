@@ -64,7 +64,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.75rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   .material-table-inline-controls .dataTables_length {
@@ -74,6 +74,18 @@
   .material-bulk-download-btn {
     white-space: nowrap;
     margin-top: 5px!important;
+  }
+
+  .material-bulk-download-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  .material-bulk-download-toolbar .material-bulk-download-btn {
+    margin-top: 0 !important;
   }
 
   .material-barcode-generator-wrapper {
@@ -135,6 +147,29 @@
   .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:last-child > [class*='col-'] {
     padding-left: 0;
     padding-right: 0;
+  }
+
+  @media (min-width: 768px) {
+    .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      column-gap: 1rem;
+      row-gap: 0.75rem;
+    }
+
+    .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-']:first-child {
+      flex: 1 1 auto;
+      width: auto;
+      max-width: none;
+    }
+
+    .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-']:last-child {
+      flex: 0 0 auto;
+      width: auto;
+      max-width: none;
+      margin-left: auto;
+    }
   }
 
   .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) {
@@ -311,13 +346,13 @@
   }
 
   .material-action-btn.material-copy-btn {
-    border-color: #6e6b7b !important;
-    color: #6e6b7b !important;
+    border-color: #7367f0 !important;
+    color: #7367f0 !important;
     background-color: transparent !important;
   }
 
   .material-action-btn.material-copy-btn:hover {
-    background-color: rgba(110, 107, 123, 0.1) !important;
+    background-color: #f7f6ff !important;
   }
 
   .material-action-btn.material-delete-btn {
@@ -593,6 +628,33 @@
     color: #b4bdd3;
   }
 
+  @media (max-width: 1199.98px) {
+    .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child {
+      row-gap: 0.75rem;
+    }
+
+    .material-table-inline-controls {
+      align-items: center;
+      width: auto;
+    }
+
+    .material-bulk-download-toolbar-row {
+      margin-top: 0;
+    }
+
+    .material-bulk-download-toolbar {
+      justify-content: center;
+    }
+  }
+
+  @media (min-width: 768px) and (max-width: 991.98px) {
+    .material-bulk-download-toolbar .material-bulk-download-btn {
+      flex: 1 1 0;
+      justify-content: center;
+      margin-top: 0 !important;
+    }
+  }
+
   @media (max-width: 767.98px) {
     .material-header-actions {
       width: 100%;
@@ -624,12 +686,27 @@
 
     .material-table-inline-controls {
       width: 100%;
-      align-items: stretch;
+      justify-content: center;
     }
 
-    .material-bulk-download-btn {
-      width: 100%;
+    .material-table-inline-controls .dataTables_length {
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .material-table-inline-controls .dataTables_length label {
+      display: inline-flex;
+      align-items: center;
       justify-content: center;
+    }
+
+    .material-bulk-download-toolbar {
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .material-bulk-download-toolbar .material-bulk-download-btn {
+      width: 100%;
     }
   }
 </style>
@@ -750,5 +827,5 @@
 <script>
   window.materialBarcodeGeneratorConfig = @json($materialBarcodeGeneratorConfig);
 </script>
-<script src="{{asset('js/scripts/pages/app-material.js?v=18')}}"></script>
+<script src="{{asset('js/scripts/pages/app-material.js?v=24')}}"></script>
 @endsection

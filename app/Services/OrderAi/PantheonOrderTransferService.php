@@ -5,6 +5,7 @@ namespace App\Services\OrderAi;
 use App\Models\Material;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Product;
 use App\Support\Utf8Sanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -16,19 +17,23 @@ class PantheonOrderTransferService
 {
     private array $catalogMaterialByCodeCache = [];
     private array $catalogMaterialByNameCache = [];
+    private array $createdCatalogItems = [];
 
     public function previewFromNormalizedPayload(array $normalizedPayload, mixed $user = null): array
     {
-        $prepared = $this->prepareTransferData($normalizedPayload);
+        $this->createdCatalogItems = [];
+        $prepared = $this->prepareTransferData($normalizedPayload, false, false, $user);
 
         return $this->buildTransferPayload($prepared, $user);
     }
 
     public function createFromNormalizedPayload(array $normalizedPayload, mixed $user = null): array
     {
+        $this->createdCatalogItems = [];
+
         try {
             return DB::connection('sqlsrv')->transaction(function () use ($normalizedPayload, $user) {
-            $prepared = $this->prepareTransferData($normalizedPayload);
+            $prepared = $this->prepareTransferData($normalizedPayload, true, true, $user);
             $numberContext = $this->generateNextOrderNumber($prepared['document_type']);
             $headerTemplate = $this->resolveHeaderTemplate($prepared['document_type']);
             $itemTemplate = $this->resolveItemTemplate($headerTemplate['acKey'] ?? null);
@@ -86,6 +91,8 @@ class PantheonOrderTransferService
                 'item_count' => count($itemPayloads),
                 'header_payload' => $headerPayload,
                 'item_payloads' => $itemPayloads,
+                'created_catalog_items' => $this->createdCatalogItems,
+                'created_catalog_item_count' => count($this->createdCatalogItems),
                 ];
 
                 Log::info('Order AI Pantheon transfer completed.', [
@@ -109,6 +116,7 @@ class PantheonOrderTransferService
 
     public function isTransferReady(array $normalizedPayload): bool
     {
+        $this->createdCatalogItems = [];
         $prepared = $this->prepareTransferData($normalizedPayload, false);
 
         if (trim((string) ($prepared['customer_name'] ?? '')) === '') {
@@ -125,11 +133,11 @@ class PantheonOrderTransferService
         $itemTemplate = $this->resolveItemTemplate($headerTemplate['acKey'] ?? null);
 
         if (empty($headerTemplate)) {
-            throw new RuntimeException('Nije moguÄ‡e pronaÄ‡i template narudÅ¾be za Pantheon.');
+            throw new RuntimeException('Nije moguće pronaći template narudžbe za Pantheon.');
         }
 
         if (empty($itemTemplate)) {
-            throw new RuntimeException('Nije moguÄ‡e pronaÄ‡i template stavke narudÅ¾be za Pantheon.');
+            throw new RuntimeException('Nije moguće pronaći template stavke narudžbe za Pantheon.');
         }
 
         $headerQid = $this->nextIntegerValue(Order::newSourceQuery(), Order::sourceColumns(), Order::sourceNonInsertableColumns(), 'anQId');
@@ -164,10 +172,17 @@ class PantheonOrderTransferService
             'item_count' => count($itemPayloads),
             'header_payload' => $headerPayload,
             'item_payloads' => $itemPayloads,
+            'created_catalog_items' => $this->createdCatalogItems,
+            'created_catalog_item_count' => count($this->createdCatalogItems),
         ];
     }
 
-    private function prepareTransferData(array $normalizedPayload, bool $strict = true): array
+    private function prepareTransferData(
+        array $normalizedPayload,
+        bool $strict = true,
+        bool $autoCreateMissingCatalogItems = false,
+        mixed $user = null
+    ): array
     {
         $order = is_array($normalizedPayload['order'] ?? null) ? $normalizedPayload['order'] : [];
         $rawItems = is_array($normalizedPayload['items'] ?? null) ? $normalizedPayload['items'] : [];
@@ -180,8 +195,9 @@ class PantheonOrderTransferService
                 continue;
             }
 
+            $itemMeta = $this->extractTransferItemMetadata($rawItem);
             $productCode = $this->normalizeCatalogLookupValue((string) ($rawItem['product_code'] ?? ''));
-            $productName = $this->normalizeCatalogLookupValue((string) ($rawItem['product_name'] ?? ''));
+            $productName = $this->normalizeCatalogLookupValue((string) ($itemMeta['product_name'] ?? ''));
 
             if ($productCode === '') {
                 continue;
@@ -206,10 +222,15 @@ class PantheonOrderTransferService
                 continue;
             }
 
+            $itemMeta = $this->extractTransferItemMetadata($rawItem);
             $productCode = trim((string) ($rawItem['product_code'] ?? ''));
-            $productName = $this->normalizePantheonText((string) ($rawItem['product_name'] ?? ''));
+            $productName = $this->normalizePantheonText((string) ($itemMeta['product_name'] ?? ''));
             $sourceProductCode = $productCode;
             $sourceProductName = $productName;
+            $itemNote = $this->normalizePantheonText((string) ($itemMeta['note'] ?? ''));
+            $drawingReference = $this->normalizePantheonText((string) ($itemMeta['drawing_reference'] ?? ''));
+            $materialHint = $this->normalizePantheonText((string) ($itemMeta['material_hint'] ?? ''));
+            $primaryClassification = $this->resolvePrimaryClassification($materialHint);
             $quantity = round(max(0, (float) ($rawItem['quantity'] ?? 0)), 6);
 
             if ($quantity <= 0) {
@@ -225,14 +246,18 @@ class PantheonOrderTransferService
             $shouldIgnoreRepeatedSourceCode = is_array($codeUsage)
                 && (int) ($codeUsage['count'] ?? 0) > 1
                 && count((array) ($codeUsage['names'] ?? [])) > 1;
-            $resolvedCatalogMaterial = $this->resolveCatalogMaterial(
-                $shouldIgnoreRepeatedSourceCode ? '' : $productCode,
-                $productName
-            );
+            $resolvedCatalogMaterial = [];
+
+            if ($normalizedSourceCode !== '' && !$shouldIgnoreRepeatedSourceCode) {
+                $resolvedCatalogMaterial = $this->resolveCatalogMaterialByCode($productCode);
+            } elseif ($productName !== '') {
+                $resolvedCatalogMaterial = $this->resolveCatalogMaterialByName($productName);
+            }
             $resolvedProductCode = trim((string) ($resolvedCatalogMaterial['material_code'] ?? ''));
             $resolvedProductName = trim((string) ($resolvedCatalogMaterial['material_name'] ?? ''));
             $resolvedProductUnit = trim((string) ($resolvedCatalogMaterial['material_um'] ?? ''));
             $resolvedProductQid = $this->positiveIntegerOrNull($resolvedCatalogMaterial['material_qid'] ?? null);
+            $catalogItemCreated = false;
 
             if ($resolvedProductCode !== '') {
                 $productCode = $resolvedProductCode;
@@ -250,9 +275,37 @@ class PantheonOrderTransferService
                 throw new RuntimeException('Svaka stavka mora imati šifru artikla za transfer u Pantheon.');
             }
 
-            if ($strict && $resolvedProductQid === null) {
+            if ($resolvedProductQid === null && $strict && $autoCreateMissingCatalogItems) {
+                $createdCatalogMaterial = $this->createMissingCatalogMaterial(
+                    $productCode,
+                    $productName !== '' ? $productName : ($sourceProductName !== '' ? $sourceProductName : $productCode),
+                    $primaryClassification,
+                    $user
+                );
+
+                if (!empty($createdCatalogMaterial)) {
+                    $resolvedCatalogMaterial = $createdCatalogMaterial;
+                    $resolvedProductCode = trim((string) ($resolvedCatalogMaterial['material_code'] ?? $productCode));
+                    $resolvedProductName = trim((string) ($resolvedCatalogMaterial['material_name'] ?? $productName));
+                    $resolvedProductUnit = trim((string) ($resolvedCatalogMaterial['material_um'] ?? config('ai-order-scan.default_unit', 'KO')));
+                    $resolvedProductQid = $this->positiveIntegerOrNull($resolvedCatalogMaterial['material_qid'] ?? null);
+                    $catalogItemCreated = $resolvedProductQid !== null;
+
+                    if ($resolvedProductCode !== '') {
+                        $productCode = $resolvedProductCode;
+                    }
+
+                    if ($resolvedProductName !== '' && $sourceProductName === '') {
+                        $productName = $resolvedProductName;
+                    }
+                }
+            }
+
+            $catalogItemMissing = $resolvedProductQid === null;
+
+            if ($strict && $catalogItemMissing) {
                 throw new RuntimeException(sprintf(
-                    'Pantheon nije pronaĹˇao katalog artikal za Ĺˇifru %s.',
+                    'Pantheon nije pronašao katalog artikal za šifru %s.',
                     $productCode !== '' ? $productCode : ($sourceProductCode !== '' ? $sourceProductCode : '[bez sifre]')
                 ));
             }
@@ -277,11 +330,21 @@ class PantheonOrderTransferService
 
             $vatValue = round($baseValue * ($vatRate / 100), 4);
             $grandTotal = round($baseValue + $vatValue, 4);
+            $catalogItemNotice = $this->buildCatalogItemNotice(
+                $productCode !== '' ? $productCode : $sourceProductCode,
+                $catalogItemCreated ? 'created' : ($catalogItemMissing ? 'missing' : 'matched')
+            );
+
+            if ($catalogItemNotice !== '') {
+                $warnings[] = $catalogItemNotice;
+            }
 
             $preparedItems[] = [
                 'line_number' => (int) ($rawItem['line_number'] ?? ($index + 1)),
                 'product_code' => $productCode,
                 'product_name' => $productName !== '' ? $productName : $productCode,
+                'drawing_reference' => $drawingReference,
+                'material_hint' => $materialHint,
                 'quantity' => $quantity,
                 'unit' => trim((string) ($rawItem['unit'] ?? config('ai-order-scan.default_unit', 'KO'))) ?: (string) config('ai-order-scan.default_unit', 'KO'),
                 'unit_price' => $unitPrice,
@@ -290,7 +353,14 @@ class PantheonOrderTransferService
                 'vat_code' => trim((string) ($rawItem['vat_code'] ?? config('ai-order-scan.default_vat_code', 'P1'))) ?: (string) config('ai-order-scan.default_vat_code', 'P1'),
                 'discount_percent' => $discount,
                 'priority' => trim((string) ($rawItem['priority'] ?? '')),
-                'note' => $this->normalizePantheonText((string) ($rawItem['note'] ?? '')),
+                'note' => $itemNote,
+                'primary_classification' => $primaryClassification,
+                'catalog_item_exists' => !$catalogItemMissing,
+                'catalog_item_missing' => $catalogItemMissing,
+                'catalog_item_auto_create' => $catalogItemMissing || $catalogItemCreated,
+                'catalog_item_created' => $catalogItemCreated,
+                'catalog_item_status' => $catalogItemCreated ? 'created' : ($catalogItemMissing ? 'missing' : 'matched'),
+                'catalog_item_notice' => $catalogItemNotice,
                 'catalog_unit_hint' => $resolvedProductUnit,
                 'product_qid' => $resolvedProductQid,
                 'source_product_code' => $sourceProductCode,
@@ -332,6 +402,159 @@ class PantheonOrderTransferService
             'grand_total' => $grandTotal,
             'items' => $preparedItems,
         ];
+    }
+
+    private function extractTransferItemMetadata(array $rawItem): array
+    {
+        $nameLines = [];
+        $drawingParts = [];
+        $noteParts = [];
+        $productName = trim((string) ($rawItem['product_name'] ?? ''));
+        $note = trim((string) ($rawItem['note'] ?? ''));
+        $drawingReference = trim((string) ($rawItem['drawing_reference'] ?? ''));
+        $materialHint = trim((string) ($rawItem['material_hint'] ?? ''));
+
+        foreach ($this->splitTransferTextLines($productName) as $line) {
+            if (preg_match('/^werkstoff\s*:/iu', $line) === 1) {
+                if ($materialHint === '') {
+                    $materialHint = preg_replace('/^werkstoff\s*:\s*/iu', '', $line) ?? $line;
+                }
+
+                continue;
+            }
+
+            if (preg_match('/^zeichnung\b/iu', $line) === 1) {
+                $drawingParts[] = $line;
+                continue;
+            }
+
+            $nameLines[] = $line;
+        }
+
+        foreach ($this->splitTransferTextLines($drawingReference) as $line) {
+            $drawingParts[] = $line;
+        }
+
+        foreach ($this->splitTransferTextLines($note) as $line) {
+            if (preg_match('/^werkstoff\s*:/iu', $line) === 1) {
+                if ($materialHint === '') {
+                    $materialHint = preg_replace('/^werkstoff\s*:\s*/iu', '', $line) ?? $line;
+                }
+
+                continue;
+            }
+
+            $noteParts[] = $line;
+        }
+
+        $drawingReference = implode(' | ', array_values(array_unique(array_filter($drawingParts))));
+
+        if ($drawingReference !== '') {
+            $noteParts[] = $drawingReference;
+        }
+
+        $resolvedProductName = trim(implode(' ', array_values(array_filter($nameLines))));
+
+        if ($resolvedProductName === '') {
+            $resolvedProductName = $productName;
+        }
+
+        return [
+            'product_name' => $resolvedProductName,
+            'drawing_reference' => $drawingReference,
+            'material_hint' => trim((string) (preg_replace('/\s+/', ' ', $materialHint) ?? $materialHint)),
+            'note' => implode(' | ', array_values(array_unique(array_filter($noteParts)))),
+        ];
+    }
+
+    private function splitTransferTextLines(string $value): array
+    {
+        $value = str_replace(["\r\n", "\r"], "\n", $value);
+        $lines = preg_split('/\n+/u', $value) ?: [];
+
+        return array_values(array_filter(array_map(function ($line) {
+            $line = trim((string) (preg_replace('/\s+/u', ' ', (string) $line) ?? $line));
+
+            return $line;
+        }, $lines)));
+    }
+
+    private function resolvePrimaryClassification(string $materialHint): string
+    {
+        $materialHint = trim($materialHint);
+
+        if ($materialHint !== '' && preg_match('/^al/i', $materialHint) === 1) {
+            return 'ALUMINIJUM';
+        }
+
+        return 'ČELIK';
+    }
+
+    private function buildCatalogItemNotice(string $productCode, string $status): string
+    {
+        $productCode = trim($productCode);
+
+        if ($productCode === '') {
+            return '';
+        }
+
+        if ($status === 'missing') {
+            return sprintf('Artikal %s nije pronađen u bazi i biće automatski kreiran pri transferu.', $productCode);
+        }
+
+        if ($status === 'created') {
+            return sprintf('Artikal %s nije postojao u bazi i automatski je kreiran tokom transfera.', $productCode);
+        }
+
+        return '';
+    }
+
+    private function createMissingCatalogMaterial(
+        string $productCode,
+        string $productName,
+        string $primaryClassification,
+        mixed $user = null
+    ): array {
+        $productCode = trim($productCode);
+        $productName = trim($productName);
+
+        if ($productCode === '') {
+            return [];
+        }
+
+        $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
+        $ensureResult = Product::ensureCatalogProduct([
+            'product_code' => $productCode,
+            'product_name' => $productName !== '' ? $productName : $productCode,
+            'product_um' => (string) config('ai-order-scan.default_unit', 'KO'),
+            'product_set' => '120',
+            'product_classification' => $primaryClassification,
+        ], $userId);
+
+        $catalogRow = is_array($ensureResult['row'] ?? null)
+            ? (array) ($ensureResult['row'] ?? [])
+            : [];
+        $candidate = $this->normalizeCatalogMaterialCandidate($catalogRow);
+
+        if (!empty($candidate)) {
+            $this->catalogMaterialByCodeCache[$this->normalizeCatalogLookupValue($productCode)] = $candidate;
+
+            if ($productName !== '') {
+                $this->catalogMaterialByNameCache[$this->normalizeCatalogLookupValue($productName)] = $candidate;
+            }
+        }
+
+        if ((bool) ($ensureResult['created'] ?? false)) {
+            $this->createdCatalogItems[] = [
+                'product_code' => $productCode,
+                'product_name' => $productName !== '' ? $productName : $productCode,
+                'unit' => (string) config('ai-order-scan.default_unit', 'KO'),
+                'set' => '120',
+                'primary_classification' => $primaryClassification,
+            ];
+        }
+
+        return $candidate;
     }
 
     private function resolvePantheonDocType(string $candidate): string
@@ -874,6 +1097,7 @@ class PantheonOrderTransferService
             'STK' => (string) config('ai-order-scan.default_unit', 'KO'),
             'STUECK' => (string) config('ai-order-scan.default_unit', 'KO'),
             'STUCK' => (string) config('ai-order-scan.default_unit', 'KO'),
+            'STU' => (string) config('ai-order-scan.default_unit', 'KO'),
             'PCS' => (string) config('ai-order-scan.default_unit', 'KO'),
             'PIECE' => (string) config('ai-order-scan.default_unit', 'KO'),
         ];
@@ -926,9 +1150,29 @@ class PantheonOrderTransferService
 
         $candidates = [$subject];
 
-        if (preg_match('/^grob-werke\b/i', $subject) === 1) {
-            $candidates[] = 'GROB-WERKE';
-            $candidates[] = 'GROB-WERKE GmbH & Co. KG';
+        foreach ((array) config('ai-order-scan.profiles', []) as $profileConfig) {
+            $aliases = is_array($profileConfig['subject_aliases'] ?? null)
+                ? $profileConfig['subject_aliases']
+                : [];
+
+            foreach ($aliases as $alias) {
+                $alias = trim((string) $alias);
+
+                if ($alias === '') {
+                    continue;
+                }
+
+                $normalizedSubject = $this->normalizeCatalogLookupValue($subject);
+                $normalizedAlias = $this->normalizeCatalogLookupValue($alias);
+
+                if ($normalizedSubject === '' || $normalizedAlias === '') {
+                    continue;
+                }
+
+                if (str_contains($normalizedSubject, $normalizedAlias) || str_contains($normalizedAlias, $normalizedSubject)) {
+                    $candidates[] = $alias;
+                }
+            }
         }
 
         return array_values(array_unique(array_filter(array_map('trim', $candidates))));
@@ -1111,8 +1355,8 @@ class PantheonOrderTransferService
 
     private function normalizeCatalogMaterialCandidate(array $candidate): array
     {
-        $materialCode = trim((string) ($candidate['material_code'] ?? $candidate['acIdentChild'] ?? ''));
-        $materialName = trim((string) ($candidate['material_name'] ?? $candidate['acDescr'] ?? ''));
+        $materialCode = trim((string) ($candidate['material_code'] ?? $candidate['acIdentChild'] ?? $candidate['acIdent'] ?? ''));
+        $materialName = trim((string) ($candidate['material_name'] ?? $candidate['acDescr'] ?? $candidate['acName'] ?? ''));
         $materialUnit = trim((string) ($candidate['material_um'] ?? $candidate['acUM'] ?? ''));
         $materialQid = $this->positiveIntegerOrNull($candidate['material_qid'] ?? $candidate['anQId'] ?? null);
 
@@ -1125,9 +1369,10 @@ class PantheonOrderTransferService
             'material_name' => $materialName !== '' ? $materialName : $materialCode,
             'material_um' => strtoupper(substr($materialUnit, 0, 3)),
             'material_qid' => $materialQid,
-            'material_code_alt' => trim((string) ($candidate['material_code_alt'] ?? '')),
-            'material_set' => trim((string) ($candidate['material_set'] ?? '')),
-            'material_supplier' => trim((string) ($candidate['material_supplier'] ?? '')),
+            'material_code_alt' => trim((string) ($candidate['material_code_alt'] ?? $candidate['acCode'] ?? '')),
+            'material_set' => trim((string) ($candidate['material_set'] ?? $candidate['acSetOfItem'] ?? '')),
+            'material_supplier' => trim((string) ($candidate['material_supplier'] ?? $candidate['acSupplier'] ?? '')),
+            'material_classification' => trim((string) ($candidate['material_classification'] ?? $candidate['acClassif'] ?? '')),
         ];
     }
 

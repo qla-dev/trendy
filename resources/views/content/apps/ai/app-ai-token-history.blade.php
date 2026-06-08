@@ -10,7 +10,7 @@
   $yearOptions = $tokenHistoryYearOptions ?? [];
   $perPage = (int) ($tokenHistoryPerPage ?? 10);
   $perPageOptions = $tokenHistoryPerPageOptions ?? [10, 25, 50, 100];
-  $showTokenUsage = (bool) ($showAiTokenUsage ?? false);
+  $showUsdSpend = (bool) ($showAiTokenUsdSpend ?? false);
 @endphp
 
 @section('vendor-style')
@@ -198,6 +198,14 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: 500;
+  }
+
+  .ai-token-history-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
   }
 
   .ai-token-history-action-cell {
@@ -432,7 +440,7 @@
   </div>
 
   <div class="row match-height mb-2">
-    <div class="col-xl-4 col-md-6 col-12">
+    <div class="col-xl col-md-6 col-12">
       <div class="card ai-token-history-summary-card">
         <div class="card-body d-flex align-items-center">
           <div class="avatar bg-light-primary me-2">
@@ -448,24 +456,56 @@
       </div>
     </div>
 
-    @if ($showTokenUsage)
-      <div class="col-xl-4 col-md-6 col-12">
-        <div class="card ai-token-history-summary-card">
-          <div class="card-body d-flex align-items-center">
-            <div class="avatar bg-light-warning me-2">
-              <div class="avatar-content">
-                <i data-feather="activity" class="font-medium-3"></i>
-              </div>
+    <div class="col-xl col-md-6 col-12">
+      <div class="card ai-token-history-summary-card">
+        <div class="card-body d-flex align-items-center">
+          <div class="avatar bg-light-warning me-2">
+            <div class="avatar-content">
+              <i data-feather="activity" class="font-medium-3"></i>
             </div>
-            <div>
-              <h4 class="fw-bolder mb-0">{{ $summary['charged_tokens_display'] ?? '0' }}</h4>
-              <p class="card-text font-small-3 mb-0">Napla&#263;eni tokeni</p>
-            </div>
+          </div>
+          <div>
+            <h4 class="fw-bolder mb-0">{{ $summary['charged_tokens_display'] ?? '0' }}</h4>
+            <p class="card-text font-small-3 mb-0">Tokeni</p>
           </div>
         </div>
       </div>
+    </div>
 
-      <div class="col-xl-4 col-md-6 col-12">
+    <div class="col-xl col-md-6 col-12">
+      <div class="card ai-token-history-summary-card">
+        <div class="card-body d-flex align-items-center">
+          <div class="avatar bg-light-success me-2">
+            <div class="avatar-content">
+              <i data-feather="check-circle" class="font-medium-3"></i>
+            </div>
+          </div>
+          <div>
+            <h4 class="fw-bolder mb-0">{{ $summary['successful_total_display'] ?? '0' }}</h4>
+            <p class="card-text font-small-3 mb-0">Uspje&#353;no</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl col-md-6 col-12">
+      <div class="card ai-token-history-summary-card">
+        <div class="card-body d-flex align-items-center">
+          <div class="avatar bg-light-danger me-2">
+            <div class="avatar-content">
+              <i data-feather="x-circle" class="font-medium-3"></i>
+            </div>
+          </div>
+          <div>
+            <h4 class="fw-bolder mb-0">{{ $summary['failed_total_display'] ?? '0' }}</h4>
+            <p class="card-text font-small-3 mb-0">Neuspje&#353;no</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    @if ($showUsdSpend)
+      <div class="col-xl col-md-6 col-12">
         <div class="card ai-token-history-summary-card">
           <div class="card-body d-flex align-items-center">
             <div class="avatar bg-light-success me-2">
@@ -631,8 +671,8 @@
             <th>Status</th>
             <th>Fajl</th>
             <th>Broj stranica</th>
-            @if ($showTokenUsage)
-              <th>Napla&#263;eni tokeni</th>
+            <th>Tokeni</th>
+            @if ($showUsdSpend)
               <th>Potro&#353;nja ($)</th>
             @endif
             <th class="text-end ai-token-history-action-cell">Akcija</th>
@@ -655,19 +695,26 @@
                 <div class="ai-token-history-file-name" title="{{ $row['file_name'] }}">{{ $row['file_name'] }}</div>
               </td>
               <td>{{ $row['page_count_display'] }}</td>
-              @if ($showTokenUsage)
-                <td>{{ $row['billed_tokens_display'] }}</td>
+              <td>{{ $row['billed_tokens_display'] }}</td>
+              @if ($showUsdSpend)
                 <td>{{ $row['usage_cost_usd_display'] }}</td>
               @endif
               <td class="text-end ai-token-history-action-cell">
-                <a href="{{ $row['open_scan_url'] }}" class="btn btn-outline-primary btn-sm">
-                  <i data-feather="eye" class="me-50"></i> Otvori scan
-                </a>
+                <div class="ai-token-history-actions">
+                  @if (!empty($row['download_source_url']))
+                    <a href="{{ $row['download_source_url'] }}" class="btn btn-outline-primary btn-sm">
+                      <i data-feather="download" class="me-50"></i> Preuzmi PDF
+                    </a>
+                  @endif
+                  <a href="{{ $row['open_scan_url'] }}" class="btn btn-outline-primary btn-sm">
+                    <i data-feather="eye" class="me-50"></i> Otvori scan
+                  </a>
+                </div>
               </td>
             </tr>
           @empty
             <tr>
-              <td colspan="{{ $showTokenUsage ? 9 : 7 }}" class="ai-token-history-empty">
+              <td colspan="{{ $showUsdSpend ? 9 : 8 }}" class="ai-token-history-empty">
                 Nema AI token historije za odabrane filtere.
               </td>
             </tr>

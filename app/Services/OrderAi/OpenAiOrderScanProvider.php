@@ -35,6 +35,7 @@ class OpenAiOrderScanProvider implements OrderAiScanProvider
         $mime = trim((string) ($scan->source_mime_type ?: 'application/octet-stream'));
         $model = trim((string) config('ai-order-scan.model', 'gpt-5'));
         $baseUrl = rtrim((string) config('ai-order-scan.openai.base_url', 'https://api.openai.com/v1'), '/');
+        $prompt = trim((string) ($scan->request_prompt ?: config('ai-order-scan.prompt')));
 
         $fileInput = str_starts_with($mime, 'image/')
             ? [
@@ -58,7 +59,7 @@ class OpenAiOrderScanProvider implements OrderAiScanProvider
                         'content' => [
                             [
                                 'type' => 'input_text',
-                                'text' => (string) config('ai-order-scan.prompt'),
+                                'text' => $prompt,
                             ],
                         ],
                     ],
