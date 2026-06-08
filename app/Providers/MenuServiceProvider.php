@@ -2,10 +2,9 @@
 
 namespace App\Providers;
 
-use App\Models\OrderAiScan;
+use App\Support\AiTokenNavbarCounter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Carbon;
 
 class MenuServiceProvider extends ServiceProvider
 {
@@ -188,25 +187,6 @@ class MenuServiceProvider extends ServiceProvider
 
     private function resolveAiTokenNavbarCount(): int
     {
-        try {
-            $now = Carbon::now();
-
-            return (int) OrderAiScan::query()
-                ->where(function ($query) {
-                    $query
-                        ->where('credits_spent', '>', 0)
-                        ->orWhereNotNull('processed_at')
-                        ->orWhere('status', 'failed');
-                })
-                ->whereRaw('COALESCE(processed_at, completed_at, created_at) >= ?', [
-                    $now->copy()->startOfMonth()->toDateTimeString(),
-                ])
-                ->whereRaw('COALESCE(processed_at, completed_at, created_at) <= ?', [
-                    $now->copy()->endOfMonth()->toDateTimeString(),
-                ])
-                ->sum('billed_tokens');
-        } catch (\Throwable $exception) {
-            return 0;
-        }
+        return app(AiTokenNavbarCounter::class)->currentMonthTotal();
     }
 }

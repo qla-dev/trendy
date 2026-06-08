@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\OrderAiScanService;
+use App\Support\AiTokenNavbarCounter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -138,6 +139,7 @@ class OrderAiScanController extends Controller
         $payload['source_document_download_url'] = $sourceFilePath !== ''
             ? route('app-order-ai-scan-source-download', ['scan' => $scan->id])
             : null;
+        $payload['ai_token_navbar_count'] = app(AiTokenNavbarCounter::class)->currentMonthTotal();
 
         return $payload;
     }

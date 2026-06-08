@@ -2953,6 +2953,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       let extractSimulationStartedAt = null;
       let extractSimulationPageCount = 1;
       let extractSimulationStatus = '';
+      const locallyStartedScanIds = new Set();
+      const tokenRewardAppliedScanIds = new Set();
       const stageFillState = {
         upload: null,
         extract: null,
@@ -2989,6 +2991,40 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         if (initialLoader) {
           initialLoader.setAttribute('aria-hidden', active ? 'false' : 'true');
         }
+      }
+
+      function isTokenRewardStatus(status) {
+        return ['completed', 'ready_for_transfer', 'transferring', 'transferred'].includes(String(status || '').trim());
+      }
+
+      function syncAiTokenNavbar(data, previousStatus) {
+        const scanId = Math.max(0, Math.round(toFiniteNumber(data && data.id, currentScanId || 0)));
+        const status = String(data && data.status || '').trim();
+        const previous = String(previousStatus || '').trim();
+
+        if (!scanId || !locallyStartedScanIds.has(scanId) || tokenRewardAppliedScanIds.has(scanId)) {
+          return;
+        }
+
+        if (!isTokenRewardStatus(status) || isTokenRewardStatus(previous)) {
+          return;
+        }
+
+        tokenRewardAppliedScanIds.add(scanId);
+
+        if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function' || typeof window.CustomEvent !== 'function') {
+          return;
+        }
+
+        const billedTokens = Math.max(0, Math.round(toFiniteNumber(data && data.billed_tokens, 0)));
+        const navbarCountValue = Number(data && data.ai_token_navbar_count);
+
+        window.dispatchEvent(new CustomEvent('ai-token-navbar:update', {
+          detail: {
+            value: Number.isFinite(navbarCountValue) ? Math.max(0, Math.round(navbarCountValue)) : null,
+            delta: billedTokens,
+          }
+        }));
       }
 
       function syncDropzoneVisibility(status) {
@@ -4991,6 +5027,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
 
           const response = xhr.response || {};
           currentScanId = response.scan_id;
+          locallyStartedScanIds.add(Math.max(0, Math.round(toFiniteNumber(response.scan_id, 0))));
           uploadProgress = 100;
           showPendingExtractionState(response.data || {
             source_file_name: file.name,
@@ -5143,6 +5180,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             label: 'Poduzmi akciju'
           });
         }
+
+        syncAiTokenNavbar(latestStatusPayload, previousStatus);
 
         const completionStatuses = ['completed', 'ready_for_transfer', 'transferring', 'transferred'];
         const shouldAutoScroll = !openedFromExistingScan
@@ -6001,6 +6040,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
 
           const response = xhr.response || {};
           currentScanId = response.scan_id;
+          locallyStartedScanIds.add(Math.max(0, Math.round(toFiniteNumber(response.scan_id, 0))));
           uploadProgress = 100;
           showPendingExtractionState(response.data || {
             source_file_name: file.name,
@@ -6168,6 +6208,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             label: 'Poduzmi akciju'
           });
         }
+
+        syncAiTokenNavbar(latestStatusPayload, previousStatus);
 
         const completionStatuses = ['completed', 'ready_for_transfer', 'transferring', 'transferred'];
         const shouldAutoScroll = !openedFromExistingScan
