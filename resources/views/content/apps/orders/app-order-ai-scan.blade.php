@@ -2463,11 +2463,11 @@
 @php
   $heroRobotLottieAsset = null;
   $heroRobotLottieScriptAsset = null;
-  $heroRobotLottiePath = resource_path('images/order-ai/hero-robot.lottie');
+  $heroRobotLottiePath = public_path('images/order-ai/hero-robot.lottie');
 
-  if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
-    $heroRobotLottieAsset = 'data:application/octet-stream;base64,' . base64_encode((string) file_get_contents($heroRobotLottiePath));
-  }
+if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
+  $heroRobotLottieAsset = asset('images/order-ai/hero-robot.lottie');
+}
 
   if (file_exists(public_path('vendors/js/order-ai/dotlottie/dotlottie-wc.js'))) {
     $heroRobotLottieScriptAsset = asset('vendors/js/order-ai/dotlottie/dotlottie-wc.js');
@@ -2510,11 +2510,15 @@
                     a upis u bazu se pokreće tek nakon ručne potvrde transfera.
                   </p>
                 </div>
-                @if(!empty($heroRobotLottieAsset) && !empty($heroRobotLottieScriptAsset))
+       
                   <div class="order-ai-hero-visual" aria-hidden="true">
-                    <dotlottie-wc class="order-ai-hero-lottie" src="{{ $heroRobotLottieAsset }}" autoplay loop></dotlottie-wc>
-                  </div>
-                @endif
+                    <dotlottie-wc
+    class="order-ai-hero-lottie"
+    src="{{ $heroRobotLottieAsset }}"
+    autoplay
+    loop>
+</dotlottie-wc></div>
+          
               </div>
             </div>
 
@@ -6296,4 +6300,5 @@
       syncFeatherIcons();
     })();
 </script>
+<script type="module" src="https://unpkg.com/@lottiefiles/dotlottie-wc@latest/dist/dotlottie-wc.js"></script>
 @endsection
