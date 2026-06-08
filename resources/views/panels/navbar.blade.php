@@ -12,6 +12,7 @@
   }
 
   .navbar-ai-token-pill {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
@@ -27,6 +28,10 @@
   .navbar-ai-token-link:focus .navbar-ai-token-pill {
     transform: translateY(-1px);
     box-shadow: 0 14px 28px rgba(34, 41, 47, 0.12);
+  }
+
+  .navbar-ai-token-pill.is-updating {
+    animation: navbar-ai-token-pill-pulse 0.45s ease;
   }
 
   .navbar-ai-token-pill__icon {
@@ -61,6 +66,20 @@
     font-weight: 700;
     line-height: 1;
     color: #4b5d78;
+  }
+
+  .navbar-ai-token-pill__delta {
+    position: absolute;
+    right: 0.7rem;
+    top: -0.1rem;
+    pointer-events: none;
+    color: #16a34a;
+    font-size: 0.86rem;
+    font-weight: 700;
+    line-height: 1;
+    opacity: 0;
+    text-shadow: 0 3px 10px rgba(22, 163, 74, 0.18);
+    animation: navbar-ai-token-delta-float 1.1s ease-out forwards;
   }
 
   .navbar-ai-token-coin {
@@ -103,6 +122,42 @@
   .dark-layout .navbar-ai-token-pill__value,
   .semi-dark-layout .navbar-ai-token-pill__value {
     color: #ffffff;
+  }
+
+  .dark-layout .navbar-ai-token-pill__delta,
+  .semi-dark-layout .navbar-ai-token-pill__delta {
+    color: #4ade80;
+    text-shadow: 0 3px 10px rgba(74, 222, 128, 0.22);
+  }
+
+  @keyframes navbar-ai-token-delta-float {
+    0% {
+      opacity: 0;
+      transform: translateY(8px) scale(0.96);
+    }
+
+    15% {
+      opacity: 1;
+    }
+
+    100% {
+      opacity: 0;
+      transform: translateY(-20px) scale(1.03);
+    }
+  }
+
+  @keyframes navbar-ai-token-pill-pulse {
+    0% {
+      transform: translateY(0) scale(1);
+    }
+
+    50% {
+      transform: translateY(-1px) scale(1.035);
+    }
+
+    100% {
+      transform: translateY(0) scale(1);
+    }
   }
 
   .dark-layout .navbar-ai-token-pill__label,
@@ -221,7 +276,10 @@
               <span class="navbar-ai-token-coin navbar-ai-token-coin--bottom"></span>
             </span>
             <span class="navbar-ai-token-pill__divider" aria-hidden="true">|</span>
-            <span class="navbar-ai-token-pill__value">{{ $aiTokenNavCountDisplay }}</span>
+            <span
+              class="navbar-ai-token-pill__value"
+              data-ai-token-count="{{ (int) ($aiTokenNavbarCount ?? 0) }}"
+              aria-live="polite">{{ $aiTokenNavCountDisplay }}</span>
           </span>
         </a>
       </li>
@@ -298,6 +356,92 @@
   </ul>
 </div>
 </nav>
+
+<script>
+  (function () {
+    const valueNode = document.querySelector('.navbar-ai-token-pill__value[data-ai-token-count]');
+
+    if (!valueNode) {
+      return;
+    }
+
+    const pill = valueNode.closest('.navbar-ai-token-pill');
+
+    function formatTokenCount(value) {
+      return String(Math.max(0, Math.round(Number(value) || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    }
+
+    function readCurrentTokenCount() {
+      const rawValue = Number(valueNode.dataset.aiTokenCount);
+
+      if (Number.isFinite(rawValue)) {
+        return Math.max(0, Math.round(rawValue));
+      }
+
+      const textValue = Number(String(valueNode.textContent || '').replace(/[^\d]/g, ''));
+
+      return Number.isFinite(textValue) ? Math.max(0, Math.round(textValue)) : 0;
+    }
+
+    function animateDelta(delta) {
+      if (!pill || delta <= 0) {
+        return;
+      }
+
+      const deltaNode = document.createElement('span');
+      deltaNode.className = 'navbar-ai-token-pill__delta';
+      deltaNode.textContent = '+' + formatTokenCount(delta);
+      pill.appendChild(deltaNode);
+
+      window.setTimeout(function () {
+        deltaNode.remove();
+      }, 1150);
+    }
+
+    function pulsePill() {
+      if (!pill) {
+        return;
+      }
+
+      pill.classList.remove('is-updating');
+      void pill.offsetWidth;
+      pill.classList.add('is-updating');
+
+      window.setTimeout(function () {
+        pill.classList.remove('is-updating');
+      }, 500);
+    }
+
+    function applyAiTokenNavbarUpdate(detail) {
+      const payload = detail && typeof detail === 'object' ? detail : {};
+      const currentValue = readCurrentTokenCount();
+      const hasExplicitValue = payload.value !== null
+        && payload.value !== undefined
+        && payload.value !== ''
+        && Number.isFinite(Number(payload.value));
+      const nextValueRaw = hasExplicitValue ? Number(payload.value) : null;
+      const deltaRaw = Number(payload.delta);
+      const delta = Number.isFinite(deltaRaw) ? Math.max(0, Math.round(deltaRaw)) : 0;
+      const nextValue = hasExplicitValue
+        ? Math.max(0, Math.round(nextValueRaw))
+        : currentValue + delta;
+
+      if (nextValue === currentValue && delta <= 0) {
+        return;
+      }
+
+      valueNode.dataset.aiTokenCount = String(nextValue);
+      valueNode.textContent = formatTokenCount(nextValue);
+      pulsePill();
+      animateDelta(delta > 0 ? delta : Math.max(0, nextValue - currentValue));
+    }
+
+    window.updateAiTokenNavbar = applyAiTokenNavbarUpdate;
+    window.addEventListener('ai-token-navbar:update', function (event) {
+      applyAiTokenNavbarUpdate(event.detail || {});
+    });
+  })();
+</script>
 
 @php
 if (!function_exists('flatten_sidebar_menu_items')) {
