@@ -392,40 +392,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.65rem;
+    gap: 0.5rem;
     flex-wrap: nowrap;
   }
 
   .order-linkage-action-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.35rem;
-    min-width: 98px;
-    white-space: nowrap;
-    text-align: center;
-  }
-
-  .order-linkage-action-btn.order-linkage-positions-btn {
-    border-color: #1e88e5 !important;
-    color: #1e88e5 !important;
-    background-color: transparent !important;
-  }
-
-  .order-linkage-action-btn.order-linkage-positions-btn:hover {
-    background-color: rgba(30, 136, 229, 0.1) !important;
-  }
-
-  .order-linkage-action-btn.order-linkage-work-orders-btn {
-    border-color: #28c76f !important;
-    color: #28c76f !important;
-    background-color: transparent !important;
-    justify-content: center;
-    text-align: center;
-  }
-
-  .order-linkage-action-btn.order-linkage-work-orders-btn:hover {
-    background-color: rgba(40, 199, 111, 0.1) !important;
+    padding: 0 !important;
   }
 
   .order-linkage-action-btn[disabled],
@@ -652,29 +624,6 @@
     }
   }
 
-  body.dark-layout #btn-toggle-filters,
-  body.dark-layout #btn-toggle-filters:hover,
-  body.dark-layout #btn-toggle-filters:focus,
-  body.semi-dark-layout #btn-toggle-filters,
-  body.semi-dark-layout #btn-toggle-filters:hover,
-  body.semi-dark-layout #btn-toggle-filters:focus,
-  .dark-layout #btn-toggle-filters,
-  .dark-layout #btn-toggle-filters:hover,
-  .dark-layout #btn-toggle-filters:focus,
-  .semi-dark-layout #btn-toggle-filters,
-  .semi-dark-layout #btn-toggle-filters:hover,
-  .semi-dark-layout #btn-toggle-filters:focus {
-    color: #fff !important;
-    border-color: #fff !important;
-    background-color: transparent !important;
-  }
-
-  body.dark-layout #btn-toggle-filters svg,
-  body.semi-dark-layout #btn-toggle-filters svg,
-  .dark-layout #btn-toggle-filters svg,
-  .semi-dark-layout #btn-toggle-filters svg {
-    stroke: currentColor !important;
-  }
 </style>
 @endsection
 

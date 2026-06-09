@@ -9,7 +9,7 @@ $(function () {
   var tableElement = $('#released-doc-table');
   var pageErrorElement = $('#released-doc-page-error');
   var filtersBody = $('#released-doc-filters-body');
-  var toggleFiltersButton = $('#released-doc-toggle-filters');
+  var toggleFiltersButton = $('#btn-toggle-filters');
   var clearFiltersButton = $('#released-doc-clear-filters');
   var applyFiltersButton = $('#released-doc-apply-filters');
   var activeFiltersContainer = $('#released-doc-active-filters');
@@ -92,6 +92,28 @@ $(function () {
   function replaceFeather() {
     if (window.feather && typeof window.feather.replace === 'function') {
       window.feather.replace({ width: 14, height: 14 });
+    }
+  }
+
+  function initActionTooltips(scope) {
+    var root = scope && scope.length ? scope.get(0) : (scope || document);
+
+    if (window.bootstrap && window.bootstrap.Tooltip) {
+      Array.prototype.forEach.call(root.querySelectorAll('[data-bs-toggle="tooltip"]'), function (element) {
+        var instance = window.bootstrap.Tooltip.getInstance(element);
+
+        if (instance) {
+          instance.dispose();
+        }
+
+        new window.bootstrap.Tooltip(element);
+      });
+
+      return;
+    }
+
+    if (window.jQuery && window.jQuery.fn && typeof window.jQuery.fn.tooltip === 'function') {
+      window.jQuery(root).find('[data-bs-toggle="tooltip"]').tooltip();
     }
   }
 
@@ -599,7 +621,7 @@ $(function () {
     filtersBody.toggleClass('d-none', !isVisible);
     toggleFiltersButton.attr('aria-expanded', isVisible ? 'true' : 'false');
     toggleFiltersButton.html(
-      '<i data-feather="filter" class="me-50"></i> ' + (isVisible ? 'Sakrij filtere' : 'Prika\u017ei filtere')
+      '<i data-feather="filter" class="me-50"></i> ' + (isVisible ? 'Sakrij filtere' : 'Poka\u017ei filtere')
     );
     replaceFeather();
   }
@@ -757,7 +779,7 @@ $(function () {
         render: function () {
           return (
             '<div class="released-doc-actions-group">' +
-              '<button type="button" class="btn btn-sm btn-outline-danger released-doc-action-btn released-doc-delete-btn" title="Izbri\u0161i dokument" aria-label="Izbri\u0161i dokument">' +
+              '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger released-doc-action-btn released-doc-delete-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="Izbri\u0161i dokument" aria-label="Izbri\u0161i dokument">' +
                 '<i data-feather="trash-2"></i>' +
               '</button>' +
             '</div>'
@@ -813,11 +835,13 @@ $(function () {
       drawCallback: function () {
         updateTableLoadingOverlayBounds();
         replaceFeather();
+        initActionTooltips(tableElement.closest('.card-datatable'));
       },
       initComplete: function () {
         updateActiveFilters();
         updateTableLoadingOverlayBounds();
         replaceFeather();
+        initActionTooltips(tableElement.closest('.card-datatable'));
       }
     });
 

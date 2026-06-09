@@ -349,9 +349,17 @@
                   </span>
                 </td>
                 <td class="text-end ai-inbox-action-cell">
-                  <a href="{{ $row['edit_url'] }}" class="btn btn-outline-primary btn-sm">
-                    <i data-feather="eye" class="me-50"></i> Pregled
-                  </a>
+                  <div class="app-table-action-group">
+                    <a
+                      href="{{ $row['edit_url'] }}"
+                      class="btn btn-sm app-table-action-btn app-table-action-btn--info"
+                      data-bs-toggle="tooltip"
+                      data-bs-placement="top"
+                      title="Pregled"
+                      aria-label="Pregled">
+                      <i data-feather="eye"></i>
+                    </a>
+                  </div>
                 </td>
               </tr>
             @empty

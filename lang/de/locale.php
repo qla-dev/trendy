@@ -197,7 +197,7 @@ return [
     "Permission" => "Genehmigung",
     "Cover" => "Abdeckung",
     "AI Inbox" => "AI Inbox",
-    "AI tokeni" => "AI tokeni",
-    "Historija" => "Historija",
+    "AI asistent" => "AI asistent",
+    "Historija AI skeniranja" => "Historija AI skeniranja",
     "message" => "Kuchen Sesam Snaps Cupcake Lebkuchen dänisch Ich liebe Lebkuchen. Apfelkuchen Jujubes Chupa Chups Muffin Halwa Lutscher. Schokoladenkuchen-Haferkuchen-Tiramisumarzipanzuckerpflaume. Donut süße Torte Hafer Kuchen Dragée Obstkuchen Zuckerwatte Zitronentropfen."
 ];
