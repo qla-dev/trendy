@@ -139,6 +139,28 @@ $(function () {
     }
   }
 
+  function initActionTooltips(scope) {
+    var root = scope && scope.length ? scope.get(0) : (scope || document);
+
+    if (window.bootstrap && window.bootstrap.Tooltip) {
+      Array.prototype.forEach.call(root.querySelectorAll('[data-bs-toggle="tooltip"]'), function (element) {
+        var instance = window.bootstrap.Tooltip.getInstance(element);
+
+        if (instance) {
+          instance.dispose();
+        }
+
+        new window.bootstrap.Tooltip(element);
+      });
+
+      return;
+    }
+
+    if (window.jQuery && window.jQuery.fn && typeof window.jQuery.fn.tooltip === 'function') {
+      window.jQuery(root).find('[data-bs-toggle="tooltip"]').tooltip();
+    }
+  }
+
   function updateModalRefreshButtonState(isLoading) {
     if (!modalRefreshButtonElement) {
       return;
@@ -434,21 +456,18 @@ $(function () {
 
     if (canDelete && deleteUrl) {
       deleteButtonHtml =
-        '<button type="button" class="btn btn-sm btn-outline-danger order-linkage-action-btn order-linkage-delete-btn">' +
+        '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger order-linkage-action-btn order-linkage-delete-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="Obriši narudžbu" aria-label="Obriši narudžbu">' +
           '<i class="fa fa-trash"></i>' +
-          '<span>Obrisi</span>' +
         '</button>';
     }
 
     return (
       '<div class="order-linkage-actions-group">' +
-        '<button type="button" class="btn btn-sm btn-outline-primary order-linkage-action-btn order-linkage-positions-btn">' +
+        '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary order-linkage-action-btn order-linkage-positions-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="Pozicije" aria-label="Pozicije">' +
           '<i class="fa fa-list"></i>' +
-          '<span>Pozicije</span>' +
         '</button>' +
-        '<button type="button" class="btn btn-sm btn-outline-primary order-linkage-action-btn order-linkage-work-orders-btn">' +
+        '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success order-linkage-action-btn order-linkage-work-orders-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="Veze" aria-label="Veze">' +
           '<i class="fa fa-industry"></i>' +
-          '<span>Veze</span>' +
         '</button>' +
         deleteButtonHtml +
       '</div>'
@@ -1298,6 +1317,7 @@ $(function () {
         });
 
         replaceFeather();
+        initActionTooltips(tableElement.closest('.card-datatable'));
       },
       drawCallback: function () {
         ensureTableBodyScrollContainer();
@@ -1305,6 +1325,7 @@ $(function () {
         updateTableLoadingOverlayBounds();
         hideTableLoadingOverlay();
         replaceFeather();
+        initActionTooltips(tableElement.closest('.card-datatable'));
       }
     });
 

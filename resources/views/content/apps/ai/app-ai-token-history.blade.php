@@ -1,6 +1,6 @@
 @extends('layouts/contentLayoutMaster')
 
-@section('title', 'AI tokeni')
+@section('title', 'Historija AI skeniranja')
 
 @php
   $summary = $tokenHistorySummary ?? [];
@@ -129,7 +129,7 @@
 
   .ai-token-history-table {
     width: 100%;
-    min-width: 1120px;
+    min-width: 1280px;
     margin-bottom: 0;
     margin-right: 0;
   }
@@ -154,12 +154,17 @@
   .ai-token-history-badge {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     border-radius: 999px;
     padding: 0.36rem 0.72rem;
     font-size: 0.76rem;
     font-weight: 600;
     line-height: 1;
     white-space: nowrap;
+    width: 13.5rem;
+    min-width: 13.5rem;
+    max-width: 13.5rem;
+    text-align: center;
   }
 
   .ai-token-history-badge-primary {
@@ -200,12 +205,17 @@
     font-weight: 500;
   }
 
-  .ai-token-history-actions {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    flex-wrap: nowrap;
+  .ai-token-history-amount {
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .ai-token-history-amount-success {
+    color: #28c76f;
+  }
+
+  .ai-token-history-amount-danger {
+    color: #ea5455;
   }
 
   .ai-token-history-action-cell {
@@ -240,6 +250,18 @@
     padding: 3rem 1.5rem !important;
     text-align: center;
     color: #6e6b7b;
+  }
+
+  .ai-token-history-transfer-feedback {
+    margin-bottom: 1rem;
+  }
+
+  @media (max-width: 767.98px) {
+    .ai-token-history-badge {
+      width: 11.75rem;
+      min-width: 11.75rem;
+      max-width: 11.75rem;
+    }
   }
 
   .ai-token-history-pagination {
@@ -428,12 +450,14 @@
   class="ai-token-history-wrapper"
   id="ai-token-history-app"
   data-status-poll-url="{{ route('app-ai-token-history-statuses') }}"
+  data-transfer-url="{{ route('app-orders-store') }}"
+  data-csrf="{{ csrf_token() }}"
   data-last-loaded-display="{{ $tokenHistoryLastLoadedAtDisplay ?? now()->format('d.m.Y H:i:s') }}">
   <div class="content-header row">
     <div class="content-header-left col-12 mb-2">
       <div class="row breadcrumbs-top">
         <div class="col-12">
-          <h2 class="content-header-title float-start mb-0">AI tokeni</h2>
+          <h2 class="content-header-title float-start mb-0">Historija AI skeniranja</h2>
         </div>
       </div>
     </div>
@@ -482,7 +506,7 @@
           </div>
           <div>
             <h4 class="fw-bolder mb-0">{{ $summary['successful_total_display'] ?? '0' }}</h4>
-            <p class="card-text font-small-3 mb-0">Uspje&#353;no</p>
+            <p class="card-text font-small-3 mb-0">Uspje&#353;an AI scan</p>
           </div>
         </div>
       </div>
@@ -498,7 +522,7 @@
           </div>
           <div>
             <h4 class="fw-bolder mb-0">{{ $summary['failed_total_display'] ?? '0' }}</h4>
-            <p class="card-text font-small-3 mb-0">Neuspje&#353;no</p>
+            <p class="card-text font-small-3 mb-0">Neuspje&#353;an AI scan</p>
           </div>
         </div>
       </div>
@@ -638,6 +662,7 @@
 
   <div class="card">
     <div class="card-body pb-0">
+      <div class="alert alert-dismissible d-none ai-token-history-transfer-feedback" id="ai-token-history-transfer-feedback" role="alert"></div>
       <div class="row align-items-center ai-token-history-table-toolbar">
         <div class="col-md-6 col-12">
           <form method="GET" action="{{ route('app-ai-token-history') }}" class="ai-token-history-length-form">
@@ -669,6 +694,7 @@
             <th>Modul</th>
             <th>Aktivnost</th>
             <th>Status</th>
+            <th>Iznos</th>
             <th>Fajl</th>
             <th>Broj stranica</th>
             <th>Tokeni</th>
@@ -692,6 +718,13 @@
                 <span class="ai-token-history-badge ai-token-history-badge-{{ $row['status_tone'] }}">{{ $row['status_label'] }}</span>
               </td>
               <td>
+                <span
+                  class="ai-token-history-amount ai-token-history-amount-{{ $row['amount_tone'] }}"
+                  title="{{ $row['amount_title'] }}">
+                  {{ $row['amount_display'] }}
+                </span>
+              </td>
+              <td>
                 <div class="ai-token-history-file-name" title="{{ $row['file_name'] }}">{{ $row['file_name'] }}</div>
               </td>
               <td>{{ $row['page_count_display'] }}</td>
@@ -700,21 +733,63 @@
                 <td>{{ $row['usage_cost_usd_display'] }}</td>
               @endif
               <td class="text-end ai-token-history-action-cell">
-                <div class="ai-token-history-actions">
+                <div class="app-table-action-group">
                   @if (!empty($row['download_source_url']))
-                    <a href="{{ $row['download_source_url'] }}" class="btn btn-outline-primary btn-sm">
-                      <i data-feather="download" class="me-50"></i> Preuzmi PDF
+                    <a
+                      href="{{ $row['download_source_url'] }}"
+                      class="btn btn-sm app-table-action-btn app-table-action-btn--primary"
+                      data-bs-toggle="tooltip"
+                      data-bs-placement="top"
+                      title="Preuzmi PDF"
+                      aria-label="Preuzmi PDF">
+                      <i data-feather="download"></i>
                     </a>
                   @endif
-                  <a href="{{ $row['open_scan_url'] }}" class="btn btn-outline-primary btn-sm">
-                    <i data-feather="eye" class="me-50"></i> Otvori scan
+                  <span data-history-transfer-host>
+                    @if ($row['transfer_enabled'])
+                      <button
+                        type="button"
+                        class="btn btn-sm app-table-action-btn app-table-action-btn--success"
+                        data-history-transfer-button
+                        data-scan-id="{{ $row['id'] }}"
+                        data-bs-toggle="tooltip"
+                        data-bs-placement="top"
+                        title="{{ $row['transfer_tooltip'] }}"
+                        aria-label="{{ $row['transfer_tooltip'] }}">
+                        <i data-feather="{{ $row['transfer_icon'] }}"></i>
+                      </button>
+                    @else
+                      <span
+                        class="app-table-action-tooltip"
+                        tabindex="0"
+                        data-bs-toggle="tooltip"
+                        data-bs-placement="top"
+                        title="{{ $row['transfer_tooltip'] }}"
+                        aria-label="{{ $row['transfer_tooltip'] }}">
+                        <button
+                          type="button"
+                          class="btn btn-sm app-table-action-btn app-table-action-btn--success"
+                          disabled>
+                          <i data-feather="{{ $row['transfer_icon'] }}"></i>
+                        </button>
+                      </span>
+                    @endif
+                  </span>
+                  <a
+                    href="{{ $row['open_scan_url'] }}"
+                    class="btn btn-sm app-table-action-btn app-table-action-btn--info"
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="top"
+                    title="Otvori scan"
+                    aria-label="Otvori scan">
+                    <i data-feather="eye"></i>
                   </a>
                 </div>
               </td>
             </tr>
           @empty
             <tr>
-              <td colspan="{{ $showUsdSpend ? 9 : 8 }}" class="ai-token-history-empty">
+              <td colspan="{{ $showUsdSpend ? 10 : 9 }}" class="ai-token-history-empty">
                 Nema AI token historije za odabrane filtere.
               </td>
             </tr>
@@ -751,20 +826,78 @@
     const filterBody = document.getElementById('filters-body');
     const toggleButton = document.getElementById('btn-toggle-filters');
     const lastLoadedEl = document.getElementById('ai-token-history-last-loaded');
+    const transferFeedback = document.getElementById('ai-token-history-transfer-feedback');
     const pollUrl = app ? (app.dataset.statusPollUrl || '') : '';
+    const transferUrl = app ? (app.dataset.transferUrl || '') : '';
+    const csrfToken = app ? (app.dataset.csrf || '') : '';
     let pollTimer = null;
+    let feedbackTimer = null;
+
+    function syncFeatherIcons() {
+      if (window.feather && typeof window.feather.replace === 'function') {
+        window.feather.replace();
+      }
+    }
+
+    function initTooltips(scope) {
+      const root = scope || document;
+
+      if (window.bootstrap && window.bootstrap.Tooltip) {
+        root.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (element) {
+          const instance = window.bootstrap.Tooltip.getInstance(element);
+
+          if (instance) {
+            instance.dispose();
+          }
+
+          new window.bootstrap.Tooltip(element);
+        });
+
+        return;
+      }
+
+      if (window.jQuery && window.jQuery.fn && typeof window.jQuery.fn.tooltip === 'function') {
+        window.jQuery(root).find('[data-bs-toggle="tooltip"]').tooltip();
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function showTransferFeedback(message, tone) {
+      if (!transferFeedback) {
+        return;
+      }
+
+      transferFeedback.className = 'alert alert-dismissible ai-token-history-transfer-feedback';
+      transferFeedback.classList.add(tone === 'success' ? 'alert-success' : 'alert-danger');
+      transferFeedback.textContent = message || '';
+      transferFeedback.classList.remove('d-none');
+
+      if (feedbackTimer) {
+        window.clearTimeout(feedbackTimer);
+      }
+
+      feedbackTimer = window.setTimeout(function () {
+        transferFeedback.classList.add('d-none');
+      }, 4500);
+    }
 
     if (toggleButton && filterBody) {
       const syncToggleState = function () {
         const isHidden = filterBody.classList.contains('d-none');
         toggleButton.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
         toggleButton.innerHTML = isHidden
-          ? '<i data-feather="filter" class="me-50"></i> Pokaži filtere'
+          ? '<i data-feather="filter" class="me-50"></i> Pokazi filtere'
           : '<i data-feather="filter" class="me-50"></i> Sakrij filtere';
 
-        if (typeof feather !== 'undefined') {
-          feather.replace();
-        }
+        syncFeatherIcons();
       };
 
       syncToggleState();
@@ -810,6 +943,29 @@
 
     function renderStatusBadge(label, tone) {
       return '<span class="ai-token-history-badge ai-token-history-badge-' + String(tone || 'secondary') + '">' + String(label || '-') + '</span>';
+    }
+
+    function renderTransferButton(rowPayload) {
+      const icon = escapeHtml(rowPayload && rowPayload.transfer_icon ? rowPayload.transfer_icon : 'arrow-right');
+      const tooltip = escapeHtml(rowPayload && rowPayload.transfer_tooltip ? rowPayload.transfer_tooltip : 'Transfer u bazu');
+      const enabled = Boolean(rowPayload && rowPayload.transfer_enabled);
+      const scanId = escapeHtml(rowPayload && rowPayload.id ? rowPayload.id : '');
+
+      if (enabled) {
+        return '' +
+          '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success" ' +
+            'data-history-transfer-button data-scan-id="' + scanId + '" ' +
+            'data-bs-toggle="tooltip" data-bs-placement="top" title="' + tooltip + '" aria-label="' + tooltip + '">' +
+            '<i data-feather="' + icon + '"></i>' +
+          '</button>';
+      }
+
+      return '' +
+        '<span class="app-table-action-tooltip" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="top" title="' + tooltip + '" aria-label="' + tooltip + '">' +
+          '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success" disabled>' +
+            '<i data-feather="' + icon + '"></i>' +
+          '</button>' +
+        '</span>';
     }
 
     function scheduleNextPoll() {
@@ -858,20 +1014,106 @@
           }
 
           const statusCell = row.querySelector('[data-history-status-cell]');
+          const transferHost = row.querySelector('[data-history-transfer-host]');
 
           if (statusCell) {
             statusCell.innerHTML = renderStatusBadge(rowPayload.status_label, rowPayload.status_tone);
           }
+
+          if (transferHost) {
+            transferHost.innerHTML = renderTransferButton(rowPayload);
+          }
         });
 
         updateLastLoaded(payload.last_loaded_at_display || '');
+        syncFeatherIcons();
+        initTooltips(app);
       } catch (error) {
       } finally {
         scheduleNextPoll();
       }
     }
 
+    async function handleTransfer(button) {
+      const row = button ? button.closest('tr[data-scan-id]') : null;
+      const scanId = row ? row.dataset.scanId || '' : '';
+
+      if (!button || !row || !scanId || !transferUrl) {
+        return;
+      }
+
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+      try {
+        const response = await fetch(transferUrl, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            scan_id: Number(scanId),
+          }),
+        });
+
+        const payload = await response.json().catch(function () {
+          return {};
+        });
+
+        if (!response.ok) {
+          throw new Error(payload && payload.message ? payload.message : 'Transfer u bazu nije uspio.');
+        }
+
+        const statusCell = row.querySelector('[data-history-status-cell]');
+        const transferHost = row.querySelector('[data-history-transfer-host]');
+
+        if (statusCell) {
+          statusCell.innerHTML = renderStatusBadge('Uspjesan transfer', 'success');
+        }
+
+        if (transferHost) {
+          transferHost.innerHTML = renderTransferButton({
+            id: scanId,
+            transfer_enabled: false,
+            transfer_completed: true,
+            transfer_icon: 'check',
+            transfer_tooltip: 'Narudzba je vec prebacena u bazu.',
+          });
+        }
+
+        showTransferFeedback(payload && payload.message ? payload.message : 'Narudzba je uspjesno prebacena u bazu.', 'success');
+        updateLastLoaded(new Date().toLocaleString('sr-Latn-BA'));
+        syncFeatherIcons();
+        initTooltips(row);
+      } catch (error) {
+        button.disabled = false;
+        button.innerHTML = '<i data-feather="arrow-right"></i>';
+        syncFeatherIcons();
+        initTooltips(row);
+        showTransferFeedback(error && error.message ? error.message : 'Transfer u bazu nije uspio.', 'danger');
+      }
+    }
+
+    if (app) {
+      app.addEventListener('click', function (event) {
+        const button = event.target.closest('[data-history-transfer-button]');
+
+        if (!button) {
+          return;
+        }
+
+        event.preventDefault();
+        handleTransfer(button);
+      });
+    }
+
     updateLastLoaded(app ? app.dataset.lastLoadedDisplay || '' : '');
+    syncFeatherIcons();
+    initTooltips(app || document);
     scheduleNextPoll();
 
     window.addEventListener('beforeunload', function () {

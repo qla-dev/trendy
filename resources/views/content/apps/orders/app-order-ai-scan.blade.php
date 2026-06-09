@@ -1284,6 +1284,12 @@
       border: 0;
     }
 
+    #order-ai-progress-warning,
+    #order-ai-warnings,
+    #order-ai-success {
+      display: none !important;
+    }
+
     .order-ai-alert.is-preview-ready {
       color: #c45b12;
       background: rgba(249, 115, 22, 0.12);
@@ -2695,7 +2701,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                 <div class="order-ai-bottom-actions-secondary">
                   <a href="#" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-pdf-button" target="_blank" rel="noopener">Vidi PDF</a>
                   <button type="button" class="btn order-ai-secondary-action" id="order-ai-new-order-button">Nova narudžba</button>
-                  <a href="{{ route('app-ai-token-history') }}" class="btn order-ai-secondary-action">Historija</a>
+                  <a href="{{ route('app-ai-token-history') }}" class="btn order-ai-secondary-action">Historija AI skeniranja</a>
                   <a href="{{ route('app-orders') }}" class="btn order-ai-secondary-action">Moje narudžbe</a>
                   <button type="button" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-order-button">Vidi narudžbu</button>
                   <button type="button" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-positions-button">Pozicije</button>

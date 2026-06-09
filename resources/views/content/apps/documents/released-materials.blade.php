@@ -396,7 +396,7 @@
       </div>
       <div class="d-flex align-items-center flex-wrap gap-2 released-doc-filter-actions">
         <div id="released-doc-active-filters" class="released-doc-active-filters d-none"></div>
-        <button type="button" class="btn btn-outline-primary btn-sm" id="released-doc-toggle-filters" aria-expanded="false">
+        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-toggle-filters" aria-expanded="false">
           <i data-feather="filter" class="me-50"></i> Prikaži filtere
         </button>
         <button type="button" class="btn btn-outline-danger btn-sm" id="released-doc-clear-filters">
@@ -521,5 +521,5 @@
 <script>
   window.releasedMaterialsConfig = @json($releasedMaterialsConfig);
 </script>
-<script src="{{ asset('js/scripts/pages/app-released-material-documents.js?v=7') }}"></script>
+<script src="{{ asset('js/scripts/pages/app-released-material-documents.js?v=8') }}"></script>
 @endsection

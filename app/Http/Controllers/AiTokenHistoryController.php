@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\OrderAiScan;
-use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class AiTokenHistoryController extends Controller
 {
@@ -35,6 +37,16 @@ class AiTokenHistoryController extends Controller
     {
         $this->authorizeModuleAccess($request);
 
+        $requestStartedAt = microtime(true);
+        $queryCount = 0;
+        $queryTimeMs = 0.0;
+        $checkpointAt = $requestStartedAt;
+
+        DB::listen(function (QueryExecuted $query) use (&$queryCount, &$queryTimeMs): void {
+            $queryCount++;
+            $queryTimeMs += max(0, (float) $query->time);
+        });
+
         $pageConfigs = ['pageHeader' => false];
         $showUsdSpend = $this->shouldShowUsdSpend($request);
         $filters = $this->resolveFilters($request);
@@ -47,20 +59,43 @@ class AiTokenHistoryController extends Controller
         $historyRows = $historyQuery
             ->orderByRaw($this->eventTimestampExpression() . ' DESC')
             ->orderByDesc('id')
-            ->paginate($perPage)
+            ->paginate($perPage, $this->historyListColumns($showUsdSpend))
             ->withQueryString();
+        $paginateMs = round((microtime(true) - $checkpointAt) * 1000, 2);
+        $checkpointAt = microtime(true);
 
         $historyRows->setCollection(
             $historyRows->getCollection()->map(function (OrderAiScan $scan) {
                 return $this->mapHistoryRow($scan);
             })
         );
+        $mapRowsMs = round((microtime(true) - $checkpointAt) * 1000, 2);
+        $checkpointAt = microtime(true);
+
+        $summary = $this->buildMonthlySummary(clone $baseQuery, $filters, $showUsdSpend);
+        $summaryMs = round((microtime(true) - $checkpointAt) * 1000, 2);
+
+        Log::info('AI token history load timings.', [
+            'path' => $request->path(),
+            'user_id' => (int) ($request->user()->id ?? 0),
+            'total_request_ms' => round((microtime(true) - $requestStartedAt) * 1000, 2),
+            'query_count' => $queryCount,
+            'total_query_ms' => round($queryTimeMs, 2),
+            'paginate_ms' => $paginateMs,
+            'map_rows_ms' => $mapRowsMs,
+            'summary_ms' => $summaryMs,
+            'page' => $historyRows->currentPage(),
+            'per_page' => $perPage,
+            'rows' => $historyRows->count(),
+            'has_file_filter' => $filters['file_name'] !== '',
+            'activity' => $filters['activity'],
+        ]);
 
         return view('content.apps.ai.app-ai-token-history', [
             'pageConfigs' => $pageConfigs,
             'tokenHistoryRows' => $historyRows,
             'tokenHistoryFilters' => $filters,
-            'tokenHistorySummary' => $this->buildMonthlySummary(clone $baseQuery, $filters),
+            'tokenHistorySummary' => $summary,
             'tokenHistoryActivityOptions' => [
                 self::ACTIVITY_ALL => 'Sve aktivnosti',
                 self::ACTIVITY_AI_SCAN => 'AI scan',
@@ -101,13 +136,15 @@ class AiTokenHistoryController extends Controller
                 'pantheon_order_qid',
             ]);
 
-        return response()->json([
+        $payload = [
             'rows' => $rows->mapWithKeys(function (OrderAiScan $scan) {
                 return [(string) $scan->id => $this->mapHistoryStatusRow($scan)];
             })->all(),
             'last_loaded_at' => now()->toIso8601String(),
             'last_loaded_at_display' => now()->format('d.m.Y H:i:s'),
-        ]);
+        ];
+
+        return response()->json($payload);
     }
 
     private function authorizeModuleAccess(Request $request): void
@@ -230,7 +267,7 @@ class AiTokenHistoryController extends Controller
         }
     }
 
-    private function buildMonthlySummary(Builder $baseQuery, array $filters): array
+    private function buildMonthlySummary(Builder $baseQuery, array $filters, bool $includeUsdSpend = false): array
     {
         $eventExpression = $this->eventTimestampExpression();
         $monthRange = $this->resolveMonthRange($filters);
@@ -243,7 +280,7 @@ class AiTokenHistoryController extends Controller
         $monthlyRows = $baseQuery
             ->whereRaw($eventExpression . ' >= ?', [$monthRange['start']->toDateTimeString()])
             ->whereRaw($eventExpression . ' <= ?', [$monthRange['end']->toDateTimeString()])
-            ->get();
+            ->get($this->historySummaryColumns($includeUsdSpend));
 
         $documentsTotal = $monthlyRows->count();
         $chargedTokens = (int) $monthlyRows->sum(function (OrderAiScan $scan) {
@@ -255,9 +292,11 @@ class AiTokenHistoryController extends Controller
         $failedTotal = $monthlyRows->filter(function (OrderAiScan $scan) {
             return $this->resolveStatusOutcome($scan) === 'failed';
         })->count();
-        $usdSpent = (float) $monthlyRows->sum(function (OrderAiScan $scan) {
-            return $this->resolveUsageCostUsd($scan) ?? 0;
-        });
+        $usdSpent = $includeUsdSpend
+            ? (float) $monthlyRows->sum(function (OrderAiScan $scan) {
+                return $this->resolveUsageCostUsd($scan) ?? 0;
+            })
+            : 0.0;
 
         return [
             'period_label' => $periodLabel,
@@ -279,12 +318,18 @@ class AiTokenHistoryController extends Controller
         $eventTimestamp = $this->resolveEventTimestamp($scan);
         $metrics = $this->resolveDocumentMetrics($scan);
         $usageCostUsd = $this->resolveUsageCostUsd($scan);
+        $amountMeta = $this->resolveAmountMeta($scan);
+        $transferMeta = $this->resolveTransferActionMeta($scan);
 
         return array_merge([
             'id' => (int) $scan->id,
             'event_time_display' => $eventTimestamp ? $eventTimestamp->format('d.m.Y H:i') : '-',
             'usage_label' => (string) ($scan->source_origin ?? 'manual') === 'imap' ? 'AI Inbox' : 'AI narudžba',
             'activity_label' => 'AI scan',
+            'amount_display' => $amountMeta['display'],
+            'amount_tone' => $amountMeta['tone'],
+            'amount_valid' => $amountMeta['valid'],
+            'amount_title' => $amountMeta['title'],
             'file_name' => trim((string) ($scan->source_file_name ?? '')) ?: '-',
             'page_count' => $metrics['page_count'],
             'page_count_display' => $metrics['page_count'] > 0
@@ -300,17 +345,22 @@ class AiTokenHistoryController extends Controller
                 : '-',
             'open_scan_url' => route('app-order-ai-scan', ['scan' => $scan->id, 'history' => 1]),
             'download_source_url' => $this->resolveSourceDownloadUrl($scan),
-        ], $this->mapHistoryStatusRow($scan));
+        ], $this->mapHistoryStatusRow($scan), $transferMeta);
     }
 
     private function mapHistoryStatusRow(OrderAiScan $scan): array
     {
         $statusMeta = $this->resolveStatusMeta($scan);
+        $transferMeta = $this->resolveTransferActionMeta($scan);
 
         return [
             'id' => (int) $scan->id,
             'status_label' => $statusMeta['label'],
             'status_tone' => $statusMeta['tone'],
+            'transfer_enabled' => $transferMeta['transfer_enabled'],
+            'transfer_completed' => $transferMeta['transfer_completed'],
+            'transfer_icon' => $transferMeta['transfer_icon'],
+            'transfer_tooltip' => $transferMeta['transfer_tooltip'],
         ];
     }
 
@@ -324,35 +374,13 @@ class AiTokenHistoryController extends Controller
 
         $pageCount = max(0, (int) ($scan->page_count ?? 0));
         $billedTokens = max(0, (int) ($scan->billed_tokens ?? 0));
-        $resolver = app(OrderAiDocumentMetrics::class);
 
         if ($pageCount <= 0) {
             $pageCount = max(0, (int) data_get($scan->normalized_payload, 'order.page_count', 0));
         }
 
         if ($pageCount > 0 && $billedTokens <= 0) {
-            $billedTokens = $resolver->calculateBilledTokens($pageCount);
-        }
-
-        if ($pageCount <= 0 || $billedTokens <= 0) {
-            $resolvedMetrics = $resolver->resolveForStoredFile(
-                (string) config('ai-order-scan.storage_disk', 'local'),
-                (string) ($scan->source_file_path ?? ''),
-                (string) ($scan->source_mime_type ?? ''),
-                (string) ($scan->source_file_name ?? '')
-            );
-
-            if ($pageCount <= 0) {
-                $pageCount = $resolvedMetrics['page_count'];
-            }
-
-            if ($billedTokens <= 0) {
-                $billedTokens = $resolvedMetrics['billed_tokens'];
-            }
-        }
-
-        if ($pageCount > 0 && $billedTokens <= 0) {
-            $billedTokens = $resolver->calculateBilledTokens($pageCount);
+            $billedTokens = $this->resolveBilledTokensFromPageCount($pageCount);
         }
 
         return $this->documentMetricsCache[$cacheKey] = [
@@ -411,15 +439,15 @@ class AiTokenHistoryController extends Controller
         $hasTransfer = $this->hasTransferResult($scan, $status);
 
         if ($outcome === 'failed') {
-            return ['label' => 'Neuspješno', 'tone' => 'danger'];
+            return ['label' => 'Neuspješan AI scan', 'tone' => 'danger'];
         }
 
         if ($hasTransfer) {
-            return ['label' => 'Završeno', 'tone' => 'success'];
+            return ['label' => 'Uspješan transfer', 'tone' => 'success'];
         }
 
         if ($outcome === 'success') {
-            return ['label' => 'Uspješno', 'tone' => 'info'];
+            return ['label' => 'Čeka na transfer u bazu', 'tone' => 'info'];
         }
 
         return ['label' => 'Obrada', 'tone' => 'secondary'];
@@ -457,6 +485,143 @@ class AiTokenHistoryController extends Controller
             : null;
     }
 
+    private function resolveAmountMeta(OrderAiScan $scan): array
+    {
+        $payload = is_array($scan->normalized_payload) ? $scan->normalized_payload : [];
+        $summary = is_array($payload['summary'] ?? null) ? $payload['summary'] : [];
+        $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];
+        $currency = trim((string) data_get($payload, 'order.currency', ''));
+        $amountValue = $this->resolveDisplayedDocumentAmount($summary);
+        $itemsTotal = $this->resolveItemsTotal($items);
+        $hasComparableValues = $amountValue > 0 || $itemsTotal > 0;
+        $matches = $hasComparableValues && abs(round($amountValue - $itemsTotal, 2)) <= 0.01;
+
+        if ($amountValue > 0) {
+            $display = $this->formatMoney($amountValue);
+
+            if ($currency !== '') {
+                $display .= ' ' . $currency;
+            }
+        } else {
+            $display = 'Nije pronađen';
+        }
+
+        return [
+            'display' => $display,
+            'tone' => $matches ? 'success' : 'danger',
+            'valid' => $matches,
+            'title' => $matches
+                ? 'Iznos odgovara zbiru stavki.'
+                : 'Iznos nije pronađen ili ne odgovara zbiru stavki.',
+        ];
+    }
+
+    private function resolveTransferActionMeta(OrderAiScan $scan): array
+    {
+        $status = trim((string) ($scan->status ?? ''));
+        $hasTransfer = $this->hasTransferResult($scan, $status);
+
+        if ($hasTransfer) {
+            return [
+                'transfer_enabled' => false,
+                'transfer_completed' => true,
+                'transfer_icon' => 'check',
+                'transfer_tooltip' => 'Narudžba je već prebačena u bazu.',
+            ];
+        }
+
+        $statusOutcome = $this->resolveStatusOutcome($scan);
+
+        if ($status === 'transferring') {
+            return [
+                'transfer_enabled' => false,
+                'transfer_completed' => false,
+                'transfer_icon' => 'arrow-right',
+                'transfer_tooltip' => 'Transfer u bazu je u toku.',
+            ];
+        }
+
+        if (in_array($status, ['completed', 'ready_for_transfer'], true) && $statusOutcome === 'success') {
+            $payload = is_array($scan->normalized_payload) ? $scan->normalized_payload : null;
+            $transferReady = is_array($payload) ? $this->looksTransferReady($payload) : true;
+
+            if ($transferReady) {
+                return [
+                    'transfer_enabled' => true,
+                    'transfer_completed' => false,
+                    'transfer_icon' => 'arrow-right',
+                    'transfer_tooltip' => 'Transfer u bazu',
+                ];
+            }
+        }
+
+        if ($statusOutcome === 'failed') {
+            return [
+                'transfer_enabled' => false,
+                'transfer_completed' => false,
+                'transfer_icon' => 'arrow-right',
+                'transfer_tooltip' => 'Transfer nije dostupan jer AI scan nije uspio.',
+            ];
+        }
+
+        return [
+            'transfer_enabled' => false,
+            'transfer_completed' => false,
+            'transfer_icon' => 'arrow-right',
+            'transfer_tooltip' => 'Transfer će biti dostupan nakon uspješne AI obrade.',
+        ];
+    }
+
+    private function looksTransferReady(array $payload): bool
+    {
+        $customerName = trim((string) data_get($payload, 'order.customer_name', ''));
+        $items = data_get($payload, 'items', []);
+
+        return $customerName !== ''
+            && is_array($items)
+            && !empty($items);
+    }
+
+    private function resolveDisplayedDocumentAmount(array $summary): float
+    {
+        $subtotal = max(0, (float) ($summary['subtotal'] ?? 0));
+        $grandTotal = max(0, (float) ($summary['grand_total'] ?? 0));
+
+        return round($subtotal > 0 ? $subtotal : $grandTotal, 2);
+    }
+
+    private function resolveItemsTotal(array $items): float
+    {
+        $total = 0.0;
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $total += $this->resolveLineSourceTotal($item);
+        }
+
+        return round($total, 2);
+    }
+
+    private function resolveLineSourceTotal(array $item): float
+    {
+        $quantity = max(0, (float) ($item['quantity'] ?? 0));
+        $unitPrice = max(0, (float) ($item['unit_price'] ?? 0));
+        $lineTotal = max(0, (float) ($item['line_total'] ?? 0));
+        $discountPercent = max(0, (float) ($item['discount_percent'] ?? 0));
+        $discountFactor = max(0, 1 - ($discountPercent / 100));
+        $baseValue = $lineTotal > 0 ? $lineTotal : ($quantity * $unitPrice * $discountFactor);
+
+        return round(max(0, $baseValue), 2);
+    }
+
+    private function formatMoney(float $value): string
+    {
+        return number_format($value, 2, ',', '.');
+    }
+
     private function resolvePerPage(Request $request): int
     {
         $perPage = (int) $request->query('per_page', 10);
@@ -466,6 +631,65 @@ class AiTokenHistoryController extends Controller
         }
 
         return $perPage;
+    }
+
+    private function historyListColumns(bool $includeUsdSpend = false): array
+    {
+        $columns = [
+            'id',
+            'status',
+            'error_message',
+            'processed_at',
+            'completed_at',
+            'created_at',
+            'source_origin',
+            'source_file_name',
+            'source_file_path',
+            'page_count',
+            'billed_tokens',
+            'normalized_payload',
+            'transferred_at',
+            'pantheon_order_key',
+            'pantheon_order_view',
+            'pantheon_order_qid',
+        ];
+
+        if ($includeUsdSpend) {
+            $columns[] = 'raw_provider_response';
+        }
+
+        return $columns;
+    }
+
+    private function historySummaryColumns(bool $includeUsdSpend = false): array
+    {
+        $columns = [
+            'id',
+            'status',
+            'error_message',
+            'processed_at',
+            'page_count',
+            'billed_tokens',
+            'transferred_at',
+            'pantheon_order_key',
+            'pantheon_order_view',
+            'pantheon_order_qid',
+        ];
+
+        if ($includeUsdSpend) {
+            $columns[] = 'raw_provider_response';
+        }
+
+        return $columns;
+    }
+
+    private function resolveBilledTokensFromPageCount(int $pageCount): int
+    {
+        if ($pageCount <= 0) {
+            return 0;
+        }
+
+        return max(10, $pageCount);
     }
 
     private function resolveYearOptions(): array

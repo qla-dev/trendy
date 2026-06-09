@@ -171,4 +171,163 @@
   .swal2-styled.swal2-default-outline:focus {
     box-shadow: none !important;
   }
+
+  .app-table-action-group {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+  }
+
+  .app-table-action-tooltip {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .app-table-action-btn,
+  .app-table-action-tooltip > .app-table-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    padding: 0.45rem;
+    line-height: 1;
+    border-radius: 0.5rem;
+    background-color: transparent !important;
+    white-space: nowrap;
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  }
+
+  .app-table-action-btn svg,
+  .app-table-action-btn i {
+    display: block;
+    width: 16px;
+    height: 16px;
+    margin: 0 !important;
+    line-height: 1 !important;
+    flex-shrink: 0;
+    vertical-align: middle;
+  }
+
+  .app-table-action-btn i {
+    font-size: 16px;
+  }
+
+  .app-table-action-btn.is-loading,
+  .app-table-action-tooltip > .app-table-action-btn.is-loading {
+    pointer-events: none;
+  }
+
+  .app-table-action-btn .spinner-border {
+    width: 0.95rem;
+    height: 0.95rem;
+    border-width: 0.14em;
+  }
+
+  .app-table-action-btn:hover,
+  .app-table-action-btn:focus {
+    transform: translateY(-1px);
+  }
+
+  .app-table-action-btn:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(30, 136, 229, 0.15);
+  }
+
+  .app-table-action-btn.app-table-action-btn--primary {
+    border-color: #1e88e5 !important;
+    color: #1e88e5 !important;
+  }
+
+  .app-table-action-btn.app-table-action-btn--primary:hover,
+  .app-table-action-btn.app-table-action-btn--primary:focus {
+    background-color: rgba(30, 136, 229, 0.1) !important;
+  }
+
+  .app-table-action-btn.app-table-action-btn--info {
+    border-color: #00a8c2 !important;
+    color: #00a8c2 !important;
+  }
+
+  .app-table-action-btn.app-table-action-btn--info:hover,
+  .app-table-action-btn.app-table-action-btn--info:focus {
+    background-color: rgba(0, 168, 194, 0.1) !important;
+  }
+
+  .app-table-action-btn.app-table-action-btn--success {
+    border-color: #28c76f !important;
+    color: #28c76f !important;
+  }
+
+  .app-table-action-btn.app-table-action-btn--success:hover,
+  .app-table-action-btn.app-table-action-btn--success:focus {
+    background-color: rgba(40, 199, 111, 0.1) !important;
+  }
+
+  .app-table-action-btn.app-table-action-btn--warning {
+    border-color: #f59e0b !important;
+    color: #f59e0b !important;
+  }
+
+  .app-table-action-btn.app-table-action-btn--warning:hover,
+  .app-table-action-btn.app-table-action-btn--warning:focus {
+    background-color: rgba(245, 158, 11, 0.12) !important;
+  }
+
+  .app-table-action-btn.app-table-action-btn--accent {
+    border-color: #7367f0 !important;
+    color: #7367f0 !important;
+  }
+
+  .app-table-action-btn.app-table-action-btn--accent:hover,
+  .app-table-action-btn.app-table-action-btn--accent:focus {
+    background-color: rgba(115, 103, 240, 0.12) !important;
+  }
+
+  .app-table-action-btn.app-table-action-btn--danger {
+    border-color: #ea5455 !important;
+    color: #ea5455 !important;
+  }
+
+  .app-table-action-btn.app-table-action-btn--danger:hover,
+  .app-table-action-btn.app-table-action-btn--danger:focus {
+    background-color: rgba(234, 84, 85, 0.1) !important;
+  }
+
+  .app-table-action-btn[disabled],
+  .app-table-action-btn.disabled,
+  .app-table-action-tooltip > .app-table-action-btn[disabled],
+  .app-table-action-tooltip > .app-table-action-btn.disabled {
+    opacity: 0.5;
+    transform: none;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  body.dark-layout #btn-toggle-filters,
+  body.dark-layout #btn-toggle-filters:hover,
+  body.dark-layout #btn-toggle-filters:focus,
+  body.semi-dark-layout #btn-toggle-filters,
+  body.semi-dark-layout #btn-toggle-filters:hover,
+  body.semi-dark-layout #btn-toggle-filters:focus,
+  .dark-layout #btn-toggle-filters,
+  .dark-layout #btn-toggle-filters:hover,
+  .dark-layout #btn-toggle-filters:focus,
+  .semi-dark-layout #btn-toggle-filters,
+  .semi-dark-layout #btn-toggle-filters:hover,
+  .semi-dark-layout #btn-toggle-filters:focus {
+    color: #fff !important;
+    border-color: #fff !important;
+    background-color: transparent !important;
+  }
+
+  body.dark-layout #btn-toggle-filters svg,
+  body.semi-dark-layout #btn-toggle-filters svg,
+  .dark-layout #btn-toggle-filters svg,
+  .semi-dark-layout #btn-toggle-filters svg {
+    stroke: currentColor !important;
+  }
 </style>

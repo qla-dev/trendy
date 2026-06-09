@@ -1115,6 +1115,28 @@ $(function () {
     });
   }
 
+  function initActionTooltips(scope) {
+    var root = scope && scope.length ? scope.get(0) : (scope || document);
+
+    if (window.bootstrap && window.bootstrap.Tooltip) {
+      Array.prototype.forEach.call(root.querySelectorAll('[data-bs-toggle="tooltip"]'), function (element) {
+        var instance = window.bootstrap.Tooltip.getInstance(element);
+
+        if (instance) {
+          instance.dispose();
+        }
+
+        new window.bootstrap.Tooltip(element);
+      });
+
+      return;
+    }
+
+    if (window.jQuery && window.jQuery.fn && typeof window.jQuery.fn.tooltip === 'function') {
+      window.jQuery(root).find('[data-bs-toggle="tooltip"]').tooltip();
+    }
+  }
+
   if (!tableElement.length || !dataUrl) {
     return;
   }
@@ -1131,6 +1153,12 @@ $(function () {
     lengthMenu: [10, 25, 50, 100],
     searchDelay: 250,
     order: [[0, 'asc']],
+    initComplete: function () {
+      initActionTooltips(tableElement.closest('.card-datatable'));
+    },
+    drawCallback: function () {
+      initActionTooltips(tableElement.closest('.card-datatable'));
+    },
     ajax: function (requestData, callback) {
       var firstOrder = requestData.order && requestData.order.length ? requestData.order[0] : null;
       var orderColumnIndex = firstOrder && firstOrder.column !== undefined ? parseInt(firstOrder.column, 10) : NaN;
@@ -1227,25 +1255,22 @@ $(function () {
 
             if (canAdjustStock) {
               actionsHtml +=
-                '<button type="button" class="btn btn-sm btn-outline-primary material-action-btn material-stock-adjust-btn">' +
+                '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="Korekcija zalihe" aria-label="Korekcija zalihe">' +
                   '<i class="fa fa-database"></i>' +
-                  '<span>Skladište</span>' +
                 '</button>';
             }
 
             if (canCopyMaterial) {
               actionsHtml +=
-                '<button type="button" class="btn btn-sm btn-outline-secondary material-action-btn material-copy-btn">' +
+                '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="Kopiraj materijal" aria-label="Kopiraj materijal">' +
                   '<i class="fa fa-copy"></i>' +
-                  '<span>Kopiraj</span>' +
                 '</button>';
             }
 
             if (canDeleteMaterial) {
               actionsHtml +=
-                '<button type="button" class="btn btn-sm btn-outline-danger material-action-btn material-delete-btn" data-material-code="' + escapeHtml(row && row.material_code ? row.material_code : '') + '">' +
+                '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" data-material-code="' + escapeHtml(row && row.material_code ? row.material_code : '') + '" data-bs-toggle="tooltip" data-bs-placement="top" title="Izbriši materijal" aria-label="Izbriši materijal">' +
                   '<i class="fa fa-trash"></i>' +
-                  '<span>Izbriši</span>' +
                 '</button>';
             }
 

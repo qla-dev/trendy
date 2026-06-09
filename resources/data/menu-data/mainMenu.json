@@ -39,11 +39,11 @@
       "slug": "app-order-ai-inbox"
     },
     {
-      "navheader": "AI tokeni",
+      "navheader": "AI asistent",
       "slug": "app-ai-tokens-navheader"
     },
     {
-      "name": "Historija",
+      "name": "Historija AI skeniranja",
       "icon": "activity",
       "url": "app/ai-tokens/history",
       "slug": "app-ai-token-history"

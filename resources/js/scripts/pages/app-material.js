@@ -57,6 +57,8 @@ $(function () {
   var currentMaterialCode = '';
   var currentQrImageUrl = '';
   var currentPreviewMode = 'barcode';
+  var qrSvgMarkupCache = Object.create(null);
+  var qrSvgRequestCache = Object.create(null);
   var activeStockMaterial = null;
   var activeCopyMaterial = null;
   var stockRequestInFlight = false;
@@ -289,6 +291,28 @@ $(function () {
         value: searchValue
       }
     };
+  }
+
+  function initActionTooltips(scope) {
+    var root = scope && scope.length ? scope.get(0) : (scope || document);
+
+    if (window.bootstrap && window.bootstrap.Tooltip) {
+      Array.prototype.forEach.call(root.querySelectorAll('[data-bs-toggle="tooltip"]'), function (element) {
+        var instance = window.bootstrap.Tooltip.getInstance(element);
+
+        if (instance) {
+          instance.dispose();
+        }
+
+        new window.bootstrap.Tooltip(element);
+      });
+
+      return;
+    }
+
+    if (window.jQuery && window.jQuery.fn && typeof window.jQuery.fn.tooltip === 'function') {
+      window.jQuery(root).find('[data-bs-toggle="tooltip"]').tooltip();
+    }
   }
 
   function createBulkDownloadButton(mode) {
@@ -733,6 +757,15 @@ $(function () {
       '&margin=0&format=svg&data=' + encodeURIComponent(qrValue);
   }
 
+  function buildQrFetchOptions() {
+    return {
+      headers: {
+        Accept: 'image/svg+xml'
+      },
+      mode: 'cors'
+    };
+  }
+
   function buildQrLabelSvg(qrSvgMarkup, materialCode, materialName) {
     var normalizedMaterialCode = normalizeBarcodeValue(materialCode);
     var label = (materialName || '').toString().trim();
@@ -913,6 +946,42 @@ $(function () {
     modalPreviewElement.innerHTML = '<div class="material-barcode-modal-empty">' + escapeHtml(message || '') + '</div>';
   }
 
+  function setModalPreviewLoading(message) {
+    if (!modalPreviewElement) {
+      return;
+    }
+
+    modalPreviewElement.innerHTML =
+      '<div class="material-barcode-modal-loading">' +
+        '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>' +
+        '<span>' + escapeHtml(message || 'Ucitavam etiketu...') + '</span>' +
+      '</div>';
+  }
+
+  function setActionButtonLoading(button, isLoading) {
+    if (!button) {
+      return;
+    }
+
+    if (isLoading) {
+      if (!button.dataset.defaultHtml) {
+        button.dataset.defaultHtml = button.innerHTML;
+      }
+
+      button.disabled = true;
+      button.classList.add('is-loading');
+      button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+      return;
+    }
+
+    if (button.dataset.defaultHtml) {
+      button.innerHTML = button.dataset.defaultHtml;
+    }
+
+    button.disabled = false;
+    button.classList.remove('is-loading');
+  }
+
   function labelFontSize(label) {
     var length = (label || '').length;
 
@@ -1049,11 +1118,10 @@ $(function () {
     }
   }
 
-  function renderMaterialQr(materialRow) {
+  function renderMaterialQr(materialRow, triggerButton) {
     var materialCode = materialRow && materialRow.barcode_value ? materialRow.barcode_value : '';
     var materialName = materialRow && materialRow.material_name ? materialRow.material_name : '';
     var normalizedMaterialCode = normalizeBarcodeValue(materialCode);
-    var qrUrl;
 
     setModalPreviewMode('qr');
     resetModalError();
@@ -1074,15 +1142,12 @@ $(function () {
     }
 
     setDownloadButtonState(qrDownloadButtonHtml, true);
+    setActionButtonLoading(triggerButton, true);
 
     try {
       currentMaterialCode = normalizedMaterialCode;
-      qrUrl = buildQrImageUrl(normalizedMaterialCode, 360);
-      currentQrImageUrl = qrUrl;
-
-      if (modalPreviewElement) {
-        modalPreviewElement.innerHTML = '<div class="material-barcode-modal-empty">Ucitavam QR etiketu...</div>';
-      }
+      currentQrImageUrl = buildQrImageUrl(normalizedMaterialCode, 360);
+      setModalPreviewLoading('Ucitavam QR etiketu...');
 
       fetchQrLabelSvg(normalizedMaterialCode, materialName)
         .then(function (svgMarkup) {
@@ -1105,8 +1170,12 @@ $(function () {
 
           setEmptyPreview('QR code etiketa nije dostupna za odabrani materijal.');
           showModalError(error && error.message ? error.message : 'Ne mogu generisati QR code etiketu.');
+        })
+        .finally(function () {
+          setActionButtonLoading(triggerButton, false);
         });
     } catch (error) {
+      setActionButtonLoading(triggerButton, false);
       setEmptyPreview('QR code etiketa nije dostupna za odabrani materijal.');
       showModalError(error && error.message ? error.message : 'Ne mogu generisati QR code etiketu.');
     }
@@ -1182,7 +1251,7 @@ $(function () {
       return;
     }
 
-    window.fetch(qrUrl, { mode: 'cors' })
+    window.fetch(qrUrl, buildQrFetchOptions())
       .then(function (response) {
         if (!response.ok) {
           throw new Error('QR download failed');
@@ -1742,9 +1811,22 @@ $(function () {
     });
   }
 
-  function fetchQrLabelSvg(materialCode, materialName, attempt) {
-    var qrUrl = buildQrImageUrl(materialCode, 360);
+  function fetchQrSvgMarkup(materialCode, attempt) {
+    var normalizedMaterialCode = normalizeBarcodeValue(materialCode);
+    var qrCacheKey = normalizedMaterialCode + ':360';
     var resolvedAttempt = Number(attempt);
+
+    if (!normalizedMaterialCode) {
+      return Promise.reject(new Error('Materijal nema vrijednost za QR code.'));
+    }
+
+    if (qrSvgMarkupCache[qrCacheKey]) {
+      return Promise.resolve(qrSvgMarkupCache[qrCacheKey]);
+    }
+
+    if (qrSvgRequestCache[qrCacheKey]) {
+      return qrSvgRequestCache[qrCacheKey];
+    }
 
     if (!window.fetch) {
       return Promise.reject(new Error('Browser ne podrzava bulk preuzimanje QR etiketa.'));
@@ -1754,22 +1836,41 @@ $(function () {
       resolvedAttempt = 1;
     }
 
-    return window.fetch(qrUrl, { mode: 'cors' }).then(function (response) {
-      if (!response.ok) {
-        throw new Error('QR etiketa nije dostupna za preuzimanje.');
-      }
+    qrSvgRequestCache[qrCacheKey] = window.fetch(buildQrImageUrl(normalizedMaterialCode, 360), buildQrFetchOptions())
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error('QR etiketa nije dostupna za preuzimanje.');
+        }
 
-      return response.text();
-    }).then(function (svgMarkup) {
-      return buildQrLabelSvg(svgMarkup, materialCode, materialName);
-    }).catch(function (error) {
-      if (resolvedAttempt >= 2) {
-        throw error;
-      }
+        return response.text();
+      })
+      .then(function (svgMarkup) {
+        qrSvgMarkupCache[qrCacheKey] = svgMarkup;
+        return svgMarkup;
+      })
+      .catch(function (error) {
+        delete qrSvgRequestCache[qrCacheKey];
 
-      return wait(150).then(function () {
-        return fetchQrLabelSvg(materialCode, materialName, resolvedAttempt + 1);
+        if (resolvedAttempt >= 2) {
+          throw error;
+        }
+
+        return wait(150).then(function () {
+          return fetchQrSvgMarkup(normalizedMaterialCode, resolvedAttempt + 1);
+        });
+      })
+      .finally(function () {
+        delete qrSvgRequestCache[qrCacheKey];
       });
+
+    return qrSvgRequestCache[qrCacheKey];
+  }
+
+  function fetchQrLabelSvg(materialCode, materialName, attempt) {
+    var normalizedMaterialCode = normalizeBarcodeValue(materialCode);
+
+    return fetchQrSvgMarkup(normalizedMaterialCode, attempt).then(function (svgMarkup) {
+      return buildQrLabelSvg(svgMarkup, normalizedMaterialCode, materialName);
     });
   }
 
@@ -2454,10 +2555,12 @@ $(function () {
     initComplete: function () {
       ensureBulkDownloadButton();
       updateBulkDownloadButtonState();
+      initActionTooltips(tableElement.closest('.card-datatable'));
     },
     drawCallback: function () {
       ensureBulkDownloadButton();
       updateBulkDownloadButtonState();
+      initActionTooltips(tableElement.closest('.card-datatable'));
     },
     ajax: function (requestData, callback) {
       var requestPayload = buildTableRequestPayload(requestData);
@@ -2542,38 +2645,33 @@ $(function () {
             var actionsHtml = '<div class="material-actions-group">';
 
             actionsHtml +=
-              '<button type="button" class="btn btn-sm btn-outline-primary material-action-btn material-barcode-preview-btn">' +
+              '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="Barcode" aria-label="Barcode">' +
                 '<i class="fa fa-barcode"></i>' +
-                '<span>Barcode</span>' +
               '</button>';
 
             actionsHtml +=
-              '<button type="button" class="btn btn-sm btn-outline-primary material-action-btn material-qr-preview-btn">' +
+              '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="QR code" aria-label="QR code">' +
                 '<i class="fa fa-qrcode"></i>' +
-                '<span>QR code</span>' +
               '</button>';
 
             if (canAdjustStock) {
               actionsHtml +=
-                '<button type="button" class="btn btn-sm btn-outline-primary material-action-btn material-stock-adjust-btn">' +
+                '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="Korekcija zalihe" aria-label="Korekcija zalihe">' +
                   '<i class="fa fa-database"></i>' +
-                  '<span>Skladište</span>' +
                 '</button>';
             }
 
             if (canCopyMaterial) {
               actionsHtml +=
-                '<button type="button" class="btn btn-sm btn-outline-secondary material-action-btn material-copy-btn">' +
+                '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="Kopiraj materijal" aria-label="Kopiraj materijal">' +
                   '<i class="fa fa-copy"></i>' +
-                  '<span>Kopiraj</span>' +
                 '</button>';
             }
 
             if (canDeleteMaterial) {
               actionsHtml +=
-                '<button type="button" class="btn btn-sm btn-outline-danger material-action-btn material-delete-btn" data-material-code="' + escapeHtml(row && row.material_code ? row.material_code : '') + '">' +
+                '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" data-material-code="' + escapeHtml(row && row.material_code ? row.material_code : '') + '" data-bs-toggle="tooltip" data-bs-placement="top" title="Izbriši materijal" aria-label="Izbriši materijal">' +
                   '<i class="fa fa-trash"></i>' +
-                  '<span>Izbriši</span>' +
                 '</button>';
             }
 
@@ -2653,7 +2751,7 @@ $(function () {
       return;
     }
 
-    renderMaterialQr(rowData);
+    renderMaterialQr(rowData, this);
     modalInstance = window.bootstrap.Modal.getOrCreateInstance(modalElement);
     modalInstance.show();
   });

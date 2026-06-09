@@ -6,10 +6,13 @@ use App\Models\OrderAiScan;
 use App\Services\OrderAi\AiInboxImportService;
 use App\Services\OrderAi\AiInboxSenderDirectory;
 use App\Support\Utf8Sanitizer;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class AiInboxController extends Controller
@@ -22,19 +25,57 @@ class AiInboxController extends Controller
     {
         $this->authorizeModuleAccess($request);
 
+        $requestStartedAt = microtime(true);
+        $queryCount = 0;
+        $queryTimeMs = 0.0;
+        $checkpointAt = $requestStartedAt;
+
+        DB::listen(function (QueryExecuted $query) use (&$queryCount, &$queryTimeMs): void {
+            $queryCount++;
+            $queryTimeMs += max(0, (float) $query->time);
+        });
+
         $pageConfigs = ['pageHeader' => false];
         $rows = OrderAiScan::query()
             ->where('source_origin', 'imap')
-            ->orderByRaw('COALESCE(source_email_received_at, created_at) DESC')
+            ->orderByDesc('source_email_received_at')
+            ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->paginate(10)
+            ->paginate(10, [
+                'id',
+                'status',
+                'processing_step',
+                'error_message',
+                'transferred_at',
+                'pantheon_order_key',
+                'source_email_received_at',
+                'created_at',
+                'source_email_from',
+                'source_email_subject',
+                'source_file_name',
+            ])
             ->withQueryString();
+        $paginateMs = round((microtime(true) - $checkpointAt) * 1000, 2);
+        $checkpointAt = microtime(true);
 
         $rows->setCollection(
             $rows->getCollection()->map(function (OrderAiScan $scan) {
                 return $this->mapRow($scan);
             })
         );
+        $mapRowsMs = round((microtime(true) - $checkpointAt) * 1000, 2);
+
+        Log::info('AI inbox load timings.', [
+            'path' => $request->path(),
+            'user_id' => (int) ($request->user()->id ?? 0),
+            'total_request_ms' => round((microtime(true) - $requestStartedAt) * 1000, 2),
+            'query_count' => $queryCount,
+            'total_query_ms' => round($queryTimeMs, 2),
+            'paginate_ms' => $paginateMs,
+            'map_rows_ms' => $mapRowsMs,
+            'page' => $rows->currentPage(),
+            'rows' => $rows->count(),
+        ]);
 
         return view('content.apps.ai.app-ai-inbox', [
             'pageConfigs' => $pageConfigs,
@@ -69,13 +110,15 @@ class AiInboxController extends Controller
                 'pantheon_order_key',
             ]);
 
-        return response()->json([
+        $payload = [
             'rows' => $rows->mapWithKeys(function (OrderAiScan $scan) {
                 return [(string) $scan->id => $this->mapStatusRow($scan)];
             })->all(),
             'last_loaded_at' => now()->toIso8601String(),
             'last_loaded_at_display' => now()->format('d.m.Y H:i:s'),
-        ]);
+        ];
+
+        return response()->json($payload);
     }
 
     public function refresh(Request $request, AiInboxImportService $importService): RedirectResponse

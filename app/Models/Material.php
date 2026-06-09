@@ -6,12 +6,16 @@ use App\Support\Utf8Sanitizer;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class Material extends Model
 {
     use HasFactory;
+
+    private const OPTION_CACHE_TTL_SECONDS = 300;
+    private const COUNT_CACHE_TTL_SECONDS = 60;
 
     private static ?array $catalogItemColumnsCache = null;
     private static ?array $catalogItemNonInsertableColumnsCache = null;
@@ -187,9 +191,16 @@ class Material extends Model
         string $warehouseFilter = ''
     ): int
     {
-        return (int) DB::query()
-            ->fromSub(self::barcodeGeneratorBaseQuery('', $materialsSets, $warehouseFilter), 'm')
-            ->count();
+        return (int) self::rememberQueryCache(
+            'barcode-generator-total-count',
+            [$materialsSets, $warehouseFilter],
+            self::COUNT_CACHE_TTL_SECONDS,
+            function () use ($materialsSets, $warehouseFilter) {
+                return (int) DB::query()
+                    ->fromSub(self::barcodeGeneratorBaseQuery('', $materialsSets, $warehouseFilter), 'm')
+                    ->count();
+            }
+        );
     }
 
     public static function barcodeGeneratorFilteredCount(
@@ -197,73 +208,94 @@ class Material extends Model
         array $materialsSets = [],
         string $warehouseFilter = ''
     ): int {
-        return (int) DB::query()
-            ->fromSub(self::barcodeGeneratorBaseQuery($search, $materialsSets, $warehouseFilter), 'm')
-            ->count();
+        return (int) self::rememberQueryCache(
+            'barcode-generator-filtered-count',
+            [$search, $materialsSets, $warehouseFilter],
+            self::COUNT_CACHE_TTL_SECONDS,
+            function () use ($search, $materialsSets, $warehouseFilter) {
+                return (int) DB::query()
+                    ->fromSub(self::barcodeGeneratorBaseQuery($search, $materialsSets, $warehouseFilter), 'm')
+                    ->count();
+            }
+        );
     }
 
     public static function stockWarehouseOptions(array $materialsSets = []): array
     {
-        $normalizedSets = self::normalizeMaterialsSets($materialsSets);
-        $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
-        $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
-        $query = DB::table($stockTable)
-            ->join($itemsTable, function ($join) {
-                $join->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) = LTRIM(RTRIM(ISNULL(s.acIdent, '')))");
-            })
-            ->whereRaw("LTRIM(RTRIM(ISNULL(s.acWarehouse, ''))) <> ''")
-            ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) <> ''");
+        return self::rememberQueryCache(
+            'stock-warehouse-options',
+            [$materialsSets],
+            self::OPTION_CACHE_TTL_SECONDS,
+            function () use ($materialsSets) {
+                $normalizedSets = self::normalizeMaterialsSets($materialsSets);
+                $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
+                $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
+                $query = DB::table($stockTable)
+                    ->join($itemsTable, function ($join) {
+                        $join->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) = LTRIM(RTRIM(ISNULL(s.acIdent, '')))");
+                    })
+                    ->whereRaw("LTRIM(RTRIM(ISNULL(s.acWarehouse, ''))) <> ''")
+                    ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) <> ''");
 
-        if (!empty($normalizedSets)) {
-            $query->whereIn(
-                DB::raw("LTRIM(RTRIM(ISNULL(i.acSetOfItem, '')))"),
-                $normalizedSets
-            );
-        }
+                if (!empty($normalizedSets)) {
+                    $query->whereIn(
+                        DB::raw("LTRIM(RTRIM(ISNULL(i.acSetOfItem, '')))"),
+                        $normalizedSets
+                    );
+                }
 
-        return $query
-            ->selectRaw("LTRIM(RTRIM(ISNULL(s.acWarehouse, ''))) as warehouse_name")
-            ->groupBy('s.acWarehouse')
-            ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(s.acWarehouse, '')))) ASC")
-            ->pluck('warehouse_name')
-            ->map(function ($value) {
-                return trim((string) $value);
-            })
-            ->filter(function ($value) {
-                return $value !== '';
-            })
-            ->values()
-            ->all();
+                return $query
+                    ->selectRaw("LTRIM(RTRIM(ISNULL(s.acWarehouse, ''))) as warehouse_name")
+                    ->groupBy('s.acWarehouse')
+                    ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(s.acWarehouse, '')))) ASC")
+                    ->pluck('warehouse_name')
+                    ->map(function ($value) {
+                        return trim((string) $value);
+                    })
+                    ->filter(function ($value) {
+                        return $value !== '';
+                    })
+                    ->values()
+                    ->all();
+            }
+        );
     }
 
     public static function materialUnitOptions(array $materialsSets = []): array
     {
-        $normalizedSets = self::normalizeMaterialsSets($materialsSets);
-        $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
-        $query = DB::table($itemsTable)
-            ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) <> ''")
-            ->whereRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) <> ''");
+        return self::rememberQueryCache(
+            'material-unit-options',
+            [$materialsSets],
+            self::OPTION_CACHE_TTL_SECONDS,
+            function () use ($materialsSets) {
+                $normalizedSets = self::normalizeMaterialsSets($materialsSets);
+                $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
+                $query = DB::table($itemsTable)
+                    ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) <> ''")
+                    ->whereRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) <> ''");
 
-        if (!empty($normalizedSets)) {
-            $query->whereIn(
-                DB::raw("LTRIM(RTRIM(ISNULL(i.acSetOfItem, '')))"),
-                $normalizedSets
-            );
-        }
+                if (!empty($normalizedSets)) {
+                    $query->whereIn(
+                        DB::raw("LTRIM(RTRIM(ISNULL(i.acSetOfItem, '')))"),
+                        $normalizedSets
+                    );
+                }
 
-        return $query
-            ->selectRaw("UPPER(LTRIM(RTRIM(ISNULL(i.acUM, '')))) as material_um")
-            ->groupBy('i.acUM')
-            ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(i.acUM, '')))) ASC")
-            ->pluck('material_um')
-            ->map(function ($value) {
-                return strtoupper(substr(trim((string) $value), 0, 3));
-            })
-            ->filter(function ($value) {
-                return $value !== '';
-            })
-            ->values()
-            ->all();
+                return $query
+                    ->selectRaw("UPPER(LTRIM(RTRIM(ISNULL(i.acUM, '')))) as material_um")
+                    ->groupBy('i.acUM')
+                    ->orderByRaw("UPPER(LTRIM(RTRIM(ISNULL(i.acUM, '')))) ASC")
+                    ->pluck('material_um')
+                    ->map(function ($value) {
+                        return strtoupper(substr(trim((string) $value), 0, 3));
+                    })
+                    ->filter(function ($value) {
+                        return $value !== '';
+                    })
+                    ->values()
+                    ->all();
+            }
+        );
     }
 
     public static function scannerFindByBarcode(string $barcode, array $materialsSets = []): ?array
@@ -918,6 +950,17 @@ class Material extends Model
         }, $materialsSets), function ($value) {
             return $value !== '';
         }));
+    }
+
+    private static function rememberQueryCache(
+        string $key,
+        array $context,
+        int $ttlSeconds,
+        callable $callback
+    ): mixed {
+        $cacheKey = 'materials:' . $key . ':' . md5(json_encode($context));
+
+        return Cache::remember($cacheKey, now()->addSeconds($ttlSeconds), $callback);
     }
 
     private static function normalizeStockAdjustments(array $items): array

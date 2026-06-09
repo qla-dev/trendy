@@ -223,28 +223,66 @@
   }
 
   .material-barcode-table .material-actions-cell {
-    width: 1%;
-  }
-
-  .material-stock-adjust-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
+    width: 1% !important;
+    position: sticky !important;
+    right: 0 !important;
+    z-index: 10 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-clip: border-box !important;
+    opacity: 1 !important;
+    isolation: isolate !important;
+    box-shadow: none !important;
+    border-left: 1px solid #ebe9f1 !important;
   }
 
   .material-actions-group {
     display: inline-flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 0.45rem;
+    gap: 0.5rem;
     flex-wrap: nowrap;
   }
 
-  .material-action-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    white-space: nowrap;
+  .material-barcode-table thead .material-actions-cell {
+    z-index: 11 !important;
+    background: #f8f8fa !important;
+    background-color: #f8f8fa !important;
+    box-shadow: none !important;
+  }
+
+  .material-barcode-table.table tbody tr:hover > .material-actions-cell {
+    background: #f8f8fc !important;
+    background-color: #f8f8fc !important;
+    box-shadow: none !important;
+  }
+
+  body.dark-layout .material-barcode-table .material-actions-cell,
+  body.semi-dark-layout .material-barcode-table .material-actions-cell,
+  .dark-layout .material-barcode-table .material-actions-cell,
+  .semi-dark-layout .material-barcode-table .material-actions-cell {
+    background: #283046 !important;
+    background-color: #283046 !important;
+    box-shadow: none !important;
+    border-left-color: rgba(184, 190, 220, 0.22) !important;
+  }
+
+  body.dark-layout .material-barcode-table thead .material-actions-cell,
+  body.semi-dark-layout .material-barcode-table thead .material-actions-cell,
+  .dark-layout .material-barcode-table thead .material-actions-cell,
+  .semi-dark-layout .material-barcode-table thead .material-actions-cell {
+    background: #2f3854 !important;
+    background-color: #2f3854 !important;
+    box-shadow: none !important;
+  }
+
+  body.dark-layout .material-barcode-table.table tbody tr:hover > .material-actions-cell,
+  body.semi-dark-layout .material-barcode-table.table tbody tr:hover > .material-actions-cell,
+  .dark-layout .material-barcode-table.table tbody tr:hover > .material-actions-cell,
+  .semi-dark-layout .material-barcode-table.table tbody tr:hover > .material-actions-cell {
+    background: #36405a !important;
+    background-color: #36405a !important;
+    box-shadow: none !important;
   }
 
   .material-stock-modal .modal-content {
@@ -550,7 +588,7 @@
             @endif
             <th>Zaliha</th>
             @if($canManageMaterialActions)
-              <th>Akcija</th>
+              <th class="material-actions-cell">Akcija</th>
             @endif
           </tr>
         </thead>

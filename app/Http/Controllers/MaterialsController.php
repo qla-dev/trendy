@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Material;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -76,12 +78,34 @@ class MaterialsController extends Controller
 
     public function stockIndex(Request $request)
     {
+        $requestStartedAt = microtime(true);
+        $queryCount = 0;
+        $queryTimeMs = 0.0;
+
+        DB::listen(function (QueryExecuted $query) use (&$queryCount, &$queryTimeMs): void {
+            $queryCount++;
+            $queryTimeMs += max(0, (float) $query->time);
+        });
+
         $pageConfigs = ['pageHeader' => false];
         $canCreateMaterial = $this->canCreateMaterial($request->user());
         $canDeleteMaterial = $this->canDeleteMaterial($request->user());
         $shouldAutoOpenCreate = strtolower(trim((string) $request->query('open', ''))) === 'create-material';
         $warehouseOptions = Material::stockWarehouseOptions(self::MATERIALS_SETS);
-        $unitOptions = Material::materialUnitOptions(self::MATERIALS_SETS);
+        $unitOptions = $canCreateMaterial
+            ? Material::materialUnitOptions(self::MATERIALS_SETS)
+            : [];
+
+        Log::info('Materials stock index timings.', [
+            'path' => $request->path(),
+            'user_id' => (int) ($request->user()->id ?? 0),
+            'total_request_ms' => round((microtime(true) - $requestStartedAt) * 1000, 2),
+            'query_count' => $queryCount,
+            'total_query_ms' => round($queryTimeMs, 2),
+            'warehouse_options' => count($warehouseOptions),
+            'unit_options' => count($unitOptions),
+            'can_create_material' => $canCreateMaterial,
+        ]);
 
         return view('content.apps.materials.app-material', [
             'pageConfigs' => $pageConfigs,
@@ -101,6 +125,16 @@ class MaterialsController extends Controller
     public function stockData(Request $request): JsonResponse
     {
         try {
+            $requestStartedAt = microtime(true);
+            $queryCount = 0;
+            $queryTimeMs = 0.0;
+            $checkpointAt = $requestStartedAt;
+
+            DB::listen(function (QueryExecuted $query) use (&$queryCount, &$queryTimeMs): void {
+                $queryCount++;
+                $queryTimeMs += max(0, (float) $query->time);
+            });
+
             $draw = (int) $request->input('draw', 0);
             $start = max(0, (int) $request->integer('start', 0));
             $length = $request->filled('length')
@@ -121,12 +155,42 @@ class MaterialsController extends Controller
                 $sortDir,
                 $warehouseFilter
             );
+            $rowsLoadMs = round((microtime(true) - $checkpointAt) * 1000, 2);
+            $checkpointAt = microtime(true);
+
+            $recordsTotal = Material::barcodeGeneratorTotalCount(self::MATERIALS_SETS, $warehouseFilter);
+            $totalCountMs = round((microtime(true) - $checkpointAt) * 1000, 2);
+            $checkpointAt = microtime(true);
+
+            $recordsFiltered = $search === ''
+                ? $recordsTotal
+                : Material::barcodeGeneratorFilteredCount($search, self::MATERIALS_SETS, $warehouseFilter);
+            $filteredCountMs = round((microtime(true) - $checkpointAt) * 1000, 2);
+
+            Log::info('Materials stock data timings.', [
+                'path' => $request->path(),
+                'user_id' => (int) ($request->user()->id ?? 0),
+                'total_request_ms' => round((microtime(true) - $requestStartedAt) * 1000, 2),
+                'query_count' => $queryCount,
+                'total_query_ms' => round($queryTimeMs, 2),
+                'rows_load_ms' => $rowsLoadMs,
+                'total_count_ms' => $totalCountMs,
+                'filtered_count_ms' => $filteredCountMs,
+                'start' => $start,
+                'limit' => $limit,
+                'rows' => count($materials),
+                'search' => $search !== '' ? $search : null,
+                'warehouse' => $warehouseFilter !== '' ? $warehouseFilter : null,
+                'records_total' => $recordsTotal,
+                'records_filtered' => $recordsFiltered,
+                'reused_total_count' => $search === '',
+            ]);
 
             return response()->json([
                 'draw' => $draw,
                 'data' => $materials,
-                'recordsTotal' => Material::barcodeGeneratorTotalCount(self::MATERIALS_SETS, $warehouseFilter),
-                'recordsFiltered' => Material::barcodeGeneratorFilteredCount($search, self::MATERIALS_SETS, $warehouseFilter),
+                'recordsTotal' => $recordsTotal,
+                'recordsFiltered' => $recordsFiltered,
             ]);
         } catch (Throwable $exception) {
             Log::error('Materials barcode generator list failed.', [
