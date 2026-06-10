@@ -230,8 +230,9 @@ class PantheonOrderTransferService
             $itemNote = $this->normalizePantheonText((string) ($itemMeta['note'] ?? ''));
             $drawingReference = $this->normalizePantheonText((string) ($itemMeta['drawing_reference'] ?? ''));
             $materialHint = $this->normalizePantheonText((string) ($itemMeta['material_hint'] ?? ''));
-            $primaryClassification = $this->resolvePrimaryClassification($materialHint);
+            $primaryClassification = $this->resolvePrimaryClassification($materialHint, $order);
             $quantity = round(max(0, (float) ($rawItem['quantity'] ?? 0)), 6);
+            $itemDeliveryDeadline = trim((string) ($rawItem['delivery_deadline'] ?? ''));
 
             if ($quantity <= 0) {
                 continue;
@@ -347,6 +348,7 @@ class PantheonOrderTransferService
                 'material_hint' => $materialHint,
                 'quantity' => $quantity,
                 'unit' => trim((string) ($rawItem['unit'] ?? config('ai-order-scan.default_unit', 'KO'))) ?: (string) config('ai-order-scan.default_unit', 'KO'),
+                'delivery_deadline' => $itemDeliveryDeadline,
                 'unit_price' => $unitPrice,
                 'line_total' => $lineTotal,
                 'vat_rate' => $vatRate,
@@ -479,15 +481,32 @@ class PantheonOrderTransferService
         }, $lines)));
     }
 
-    private function resolvePrimaryClassification(string $materialHint): string
+    private function resolvePrimaryClassification(string $materialHint, array $order = []): string
     {
         $materialHint = trim($materialHint);
+
+        if ($this->isTrendyGermanyOrder($order)) {
+            return '';
+        }
 
         if ($materialHint !== '' && preg_match('/^al/i', $materialHint) === 1) {
             return 'ALUMINIJUM';
         }
 
         return 'ČELIK';
+    }
+
+    private function isTrendyGermanyOrder(array $order): bool
+    {
+        foreach (['customer_name', 'supplier_name'] as $field) {
+            $value = trim((string) ($order[$field] ?? ''));
+
+            if ($value !== '' && stripos($value, 'trendy germany') !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function buildCatalogItemNotice(string $productCode, string $status): string
@@ -856,6 +875,13 @@ class PantheonOrderTransferService
 
         $now = Carbon::now();
         $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
+        $headerDeliveryDeadline = $headerPayload['adDeliveryDeadline'] instanceof Carbon
+            ? $headerPayload['adDeliveryDeadline']->copy()->startOfDay()
+            : $now->copy()->startOfDay();
+        $itemDeliveryDeadline = $this->parseDateOrFallback(
+            (string) ($item['delivery_deadline'] ?? ''),
+            $headerDeliveryDeadline
+        )->copy()->startOfDay();
 
         $resolvedUnit = $this->resolvePantheonItemUnit($item, $template, $stringLengths);
         $resolvedItemQid = $this->positiveIntegerOrNull($item['product_qid'] ?? null);
@@ -902,8 +928,8 @@ class PantheonOrderTransferService
         $payload['anPVOCForPay'] = $item['grand_total'];
         $payload['anQtyConverted'] = $item['quantity'];
         $payload['acUMConverted'] = $this->fitString('acUMConverted', $resolvedUnit, $stringLengths);
-        $payload['adDeliveryDeadline'] = $headerPayload['adDeliveryDeadline'] ?? null;
-        $payload['adDeliveryDate'] = $headerPayload['adDeliveryDeadline'] ?? null;
+        $payload['adDeliveryDeadline'] = $itemDeliveryDeadline;
+        $payload['adDeliveryDate'] = $itemDeliveryDeadline;
 
         if ($userId > 0) {
             $payload['anUserIns'] = $userId;

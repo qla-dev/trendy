@@ -114,7 +114,7 @@
 
               <div class="confirm-weight-screen">
                 <div class="confirm-weight-screen-readout">
-                  <span class="confirm-weight-screen-value" id="confirm-weight-screen-value">1</span>
+                  <span class="confirm-weight-screen-value" id="confirm-weight-screen-value">0</span>
                   <span class="confirm-weight-screen-unit" id="confirm-weight-screen-unit">AUTO</span>
                 </div>
 
@@ -132,7 +132,7 @@
               <input
                 type="text"
                 id="weight-input"
-                value="1"
+                value=""
                 inputmode="none"
                 autocomplete="off"
                 readonly

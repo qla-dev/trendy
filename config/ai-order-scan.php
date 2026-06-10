@@ -19,8 +19,10 @@ Extraction rules:
 - Keep buyer/customer and supplier/sender separate when both are visible.
 - Prefer a purchase-order / narudzba / order reference number when present.
 - Normalize quantities, prices, rebates, and VAT rates into numeric values.
+- Parse German-formatted numbers correctly, including values such as 1.234,56 -> 1234.56.
 - Extract both the visible line unit price and the visible line total price into unit_price and line_total whenever they are shown.
 - If the document shows a row total / amount / value for a line item, preserve that exact numeric value in line_total.
+- When a visible document subtotal / net total such as Gesamtbetrag or Nettowert is present below the item table, extract that visible value into summary.subtotal.
 - Keep item ordering as shown in the source document.
 - If a unit is missing, use "KO".
 - If the source uses piece-like labels such as ST, STK, STUECK, STUCK, STU, PCS, or PIECE, normalize them to "KO".
@@ -36,10 +38,13 @@ $grobPromptRules = <<<'PROMPT'
 - If a line begins with Werkstoff:, put only the text after the colon into material_hint and do not include that line in product_name.
 - Example: if an item block shows code 3226090, then Klotz on one line, G552-11000-1000-10-80-1-01-1-30 on the next line, then Zeichnung ... and Werkstoff: RSt37-2, product_name must be "Klotz G552-11000-1000-10-80-1-01-1-30", drawing_reference must contain the Zeichnung line, and material_hint must be "RSt37-2".
 - Prefer Nettopreis / net unit price for unit_price when both Nettopreis and Bruttopreis are visible for the same item.
+- Ignore Bruttopreis when Nettopreis is also present for the same GROB item.
 - Continuation rows without a new position number or new product code belong to the previous numbered item, even across a page break.
 - Rows such as Ruesten/Termin abs., Nettopreis, Lieferdatum, Preis, Preiseinheit, pro, and Wert may continue the previous item and must not start a new item on their own.
 - If one page ends with Bruttopreis for an item and the next page continues the same item without a new position number, use the continued Nettopreis and continued Wert as the final unit_price and line_total for that same item.
 - Fold continuation amounts into the previous item instead of leaving them only in the summary.
+- Read GROB line items only until the separator line "*********************************** ACHTUNG * *************************************". Ignore everything after that separator for item extraction.
+- If Preiseinheit is ST for a GROB item, return unit as KO.
 - Do not copy Bruttopreis, subtotal, footer totals, or prices from a previous page into the first unrelated item on the next page.
 - Respect page breaks strictly: page headers, footers, company signatures, and bank/contact blocks are not part of a line item.
 - Never treat a continuation amount row as a standalone summary-only adjustment if it visually belongs to the previous item.
@@ -58,13 +63,16 @@ $trendyDePromptRules = <<<'PROMPT'
 - Use the line-item table columns as follows:
 - Pos. -> line_number
 - Artikel Nr. -> product_code
-- Beschreibung -> product_name
+- Beschreibung first visible line -> product_name
+- Additional Beschreibung lines before Liefertermin -> note
+- Liefertermin value inside the line-item block -> delivery_deadline for that item
 - Menge -> quantity
 - Einheit -> unit
 - EK-Preis -> unit_price
 - VAT % -> vat_rate
 - Betrag -> line_total
-- If Beschreibung spans multiple lines for the same row, merge those lines into product_name in reading order.
+- Do not copy Liefertermin or its date into product_name or note.
+- If Einheit is STU for a Trendy Germany item, return unit as KO.
 - Prefer the visible Betrag value as line_total for each row.
 - If footer totals are missing or unclear, leave summary totals at 0 and let downstream normalization compute them from items.
 PROMPT;

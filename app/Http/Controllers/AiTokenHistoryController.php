@@ -32,6 +32,7 @@ class AiTokenHistoryController extends Controller
     ];
 
     private array $documentMetricsCache = [];
+    private array $historyResultPayloadCache = [];
 
     public function index(Request $request)
     {
@@ -487,7 +488,7 @@ class AiTokenHistoryController extends Controller
 
     private function resolveAmountMeta(OrderAiScan $scan): array
     {
-        $payload = is_array($scan->normalized_payload) ? $scan->normalized_payload : [];
+        $payload = $this->resolveHistoryResultPayload($scan);
         $summary = is_array($payload['summary'] ?? null) ? $payload['summary'] : [];
         $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];
         $currency = trim((string) data_get($payload, 'order.currency', ''));
@@ -495,25 +496,77 @@ class AiTokenHistoryController extends Controller
         $itemsTotal = $this->resolveItemsTotal($items);
         $hasComparableValues = $amountValue > 0 || $itemsTotal > 0;
         $matches = $hasComparableValues && abs(round($amountValue - $itemsTotal, 2)) <= 0.01;
+        $difference = round($amountValue - $itemsTotal, 2);
+        $display = $this->formatMoney($amountValue);
 
-        if ($amountValue > 0) {
-            $display = $this->formatMoney($amountValue);
-
-            if ($currency !== '') {
-                $display .= ' ' . $currency;
-            }
-        } else {
-            $display = 'Nije pronađen';
+        if ($currency !== '') {
+            $display .= ' ' . $currency;
         }
 
         return [
             'display' => $display,
-            'tone' => $matches ? 'success' : 'danger',
+            'tone' => !$hasComparableValues ? 'secondary' : ($matches ? 'success' : 'danger'),
             'valid' => $matches,
-            'title' => $matches
-                ? 'Iznos odgovara zbiru stavki.'
-                : 'Iznos nije pronađen ili ne odgovara zbiru stavki.',
+            'title' => !$hasComparableValues
+                ? 'Ukupan iznos nije potvrđen iz skeniranog dokumenta.'
+                : ($matches
+                    ? 'Iznos odgovara zbiru stavki.'
+                    : 'Razlika: ' . $this->formatMoney($difference)),
         ];
+    }
+
+    private function resolveHistoryResultPayload(OrderAiScan $scan): array
+    {
+        $cacheKey = (string) ($scan->id ?: spl_object_id($scan));
+
+        if (array_key_exists($cacheKey, $this->historyResultPayloadCache)) {
+            return $this->historyResultPayloadCache[$cacheKey];
+        }
+
+        $resultPayload = is_array($scan->normalized_payload) ? $scan->normalized_payload : [];
+        $transferPreview = is_array($scan->pantheon_transfer_payload) ? $scan->pantheon_transfer_payload : [];
+        $preparedPayload = is_array($transferPreview['payload'] ?? null) ? $transferPreview['payload'] : [];
+
+        if ($preparedPayload !== []) {
+            $resultPayload = $this->overlayHistoryTransferPreviewPayload($resultPayload, $preparedPayload);
+        }
+
+        return $this->historyResultPayloadCache[$cacheKey] = $resultPayload;
+    }
+
+    private function overlayHistoryTransferPreviewPayload(array $payload, array $preparedPayload): array
+    {
+        $order = is_array($payload['order'] ?? null) ? $payload['order'] : [];
+        $summary = is_array($payload['summary'] ?? null) ? $payload['summary'] : [];
+        $items = is_array($payload['items'] ?? null) ? array_values($payload['items']) : [];
+        $preparedItems = is_array($preparedPayload['items'] ?? null) ? array_values($preparedPayload['items']) : [];
+
+        $payload['order'] = array_merge($order, [
+            'currency' => trim((string) ($preparedPayload['currency'] ?? ($order['currency'] ?? ''))),
+        ]);
+
+        foreach ($preparedItems as $index => $preparedItem) {
+            if (!is_array($preparedItem)) {
+                continue;
+            }
+
+            $existingItem = is_array($items[$index] ?? null) ? $items[$index] : [];
+
+            $items[$index] = array_merge($existingItem, [
+                'quantity' => (float) ($preparedItem['quantity'] ?? ($existingItem['quantity'] ?? 0)),
+                'unit_price' => (float) ($existingItem['unit_price'] ?? ($preparedItem['unit_price'] ?? 0)),
+                'line_total' => (float) ($existingItem['line_total'] ?? ($preparedItem['line_total'] ?? 0)),
+            ]);
+        }
+
+        $payload['items'] = $items;
+        $payload['summary'] = array_merge($summary, [
+            'subtotal' => (float) ($preparedPayload['subtotal'] ?? ($summary['subtotal'] ?? 0)),
+            'vat_total' => (float) ($preparedPayload['vat_total'] ?? ($summary['vat_total'] ?? 0)),
+            'grand_total' => (float) ($preparedPayload['grand_total'] ?? ($summary['grand_total'] ?? 0)),
+        ]);
+
+        return $payload;
     }
 
     private function resolveTransferActionMeta(OrderAiScan $scan): array
@@ -648,6 +701,7 @@ class AiTokenHistoryController extends Controller
             'page_count',
             'billed_tokens',
             'normalized_payload',
+            'pantheon_transfer_payload',
             'transferred_at',
             'pantheon_order_key',
             'pantheon_order_view',

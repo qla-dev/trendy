@@ -5777,16 +5777,7 @@
 
       applyConfirmContext(selected, context);
 
-      if (quantityInput) {
-        if (context && context.mode === 'barcode') {
-          var existingQty = context && context.material && context.material.existing_item
-            ? Number(context.material.existing_item.qty || 0)
-            : 0;
-          quantityInput.value = Number.isFinite(existingQty) && existingQty > 0 ? String(existingQty) : '1';
-        } else if (!quantityInput.value || Number(quantityInput.value) <= 0) {
-          quantityInput.value = '1';
-        }
-      }
+      setQuantityInputValue('');
 
       var confirmModal = window.bootstrap.Modal.getOrCreateInstance(confirmModalEl);
       confirmModal.show();
@@ -6146,7 +6137,7 @@
         confirmHelpTextEl.textContent = 'Unesi faktor količine za planiranu potrošnju.';
       }
 
-      setQuantityInputValue('1');
+      setQuantityInputValue('');
       setQuantityUnitValue('AUTO');
 
       if (confirmSaveBtn) {
@@ -6333,24 +6324,7 @@
       }
 
       applyConfirmContext(selected, context);
-      var prefillValue = '1';
-      if (context && context.mode === 'barcode') {
-        var existingQty = context && context.material && context.material.existing_item
-          ? Number(context.material.existing_item.qty || 0)
-          : 0;
-        if (Number.isFinite(existingQty) && existingQty > 0) {
-          prefillValue = String(existingQty);
-        }
-      }
-      if (context && context.mode === 'barcode') {
-        var existingTotalQty = context && context.material && context.material.existing_item
-          ? Number(context.material.existing_item.qty || 0)
-          : 0;
-        var barcodeUnitQty = resolveBarcodeExistingUnitQuantity(existingTotalQty);
-        if (barcodeUnitQty !== '') {
-          prefillValue = barcodeUnitQty;
-        }
-      }
+      var prefillValue = '';
       setQuantityInputValue(prefillValue);
 
       var confirmModal = window.bootstrap.Modal.getOrCreateInstance(confirmModalEl);

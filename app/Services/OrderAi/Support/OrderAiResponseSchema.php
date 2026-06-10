@@ -64,6 +64,7 @@ class OrderAiResponseSchema
                             'material_hint',
                             'quantity',
                             'unit',
+                            'delivery_deadline',
                             'unit_price',
                             'line_total',
                             'vat_rate',
@@ -92,6 +93,10 @@ class OrderAiResponseSchema
                             ],
                             'quantity' => ['type' => 'number'],
                             'unit' => ['type' => 'string'],
+                            'delivery_deadline' => [
+                                'type' => 'string',
+                                'description' => 'Optional row-level Liefertermin / shipping deadline for this item only.',
+                            ],
                             'unit_price' => [
                                 'type' => 'number',
                                 'description' => 'Final visible Nettopreis for the item. If a page ends with Bruttopreis and the next page continues the same item without a new position/code, use the continued Nettopreis instead.',

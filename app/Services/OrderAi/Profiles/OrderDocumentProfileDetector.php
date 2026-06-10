@@ -2,6 +2,8 @@
 
 namespace App\Services\OrderAi\Profiles;
 
+use App\Services\OrderAi\Support\OrderAiDocumentTextExtractor;
+
 class OrderDocumentProfileDetector
 {
     public function detect(string $fileName, ?string $mimeType, string $bytes): string
@@ -29,6 +31,13 @@ class OrderDocumentProfileDetector
     {
         if ($bytes === '') {
             return '';
+        }
+
+        $extracted = app(OrderAiDocumentTextExtractor::class)->extract($bytes);
+        $documentText = trim((string) ($extracted['text'] ?? ''));
+
+        if ($documentText !== '') {
+            return $documentText;
         }
 
         $bytes = str_replace("\0", ' ', $bytes);
