@@ -4,6 +4,7 @@ namespace App\Services\OrderAi;
 
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\Contracts\OrderAiScanProvider;
+use App\Services\OrderAi\Support\OrderAiDocumentPreparationService;
 use App\Services\OrderAi\Support\OrderAiResponseSchema;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
@@ -36,17 +37,13 @@ class OpenAiOrderScanProvider implements OrderAiScanProvider
         $model = trim((string) config('ai-order-scan.model', 'gpt-5'));
         $baseUrl = rtrim((string) config('ai-order-scan.openai.base_url', 'https://api.openai.com/v1'), '/');
         $prompt = trim((string) ($scan->request_prompt ?: config('ai-order-scan.prompt')));
-
-        $fileInput = str_starts_with($mime, 'image/')
-            ? [
-                'type' => 'input_image',
-                'image_url' => 'data:' . $mime . ';base64,' . base64_encode($bytes),
-            ]
-            : [
-                'type' => 'input_file',
-                'filename' => (string) $scan->source_file_name,
-                'file_data' => 'data:' . $mime . ';base64,' . base64_encode($bytes),
-            ];
+        $preparedDocument = app(OrderAiDocumentPreparationService::class)->prepareDocument(
+            (string) ($scan->document_profile ?? ''),
+            (string) ($scan->source_file_name ?? 'document'),
+            $mime,
+            $bytes
+        );
+        $documentInput = $this->buildDocumentInput($scan, $mime, $bytes, $preparedDocument);
 
         $response = Http::withToken($apiKey)
             ->timeout((int) config('ai-order-scan.timeout', 120))
@@ -70,7 +67,7 @@ class OpenAiOrderScanProvider implements OrderAiScanProvider
                                 'type' => 'input_text',
                                 'text' => 'Extract the order from this document and return JSON that matches the provided schema.',
                             ],
-                            $fileInput,
+                            ...$documentInput,
                         ],
                     ],
                 ],
@@ -133,6 +130,31 @@ class OpenAiOrderScanProvider implements OrderAiScanProvider
         }
 
         return $outputText;
+    }
+
+    private function buildDocumentInput(OrderAiScan $scan, string $mime, string $bytes, array $preparedDocument): array
+    {
+        $preparedText = trim((string) ($preparedDocument['provider_input_text'] ?? ''));
+
+        if (trim((string) ($preparedDocument['provider_input_mode'] ?? '')) === 'text' && $preparedText !== '') {
+            return [[
+                'type' => 'input_text',
+                'text' => $preparedText,
+            ]];
+        }
+
+        if (str_starts_with($mime, 'image/')) {
+            return [[
+                'type' => 'input_image',
+                'image_url' => 'data:' . $mime . ';base64,' . base64_encode($bytes),
+            ]];
+        }
+
+        return [[
+            'type' => 'input_file',
+            'filename' => (string) $scan->source_file_name,
+            'file_data' => 'data:' . $mime . ';base64,' . base64_encode($bytes),
+        ]];
     }
 
     private function calculateCredits(array $usage): float

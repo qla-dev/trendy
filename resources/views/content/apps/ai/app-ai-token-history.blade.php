@@ -218,6 +218,10 @@
     color: #ea5455;
   }
 
+  .ai-token-history-amount-secondary {
+    color: #6e6b7b;
+  }
+
   .ai-token-history-action-cell {
     width: 1% !important;
     position: sticky !important;
@@ -720,12 +724,14 @@
               <td>
                 <span
                   class="ai-token-history-amount ai-token-history-amount-{{ $row['amount_tone'] }}"
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="top"
                   title="{{ $row['amount_title'] }}">
                   {{ $row['amount_display'] }}
                 </span>
               </td>
               <td>
-                <div class="ai-token-history-file-name" title="{{ $row['file_name'] }}">{{ $row['file_name'] }}</div>
+                <div class="ai-token-history-file-name">{{ $row['file_name'] }}</div>
               </td>
               <td>{{ $row['page_count_display'] }}</td>
               <td>{{ $row['billed_tokens_display'] }}</td>

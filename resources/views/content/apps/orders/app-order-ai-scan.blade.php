@@ -1157,12 +1157,14 @@
     }
 
     .order-ai-line-total-computed {
-      font-weight: 700;
+      font-size: 0.78rem;
+      opacity: 0.8;
     }
 
     .order-ai-line-total-source {
-      font-size: 0.8rem;
-      opacity: 0.84;
+      font-size: 0.94rem;
+      font-weight: 700;
+      opacity: 1;
     }
 
     .order-ai-line-total-diff {
@@ -2959,6 +2961,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       let extractSimulationStartedAt = null;
       let extractSimulationPageCount = 1;
       let extractSimulationStatus = '';
+      let lastFailedToastSignature = '';
       const locallyStartedScanIds = new Set();
       const tokenRewardAppliedScanIds = new Set();
       const stageFillState = {
@@ -3106,6 +3109,46 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         });
       }
 
+      function buildFailedExtractionToastText(data, extractionProgressState) {
+        const details = [];
+        const reason = String(data && data.error_message || '').trim();
+        const currentPage = extractionProgressState && Number.isFinite(extractionProgressState.currentPage)
+          ? Math.max(1, Math.round(extractionProgressState.currentPage))
+          : 0;
+        const totalPages = extractionProgressState && Number.isFinite(extractionProgressState.totalPages)
+          ? Math.max(1, Math.round(extractionProgressState.totalPages))
+          : 0;
+
+        if (currentPage > 0 && totalPages > 0) {
+          details.push(`Stranica ${currentPage}/${totalPages}`);
+        }
+
+        if (reason !== '') {
+          details.push(reason.length > 220 ? `${reason.slice(0, 217)}...` : reason);
+        }
+
+        return details.join(' | ');
+      }
+
+      function showExtractionFailedToast(data, extractionProgressState) {
+        if (!window.Swal || typeof window.Swal.fire !== 'function') {
+          return;
+        }
+
+        const toastText = buildFailedExtractionToastText(data, extractionProgressState);
+
+        window.Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'error',
+          title: 'AI obrada narudžbe je bila neuspješna.',
+          text: toastText || undefined,
+          showConfirmButton: false,
+          timer: 5000,
+          timerProgressBar: true,
+        });
+      }
+
       function showTransferSuccessAlert(orderView) {
         if (!window.Swal || typeof window.Swal.fire !== 'function') {
           return;
@@ -3233,12 +3276,28 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         }
       }
 
-      function resolvePageCount(data) {
+      function resolveSourcePageCount(data) {
         const payload = data && data.result ? data.result : {};
         const payloadPageCount = toFiniteNumber(payload && payload.order && payload.order.page_count, 0);
         const statusPageCount = toFiniteNumber(data && data.page_count, payloadPageCount);
 
         return Math.max(0, Math.round(statusPageCount));
+      }
+
+      function resolvePageCount(data) {
+        const payload = data && data.result ? data.result : {};
+        const sourcePageCount = resolveSourcePageCount(data);
+        const payloadEffectivePageCount = toFiniteNumber(payload && payload.order && payload.order.effective_page_count, 0);
+        const statusEffectivePageCount = toFiniteNumber(data && data.effective_page_count, payloadEffectivePageCount);
+        const resolvedEffectivePageCount = Math.max(0, Math.round(statusEffectivePageCount));
+
+        if (resolvedEffectivePageCount > 0) {
+          return sourcePageCount > 0
+            ? Math.min(sourcePageCount, resolvedEffectivePageCount)
+            : resolvedEffectivePageCount;
+        }
+
+        return sourcePageCount;
       }
 
       function resolveExtractRowSizes(model) {
@@ -3491,6 +3550,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
               material_hint: String(item.material_hint || '').trim(),
               quantity: toFiniteNumber(item.quantity, 0),
               unit: String(item.unit || '').trim(),
+              delivery_deadline: String(item.delivery_deadline || '').trim(),
               unit_price: toFiniteNumber(item.unit_price, 0),
               line_total: resolveLineSourceTotal(item),
               vat_rate: toFiniteNumber(item.vat_rate, 0),
@@ -3788,8 +3848,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                   ${allowLineEdit ? '' : 'tabindex="-1"'}
                 >
                   <span class="order-ai-line-total-meta">
-                    <span class="order-ai-line-total-computed">${escapeHtml(formatAmount(item.unit_price || 0))} x ${escapeHtml(formatAmount(item.quantity || 0))} = ${escapeHtml(formatAmountWithCurrency(comparison.computed, currency))}</span>
                     <span class="order-ai-line-total-source">AI total: ${escapeHtml(formatAmountWithCurrency(comparison.source, currency))}</span>
+                    <span class="order-ai-line-total-computed">${escapeHtml(formatAmount(item.unit_price || 0))} x ${escapeHtml(formatAmount(item.quantity || 0))} = ${escapeHtml(formatAmountWithCurrency(comparison.computed, currency))}</span>
                     <span class="order-ai-line-total-diff">Razlika: ${escapeHtml(diffPrefix + formatAmountWithCurrency(comparison.difference, currency))}</span>
                   </span>
                 </button>
@@ -4258,10 +4318,12 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         setVisible(viewOrderButton, false);
 
         if (data.status === 'failed') {
-          errorBox.textContent = data.error_message || 'AI obrada nije uspjela.';
-          setVisible(errorBox, true);
+          var isTransferFailure = /(transfer|baza|pantheon)/i.test(String(data.processing_step || ''))
+            || /(anConsigneeQId|SetSubj|Pantheon)/i.test(String(data.error_message || ''));
+          errorBox.textContent = isTransferFailure ? (data.error_message || 'Transfer u bazu nije uspio.') : '';
+          setVisible(errorBox, isTransferFailure);
           setVisible(transferFollowup, true);
-          if (/(transfer|baza|pantheon)/i.test(String(data.processing_step || '')) || /(anConsigneeQId|SetSubj|Pantheon)/i.test(String(data.error_message || ''))) {
+          if (isTransferFailure) {
             showTransferErrorModal(data.error_message || 'Transfer u bazu nije uspio.', data.error_message || '');
           }
           setTransferButtonState({
@@ -4736,8 +4798,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                   ${allowLineEdit ? '' : 'tabindex="-1"'}
                 >
                   <span class="order-ai-line-total-meta">
-                    <span class="order-ai-line-total-computed">${escapeHtml(formatAmount(item.unit_price || 0))} x ${escapeHtml(formatAmount(item.quantity || 0))} = ${escapeHtml(formatAmountWithCurrency(comparison.computed, currency))}</span>
                     <span class="order-ai-line-total-source">Skenirani total: ${escapeHtml(formatAmountWithCurrency(comparison.source, currency))}</span>
+                    <span class="order-ai-line-total-computed">${escapeHtml(formatAmount(item.unit_price || 0))} x ${escapeHtml(formatAmount(item.quantity || 0))} = ${escapeHtml(formatAmountWithCurrency(comparison.computed, currency))}</span>
                     <span class="order-ai-line-total-diff">Razlika: ${escapeHtml(diffPrefix + formatAmountWithCurrency(comparison.difference, currency))}</span>
                   </span>
                 </button>
@@ -5069,10 +5131,15 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         const stageName = detectStage(status, autoTransfer, latestStatusPayload.current_progress, latestStatusPayload.processing_step);
         const finalizeStage = (status === 'completed' && stageName === 'extract' && !autoTransfer)
           || (status === 'transferred' && stageName === 'transfer');
-        const extractionProgressState = (status === 'uploaded' || status === 'extracting')
+        const extractionProgressState = (status === 'uploaded' || status === 'extracting' || status === 'failed')
           ? buildExtractPhaseModel(latestStatusPayload)
           : null;
+        const isTransferFailure = /(transfer|baza|pantheon)/i.test(String(latestStatusPayload.processing_step || ''))
+          || /(anConsigneeQId|SetSubj|Pantheon)/i.test(String(latestStatusPayload.error_message || ''));
 
+        if (status === 'failed' && extractionProgressState) {
+          extractVisualProgress = extractionProgressState.progressPercent;
+        }
         syncDropzoneVisibility(status);
         setVisible(resultCard, showResultCard);
         setVisible(actions, showResultCard);
@@ -5110,13 +5177,31 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         if (status === 'failed') {
           errorBox.textContent = latestStatusPayload.error_message || 'AI obrada nije uspjela.';
           setVisible(errorBox, true);
+          if (extractionProgressState) {
+            extractVisualProgress = extractionProgressState.progressPercent;
+            setStageFill('extract', extractionProgressState.progressPercent);
+          }
           setTransferButtonState({
             enabled: false,
             label: 'Transfer u bazu',
             hint: 'AI obrada nije uspjela. Učitaj novi dokument i pokušaj ponovo.'
           });
 
-          if (/(transfer|baza|pantheon)/i.test(String(latestStatusPayload.processing_step || '')) || /(anConsigneeQId|SetSubj|Pantheon)/i.test(String(latestStatusPayload.error_message || ''))) {
+          if (!isTransferFailure) {
+            const failedToastSignature = JSON.stringify({
+              scanId: currentScanId,
+              error: String(latestStatusPayload.error_message || '').trim(),
+              page: extractionProgressState ? extractionProgressState.currentPage : 0,
+              totalPages: extractionProgressState ? extractionProgressState.totalPages : 0,
+            });
+
+            if (failedToastSignature !== lastFailedToastSignature) {
+              lastFailedToastSignature = failedToastSignature;
+              showExtractionFailedToast(latestStatusPayload, extractionProgressState);
+            }
+          }
+
+          if (isTransferFailure) {
             showTransferErrorModal(latestStatusPayload.error_message || 'Transfer u bazu nije uspio.', latestStatusPayload.error_message || '');
           }
 
@@ -5208,6 +5293,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         lastLinesSignature = '';
         lastWarningsSignature = '';
         lastExtractLiveSignature = '';
+        lastFailedToastSignature = '';
         lastProgressPercent = null;
         lastProgressLabel = '';
         extractSimulationStartedAt = null;
@@ -5491,6 +5577,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         }
 
         const model = buildExtractPhaseModel(data);
+        const sourcePageCount = resolveSourcePageCount(data);
+        const pageLimitReason = String(data && data.page_processing_limit_reason
+          || data && data.result && data.result.order && data.result.order.page_processing_limit_reason
+          || '').trim();
         const rowSizes = resolveExtractRowSizes(model);
         const phaseStates = EXTRACTION_STEPS.map(function (label, index) {
           let state = 'pending';
@@ -5529,7 +5619,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           extractLiveProgressBar.style.width = `${model.phaseProgressPercent}%`;
         }
 
-        extractLiveMeta.textContent = `Korak ${model.currentStepIndex + 1}/${model.totalSteps} - ${model.currentStepLabel} - Stranica ${model.currentPage}/${model.totalPages}`;
+        extractLiveMeta.textContent = `Korak ${model.currentStepIndex + 1}/${model.totalSteps} - ${model.currentStepLabel} - Stranica ${model.currentPage}/${model.totalPages}${sourcePageCount > model.totalPages ? ` (PDF ${sourcePageCount})` : ''}${pageLimitReason ? ` - ${pageLimitReason}` : ''}`;
         extractLiveGrid.classList.toggle('is-complete', model.status === 'done');
         let pageOffset = 0;
         extractLiveGrid.innerHTML = rowSizes.map(function (rowSize) {
@@ -5822,8 +5912,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                   ${allowLineEdit ? '' : 'tabindex="-1"'}
                 >
                   <span class="order-ai-line-total-meta">
-                    <span class="order-ai-line-total-computed">${escapeHtml(formatAmount(item.unit_price || 0))} x ${escapeHtml(formatAmount(item.quantity || 0))} = ${escapeHtml(formatAmountWithCurrency(comparison.computed, currency))}</span>
                     <span class="order-ai-line-total-source">Skenirani total: ${escapeHtml(formatAmountWithCurrency(comparison.source, currency))}</span>
+                    <span class="order-ai-line-total-computed">${escapeHtml(formatAmount(item.unit_price || 0))} x ${escapeHtml(formatAmount(item.quantity || 0))} = ${escapeHtml(formatAmountWithCurrency(comparison.computed, currency))}</span>
                     <span class="order-ai-line-total-diff">Razlika: ${escapeHtml(diffPrefix + formatAmountWithCurrency(comparison.difference, currency))}</span>
                   </span>
                 </button>
@@ -6081,6 +6171,15 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         const stageName = detectStage(status, autoTransfer, latestStatusPayload.current_progress, latestStatusPayload.processing_step);
         const finalizeStage = (status === 'completed' && stageName === 'extract' && !autoTransfer)
           || (status === 'transferred' && stageName === 'transfer');
+        const extractionProgressState = (status === 'uploaded' || status === 'extracting' || status === 'failed')
+          ? buildExtractPhaseModel(latestStatusPayload)
+          : null;
+        const isTransferFailure = /(transfer|baza|pantheon)/i.test(String(latestStatusPayload.processing_step || ''))
+          || /(anConsigneeQId|SetSubj|Pantheon)/i.test(String(latestStatusPayload.error_message || ''));
+
+        if (status === 'failed' && extractionProgressState) {
+          extractVisualProgress = extractionProgressState.progressPercent;
+        }
 
         syncDropzoneVisibility(status);
         setVisible(resultCard, showResultCard);
@@ -6106,7 +6205,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           fileNameEl.textContent = latestStatusPayload.source_file_name;
         }
 
-        setProgress(resolveOverallProgress(latestStatusPayload), latestStatusPayload.processing_step || 'AI obrada je u toku.');
+        setProgress(
+          extractionProgressState ? extractionProgressState.progressPercent : resolveOverallProgress(latestStatusPayload),
+          latestStatusPayload.processing_step || 'AI obrada je u toku.'
+        );
         setStageState(stageName, finalizeStage);
         updateStageFills(latestStatusPayload);
         updateActivityState(latestStatusPayload);
@@ -6136,15 +6238,32 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         });
 
         if (status === 'failed') {
-          errorBox.textContent = latestStatusPayload.error_message || 'AI obrada nije uspjela.';
-          setVisible(errorBox, true);
+          errorBox.textContent = isTransferFailure ? (latestStatusPayload.error_message || 'Transfer u bazu nije uspio.') : '';
+          setVisible(errorBox, isTransferFailure);
+          if (extractionProgressState) {
+            setStageFill('extract', extractionProgressState.progressPercent);
+          }
           setTransferButtonState({
             enabled: false,
             label: 'Transfer u bazu',
             hint: 'AI obrada nije uspjela. Učitaj novi dokument i pokušaj ponovo.'
           });
 
-          if (/(transfer|baza|pantheon)/i.test(String(latestStatusPayload.processing_step || '')) || /(anConsigneeQId|SetSubj|Pantheon)/i.test(String(latestStatusPayload.error_message || ''))) {
+          if (!isTransferFailure) {
+            const failedToastSignature = JSON.stringify({
+              scanId: currentScanId,
+              error: String(latestStatusPayload.error_message || '').trim(),
+              page: extractionProgressState ? extractionProgressState.currentPage : 0,
+              totalPages: extractionProgressState ? extractionProgressState.totalPages : 0,
+            });
+
+            if (failedToastSignature !== lastFailedToastSignature) {
+              lastFailedToastSignature = failedToastSignature;
+              showExtractionFailedToast(latestStatusPayload, extractionProgressState);
+            }
+          }
+
+          if (isTransferFailure) {
             showTransferErrorModal(latestStatusPayload.error_message || 'Transfer u bazu nije uspio.', latestStatusPayload.error_message || '');
           }
 

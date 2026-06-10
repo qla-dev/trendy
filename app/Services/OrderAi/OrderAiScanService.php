@@ -6,6 +6,7 @@ use App\Jobs\ProcessImportedOrderAiScanJob;
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\Contracts\OrderAiScanProvider;
 use App\Services\OrderAi\Profiles\OrderDocumentProfileDetector;
+use App\Services\OrderAi\Support\OrderAiDocumentPreparationService;
 use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use App\Support\Utf8Sanitizer;
 use Illuminate\Http\UploadedFile;
@@ -19,8 +20,10 @@ use RuntimeException;
 class OrderAiScanService
 {
     private const TRENDY_DE_PARTY_NAME = 'Trendy Germany GmbH';
+    private const GROB_ATTENTION_MARKER = '*********************************** ACHTUNG * *************************************';
 
     private ?array $orderAiScanColumns = null;
+    private array $effectivePageMetaCache = [];
 
     public function createScan(UploadedFile $file, mixed $user = null): OrderAiScan
     {
@@ -166,6 +169,20 @@ class OrderAiScanService
         $payload = is_array($scan->normalized_payload) ? $scan->normalized_payload : [];
         $transferPreview = Utf8Sanitizer::cleanRecursive($scan->pantheon_transfer_payload);
         $payload = $this->overlayTransferPreview($payload, $transferPreview);
+        $processingPageMeta = $this->resolveProcessingPageMeta($scan, $payload);
+
+        if (!isset($payload['order']) || !is_array($payload['order'])) {
+            $payload['order'] = [];
+        }
+
+        if (($processingPageMeta['effective_page_count'] ?? 0) > 0) {
+            $payload['order']['effective_page_count'] = (int) $processingPageMeta['effective_page_count'];
+        }
+
+        if (($processingPageMeta['page_processing_limit_reason'] ?? '') !== '') {
+            $payload['order']['page_processing_limit_reason'] = (string) $processingPageMeta['page_processing_limit_reason'];
+        }
+
         $payload = Utf8Sanitizer::cleanRecursive($payload);
         $warnings = is_array($payload['order']['warnings'] ?? null) ? $payload['order']['warnings'] : [];
         $autoTransfer = $this->shouldAutoTransfer($scan);
@@ -173,6 +190,7 @@ class OrderAiScanService
         $elapsed = $this->resolveElapsedMeta($scan);
         $pageCount = max(0, (int) ($scan->page_count ?? data_get($payload, 'order.page_count', 0)));
         $billedTokens = max(0, (int) ($scan->billed_tokens ?? 0));
+        $displayErrorMessage = $this->resolveDisplayErrorMessage($scan);
 
         if ($billedTokens <= 0 && $pageCount > 0) {
             $billedTokens = app(OrderAiDocumentMetrics::class)->calculateBilledTokens($pageCount);
@@ -186,6 +204,8 @@ class OrderAiScanService
             'max_progress_steps' => (int) $scan->progress_total,
             'credits_spent' => (float) $scan->credits_spent,
             'page_count' => $pageCount,
+            'effective_page_count' => (int) ($processingPageMeta['effective_page_count'] ?? 0),
+            'page_processing_limit_reason' => (string) ($processingPageMeta['page_processing_limit_reason'] ?? ''),
             'billed_tokens' => $billedTokens,
             'started_at' => $elapsed['started_at'],
             'finished_at' => $elapsed['finished_at'],
@@ -209,7 +229,7 @@ class OrderAiScanService
                 'qid' => $scan->pantheon_order_qid,
             ],
             'result' => $payload,
-            'error_message' => Utf8Sanitizer::clean((string) ($scan->error_message ?? '')),
+            'error_message' => $displayErrorMessage,
         ];
     }
 
@@ -263,10 +283,18 @@ class OrderAiScanService
 
             $scan->forceFill($attributes)->save();
         } catch (\Throwable $exception) {
+            Log::warning('Order AI extraction failed.', [
+                'scan_id' => $scan->id,
+                'user_id' => $scan->user_id,
+                'provider' => $scan->provider,
+                'document_profile' => $scan->document_profile,
+                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+            ]);
+
             $scan->forceFill([
                 'status' => 'failed',
                 'processing_step' => 'AI analiza nije uspjela.',
-                'error_message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+                'error_message' => $this->humanizeExtractionFailureReason($exception),
                 'completed_at' => now(),
             ])->save();
         }
@@ -304,6 +332,56 @@ class OrderAiScanService
         }
 
         return $scan->fresh();
+    }
+
+    private function humanizeExtractionFailureReason(\Throwable $exception): string
+    {
+        return $this->humanizeExtractionFailureMessage(
+            Utf8Sanitizer::cleanExceptionMessage($exception)
+        );
+    }
+
+    private function humanizeExtractionFailureMessage(string $message): string
+    {
+        $message = Utf8Sanitizer::clean($message);
+        $normalized = Str::lower($message);
+
+        if ($message === '') {
+            return 'AI obrada narudzbe je bila neuspjesna.';
+        }
+
+        if (str_contains($normalized, 'openrouter') || str_contains($normalized, 'openai')) {
+            if (str_contains($normalized, 'json') || str_contains($normalized, 'tekstualni')) {
+                return 'AI obrada narudzbe je bila neuspjesna. AI provider nije vratio ispravan odgovor.';
+            }
+
+            return 'AI obrada narudzbe je bila neuspjesna. AI provider je prekinuo obradu dokumenta.';
+        }
+
+        return 'AI obrada narudzbe je bila neuspjesna. ' . $message;
+    }
+
+    private function resolveDisplayErrorMessage(OrderAiScan $scan): string
+    {
+        $message = Utf8Sanitizer::clean((string) ($scan->error_message ?? ''));
+
+        if ($message === '') {
+            return '';
+        }
+
+        $normalizedMessage = Str::lower($message);
+        $normalizedStep = Str::lower(Utf8Sanitizer::clean((string) ($scan->processing_step ?? '')));
+        $looksLikeTransferFailure = str_contains($normalizedStep, 'transfer')
+            || str_contains($normalizedStep, 'bazu')
+            || str_contains($normalizedMessage, 'pantheon');
+        $looksLikeLegacyProviderFailure = str_contains($normalizedMessage, 'openrouter')
+            || str_contains($normalizedMessage, 'openai');
+
+        if (!$looksLikeTransferFailure && $looksLikeLegacyProviderFailure) {
+            return $this->humanizeExtractionFailureMessage($message);
+        }
+
+        return $message;
     }
 
     private function shouldAutoTransfer(OrderAiScan $scan): bool
@@ -402,7 +480,12 @@ class OrderAiScanService
                 'drawing_reference' => $itemMeta['drawing_reference'],
                 'material_hint' => $itemMeta['material_hint'],
                 'quantity' => (float) ($item['quantity'] ?? 0),
-                'unit' => trim((string) ($item['unit'] ?? config('ai-order-scan.default_unit', 'KO'))),
+                'unit' => $this->normalizeScannedUnit(
+                    trim((string) ($item['unit'] ?? '')) !== ''
+                        ? (string) $item['unit']
+                        : (string) config('ai-order-scan.default_unit', 'KO')
+                ),
+                'delivery_deadline' => trim((string) ($item['delivery_deadline'] ?? '')),
                 'unit_price' => (float) ($item['unit_price'] ?? 0),
                 'line_total' => (float) ($item['line_total'] ?? 0),
                 'vat_rate' => (float) ($item['vat_rate'] ?? config('ai-order-scan.default_vat_rate', 17)),
@@ -582,16 +665,16 @@ class OrderAiScanService
         $amount = number_format(abs($subtotalDelta), 2, '.', '');
 
         if ($subtotalDelta > 0 && stripos($supplierName, 'grob') !== false) {
-            return 'AI summary je veci od zbira stavki za ' . $amount
+            return 'Skenirani Nettowert/Gesamtbetrag je veci od zbira stavki za ' . $amount
                 . '. Provjeri GROB page-break continuation redove poput Ruesten/Termin abs. i Nettopreis, jer vjerovatno pripadaju prethodnoj stavci.';
         }
 
         if ($subtotalDelta > 0) {
-            return 'AI summary je veci od zbira stavki za ' . $amount
+            return 'Skenirani dokumentni iznos je veci od zbira stavki za ' . $amount
                 . '. Moguc je continuation red na prelomu stranice koji pripada prethodnoj stavci.';
         }
 
-        return 'AI summary se razlikuje od zbira stavki za ' . $amount . '. Provjeri ekstraktovane cijene i totale.';
+        return 'Skenirani dokumentni iznos se razlikuje od zbira stavki za ' . $amount . '. Provjeri ekstraktovane cijene i totale.';
     }
 
     private function overlayTransferPreview(array $payload, mixed $transferPreview): array
@@ -639,7 +722,8 @@ class OrderAiScanService
                 'drawing_reference' => trim((string) ($preparedItem['drawing_reference'] ?? ($existingItem['drawing_reference'] ?? ''))),
                 'material_hint' => trim((string) ($preparedItem['material_hint'] ?? ($existingItem['material_hint'] ?? ''))),
                 'quantity' => (float) ($preparedItem['quantity'] ?? ($existingItem['quantity'] ?? 0)),
-                'unit' => trim((string) ($preparedItem['unit'] ?? ($existingItem['unit'] ?? ''))),
+                'unit' => $this->normalizeScannedUnit((string) ($preparedItem['unit'] ?? ($existingItem['unit'] ?? ''))),
+                'delivery_deadline' => trim((string) ($preparedItem['delivery_deadline'] ?? ($existingItem['delivery_deadline'] ?? ''))),
                 'unit_price' => (float) ($existingItem['unit_price'] ?? ($preparedItem['unit_price'] ?? 0)),
                 'line_total' => (float) ($existingItem['line_total'] ?? ($preparedItem['line_total'] ?? 0)),
                 'vat_rate' => (float) ($preparedItem['vat_rate'] ?? ($existingItem['vat_rate'] ?? 0)),
@@ -904,19 +988,45 @@ class OrderAiScanService
 
     private function postProcessProfilePayload(OrderAiScan $scan, array $payload): array
     {
-        if ($this->resolveDocumentProfileKey($scan) !== 'trendy_de') {
+        $profileKey = $this->resolveDocumentProfileKey($scan);
+
+        if (!in_array($profileKey, ['trendy_de', 'grob'], true)) {
             return $payload;
         }
 
         $bytes = $this->readStoredFileBytes($scan);
-        $searchableText = app(OrderDocumentProfileDetector::class)->extractSearchableText($bytes);
+        $preparedDocument = $this->prepareDocumentContext($scan, $profileKey, $bytes);
 
-        return $this->postProcessTrendyDePayload($payload, [
+        $context = [
             'file_name' => (string) ($scan->source_file_name ?? ''),
             'mime_type' => (string) ($scan->source_mime_type ?? ''),
-            'searchable_text' => $searchableText,
+            'searchable_text' => (string) ($preparedDocument['searchable_text'] ?? ''),
             'raw_content' => $bytes,
-        ]);
+            'processed_pages' => is_array($preparedDocument['processed_pages'] ?? null)
+                ? $preparedDocument['processed_pages']
+                : [],
+            'source_page_count' => (int) ($preparedDocument['source_page_count'] ?? 0),
+            'effective_page_count' => (int) ($preparedDocument['effective_page_count'] ?? 0),
+            'page_processing_limit_reason' => (string) ($preparedDocument['page_processing_limit_reason'] ?? ''),
+        ];
+
+        if ($profileKey === 'trendy_de') {
+            return $this->postProcessTrendyDePayload($payload, $context);
+        }
+
+        return $this->postProcessGrobPayload($payload, $context);
+    }
+
+    private function prepareDocumentContext(OrderAiScan $scan, ?string $profileKey = null, ?string $bytes = null): array
+    {
+        $resolvedBytes = is_string($bytes) ? $bytes : $this->readStoredFileBytes($scan);
+
+        return app(OrderAiDocumentPreparationService::class)->prepareDocument(
+            $profileKey !== null ? $profileKey : $this->resolveDocumentProfileKey($scan),
+            (string) ($scan->source_file_name ?? ''),
+            (string) ($scan->source_mime_type ?? ''),
+            $resolvedBytes
+        );
     }
 
     private function readLocalFileBytes(string $path): string
@@ -1002,8 +1112,731 @@ class OrderAiScanService
         $order['note'] = implode(' | ', array_values($noteParts));
 
         $payload['order'] = $order;
+        $payload['items'] = $this->postProcessTrendyDeItems(
+            is_array($payload['items'] ?? null) ? $payload['items'] : []
+        );
 
         return $payload;
+    }
+
+    private function postProcessTrendyDeItems(array $items): array
+    {
+        return array_values(array_map(function ($item) {
+            if (!is_array($item)) {
+                return $item;
+            }
+
+            $contentLines = [];
+            $deliveryDeadline = trim((string) ($item['delivery_deadline'] ?? ''));
+            $pendingDeliveryLabel = false;
+
+            foreach ($this->splitVisibleTextLines(
+                trim((string) ($item['product_name'] ?? '')) . "\n" . trim((string) ($item['note'] ?? ''))
+            ) as $line) {
+                $lineDeliveryDeadline = $this->extractVisibleDateFromLine($line);
+
+                if (preg_match('/\bliefertermin\b/i', $line) === 1) {
+                    if ($deliveryDeadline === '' && $lineDeliveryDeadline !== '') {
+                        $deliveryDeadline = $lineDeliveryDeadline;
+                    }
+
+                    $pendingDeliveryLabel = $lineDeliveryDeadline === '';
+                    continue;
+                }
+
+                if ($pendingDeliveryLabel && $deliveryDeadline === '') {
+                    $deliveryDeadline = $lineDeliveryDeadline;
+
+                    if ($deliveryDeadline !== '') {
+                        $pendingDeliveryLabel = false;
+                        continue;
+                    }
+                }
+
+                $pendingDeliveryLabel = false;
+                $contentLines[] = $line;
+            }
+
+            $contentLines = array_values(array_filter($contentLines));
+            $productName = trim((string) ($contentLines[0] ?? $item['product_name'] ?? ''));
+            $noteLines = array_slice($contentLines, 1);
+
+            $item['product_name'] = $productName;
+            $item['note'] = implode(' | ', array_values(array_unique(array_filter($noteLines))));
+            $item['delivery_deadline'] = $deliveryDeadline;
+            $item['unit'] = $this->normalizeScannedUnit((string) ($item['unit'] ?? ''));
+
+            return $item;
+        }, $items));
+    }
+
+    private function postProcessGrobPayload(array $payload, array $context = []): array
+    {
+        $searchableText = trim((string) ($context['searchable_text'] ?? ''));
+        $processedPages = is_array($context['processed_pages'] ?? null) ? $context['processed_pages'] : [];
+        $order = is_array($payload['order'] ?? null) ? $payload['order'] : [];
+
+        if ($searchableText === '') {
+            $payload['order'] = $order;
+            return $payload;
+        }
+
+        $summary = is_array($payload['summary'] ?? null) ? $payload['summary'] : [];
+        $parsedItems = $processedPages !== []
+            ? $this->parseGrobItemsFromPages($processedPages)
+            : $this->parseGrobItemsFromText($searchableText);
+        $documentSubtotal = $this->extractLastGermanAmountAfterLabels($searchableText, ['Nettowert', 'Gesamtbetrag']);
+        $effectivePageCount = max(0, (int) ($context['effective_page_count'] ?? 0));
+        $sourcePageCount = max(0, (int) ($context['source_page_count'] ?? 0), (int) ($order['page_count'] ?? 0));
+        $pageLimitReason = trim((string) ($context['page_processing_limit_reason'] ?? ''));
+
+        if ($effectivePageCount <= 0) {
+            $effectivePageCount = $this->estimateGrobEffectivePageCount(
+                (string) ($context['raw_content'] ?? ''),
+                $searchableText,
+                $sourcePageCount
+            );
+        }
+
+        if (!empty($parsedItems) && is_array($payload['items'] ?? null)) {
+            $payload['items'] = $this->mergeGrobParsedItemsIntoPayload($payload['items'], $parsedItems);
+        }
+
+        if ($documentSubtotal > 0) {
+            $summary['subtotal'] = $documentSubtotal;
+
+            if ((float) ($summary['grand_total'] ?? 0) <= 0) {
+                $summary['grand_total'] = $documentSubtotal;
+            }
+        }
+
+        if ($effectivePageCount > 0) {
+            $order['effective_page_count'] = $effectivePageCount;
+            $order['page_count'] = $effectivePageCount;
+        }
+
+        if ($pageLimitReason !== '') {
+            $order['page_processing_limit_reason'] = 'GROB obrada stavki je ograničena do ACHTUNG reda.';
+        }
+
+        $payload['order'] = $order;
+        if ($pageLimitReason !== '') {
+            $payload['order']['page_processing_limit_reason'] = $pageLimitReason;
+        } elseif ($effectivePageCount > 0 && $sourcePageCount > 0 && $effectivePageCount < $sourcePageCount) {
+            $payload['order']['page_processing_limit_reason'] = OrderAiDocumentPreparationService::GROB_PAGE_LIMIT_REASON;
+        }
+
+        $payload['summary'] = $summary;
+
+        return $payload;
+    }
+
+    private function mergeGrobParsedItemsIntoPayload(array $items, array $parsedItems): array
+    {
+        $remaining = array_values($parsedItems);
+
+        foreach ($items as $index => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $lineNumber = (int) ($item['line_number'] ?? 0);
+            $productCode = trim((string) ($item['product_code'] ?? ''));
+            $matchIndex = null;
+
+            foreach ($remaining as $candidateIndex => $parsedItem) {
+                $candidateLineNumber = (int) ($parsedItem['line_number'] ?? 0);
+                $candidateCode = trim((string) ($parsedItem['product_code'] ?? ''));
+
+                if ($lineNumber > 0 && $candidateLineNumber === $lineNumber) {
+                    $matchIndex = $candidateIndex;
+                    break;
+                }
+
+                if ($productCode !== '' && $candidateCode !== '' && strcasecmp($candidateCode, $productCode) === 0) {
+                    $matchIndex = $candidateIndex;
+                    break;
+                }
+            }
+
+            if ($matchIndex === null) {
+                continue;
+            }
+
+            $parsedItem = $remaining[$matchIndex];
+            unset($remaining[$matchIndex]);
+            $mergedItem = $item;
+
+            $mergedItem['unit_price'] = (float) ($parsedItem['unit_price'] ?? 0);
+            $mergedItem['line_total'] = (float) ($parsedItem['line_total'] ?? 0);
+
+            if ((float) ($parsedItem['quantity'] ?? 0) > 0) {
+                $mergedItem['quantity'] = (float) $parsedItem['quantity'];
+            }
+
+            if (trim((string) ($parsedItem['unit'] ?? '')) !== '') {
+                $mergedItem['unit'] = $this->normalizeScannedUnit((string) $parsedItem['unit']);
+            }
+
+            foreach (['drawing_reference', 'material_hint', 'delivery_deadline'] as $field) {
+                if (trim((string) ($parsedItem[$field] ?? '')) !== '') {
+                    $mergedItem[$field] = trim((string) $parsedItem[$field]);
+                }
+            }
+
+            if (!empty($parsedItem['warnings']) && is_array($parsedItem['warnings'])) {
+                $mergedItem['note'] = $this->appendItemNote(
+                    (string) ($mergedItem['note'] ?? ''),
+                    implode(' | ', array_values(array_unique(array_filter($parsedItem['warnings']))))
+                );
+            }
+
+            $items[$index] = $mergedItem;
+        }
+
+        return $items;
+    }
+
+    private function parseGrobItemsFromPages(array $pages): array
+    {
+        $items = [];
+        $currentItem = null;
+
+        foreach ($pages as $page) {
+            foreach ($this->prepareGrobPageLinesForParsing($page, is_array($currentItem)) as $line) {
+                $newItem = $this->createGrobParsedItemFromLine($line);
+
+                if ($newItem !== null) {
+                    if (is_array($currentItem)) {
+                        $items[] = $this->finalizeGrobParsedItem($currentItem);
+                    }
+
+                    $currentItem = $newItem;
+                    continue;
+                }
+
+                if (!is_array($currentItem) || $this->isGrobNonItemNoiseLine($line)) {
+                    continue;
+                }
+
+                if ($currentItem['product_code'] === '' && preg_match('/^[A-Z0-9][A-Z0-9.\-\/]{2,}$/iu', $line) === 1 && !$this->isGrobKeywordLine($line)) {
+                    $currentItem['product_code'] = trim($line);
+                    continue;
+                }
+
+                if (preg_match('/^zeichnung\b/iu', $line) === 1) {
+                    $currentItem['drawing_reference'] = trim(implode(' | ', array_filter([
+                        $currentItem['drawing_reference'],
+                        $line,
+                    ])));
+                    continue;
+                }
+
+                if (preg_match('/^werkstoff\s*:\s*(.+)$/iu', $line, $matches) === 1) {
+                    $currentItem['material_hint'] = trim((string) ($matches[1] ?? ''));
+                    continue;
+                }
+
+                if (preg_match('/^preiseinheit\b.*?\b([A-Z]{1,5})\b/iu', $line, $matches) === 1) {
+                    $currentItem['unit'] = trim((string) ($matches[1] ?? ''));
+                    continue;
+                }
+
+                if (preg_match('/^bruttopreis\b/iu', $line) === 1) {
+                    continue;
+                }
+
+                if (preg_match('/^nettopreis\b/iu', $line) === 1) {
+                    $this->populateGrobItemFromNettoLine($currentItem, $line);
+                    continue;
+                }
+
+                if (preg_match('/^wert\b.*?(-?\d[\d.,]*)/iu', $line, $matches) === 1) {
+                    $currentItem['line_total'] = $this->parseGermanNumber((string) ($matches[1] ?? ''));
+                    $currentItem['line_total_found'] = $currentItem['line_total'] > 0;
+                    continue;
+                }
+
+                if (preg_match('/^lieferdatum\b/iu', $line) === 1) {
+                    $currentItem['delivery_deadline'] = $this->extractVisibleDateFromLine($line);
+
+                    if ((float) ($currentItem['quantity'] ?? 0) <= 0 && preg_match('/(-?\d{1,3}(?:\.\d{3})*,\d+|-?\d+(?:,\d+)?)\s+([A-Z]{1,5})\b/u', $line, $matches) === 1) {
+                        $currentItem['quantity'] = $this->parseGermanNumber((string) ($matches[1] ?? ''));
+
+                        if (trim((string) ($currentItem['unit'] ?? '')) === '') {
+                            $currentItem['unit'] = trim((string) ($matches[2] ?? ''));
+                        }
+                    }
+
+                    continue;
+                }
+
+                if ($this->isGrobKeywordLine($line)) {
+                    continue;
+                }
+
+                $currentItem['product_name_lines'][] = $line;
+            }
+        }
+
+        if (is_array($currentItem)) {
+            $items[] = $this->finalizeGrobParsedItem($currentItem);
+        }
+
+        return array_values(array_filter($items, function ($item) {
+            return is_array($item)
+                && (((int) ($item['line_number'] ?? 0)) > 0 || trim((string) ($item['product_code'] ?? '')) !== '');
+        }));
+    }
+
+    private function parseGrobItemsFromText(string $searchableText): array
+    {
+        $items = [];
+        $currentItem = null;
+
+        foreach ($this->splitVisibleTextLines($searchableText) as $line) {
+            $newItem = $this->createGrobParsedItemFromLine($line);
+
+            if ($newItem !== null) {
+                if (is_array($currentItem)) {
+                    $items[] = $this->finalizeGrobParsedItem($currentItem);
+                }
+
+                $currentItem = $newItem;
+                continue;
+            }
+
+            if (!is_array($currentItem)) {
+                continue;
+            }
+
+            if ($currentItem['product_code'] === '' && preg_match('/^[A-Z0-9][A-Z0-9.\-\/]{2,}$/iu', $line) === 1 && !$this->isGrobKeywordLine($line)) {
+                $currentItem['product_code'] = trim($line);
+                continue;
+            }
+
+            if (preg_match('/^zeichnung\b/iu', $line) === 1) {
+                $currentItem['drawing_reference'] = trim(implode(' | ', array_filter([
+                    $currentItem['drawing_reference'],
+                    $line,
+                ])));
+                continue;
+            }
+
+            if (preg_match('/^werkstoff\s*:\s*(.+)$/iu', $line, $matches) === 1) {
+                $currentItem['material_hint'] = trim((string) ($matches[1] ?? ''));
+                continue;
+            }
+
+            if (preg_match('/^preiseinheit\b.*?\b([A-Z]{1,5})\b/iu', $line, $matches) === 1) {
+                $currentItem['unit'] = trim((string) ($matches[1] ?? ''));
+                continue;
+            }
+
+            if (preg_match('/^bruttopreis\b/iu', $line) === 1) {
+                continue;
+            }
+
+            if (preg_match('/^nettopreis\b/iu', $line) === 1) {
+                $this->populateGrobItemFromNettoLine($currentItem, $line);
+                continue;
+            }
+
+            if (preg_match('/^wert\b.*?(-?\d[\d.,]*)/iu', $line, $matches) === 1) {
+                $currentItem['line_total'] = $this->parseGermanNumber((string) ($matches[1] ?? ''));
+                $currentItem['line_total_found'] = $currentItem['line_total'] > 0;
+                continue;
+            }
+
+            if (preg_match('/^lieferdatum\b/iu', $line) === 1) {
+                $currentItem['delivery_deadline'] = $this->extractVisibleDateFromLine($line);
+                continue;
+            }
+
+            if ($this->isGrobKeywordLine($line)) {
+                continue;
+            }
+
+            $currentItem['product_name_lines'][] = $line;
+        }
+
+        if (is_array($currentItem)) {
+            $items[] = $this->finalizeGrobParsedItem($currentItem);
+        }
+
+        return array_values(array_filter($items, function ($item) {
+            return is_array($item)
+                && (((int) ($item['line_number'] ?? 0)) > 0 || trim((string) ($item['product_code'] ?? '')) !== '');
+        }));
+    }
+
+    private function finalizeGrobParsedItem(array $item): array
+    {
+        $item['product_name'] = trim(implode(' ', array_values(array_filter($item['product_name_lines'] ?? []))));
+        unset($item['product_name_lines']);
+
+        if (!($item['netto_price_found'] ?? false)) {
+            $item['unit_price'] = 0.0;
+            $item['line_total'] = ($item['line_total_found'] ?? false) ? (float) ($item['line_total'] ?? 0) : 0.0;
+            $item['warnings'][] = 'NettoPreis nije pronadjen u GROB dokumentu.';
+        } elseif (!($item['line_total_found'] ?? false)) {
+            $item['line_total'] = 0.0;
+            $item['warnings'][] = 'Wert za GROB stavku nije pronadjen uz NettoPreis.';
+        }
+
+        if (trim((string) ($item['unit'] ?? '')) !== '') {
+            $item['unit'] = $this->normalizeScannedUnit((string) $item['unit']);
+        }
+
+        return $item;
+    }
+
+    private function createGrobParsedItemFromLine(string $line): ?array
+    {
+        if (preg_match('/^(\d{1,4})\s+([A-Z0-9.\-\/]+)\s+(-?\d{1,3}(?:\.\d{3})*,\d+|-?\d+(?:,\d+)?)\s+([A-Z]{1,5})\s*(.*)$/iu', $line, $matches) === 1) {
+            return $this->initializeGrobParsedItem(
+                (int) ($matches[1] ?? 0),
+                trim((string) ($matches[2] ?? '')),
+                $this->parseGermanNumber((string) ($matches[3] ?? '')),
+                trim((string) ($matches[4] ?? '')),
+                trim((string) ($matches[5] ?? ''))
+            );
+        }
+
+        if (preg_match('/^pos(?:ition)?\.?\s*([0-9]+)\b(?:\s+([A-Z0-9.\-\/]+))?/iu', $line, $matches) === 1) {
+            return $this->initializeGrobParsedItem(
+                (int) ($matches[1] ?? 0),
+                trim((string) ($matches[2] ?? '')),
+                0.0,
+                '',
+                ''
+            );
+        }
+
+        return null;
+    }
+
+    private function initializeGrobParsedItem(int $lineNumber, string $productCode, float $quantity, string $unit, string $productName): array
+    {
+        return [
+            'line_number' => $lineNumber,
+            'product_code' => $productCode,
+            'quantity' => $quantity,
+            'unit' => $unit,
+            'product_name_lines' => $productName !== '' ? [$productName] : [],
+            'drawing_reference' => '',
+            'material_hint' => '',
+            'delivery_deadline' => '',
+            'unit_price' => 0.0,
+            'line_total' => 0.0,
+            'line_total_found' => false,
+            'netto_price_found' => false,
+            'warnings' => [],
+        ];
+    }
+
+    private function populateGrobItemFromNettoLine(array &$item, string $line): void
+    {
+        $amounts = $this->extractGermanAmounts($line);
+
+        if ($amounts !== []) {
+            $item['unit_price'] = $amounts[0];
+            $item['netto_price_found'] = $item['unit_price'] > 0;
+
+            if (count($amounts) > 1) {
+                $item['line_total'] = (float) end($amounts);
+                $item['line_total_found'] = $item['line_total'] > 0;
+            }
+        }
+
+        if (trim((string) ($item['unit'] ?? '')) === '' && preg_match('/^nettopreis\b.*?eur\s+([A-Z]{1,5})\b/iu', $line, $matches) === 1) {
+            $item['unit'] = trim((string) ($matches[1] ?? ''));
+        }
+    }
+
+    private function prepareGrobPageLinesForParsing(array $page, bool $hasOpenItem): array
+    {
+        $lines = array_values(array_filter(array_map(function ($line) {
+            return trim((string) $line);
+        }, is_array($page['lines'] ?? null) ? $page['lines'] : $this->splitVisibleTextLines((string) ($page['text'] ?? '')))));
+
+        if ($lines === []) {
+            return [];
+        }
+
+        $startIndex = 0;
+
+        foreach ($lines as $index => $line) {
+            if ($hasOpenItem) {
+                if (!$this->isGrobNonItemNoiseLine($line)) {
+                    $startIndex = $index;
+                    break;
+                }
+
+                continue;
+            }
+
+            if ($this->createGrobParsedItemFromLine($line) !== null) {
+                $startIndex = $index;
+                break;
+            }
+        }
+
+        $lines = array_slice($lines, $startIndex);
+
+        while (!empty($lines) && $this->isGrobNonItemNoiseLine((string) end($lines))) {
+            array_pop($lines);
+        }
+
+        return array_values($lines);
+    }
+
+    private function isGrobNonItemNoiseLine(string $line): bool
+    {
+        if (preg_match('/^w.+hrung\b/iu', $line) === 1) {
+            return true;
+        }
+
+        return preg_match(
+            '/^(?:grob-werke(?:\s+gmbh\s*&\s*co\.\s*kg)?|gmbh\s*&\s*co\.\s*kg|bestellung|bestell-nr\.:|trendy d\.o\.o\.|mehmeda spahe\b|bosnien-herz\.?|seite\s+\d+\s+von\s+\d+|pos\b|beschreibung\b|menge\b|mengeneinheit\b|w[äa]hrung\b|preis\b|_{10,}|\*{20,}|liefer\.-nr\.|kunden-nr\.|zahlungsbed\.|sachb\.\/tel\.|ekg:|bitte weisen sie)/iu',
+            $line
+        ) === 1;
+    }
+
+    private function appendItemNote(string $existingNote, string $extraNote): string
+    {
+        $notes = [];
+
+        foreach ([trim($existingNote), trim($extraNote)] as $note) {
+            if ($note === '') {
+                continue;
+            }
+
+            $notes[$note] = $note;
+        }
+
+        return implode(' | ', array_values($notes));
+    }
+
+    private function extractGermanAmounts(string $value): array
+    {
+        if (preg_match_all('/-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+(?:,\d{2})/u', $value, $matches) < 1) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(function ($amount) {
+            return $this->parseGermanNumber((string) $amount);
+        }, $matches[0] ?? []), function ($amount) {
+            return $amount > 0;
+        }));
+    }
+
+    private function isGrobKeywordLine(string $line): bool
+    {
+        return preg_match(
+            '/^(?:bruttopreis|nettopreis|wert|preiseinheit|preis|pro|lieferdatum|ruesten\/termin abs\.?|vertrag\b|beschichtung\b|gesamtbetrag|nettowert|seite\b|summe\b|mwst\b|achtung\b|attention\b)/iu',
+            $line
+        ) === 1;
+    }
+
+    private function truncateGrobSearchableText(string $searchableText): string
+    {
+        $normalized = trim($searchableText);
+
+        if ($normalized === '') {
+            return '';
+        }
+
+        $markerOffset = mb_stripos($normalized, self::GROB_ATTENTION_MARKER);
+
+        if ($markerOffset === false) {
+            return $normalized;
+        }
+
+        return trim(mb_substr($normalized, 0, $markerOffset));
+    }
+
+    private function extractLastGermanAmountAfterLabels(string $value, array $labels): float
+    {
+        $amount = 0.0;
+
+        foreach ($labels as $label) {
+            $pattern = '/' . preg_quote($label, '/') . '[^0-9-]{0,40}(-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+(?:,\d{2})?)/iu';
+
+            if (preg_match_all($pattern, $value, $matches) < 1 || empty($matches[1])) {
+                continue;
+            }
+
+            $lastMatch = (string) end($matches[1]);
+            $parsed = $this->parseGermanNumber($lastMatch);
+
+            if ($parsed > 0) {
+                $amount = $parsed;
+            }
+        }
+
+        return $amount;
+    }
+
+    private function extractVisibleDateFromLine(string $value): string
+    {
+        if (preg_match('/(\d{1,2}\.\s*\d{1,2}\.\s*\d{2,4}\.?)/u', $value, $matches) === 1) {
+            return trim((string) ($matches[1] ?? ''));
+        }
+
+        return '';
+    }
+
+    private function parseGermanNumber(string $value): float
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return 0.0;
+        }
+
+        $normalized = preg_replace('/[^\d,.\-]/u', '', $value) ?? $value;
+        $hasComma = str_contains($normalized, ',');
+        $hasDot = str_contains($normalized, '.');
+
+        if ($hasComma && $hasDot) {
+            if (strrpos($normalized, ',') > strrpos($normalized, '.')) {
+                $normalized = str_replace('.', '', $normalized);
+                $normalized = str_replace(',', '.', $normalized);
+            } else {
+                $normalized = str_replace(',', '', $normalized);
+            }
+        } elseif ($hasComma) {
+            $normalized = str_replace('.', '', $normalized);
+            $normalized = str_replace(',', '.', $normalized);
+        } elseif (substr_count($normalized, '.') > 1) {
+            $normalized = str_replace('.', '', $normalized);
+        }
+
+        return round((float) $normalized, 4);
+    }
+
+    private function normalizeScannedUnit(string $unit): string
+    {
+        $unit = strtoupper(trim($unit));
+
+        if ($unit === '') {
+            return '';
+        }
+
+        return match ($unit) {
+            'ST', 'STK', 'STUECK', 'STUCK', 'STU', 'PCS', 'PIECE' => strtoupper((string) config('ai-order-scan.default_unit', 'KO')),
+            default => $unit,
+        };
+    }
+
+    private function resolveProcessingPageMeta(OrderAiScan $scan, array $payload): array
+    {
+        $effectivePageCount = max(0, (int) data_get($payload, 'order.effective_page_count', 0));
+        $totalPageCount = max(0, (int) ($scan->page_count ?? data_get($payload, 'order.page_count', 0)));
+
+        if ($effectivePageCount <= 0 && $this->resolveDocumentProfileKey($scan) === 'grob' && $totalPageCount > 0) {
+            $cacheKey = implode('|', [
+                (int) ($scan->id ?? 0),
+                trim((string) ($scan->source_file_path ?? '')),
+                $totalPageCount,
+            ]);
+
+            if (!array_key_exists($cacheKey, $this->effectivePageMetaCache)) {
+                $preparedDocument = $this->prepareDocumentContext($scan, 'grob');
+
+                $this->effectivePageMetaCache[$cacheKey] = max(
+                    0,
+                    (int) ($preparedDocument['effective_page_count'] ?? 0)
+                );
+            }
+
+            $effectivePageCount = max(0, (int) ($this->effectivePageMetaCache[$cacheKey] ?? 0));
+        }
+
+        if ($effectivePageCount <= 0) {
+            $effectivePageCount = $totalPageCount;
+        }
+
+        $reason = $effectivePageCount > 0 && $totalPageCount > 0 && $effectivePageCount < $totalPageCount
+            ? 'GROB obrada stavki je ograničena do ACHTUNG reda.'
+            : '';
+
+        return [
+            'effective_page_count' => $effectivePageCount,
+            'page_processing_limit_reason' => $reason !== ''
+                ? OrderAiDocumentPreparationService::GROB_PAGE_LIMIT_REASON
+                : '',
+        ];
+    }
+
+    private function estimateGrobEffectivePageCount(string $rawContent, string $searchableText, int $totalPageCount): int
+    {
+        if ($totalPageCount <= 1) {
+            return max(0, $totalPageCount);
+        }
+
+        $markerOffsetText = mb_stripos($searchableText, self::GROB_ATTENTION_MARKER);
+        $markerOffsetBytes = stripos($rawContent, self::GROB_ATTENTION_MARKER);
+
+        if ($markerOffsetText === false && $markerOffsetBytes === false) {
+            return $totalPageCount;
+        }
+
+        $pageIndicator = $this->extractLastVisiblePageIndicatorBeforeMarker($searchableText, $markerOffsetText, $totalPageCount);
+
+        if ($pageIndicator > 0) {
+            return $pageIndicator;
+        }
+
+        if ($markerOffsetBytes !== false) {
+            $pageObjectCount = preg_match_all('/\/Type\s*\/Page\b/i', substr($rawContent, 0, $markerOffsetBytes), $matches);
+
+            if ($pageObjectCount >= 1 && $pageObjectCount <= $totalPageCount) {
+                return (int) $pageObjectCount;
+            }
+        }
+
+        if ($markerOffsetText !== false) {
+            $fullLength = max(1, mb_strlen($searchableText));
+            $estimatedPage = (int) ceil((($markerOffsetText + 1) / $fullLength) * $totalPageCount);
+
+            return max(1, min($totalPageCount, $estimatedPage));
+        }
+
+        return $totalPageCount;
+    }
+
+    private function extractLastVisiblePageIndicatorBeforeMarker(string $searchableText, int|false $markerOffset, int $totalPageCount): int
+    {
+        if ($markerOffset === false) {
+            return 0;
+        }
+
+        $contextLength = 16000;
+        $startOffset = max(0, $markerOffset - $contextLength);
+        $beforeMarker = mb_substr($searchableText, $startOffset, $markerOffset - $startOffset);
+        $patterns = [
+            '/(?:Seite|Page|Stranica)\s*[:#]?\s*(\d{1,3})\s*(?:\/|von|of)\s*(\d{1,3})/iu',
+            '/(?:Seite|Page|Stranica)\s*[:#]?\s*(\d{1,3})\b/iu',
+            '/\b(\d{1,3})\s*\/\s*' . preg_quote((string) $totalPageCount, '/') . '\b/u',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match_all($pattern, $beforeMarker, $matches, PREG_SET_ORDER) < 1) {
+                continue;
+            }
+
+            for ($index = count($matches) - 1; $index >= 0; $index--) {
+                $pageCandidate = (int) ($matches[$index][1] ?? 0);
+
+                if ($pageCandidate >= 1 && $pageCandidate <= $totalPageCount) {
+                    return $pageCandidate;
+                }
+            }
+        }
+
+        return 0;
     }
 
     private function extractTrendyDeDocumentNumber(string $searchableText, string $fileName): string

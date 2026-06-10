@@ -23,7 +23,7 @@ class UserController extends Controller
                 '', // empty for responsive control
                 $user->name,
                 $user->username,
-                $user->email,
+                trim((string) ($user->email ?? '')) !== '' ? $user->email : '-',
                 $user->role,
                 $user->created_at->format('d.m.Y'),
                 $user->id // for actions
@@ -56,7 +56,7 @@ class UserController extends Controller
                 Rule::unique($this->usersTableForValidation(), 'username'),
             ],
             'email' => [
-                'required',
+                'nullable',
                 'string',
                 'email',
                 'max:255',
@@ -76,7 +76,7 @@ class UserController extends Controller
             User::create([
                 'name' => $request->name,
                 'username' => $request->username,
-                'email' => $request->email,
+                'email' => $request->input('email'),
                 'password' => Hash::make($request->password),
                 'role' => $request->role,
             ]);
@@ -124,7 +124,7 @@ class UserController extends Controller
                 Rule::unique($this->usersTableForValidation(), 'username')->ignore($id),
             ],
             'email' => [
-                'required',
+                'nullable',
                 'string',
                 'email',
                 'max:255',
@@ -143,7 +143,7 @@ class UserController extends Controller
             $user->update([
                 'name' => $request->name,
                 'username' => $request->username,
-                'email' => $request->email,
+                'email' => $request->input('email'),
                 'role' => $request->role,
             ]);
 

@@ -4,6 +4,7 @@ namespace App\Services\OrderAi;
 
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\Contracts\OrderAiScanProvider;
+use App\Services\OrderAi\Support\OrderAiDocumentPreparationService;
 use App\Services\OrderAi\Support\OrderAiResponseSchema;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
@@ -36,6 +37,12 @@ class OpenRouterOrderAiScanProvider implements OrderAiScanProvider
         $model = trim((string) config('ai-order-scan.model', 'openai/gpt-4.1-mini'));
         $baseUrl = rtrim((string) config('ai-order-scan.openrouter.base_url', 'https://openrouter.ai/api/v1'), '/');
         $prompt = trim((string) ($scan->request_prompt ?: config('ai-order-scan.prompt')));
+        $preparedDocument = app(OrderAiDocumentPreparationService::class)->prepareDocument(
+            (string) ($scan->document_profile ?? ''),
+            (string) ($scan->source_file_name ?? 'document'),
+            $mime,
+            $bytes
+        );
 
         $client = Http::withToken($apiKey)
             ->timeout((int) config('ai-order-scan.timeout', 120))
@@ -79,7 +86,7 @@ class OpenRouterOrderAiScanProvider implements OrderAiScanProvider
                             'type' => 'text',
                             'text' => 'Extract the order from this document and return JSON that matches the provided schema.',
                         ],
-                        $this->buildFileContent($scan, $mime, $bytes),
+                        ...$this->buildDocumentContent($scan, $mime, $bytes, $preparedDocument),
                     ],
                 ],
             ],
@@ -107,26 +114,35 @@ class OpenRouterOrderAiScanProvider implements OrderAiScanProvider
         ];
     }
 
-    private function buildFileContent(OrderAiScan $scan, string $mime, string $bytes): array
+    private function buildDocumentContent(OrderAiScan $scan, string $mime, string $bytes, array $preparedDocument): array
     {
+        $preparedText = trim((string) ($preparedDocument['provider_input_text'] ?? ''));
+
+        if (trim((string) ($preparedDocument['provider_input_mode'] ?? '')) === 'text' && $preparedText !== '') {
+            return [[
+                'type' => 'text',
+                'text' => $preparedText,
+            ]];
+        }
+
         $dataUri = 'data:' . $mime . ';base64,' . base64_encode($bytes);
 
         if (str_starts_with($mime, 'image/')) {
-            return [
+            return [[
                 'type' => 'image_url',
                 'image_url' => [
                     'url' => $dataUri,
                 ],
-            ];
+            ]];
         }
 
-        return [
+        return [[
             'type' => 'file',
             'file' => [
                 'filename' => (string) ($scan->source_file_name ?: 'document'),
                 'file_data' => $dataUri,
             ],
-        ];
+        ]];
     }
 
     private function extractOutputText(array $response): string
