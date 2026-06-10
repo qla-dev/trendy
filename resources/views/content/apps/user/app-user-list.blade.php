@@ -152,7 +152,7 @@
           <div class="row">
             <div class="col-md-12 mb-1">
               <label class="form-label" for="email">Email</label>
-              <input type="email" class="form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email') }}" autocomplete="off" required>
+              <input type="email" class="form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email') }}" autocomplete="off">
               @error('email')
                 <div class="invalid-feedback">{{ $message }}</div>
               @enderror
@@ -169,6 +169,7 @@
             <div class="col-md-6 mb-1">
               <label class="form-label" for="password_confirmation">Potvrdi Lozinku</label>
               <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" autocomplete="new-password" required>
+              <div class="form-text d-none" id="password-match-feedback"></div>
             </div>
           </div>
           <div class="row">

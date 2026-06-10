@@ -32,7 +32,7 @@
         <div class="row">
           <div class="col-md-12 mb-1">
             <label class="form-label" for="email">Email</label>
-            <input type="email" class="form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email', $user->email) }}" required>
+            <input type="email" class="form-control @error('email') is-invalid @enderror" id="email" name="email" value="{{ old('email', $user->email) }}">
             @error('email')
               <div class="invalid-feedback">{{ $message }}</div>
             @enderror

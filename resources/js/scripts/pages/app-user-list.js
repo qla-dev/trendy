@@ -13,6 +13,9 @@ $(function () {
   var dtUserTable = $('.user-list-table'),
     newUserSidebar = $('#addUserModal'),
     newUserForm = $('#addUserForm'),
+    passwordField = $('#password'),
+    passwordConfirmationField = $('#password_confirmation'),
+    passwordMatchFeedback = $('#password-match-feedback'),
     select = $('.select2'),
     dtContact = $('.dt-contact'),
     statusObj = {
@@ -73,7 +76,7 @@ $(function () {
           responsivePriority: 4,
           render: function (data, type, full, meta) {
             var $name = full[1],
-              $email = full[3];
+              $email = full[3] || '-';
             // For Avatar badge
             var $initials = $name.match(/\b\w/g) || [];
             $initials = (($initials.shift() || '') + ($initials.pop() || '')).toUpperCase();
@@ -114,7 +117,7 @@ $(function () {
           // Email
           targets: 3,
           render: function (data, type, full, meta) {
-            return "<span class='text-truncate align-middle'>" + full[3] + '</span>';
+            return "<span class='text-truncate align-middle'>" + (full[3] || '-') + '</span>';
           }
         },
         {
@@ -269,8 +272,57 @@ $(function () {
 
   // Form Validation
   if (newUserForm.length) {
+    function setPasswordFeedback(message, state) {
+      if (!passwordMatchFeedback.length) {
+        return;
+      }
+
+      passwordMatchFeedback
+        .toggleClass('d-none', !message)
+        .removeClass('text-success text-danger')
+        .text(message || '');
+
+      if (message) {
+        passwordMatchFeedback.addClass(state === 'success' ? 'text-success' : 'text-danger');
+      }
+    }
+
+    function updatePasswordMatchState() {
+      if (!passwordField.length || !passwordConfirmationField.length || !passwordMatchFeedback.length) {
+        return;
+      }
+
+      var passwordValue = String(passwordField.val() || '');
+      var confirmationValue = String(passwordConfirmationField.val() || '');
+
+      passwordConfirmationField.removeClass('is-valid is-invalid');
+      setPasswordFeedback('', null);
+
+      if (!confirmationValue.length) {
+        return;
+      }
+
+      if (passwordValue === confirmationValue) {
+        passwordConfirmationField.addClass('is-valid');
+        setPasswordFeedback('Šifre se poklapaju.', 'success');
+        return;
+      }
+
+      passwordConfirmationField.addClass('is-invalid');
+      setPasswordFeedback('Šifre se ne poklapaju.', 'danger');
+    }
+
     newUserForm.validate({
       errorClass: 'error',
+      errorPlacement: function (error, element) {
+        if (element.attr('name') === 'password_confirmation') {
+          passwordConfirmationField.removeClass('is-valid').addClass('is-invalid');
+          setPasswordFeedback(error.text(), 'danger');
+          return;
+        }
+
+        error.insertAfter(element);
+      },
       rules: {
         'name': {
           required: true
@@ -279,12 +331,51 @@ $(function () {
           required: true
         },
         'email': {
-          required: true
+          email: true
+        },
+        'password': {
+          required: true,
+          minlength: 6
+        },
+        'password_confirmation': {
+          required: true,
+          equalTo: '#password'
+        }
+      },
+      messages: {
+        'password_confirmation': {
+          required: 'Potvrda lozinke je obavezna.',
+          equalTo: 'Šifre se ne poklapaju.'
         }
       }
     });
 
+    passwordField.on('input', function () {
+      updatePasswordMatchState();
+      if (passwordConfirmationField.val()) {
+        passwordConfirmationField.valid();
+      }
+    });
+
+    passwordConfirmationField.on('input', function () {
+      updatePasswordMatchState();
+      passwordConfirmationField.valid();
+    });
+
+    newUserSidebar.on('hidden.bs.modal', function () {
+      if (passwordConfirmationField.length) {
+        passwordConfirmationField.removeClass('is-valid is-invalid');
+      }
+
+      if (passwordMatchFeedback.length) {
+        setPasswordFeedback('', null);
+      }
+    });
+
+    updatePasswordMatchState();
+
     newUserForm.on('submit', function (e) {
+      updatePasswordMatchState();
       var isValid = newUserForm.valid();
       if (isValid) {
         // Form will submit normally to the server
