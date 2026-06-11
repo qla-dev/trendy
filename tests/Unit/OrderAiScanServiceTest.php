@@ -325,6 +325,144 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(98.15, $normalized['summary']['subtotal']);
     }
 
+    public function test_parse_grob_items_from_pages_ignores_page_header_city_line_for_open_item(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('parseGrobItemsFromPages');
+        $method->setAccessible(true);
+
+        $items = $method->invoke($service, [
+            [
+                'page_number' => 1,
+                'lines' => [
+                    '70 3629426 1,00 ST',
+                    'Klotz',
+                    'G350-1950-0000-50-01-1',
+                ],
+                'text' => '',
+            ],
+            [
+                'page_number' => 2,
+                'lines' => [
+                    '72290 NOVI TRAVNIK',
+                    'Zeichnung G350-1950-0000-50-01-1 mit Revisionsstand 00',
+                    'Werkstoff: St37-2K',
+                    'Bruttopreis 3,28 EUR ST 1 3,28',
+                    'Ruesten/Termin abs. 9,13 EUR 9,13',
+                    'Nettopreis 12,41 EUR ST 1 12,41',
+                    'Lieferdatum: 23.07.2026 1,00 ST',
+                ],
+                'text' => '',
+            ],
+        ]);
+
+        $this->assertCount(1, $items);
+        $this->assertSame('Klotz G350-1950-0000-50-01-1', $items[0]['product_name']);
+        $this->assertStringNotContainsString('72290 NOVI TRAVNIK', $items[0]['product_name']);
+        $this->assertStringNotContainsString('Ruesten/Termin abs.', $items[0]['product_name']);
+    }
+
+    public function test_post_process_profile_payload_for_grob_keeps_product_name_until_zeichnung_and_moves_extra_description_to_note(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+
+        $sourcePath = 'order-ai-scans/4512120662.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([
+            [
+                'GROB-WERKE GmbH & Co. KG',
+                'BESTELLUNG',
+                'Bestell-Nr.: 4512120662',
+                '10 4008746 6,00 ST',
+                'Platte',
+                'SVTP1841-01',
+                'Zeichnung SVTP1841-01 mit Revisionsstand 01',
+                'Werkstoff: 16MnCrS5',
+                'Bruttopreis 19,20 EUR ST 1 115,20',
+                'Ruesten/Termin abs. 45,00 EUR 45,00',
+                'Nettopreis 26,70 EUR ST 1 160,20',
+                'Lieferdatum: 09.07.2026 6,00 ST',
+                'PLACA DE ACO; USINADA; UTILIZADA EM DISPOSITIVO',
+                'DIMENSOES 70mm x 35mm x 12mm',
+                'REF. DES. SVTP1841-01',
+                '*********************************** ACHTUNG * *************************************',
+            ],
+        ]));
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'grob',
+            'source_file_name' => '4512120662.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('postProcessProfilePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['order']['supplier_name'] = 'GROB-WERKE GmbH & Co. KG';
+        $payload['items'][0]['line_number'] = 10;
+        $payload['items'][0]['product_code'] = '4008746';
+        $payload['items'][0]['product_name'] = 'Platte SVTP1841-01 Ruesten/Termin abs. 45,00 EUR 45,00 PLACA DE ACO; USINADA; UTILIZADA EM DISPOSITIVO';
+        $payload['items'][0]['note'] = '';
+
+        $payload = $method->invoke($service, $scan, $payload);
+
+        $this->assertSame('Platte SVTP1841-01', $payload['items'][0]['product_name']);
+        $this->assertSame('Zeichnung SVTP1841-01 mit Revisionsstand 01', $payload['items'][0]['drawing_reference']);
+        $this->assertSame('16MnCrS5', $payload['items'][0]['material_hint']);
+        $this->assertStringContainsString('PLACA DE ACO; USINADA; UTILIZADA EM DISPOSITIVO', $payload['items'][0]['note']);
+        $this->assertStringContainsString('REF. DES. SVTP1841-01', $payload['items'][0]['note']);
+        $this->assertStringNotContainsString('Ruesten/Termin abs.', $payload['items'][0]['product_name']);
+    }
+
+    public function test_grob_document_preparation_stops_before_warenbegleitschein_attachments_when_attention_marker_is_missing(): void
+    {
+        $prepared = app(OrderAiDocumentPreparationService::class)->prepareDocument(
+            'grob',
+            '4512120662.pdf',
+            'application/pdf',
+            $this->buildSyntheticPdf([
+                [
+                    'GROB-WERKE GmbH & Co. KG',
+                    'BESTELLUNG',
+                    'Bestell-Nr.: 4512120662',
+                    '10 4008746 6,00 ST',
+                    'Platte',
+                    'SVTP1841-01',
+                    'Zeichnung SVTP1841-01 mit Revisionsstand 01',
+                    'Werkstoff: 16MnCrS5',
+                    'Nettopreis 26,70 EUR ST 1 160,20',
+                    'Lieferdatum: 09.07.2026 6,00 ST',
+                ],
+                [
+                    'Nettowert: 160,20',
+                    'Gesamtbetrag: 160,20',
+                ],
+                [
+                    'Lieferant',
+                    '7307181, Trendy d.o.o.',
+                    'Warenbegleitschein',
+                    'GROB-Identnr.:',
+                    'SVTP1841-01',
+                    'Material:',
+                    '4008746',
+                ],
+            ])
+        );
+
+        $this->assertSame(3, $prepared['source_page_count']);
+        $this->assertSame(2, $prepared['effective_page_count']);
+        $this->assertSame(
+            OrderAiDocumentPreparationService::GROB_ATTACHMENT_PAGE_LIMIT_REASON,
+            $prepared['page_processing_limit_reason']
+        );
+        $this->assertStringContainsString('[Page 2]', $prepared['provider_input_text']);
+        $this->assertStringNotContainsString('[Page 3]', $prepared['provider_input_text']);
+        $this->assertStringNotContainsString('GROB-Identnr.:', $prepared['provider_input_text']);
+    }
+
     private function basePayload(): array
     {
         return [
