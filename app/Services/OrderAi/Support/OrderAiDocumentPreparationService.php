@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 class OrderAiDocumentPreparationService
 {
     public const GROB_PAGE_LIMIT_REASON = 'GROB obrada stavki je ograničena do ACHTUNG reda.';
+    public const GROB_ATTACHMENT_PAGE_LIMIT_REASON = 'GROB obrada stavki je ograničena prije pratećih Warenbegleitschein stranica.';
 
     public function prepareDocument(
         string $documentProfile,
@@ -74,16 +75,25 @@ class OrderAiDocumentPreparationService
 
         $processedPages = [];
         $markerPageNumber = 0;
+        $pageLimitReason = '';
 
         foreach ($pages as $page) {
             $pageLines = array_values(array_filter(array_map(function ($line) {
                 return Utf8Sanitizer::clean(trim((string) $line));
             }, is_array($page['lines'] ?? null) ? $page['lines'] : [])));
+
+            if ($pageLines !== [] && $processedPages !== [] && $this->isGrobAttachmentPage($pageLines)) {
+                $markerPageNumber = max(0, ((int) ($page['page_number'] ?? (count($processedPages) + 1))) - 1);
+                $pageLimitReason = self::GROB_ATTACHMENT_PAGE_LIMIT_REASON;
+                break;
+            }
+
             $markerLineIndex = $this->findAttentionMarkerLineIndex($pageLines);
 
             if ($markerLineIndex !== null) {
                 $markerPageNumber = (int) ($page['page_number'] ?? (count($processedPages) + 1));
                 $pageLines = array_slice($pageLines, 0, $markerLineIndex);
+                $pageLimitReason = self::GROB_PAGE_LIMIT_REASON;
             }
 
             $pageText = Utf8Sanitizer::clean(trim(implode("\n", $pageLines)));
@@ -103,9 +113,6 @@ class OrderAiDocumentPreparationService
         $searchableText = trim(implode("\n\n", array_values(array_filter(array_map(function (array $page) {
             return trim((string) ($page['text'] ?? ''));
         }, $processedPages)))));
-        $pageLimitReason = $markerPageNumber > 0 && $effectivePageCount < $sourcePageCount
-            ? self::GROB_PAGE_LIMIT_REASON
-            : '';
 
         return [
             'processed_pages' => $processedPages,
@@ -175,6 +182,18 @@ class OrderAiDocumentPreparationService
         }
 
         return null;
+    }
+
+    private function isGrobAttachmentPage(array $lines): bool
+    {
+        $joined = Str::lower(implode("\n", array_filter($lines)));
+
+        if ($joined === '') {
+            return false;
+        }
+
+        return str_contains($joined, 'warenbegleitschein')
+            && (str_contains($joined, 'grob-identnr') || str_contains($joined, 'lieferant'));
     }
 
     private function truncateFallbackAtAttentionMarker(string $value): string

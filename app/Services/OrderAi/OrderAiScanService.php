@@ -326,7 +326,7 @@ class OrderAiScanService
             $scan->forceFill([
                 'status' => 'failed',
                 'processing_step' => 'Transfer u bazu nije uspio.',
-                'error_message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+                'error_message' => $this->humanizeTransferFailureReason($exception),
                 'completed_at' => now(),
             ])->save();
         }
@@ -377,8 +377,44 @@ class OrderAiScanService
         $looksLikeLegacyProviderFailure = str_contains($normalizedMessage, 'openrouter')
             || str_contains($normalizedMessage, 'openai');
 
+        if ($looksLikeTransferFailure) {
+            return $this->humanizeTransferFailureMessage($message);
+        }
+
         if (!$looksLikeTransferFailure && $looksLikeLegacyProviderFailure) {
             return $this->humanizeExtractionFailureMessage($message);
+        }
+
+        return $message;
+    }
+
+    private function humanizeTransferFailureReason(\Throwable $exception): string
+    {
+        return $this->humanizeTransferFailureMessage(
+            Utf8Sanitizer::cleanExceptionMessage($exception)
+        );
+    }
+
+    private function humanizeTransferFailureMessage(string $message): string
+    {
+        $message = trim(Utf8Sanitizer::clean($message));
+
+        if ($message === '') {
+            return 'Transfer u bazu nije uspio, ali detaljan razlog nije vraćen.';
+        }
+
+        $normalized = Str::lower($message);
+
+        if (str_contains($normalized, 'unknown column') && str_contains($normalized, 'transfer_started_at')) {
+            return 'Transfer trenutno nije moguć jer bazi nedostaje obavezno polje za praćenje transfera. Potrebno je ažurirati bazu pa pokušati ponovo.';
+        }
+
+        if (str_contains($normalized, 'rthe_order_the_setsubj_21') || str_contains($normalized, 'anconsigneeqid')) {
+            return 'Pantheon nije prihvatio naručitelja jer nije bio postavljen validan subject za anConsigneeQId.';
+        }
+
+        if (str_contains($normalized, 'sqlstate') || str_contains($normalized, 'column not found')) {
+            return 'Transfer trenutno nije moguć zbog interne greške pri upisu u bazu. Pokušajte ponovo ili kontaktirajte administratora.';
         }
 
         return $message;
@@ -1278,10 +1314,21 @@ class OrderAiScanService
                 $mergedItem['unit'] = $this->normalizeScannedUnit((string) $parsedItem['unit']);
             }
 
+            if (trim((string) ($parsedItem['product_name'] ?? '')) !== '') {
+                $mergedItem['product_name'] = trim((string) $parsedItem['product_name']);
+            }
+
             foreach (['drawing_reference', 'material_hint', 'delivery_deadline'] as $field) {
                 if (trim((string) ($parsedItem[$field] ?? '')) !== '') {
                     $mergedItem[$field] = trim((string) $parsedItem[$field]);
                 }
+            }
+
+            if (trim((string) ($parsedItem['note'] ?? '')) !== '') {
+                $mergedItem['note'] = $this->appendItemNote(
+                    (string) ($mergedItem['note'] ?? ''),
+                    (string) $parsedItem['note']
+                );
             }
 
             if (!empty($parsedItem['warnings']) && is_array($parsedItem['warnings'])) {
@@ -1325,6 +1372,7 @@ class OrderAiScanService
                 }
 
                 if (preg_match('/^zeichnung\b/iu', $line) === 1) {
+                    $currentItem['product_name_capture_complete'] = true;
                     $currentItem['drawing_reference'] = trim(implode(' | ', array_filter([
                         $currentItem['drawing_reference'],
                         $line,
@@ -1333,31 +1381,43 @@ class OrderAiScanService
                 }
 
                 if (preg_match('/^werkstoff\s*:\s*(.+)$/iu', $line, $matches) === 1) {
+                    $currentItem['product_name_capture_complete'] = true;
                     $currentItem['material_hint'] = trim((string) ($matches[1] ?? ''));
                     continue;
                 }
 
+                if (preg_match('/^(?:kontierung\s*:|ref\.\s*des\.)/iu', $line) === 1) {
+                    $currentItem['product_name_capture_complete'] = true;
+                    $this->appendGrobItemNoteLine($currentItem, $line);
+                    continue;
+                }
+
                 if (preg_match('/^preiseinheit\b.*?\b([A-Z]{1,5})\b/iu', $line, $matches) === 1) {
+                    $currentItem['product_name_capture_complete'] = true;
                     $currentItem['unit'] = trim((string) ($matches[1] ?? ''));
                     continue;
                 }
 
                 if (preg_match('/^bruttopreis\b/iu', $line) === 1) {
+                    $currentItem['product_name_capture_complete'] = true;
                     continue;
                 }
 
                 if (preg_match('/^nettopreis\b/iu', $line) === 1) {
+                    $currentItem['product_name_capture_complete'] = true;
                     $this->populateGrobItemFromNettoLine($currentItem, $line);
                     continue;
                 }
 
                 if (preg_match('/^wert\b.*?(-?\d[\d.,]*)/iu', $line, $matches) === 1) {
+                    $currentItem['product_name_capture_complete'] = true;
                     $currentItem['line_total'] = $this->parseGermanNumber((string) ($matches[1] ?? ''));
                     $currentItem['line_total_found'] = $currentItem['line_total'] > 0;
                     continue;
                 }
 
                 if (preg_match('/^lieferdatum\b/iu', $line) === 1) {
+                    $currentItem['product_name_capture_complete'] = true;
                     $currentItem['delivery_deadline'] = $this->extractVisibleDateFromLine($line);
 
                     if ((float) ($currentItem['quantity'] ?? 0) <= 0 && preg_match('/(-?\d{1,3}(?:\.\d{3})*,\d+|-?\d+(?:,\d+)?)\s+([A-Z]{1,5})\b/u', $line, $matches) === 1) {
@@ -1372,10 +1432,16 @@ class OrderAiScanService
                 }
 
                 if ($this->isGrobKeywordLine($line)) {
+                    $currentItem['product_name_capture_complete'] = true;
                     continue;
                 }
 
-                $currentItem['product_name_lines'][] = $line;
+                if (!($currentItem['product_name_capture_complete'] ?? false)) {
+                    $currentItem['product_name_lines'][] = $line;
+                    continue;
+                }
+
+                $this->appendGrobItemNoteLine($currentItem, $line);
             }
         }
 
@@ -1416,6 +1482,7 @@ class OrderAiScanService
             }
 
             if (preg_match('/^zeichnung\b/iu', $line) === 1) {
+                $currentItem['product_name_capture_complete'] = true;
                 $currentItem['drawing_reference'] = trim(implode(' | ', array_filter([
                     $currentItem['drawing_reference'],
                     $line,
@@ -1424,40 +1491,67 @@ class OrderAiScanService
             }
 
             if (preg_match('/^werkstoff\s*:\s*(.+)$/iu', $line, $matches) === 1) {
+                $currentItem['product_name_capture_complete'] = true;
                 $currentItem['material_hint'] = trim((string) ($matches[1] ?? ''));
                 continue;
             }
 
+            if (preg_match('/^(?:kontierung\s*:|ref\.\s*des\.)/iu', $line) === 1) {
+                $currentItem['product_name_capture_complete'] = true;
+                $this->appendGrobItemNoteLine($currentItem, $line);
+                continue;
+            }
+
             if (preg_match('/^preiseinheit\b.*?\b([A-Z]{1,5})\b/iu', $line, $matches) === 1) {
+                $currentItem['product_name_capture_complete'] = true;
                 $currentItem['unit'] = trim((string) ($matches[1] ?? ''));
                 continue;
             }
 
             if (preg_match('/^bruttopreis\b/iu', $line) === 1) {
+                $currentItem['product_name_capture_complete'] = true;
                 continue;
             }
 
             if (preg_match('/^nettopreis\b/iu', $line) === 1) {
+                $currentItem['product_name_capture_complete'] = true;
                 $this->populateGrobItemFromNettoLine($currentItem, $line);
                 continue;
             }
 
             if (preg_match('/^wert\b.*?(-?\d[\d.,]*)/iu', $line, $matches) === 1) {
+                $currentItem['product_name_capture_complete'] = true;
                 $currentItem['line_total'] = $this->parseGermanNumber((string) ($matches[1] ?? ''));
                 $currentItem['line_total_found'] = $currentItem['line_total'] > 0;
                 continue;
             }
 
             if (preg_match('/^lieferdatum\b/iu', $line) === 1) {
+                $currentItem['product_name_capture_complete'] = true;
                 $currentItem['delivery_deadline'] = $this->extractVisibleDateFromLine($line);
+
+                if ((float) ($currentItem['quantity'] ?? 0) <= 0 && preg_match('/(-?\d{1,3}(?:\.\d{3})*,\d+|-?\d+(?:,\d+)?)\s+([A-Z]{1,5})\b/u', $line, $matches) === 1) {
+                    $currentItem['quantity'] = $this->parseGermanNumber((string) ($matches[1] ?? ''));
+
+                    if (trim((string) ($currentItem['unit'] ?? '')) === '') {
+                        $currentItem['unit'] = trim((string) ($matches[2] ?? ''));
+                    }
+                }
+
                 continue;
             }
 
             if ($this->isGrobKeywordLine($line)) {
+                $currentItem['product_name_capture_complete'] = true;
                 continue;
             }
 
-            $currentItem['product_name_lines'][] = $line;
+            if (!($currentItem['product_name_capture_complete'] ?? false)) {
+                $currentItem['product_name_lines'][] = $line;
+                continue;
+            }
+
+            $this->appendGrobItemNoteLine($currentItem, $line);
         }
 
         if (is_array($currentItem)) {
@@ -1473,7 +1567,10 @@ class OrderAiScanService
     private function finalizeGrobParsedItem(array $item): array
     {
         $item['product_name'] = trim(implode(' ', array_values(array_filter($item['product_name_lines'] ?? []))));
+        $item['note'] = implode(' | ', array_values(array_unique(array_filter($item['note_lines'] ?? []))));
         unset($item['product_name_lines']);
+        unset($item['note_lines']);
+        unset($item['product_name_capture_complete']);
 
         if (!($item['netto_price_found'] ?? false)) {
             $item['unit_price'] = 0.0;
@@ -1524,6 +1621,8 @@ class OrderAiScanService
             'quantity' => $quantity,
             'unit' => $unit,
             'product_name_lines' => $productName !== '' ? [$productName] : [],
+            'note_lines' => [],
+            'product_name_capture_complete' => false,
             'drawing_reference' => '',
             'material_hint' => '',
             'delivery_deadline' => '',
@@ -1597,8 +1696,12 @@ class OrderAiScanService
             return true;
         }
 
+        if (preg_match('/^\d{4,6}\s+[A-ZÄÖÜ][A-ZÄÖÜ\s.\-]+$/u', $line) === 1) {
+            return true;
+        }
+
         return preg_match(
-            '/^(?:grob-werke(?:\s+gmbh\s*&\s*co\.\s*kg)?|gmbh\s*&\s*co\.\s*kg|bestellung|bestell-nr\.:|trendy d\.o\.o\.|mehmeda spahe\b|bosnien-herz\.?|seite\s+\d+\s+von\s+\d+|pos\b|beschreibung\b|menge\b|mengeneinheit\b|w[äa]hrung\b|preis\b|_{10,}|\*{20,}|liefer\.-nr\.|kunden-nr\.|zahlungsbed\.|sachb\.\/tel\.|ekg:|bitte weisen sie)/iu',
+            '/^(?:grob-werke(?:\s+gmbh\s*&\s*co\.\s*kg)?|gmbh\s*&\s*co\.\s*kg|bestellung|bestell-nr\.:|trendy d\.o\.o\.|mehmeda spahe\b|bosnien-herz\.?|seite\s+\d+\s+von\s+\d+|pos\b|beschreibung\b|menge\b|mengeneinheit\b|w[äa]hrung\b|preis\b|_{10,}|\*{20,}|liefer\.-nr\.|kunden-nr\.|zahlungsbed\.|sachb\.\/tel\.|ekg:|bitte weisen sie|lieferant\b|grob-identnr\.:|material:|banf:)/iu',
             $line
         ) === 1;
     }
@@ -1634,9 +1737,20 @@ class OrderAiScanService
     private function isGrobKeywordLine(string $line): bool
     {
         return preg_match(
-            '/^(?:bruttopreis|nettopreis|wert|preiseinheit|preis|pro|lieferdatum|ruesten\/termin abs\.?|vertrag\b|beschichtung\b|gesamtbetrag|nettowert|seite\b|summe\b|mwst\b|achtung\b|attention\b)/iu',
+            '/^(?:bruttopreis|nettopreis|wert|preiseinheit|preis|pro|lieferdatum|r.+\/termin abs\.?|vertrag\b|beschichtung\b|gesamtbetrag|nettowert|seite\b|summe\b|mwst\b|achtung\b|attention\b)/iu',
             $line
         ) === 1;
+    }
+
+    private function appendGrobItemNoteLine(array &$item, string $line): void
+    {
+        $trimmedLine = trim($line);
+
+        if ($trimmedLine === '' || $this->isGrobNonItemNoiseLine($trimmedLine)) {
+            return;
+        }
+
+        $item['note_lines'][] = $trimmedLine;
     }
 
     private function truncateGrobSearchableText(string $searchableText): string
@@ -1734,6 +1848,7 @@ class OrderAiScanService
     {
         $effectivePageCount = max(0, (int) data_get($payload, 'order.effective_page_count', 0));
         $totalPageCount = max(0, (int) ($scan->page_count ?? data_get($payload, 'order.page_count', 0)));
+        $reason = trim((string) data_get($payload, 'order.page_processing_limit_reason', ''));
 
         if ($effectivePageCount <= 0 && $this->resolveDocumentProfileKey($scan) === 'grob' && $totalPageCount > 0) {
             $cacheKey = implode('|', [
@@ -1745,28 +1860,42 @@ class OrderAiScanService
             if (!array_key_exists($cacheKey, $this->effectivePageMetaCache)) {
                 $preparedDocument = $this->prepareDocumentContext($scan, 'grob');
 
-                $this->effectivePageMetaCache[$cacheKey] = max(
-                    0,
-                    (int) ($preparedDocument['effective_page_count'] ?? 0)
-                );
+                $this->effectivePageMetaCache[$cacheKey] = [
+                    'effective_page_count' => max(
+                        0,
+                        (int) ($preparedDocument['effective_page_count'] ?? 0)
+                    ),
+                    'page_processing_limit_reason' => trim((string) ($preparedDocument['page_processing_limit_reason'] ?? '')),
+                ];
             }
 
-            $effectivePageCount = max(0, (int) ($this->effectivePageMetaCache[$cacheKey] ?? 0));
+            $cachedMeta = is_array($this->effectivePageMetaCache[$cacheKey] ?? null)
+                ? $this->effectivePageMetaCache[$cacheKey]
+                : ['effective_page_count' => (int) ($this->effectivePageMetaCache[$cacheKey] ?? 0)];
+
+            $effectivePageCount = max(0, (int) ($cachedMeta['effective_page_count'] ?? 0));
+
+            if ($reason === '') {
+                $reason = trim((string) ($cachedMeta['page_processing_limit_reason'] ?? ''));
+            }
         }
 
         if ($effectivePageCount <= 0) {
             $effectivePageCount = $totalPageCount;
         }
 
-        $reason = $effectivePageCount > 0 && $totalPageCount > 0 && $effectivePageCount < $totalPageCount
-            ? 'GROB obrada stavki je ograničena do ACHTUNG reda.'
-            : '';
+        if (
+            $reason === ''
+            && $effectivePageCount > 0
+            && $totalPageCount > 0
+            && $effectivePageCount < $totalPageCount
+        ) {
+            $reason = OrderAiDocumentPreparationService::GROB_PAGE_LIMIT_REASON;
+        }
 
         return [
             'effective_page_count' => $effectivePageCount,
-            'page_processing_limit_reason' => $reason !== ''
-                ? OrderAiDocumentPreparationService::GROB_PAGE_LIMIT_REASON
-                : '',
+            'page_processing_limit_reason' => $reason,
         ];
     }
 

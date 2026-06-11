@@ -1005,11 +1005,24 @@
       white-space: nowrap;
     }
 
+    .order-ai-secondary-action--accent {
+      background: linear-gradient(135deg, rgba(14, 122, 107, 0.16), rgba(28, 162, 143, 0.24));
+      border-color: rgba(14, 122, 107, 0.42);
+      box-shadow: 0 12px 24px rgba(14, 122, 107, 0.12);
+    }
+
     .order-ai-secondary-action:hover,
     .order-ai-secondary-action:focus {
       color: var(--order-ai-ink);
       background: rgba(74, 160, 117, 0.08);
       border-color: rgba(74, 160, 117, 0.34);
+    }
+
+    .order-ai-secondary-action--accent:hover,
+    .order-ai-secondary-action--accent:focus {
+      background: linear-gradient(135deg, rgba(14, 122, 107, 0.22), rgba(28, 162, 143, 0.3));
+      border-color: rgba(14, 122, 107, 0.5);
+      box-shadow: 0 14px 28px rgba(14, 122, 107, 0.16);
     }
 
     #order-ai-lines-shell {
@@ -1896,6 +1909,13 @@
       color: var(--order-ai-ink);
     }
 
+    html.dark-layout .order-ai-secondary-action--accent,
+    html.semi-dark-layout .order-ai-secondary-action--accent {
+      background: linear-gradient(135deg, rgba(24, 203, 183, 0.16), rgba(16, 185, 129, 0.26));
+      border-color: rgba(24, 203, 183, 0.34);
+      box-shadow: 0 14px 30px rgba(7, 10, 18, 0.28);
+    }
+
     html.dark-layout .order-ai-secondary-action:hover,
     html.dark-layout .order-ai-secondary-action:focus,
     html.semi-dark-layout .order-ai-secondary-action:hover,
@@ -1903,6 +1923,14 @@
       background: rgba(108, 176, 140, 0.12);
       border-color: rgba(108, 176, 140, 0.38);
       color: var(--order-ai-ink);
+    }
+
+    html.dark-layout .order-ai-secondary-action--accent:hover,
+    html.dark-layout .order-ai-secondary-action--accent:focus,
+    html.semi-dark-layout .order-ai-secondary-action--accent:hover,
+    html.semi-dark-layout .order-ai-secondary-action--accent:focus {
+      background: linear-gradient(135deg, rgba(24, 203, 183, 0.22), rgba(16, 185, 129, 0.32));
+      border-color: rgba(24, 203, 183, 0.42);
     }
 
     html.dark-layout .order-ai-primary-action,
@@ -2702,7 +2730,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
               <div class="order-ai-bottom-actions order-ai-hidden" id="order-ai-actions">
                 <div class="order-ai-bottom-actions-secondary">
                   <a href="#" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-pdf-button" target="_blank" rel="noopener">Vidi PDF</a>
-                  <button type="button" class="btn order-ai-secondary-action" id="order-ai-new-order-button">Nova narudžba</button>
+                  <button type="button" class="btn order-ai-secondary-action order-ai-secondary-action--accent" id="order-ai-new-order-button">Nova narudžba</button>
                   <a href="{{ route('app-ai-token-history') }}" class="btn order-ai-secondary-action">Historija AI skeniranja</a>
                   <a href="{{ route('app-orders') }}" class="btn order-ai-secondary-action">Moje narudžbe</a>
                   <button type="button" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-order-button">Vidi narudžbu</button>
@@ -2776,7 +2804,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       <div class="modal-header">
         <div>
           <h5 class="modal-title mb-0" id="order-ai-transfer-error-modal-label">Transfer u bazu nije uspio</h5>
-          <div class="small text-muted">Prikaz razloga zbog kojeg Pantheon nije prihvatio narudžbu</div>
+          <div class="small text-muted">Prikaz razloga zbog kojeg transfer nije mogao biti završen</div>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
       </div>
@@ -3581,8 +3609,16 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           return 'Transfer u bazu nije uspio, ali detaljan razlog nije vraćen.';
         }
 
+        if (/unknown column/i.test(message) && /transfer_started_at/i.test(message)) {
+          return 'Transfer trenutno nije moguć jer bazi nedostaje obavezno polje za praćenje transfera. Potrebno je ažurirati bazu pa pokušati ponovo.';
+        }
+
         if (/rtHE_Order_tHE_SetSubj_21|anConsigneeQId/i.test(message)) {
           return 'Pantheon nije prihvatio naručitelja jer nije bio postavljen validan subject za anConsigneeQId.';
+        }
+
+        if (/SQLSTATE|column not found/i.test(message)) {
+          return 'Transfer trenutno nije moguć zbog interne greške pri upisu u bazu. Pokušaj ponovo ili kontaktiraj administratora.';
         }
 
         return message;
@@ -4028,18 +4064,11 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         }
 
         const friendlyReason = normalizeTransferFailureReason(reason);
-        const technical = String(technicalReason || '').trim();
 
         transferErrorModalBody.innerHTML = `
           <div class="alert alert-danger mb-0">
             <strong>Razlog:</strong> ${escapeHtml(friendlyReason)}
           </div>
-          ${technical && technical !== friendlyReason ? `
-            <div>
-              <div class="small text-muted mb-50">Tehnički detalj</div>
-              <code>${escapeHtml(technical)}</code>
-            </div>
-          ` : ''}
         `;
 
         if (transferErrorModalElement && window.bootstrap && window.bootstrap.Modal) {
@@ -4379,6 +4408,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             : 'Narudžba je uspješno spremljena u bazu.';
           setVisible(successBox, true);
           renderSavedPreview(data);
+          syncSourcePdfButton(data, true);
           setVisible(actions, true);
           setVisible(transferFollowup, true);
           setVisible(viewOrderButton, true);
@@ -4598,6 +4628,18 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           }
 
           if (persistedStatusPayload) {
+            if (!persistedStatusPayload.source_document_view_url && latestStatusPayload && latestStatusPayload.source_document_view_url) {
+              persistedStatusPayload.source_document_view_url = latestStatusPayload.source_document_view_url;
+            }
+
+            if (!persistedStatusPayload.source_document_download_url && latestStatusPayload && latestStatusPayload.source_document_download_url) {
+              persistedStatusPayload.source_document_download_url = latestStatusPayload.source_document_download_url;
+            }
+
+            if (!persistedStatusPayload.source_file_name && latestStatusPayload && latestStatusPayload.source_file_name) {
+              persistedStatusPayload.source_file_name = latestStatusPayload.source_file_name;
+            }
+
             latestStatusPayload = persistedStatusPayload;
           }
 
@@ -4672,8 +4714,16 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           return 'Transfer u bazu nije uspio, ali detaljan razlog nije vraćen.';
         }
 
+        if (/unknown column/i.test(message) && /transfer_started_at/i.test(message)) {
+          return 'Transfer trenutno nije moguć jer bazi nedostaje obavezno polje za praćenje transfera. Potrebno je ažurirati bazu pa pokušati ponovo.';
+        }
+
         if (/rtHE_Order_tHE_SetSubj_21|anConsigneeQId/i.test(message)) {
           return 'Pantheon nije prihvatio naručitelja jer nije bio postavljen validan subject za anConsigneeQId.';
+        }
+
+        if (/SQLSTATE|column not found/i.test(message)) {
+          return 'Transfer trenutno nije moguć zbog interne greške pri upisu u bazu. Pokušaj ponovo ili kontaktiraj administratora.';
         }
 
         return message;
@@ -4857,18 +4907,11 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         }
 
         const friendlyReason = normalizeTransferFailureReason(reason);
-        const technical = String(technicalReason || '').trim();
 
         transferErrorModalBody.innerHTML = `
           <div class="alert alert-danger mb-0">
             <strong>Razlog:</strong> ${escapeHtml(friendlyReason)}
           </div>
-          ${technical && technical !== friendlyReason ? `
-            <div>
-              <div class="small text-muted mb-50">Tehnički detalj</div>
-              <code>${escapeHtml(technical)}</code>
-            </div>
-          ` : ''}
         `;
 
         if (transferErrorModalElement && window.bootstrap && window.bootstrap.Modal) {
@@ -5252,6 +5295,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             : 'Narudžba je uspješno spremljena u bazu.';
           setVisible(successBox, true);
           renderSavedPreview(latestStatusPayload);
+          syncSourcePdfButton(latestStatusPayload, true);
           setVisible(viewOrderButton, true);
           setVisible(viewPositionsButton, true);
           setTransferButtonState({
@@ -6314,6 +6358,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             : 'Narudžba je uspješno spremljena u bazu.';
           setVisible(successBox, true);
           renderSavedPreview(latestStatusPayload);
+          syncSourcePdfButton(latestStatusPayload, true);
           setVisible(viewOrderButton, true);
           setVisible(viewPositionsButton, true);
           setTransferButtonState({

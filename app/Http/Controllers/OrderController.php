@@ -11,11 +11,14 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Throwable;
 
 class OrderController extends WorkOrderController
 {
+    private ?array $orderAiScanColumns = null;
+
     public function ordersLinkageIndex(Request $request)
     {
         return parent::ordersLinkageIndex($request);
@@ -461,32 +464,40 @@ class OrderController extends WorkOrderController
 
         try {
             if ($scan !== null) {
-                $scan->forceFill([
+                $scanAttributes = [
                     'status' => 'transferring',
                     'processing_step' => 'Priprema upisa u bazu.',
                     'progress_current' => 82,
-                    'transfer_started_at' => now(),
                     'error_message' => null,
-                ])->save();
+                ];
+
+                if ($this->orderAiScanColumnExists('transfer_started_at')) {
+                    $scanAttributes['transfer_started_at'] = now();
+                }
+
+                $scan->forceFill($scanAttributes)->save();
             }
 
             $result = $transferService->createFromNormalizedPayload($normalizedPayload, $request->user());
         } catch (Throwable $exception) {
-            $reason = $this->humanizeTransferFailureReason($exception->getMessage());
+            $rawReason = trim($exception->getMessage());
+            $reason = $this->humanizeTransferFailureReason($rawReason);
+            $errorType = $this->detectTransferFailureType($rawReason);
+
+            Log::error('Manual order transfer failed.', [
+                'scan_id' => $scan?->id,
+                'error_type' => $errorType,
+                'message' => $rawReason,
+            ]);
 
             if ($scan !== null) {
-                $scan->forceFill([
-                    'status' => 'failed',
-                    'processing_step' => 'Transfer u bazu nije uspio.',
-                    'error_message' => $reason,
-                    'completed_at' => now(),
-                ])->save();
+                $this->markScanTransferAsFailed($scan, $reason);
             }
 
             return response()->json([
                 'message' => 'Transfer u bazu nije uspio.',
                 'reason' => $reason,
-                'technical_reason' => $exception->getMessage(),
+                'error_type' => $errorType,
             ], 422);
         }
 
@@ -505,6 +516,20 @@ class OrderController extends WorkOrderController
             ])->save();
         }
 
+        $freshScan = $scan !== null ? $scan->fresh() : null;
+        $scanStatusPayload = $freshScan !== null
+            ? $orderAiScanService->buildStatusPayload($freshScan)
+            : null;
+
+        if (is_array($scanStatusPayload)) {
+            $scanStatusPayload['source_document_view_url'] = trim((string) ($freshScan->source_file_path ?? '')) !== ''
+                ? route('app-order-ai-scan-source', ['scan' => $freshScan->id])
+                : null;
+            $scanStatusPayload['source_document_download_url'] = trim((string) ($freshScan->source_file_path ?? '')) !== ''
+                ? route('app-order-ai-scan-source-download', ['scan' => $freshScan->id])
+                : null;
+        }
+
         return response()->json([
             'message' => 'Narudžba je uspješno kreirana u Pantheonu.',
                 'data' => [
@@ -512,9 +537,7 @@ class OrderController extends WorkOrderController
                     'pantheon_order_view' => $result['pantheon_order_view'] ?? '',
                     'pantheon_order_qid' => $result['pantheon_order_qid'] ?? null,
                     'item_count' => $result['item_count'] ?? 0,
-                    'scan_status' => $scan !== null
-                        ? $orderAiScanService->buildStatusPayload($scan->fresh())
-                        : null,
+                    'scan_status' => $scanStatusPayload,
                 ],
         ], 201);
     }
@@ -537,11 +560,76 @@ class OrderController extends WorkOrderController
             return 'Baza je odbila transfer, ali detaljan razlog nije vraćen.';
         }
 
-        if (str_contains($message, 'rtHE_Order_tHE_SetSubj_21') || str_contains($message, 'anConsigneeQId')) {
+        $failureType = $this->detectTransferFailureType($message);
+
+        if ($failureType === 'database_schema_mismatch') {
+            return 'Transfer trenutno nije moguć jer bazi nedostaje obavezno polje za praćenje transfera. Potrebno je ažurirati bazu pa pokušati ponovo.';
+        }
+
+        if ($failureType === 'pantheon_subject_validation') {
             return 'Pantheon nije prihvatio naručitelja jer nije bio postavljen validan subject za anConsigneeQId.';
         }
 
+        if ($failureType === 'database_query_error') {
+            return 'Transfer trenutno nije moguć zbog interne greške pri upisu u bazu. Pokušajte ponovo ili kontaktirajte administratora.';
+        }
+
         return $message;
+    }
+
+    private function detectTransferFailureType(string $message): string
+    {
+        $normalized = strtolower(trim($message));
+
+        if ($normalized === '') {
+            return 'unknown';
+        }
+
+        if (str_contains($normalized, 'unknown column') && str_contains($normalized, 'transfer_started_at')) {
+            return 'database_schema_mismatch';
+        }
+
+        if (str_contains($normalized, 'rthe_order_the_setsubj_21') || str_contains($normalized, 'anconsigneeqid')) {
+            return 'pantheon_subject_validation';
+        }
+
+        if (str_contains($normalized, 'sqlstate') || str_contains($normalized, 'column not found')) {
+            return 'database_query_error';
+        }
+
+        return 'transfer_error';
+    }
+
+    private function markScanTransferAsFailed(OrderAiScan $scan, string $reason): void
+    {
+        try {
+            $failedScan = OrderAiScan::query()->find($scan->getKey());
+
+            if ($failedScan === null) {
+                return;
+            }
+
+            $failedScan->forceFill([
+                'status' => 'failed',
+                'processing_step' => 'Transfer u bazu nije uspio.',
+                'error_message' => $reason,
+                'completed_at' => now(),
+            ])->save();
+        } catch (Throwable $exception) {
+            Log::warning('Unable to persist failed transfer scan state.', [
+                'scan_id' => $scan->getKey(),
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function orderAiScanColumnExists(string $column): bool
+    {
+        if (!array_key_exists($column, $this->orderAiScanColumns ?? [])) {
+            $this->orderAiScanColumns[$column] = Schema::connection('mysql')->hasColumn('order_ai_scans', $column);
+        }
+
+        return (bool) ($this->orderAiScanColumns[$column] ?? false);
     }
 
     protected function workOrderOrderItemLinkTableName(): string
