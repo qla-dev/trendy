@@ -88,7 +88,7 @@
 
                 <div class="wo-qr-controls-wrap wo-bom-dummy-qr-controls">
                   <div class="wo-qr-controls-panel mt-2 mb-1">
-                    <div class="wo-qr-controls-row">
+                    <div class="wo-qr-controls-row wo-qr-display-row">
                       <div class="wo-qr-control-block">
                         <span class="wo-qr-control-kicker">Prikaz</span>
                         <div class="form-check form-switch mb-0 d-flex align-items-center">
@@ -1071,6 +1071,8 @@
     position: fixed;
     top: max(1rem, env(safe-area-inset-top));
     left: max(1rem, env(safe-area-inset-left));
+    width: auto;
+    max-width: calc(100vw - 2rem);
     z-index: 1085;
     display: flex;
     justify-content: flex-start;
@@ -1418,6 +1420,170 @@
     #sirovina-scanner-modal .wo-qr-camera-row {
       flex-direction: column;
       align-items: stretch;
+    }
+  }
+  @media (max-width: 480px) {
+    #sirovina-scanner-modal .modal-dialog {
+      max-width: calc(100vw - 0.5rem);
+      margin: 0.25rem auto;
+    }
+
+    #sirovina-scanner-modal .wo-bom-modal-header {
+      margin-bottom: 1rem;
+    }
+
+    #sirovina-scanner-modal .wo-bom-content-header {
+      padding: calc(4.1rem + env(safe-area-inset-top)) 0.75rem 0.55rem;
+    }
+
+    #sirovina-scanner-modal .wo-bom-modal-header h4 {
+      font-size: 1.15rem;
+      line-height: 1.28;
+    }
+
+    #sirovina-scanner-modal .wo-bom-modal-subtitle {
+      max-width: 20rem;
+      margin: 0.35rem auto 0;
+      font-size: 0.76rem;
+      line-height: 1.3;
+    }
+
+    #sirovina-scanner-modal .wo-bom-modal-footer {
+      top: max(0.65rem, env(safe-area-inset-top));
+      left: max(0.75rem, env(safe-area-inset-left));
+      right: max(0.75rem, env(safe-area-inset-right));
+      width: auto;
+      max-width: none;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      justify-content: stretch;
+      gap: 0.5rem;
+      flex-wrap: nowrap;
+    }
+
+    #sirovina-scanner-modal .wo-scanner-close-fab,
+    #sirovina-scanner-modal .wo-scanner-open-fab {
+      width: 100%;
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 0.5rem 0.5rem;
+      height: 40px;
+      font-size: 0.92rem;
+    }
+
+    #sirovina-scanner-modal .wo-bom-modal-footer > * {
+      min-width: 0;
+    }
+
+    #sirovina-scanner-modal .wo-bom-dummy-qr-card > h5 {
+      font-size: 1.05rem;
+      line-height: 1.25;
+      margin-bottom: 0.75rem !important;
+    }
+
+    #sirovina-scanner-modal .wo-bom-dummy-qr-wrap {
+      max-width: 320px;
+    }
+
+    #sirovina-scanner-modal .wo-bom-dummy-qr-controls {
+      max-width: none;
+      width: 100%;
+    }
+
+    #sirovina-scanner-modal #sirovina-qr-scanner-frame {
+      height: auto;
+      aspect-ratio: 1 / 1;
+    }
+
+    #sirovina-scanner-modal #sirovina-qr-scanner-frame .qr-barcode-window {
+      inset: 18px;
+      border-radius: 16px;
+    }
+
+    #sirovina-scanner-modal #sirovina-qr-scanner-frame .qr-barcode-window-label {
+      max-width: calc(100% - 56px);
+      bottom: 20px;
+      white-space: normal;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    #sirovina-scanner-modal .wo-qr-controls-panel {
+      width: 100%;
+      padding: 0.72rem 0.6rem;
+    }
+
+    #sirovina-scanner-modal .wo-qr-controls-row {
+      flex-direction: row;
+      align-items: flex-end;
+      gap: 0.45rem;
+    }
+
+    #sirovina-scanner-modal .wo-qr-display-row .wo-qr-control-block {
+      flex: 1 1 0;
+    }
+
+    #sirovina-scanner-modal .wo-qr-display-row .wo-qr-btn {
+      flex: 1 1 0;
+    }
+
+    #sirovina-scanner-modal .wo-qr-camera-controls-row {
+      align-items: flex-end;
+    }
+
+    #sirovina-scanner-modal .wo-qr-camera-row {
+      flex: 1 1 auto;
+      min-width: 0;
+      flex-direction: row;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    #sirovina-scanner-modal .wo-qr-camera-row .form-select {
+      min-width: 0;
+    }
+
+    #sirovina-scanner-modal .wo-qr-camera-row .wo-qr-btn {
+      flex: 0 0 auto;
+      min-width: 6.25rem;
+    }
+
+    #sirovina-scanner-modal .wo-qr-enhance-row {
+      align-items: flex-end;
+    }
+
+    #sirovina-scanner-modal .wo-qr-enhance-row .wo-qr-zoom-control {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    #sirovina-scanner-modal .wo-qr-enhance-row .wo-qr-btn {
+      flex: 0 0 41%;
+    }
+
+    #sirovina-scanner-modal .wo-qr-btn {
+      width: auto;
+      min-width: 0;
+      justify-content: center;
+      padding-left: 0.65rem;
+      padding-right: 0.65rem;
+    }
+
+    #sirovina-scanner-modal .wo-qr-control-kicker {
+      font-size: 0.68rem;
+    }
+
+    #sirovina-scanner-modal .form-check-label {
+      font-size: 0.88rem;
+    }
+
+    #sirovina-scanner-modal .wo-qr-status {
+      display: none;
+    }
+
+    #sirovina-scanner-modal .wo-qr-feedback-wrap {
+      min-height: 0;
+      margin: 0.2rem 0 0;
     }
   }
 </style>
