@@ -8,57 +8,59 @@
 <div class="modal fade" id="qr-scanner-modal" tabindex="-1" aria-labelledby="qr-scanner-modal-label" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content" style="background: transparent; border: none;">
-      <div class="modal-body p-0 text-center">
-        <h4 class="text-white mb-2" id="qr-scanner-modal-label">Skeniraj QR code radnog naloga</h4>
+      <div class="modal-body p-0 text-center wo-qr-modal-body">
+        <div class="wo-qr-modal-copy">
+          <h4 class="text-white mb-2 wo-qr-modal-title" id="qr-scanner-modal-label">Skeniraj QR code radnog naloga</h4>
 
-        <div class="qr-scanner-container position-relative" style="max-width: 400px; margin: 0 auto;">
-          <div id="qr-scanner-frame" class="qr-scanner-frame position-relative" style="width: 100%; padding-top: 100%; background: rgba(255, 255, 255, 0.1); border: 2px solid var(--bs-success, #28c76f); border-radius: 12px; overflow: hidden;">
-            <div id="qr-scanner-region" class="position-absolute" style="inset: 0;"></div>
+          <div class="qr-scanner-container position-relative" style="max-width: 400px; margin: 0 auto;">
+            <div id="qr-scanner-frame" class="qr-scanner-frame position-relative" style="width: 100%; padding-top: 100%; background: rgba(255, 255, 255, 0.1); border: 2px solid var(--bs-success, #28c76f); border-radius: 12px; overflow: hidden;">
+              <div id="qr-scanner-region" class="position-absolute" style="inset: 0;"></div>
 
-            <div class="qr-corner qr-corner-top-left" style="position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-top: 3px solid var(--bs-success, #28c76f); border-left: 3px solid var(--bs-success, #28c76f);"></div>
-            <div class="qr-corner qr-corner-top-right" style="position: absolute; top: 0; right: 0; width: 40px; height: 40px; border-top: 3px solid var(--bs-success, #28c76f); border-right: 3px solid var(--bs-success, #28c76f);"></div>
-            <div class="qr-corner qr-corner-bottom-left" style="position: absolute; bottom: 0; left: 0; width: 40px; height: 40px; border-bottom: 3px solid var(--bs-success, #28c76f); border-left: 3px solid var(--bs-success, #28c76f);"></div>
-            <div class="qr-corner qr-corner-bottom-right" style="position: absolute; bottom: 0; right: 0; width: 40px; height: 40px; border-bottom: 3px solid var(--bs-success, #28c76f); border-right: 3px solid var(--bs-success, #28c76f);"></div>
+              <div class="qr-corner qr-corner-top-left" style="position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-top: 3px solid var(--bs-success, #28c76f); border-left: 3px solid var(--bs-success, #28c76f);"></div>
+              <div class="qr-corner qr-corner-top-right" style="position: absolute; top: 0; right: 0; width: 40px; height: 40px; border-top: 3px solid var(--bs-success, #28c76f); border-right: 3px solid var(--bs-success, #28c76f);"></div>
+              <div class="qr-corner qr-corner-bottom-left" style="position: absolute; bottom: 0; left: 0; width: 40px; height: 40px; border-bottom: 3px solid var(--bs-success, #28c76f); border-left: 3px solid var(--bs-success, #28c76f);"></div>
+              <div class="qr-corner qr-corner-bottom-right" style="position: absolute; bottom: 0; right: 0; width: 40px; height: 40px; border-bottom: 3px solid var(--bs-success, #28c76f); border-right: 3px solid var(--bs-success, #28c76f);"></div>
 
-            <div class="qr-scan-line" style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--bs-success, #28c76f), transparent); animation: scanLineNalog 2s linear infinite;"></div>
+              <div class="qr-scan-line" style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--bs-success, #28c76f), transparent); animation: scanLineNalog 2s linear infinite;"></div>
 
-            <div class="qr-grid" style="position: absolute; inset: 0; background-image:
-              linear-gradient(rgba(40, 199, 111, 0.1) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(40, 199, 111, 0.1) 1px, transparent 1px);
-              background-size: 20px 20px; opacity: 0.3;"></div>
+              <div class="qr-grid" style="position: absolute; inset: 0; background-image:
+                linear-gradient(rgba(40, 199, 111, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(40, 199, 111, 0.1) 1px, transparent 1px);
+                background-size: 20px 20px; opacity: 0.3;"></div>
+            </div>
           </div>
-        </div>
 
-        <div class="wo-qr-controls-wrap" style="max-width: 400px; margin: 0 auto;">
-          <div class="wo-qr-controls-panel mt-2 mb-1">
-            <div class="wo-qr-controls-row">
-              <div class="wo-qr-control-block">
-                <span class="wo-qr-control-kicker">Prikaz</span>
-                <div class="form-check form-switch mb-0 d-flex align-items-center">
-                  <input class="form-check-input me-50" type="checkbox" id="qr-mirror-toggle">
-                  <label class="form-check-label mb-0" for="qr-mirror-toggle">Mirror</label>
+          <div class="wo-qr-controls-wrap" style="max-width: 400px; margin: 0 auto;">
+            <div class="wo-qr-controls-panel mt-2 mb-1">
+              <div class="wo-qr-controls-row wo-qr-display-row">
+                <div class="wo-qr-control-block">
+                  <span class="wo-qr-control-kicker">Prikaz</span>
+                  <div class="form-check form-switch mb-0 d-flex align-items-center">
+                    <input class="form-check-input me-50" type="checkbox" id="qr-mirror-toggle">
+                    <label class="form-check-label mb-0" for="qr-mirror-toggle">Mirror</label>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-subtle" id="qr-scanner-restart-btn">
+                  <i class="fa fa-refresh me-50"></i> Ponovo pokreni
+                </button>
+              </div>
+
+              <div class="wo-qr-controls-row wo-qr-camera-controls-row">
+                <span class="wo-qr-camera-icon" aria-hidden="true"><i class="fa fa-camera"></i></span>
+                <label class="visually-hidden" for="qr-camera-select">Kamera</label>
+                <div class="wo-qr-camera-row">
+                  <select class="form-select form-select-sm" id="qr-camera-select">
+                    <option value="">Automatski odabir</option>
+                  </select>
+                  <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-primary" id="qr-camera-apply-btn">Primijeni</button>
                 </div>
               </div>
-              <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-subtle" id="qr-scanner-restart-btn">
-                <i class="fa fa-refresh me-50"></i> Ponovo pokreni
-              </button>
             </div>
 
-            <div class="wo-qr-controls-row wo-qr-camera-controls-row">
-              <span class="wo-qr-camera-icon" aria-hidden="true"><i class="fa fa-camera"></i></span>
-              <label class="visually-hidden" for="qr-camera-select">Kamera</label>
-              <div class="wo-qr-camera-row">
-                <select class="form-select form-select-sm" id="qr-camera-select">
-                  <option value="">Automatski odabir</option>
-                </select>
-                <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-primary" id="qr-camera-apply-btn">Primijeni</button>
-              </div>
+            <div class="wo-qr-feedback-wrap">
+              <div id="qr-scanner-status" class="small wo-qr-status">Dozvoli pristup kameri da skeniranje zapocne.</div>
+              <div id="qr-scanner-error" class="small wo-qr-error text-danger d-none"></div>
             </div>
-          </div>
-
-          <div class="wo-qr-feedback-wrap">
-            <div id="qr-scanner-status" class="small wo-qr-status">Dozvoli pristup kameri da skeniranje zapocne.</div>
-            <div id="qr-scanner-error" class="small wo-qr-error text-danger d-none"></div>
           </div>
         </div>
 
@@ -185,6 +187,15 @@
 
   #qr-scanner-modal .form-label {
     color: var(--qr-text-soft) !important;
+  }
+
+  #qr-scanner-modal .wo-qr-modal-copy {
+    padding: 0 0.75rem 0.75rem;
+  }
+
+  #qr-scanner-modal .wo-qr-modal-title {
+    max-width: 24rem;
+    margin: 0 auto 0.5rem;
   }
 
   #qr-scanner-modal .wo-qr-controls-wrap {
@@ -698,6 +709,93 @@
     #qr-scanner-modal .wo-qr-btn-primary {
       width: 100%;
       min-width: 0;
+    }
+  }
+
+  @media (max-width: 480px) {
+    #qr-scanner-modal .modal-dialog {
+      max-width: calc(100vw - 0.5rem);
+      margin: 0.25rem auto;
+    }
+
+    #qr-scanner-modal .wo-qr-modal-copy {
+      padding: calc(4.1rem + env(safe-area-inset-top)) 0.75rem 0.55rem;
+    }
+
+    #qr-scanner-modal .wo-qr-modal-title {
+      max-width: 20rem;
+      margin-bottom: 0.75rem !important;
+      font-size: 1.15rem;
+      line-height: 1.28;
+    }
+
+    #qr-scanner-modal .qr-scanner-container {
+      max-width: 320px !important;
+    }
+
+    #qr-scanner-modal .wo-qr-controls-wrap {
+      max-width: none !important;
+      width: 100%;
+    }
+
+    #qr-scanner-modal .wo-qr-controls-panel {
+      width: 100%;
+      padding: 0.72rem 0.6rem;
+    }
+
+    #qr-scanner-modal .wo-qr-controls-row {
+      flex-direction: row;
+      align-items: flex-end;
+      gap: 0.45rem;
+    }
+
+    #qr-scanner-modal .wo-qr-display-row .wo-qr-control-block {
+      flex: 1 1 0;
+    }
+
+    #qr-scanner-modal .wo-qr-display-row .wo-qr-btn {
+      flex: 1 1 0;
+    }
+
+    #qr-scanner-modal .wo-qr-camera-controls-row {
+      align-items: flex-end;
+    }
+
+    #qr-scanner-modal .wo-qr-camera-row {
+      flex: 1 1 auto;
+      min-width: 0;
+      flex-direction: row;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    #qr-scanner-modal .wo-qr-camera-row .form-select {
+      min-width: 0;
+    }
+
+    #qr-scanner-modal .wo-qr-camera-row .wo-qr-btn {
+      flex: 0 0 auto;
+      min-width: 6.25rem;
+    }
+
+    #qr-scanner-modal .wo-qr-btn {
+      width: auto;
+      min-width: 0;
+      justify-content: center;
+      padding-left: 0.65rem;
+      padding-right: 0.65rem;
+    }
+
+    #qr-scanner-modal .wo-qr-control-kicker {
+      font-size: 0.68rem;
+    }
+
+    #qr-scanner-modal .form-check-label {
+      font-size: 0.88rem;
+    }
+
+    #qr-scanner-modal .wo-qr-feedback-wrap {
+      margin: 0.2rem 0 0;
     }
   }
 </style>

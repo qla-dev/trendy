@@ -1370,6 +1370,15 @@
     .wo-mobile-top-actions .btn i {
       font-size: 1.05rem !important;
     }
+    body.vertical-overlay-menu .sidenav-overlay.show {
+      z-index: 1036 !important;
+    }
+    body.vertical-overlay-menu .main-menu,
+    body.vertical-overlay-menu .main-menu.menu-fixed,
+    body.vertical-overlay-menu.menu-open .main-menu,
+    body.vertical-overlay-menu.menu-open .main-menu.menu-fixed {
+      z-index: 1037 !important;
+    }
     .scroll-top {
       display: none !important;
     }
@@ -1590,9 +1599,12 @@
     }
     .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs .nav-link {
       white-space: nowrap;
-      font-size: 0.82rem;
-      padding-left: 0.82rem;
-      padding-right: 0.82rem;
+      font-size: 1.04rem;
+      padding-left: 0.95rem;
+      padding-right: 0.95rem;
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs .nav-link i {
+      font-size: 1.04rem;
     }
   }
 </style>

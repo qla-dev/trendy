@@ -238,9 +238,14 @@
 @endif
 <div class="navbar-container d-flex content">
   <div class="bookmark-wrapper d-flex align-items-center">
-    <ul class="nav navbar-nav d-xl-none">
+    <ul class="nav navbar-nav d-xl-none align-items-center">
       <li class="nav-item"><a class="nav-link menu-toggle" href="javascript:void(0);"><i class="ficon"
             data-feather="menu"></i></a></li>
+      <li class="nav-item d-md-none">
+        <a class="nav-link" href="{{ url('app/invoice/preview') }}"
+          data-bs-toggle="tooltip" data-bs-placement="bottom" title="Skeniraj nalog" aria-label="Skeniraj nalog"><i class="ficon"
+            data-feather="camera"></i></a>
+      </li>
     </ul>
     <ul class="nav navbar-nav bookmark-icons">
       @if (Auth::check() && Auth::user()->role === 'admin')

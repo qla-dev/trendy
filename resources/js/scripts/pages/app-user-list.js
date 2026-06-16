@@ -50,81 +50,69 @@ $(function () {
     dtUserTable.DataTable({
       data: window.usersData || [],
       columns: [
-        // columns according to server-side data
+        { data: null },
         { data: 0 },
         { data: 1 },
         { data: 2 },
         { data: 3 },
         { data: 4 },
-        { data: 5 },
-        { data: 6 }
+        { data: 5 }
       ],
       columnDefs: [
         {
-          // For Responsive
-          className: 'control',
-          orderable: false,
-          responsivePriority: 2,
+          // Avatar
           targets: 0,
+          responsivePriority: 1,
           render: function (data, type, full, meta) {
-            return '';
-          }
-        },
-        {
-          // User full name and username
-          targets: 1,
-          responsivePriority: 4,
-          render: function (data, type, full, meta) {
-            var $name = full[1],
-              $email = full[3] || '-';
+            var $name = full[0] || '';
             // For Avatar badge
             var $initials = $name.match(/\b\w/g) || [];
             $initials = (($initials.shift() || '') + ($initials.pop() || '')).toUpperCase();
             var $output = '<span class="avatar-content">' + $initials + '</span>';
             var colorClass = ' bg-light-primary ';
-            // Creates full output for row
             var $row_output =
-              '<div class="d-flex justify-content-left align-items-center">' +
               '<div class="avatar-wrapper">' +
               '<div class="avatar ' +
               colorClass +
-              ' me-1">' +
+              '">' +
               $output +
-              '</div>' +
-              '</div>' +
-              '<div class="d-flex flex-column">' +
-              '<a href="' +
-              userView +
-              '" class="user_name text-truncate text-body"><span class="fw-bolder">' +
-              $name +
-              '</span></a>' +
-              '<small class="emp_post text-muted">' +
-              $email +
-              '</small>' +
               '</div>' +
               '</div>';
             return $row_output;
           }
         },
         {
+          // User full name
+          targets: 1,
+          render: function (data, type, full, meta) {
+            return (
+              '<a href="' +
+              userView +
+              '" class="user_name text-truncate text-body"><span class="fw-bolder">' +
+              (full[0] || '-') +
+              '</span></a>'
+            );
+          }
+        },
+        {
           // Username
           targets: 2,
           render: function (data, type, full, meta) {
-            return "<span class='text-truncate align-middle'>" + full[2] + '</span>';
+            return "<span class='text-truncate align-middle'>" + full[1] + '</span>';
           }
         },
         {
           // Email
           targets: 3,
           render: function (data, type, full, meta) {
-            return "<span class='text-truncate align-middle'>" + (full[3] || '-') + '</span>';
+            return "<span class='text-truncate align-middle'>" + (full[2] || '-') + '</span>';
           }
         },
         {
           // User Role
           targets: 4,
           render: function (data, type, full, meta) {
-            var $role = full[4];
+            var $role = full[3];
             var roleBadgeObj = {
               admin: feather.icons['slack'].toSvg({ class: 'font-medium-3 text-danger me-50' }),
               user: feather.icons['user'].toSvg({ class: 'font-medium-3 text-primary me-50' })
@@ -137,7 +125,7 @@ $(function () {
           // Created Date
           targets: 5,
           render: function (data, type, full, meta) {
-            var $date = full[5];
+            var $date = full[4];
             return '<span class="text-nowrap">' + $date + '</span>';
           }
         },
@@ -146,6 +134,7 @@ $(function () {
           targets: -1,
           title: 'Akcije',
           orderable: false,
+          responsivePriority: 2,
           render: function (data, type, full, meta) {
             return (
               '<div class="btn-group">' +
@@ -159,7 +148,7 @@ $(function () {
               '<a href="javascript:;" class="dropdown-item">' +
               feather.icons['lock'].toSvg({ class: 'font-small-4 me-50' }) +
               'Promijeni lozinku</a>' +
-              '<a href="javascript:;" class="dropdown-item delete-record" onclick="deleteUser(' + full[6] + ')">' +
+              '<a href="javascript:;" class="dropdown-item delete-record" onclick="deleteUser(' + full[5] + ')">' +
               feather.icons['trash-2'].toSvg({ class: 'font-small-4 me-50' }) +
               'Obriši</a></div>' +
               '</div>' +
@@ -203,38 +192,7 @@ $(function () {
           "sSortDescending": ": aktiviraj za opadajuće sortiranje kolone"
         }
       },
-      // For responsive popup
-      responsive: {
-        details: {
-          display: $.fn.dataTable.Responsive.display.modal({
-            header: function (row) {
-              var data = row.data();
-              return 'Detalji o ' + data['name'];
-            }
-          }),
-          type: 'column',
-          renderer: function (api, rowIdx, columns) {
-            var data = $.map(columns, function (col, i) {
-              return col.columnIndex !== 6 // ? Do not show row in modal popup if title is blank (for check box)
-                ? '<tr data-dt-row="' +
-                    col.rowIdx +
-                    '" data-dt-column="' +
-                    col.columnIndex +
-                    '">' +
-                    '<td>' +
-                    col.title +
-                    ':' +
-                    '</td> ' +
-                    '<td>' +
-                    col.data +
-                    '</td>' +
-                    '</tr>'
-                : '';
-            }).join('');
-            return data ? $('<table class="table"/>').append('<tbody>' + data + '</tbody>') : false;
-          }
-        }
-      },
+      responsive: false,
       language: {
         paginate: {
           // remove previous & next text from pagination
