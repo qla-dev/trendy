@@ -100,7 +100,7 @@ return [
     'inbox' => [
         'enabled' => filter_var(env('AI_ORDER_SCAN_INBOX_ENABLED', true), FILTER_VALIDATE_BOOL),
         'subject_keyword' => env('AI_ORDER_SCAN_INBOX_SUBJECT_KEYWORD', 'Bestellung'),
-        'poll_interval_minutes' => max(1, (int) env('AI_ORDER_SCAN_INBOX_POLL_INTERVAL', 15)),
+        'poll_interval_minutes' => 1,
         'queue_connection' => env('AI_ORDER_SCAN_INBOX_QUEUE_CONNECTION', 'database_ai_inbox'),
         'queue_name' => env('AI_ORDER_SCAN_INBOX_QUEUE_NAME', 'ai-inbox'),
         'enforce_sender_whitelist' => env('AI_ORDER_SCAN_INBOX_ENFORCE_SENDER_WHITELIST'),
