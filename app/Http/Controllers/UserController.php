@@ -20,7 +20,6 @@ class UserController extends Controller
         // Prepare data for DataTables
         $usersData = $users->map(function($user) {
             return [
-                '', // empty for responsive control
                 $user->name,
                 $user->username,
                 trim((string) ($user->email ?? '')) !== '' ? $user->email : '-',

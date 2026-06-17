@@ -24,6 +24,13 @@
     margin-bottom: 5px;
   }
 
+  .footer-qla-link {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.24rem;
+    margin-right: 0.34rem;
+  }
+
   .footer-qla-link .footer-qla-logo-dark {
     display: none;
   }
@@ -40,6 +47,55 @@
   .dark-layout .footer-qla-link .footer-qla-logo-dark,
   .semi-dark-layout .footer-qla-link .footer-qla-logo-dark {
     display: inline-block;
+  }
+
+  @media (max-width: 480px) {
+    footer .clearfix {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      gap: 0.2rem;
+      flex-wrap: nowrap;
+      margin-bottom: 0;
+      padding-left: 0;
+      padding-right: 0;
+      padding-bottom: calc(4.9rem + env(safe-area-inset-bottom));
+    }
+
+    footer .clearfix > span {
+      float: none !important;
+      display: flex !important;
+      align-items: center;
+      min-width: 0;
+      margin-top: 0 !important;
+    }
+
+    .footer-app-version {
+      flex: 0 0 auto;
+      font-size: 1.12rem;
+      line-height: 1.02;
+    }
+
+    footer .clearfix > span.text-end {
+      flex: 1 1 auto;
+      font-size: 0.72rem;
+      line-height: 1.02;
+      letter-spacing: -0.02em;
+      justify-content: flex-end;
+      text-align: right !important;
+      white-space: nowrap;
+    }
+
+    .footer-qla-link .footer-qla-logo {
+      height: 14px;
+      margin-bottom: 2px;
+    }
+
+    .footer-qla-link {
+      margin-left: 0.32rem;
+      margin-right: 0.42rem;
+    }
   }
 </style>
 <button class="btn btn-primary btn-icon scroll-top" type="button"><i data-feather="arrow-up"></i></button>

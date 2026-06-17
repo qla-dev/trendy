@@ -87,6 +87,9 @@
   .invoice-preview-wrapper .invoice-actions .card {
     transition: transform 0.22s ease, box-shadow 0.22s ease;
   }
+  .wo-mobile-top-actions {
+    display: none;
+  }
   .invoice-preview-wrapper {
     --wo-divider-color: #ebe9f1;
     --wo-table-scroll-track: var(--app-scroll-track);
@@ -131,6 +134,18 @@
   .wo-side-meta-btn.wo-side-meta-btn-secondary { border-color: #6e6b7b; color: #6e6b7b; background-color: rgba(110, 107, 123, 0.08); }
   .wo-side-meta-btn:hover {
     filter: brightness(0.96);
+  }
+  .wo-other-options-toggle {
+    display: none;
+  }
+  .invoice-preview-wrapper .wo-other-options-collapse.collapse:not(.show) {
+    display: block;
+  }
+  .wo-other-options-chevron {
+    transition: transform 0.2s ease;
+  }
+  .wo-other-options-toggle[aria-expanded="true"] .wo-other-options-chevron {
+    transform: rotate(180deg);
   }
   .wo-meta-shell {
     border: 1px solid #ebe9f1;
@@ -1307,6 +1322,291 @@
       grid-template-columns: 1fr;
     }
   }
+  /* Compact portrait tuning for 480x774-class screens */
+  @media (max-width: 480px) {
+    .invoice-preview-wrapper {
+      padding-bottom: calc(2.4rem + env(safe-area-inset-bottom));
+    }
+    .invoice-preview .invoice-padding {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+    .invoice-preview .table th:first-child,
+    .invoice-preview .table td:first-child {
+      padding-left: 1rem;
+    }
+    .wo-mobile-top-actions {
+      display: block;
+      position: fixed;
+      left: max(0.75rem, env(safe-area-inset-left));
+      right: max(0.75rem, env(safe-area-inset-right));
+      bottom: max(0.75rem, env(safe-area-inset-bottom));
+      z-index: 1035;
+      margin-bottom: 0;
+    }
+    .wo-mobile-top-actions .card {
+      margin: 0;
+      border: 1px solid rgba(113, 130, 163, 0.18);
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 12px 28px rgba(34, 41, 47, 0.16);
+      backdrop-filter: blur(10px);
+    }
+    .wo-mobile-top-actions .card-body {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.55rem;
+      padding: 0.55rem;
+    }
+    .wo-mobile-top-actions .btn {
+      width: 100%;
+      height: 44px;
+      margin-bottom: 0 !important;
+      padding: 0.5rem 0.3rem;
+      font-size: 0.92rem;
+      font-weight: 600;
+      line-height: 1.12;
+      white-space: nowrap;
+    }
+    .wo-mobile-top-actions .btn i {
+      font-size: 1.05rem !important;
+    }
+    body.vertical-overlay-menu .sidenav-overlay.show {
+      z-index: 1036 !important;
+    }
+    body.vertical-overlay-menu .main-menu,
+    body.vertical-overlay-menu .main-menu.menu-fixed,
+    body.vertical-overlay-menu.menu-open .main-menu,
+    body.vertical-overlay-menu.menu-open .main-menu.menu-fixed {
+      z-index: 1037 !important;
+    }
+    .scroll-top {
+      display: none !important;
+    }
+    .invoice-preview-wrapper .wo-preview-actions-col {
+      order: 0;
+    }
+    .invoice-preview-wrapper .wo-preview-main-col {
+      order: 0;
+    }
+    .invoice-preview-wrapper .invoice-actions {
+      position: static;
+      top: auto;
+    }
+    .invoice-preview-wrapper .invoice-actions .wo-action-primary-pair,
+    .invoice-preview-wrapper .invoice-actions .wo-action-primary-divider {
+      display: none !important;
+    }
+    .invoice-preview-wrapper .invoice-actions .card {
+      margin-bottom: 0.75rem;
+    }
+    .wo-other-options-toggle {
+      display: flex;
+      margin-bottom: 0 !important;
+      font-weight: 600;
+    }
+    .invoice-preview-wrapper .wo-other-options-collapse.collapse:not(.show) {
+      display: none;
+    }
+    .wo-other-options-shell .invoice-actions-divider {
+      display: none;
+    }
+    .wo-other-options-collapse {
+      padding-top: 0.75rem;
+    }
+    .invoice-preview-wrapper .wo-sidebar-qr-block,
+    .invoice-preview-wrapper .wo-sidebar-qr-divider {
+      display: none !important;
+    }
+    .wo-header-brand-row {
+      align-items: center;
+      gap: 0.95rem;
+    }
+    .invoice-preview-wrapper .wo-header-brand-row .logo-wrapper {
+      flex: 0 1 54%;
+      min-width: 0;
+      margin-bottom: 0;
+    }
+    .invoice-preview-wrapper .logo-wrapper .wo-brand-logo {
+      width: 62px;
+      height: 62px;
+      min-width: 62px;
+      min-height: 62px;
+      flex: 0 0 62px;
+      object-fit: contain;
+      object-position: center;
+    }
+    .invoice-preview-wrapper .logo-wrapper .invoice-logo {
+      margin-left: 0.82rem;
+      font-size: 1.62rem;
+      line-height: 1.02;
+      white-space: nowrap;
+    }
+    .wo-preview-qr-image {
+      width: 96px;
+      height: 96px;
+      padding: 6px;
+    }
+    .wo-header-details-row {
+      flex-wrap: nowrap;
+      align-items: flex-start;
+      gap: 0.8rem;
+    }
+    .wo-header-company-block {
+      flex: 0 1 43%;
+      font-size: 0.73rem;
+      line-height: 1.32;
+      word-break: break-word;
+    }
+    .wo-header-company-block .card-text {
+      font-size: inherit;
+      line-height: inherit;
+      margin-bottom: 0.2rem !important;
+    }
+    .wo-header-company-block .card-text:first-child {
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-bottom: 0.32rem !important;
+    }
+    .wo-header-right-column {
+      flex: 0 1 57%;
+      width: auto;
+      min-width: 0;
+    }
+    .wo-header-main-row {
+      width: 100%;
+      justify-content: flex-end;
+    }
+    .wo-header-meta {
+      width: 100%;
+    }
+    .wo-header-meta .invoice-title {
+      margin-top: 0;
+      margin-bottom: 0.42rem !important;
+    }
+    .wo-header-meta .invoice-title .invoice-title-stack {
+      gap: 0.4rem;
+      align-items: flex-end;
+      width: 100%;
+    }
+    .wo-header-meta .invoice-title .invoice-title-stack > span:first-child {
+      font-size: 1.22rem;
+      line-height: 1.03;
+    }
+    .invoice-preview .invoice-title .invoice-order-number {
+      font-size: 0.86rem;
+      line-height: 1.12;
+    }
+    .wo-header-meta .invoice-date-title {
+      min-width: 5.35rem;
+      font-size: 0.74rem;
+    }
+    .wo-header-meta .invoice-date {
+      font-size: 0.74rem;
+      margin-left: 0.3rem;
+      white-space: nowrap;
+    }
+    .invoice-preview .invoice-date-wrapper {
+      margin-bottom: 0rem !important;
+    }
+    .wo-contact-row {
+      --bs-gutter-x: 0;
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 0.7rem;
+      margin-left: 0;
+      margin-right: 0;
+    }
+    .wo-contact-col {
+      flex: 1 1 0;
+      max-width: calc(50% - 0.35rem);
+      min-width: 0;
+    }
+    .wo-contact-col h6 {
+      font-size: 0.78rem;
+      line-height: 1.28;
+      word-break: break-word;
+    }
+    .wo-product-hero {
+      padding: 0.8rem 0.9rem;
+    }
+    .wo-product-hero-row {
+      flex-direction: row;
+      align-items: center;
+      gap: 0.7rem;
+    }
+    .wo-product-kicker {
+      font-size: 0.62rem;
+      margin-bottom: 0.22rem;
+    }
+    .wo-product-title {
+      font-size: 1.06rem;
+      line-height: 1.18;
+    }
+    .wo-product-code-accent {
+      margin-top: 0.38rem;
+      gap: 0.32rem;
+      padding: 0.26rem 0.52rem 0.26rem 0.42rem;
+    }
+    .wo-product-code-accent::before {
+      width: 0.36rem;
+      height: 0.36rem;
+      box-shadow: 0 0 0 3px rgba(40, 199, 111, 0.2);
+    }
+    .wo-product-code-label {
+      font-size: 0.56rem;
+    }
+    .wo-product-code-value {
+      font-size: 0.72rem;
+    }
+    .wo-product-qty {
+      width: auto;
+      margin-left: auto;
+      align-items: flex-end;
+    }
+    .wo-product-qty-label {
+      font-size: 0.6rem;
+      margin-bottom: 0.18rem;
+    }
+    .wo-product-qty-value {
+      font-size: 1.16rem;
+    }
+    .wo-product-qty-unit {
+      font-size: 0.74rem;
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 0.2rem;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs::-webkit-scrollbar {
+      height: 6px;
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs::-webkit-scrollbar-track {
+      background: var(--wo-table-scroll-track);
+      border-radius: 999px;
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs::-webkit-scrollbar-thumb {
+      background: var(--wo-table-scroll-thumb);
+      border-radius: 999px;
+      border: 1px solid var(--wo-table-scroll-thumb-border);
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs .nav-item {
+      flex: 0 0 auto;
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs .nav-link {
+      white-space: nowrap;
+      font-size: 1.04rem;
+      padding-left: 0.95rem;
+      padding-right: 0.95rem;
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs .nav-link i {
+      font-size: 1.04rem;
+    }
+  }
 </style>
 @endsection
 
@@ -1575,9 +1875,21 @@
 
 @section('content')
 <section class="invoice-preview-wrapper">
+  <div class="wo-mobile-top-actions">
+    <div class="card">
+      <div class="card-body">
+        <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#qr-scanner-modal">
+          <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog
+        </button>
+        <button class="btn btn-primary w-100 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#sirovina-scanner-modal" @if (!$canPrepareMaterial) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
+          <i class="fa fa-barcode me-50" style="font-size: 20px;"></i> Pripremi materijal
+        </button>
+      </div>
+    </div>
+  </div>
   <div class="row invoice-preview">
     <!-- Invoice -->
-    <div class="col-xl-9 col-md-8 col-12">
+    <div class="col-xl-9 col-md-8 col-12 wo-preview-main-col">
       <div class="card invoice-preview-card">
         <div class="card-body invoice-padding pb-0">
           <!-- Header starts -->
@@ -1632,8 +1944,8 @@
 
         <!-- Address and Contact starts -->
         <div class="card-body invoice-padding pt-0 pb-0">
-          <div class="row invoice-spacing">
-            <div class="col-xl-4 col-md-6 p-0">
+          <div class="row invoice-spacing wo-contact-row">
+            <div class="col-xl-4 col-md-6 p-0 wo-contact-col">
               <h6 class="mb-2">Pošiljatelj:</h6>
               @if($sender['name'])
                 <h6 class="mb-25">{{ $sender['name'] }}</h6>
@@ -1641,7 +1953,7 @@
              
             </div>
             <div class="col-xl-4 d-none d-xl-block"></div>
-            <div class="col-xl-4 col-md-6 p-0">
+            <div class="col-xl-4 col-md-6 p-0 wo-contact-col">
               <h6 class="mb-2">Primatelj:</h6>
               @if($recipient['name'])
                 <h6 class="mb-25">{{ $recipient['name'] }}</h6>
@@ -2055,7 +2367,7 @@
     <!-- /Invoice -->
 
     <!-- Invoice Actions -->
-    <div class="col-xl-3 col-md-4 col-12 invoice-actions mt-md-0 mt-2">
+    <div class="col-xl-3 col-md-4 col-12 invoice-actions mt-md-0 mt-2 wo-preview-actions-col">
       <div class="card">
         <div class="card-body">
           @if($showPreviewQr)
@@ -2064,20 +2376,34 @@
             </div>
             <div class="invoice-actions-divider wo-sidebar-qr-divider"></div>
           @endif
-          <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#qr-scanner-modal">
-            <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog
-          </button>
-          <button class="btn btn-primary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#sirovina-scanner-modal" @if (!$canPrepareMaterial) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
-            <i class="fa fa-barcode me-50" style="font-size: 20px;"></i> Pripremi materijal
-          </button>
-          <div class="invoice-actions-divider"></div>
+          <div class="wo-action-primary-pair">
+            <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#qr-scanner-modal">
+              <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog
+            </button>
+            <button class="btn btn-primary w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#sirovina-scanner-modal" @if (!$canPrepareMaterial) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
+              <i class="fa fa-barcode me-50" style="font-size: 20px;"></i> Pripremi materijal
+            </button>
+          </div>
+          <div class="invoice-actions-divider wo-action-primary-divider"></div>
+          <div class="wo-other-options-shell">
+            <div class="invoice-actions-divider"></div>
+            <button
+              class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center wo-other-options-toggle collapsed"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#wo-other-options-collapse"
+              aria-expanded="false"
+              aria-controls="wo-other-options-collapse"
+            >
+              <i class="fa fa-chevron-down me-50 wo-other-options-chevron" style="font-size: 12px;"></i> Ostale opcije
+            </button>
+            <div class="collapse wo-other-options-collapse" id="wo-other-options-collapse">
           <button id="wo-status-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $statusToneClass }}" data-bs-toggle="modal" data-bs-target="#change-status-modal" @if (!$hasLoadedWorkOrder) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
             <i class="fa fa-circle-notch me-50"></i> Status: <span id="wo-status-label" class="ms-25">{{ $statusDisplayLabel }}</span>
           </button>
           <button id="wo-priority-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $priorityToneClass }}" data-bs-toggle="modal" data-bs-target="#change-priority-modal" @if (!$hasLoadedWorkOrder) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
             <span id="wo-priority-label">{{ $priorityDisplayLabel === '-' ? 'Prioritet -' : $priorityDisplayLabel }}</span>
           </button>
-          <div class="invoice-actions-divider"></div>
           @if($isAdminUser)
             <button
               id="wo-delete-order-btn"
@@ -2111,6 +2437,8 @@
           >
             <i class="fa fa-print me-50"></i> Isprintaj
           </a>
+            </div>
+          </div>
         </div>
       </div>
     </div>
