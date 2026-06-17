@@ -199,5 +199,6 @@ return [
     "AI Inbox" => "AI Inbox",
     "AI asistent" => "AI asistent",
     "Historija AI skeniranja" => "Historija AI skeniranja",
+    "Dozvoljeni posiljaoci" => "Zugelassene Absender",
     "message" => "Kuchen Sesam Snaps Cupcake Lebkuchen dänisch Ich liebe Lebkuchen. Apfelkuchen Jujubes Chupa Chups Muffin Halwa Lutscher. Schokoladenkuchen-Haferkuchen-Tiramisumarzipanzuckerpflaume. Donut süße Torte Hafer Kuchen Dragée Obstkuchen Zuckerwatte Zitronentropfen."
 ];

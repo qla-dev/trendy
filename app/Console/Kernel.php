@@ -15,10 +15,20 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        $schedule
+        $pollInterval = min(59, max(1, (int) config('ai-order-scan.inbox.poll_interval_minutes', 1)));
+
+        $event = $schedule
             ->command('orders:ai-inbox-poll')
-            ->everyFifteenMinutes()
-            ->withoutOverlapping();
+            ->withoutOverlapping(10)
+            ->appendOutputTo(storage_path('logs/ai-inbox-poll.log'));
+
+        if ($pollInterval === 1) {
+            $event->everyMinute();
+
+            return;
+        }
+
+        $event->cron(sprintf('*/%d * * * *', $pollInterval));
     }
 
     /**

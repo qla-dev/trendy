@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AiInboxController;
+use App\Http\Controllers\AiInboxWhitelistController;
 use App\Http\Controllers\AiTokenHistoryController;
 use App\Http\Controllers\LanguageController;
 use App\Http\Controllers\DashboardController;
@@ -101,6 +102,11 @@ Route::middleware('auth:web')->group(function () {
         Route::get('orders/ai-scan/{scan}/status', [OrderAiScanController::class, 'status'])->name('app-order-ai-scan-status');
         Route::get('ai-tokens/history', [AiTokenHistoryController::class, 'index'])->name('app-ai-token-history');
         Route::get('ai-tokens/history/statuses', [AiTokenHistoryController::class, 'statuses'])->name('app-ai-token-history-statuses');
+        Route::get('ai-assistant/whitelist', [AiInboxWhitelistController::class, 'index'])->name('app-ai-whitelist');
+        Route::post('ai-assistant/whitelist', [AiInboxWhitelistController::class, 'store'])->name('app-ai-whitelist-store');
+        Route::put('ai-assistant/whitelist/{entry}', [AiInboxWhitelistController::class, 'update'])->name('app-ai-whitelist-update');
+        Route::patch('ai-assistant/whitelist/{entry}/toggle', [AiInboxWhitelistController::class, 'toggle'])->name('app-ai-whitelist-toggle');
+        Route::delete('ai-assistant/whitelist/{entry}', [AiInboxWhitelistController::class, 'destroy'])->name('app-ai-whitelist-destroy');
         Route::get('documents/released-materials', [ReleasedMaterialDocumentController::class, 'index'])->name('app-released-material-documents');
         Route::get('documents/released-materials/data', [ReleasedMaterialDocumentController::class, 'data'])->name('app-released-material-documents-data');
         Route::delete('documents/released-materials', [ReleasedMaterialDocumentController::class, 'destroy'])->name('app-released-material-documents-destroy');

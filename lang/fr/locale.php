@@ -199,5 +199,6 @@ return [
     "AI Inbox" => "AI Inbox",
     "AI asistent" => "AI asistent",
     "Historija AI skeniranja" => "Historija AI skeniranja",
+    "Dozvoljeni posiljaoci" => "Expediteurs autorises",
     "message" => "Gâteau au sésame s'enclenche petit pain au pain d'épices danois J'adore le pain d'épices. Tarte aux pommes jujubes chupa chups  muffin halva sucette. Gateau au chocolat gateau d 'avoine tiramisu prune sucre. Donut tourte sucrée gateau dragée fruit gateau barbe a papa citron gouttes.."
 ];

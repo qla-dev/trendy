@@ -102,6 +102,7 @@ class MenuServiceProvider extends ServiceProvider
                 'app-order-ai-inbox',
                 'app-ai-tokens-navheader',
                 'app-ai-token-history',
+                'app-ai-whitelist',
             ]);
         }
 
@@ -168,6 +169,7 @@ class MenuServiceProvider extends ServiceProvider
                 'app-order-ai-inbox',
                 'app-ai-tokens-navheader',
                 'app-ai-token-history',
+                'app-ai-whitelist',
             ], true);
         }));
 

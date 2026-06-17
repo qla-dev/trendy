@@ -101,9 +101,21 @@ class OrderAiScanService
 
     public function dispatchBackgroundProcessing(OrderAiScan $scan): void
     {
+        $connection = (string) config('ai-order-scan.inbox.queue_connection', 'database_ai_inbox');
+        $queue = (string) config('ai-order-scan.inbox.queue_name', 'ai-inbox');
+
         ProcessImportedOrderAiScanJob::dispatch((int) $scan->id)
-            ->onConnection((string) config('ai-order-scan.inbox.queue_connection', 'database_ai_inbox'))
-            ->onQueue((string) config('ai-order-scan.inbox.queue_name', 'ai-inbox'));
+            ->onConnection($connection)
+            ->onQueue($queue);
+
+        Log::info('AI inbox scan dispatched to queue.', [
+            'scan_id' => (int) $scan->id,
+            'connection' => $connection,
+            'queue' => $queue,
+            'status' => (string) ($scan->status ?? ''),
+            'source_origin' => (string) ($scan->source_origin ?? ''),
+            'source_email_subject' => (string) ($scan->source_email_subject ?? ''),
+        ]);
     }
 
     public function processUntilReviewed(OrderAiScan $scan, mixed $user = null): OrderAiScan

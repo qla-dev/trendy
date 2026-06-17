@@ -223,5 +223,6 @@ return [
     "Roles" => "Uloge",
     "Permission" => "Dozvola",
     "Cover" => "Naslovna",
+    "Dozvoljeni posiljaoci" => "Dozvoljeni pošiljaoci",
     "message" => "Kolačići sesam snaps cupcake gingerbread danski volim gingerbread. Apple pie pie jujubes chupa chups muffin halvah lollipop. Čokoladni kolač zobeni kolač tiramisu marzipan šećer šljiva. Donut slatka pita zobeni kolač dragée voćni kolač pamučni bomboni limun kapi."
 ];

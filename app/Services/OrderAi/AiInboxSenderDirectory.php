@@ -2,6 +2,10 @@
 
 namespace App\Services\OrderAi;
 
+use App\Models\AiInboxWhitelistEntry;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+
 class AiInboxSenderDirectory
 {
     private ?array $entries = null;
@@ -96,7 +100,20 @@ class AiInboxSenderDirectory
             return true;
         }
 
-        return array_key_exists($this->normalizeEmail($email), $this->entries());
+        $normalizedEmail = $this->normalizeEmail($email);
+        $entry = $normalizedEmail !== '' ? ($this->entries()[$normalizedEmail] ?? null) : null;
+
+        if (!is_array($entry) || !array_key_exists($normalizedEmail, $this->entries())) {
+            return false;
+        }
+
+        $isAllowed = (bool) ($entry['is_active'] ?? false);
+
+        if ($isAllowed) {
+            $this->touchLastMatchedAt($entry);
+        }
+
+        return $isAllowed;
     }
 
     public function resolveDisplayLabel(mixed $email, mixed $fallbackName = null): string
@@ -115,16 +132,35 @@ class AiInboxSenderDirectory
         return $normalizedEmail !== '' ? $normalizedEmail : '-';
     }
 
+    public function allEntries(): array
+    {
+        return $this->entries();
+    }
+
+    public function flushCache(): void
+    {
+        $this->entries = null;
+    }
+
     private function entries(): array
     {
         if ($this->entries !== null) {
             return $this->entries;
         }
 
-        $configuredEntries = config('ai-order-scan.inbox.allowed_senders', []);
+        $databaseEntries = $this->databaseEntries();
+
+        if ($databaseEntries !== []) {
+            return $this->entries = $databaseEntries;
+        }
+
+        $configuredEntries = array_merge(
+            $this->asArray(config('ai-order-scan.inbox.allowed_senders', [])),
+            $this->asArray(config('ai-order-scan.inbox.fallback_allowed_senders', []))
+        );
         $resolved = [];
 
-        foreach (is_array($configuredEntries) ? $configuredEntries : [] as $entry) {
+        foreach ($configuredEntries as $entry) {
             $parsed = is_array($entry)
                 ? [
                     'email' => $this->normalizeEmail($entry['email'] ?? ''),
@@ -137,12 +173,102 @@ class AiInboxSenderDirectory
             }
 
             $resolved[$parsed['email']] = [
+                'id' => null,
                 'email' => $parsed['email'],
                 'name' => $parsed['name'],
+                'notes' => '',
+                'is_active' => true,
+                'source' => 'config',
+                'last_matched_at' => null,
+                'created_at' => null,
+                'updated_at' => null,
             ];
         }
 
         return $this->entries = $resolved;
+    }
+
+    private function databaseEntries(): array
+    {
+        try {
+            $model = new AiInboxWhitelistEntry();
+            $connection = $model->getConnectionName() ?: config('database.default');
+            $table = $model->getTable();
+
+            if (!Schema::connection($connection)->hasTable($table)) {
+                return [];
+            }
+
+            return AiInboxWhitelistEntry::query()
+                ->orderBy('email')
+                ->get([
+                    'id',
+                    'name',
+                    'email',
+                    'notes',
+                    'is_active',
+                    'last_matched_at',
+                    'created_at',
+                    'updated_at',
+                ])
+                ->mapWithKeys(function (AiInboxWhitelistEntry $entry) {
+                    $email = $this->normalizeEmail($entry->email);
+
+                    if ($email === '') {
+                        return [];
+                    }
+
+                    return [
+                        $email => [
+                            'id' => (int) $entry->id,
+                            'email' => $email,
+                            'name' => $this->decodeHeaderText($entry->name ?? ''),
+                            'notes' => trim((string) ($entry->notes ?? '')),
+                            'is_active' => (bool) $entry->is_active,
+                            'source' => 'database',
+                            'last_matched_at' => $entry->last_matched_at,
+                            'created_at' => $entry->created_at,
+                            'updated_at' => $entry->updated_at,
+                        ],
+                    ];
+                })
+                ->all();
+        } catch (\Throwable $exception) {
+            Log::warning('Unable to load AI inbox whitelist entries from database.', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [];
+        }
+    }
+
+    private function touchLastMatchedAt(array $entry): void
+    {
+        $entryId = (int) ($entry['id'] ?? 0);
+        $email = $this->normalizeEmail($entry['email'] ?? '');
+
+        if ($entryId <= 0 || $email === '' || ($entry['source'] ?? '') !== 'database') {
+            return;
+        }
+
+        try {
+            $timestamp = now();
+
+            AiInboxWhitelistEntry::query()
+                ->whereKey($entryId)
+                ->update(['last_matched_at' => $timestamp]);
+
+            if ($this->entries !== null && isset($this->entries[$email])) {
+                $this->entries[$email]['last_matched_at'] = $timestamp;
+            }
+        } catch (\Throwable $exception) {
+            // Best-effort metadata update only.
+        }
+    }
+
+    private function asArray(mixed $value): array
+    {
+        return is_array($value) ? $value : [];
     }
 
     private function cleanText(mixed $value): string
