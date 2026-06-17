@@ -20,21 +20,27 @@ class OpenAiOrderScanProvider implements OrderAiScanProvider
 
     public function scan(OrderAiScan $scan): array
     {
+        $model = trim((string) config('ai-order-scan.model', 'gpt-5'));
         $apiKey = trim((string) config('ai-order-scan.openai.api_key'));
 
         if ($apiKey === '') {
-            throw new RuntimeException('OPENAI_API_KEY nije postavljen.');
+            throw $this->newProviderException(
+                'OPENAI_API_KEY nije postavljen.',
+                $this->buildFailureContext($model)
+            );
         }
 
         $disk = (string) config('ai-order-scan.storage_disk', 'local');
 
         if (!Storage::disk($disk)->exists($scan->source_file_path)) {
-            throw new RuntimeException('Učitani dokument nije pronađen na disku.');
+            throw $this->newProviderException(
+                'Ucitani dokument nije pronadjen na disku.',
+                $this->buildFailureContext($model)
+            );
         }
 
         $bytes = Storage::disk($disk)->get($scan->source_file_path);
         $mime = trim((string) ($scan->source_mime_type ?: 'application/octet-stream'));
-        $model = trim((string) config('ai-order-scan.model', 'gpt-5'));
         $baseUrl = rtrim((string) config('ai-order-scan.openai.base_url', 'https://api.openai.com/v1'), '/');
         $prompt = trim((string) ($scan->request_prompt ?: config('ai-order-scan.prompt')));
         $preparedDocument = app(OrderAiDocumentPreparationService::class)->prepareDocument(
@@ -82,25 +88,104 @@ class OpenAiOrderScanProvider implements OrderAiScanProvider
             ]);
 
         if (!$response->successful()) {
-            throw new RuntimeException('OpenAI odgovor nije uspješan: ' . $response->body());
+            $errorPayload = $response->json();
+
+            if (!is_array($errorPayload)) {
+                $errorPayload = [
+                    'http_status' => $response->status(),
+                    'body' => $response->body(),
+                ];
+            } else {
+                $errorPayload['_http_status'] = $response->status();
+            }
+
+            throw $this->newProviderException(
+                'OpenAI odgovor nije uspjesan: ' . $response->body(),
+                $this->buildFailureContext(
+                    $model,
+                    $errorPayload,
+                    (string) ($errorPayload['id'] ?? '')
+                )
+            );
         }
 
         $data = $response->json();
-        $textOutput = $this->extractOutputText($data);
+
+        if (!is_array($data)) {
+            throw $this->newProviderException(
+                'OpenAI odgovor ne sadrzi validan JSON payload.',
+                $this->buildFailureContext($model, [
+                    'http_status' => $response->status(),
+                    'body' => $response->body(),
+                ])
+            );
+        }
+
+        $providerTaskId = (string) ($data['id'] ?? '');
+
+        try {
+            $textOutput = $this->extractOutputText($data);
+        } catch (\Throwable $exception) {
+            throw $this->newProviderException(
+                $exception->getMessage(),
+                $this->buildFailureContext($model, $data, $providerTaskId),
+                previous: $exception
+            );
+        }
+
         $normalizedPayload = json_decode($textOutput, true);
 
         if (!is_array($normalizedPayload)) {
-            throw new RuntimeException('OpenAI nije vratio validan JSON za narudžbu.');
+            throw $this->newProviderException(
+                'OpenAI nije vratio validan JSON za narudzbu.',
+                $this->buildFailureContext($model, $data, $providerTaskId)
+            );
         }
 
         return [
             'provider' => 'openai',
             'model' => $model,
             'credits_spent' => $this->calculateCredits((array) Arr::get($data, 'usage', [])),
-            'provider_task_id' => (string) ($data['id'] ?? ''),
+            'provider_task_id' => $providerTaskId,
             'raw_response' => $data,
             'normalized_payload' => $normalizedPayload,
         ];
+    }
+
+    private function buildFailureContext(string $model, mixed $rawResponse = null, ?string $providerTaskId = null): array
+    {
+        $context = [
+            'provider' => 'openai',
+            'model' => $model,
+        ];
+
+        if ($rawResponse !== null) {
+            $context['raw_response'] = $rawResponse;
+        }
+
+        if (trim((string) $providerTaskId) !== '') {
+            $context['provider_task_id'] = trim((string) $providerTaskId);
+        }
+
+        return $context;
+    }
+
+    private function newProviderException(string $message, array $context = [], ?\Throwable $previous = null): RuntimeException
+    {
+        return new class($message, $context, $previous) extends RuntimeException {
+            public function __construct(
+                string $message,
+                private readonly array $context = [],
+                ?\Throwable $previous = null
+            ) {
+                parent::__construct($message, 0, $previous);
+            }
+
+            public function context(): array
+            {
+                return $this->context;
+            }
+        };
     }
 
     private function extractOutputText(array $response): string
@@ -126,7 +211,7 @@ class OpenAiOrderScanProvider implements OrderAiScanProvider
         })));
 
         if ($outputText === '') {
-            throw new RuntimeException('OpenAI odgovor ne sadrži tekstualni izlaz.');
+            throw new RuntimeException('OpenAI odgovor ne sadrzi tekstualni izlaz.');
         }
 
         return $outputText;

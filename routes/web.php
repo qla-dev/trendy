@@ -102,6 +102,7 @@ Route::middleware('auth:web')->group(function () {
         Route::get('orders/ai-scan/{scan}/status', [OrderAiScanController::class, 'status'])->name('app-order-ai-scan-status');
         Route::get('ai-tokens/history', [AiTokenHistoryController::class, 'index'])->name('app-ai-token-history');
         Route::get('ai-tokens/history/statuses', [AiTokenHistoryController::class, 'statuses'])->name('app-ai-token-history-statuses');
+        Route::post('ai-tokens/history/{scan}/retry', [AiTokenHistoryController::class, 'retry'])->name('app-ai-token-history-retry');
         Route::get('ai-assistant/whitelist', [AiInboxWhitelistController::class, 'index'])->name('app-ai-whitelist');
         Route::post('ai-assistant/whitelist', [AiInboxWhitelistController::class, 'store'])->name('app-ai-whitelist-store');
         Route::put('ai-assistant/whitelist/{entry}', [AiInboxWhitelistController::class, 'update'])->name('app-ai-whitelist-update');

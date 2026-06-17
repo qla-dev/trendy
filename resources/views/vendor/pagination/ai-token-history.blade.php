@@ -1,5 +1,5 @@
 @if ($paginator->hasPages())
-  <nav aria-label="AI token history pagination">
+  <nav aria-label="{{ $ariaLabel ?? 'AI token history pagination' }}">
     <ul class="pagination">
       @if ($paginator->onFirstPage())
         <li class="page-item disabled" aria-disabled="true" aria-label="@lang('pagination.previous')">

@@ -3,11 +3,15 @@
 namespace Tests\Unit;
 
 use App\Models\OrderAiScan;
+use App\Services\OrderAi\Contracts\OrderAiScanProvider;
+use App\Services\OrderAi\OpenRouterOrderAiScanProvider;
 use App\Services\OrderAi\OrderAiScanService;
+use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use App\Services\OrderAi\Support\OrderAiDocumentPreparationService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use ReflectionClass;
+use RuntimeException;
 use Tests\TestCase;
 
 class OrderAiScanServiceTest extends TestCase
@@ -463,6 +467,211 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertStringNotContainsString('GROB-Identnr.:', $prepared['provider_input_text']);
     }
 
+    public function test_run_extraction_persists_raw_provider_response_when_provider_throws_exception(): void
+    {
+        config(['ai-order-scan.provider' => 'openrouter']);
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new class('Provider returned malformed JSON.') extends RuntimeException {
+                    public function context(): array
+                    {
+                        return [
+                            'provider' => 'openrouter',
+                            'model' => 'demo-model',
+                            'provider_task_id' => 'task-123',
+                            'raw_response' => [
+                                'id' => 'task-123',
+                                'http_status' => 200,
+                                'body' => '{"oops":true}',
+                            ],
+                        ];
+                    }
+                };
+            }
+        });
+
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('runExtraction');
+        $method->setAccessible(true);
+        $scan = $this->makeInMemoryScan([
+            'id' => 321,
+            'status' => 'extracting',
+            'provider' => 'openrouter',
+            'document_profile' => '',
+        ]);
+
+        $result = $method->invoke($service, $scan);
+
+        $this->assertSame($scan, $result);
+        $this->assertSame('failed', $scan->capturedForceFill['status']);
+        $this->assertSame('task-123', $scan->capturedForceFill['provider_task_id']);
+        $this->assertSame('demo-model', $scan->capturedForceFill['model']);
+        $this->assertSame('task-123', $scan->capturedForceFill['raw_provider_response']['id']);
+        $this->assertSame(
+            'Provider returned malformed JSON.',
+            $scan->capturedForceFill['raw_provider_response']['_failure']['message']
+        );
+    }
+
+    public function test_run_extraction_keeps_provider_response_when_downstream_processing_fails(): void
+    {
+        config(['ai-order-scan.provider' => 'openrouter']);
+
+        $rawResponse = [
+            'id' => 'provider-row-1',
+            'choices' => [
+                [
+                    'message' => [
+                        'content' => json_encode($this->basePayload()),
+                    ],
+                ],
+            ],
+            'usage' => [
+                'total_tokens' => 123,
+            ],
+        ];
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class($this->basePayload(), $rawResponse) implements OrderAiScanProvider {
+            public function __construct(
+                private readonly array $payload,
+                private readonly array $rawResponse
+            ) {
+            }
+
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                return [
+                    'provider' => 'openrouter',
+                    'model' => 'demo-model',
+                    'provider_task_id' => 'task-789',
+                    'credits_spent' => 0.1234,
+                    'raw_response' => $this->rawResponse,
+                    'normalized_payload' => $this->payload,
+                ];
+            }
+        });
+
+        app()->instance(OrderAiDocumentMetrics::class, new class {
+            public function calculateBilledTokens(int $pageCount): int
+            {
+                throw new RuntimeException('Synthetic downstream failure.');
+            }
+        });
+
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('runExtraction');
+        $method->setAccessible(true);
+        $scan = $this->makeInMemoryScan([
+            'id' => 654,
+            'status' => 'extracting',
+            'provider' => 'openrouter',
+            'document_profile' => '',
+        ]);
+
+        $result = $method->invoke($service, $scan);
+
+        $this->assertSame($scan, $result);
+        $this->assertSame('failed', $scan->capturedForceFill['status']);
+        $this->assertSame('task-789', $scan->capturedForceFill['provider_task_id']);
+        $this->assertSame('provider-row-1', $scan->capturedForceFill['raw_provider_response']['id']);
+        $this->assertSame(
+            'Synthetic downstream failure.',
+            $scan->capturedForceFill['raw_provider_response']['_failure']['message']
+        );
+    }
+
+    public function test_run_extraction_retries_failed_ai_scan_only_once_automatically(): void
+    {
+        config(['ai-order-scan.provider' => 'openrouter']);
+
+        $attempts = new class {
+            public int $count = 0;
+        };
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class($attempts) implements OrderAiScanProvider {
+            public function __construct(
+                private readonly object $attempts
+            ) {
+            }
+
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                $this->attempts->count++;
+
+                throw new class('Provider timeout during extraction.') extends RuntimeException {
+                    public function context(): array
+                    {
+                        return [
+                            'provider' => 'openrouter',
+                            'model' => 'demo-model',
+                            'provider_task_id' => 'task-timeout',
+                            'raw_response' => [
+                                'id' => 'task-timeout',
+                                'http_status' => 504,
+                                'body' => 'Gateway Timeout',
+                            ],
+                        ];
+                    }
+                };
+            }
+        });
+
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('runExtraction');
+        $method->setAccessible(true);
+        $scan = $this->makeInMemoryScan([
+            'id' => 777,
+            'status' => 'extracting',
+            'provider' => 'openrouter',
+            'document_profile' => '',
+        ]);
+
+        $result = $method->invoke($service, $scan);
+
+        $this->assertSame($scan, $result);
+        $this->assertSame(2, $attempts->count);
+        $this->assertSame('failed', $scan->capturedForceFill['status']);
+        $this->assertSame(
+            1,
+            $scan->capturedForceFill['raw_provider_response']['_failure']['automatic_retry_attempts_used']
+        );
+    }
+
+    public function test_can_retry_failed_scan_allows_terminal_failed_history_row_without_transfer(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $scan = $this->makeInMemoryScan([
+            'status' => 'completed',
+            'error_message' => 'Neuspjesan AI scan.',
+            'transferred_at' => null,
+            'pantheon_order_key' => null,
+            'pantheon_order_view' => null,
+            'pantheon_order_qid' => null,
+        ]);
+
+        $this->assertTrue($service->canRetryFailedScan($scan));
+    }
+
     private function basePayload(): array
     {
         return [
@@ -506,6 +715,45 @@ class OrderAiScanServiceTest extends TestCase
                 'grand_total' => 616.6,
             ],
         ];
+    }
+
+    private function makeInMemoryScan(array $attributes = []): OrderAiScan
+    {
+        $scan = new class extends OrderAiScan {
+            public array $capturedForceFill = [];
+
+            public function forceFill(array $attributes)
+            {
+                $this->capturedForceFill = $attributes;
+
+                foreach ($attributes as $key => $value) {
+                    $this->setAttribute($key, $value);
+                }
+
+                return $this;
+            }
+
+            public function save(array $options = []): bool
+            {
+                return true;
+            }
+
+            public function fresh($with = [])
+            {
+                return $this;
+            }
+
+            public function refresh()
+            {
+                return $this;
+            }
+        };
+
+        foreach ($attributes as $key => $value) {
+            $scan->setAttribute($key, $value);
+        }
+
+        return $scan;
     }
 
     private function fixturePath(string $fileName): string

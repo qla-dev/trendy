@@ -21,6 +21,7 @@ class OrderAiScanService
 {
     private const TRENDY_DE_PARTY_NAME = 'Trendy Germany GmbH';
     private const GROB_ATTENTION_MARKER = '*********************************** ACHTUNG * *************************************';
+    private const MAX_AUTOMATIC_EXTRACTION_RETRIES = 1;
 
     private ?array $orderAiScanColumns = null;
     private array $effectivePageMetaCache = [];
@@ -116,6 +117,89 @@ class OrderAiScanService
             'source_origin' => (string) ($scan->source_origin ?? ''),
             'source_email_subject' => (string) ($scan->source_email_subject ?? ''),
         ]);
+    }
+
+    public function canRetryFailedScan(OrderAiScan $scan): bool
+    {
+        $scan->refresh();
+
+        $status = (string) ($scan->status ?? '');
+
+        if (in_array($status, ['uploaded', 'extracting', 'ready_for_transfer', 'transferring', 'transferred'], true)) {
+            return false;
+        }
+
+        if (
+            $scan->transferred_at !== null
+            || trim((string) ($scan->pantheon_order_key ?? '')) !== ''
+            || trim((string) ($scan->pantheon_order_view ?? '')) !== ''
+            || (int) ($scan->pantheon_order_qid ?? 0) > 0
+        ) {
+            return false;
+        }
+
+        return $status === 'failed' || trim((string) ($scan->error_message ?? '')) !== '';
+    }
+
+    public function retryFailedScan(OrderAiScan $scan, mixed $user = null, ?bool $background = null): OrderAiScan
+    {
+        $scan->refresh();
+
+        if (!$this->canRetryFailedScan($scan)) {
+            throw new RuntimeException('Ponovno AI skeniranje je dostupno samo za neuspjesne scanove.');
+        }
+
+        $attributes = [
+            'status' => 'uploaded',
+            'processing_step' => 'AI skeniranje je ponovo pokrenuto.',
+            'progress_current' => 0,
+            'progress_total' => max(100, (int) ($scan->progress_total ?? 100)),
+            'provider_task_id' => null,
+            'normalized_payload' => null,
+            'pantheon_transfer_payload' => null,
+            'raw_provider_response' => null,
+            'credits_spent' => 0,
+            'pantheon_order_key' => null,
+            'pantheon_order_view' => null,
+            'pantheon_order_qid' => null,
+            'error_message' => null,
+            'processed_at' => null,
+            'transferred_at' => null,
+            'completed_at' => null,
+        ];
+
+        if ($this->orderAiScanColumnExists('page_count')) {
+            $attributes['page_count'] = null;
+        }
+
+        if ($this->orderAiScanColumnExists('billed_tokens')) {
+            $attributes['billed_tokens'] = null;
+        }
+
+        if ($this->orderAiScanColumnExists('transfer_started_at')) {
+            $attributes['transfer_started_at'] = null;
+        }
+
+        $scan->forceFill($attributes)->save();
+
+        $background = $background ?? ((string) ($scan->source_origin ?? 'manual') === 'imap');
+
+        Log::info('Order AI failed scan retry requested.', [
+            'scan_id' => $scan->id,
+            'user_id' => $scan->user_id,
+            'source_origin' => (string) ($scan->source_origin ?? 'manual'),
+            'background' => $background,
+        ]);
+
+        $scan = $scan->fresh();
+
+        if ($background) {
+            $this->dispatchBackgroundProcessing($scan);
+
+            return $scan->fresh();
+        }
+
+        return $this->processUntilReviewed($scan, $user);
     }
 
     public function processUntilReviewed(OrderAiScan $scan, mixed $user = null): OrderAiScan
@@ -247,71 +331,253 @@ class OrderAiScanService
 
     private function runExtraction(OrderAiScan $scan, mixed $user = null): OrderAiScan
     {
-        try {
-            $provider = $this->resolveProvider($scan);
-            $result = $provider->scan($scan);
-            $profilePayload = $this->postProcessProfilePayload(
-                $scan,
-                is_array($result['normalized_payload'] ?? null) ? $result['normalized_payload'] : []
-            );
-            $normalizedPayload = Utf8Sanitizer::cleanRecursive(
-                $this->normalizePayload($profilePayload)
-            );
-            $pageCount = max(0, (int) data_get($normalizedPayload, 'order.page_count', 0));
-            $billedTokens = $pageCount > 0
-                ? app(OrderAiDocumentMetrics::class)->calculateBilledTokens($pageCount)
-                : 0;
-            $transferReady = app(PantheonOrderTransferService::class)->isTransferReady($normalizedPayload);
-            $autoTransfer = $transferReady && $this->shouldAutoTransfer($scan) && $provider->supportsLiveTransfer();
-            $transferPreview = null;
+        $providerName = Utf8Sanitizer::clean((string) ($scan->provider ?? ''), 40);
+        $modelName = trim(Utf8Sanitizer::clean((string) ($scan->model ?? ''), 120)) ?: null;
+        $providerTaskId = trim(Utf8Sanitizer::clean((string) ($scan->provider_task_id ?? ''))) ?: null;
+        $rawProviderResponse = is_array($scan->raw_provider_response) ? $scan->raw_provider_response : null;
 
-            if ($transferReady && !$autoTransfer) {
-                $transferPreview = $this->buildTransferPreview($scan, $normalizedPayload, $user);
+        for ($automaticRetryAttempt = 0; $automaticRetryAttempt <= self::MAX_AUTOMATIC_EXTRACTION_RETRIES; $automaticRetryAttempt++) {
+            try {
+                $provider = $this->resolveProvider($scan);
+                $result = $provider->scan($scan);
+                $providerName = Utf8Sanitizer::clean((string) ($result['provider'] ?? $scan->provider), 40);
+                $modelName = trim(Utf8Sanitizer::clean((string) ($result['model'] ?? $scan->model), 120)) ?: null;
+                $providerTaskId = trim(Utf8Sanitizer::clean((string) ($result['provider_task_id'] ?? ''))) ?: null;
+                $rawProviderResponse = Utf8Sanitizer::cleanRecursive($result['raw_response'] ?? null);
+                $profilePayload = $this->postProcessProfilePayload(
+                    $scan,
+                    is_array($result['normalized_payload'] ?? null) ? $result['normalized_payload'] : []
+                );
+                $normalizedPayload = Utf8Sanitizer::cleanRecursive(
+                    $this->normalizePayload($profilePayload)
+                );
+                $pageCount = max(0, (int) data_get($normalizedPayload, 'order.page_count', 0));
+                $billedTokens = $pageCount > 0
+                    ? app(OrderAiDocumentMetrics::class)->calculateBilledTokens($pageCount)
+                    : 0;
+                $transferReady = app(PantheonOrderTransferService::class)->isTransferReady($normalizedPayload);
+                $autoTransfer = $transferReady && $this->shouldAutoTransfer($scan) && $provider->supportsLiveTransfer();
+                $transferPreview = null;
+
+                if ($transferReady && !$autoTransfer) {
+                    $transferPreview = $this->buildTransferPreview($scan, $normalizedPayload, $user);
+                }
+
+                $attributes = [
+                    'provider' => $providerName,
+                    'model' => $modelName,
+                    'provider_task_id' => $providerTaskId,
+                    'raw_provider_response' => $rawProviderResponse,
+                    'normalized_payload' => $normalizedPayload,
+                    'pantheon_transfer_payload' => $transferPreview,
+                    'credits_spent' => (float) ($result['credits_spent'] ?? 0),
+                    'processed_at' => now(),
+                    'status' => $autoTransfer ? 'ready_for_transfer' : 'completed',
+                    'processing_step' => $this->resolveCompletedProcessingStep($autoTransfer, $transferReady, $transferPreview),
+                    'progress_current' => $autoTransfer ? 70 : 100,
+                    'completed_at' => $autoTransfer ? null : now(),
+                    'error_message' => null,
+                ];
+
+                if ($pageCount > 0 && $this->orderAiScanColumnExists('page_count')) {
+                    $attributes['page_count'] = $pageCount;
+                }
+
+                if ($billedTokens > 0 && $this->orderAiScanColumnExists('billed_tokens')) {
+                    $attributes['billed_tokens'] = $billedTokens;
+                }
+
+                $scan->forceFill($attributes)->save();
+
+                Log::info('Order AI extraction completed.', [
+                    'scan_id' => $scan->id,
+                    'user_id' => $scan->user_id,
+                    'provider' => $providerName,
+                    'model' => $modelName,
+                    'provider_task_id' => $providerTaskId,
+                    'document_profile' => $scan->document_profile,
+                    'status' => $attributes['status'],
+                    'automatic_retry_attempts_used' => $automaticRetryAttempt,
+                    'raw_provider_response' => $rawProviderResponse,
+                ]);
+
+                return $scan->fresh();
+            } catch (\Throwable $exception) {
+                $failureAttributes = $this->buildExtractionFailureUpdatePayload(
+                    $scan,
+                    $exception,
+                    $providerName,
+                    $modelName,
+                    $providerTaskId,
+                    $rawProviderResponse,
+                    $automaticRetryAttempt
+                );
+                $shouldRetry = $this->shouldAutomaticallyRetryFailedExtraction($automaticRetryAttempt);
+
+                Log::warning('Order AI extraction failed.', [
+                    'scan_id' => $scan->id,
+                    'user_id' => $scan->user_id,
+                    'provider' => $failureAttributes['provider'],
+                    'model' => $failureAttributes['model'],
+                    'provider_task_id' => $failureAttributes['provider_task_id'],
+                    'document_profile' => $scan->document_profile,
+                    'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+                    'automatic_retry_attempt' => $automaticRetryAttempt,
+                    'will_retry_automatically' => $shouldRetry,
+                    'raw_provider_response' => $failureAttributes['raw_provider_response'],
+                ]);
+
+                if ($shouldRetry) {
+                    $scan->forceFill($this->buildAutomaticExtractionRetryPayload($failureAttributes))->save();
+                    $scan = $scan->fresh();
+                    $providerName = Utf8Sanitizer::clean((string) ($scan->provider ?? ''), 40);
+                    $modelName = trim(Utf8Sanitizer::clean((string) ($scan->model ?? ''), 120)) ?: null;
+                    $providerTaskId = trim(Utf8Sanitizer::clean((string) ($scan->provider_task_id ?? ''))) ?: null;
+                    $rawProviderResponse = is_array($scan->raw_provider_response) ? $scan->raw_provider_response : null;
+
+                    continue;
+                }
+
+                $scan->forceFill(array_merge($failureAttributes, [
+                    'status' => 'failed',
+                    'processing_step' => 'AI analiza nije uspjela.',
+                    'error_message' => $this->humanizeExtractionFailureReason($exception),
+                    'completed_at' => now(),
+                ]))->save();
             }
-
-            $attributes = [
-                'provider' => Utf8Sanitizer::clean((string) ($result['provider'] ?? $scan->provider), 40),
-                'model' => Utf8Sanitizer::clean((string) ($result['model'] ?? $scan->model), 120),
-                'provider_task_id' => trim(Utf8Sanitizer::clean((string) ($result['provider_task_id'] ?? ''))) ?: null,
-                'raw_provider_response' => Utf8Sanitizer::cleanRecursive($result['raw_response'] ?? null),
-                'normalized_payload' => $normalizedPayload,
-                'pantheon_transfer_payload' => $transferPreview,
-                'credits_spent' => (float) ($result['credits_spent'] ?? 0),
-                'processed_at' => now(),
-                'status' => $autoTransfer ? 'ready_for_transfer' : 'completed',
-                'processing_step' => $this->resolveCompletedProcessingStep($autoTransfer, $transferReady, $transferPreview),
-                'progress_current' => $autoTransfer ? 70 : 100,
-                'completed_at' => $autoTransfer ? null : now(),
-                'error_message' => null,
-            ];
-
-            if ($pageCount > 0 && $this->orderAiScanColumnExists('page_count')) {
-                $attributes['page_count'] = $pageCount;
-            }
-
-            if ($billedTokens > 0 && $this->orderAiScanColumnExists('billed_tokens')) {
-                $attributes['billed_tokens'] = $billedTokens;
-            }
-
-            $scan->forceFill($attributes)->save();
-        } catch (\Throwable $exception) {
-            Log::warning('Order AI extraction failed.', [
-                'scan_id' => $scan->id,
-                'user_id' => $scan->user_id,
-                'provider' => $scan->provider,
-                'document_profile' => $scan->document_profile,
-                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
-            ]);
-
-            $scan->forceFill([
-                'status' => 'failed',
-                'processing_step' => 'AI analiza nije uspjela.',
-                'error_message' => $this->humanizeExtractionFailureReason($exception),
-                'completed_at' => now(),
-            ])->save();
         }
 
         return $scan->fresh();
+    }
+
+    private function buildExtractionFailureUpdatePayload(
+        OrderAiScan $scan,
+        \Throwable $exception,
+        ?string $providerName = null,
+        ?string $modelName = null,
+        ?string $providerTaskId = null,
+        mixed $rawProviderResponse = null,
+        int $automaticRetryAttemptsUsed = 0
+    ): array {
+        $context = $this->resolveProviderFailureContext($exception);
+        $resolvedProvider = trim((string) (
+            $providerName
+            ?: ($context['provider'] ?? '')
+            ?: ($scan->provider ?? '')
+            ?: config('ai-order-scan.provider', 'mock')
+        ));
+        $resolvedModel = trim((string) ($modelName ?: ($context['model'] ?? '') ?: ($scan->model ?? '')));
+        $resolvedProviderTaskId = trim(Utf8Sanitizer::clean((string) (
+            $providerTaskId
+            ?: ($context['provider_task_id'] ?? '')
+            ?: ($scan->provider_task_id ?? '')
+        ))) ?: null;
+
+        return [
+            'provider' => Utf8Sanitizer::clean($resolvedProvider, 40),
+            'model' => $resolvedModel !== '' ? Utf8Sanitizer::clean($resolvedModel, 120) : null,
+            'provider_task_id' => $resolvedProviderTaskId,
+            'raw_provider_response' => $this->buildExtractionFailureRawProviderResponse(
+                $scan,
+                $exception,
+                $context,
+                $resolvedProvider,
+                $resolvedModel,
+                $resolvedProviderTaskId,
+                $rawProviderResponse,
+                $automaticRetryAttemptsUsed
+            ),
+        ];
+    }
+
+    private function resolveProviderFailureContext(\Throwable $exception): array
+    {
+        if (!method_exists($exception, 'context')) {
+            return [];
+        }
+
+        $context = $exception->context();
+
+        return is_array($context) ? $context : [];
+    }
+
+    private function buildExtractionFailureRawProviderResponse(
+        OrderAiScan $scan,
+        \Throwable $exception,
+        array $context,
+        string $providerName,
+        string $modelName,
+        ?string $providerTaskId,
+        mixed $rawProviderResponse = null,
+        int $automaticRetryAttemptsUsed = 0
+    ): array {
+        $resolvedRawProviderResponse = $rawProviderResponse;
+
+        if ($resolvedRawProviderResponse === null && array_key_exists('raw_response', $context)) {
+            $resolvedRawProviderResponse = $context['raw_response'];
+        }
+
+        if ($resolvedRawProviderResponse === null && is_array($scan->raw_provider_response)) {
+            $resolvedRawProviderResponse = $scan->raw_provider_response;
+        }
+
+        $failureMeta = array_filter([
+            'stage' => 'extraction',
+            'scan_id' => $scan->id ? (int) $scan->id : null,
+            'source_origin' => trim((string) ($scan->source_origin ?? '')) ?: null,
+            'provider' => $providerName !== '' ? $providerName : null,
+            'model' => $modelName !== '' ? $modelName : null,
+            'provider_task_id' => $providerTaskId,
+            'automatic_retry_attempts_used' => max(0, $automaticRetryAttemptsUsed),
+            'automatic_retry_limit' => self::MAX_AUTOMATIC_EXTRACTION_RETRIES,
+            'exception_class' => $exception::class,
+            'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+            'captured_at' => now()->toIso8601String(),
+        ], function ($value) {
+            return $value !== null && $value !== '';
+        });
+
+        if (is_array($resolvedRawProviderResponse)) {
+            $payload = $resolvedRawProviderResponse;
+            $payload['_failure'] = $failureMeta;
+
+            return Utf8Sanitizer::cleanRecursive($payload);
+        }
+
+        $payload = ['_failure' => $failureMeta];
+
+        if ($resolvedRawProviderResponse !== null) {
+            $serializedRawResponse = is_string($resolvedRawProviderResponse)
+                ? $resolvedRawProviderResponse
+                : json_encode($resolvedRawProviderResponse, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            if (is_string($serializedRawResponse) && trim($serializedRawResponse) !== '') {
+                $payload['_failure']['raw_body'] = Utf8Sanitizer::clean($serializedRawResponse);
+            }
+        }
+
+        return Utf8Sanitizer::cleanRecursive($payload);
+    }
+
+    private function shouldAutomaticallyRetryFailedExtraction(int $automaticRetryAttempt): bool
+    {
+        return $automaticRetryAttempt < self::MAX_AUTOMATIC_EXTRACTION_RETRIES;
+    }
+
+    private function buildAutomaticExtractionRetryPayload(array $failureAttributes): array
+    {
+        return [
+            'provider' => $failureAttributes['provider'] ?? null,
+            'model' => $failureAttributes['model'] ?? null,
+            'provider_task_id' => null,
+            'raw_provider_response' => $failureAttributes['raw_provider_response'] ?? null,
+            'status' => 'extracting',
+            'processing_step' => 'Prvi AI pokusaj nije uspio. Pokusavam ponovo.',
+            'progress_current' => 25,
+            'error_message' => null,
+            'processed_at' => null,
+            'completed_at' => null,
+        ];
     }
 
     private function runTransfer(OrderAiScan $scan, mixed $user = null): OrderAiScan
