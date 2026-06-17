@@ -32,62 +32,66 @@ $(function () {
     userView = '/app/user/view/account';
   }
 
+  function initUserListTooltips(scope) {
+    var root = scope || document;
+
+    if (window.bootstrap && window.bootstrap.Tooltip) {
+      root.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (element) {
+        var instance = window.bootstrap.Tooltip.getInstance(element);
+
+        if (instance) {
+          instance.dispose();
+        }
+
+        new window.bootstrap.Tooltip(element);
+      });
+    }
+  }
+
   select.each(function () {
     var $this = $(this);
     $this.wrap('<div class="position-relative"></div>');
     $this.select2({
-      // the following code is used to disable x-scrollbar when click in select input and
-      // take 100% width in responsive also
       dropdownAutoWidth: true,
       width: '100%',
       dropdownParent: $this.parent()
     });
   });
 
-  // Users List datatable
   if (dtUserTable.length) {
-    console.log('Initializing DataTable with Bosnian language...');
     dtUserTable.DataTable({
       data: window.usersData || [],
-      columns: [
-        { data: null },
-        { data: 0 },
-        { data: 1 },
-        { data: 2 },
-        { data: 3 },
-        { data: 4 },
-        { data: 5 }
-      ],
+      columns: [{ data: null }, { data: 0 }, { data: 1 }, { data: 2 }, { data: 3 }, { data: 4 }, { data: 5 }],
       columnDefs: [
         {
-          // Avatar
           targets: 0,
           responsivePriority: 1,
           render: function (data, type, full, meta) {
             var $name = full[0] || '';
-            // For Avatar badge
             var $initials = $name.match(/\b\w/g) || [];
             $initials = (($initials.shift() || '') + ($initials.pop() || '')).toUpperCase();
             var $output = '<span class="avatar-content">' + $initials + '</span>';
             var colorClass = ' bg-light-primary ';
-            var $row_output =
+
+            return (
               '<div class="avatar-wrapper">' +
               '<div class="avatar ' +
               colorClass +
               '">' +
               $output +
               '</div>' +
-              '</div>';
-            return $row_output;
+              '</div>'
+            );
           }
         },
         {
-          // User full name
           targets: 1,
           render: function (data, type, full, meta) {
             return (
               '<a href="' +
               userView +
+              '/' +
+              full[5] +
               '" class="user_name text-truncate text-body"><span class="fw-bolder">' +
               (full[0] || '-') +
               '</span></a>'
@@ -95,21 +99,18 @@ $(function () {
           }
         },
         {
-          // Username
           targets: 2,
           render: function (data, type, full, meta) {
             return "<span class='text-truncate align-middle'>" + full[1] + '</span>';
           }
         },
         {
-          // Email
           targets: 3,
           render: function (data, type, full, meta) {
             return "<span class='text-truncate align-middle'>" + (full[2] || '-') + '</span>';
           }
         },
         {
-          // User Role
           targets: 4,
           render: function (data, type, full, meta) {
             var $role = full[3];
@@ -118,40 +119,37 @@ $(function () {
               user: feather.icons['user'].toSvg({ class: 'font-medium-3 text-primary me-50' })
             };
             var roleText = $role === 'admin' ? 'Admin' : 'Korisnik';
+
             return "<span class='text-truncate align-middle'>" + roleBadgeObj[$role] + roleText + '</span>';
           }
         },
         {
-          // Created Date
           targets: 5,
           render: function (data, type, full, meta) {
-            var $date = full[4];
-            return '<span class="text-nowrap">' + $date + '</span>';
+            return '<span class="text-nowrap">' + full[4] + '</span>';
           }
         },
         {
-          // Actions
           targets: -1,
           title: 'Akcije',
           orderable: false,
+          className: 'text-end user-list-action-cell',
           responsivePriority: 2,
           render: function (data, type, full, meta) {
             return (
-              '<div class="btn-group">' +
-              '<a class="btn btn-sm dropdown-toggle hide-arrow" data-bs-toggle="dropdown">' +
-              feather.icons['more-vertical'].toSvg({ class: 'font-small-4' }) +
+              '<div class="app-table-action-group">' +
+              '<a href="' +
+              userView +
+              '/' +
+              full[5] +
+              '" class="btn btn-sm app-table-action-btn app-table-action-btn--info" data-bs-toggle="tooltip" data-bs-placement="top" title="Pregled korisnika" aria-label="Pregled korisnika">' +
+              feather.icons['eye'].toSvg({ class: 'font-small-4' }) +
               '</a>' +
-              '<div class="dropdown-menu dropdown-menu-end">' +
-              // '<a href="' + userView + '/' + full[6] + '" class="dropdown-item">' +
-              // feather.icons['file-text'].toSvg({ class: 'font-small-4 me-50' }) +
-              // 'Pregled</a>' +
-              '<a href="javascript:;" class="dropdown-item">' +
-              feather.icons['lock'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Promijeni lozinku</a>' +
-              '<a href="javascript:;" class="dropdown-item delete-record" onclick="deleteUser(' + full[5] + ')">' +
-              feather.icons['trash-2'].toSvg({ class: 'font-small-4 me-50' }) +
-              'Obriši</a></div>' +
-              '</div>' +
+              '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger" data-bs-toggle="tooltip" data-bs-placement="top" title="Obriši korisnika" aria-label="Obriši korisnika" onclick="deleteUser(' +
+              full[5] +
+              ')">' +
+              feather.icons['trash-2'].toSvg({ class: 'font-small-4' }) +
+              '</button>' +
               '</div>'
             );
           }
@@ -168,48 +166,57 @@ $(function () {
         '<"col-sm-12 col-md-6"p>' +
         '>',
       oLanguage: {
-        "sDecimal": "",
-        "sEmptyTable": "Nema podataka u tabeli",
-        "sInfo": "Prikazano _START_ do _END_ od _TOTAL_ korisnika",
-        "sInfoEmpty": "Prikazano 0 do 0 od 0 korisnika",
-        "sInfoFiltered": "(filtrirano od _MAX_ ukupno korisnika)",
-        "sInfoPostFix": "",
-        "sThousands": ",",
-        "sLengthMenu": "Prikaži _MENU_",
-        "sLoadingRecords": "Učitavanje...",
-        "sProcessing": "Obrađuje se...",
-        "sSearch": "Pretraži:",
-        "sSearchPlaceholder": "Pojam za pretragu..",
-        "sZeroRecords": "Nisu pronađeni odgovarajući zapisi",
-        "oPaginate": {
-          "sFirst": "Prva",
-          "sLast": "Poslednja",
-          "sNext": "Sljedeća",
-          "sPrevious": "Prethodna"
+        sDecimal: '',
+        sEmptyTable: 'Nema podataka u tabeli',
+        sInfo: 'Prikazano _START_ do _END_ od _TOTAL_ korisnika',
+        sInfoEmpty: 'Prikazano 0 do 0 od 0 korisnika',
+        sInfoFiltered: '(filtrirano od _MAX_ ukupno korisnika)',
+        sInfoPostFix: '',
+        sThousands: ',',
+        sLengthMenu: 'Prikaži _MENU_',
+        sLoadingRecords: 'Učitavanje...',
+        sProcessing: 'Obrađuje se...',
+        sSearch: 'Pretraži:',
+        sSearchPlaceholder: 'Pojam za pretragu..',
+        sZeroRecords: 'Nisu pronađeni odgovarajući zapisi',
+        oPaginate: {
+          sFirst: 'Prva',
+          sLast: 'Poslednja',
+          sNext: 'Sljedeća',
+          sPrevious: 'Prethodna'
         },
-        "oAria": {
-          "sSortAscending": ": aktiviraj za rastuće sortiranje kolone",
-          "sSortDescending": ": aktiviraj za opadajuće sortiranje kolone"
+        oAria: {
+          sSortAscending: ': aktiviraj za rastuće sortiranje kolone',
+          sSortDescending: ': aktiviraj za opadajuće sortiranje kolone'
         }
       },
       responsive: false,
       language: {
         paginate: {
-          // remove previous & next text from pagination
           previous: '&nbsp;',
           next: '&nbsp;'
         }
       },
+      drawCallback: function () {
+        if (window.feather && typeof window.feather.replace === 'function') {
+          window.feather.replace();
+        }
+
+        initUserListTooltips(document);
+      },
       initComplete: function () {
-        // Adding role filter once table initialized
+        if (window.feather && typeof window.feather.replace === 'function') {
+          window.feather.replace();
+        }
+
+        initUserListTooltips(document);
+
         this.api()
           .columns(4)
           .every(function () {
             var column = this;
-            var label = $('<label class="form-label" for="UserRole">Uloga</label>').appendTo('.user_role');
-            var select = $(
-              '<select id="UserRole" class="form-select text-capitalize mb-md-0 mb-2"><option value=""> Odaberite Ulogu </option></select>'
-            )
+            $('<label class="form-label" for="UserRole">Uloga</label>').appendTo('.user_role');
+            var select = $('<select id="UserRole" class="form-select text-capitalize mb-md-0 mb-2"><option value=""> Odaberite Ulogu </option></select>')
               .appendTo('.user_role')
               .on('change', function () {
                 var val = $.fn.dataTable.util.escapeRegex($(this).val());
@@ -228,17 +235,13 @@ $(function () {
     });
   }
 
-  // Form Validation
   if (newUserForm.length) {
     function setPasswordFeedback(message, state) {
       if (!passwordMatchFeedback.length) {
         return;
       }
 
-      passwordMatchFeedback
-        .toggleClass('d-none', !message)
-        .removeClass('text-success text-danger')
-        .text(message || '');
+      passwordMatchFeedback.toggleClass('d-none', !message).removeClass('text-success text-danger').text(message || '');
 
       if (message) {
         passwordMatchFeedback.addClass(state === 'success' ? 'text-success' : 'text-danger');
@@ -282,26 +285,26 @@ $(function () {
         error.insertAfter(element);
       },
       rules: {
-        'name': {
+        name: {
           required: true
         },
-        'username': {
+        username: {
           required: true
         },
-        'email': {
+        email: {
           email: true
         },
-        'password': {
+        password: {
           required: true,
           minlength: 6
         },
-        'password_confirmation': {
+        password_confirmation: {
           required: true,
           equalTo: '#password'
         }
       },
       messages: {
-        'password_confirmation': {
+        password_confirmation: {
           required: 'Potvrda lozinke je obavezna.',
           equalTo: 'Šifre se ne poklapaju.'
         }
@@ -335,15 +338,15 @@ $(function () {
     newUserForm.on('submit', function (e) {
       updatePasswordMatchState();
       var isValid = newUserForm.valid();
+
       if (isValid) {
-        // Form will submit normally to the server
         return true;
       }
+
       e.preventDefault();
     });
   }
 
-  // Phone Number
   if (dtContact.length) {
     dtContact.each(function () {
       new Cleave($(this), {

@@ -31,10 +31,29 @@ class ProcessImportedOrderAiScanJob implements ShouldQueue
         $scan = OrderAiScan::query()->find($this->scanId);
 
         if (!$scan) {
+            Log::warning('AI inbox scan job skipped because the scan record no longer exists.', [
+                'scan_id' => $this->scanId,
+            ]);
+
             return;
         }
 
+        Log::info('AI inbox scan job started.', [
+            'scan_id' => $this->scanId,
+            'attempts' => $this->attempts(),
+            'status' => (string) ($scan->status ?? ''),
+        ]);
+
         $scanService->processUntilReviewed($scan);
+
+        $scan->refresh();
+
+        Log::info('AI inbox scan job completed.', [
+            'scan_id' => $this->scanId,
+            'attempts' => $this->attempts(),
+            'status' => (string) ($scan->status ?? ''),
+            'processing_step' => (string) ($scan->processing_step ?? ''),
+        ]);
     }
 
     public function failed(\Throwable $exception): void

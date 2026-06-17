@@ -27,11 +27,13 @@ class AiInboxImportService
     public function importNewMail(): array
     {
         $summary = [
+            'total_messages' => 0,
             'matched_messages' => 0,
             'imported_messages' => 0,
             'imported_pdfs' => 0,
             'duplicates_skipped' => 0,
             'blocked_messages' => 0,
+            'subject_skipped' => 0,
             'failed_items' => 0,
         ];
 
@@ -59,11 +61,13 @@ class AiInboxImportService
                     return (int) $message->getUid();
                 })
                 ->values();
+            $summary['total_messages'] = $sortedMessages->count();
 
             foreach ($sortedMessages as $message) {
                 $subject = trim((string) $message->getSubject());
 
                 if (!$this->subjectMatches($subject, (string) ($config['subject_keyword'] ?? 'Bestellung'))) {
+                    $summary['subject_skipped']++;
                     continue;
                 }
 
@@ -122,6 +126,14 @@ class AiInboxImportService
         ];
 
         if ($pdfAttachments->isEmpty()) {
+            Log::warning('AI inbox message skipped because it has no PDF attachments.', [
+                'message_uid' => trim((string) $message->getUid()),
+                'message_id' => trim((string) $message->getMessageId()),
+                'subject' => $subject,
+                'sender_email' => $sender['email'] ?? '',
+                'sender_name' => $sender['name'] ?? '',
+            ]);
+
             $this->moveMessage($message, 'review');
 
             return [

@@ -15,11 +15,76 @@
   {{-- Page Css files --}}
   <link rel="stylesheet" href="{{ asset(mix('css/base/plugins/forms/form-validation.css')) }}">
   <style>
-      .content-header {
-    margin-top: -6px;
-    margin-bottom: 4px;
-  }
-  .content-header-title {margin-top: 5px;}
+    .content-header {
+      margin-top: -6px;
+      margin-bottom: 4px;
+    }
+
+    .content-header-title {
+      margin-top: 5px;
+    }
+
+    .user-list-table.table tbody tr:hover > * {
+      background-color: #f8f8fc;
+    }
+
+    .user-list-action-cell {
+      width: 1% !important;
+      position: sticky !important;
+      right: 0 !important;
+      z-index: 10 !important;
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+      background-clip: border-box !important;
+      opacity: 1 !important;
+      isolation: isolate !important;
+      box-shadow: none !important;
+      border-left: 1px solid #ebe9f1 !important;
+      white-space: nowrap;
+    }
+
+    .user-list-table thead .user-list-action-cell {
+      z-index: 11 !important;
+      background: #f8f8fa !important;
+      background-color: #f8f8fa !important;
+      box-shadow: none !important;
+    }
+
+    .user-list-table.table tbody tr:hover > .user-list-action-cell {
+      background: #f8f8fc !important;
+      background-color: #f8f8fc !important;
+      box-shadow: none !important;
+    }
+
+    .dark-layout .user-list-table.table tbody tr:hover > *,
+    .semi-dark-layout .user-list-table.table tbody tr:hover > * {
+      background-color: #36405a !important;
+    }
+
+    .dark-layout .user-list-table .user-list-action-cell,
+    .semi-dark-layout .user-list-table .user-list-action-cell,
+    body.dark-layout .user-list-table .user-list-action-cell,
+    body.semi-dark-layout .user-list-table .user-list-action-cell {
+      background: #283046 !important;
+      background-color: #283046 !important;
+      border-left-color: rgba(184, 190, 220, 0.22) !important;
+    }
+
+    .dark-layout .user-list-table thead .user-list-action-cell,
+    .semi-dark-layout .user-list-table thead .user-list-action-cell,
+    body.dark-layout .user-list-table thead .user-list-action-cell,
+    body.semi-dark-layout .user-list-table thead .user-list-action-cell {
+      background: #2f3854 !important;
+      background-color: #2f3854 !important;
+    }
+
+    .dark-layout .user-list-table.table tbody tr:hover > .user-list-action-cell,
+    .semi-dark-layout .user-list-table.table tbody tr:hover > .user-list-action-cell,
+    body.dark-layout .user-list-table.table tbody tr:hover > .user-list-action-cell,
+    body.semi-dark-layout .user-list-table.table tbody tr:hover > .user-list-action-cell {
+      background: #36405a !important;
+      background-color: #36405a !important;
+    }
   </style>
 @endsection
 
@@ -105,11 +170,11 @@
           <tr>
             <th>Avatar</th>
             <th>Ime i Prezime</th>
-            <th>Korisničko Ime</th>
+            <th>Korisničko ime</th>
             <th>Email</th>
             <th>Uloga</th>
             <th>Datum Kreiranja</th>
-            <th>Akcije</th>
+            <th class="text-end user-list-action-cell">Akcije</th>
           </tr>
         </thead>
         <tbody>
@@ -142,7 +207,7 @@
               @enderror
             </div>
             <div class="col-md-6 mb-1">
-              <label class="form-label" for="username">Korisničko Ime</label>
+              <label class="form-label" for="username">Korisničko ime</label>
               <input type="text" class="form-control @error('username') is-invalid @enderror" id="username" name="username" value="{{ old('username') }}" autocomplete="off" required>
               @error('username')
                 <div class="invalid-feedback">{{ $message }}</div>
@@ -187,7 +252,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Otkaži</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Odustani</button>
           <button type="submit" class="btn btn-primary">Dodaj Korisnika</button>
         </div>
       </form>

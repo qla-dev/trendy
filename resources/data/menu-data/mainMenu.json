@@ -49,6 +49,12 @@
       "slug": "app-ai-token-history"
     },
     {
+      "name": "Dozvoljeni posiljaoci",
+      "icon": "shield",
+      "url": "app/ai-assistant/whitelist",
+      "slug": "app-ai-whitelist"
+    },
+    {
       "navheader": "Dokumenti",
       "slug": "app-documents-navheader"
     },
