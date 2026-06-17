@@ -220,7 +220,7 @@
 
 @section('page-script')
   {{-- Page js files --}}
-  <script src="{{ asset(mix('js/scripts/pages/app-user-list.js')) }}"></script>
+  <script src="{{ asset(mix('js/scripts/pages/app-user-list.js?v=2')) }}"></script>
   <script>
     function deleteUser(userId) {
       if (confirm('Da li ste sigurni da želite obrisati ovog korisnika? Ova akcija se ne može poništiti.')) {
