@@ -13,12 +13,7 @@ class AiTokenNavbarCounter
             $now = $moment ? $moment->copy() : Carbon::now();
 
             return (int) OrderAiScan::query()
-                ->where(function ($query) {
-                    $query
-                        ->where('credits_spent', '>', 0)
-                        ->orWhereNotNull('processed_at')
-                        ->orWhere('status', 'failed');
-                })
+                ->whereNotNull('processed_at')
                 ->whereRaw('COALESCE(processed_at, completed_at, created_at) >= ?', [
                     $now->copy()->startOfMonth()->toDateTimeString(),
                 ])

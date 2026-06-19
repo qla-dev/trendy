@@ -34,6 +34,7 @@ class PantheonOrderTransferService
         try {
             return DB::connection('sqlsrv')->transaction(function () use ($normalizedPayload, $user) {
             $prepared = $this->prepareTransferData($normalizedPayload, true, true, $user);
+            $this->assertUniqueExternalDocumentReference($prepared);
             $numberContext = $this->generateNextOrderNumber($prepared['document_type']);
             $headerTemplate = $this->resolveHeaderTemplate($prepared['document_type']);
             $itemTemplate = $this->resolveItemTemplate($headerTemplate['acKey'] ?? null);
@@ -126,8 +127,78 @@ class PantheonOrderTransferService
         return !empty($prepared['items']);
     }
 
+    protected function assertUniqueExternalDocumentReference(array $prepared): void
+    {
+        $reference = trim((string) ($prepared['external_document_number'] ?? ''));
+
+        if ($reference === '') {
+            return;
+        }
+
+        $existingOrder = $this->findExistingOrderByExternalDocumentReference($reference);
+
+        if ($existingOrder === null) {
+            return;
+        }
+
+        $existingOrderView = trim((string) ($existingOrder['view'] ?? ''));
+        $existingOrderKey = trim((string) ($existingOrder['key'] ?? ''));
+        $resolvedOrder = $existingOrderView !== '' ? $existingOrderView : $existingOrderKey;
+        $message = 'Narudžba sa referencom "' . $reference . '" već postoji u bazi';
+
+        if ($resolvedOrder !== '') {
+            $message .= ' kao ' . $resolvedOrder;
+        }
+
+        throw new RuntimeException($message . '.');
+    }
+
+    protected function findExistingOrderByExternalDocumentReference(string $reference): ?array
+    {
+        $reference = trim($reference);
+
+        if ($reference === '') {
+            return null;
+        }
+
+        $columns = Order::sourceColumns();
+
+        if (!in_array('acDoc1', $columns, true)) {
+            return null;
+        }
+
+        $selects = [
+            DB::raw("LTRIM(RTRIM(ISNULL(acDoc1, ''))) as acDoc1"),
+        ];
+
+        if (in_array('acKey', $columns, true)) {
+            $selects[] = DB::raw("LTRIM(RTRIM(ISNULL(acKey, ''))) as acKey");
+        }
+
+        if (in_array('acKeyView', $columns, true)) {
+            $selects[] = DB::raw("LTRIM(RTRIM(ISNULL(acKeyView, ''))) as acKeyView");
+        }
+
+        $existingOrder = Order::newSourceQuery()
+            ->select($selects)
+            ->whereRaw("LTRIM(RTRIM(ISNULL(acDoc1, ''))) = ?", [$reference])
+            ->orderByDesc('acKey')
+            ->first();
+
+        if ($existingOrder === null) {
+            return null;
+        }
+
+        return [
+            'key' => trim((string) ($existingOrder->acKey ?? '')),
+            'view' => trim((string) ($existingOrder->acKeyView ?? '')),
+            'reference' => trim((string) ($existingOrder->acDoc1 ?? '')),
+        ];
+    }
+
     private function buildTransferPayload(array $prepared, mixed $user = null): array
     {
+        $this->assertUniqueExternalDocumentReference($prepared);
         $numberContext = $this->generateNextOrderNumber($prepared['document_type']);
         $headerTemplate = $this->resolveHeaderTemplate($prepared['document_type']);
         $itemTemplate = $this->resolveItemTemplate($headerTemplate['acKey'] ?? null);
@@ -195,7 +266,7 @@ class PantheonOrderTransferService
                 continue;
             }
 
-            $itemMeta = $this->extractTransferItemMetadata($rawItem);
+            $itemMeta = $this->extractTransferItemMetadata($rawItem, $order);
             $productCode = $this->normalizeCatalogLookupValue((string) ($rawItem['product_code'] ?? ''));
             $productName = $this->normalizeCatalogLookupValue((string) ($itemMeta['product_name'] ?? ''));
 
@@ -223,7 +294,7 @@ class PantheonOrderTransferService
             }
 
             $itemMeta = $this->extractTransferItemMetadata($rawItem);
-            $productCode = trim((string) ($rawItem['product_code'] ?? ''));
+            $productCode = $this->normalizeTransferProductCode((string) ($rawItem['product_code'] ?? ''));
             $productName = $this->normalizePantheonText((string) ($itemMeta['product_name'] ?? ''));
             $sourceProductCode = $productCode;
             $sourceProductName = $productName;
@@ -406,7 +477,7 @@ class PantheonOrderTransferService
         ];
     }
 
-    private function extractTransferItemMetadata(array $rawItem): array
+    private function extractTransferItemMetadata(array $rawItem, array $order = []): array
     {
         $nameLines = [];
         $drawingParts = [];
@@ -415,6 +486,7 @@ class PantheonOrderTransferService
         $note = trim((string) ($rawItem['note'] ?? ''));
         $drawingReference = trim((string) ($rawItem['drawing_reference'] ?? ''));
         $materialHint = trim((string) ($rawItem['material_hint'] ?? ''));
+        $isGrobOrder = $this->isGrobOrder($order);
 
         foreach ($this->splitTransferTextLines($productName) as $line) {
             if (preg_match('/^werkstoff\s*:/iu', $line) === 1) {
@@ -426,15 +498,21 @@ class PantheonOrderTransferService
             }
 
             if (preg_match('/^zeichnung\b/iu', $line) === 1) {
+                if ($isGrobOrder) {
+                    continue;
+                }
+
                 $drawingParts[] = $line;
                 continue;
             }
 
-            $nameLines[] = $line;
+            $nameLines[] = $this->normalizeTransferProductNameLine($line);
         }
 
-        foreach ($this->splitTransferTextLines($drawingReference) as $line) {
-            $drawingParts[] = $line;
+        if (!$isGrobOrder) {
+            foreach ($this->splitTransferTextLines($drawingReference) as $line) {
+                $drawingParts[] = $line;
+            }
         }
 
         foreach ($this->splitTransferTextLines($note) as $line) {
@@ -446,19 +524,29 @@ class PantheonOrderTransferService
                 continue;
             }
 
+            if ($isGrobOrder && preg_match('/^zeichnung\b/iu', $line) === 1) {
+                continue;
+            }
+
             $noteParts[] = $line;
         }
 
         $drawingReference = implode(' | ', array_values(array_unique(array_filter($drawingParts))));
 
-        if ($drawingReference !== '') {
+        if (!$isGrobOrder && $drawingReference !== '') {
             $noteParts[] = $drawingReference;
         }
 
-        $resolvedProductName = trim(implode(' ', array_values(array_filter($nameLines))));
+        if ($isGrobOrder) {
+            $drawingReference = '';
+        }
+
+        $resolvedProductName = $this->normalizeTransferProductName(
+            trim(implode(' ', array_values(array_filter($nameLines))))
+        );
 
         if ($resolvedProductName === '') {
-            $resolvedProductName = $productName;
+            $resolvedProductName = $this->normalizeTransferProductName($productName);
         }
 
         return [
@@ -502,6 +590,19 @@ class PantheonOrderTransferService
             $value = trim((string) ($order[$field] ?? ''));
 
             if ($value !== '' && stripos($value, 'trendy germany') !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isGrobOrder(array $order): bool
+    {
+        foreach (['customer_name', 'supplier_name'] as $field) {
+            $value = trim((string) ($order[$field] ?? ''));
+
+            if ($value !== '' && stripos($value, 'grob') !== false) {
                 return true;
             }
         }
@@ -1012,7 +1113,7 @@ class PantheonOrderTransferService
     private function resolvePantheonItemUnit(array $item, array $template, array $stringLengths): string
     {
         $sourceUnit = $this->normalizeUnitCode((string) ($item['unit'] ?? ''), $stringLengths);
-        $productCode = trim((string) ($item['product_code'] ?? ''));
+        $productCode = $this->normalizeTransferProductCode((string) ($item['product_code'] ?? ''));
         $catalogUnit = $this->normalizeUnitCode((string) ($item['catalog_unit_hint'] ?? ''), $stringLengths);
         $productUnit = $this->resolveRecentProductUnit($productCode, $stringLengths);
         $templateUnit = $this->normalizeUnitCode((string) ($template['acUM'] ?? ($template['acUMConverted'] ?? '')), $stringLengths);
@@ -1559,8 +1660,49 @@ class PantheonOrderTransferService
     private function normalizeCatalogLookupValue(string $value): string
     {
         $value = Utf8Sanitizer::clean($value);
+        $trimmedValue = preg_replace('/\s+/u', '', trim($value)) ?? trim($value);
+
+        if (preg_match('/^(\d+)(?:[.,]0+)$/u', $trimmedValue, $matches) === 1) {
+            return (string) ($matches[1] ?? '');
+        }
 
         return preg_replace('/[^A-Z0-9]+/', '', strtoupper(trim($value))) ?? '';
+    }
+
+    private function normalizeTransferProductCode(string $value): string
+    {
+        $value = Utf8Sanitizer::clean($value);
+        $value = preg_replace('/\s+/u', '', trim($value)) ?? trim($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        if (preg_match('/^(\d+)(?:[.,]0+)$/u', $value, $matches) === 1) {
+            return (string) ($matches[1] ?? '');
+        }
+
+        return $value;
+    }
+
+    private function normalizeTransferProductName(string $value): string
+    {
+        $normalized = trim((string) (preg_replace('/\s+/u', ' ', Utf8Sanitizer::clean($value)) ?? Utf8Sanitizer::clean($value)));
+
+        if ($normalized === '') {
+            return '';
+        }
+
+        return $this->normalizeTransferProductNameLine($normalized);
+    }
+
+    private function normalizeTransferProductNameLine(string $value): string
+    {
+        $normalized = Utf8Sanitizer::clean($value);
+        $normalized = preg_replace('/(?<=[\p{L}\p{N}\/])\s*-\s*(?=[\p{L}\p{N}\/])/u', '-', $normalized) ?? $normalized;
+        $normalized = preg_replace('/(?<=[\p{L}\p{N}])\s*\/\s*(?=[\p{L}\p{N}])/u', '/', $normalized) ?? $normalized;
+
+        return trim((string) (preg_replace('/\s+/u', ' ', $normalized) ?? $normalized));
     }
 
     private function normalizePantheonText(string $value): string

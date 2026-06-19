@@ -419,21 +419,11 @@ class AiTokenHistoryController extends Controller
         if (array_key_exists($cacheKey, $this->documentMetricsCache)) {
             return $this->documentMetricsCache[$cacheKey];
         }
-
-        $pageCount = max(0, (int) ($scan->page_count ?? 0));
-        $billedTokens = max(0, (int) ($scan->billed_tokens ?? 0));
-
-        if ($pageCount <= 0) {
-            $pageCount = max(0, (int) data_get($scan->normalized_payload, 'order.page_count', 0));
-        }
-
-        if ($pageCount > 0 && $billedTokens <= 0) {
-            $billedTokens = $this->resolveBilledTokensFromPageCount($pageCount);
-        }
+        $metrics = app(OrderAiScanService::class)->resolveDisplayDocumentMetrics($scan);
 
         return $this->documentMetricsCache[$cacheKey] = [
-            'page_count' => max(0, $pageCount),
-            'billed_tokens' => max(0, $billedTokens),
+            'page_count' => max(0, (int) ($metrics['page_count'] ?? 0)),
+            'billed_tokens' => max(0, (int) ($metrics['billed_tokens'] ?? 0)),
         ];
     }
 

@@ -1126,6 +1126,108 @@
       opacity: 0.92;
     }
 
+    .order-ai-line-edit-trigger {
+      width: 100%;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      font: inherit;
+      line-height: inherit;
+      cursor: pointer;
+      transition: color 0.2s ease, transform 0.2s ease;
+    }
+
+    .order-ai-line-edit-trigger:hover,
+    .order-ai-line-edit-trigger:focus {
+      color: var(--order-ai-accent);
+      transform: translateY(-1px);
+      outline: 0;
+    }
+
+    .order-ai-line-edit-trigger.is-editing {
+      color: var(--order-ai-accent);
+    }
+
+    .order-ai-line-edit-trigger.is-readonly {
+      cursor: default;
+      transform: none;
+      color: inherit;
+    }
+
+    .order-ai-line-edit-trigger.is-readonly:hover,
+    .order-ai-line-edit-trigger.is-readonly:focus {
+      color: inherit;
+      transform: none;
+    }
+
+    .order-ai-line-edit-trigger--compact {
+      white-space: nowrap;
+    }
+
+    .order-ai-inline-editor {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 1205;
+      width: min(360px, calc(100vw - 1.5rem));
+      isolation: isolate;
+    }
+
+    .order-ai-inline-editor-card {
+      position: relative;
+      z-index: 1;
+      border: 1px solid var(--order-ai-border);
+      border-radius: 1rem;
+      background: #fff;
+      opacity: 1;
+      box-shadow: 0 18px 38px rgba(16, 31, 48, 0.18);
+      padding: 0.95rem;
+      overflow: hidden;
+    }
+
+    .order-ai-inline-editor .form-control {
+      position: relative;
+      z-index: 1;
+      background: #fff;
+      opacity: 1;
+    }
+
+    .order-ai-inline-editor-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.8rem;
+    }
+
+    .order-ai-inline-editor-title {
+      display: block;
+      color: var(--order-ai-ink);
+      font-size: 0.95rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .order-ai-inline-editor textarea.form-control {
+      min-height: 6.75rem;
+      resize: vertical;
+    }
+
+    .order-ai-inline-editor-help {
+      margin-top: 0.45rem;
+      line-height: 1.45;
+    }
+
+    .order-ai-inline-editor-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      margin-top: 0.9rem;
+    }
+
     .order-ai-line-total-trigger {
       width: 100%;
       border: 1px solid rgba(22, 52, 77, 0.12);
@@ -2715,9 +2817,9 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                   <thead>
                     <tr>
                       <th>#</th>
-                      <th>Sifra</th>
+                      <th>Šifra</th>
                       <th class="order-ai-wrap">Naziv</th>
-                      <th>Kolicina</th>
+                      <th>Količina</th>
                       <th>JM</th>
                       <th>Jed. cijena</th>
                       <th class="order-ai-wrap">Total provjera</th>
@@ -2747,6 +2849,28 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
     </div>
   </div>
 </section>
+
+<div class="order-ai-inline-editor order-ai-hidden" id="order-ai-inline-editor" aria-hidden="true">
+  <div class="order-ai-inline-editor-card">
+    <div class="order-ai-inline-editor-head">
+      <div>
+        <span class="order-ai-inline-editor-title" id="order-ai-inline-editor-title">Uredi polje</span>
+        <div class="small text-muted" id="order-ai-inline-editor-subtitle">Stavka</div>
+      </div>
+      <button type="button" class="btn-close" id="order-ai-inline-editor-close" aria-label="Zatvori"></button>
+    </div>
+    <div>
+      <label class="form-label" id="order-ai-inline-editor-label" for="order-ai-inline-editor-input">Vrijednost</label>
+      <input type="text" class="form-control" id="order-ai-inline-editor-input" autocomplete="off">
+      <textarea class="form-control order-ai-hidden" id="order-ai-inline-editor-textarea" rows="4"></textarea>
+      <div class="order-ai-inline-editor-help small text-muted order-ai-hidden" id="order-ai-inline-editor-help"></div>
+    </div>
+    <div class="order-ai-inline-editor-actions">
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="order-ai-inline-editor-cancel">Odustani</button>
+      <button type="button" class="btn btn-primary btn-sm" id="order-ai-inline-editor-save">Sačuvaj</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal fade" id="order-ai-order-modal" tabindex="-1" aria-labelledby="order-ai-order-modal-label" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -2946,6 +3070,16 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       const lineTotalDifferenceValue = document.getElementById('order-ai-line-total-difference-value');
       const lineTotalInput = document.getElementById('order-ai-line-total-input');
       const lineTotalSaveButton = document.getElementById('order-ai-line-total-save-button');
+      const inlineEditorElement = document.getElementById('order-ai-inline-editor');
+      const inlineEditorTitle = document.getElementById('order-ai-inline-editor-title');
+      const inlineEditorSubtitle = document.getElementById('order-ai-inline-editor-subtitle');
+      const inlineEditorLabel = document.getElementById('order-ai-inline-editor-label');
+      const inlineEditorInput = document.getElementById('order-ai-inline-editor-input');
+      const inlineEditorTextarea = document.getElementById('order-ai-inline-editor-textarea');
+      const inlineEditorHelp = document.getElementById('order-ai-inline-editor-help');
+      const inlineEditorCloseButton = document.getElementById('order-ai-inline-editor-close');
+      const inlineEditorCancelButton = document.getElementById('order-ai-inline-editor-cancel');
+      const inlineEditorSaveButton = document.getElementById('order-ai-inline-editor-save');
       const stageNodes = Array.from(document.querySelectorAll('.order-ai-stage'));
       const stageFillNodes = stageNodes.reduce(function (carry, node) {
         if (node && node.dataset && node.dataset.stage) {
@@ -2974,6 +3108,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       let extractVisualProgress = 0;
       let elapsedTimer = null;
       let activeLineTotalIndex = null;
+      let activeInlineLineEditorState = null;
       let openedFromExistingScan = Boolean(initialScanId);
       let hasAutoScrolledToExtraction = false;
       let hasAutoScrolledToResult = false;
@@ -2990,6 +3125,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       let extractSimulationPageCount = 1;
       let extractSimulationStatus = '';
       let lastFailedToastSignature = '';
+      let lastDuplicateReferenceAlertSignature = '';
       const locallyStartedScanIds = new Set();
       const tokenRewardAppliedScanIds = new Set();
       const stageFillState = {
@@ -3005,6 +3141,72 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         'Provjera rezultata',
       ];
       const OVERALL_PHASE_COUNT = EXTRACTION_STEPS.length + 1;
+      const EDITABLE_LINE_FIELD_CONFIG = {
+        product_code: {
+          label: 'Šifra',
+          title: 'Uredi šifru',
+          control: 'input',
+          inputMode: 'text',
+          help: 'Šifra će biti upisana tačno kako je unesena.',
+          formatValue: function (item) {
+            return String(item && item.product_code || '').trim();
+          },
+          normalize: function (value) {
+            return String(value ?? '').trim();
+          },
+        },
+        product_name: {
+          label: 'Naziv',
+          title: 'Uredi naziv',
+          control: 'textarea',
+          help: 'Izmjena ostaje u pregledu i bice sacuvana pri transferu u bazu.',
+          formatValue: function (item) {
+            return String(item && item.product_name || '').trim();
+          },
+          normalize: function (value) {
+            return String(value ?? '').trim();
+          },
+        },
+        quantity: {
+          label: 'Količina',
+          title: 'Uredi količinu',
+          control: 'input',
+          inputMode: 'decimal',
+          help: 'Dozvoljen je decimalni unos, na primjer 2 ili 2.50.',
+          formatValue: function (item) {
+            return formatAmount(item && item.quantity || 0);
+          },
+          normalize: function (value) {
+            return parseAmountInput(value);
+          },
+        },
+        unit: {
+          label: 'JM',
+          title: 'Uredi jedinicu mjere',
+          control: 'input',
+          inputMode: 'text',
+          help: 'Na primjer KO, ST ili KOM.',
+          formatValue: function (item) {
+            return String(item && item.unit || '').trim();
+          },
+          normalize: function (value) {
+            return String(value ?? '').trim();
+          },
+        },
+        unit_price: {
+          label: 'Jed. cijena',
+          title: 'Uredi jed. cijenu',
+          control: 'input',
+          inputMode: 'decimal',
+          help: 'Promjena cijene odmah osvježava total provjeru i iznos dokumenta.',
+          formatValue: function (item) {
+            return formatAmount(item && item.unit_price || 0);
+          },
+          normalize: function (value) {
+            return parseAmountInput(value);
+          },
+        },
+      };
 
       function escapeHtml(value) {
         return String(value ?? '')
@@ -3193,6 +3395,21 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           showConfirmButton: false,
           timer: 1000,
           timerProgressBar: true,
+        });
+      }
+
+      function showDuplicateReferenceAlert(reason) {
+        if (!window.Swal || typeof window.Swal.fire !== 'function') {
+          return;
+        }
+
+        const message = String(reason || '').trim() || 'Narudžba sa ovom referencom već postoji u bazi.';
+
+        window.Swal.fire({
+          icon: 'warning',
+          title: 'Narudžba već postoji',
+          text: message,
+          confirmButtonText: 'U redu',
         });
       }
 
@@ -3453,6 +3670,251 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           && latestStatusPayload.status === 'completed'
           && latestStatusPayload.transfer_ready
         );
+      }
+
+      function canEditScannedLines() {
+        return Boolean(
+          latestStatusPayload
+          && latestStatusPayload.status === 'completed'
+          && latestStatusPayload.result
+          && Array.isArray(latestStatusPayload.result.items)
+          && latestStatusPayload.result.items.length > 0
+        );
+      }
+
+      function resolveEditableLineFieldConfig(field) {
+        const resolvedField = String(field || '').trim();
+
+        return Object.prototype.hasOwnProperty.call(EDITABLE_LINE_FIELD_CONFIG, resolvedField)
+          ? EDITABLE_LINE_FIELD_CONFIG[resolvedField]
+          : null;
+      }
+
+      function resolveEditableLineItem(index) {
+        const payload = latestStatusPayload && latestStatusPayload.result ? latestStatusPayload.result : null;
+        const items = payload && Array.isArray(payload.items) ? payload.items : [];
+
+        if (!Number.isInteger(index) || index < 0 || index >= items.length) {
+          return null;
+        }
+
+        return items[index];
+      }
+
+      function resolveInlineEditorControl() {
+        if (!activeInlineLineEditorState) {
+          return null;
+        }
+
+        const config = resolveEditableLineFieldConfig(activeInlineLineEditorState.field);
+
+        if (!config) {
+          return null;
+        }
+
+        return config.control === 'textarea' ? inlineEditorTextarea : inlineEditorInput;
+      }
+
+      function renderLineEditTrigger(index, field, content, options) {
+        const config = options || {};
+        const classNames = ['order-ai-line-edit-trigger'];
+
+        if (config.compact) {
+          classNames.push('order-ai-line-edit-trigger--compact');
+        }
+
+        if (!config.editable) {
+          classNames.push('is-readonly');
+
+          return `<div class="${classNames.join(' ')}">${content}</div>`;
+        }
+
+        return `
+          <button
+            type="button"
+            class="${classNames.join(' ')}"
+            data-line-edit-index="${index}"
+            data-line-edit-field="${escapeHtml(field)}"
+            aria-label="${escapeHtml(config.label || 'Uredi polje')}"
+          >
+            ${content}
+          </button>
+        `;
+      }
+
+      function positionInlineLineEditor() {
+        if (!inlineEditorElement || !activeInlineLineEditorState || !activeInlineLineEditorState.trigger) {
+          return;
+        }
+
+        const trigger = activeInlineLineEditorState.trigger;
+
+        if (!document.body.contains(trigger)) {
+          closeInlineLineEditor(false);
+          return;
+        }
+
+        const triggerRect = trigger.getBoundingClientRect();
+
+        if (triggerRect.width === 0 && triggerRect.height === 0) {
+          closeInlineLineEditor(false);
+          return;
+        }
+
+        const viewportPadding = 12;
+        const verticalGap = 10;
+        inlineEditorElement.style.visibility = 'hidden';
+
+        const editorRect = inlineEditorElement.getBoundingClientRect();
+        let left = triggerRect.left;
+
+        if (left + editorRect.width > window.innerWidth - viewportPadding) {
+          left = window.innerWidth - editorRect.width - viewportPadding;
+        }
+
+        left = Math.max(viewportPadding, left);
+
+        let top = triggerRect.bottom + verticalGap;
+
+        if (top + editorRect.height > window.innerHeight - viewportPadding) {
+          top = Math.max(viewportPadding, triggerRect.top - editorRect.height - verticalGap);
+        }
+
+        inlineEditorElement.style.left = `${Math.round(left)}px`;
+        inlineEditorElement.style.top = `${Math.round(top)}px`;
+        inlineEditorElement.style.visibility = 'visible';
+      }
+
+      function closeInlineLineEditor(refocusTrigger) {
+        if (!inlineEditorElement) {
+          return;
+        }
+
+        const trigger = refocusTrigger && activeInlineLineEditorState ? activeInlineLineEditorState.trigger : null;
+
+        if (activeInlineLineEditorState && activeInlineLineEditorState.trigger && activeInlineLineEditorState.trigger.classList) {
+          activeInlineLineEditorState.trigger.classList.remove('is-editing');
+        }
+
+        activeInlineLineEditorState = null;
+        inlineEditorElement.classList.add('order-ai-hidden');
+        inlineEditorElement.setAttribute('aria-hidden', 'true');
+        inlineEditorElement.style.left = '';
+        inlineEditorElement.style.top = '';
+        inlineEditorElement.style.visibility = '';
+
+        if (inlineEditorInput) {
+          inlineEditorInput.value = '';
+        }
+
+        if (inlineEditorTextarea) {
+          inlineEditorTextarea.value = '';
+        }
+
+        if (trigger && document.body.contains(trigger)) {
+          trigger.focus();
+        }
+      }
+
+      function openInlineLineEditor(index, field, trigger) {
+        if (!inlineEditorElement || !canEditScannedLines()) {
+          return;
+        }
+
+        const item = resolveEditableLineItem(index);
+        const config = resolveEditableLineFieldConfig(field);
+
+        if (!item || !config || !trigger) {
+          return;
+        }
+
+        closeInlineLineEditor(false);
+
+        activeInlineLineEditorState = {
+          index: index,
+          field: field,
+          trigger: trigger,
+        };
+
+        trigger.classList.add('is-editing');
+
+        if (inlineEditorTitle) {
+          inlineEditorTitle.textContent = config.title || 'Uredi polje';
+        }
+
+        if (inlineEditorSubtitle) {
+          const lineLabel = String(item.line_number || index + 1).trim() || String(index + 1);
+          const productCode = String(item.product_code || '-').trim() || '-';
+          inlineEditorSubtitle.textContent = `Stavka ${lineLabel} - ${productCode}`;
+        }
+
+        if (inlineEditorLabel) {
+          inlineEditorLabel.textContent = config.label || 'Vrijednost';
+        }
+
+        const useTextarea = config.control === 'textarea';
+        const fieldValue = typeof config.formatValue === 'function'
+          ? config.formatValue(item)
+          : String(item[field] ?? '').trim();
+
+        setVisible(inlineEditorInput, !useTextarea);
+        setVisible(inlineEditorTextarea, useTextarea);
+
+        if (inlineEditorHelp) {
+          inlineEditorHelp.textContent = '';
+          setVisible(inlineEditorHelp, false);
+        }
+
+        if (useTextarea) {
+          inlineEditorTextarea.value = fieldValue;
+          inlineEditorTextarea.spellcheck = true;
+          inlineEditorLabel.setAttribute('for', 'order-ai-inline-editor-textarea');
+        } else {
+          inlineEditorInput.type = 'text';
+          inlineEditorInput.inputMode = config.inputMode || 'text';
+          inlineEditorInput.value = fieldValue;
+          inlineEditorInput.spellcheck = false;
+          inlineEditorLabel.setAttribute('for', 'order-ai-inline-editor-input');
+        }
+
+        inlineEditorElement.classList.remove('order-ai-hidden');
+        inlineEditorElement.setAttribute('aria-hidden', 'false');
+        positionInlineLineEditor();
+
+        const control = resolveInlineEditorControl();
+
+        if (control) {
+          window.requestAnimationFrame(function () {
+            control.focus();
+            if (typeof control.select === 'function') {
+              control.select();
+            }
+          });
+        }
+      }
+
+      function saveInlineLineEdit() {
+        if (!activeInlineLineEditorState || !canEditScannedLines()) {
+          return;
+        }
+
+        const item = resolveEditableLineItem(activeInlineLineEditorState.index);
+        const config = resolveEditableLineFieldConfig(activeInlineLineEditorState.field);
+        const control = resolveInlineEditorControl();
+        const payload = latestStatusPayload && latestStatusPayload.result ? latestStatusPayload.result : null;
+
+        if (!item || !config || !control || !payload) {
+          return;
+        }
+
+        item[activeInlineLineEditorState.field] = typeof config.normalize === 'function'
+          ? config.normalize(control.value, item)
+          : String(control.value ?? '').trim();
+
+        closeInlineLineEditor(false);
+        recalculateSummaryFromItems(payload);
+        renderFacts(payload, latestStatusPayload);
+        renderLines(payload);
       }
 
       function resolveLineComputedTotal(item) {
@@ -3783,6 +4245,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         const complete = Boolean(config.complete);
         const enabled = Boolean(config.enabled) && !busy && !complete;
         const label = config.label || 'Transfer u bazu';
+        const hintText = String(config.hint || 'Akcije su na dnu stranice. Nakon završetka obrade omogućava se upis u bazu.').trim();
+        const tooltipText = String(config.title || (!enabled && !busy && !complete ? hintText : '')).trim();
 
         transferButton.disabled = !enabled;
         transferButton.classList.toggle('is-ready', enabled);
@@ -3854,7 +4318,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       function renderLines(payload) {
         const items = Array.isArray(payload.items) ? payload.items : [];
         const currency = String((payload.order && payload.order.currency) || '').trim();
-        const allowLineEdit = canEditLineTotals();
+        const allowCellEdit = canEditScannedLines();
+        const allowLineTotalEdit = canEditLineTotals();
 
         if (!items.length) {
           linesBody.innerHTML = '';
@@ -4574,6 +5039,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           return;
         }
 
+        closeInlineLineEditor(false);
+
         if (!latestStatusPayload || latestStatusPayload.status !== 'completed' || !latestStatusPayload.transfer_ready) {
           return;
         }
@@ -4762,6 +5229,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         const complete = Boolean(config.complete);
         const enabled = Boolean(config.enabled) && !busy && !complete;
         const label = config.label || 'Transfer u bazu';
+        const hintText = String(
+          config.hint || 'Akcije su na dnu stranice. Nakon završetka obrade omogućava se upis u bazu.'
+        ).trim();
+        const tooltipText = String(config.title || hintText).trim();
 
         if (!transferButton) {
           return;
@@ -4778,8 +5249,15 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           transferButton.textContent = label;
         }
 
+        transferButton.title = tooltipText;
+        transferButton.setAttribute('aria-label', tooltipText !== '' ? `${label}. ${tooltipText}` : label);
+
+        if (transferButton.parentElement) {
+          transferButton.parentElement.title = tooltipText;
+        }
+
         if (transferHint) {
-          transferHint.textContent = config.hint || 'Akcije su na dnu stranice. Nakon završetka obrade omogućava se upis u bazu.';
+          transferHint.textContent = hintText;
         }
       }
 
@@ -4818,7 +5296,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       function renderLines(payload) {
         const items = Array.isArray(payload.items) ? payload.items : [];
         const currency = String((payload.order && payload.order.currency) || '').trim();
-        const allowLineEdit = canEditLineTotals();
+        const allowCellEdit = canEditScannedLines();
+        const allowLineTotalEdit = canEditLineTotals();
 
         if (!items.length) {
           linesBody.innerHTML = '';
@@ -5051,6 +5530,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         closeSavedOrderModal();
         closePositionsModal();
         closeLineTotalModal();
+        closeInlineLineEditor(false);
         resetMessages();
         currentScanId = null;
         latestStatusPayload = null;
@@ -5179,6 +5659,20 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           : null;
         const isTransferFailure = /(transfer|baza|pantheon)/i.test(String(latestStatusPayload.processing_step || ''))
           || /(anConsigneeQId|SetSubj|Pantheon)/i.test(String(latestStatusPayload.error_message || ''));
+        const transferBlocked = Boolean(latestStatusPayload.transfer_blocked);
+        const transferBlockedReason = String(
+          latestStatusPayload.transfer_block_reason
+          || latestStatusPayload.transfer_preview_error
+          || ''
+        ).trim();
+        const transferBlockedHint = String(
+          latestStatusPayload.transfer_button_hint
+          || 'Narudžba sa ovom referencom već postoji.'
+        ).trim();
+
+        if ((status !== 'completed' || !hasItems) && activeInlineLineEditorState) {
+          closeInlineLineEditor(false);
+        }
 
         if (status === 'failed' && extractionProgressState) {
           extractVisualProgress = extractionProgressState.progressPercent;
@@ -5338,6 +5832,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         lastWarningsSignature = '';
         lastExtractLiveSignature = '';
         lastFailedToastSignature = '';
+        lastDuplicateReferenceAlertSignature = '';
         lastProgressPercent = null;
         lastProgressLabel = '';
         extractSimulationStartedAt = null;
@@ -5861,7 +6356,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       function renderLines(payload) {
         const items = Array.isArray(payload.items) ? payload.items : [];
         const currency = String((payload.order && payload.order.currency) || '').trim();
-        const allowLineEdit = canEditLineTotals();
+        const allowCellEdit = canEditScannedLines();
+        const allowLineTotalEdit = canEditLineTotals();
 
         if (!items.length) {
           if (lastLinesSignature !== 'empty') {
@@ -5874,7 +6370,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
 
         const renderSignature = JSON.stringify({
           currency: currency,
-          editable: allowLineEdit,
+          cell_editable: allowCellEdit,
+          total_editable: allowLineTotalEdit,
           items: items.map(function (item) {
             const comparison = resolveLineComparison(item);
 
@@ -5907,7 +6404,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         linesBody.innerHTML = items.map((item, index) => {
           const comparison = resolveLineComparison(item);
           const buttonClasses = comparison.matches ? 'is-match' : 'is-mismatch';
-          const readOnlyClass = allowLineEdit ? '' : ' is-readonly';
+          const readOnlyClass = allowLineTotalEdit ? '' : ' is-readonly';
           const diffPrefix = comparison.difference > 0 ? '+' : '';
           const catalogStatus = String(item.catalog_item_status || '').trim();
           const isCatalogMissing = Boolean(item.catalog_item_missing) || catalogStatus === 'missing';
@@ -5932,28 +6429,61 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             catalogMeta.push(`<div class="order-ai-line-note">Primarna klasifikacija: ${escapeHtml(item.primary_classification)}</div>`);
           }
 
+          const lineLabel = `Uredi stavku ${escapeHtml(String(item.line_number || index + 1))}`;
+          const productCodeMarkup = renderLineEditTrigger(index, 'product_code', `
+            <div class="order-ai-line-code-stack">
+              <span>${escapeHtml(item.product_code || '-')}</span>
+              ${catalogBadge}
+            </div>
+          `, {
+            editable: allowCellEdit,
+            label: `${lineLabel} - šifra`,
+          });
+          const productNameMarkup = renderLineEditTrigger(index, 'product_name', `
+            <div class="order-ai-line-name">${escapeHtml(item.product_name || '-')}</div>
+            ${catalogMeta.join('')}
+          `, {
+            editable: allowCellEdit,
+            label: `${lineLabel} - naziv`,
+          });
+          const quantityMarkup = renderLineEditTrigger(index, 'quantity', `
+            <span>${escapeHtml(formatAmount(item.quantity || 0))}</span>
+          `, {
+            editable: allowCellEdit,
+            compact: true,
+            label: `${lineLabel} - količina`,
+          });
+          const unitMarkup = renderLineEditTrigger(index, 'unit', `
+            <span>${escapeHtml(item.unit || '-')}</span>
+          `, {
+            editable: allowCellEdit,
+            compact: true,
+            label: `${lineLabel} - jedinica mjere`,
+          });
+          const unitPriceMarkup = renderLineEditTrigger(index, 'unit_price', `
+            <span>${escapeHtml(formatAmount(item.unit_price || 0))}</span>
+          `, {
+            editable: allowCellEdit,
+            compact: true,
+            label: `${lineLabel} - jed. cijena`,
+          });
+
           return `
             <tr${rowClass}>
               <td>${escapeHtml(item.line_number || '')}</td>
-              <td>
-                <div class="order-ai-line-code-stack">
-                  <span>${escapeHtml(item.product_code || '-')}</span>
-                  ${catalogBadge}
-                </div>
-              </td>
+              <td>${productCodeMarkup}</td>
               <td class="order-ai-wrap">
-                <div class="order-ai-line-name">${escapeHtml(item.product_name || '-')}</div>
-                ${catalogMeta.join('')}
+                ${productNameMarkup}
               </td>
-              <td>${escapeHtml(formatAmount(item.quantity || 0))}</td>
-              <td>${escapeHtml(item.unit || '-')}</td>
-              <td>${escapeHtml(formatAmount(item.unit_price || 0))}</td>
+              <td>${quantityMarkup}</td>
+              <td>${unitMarkup}</td>
+              <td>${unitPriceMarkup}</td>
               <td class="order-ai-wrap">
                 <button
                   type="button"
                   class="order-ai-line-total-trigger ${buttonClasses}${readOnlyClass}"
                   data-line-total-index="${index}"
-                  ${allowLineEdit ? '' : 'tabindex="-1"'}
+                  ${allowLineTotalEdit ? '' : 'tabindex="-1"'}
                 >
                   <span class="order-ai-line-total-meta">
                     <span class="order-ai-line-total-source">Skenirani total: ${escapeHtml(formatAmountWithCurrency(comparison.source, currency))}</span>
@@ -6007,6 +6537,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         latestStatusPayload = null;
         isTransferBusy = false;
         activeLineTotalIndex = null;
+        closeInlineLineEditor(false);
         hasAutoScrolledToExtraction = false;
         hasAutoScrolledToResult = false;
         lastRenderedStatus = '';
@@ -6220,6 +6751,20 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           : null;
         const isTransferFailure = /(transfer|baza|pantheon)/i.test(String(latestStatusPayload.processing_step || ''))
           || /(anConsigneeQId|SetSubj|Pantheon)/i.test(String(latestStatusPayload.error_message || ''));
+        const transferBlocked = Boolean(latestStatusPayload.transfer_blocked);
+        const transferBlockedReason = String(
+          latestStatusPayload.transfer_block_reason
+          || latestStatusPayload.transfer_preview_error
+          || ''
+        ).trim();
+        const transferBlockedHint = String(
+          latestStatusPayload.transfer_button_hint
+          || 'Narudžba sa ovom referencom već postoji.'
+        ).trim();
+
+        if ((status !== 'completed' || !hasItems) && activeInlineLineEditorState) {
+          closeInlineLineEditor(false);
+        }
 
         if (status === 'failed' && extractionProgressState) {
           extractVisualProgress = extractionProgressState.progressPercent;
@@ -6316,16 +6861,53 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         }
 
         if (status === 'completed') {
-          setTransferButtonState({
-            enabled: Boolean(latestStatusPayload.transfer_ready),
-            label: 'Transfer u bazu',
-            hint: latestStatusPayload.transfer_ready
-              ? 'Rezultat je spreman. Nakon pregleda podataka može se pokrenuti upis u bazu.'
-              : 'Transfer ostaje zaključan dok se svi obavezni podaci ne pripreme.'
-          });
+          if (transferBlocked) {
+            setTransferButtonState({
+              enabled: false,
+              label: 'Transfer u bazu',
+              hint: transferBlockedHint,
+              title: transferBlockedHint
+            });
+          } else {
+            setTransferButtonState({
+              enabled: Boolean(latestStatusPayload.transfer_ready),
+              label: 'Transfer u bazu',
+              hint: latestStatusPayload.transfer_ready
+                ? 'Rezultat je spreman. Nakon pregleda podataka može se pokrenuti upis u bazu.'
+                : 'Transfer ostaje zaključan dok se svi obavezni podaci ne pripreme.'
+            });
+          }
+
+          const resolvedScanId = Math.max(0, Math.round(toFiniteNumber(currentScanId, 0)));
+          const duplicateAlertSignature = transferBlocked
+            ? JSON.stringify({
+                scanId: resolvedScanId,
+                reason: transferBlockedReason,
+              })
+            : '';
+          const shouldShowDuplicateReferenceAlert = transferBlocked
+            && resolvedScanId > 0
+            && locallyStartedScanIds.has(resolvedScanId)
+            && previousStatus !== 'completed'
+            && duplicateAlertSignature !== lastDuplicateReferenceAlertSignature;
+
+          if (shouldShowDuplicateReferenceAlert) {
+            lastDuplicateReferenceAlertSignature = duplicateAlertSignature;
+            showDuplicateReferenceAlert(
+              transferBlockedReason !== ''
+                ? transferBlockedReason
+                : 'Narudžba sa ovom referencom već postoji u bazi.'
+            );
+          }
 
           if (!autoTransfer) {
-            if (latestStatusPayload.transfer_ready && latestStatusPayload.transfer_preview_error) {
+            if (transferBlocked) {
+              setProgressWarningMessage(
+                transferBlockedReason !== ''
+                  ? transferBlockedReason
+                  : 'Narudžba sa ovom referencom već postoji u bazi.'
+              );
+            } else if (latestStatusPayload.transfer_ready && latestStatusPayload.transfer_preview_error) {
               setProgressWarningMessage('Priprema provjere za bazu nije uspjela, ali se i dalje može pokušati ručni transfer.');
             } else if (latestStatusPayload.transfer_ready && latestStatusPayload.transfer_preview_available) {
               setProgressWarningMessage('Provjera za bazu je spremna. Nakon pregleda rezultata može se pokrenuti transfer.', {
@@ -6435,6 +7017,21 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       });
 
       linesBody.addEventListener('click', function (event) {
+        const editTrigger = event.target.closest('[data-line-edit-field]');
+
+        if (editTrigger) {
+          const index = Number(editTrigger.dataset.lineEditIndex);
+          const field = String(editTrigger.dataset.lineEditField || '').trim();
+
+          if (!Number.isInteger(index) || field === '') {
+            return;
+          }
+
+          event.preventDefault();
+          openInlineLineEditor(index, field, editTrigger);
+          return;
+        }
+
         const trigger = event.target.closest('[data-line-total-index]');
 
         if (!trigger) {
@@ -6447,8 +7044,77 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           return;
         }
 
+        closeInlineLineEditor(false);
         openLineTotalModal(index);
       });
+
+      if (inlineEditorCloseButton) {
+        inlineEditorCloseButton.addEventListener('click', function () {
+          closeInlineLineEditor(true);
+        });
+      }
+
+      if (inlineEditorCancelButton) {
+        inlineEditorCancelButton.addEventListener('click', function () {
+          closeInlineLineEditor(true);
+        });
+      }
+
+      if (inlineEditorSaveButton) {
+        inlineEditorSaveButton.addEventListener('click', saveInlineLineEdit);
+      }
+
+      if (inlineEditorInput) {
+        inlineEditorInput.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            saveInlineLineEdit();
+          } else if (event.key === 'Escape') {
+            event.preventDefault();
+            closeInlineLineEditor(true);
+          }
+        });
+      }
+
+      if (inlineEditorTextarea) {
+        inlineEditorTextarea.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            closeInlineLineEditor(true);
+          } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            saveInlineLineEdit();
+          }
+        });
+      }
+
+      document.addEventListener('mousedown', function (event) {
+        if (!activeInlineLineEditorState || !inlineEditorElement || inlineEditorElement.classList.contains('order-ai-hidden')) {
+          return;
+        }
+
+        if (inlineEditorElement.contains(event.target)) {
+          return;
+        }
+
+        if (event.target.closest('[data-line-edit-field]')) {
+          return;
+        }
+
+        closeInlineLineEditor(false);
+      });
+
+      window.addEventListener('resize', function () {
+        if (activeInlineLineEditorState) {
+          positionInlineLineEditor();
+        }
+      });
+
+      window.addEventListener('scroll', function () {
+        if (activeInlineLineEditorState) {
+          positionInlineLineEditor();
+        }
+      }, true);
 
       transferButton.addEventListener('click', transferToPantheon);
       if (primaryActionButton) {
@@ -6512,5 +7178,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       syncFeatherIcons();
     })();
 </script>
-<script type="module" src="https://unpkg.com/@lottiefiles/dotlottie-wc@latest/dist/dotlottie-wc.js"></script>
+@if(empty($heroRobotLottieScriptAsset))
+  <script type="module" src="https://unpkg.com/@lottiefiles/dotlottie-wc@latest/dist/dotlottie-wc.js"></script>
+@endif
 @endsection

@@ -8,7 +8,14 @@ Your task is to read a customer order document and return structured JSON for im
 Extraction rules:
 - Extract only what is actually visible in the file.
 - Preserve customer names, product names, and product codes exactly as written.
+- Preserve visible German characters exactly as written, including ä, ö, ü, Ä, Ö, Ü, and ß.
+- Never transliterate visible German text into ae, oe, ue, ss, or mojibake such as Ã¤, Ã¶, Ã¼, or ÃŸ unless the document itself visibly uses that exact spelling.
+- If copied or extracted text clearly contains UTF-8 / Windows-1252 mojibake for German words, repair it to the intended German spelling before returning JSON.
+- Example: return "StÃ¶ÃŸel" as "Stößel" and "MÃ¼ller" as "Müller".
 - Keep product_code and product_name separate: product_code is only the visible code, while product_name must contain only the visible article/name block for that same line item.
+- Treat product_code as a literal text identifier, not as a number for calculation.
+- Never append decimal places to a numeric-looking product_code.
+- Example: return product_code "64820441" exactly as "64820441", never as "64820441.00" or "64820441,00".
 - If a value is missing or uncertain, return an empty string for text fields or 0 for numeric fields.
 - Never invent product codes, prices, delivery dates, or document numbers.
 - Prefer the buyer/customer name from the document header.
@@ -33,8 +40,19 @@ PROMPT;
 
 $grobPromptRules = <<<'PROMPT'
 - Never shorten a material/article name to only its family or first word if the document shows a longer multi-line article/name block.
+- GROB item names are often German nouns. Preserve umlauts and eszett in product_name, drawing_reference, material_hint, and note.
 - If a line item article/name spans multiple stacked lines, merge only those article/name lines into product_name in reading order.
-- Do not copy lines beginning with Zeichnung into product_name. Put them into drawing_reference instead.
+- For GROB item blocks where the first stacked row contains the numeric article code together with quantity/unit, use only that numeric article code as product_code.
+- If that same first GROB row also shows quantity and unit after the article code, do not keep them inside product_code.
+- Instead, map that trailing quantity to quantity and that trailing unit to unit/komad.
+- Example: if the visible first row is "6482044 1,00 ST", return product_code "6482044", quantity 1.00, and unit "KO".
+- For that same GROB block, treat the second and third stacked rows as product_name in reading order.
+- Example: if the visible stacked rows are "Träger", then "GCU-040-210-01-GM5511/1-1", then "Zeichnung GCU-040-210-01-GM5511/1-1 mit Revisionsstand 00", return product_name "Träger GCU-040-210-01-GM5511/1-1" and ignore the Zeichnung row for naziv.
+- Preserve code-like article/model segments inside product_name exactly as visible, especially hyphens.
+- Do not insert spaces around hyphens inside code-like names.
+- Example: return "GM7258/06-1350-75/1-2" exactly like that, never as "GM7258/06 - 1350 - 75/1 - 2".
+- If the fourth stacked row begins with Zeichnung, ignore it completely. Do not copy it into product_name, drawing_reference, note, or any database-bound field.
+- Do not copy lines beginning with Zeichnung into product_name.
 - If a line begins with Werkstoff:, put only the text after the colon into material_hint and do not include that line in product_name.
 - Example: if an item block shows code 3226090, then Klotz on one line, G552-11000-1000-10-80-1-01-1-30 on the next line, then Zeichnung ... and Werkstoff: RSt37-2, product_name must be "Klotz G552-11000-1000-10-80-1-01-1-30", drawing_reference must contain the Zeichnung line, and material_hint must be "RSt37-2".
 - Prefer Nettopreis / net unit price for unit_price when both Nettopreis and Bruttopreis are visible for the same item.

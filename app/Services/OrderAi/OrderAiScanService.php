@@ -22,6 +22,7 @@ class OrderAiScanService
     private const TRENDY_DE_PARTY_NAME = 'Trendy Germany GmbH';
     private const GROB_ATTENTION_MARKER = '*********************************** ACHTUNG * *************************************';
     private const MAX_AUTOMATIC_EXTRACTION_RETRIES = 1;
+    private const TRANSFER_PREVIEW_VERSION = 2;
 
     private ?array $orderAiScanColumns = null;
     private array $effectivePageMetaCache = [];
@@ -37,13 +38,20 @@ class OrderAiScanService
         $fileBytes = $this->readLocalFileBytes((string) $file->getRealPath());
         $documentProfile = $this->detectDocumentProfile($originalName, $mimeType, $fileBytes);
         $requestPrompt = $this->buildRequestPrompt($documentProfile);
-        $documentMetrics = app(OrderAiDocumentMetrics::class)->resolveForUpload($file);
         $storedName = Str::uuid()->toString() . '.' . ($file->guessExtension() ?: $file->extension() ?: 'bin');
         $relativePath = $file->storeAs($directory . '/' . Carbon::now()->format('Y/m'), $storedName, $disk);
 
         if ($relativePath === false) {
             throw new RuntimeException('Upload fajla nije uspio.');
         }
+
+        $documentMetrics = $this->resolveStoredDocumentMetrics(
+            $disk,
+            $relativePath,
+            $originalName,
+            $mimeType,
+            $documentProfile
+        );
 
         return $this->createScanRecord(
             relativePath: $relativePath,
@@ -80,11 +88,12 @@ class OrderAiScanService
             : $this->guessMimeTypeFromName($originalName);
         $documentProfile = $this->detectDocumentProfile($originalName, $resolvedMimeType, $binaryContent);
         $requestPrompt = $this->buildRequestPrompt($documentProfile);
-        $documentMetrics = app(OrderAiDocumentMetrics::class)->resolveForStoredFile(
+        $documentMetrics = $this->resolveStoredDocumentMetrics(
             $disk,
             $relativePath,
+            $originalName,
             $resolvedMimeType,
-            $originalName
+            $documentProfile
         );
 
         return $this->createScanRecord(
@@ -149,6 +158,8 @@ class OrderAiScanService
             throw new RuntimeException('Ponovno AI skeniranje je dostupno samo za neuspjesne scanove.');
         }
 
+        $documentMetrics = $this->resolveStoredDocumentMetricsForScan($scan);
+
         $attributes = [
             'status' => 'uploaded',
             'processing_step' => 'AI skeniranje je ponovo pokrenuto.',
@@ -169,11 +180,13 @@ class OrderAiScanService
         ];
 
         if ($this->orderAiScanColumnExists('page_count')) {
-            $attributes['page_count'] = null;
+            $attributes['page_count'] = $documentMetrics['page_count'] > 0
+                ? $documentMetrics['page_count']
+                : null;
         }
 
         if ($this->orderAiScanColumnExists('billed_tokens')) {
-            $attributes['billed_tokens'] = null;
+            $attributes['billed_tokens'] = 0;
         }
 
         if ($this->orderAiScanColumnExists('transfer_started_at')) {
@@ -263,45 +276,52 @@ class OrderAiScanService
     public function buildStatusPayload(OrderAiScan $scan): array
     {
         $payload = is_array($scan->normalized_payload) ? $scan->normalized_payload : [];
-        $transferPreview = Utf8Sanitizer::cleanRecursive($scan->pantheon_transfer_payload);
+        $transferPreview = $this->resolveDisplayTransferPreview($scan, $payload);
         $payload = $this->overlayTransferPreview($payload, $transferPreview);
         $processingPageMeta = $this->resolveProcessingPageMeta($scan, $payload);
+        $documentMetrics = $this->resolveDisplayDocumentMetrics($scan, $payload, $processingPageMeta);
 
         if (!isset($payload['order']) || !is_array($payload['order'])) {
             $payload['order'] = [];
         }
 
-        if (($processingPageMeta['effective_page_count'] ?? 0) > 0) {
-            $payload['order']['effective_page_count'] = (int) $processingPageMeta['effective_page_count'];
+        if (($documentMetrics['effective_page_count'] ?? 0) > 0) {
+            $payload['order']['effective_page_count'] = (int) $documentMetrics['effective_page_count'];
         }
 
-        if (($processingPageMeta['page_processing_limit_reason'] ?? '') !== '') {
-            $payload['order']['page_processing_limit_reason'] = (string) $processingPageMeta['page_processing_limit_reason'];
+        if (($documentMetrics['page_processing_limit_reason'] ?? '') !== '') {
+            $payload['order']['page_processing_limit_reason'] = (string) $documentMetrics['page_processing_limit_reason'];
         }
 
+        $payload = $this->sanitizeDisplayPayloadItemCodes($payload);
         $payload = Utf8Sanitizer::cleanRecursive($payload);
         $warnings = is_array($payload['order']['warnings'] ?? null) ? $payload['order']['warnings'] : [];
         $autoTransfer = $this->shouldAutoTransfer($scan);
         $transferReady = $this->resolveTransferReadyForDisplay($scan, $payload, $transferPreview);
         $elapsed = $this->resolveElapsedMeta($scan);
         $pageCount = max(0, (int) ($scan->page_count ?? data_get($payload, 'order.page_count', 0)));
-        $billedTokens = max(0, (int) ($scan->billed_tokens ?? 0));
+        $billedTokens = max(0, (int) ($documentMetrics['billed_tokens'] ?? 0));
         $displayErrorMessage = $this->resolveDisplayErrorMessage($scan);
+        $displayProcessingStep = Utf8Sanitizer::clean((string) ($scan->processing_step ?? ''), 160);
 
-        if ($billedTokens <= 0 && $pageCount > 0) {
-            $billedTokens = app(OrderAiDocumentMetrics::class)->calculateBilledTokens($pageCount);
+        if (
+            trim((string) ($scan->status ?? '')) === 'completed'
+            && is_array($transferPreview)
+            && !empty($transferPreview['transfer_blocked'])
+        ) {
+            $displayProcessingStep = 'AI obrada je završena. Narudžba sa ovom referencom već postoji u bazi.';
         }
 
         return [
             'id' => $scan->id,
             'status' => Utf8Sanitizer::clean((string) ($scan->status ?? ''), 40),
-            'processing_step' => Utf8Sanitizer::clean((string) ($scan->processing_step ?? ''), 160),
+            'processing_step' => $displayProcessingStep,
             'current_progress' => (int) $scan->progress_current,
             'max_progress_steps' => (int) $scan->progress_total,
             'credits_spent' => (float) $scan->credits_spent,
             'page_count' => $pageCount,
-            'effective_page_count' => (int) ($processingPageMeta['effective_page_count'] ?? 0),
-            'page_processing_limit_reason' => (string) ($processingPageMeta['page_processing_limit_reason'] ?? ''),
+            'effective_page_count' => (int) ($documentMetrics['effective_page_count'] ?? 0),
+            'page_processing_limit_reason' => (string) ($documentMetrics['page_processing_limit_reason'] ?? ''),
             'billed_tokens' => $billedTokens,
             'started_at' => $elapsed['started_at'],
             'finished_at' => $elapsed['finished_at'],
@@ -311,6 +331,18 @@ class OrderAiScanService
             'transfer_ready' => $transferReady,
             'auto_transfer' => $autoTransfer,
             'transfer_preview_available' => !empty($transferPreview),
+            'transfer_blocked' => is_array($transferPreview)
+                ? (bool) ($transferPreview['transfer_blocked'] ?? false)
+                : false,
+            'transfer_block_reason' => is_array($transferPreview) && !empty($transferPreview['transfer_blocked'])
+                ? (string) ($transferPreview['preview_error'] ?? '')
+                : '',
+            'transfer_button_hint' => is_array($transferPreview) && !empty($transferPreview['transfer_blocked'])
+                ? (string) ($transferPreview['transfer_hint'] ?? '')
+                : '',
+            'transfer_preview_error_code' => is_array($transferPreview)
+                ? (string) ($transferPreview['preview_error_code'] ?? '')
+                : '',
             'transfer_preview_error' => is_array($transferPreview)
                 ? (string) ($transferPreview['preview_error'] ?? '')
                 : '',
@@ -327,6 +359,81 @@ class OrderAiScanService
             'result' => $payload,
             'error_message' => $displayErrorMessage,
         ];
+    }
+
+    private function resolveDisplayTransferPreview(OrderAiScan $scan, array $normalizedPayload): mixed
+    {
+        $transferPreview = Utf8Sanitizer::cleanRecursive($scan->pantheon_transfer_payload);
+
+        if (!$this->shouldRefreshTransferPreviewForDisplay($scan, $normalizedPayload, $transferPreview)) {
+            return $transferPreview;
+        }
+
+        $refreshedPreview = $this->buildTransferPreview($scan, $normalizedPayload);
+
+        if (is_array($refreshedPreview)) {
+            $this->persistDisplayTransferPreview($scan, $refreshedPreview);
+
+            return $refreshedPreview;
+        }
+
+        return $transferPreview;
+    }
+
+    private function shouldRefreshTransferPreviewForDisplay(
+        OrderAiScan $scan,
+        array $normalizedPayload,
+        mixed $transferPreview
+    ): bool {
+        $status = trim((string) ($scan->status ?? ''));
+
+        if (!in_array($status, ['completed', 'ready_for_transfer'], true)) {
+            return false;
+        }
+
+        if ($this->hasPersistedPantheonOrder($scan)) {
+            return false;
+        }
+
+        if (!app(PantheonOrderTransferService::class)->isTransferReady($normalizedPayload)) {
+            return false;
+        }
+
+        if (!is_array($transferPreview)) {
+            return true;
+        }
+
+        return (int) ($transferPreview['preview_version'] ?? 0) < self::TRANSFER_PREVIEW_VERSION;
+    }
+
+    private function persistDisplayTransferPreview(OrderAiScan $scan, array $transferPreview): void
+    {
+        if (empty($transferPreview)) {
+            return;
+        }
+
+        if (!array_key_exists('payload', $transferPreview) && empty($transferPreview['transfer_blocked'])) {
+            return;
+        }
+
+        try {
+            $scan->forceFill([
+                'pantheon_transfer_payload' => $transferPreview,
+            ])->save();
+        } catch (\Throwable $exception) {
+            Log::warning('Order AI display transfer preview refresh could not be persisted.', [
+                'scan_id' => $scan->id,
+                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+            ]);
+        }
+    }
+
+    private function hasPersistedPantheonOrder(OrderAiScan $scan): bool
+    {
+        return $scan->transferred_at !== null
+            || trim((string) ($scan->pantheon_order_key ?? '')) !== ''
+            || trim((string) ($scan->pantheon_order_view ?? '')) !== ''
+            || (int) ($scan->pantheon_order_qid ?? 0) > 0;
     }
 
     private function runExtraction(OrderAiScan $scan, mixed $user = null): OrderAiScan
@@ -356,12 +463,18 @@ class OrderAiScanService
                     ? app(OrderAiDocumentMetrics::class)->calculateBilledTokens($pageCount)
                     : 0;
                 $transferReady = app(PantheonOrderTransferService::class)->isTransferReady($normalizedPayload);
-                $autoTransfer = $transferReady && $this->shouldAutoTransfer($scan) && $provider->supportsLiveTransfer();
                 $transferPreview = null;
 
-                if ($transferReady && !$autoTransfer) {
+                if ($transferReady) {
                     $transferPreview = $this->buildTransferPreview($scan, $normalizedPayload, $user);
                 }
+
+                $transferBlocked = is_array($transferPreview)
+                    && (bool) ($transferPreview['transfer_blocked'] ?? false);
+                $autoTransfer = $transferReady
+                    && !$transferBlocked
+                    && $this->shouldAutoTransfer($scan)
+                    && $provider->supportsLiveTransfer();
 
                 $attributes = [
                     'provider' => $providerName,
@@ -472,8 +585,9 @@ class OrderAiScanService
             ?: ($context['provider_task_id'] ?? '')
             ?: ($scan->provider_task_id ?? '')
         ))) ?: null;
+        $documentMetrics = $this->resolveStoredDocumentMetricsForScan($scan);
 
-        return [
+        $attributes = [
             'provider' => Utf8Sanitizer::clean($resolvedProvider, 40),
             'model' => $resolvedModel !== '' ? Utf8Sanitizer::clean($resolvedModel, 120) : null,
             'provider_task_id' => $resolvedProviderTaskId,
@@ -487,7 +601,20 @@ class OrderAiScanService
                 $rawProviderResponse,
                 $automaticRetryAttemptsUsed
             ),
+            'credits_spent' => 0,
         ];
+
+        if ($this->orderAiScanColumnExists('page_count')) {
+            $attributes['page_count'] = $documentMetrics['page_count'] > 0
+                ? $documentMetrics['page_count']
+                : null;
+        }
+
+        if ($this->orderAiScanColumnExists('billed_tokens')) {
+            $attributes['billed_tokens'] = 0;
+        }
+
+        return $attributes;
     }
 
     private function resolveProviderFailureContext(\Throwable $exception): array
@@ -566,7 +693,7 @@ class OrderAiScanService
 
     private function buildAutomaticExtractionRetryPayload(array $failureAttributes): array
     {
-        return [
+        $payload = [
             'provider' => $failureAttributes['provider'] ?? null,
             'model' => $failureAttributes['model'] ?? null,
             'provider_task_id' => null,
@@ -574,18 +701,30 @@ class OrderAiScanService
             'status' => 'extracting',
             'processing_step' => 'Prvi AI pokusaj nije uspio. Pokusavam ponovo.',
             'progress_current' => 25,
+            'credits_spent' => 0,
             'error_message' => null,
             'processed_at' => null,
             'completed_at' => null,
         ];
+
+        if ($this->orderAiScanColumnExists('billed_tokens')) {
+            $payload['billed_tokens'] = 0;
+        }
+
+        if ($this->orderAiScanColumnExists('page_count') && array_key_exists('page_count', $failureAttributes)) {
+            $payload['page_count'] = $failureAttributes['page_count'];
+        }
+
+        return $payload;
     }
 
     private function runTransfer(OrderAiScan $scan, mixed $user = null): OrderAiScan
     {
         try {
+            $normalizedPayload = Utf8Sanitizer::cleanRecursive((array) $scan->normalized_payload);
             $result = Utf8Sanitizer::cleanRecursive(
                 app(PantheonOrderTransferService::class)
-                    ->createFromNormalizedPayload((array) $scan->normalized_payload, $user)
+                    ->createFromNormalizedPayload($normalizedPayload, $user)
             );
 
             $scan->forceFill([
@@ -713,6 +852,7 @@ class OrderAiScanService
         try {
             $preview = app(PantheonOrderTransferService::class)->previewFromNormalizedPayload($normalizedPayload, $user);
             $preview = Utf8Sanitizer::cleanRecursive($preview);
+            $preview['preview_version'] = self::TRANSFER_PREVIEW_VERSION;
 
             Log::info('Order AI Pantheon preview prepared.', [
                 'scan_id' => $scan->id,
@@ -733,9 +873,7 @@ class OrderAiScanService
                 'message' => $sanitizedMessage,
             ]);
 
-            return [
-                'preview_error' => $sanitizedMessage,
-            ];
+            return $this->buildTransferPreviewErrorPayload($sanitizedMessage);
         }
     }
 
@@ -743,6 +881,10 @@ class OrderAiScanService
     {
         if ($autoTransfer) {
             return 'AI obrada je završena. Dokument je spreman za upis u bazu.';
+        }
+
+        if (is_array($transferPreview) && !empty($transferPreview['transfer_blocked'])) {
+            return 'AI obrada je završena. Narudžba sa ovom referencom već postoji u bazi.';
         }
 
         if (!$transferReady) {
@@ -754,6 +896,31 @@ class OrderAiScanService
         }
 
         return 'AI obrada je završena. Narudžba je spremna za upis u bazu.';
+    }
+
+    private function buildTransferPreviewErrorPayload(string $message): array
+    {
+        $payload = [
+            'preview_version' => self::TRANSFER_PREVIEW_VERSION,
+            'preview_error' => $message,
+        ];
+
+        if ($this->isDuplicateReferencePreviewError($message)) {
+            $payload['preview_error_code'] = 'duplicate_reference';
+            $payload['transfer_blocked'] = true;
+            $payload['transfer_hint'] = 'Narudžba sa ovom referencom već postoji.';
+        }
+
+        return $payload;
+    }
+
+    private function isDuplicateReferencePreviewError(string $message): bool
+    {
+        $normalized = Str::lower(Str::ascii(trim($message)));
+
+        return $normalized !== ''
+            && str_contains($normalized, 'narudzba sa referencom')
+            && str_contains($normalized, 'vec postoji u bazi');
     }
 
     private function resolveProvider(OrderAiScan $scan): OrderAiScanProvider
@@ -780,6 +947,7 @@ class OrderAiScanService
                 return null;
             }
 
+            $item = $this->normalizeScannedItemIdentity($item);
             $itemMeta = $this->extractScannedItemMetadata(
                 (string) ($item['product_name'] ?? ''),
                 (string) ($item['note'] ?? ''),
@@ -789,8 +957,8 @@ class OrderAiScanService
 
             return [
                 'line_number' => (int) ($item['line_number'] ?? ($index + 1)),
-                'product_code' => trim((string) ($item['product_code'] ?? '')),
-                'product_name' => $itemMeta['product_name'],
+                'product_code' => $this->normalizeScannedProductCode((string) ($item['product_code'] ?? '')),
+                'product_name' => $this->normalizeScannedProductName($itemMeta['product_name']),
                 'drawing_reference' => $itemMeta['drawing_reference'],
                 'material_hint' => $itemMeta['material_hint'],
                 'quantity' => (float) ($item['quantity'] ?? 0),
@@ -923,7 +1091,7 @@ class OrderAiScanService
                 continue;
             }
 
-            $nameLines[] = $line;
+            $nameLines[] = $this->normalizeScannedProductNameLine($line);
         }
 
         foreach ($this->splitVisibleTextLines($drawingReference) as $line) {
@@ -948,10 +1116,12 @@ class OrderAiScanService
             $noteParts[] = $drawingReference;
         }
 
-        $resolvedProductName = trim(implode(' ', array_values(array_filter($nameLines))));
+        $resolvedProductName = $this->normalizeScannedProductName(
+            trim(implode(' ', array_values(array_filter($nameLines))))
+        );
 
         if ($resolvedProductName === '') {
-            $resolvedProductName = $productName;
+            $resolvedProductName = $this->normalizeScannedProductName($productName);
         }
 
         return [
@@ -1032,7 +1202,9 @@ class OrderAiScanService
             $items[$index] = array_merge($existingItem, [
                 'line_number' => (int) ($preparedItem['line_number'] ?? ($existingItem['line_number'] ?? ($index + 1))),
                 'product_code' => trim((string) ($preparedItem['product_code'] ?? ($existingItem['product_code'] ?? ''))),
-                'product_name' => trim((string) ($preparedItem['product_name'] ?? ($existingItem['product_name'] ?? ''))),
+                'product_name' => $this->normalizeScannedProductName(
+                    trim((string) ($preparedItem['product_name'] ?? ($existingItem['product_name'] ?? '')))
+                ),
                 'drawing_reference' => trim((string) ($preparedItem['drawing_reference'] ?? ($existingItem['drawing_reference'] ?? ''))),
                 'material_hint' => trim((string) ($preparedItem['material_hint'] ?? ($existingItem['material_hint'] ?? ''))),
                 'quantity' => (float) ($preparedItem['quantity'] ?? ($existingItem['quantity'] ?? 0)),
@@ -1144,6 +1316,40 @@ class OrderAiScanService
         return OrderAiScan::query()->create($payload);
     }
 
+    public function resolveDisplayDocumentMetrics(
+        OrderAiScan $scan,
+        ?array $payload = null,
+        ?array $processingPageMeta = null
+    ): array {
+        $resolvedPayload = is_array($payload) ? $payload : (is_array($scan->normalized_payload) ? $scan->normalized_payload : []);
+        $resolvedPageMeta = is_array($processingPageMeta)
+            ? $processingPageMeta
+            : $this->resolveProcessingPageMeta($scan, $resolvedPayload);
+        $storedPageCount = max(0, (int) ($scan->page_count ?? data_get($resolvedPayload, 'order.page_count', 0)));
+        $effectivePageCount = max(0, (int) ($resolvedPageMeta['effective_page_count'] ?? 0));
+        $displayPageCount = $storedPageCount > 0 ? $storedPageCount : $effectivePageCount;
+
+        if ($this->resolveDocumentProfileKey($scan) === 'grob' && $effectivePageCount > 0) {
+            $displayPageCount = $effectivePageCount;
+        }
+
+        $billedTokens = max(0, (int) ($scan->billed_tokens ?? 0));
+
+        if (!$this->hasSuccessfulExtraction($scan)) {
+            $billedTokens = 0;
+        } elseif ($billedTokens <= 0 && $displayPageCount > 0) {
+            $billedTokens = app(OrderAiDocumentMetrics::class)->calculateBilledTokens($displayPageCount);
+        }
+
+        return [
+            'page_count' => max(0, $displayPageCount),
+            'source_page_count' => $storedPageCount,
+            'effective_page_count' => $effectivePageCount > 0 ? $effectivePageCount : max(0, $displayPageCount),
+            'billed_tokens' => max(0, $billedTokens),
+            'page_processing_limit_reason' => trim((string) ($resolvedPageMeta['page_processing_limit_reason'] ?? '')),
+        ];
+    }
+
     private function resolveTransferReadyForDisplay(OrderAiScan $scan, array $payload, mixed $transferPreview): bool
     {
         $status = trim((string) ($scan->status ?? ''));
@@ -1153,6 +1359,10 @@ class OrderAiScanService
         }
 
         if ($status === 'completed') {
+            if (is_array($transferPreview) && !empty($transferPreview['transfer_blocked'])) {
+                return false;
+            }
+
             if (is_array($transferPreview)) {
                 return true;
             }
@@ -1205,6 +1415,11 @@ class OrderAiScanService
             'seconds' => $seconds,
             'display' => $this->formatElapsedSeconds($seconds),
         ];
+    }
+
+    private function hasSuccessfulExtraction(OrderAiScan $scan): bool
+    {
+        return $this->normalizeScanTimestamp($scan->processed_at) instanceof Carbon;
     }
 
     private function normalizeScanTimestamp(mixed $value): ?Carbon
@@ -1366,6 +1581,64 @@ class OrderAiScanService
         return (string) Storage::disk($disk)->get($path);
     }
 
+    private function resolveStoredDocumentMetricsForScan(OrderAiScan $scan): array
+    {
+        return $this->resolveStoredDocumentMetrics(
+            (string) config('ai-order-scan.storage_disk', 'local'),
+            trim((string) ($scan->source_file_path ?? '')),
+            (string) ($scan->source_file_name ?? ''),
+            (string) ($scan->source_mime_type ?? ''),
+            $this->resolveDocumentProfileKey($scan)
+        );
+    }
+
+    private function resolveStoredDocumentMetrics(
+        string $disk,
+        string $relativePath,
+        string $originalName,
+        string $mimeType,
+        string $documentProfile
+    ): array {
+        $bytes = '';
+
+        if ($relativePath !== '' && Storage::disk($disk)->exists($relativePath)) {
+            $bytes = (string) Storage::disk($disk)->get($relativePath);
+        }
+
+        $preparedDocument = app(OrderAiDocumentPreparationService::class)->prepareDocument(
+            $this->normalizeDocumentProfileKey($documentProfile),
+            $originalName,
+            $mimeType,
+            $bytes
+        );
+
+        $effectivePageCount = max(0, (int) ($preparedDocument['effective_page_count'] ?? 0));
+        $sourcePageCount = max(0, (int) ($preparedDocument['source_page_count'] ?? 0));
+        $pageCount = $effectivePageCount > 0 ? $effectivePageCount : $sourcePageCount;
+
+        if ($pageCount <= 0) {
+            $metricsService = app(OrderAiDocumentMetrics::class);
+
+            if (method_exists($metricsService, 'resolveForStoredFile')) {
+                $fallbackMetrics = $metricsService->resolveForStoredFile(
+                    $disk,
+                    $relativePath,
+                    $mimeType,
+                    $originalName
+                );
+
+                $pageCount = max(0, (int) ($fallbackMetrics['page_count'] ?? 0));
+            }
+        }
+
+        return [
+            'page_count' => $pageCount,
+            'billed_tokens' => 0,
+            'effective_page_count' => $effectivePageCount,
+            'page_processing_limit_reason' => trim((string) ($preparedDocument['page_processing_limit_reason'] ?? '')),
+        ];
+    }
+
     private function postProcessTrendyDePayload(array $payload, array $context = []): array
     {
         $order = is_array($payload['order'] ?? null) ? $payload['order'] : [];
@@ -1512,8 +1785,12 @@ class OrderAiScanService
             );
         }
 
-        if (!empty($parsedItems) && is_array($payload['items'] ?? null)) {
-            $payload['items'] = $this->mergeGrobParsedItemsIntoPayload($payload['items'], $parsedItems);
+        if (is_array($payload['items'] ?? null)) {
+            if (!empty($parsedItems)) {
+                $payload['items'] = $this->mergeGrobParsedItemsIntoPayload($payload['items'], $parsedItems);
+            }
+
+            $payload['items'] = $this->sanitizeGrobPayloadItems($payload['items']);
         }
 
         if ($documentSubtotal > 0) {
@@ -1548,12 +1825,17 @@ class OrderAiScanService
     private function mergeGrobParsedItemsIntoPayload(array $items, array $parsedItems): array
     {
         $remaining = array_values($parsedItems);
+        $payloadItemCount = count($items);
+        $parsedItemCount = count($parsedItems);
 
         foreach ($items as $index => $item) {
             if (!is_array($item)) {
                 continue;
             }
 
+            $item = $this->normalizeScannedItemIdentity($item);
+            $items[$index] = $item;
+            $remaining = array_values($remaining);
             $lineNumber = (int) ($item['line_number'] ?? 0);
             $productCode = trim((string) ($item['product_code'] ?? ''));
             $matchIndex = null;
@@ -1573,6 +1855,14 @@ class OrderAiScanService
                 }
             }
 
+            if (
+                $matchIndex === null
+                && $remaining !== []
+                && ($payloadItemCount === $parsedItemCount || $lineNumber <= 0 || $productCode === '')
+            ) {
+                $matchIndex = 0;
+            }
+
             if ($matchIndex === null) {
                 continue;
             }
@@ -1584,6 +1874,10 @@ class OrderAiScanService
             $mergedItem['unit_price'] = (float) ($parsedItem['unit_price'] ?? 0);
             $mergedItem['line_total'] = (float) ($parsedItem['line_total'] ?? 0);
 
+            if (trim((string) ($parsedItem['product_code'] ?? '')) !== '') {
+                $mergedItem['product_code'] = $this->normalizeScannedProductCode((string) $parsedItem['product_code']);
+            }
+
             if ((float) ($parsedItem['quantity'] ?? 0) > 0) {
                 $mergedItem['quantity'] = (float) $parsedItem['quantity'];
             }
@@ -1593,7 +1887,7 @@ class OrderAiScanService
             }
 
             if (trim((string) ($parsedItem['product_name'] ?? '')) !== '') {
-                $mergedItem['product_name'] = trim((string) $parsedItem['product_name']);
+                $mergedItem['product_name'] = $this->normalizeScannedProductName((string) $parsedItem['product_name']);
             }
 
             foreach (['drawing_reference', 'material_hint', 'delivery_deadline'] as $field) {
@@ -1620,6 +1914,59 @@ class OrderAiScanService
         }
 
         return $items;
+    }
+
+    private function sanitizeGrobPayloadItems(array $items): array
+    {
+        return array_values(array_map(function ($item) {
+            if (!is_array($item)) {
+                return $item;
+            }
+
+            return $this->sanitizeGrobPayloadItem($item);
+        }, $items));
+    }
+
+    private function sanitizeGrobPayloadItem(array $item): array
+    {
+        $item['product_name'] = $this->sanitizeGrobPayloadProductName(
+            (string) ($item['product_name'] ?? '')
+        );
+        $item['note'] = $this->sanitizeGrobPayloadAnnotation(
+            (string) ($item['note'] ?? '')
+        );
+        $item['drawing_reference'] = '';
+
+        return $item;
+    }
+
+    private function sanitizeGrobPayloadProductName(string $value): string
+    {
+        $lines = array_values(array_filter(array_map(function ($line) {
+            $line = trim((string) $line);
+
+            return $this->isIgnoredGrobDrawingLine($line) ? '' : $this->normalizeScannedProductNameLine($line);
+        }, $this->splitVisibleTextLines($value))));
+
+        return $this->normalizeScannedProductName(trim(implode(' ', $lines)));
+    }
+
+    private function sanitizeGrobPayloadAnnotation(string $value): string
+    {
+        $normalized = str_replace(["\r\n", "\r"], "\n", $value);
+        $parts = preg_split('/\n+|\s*\|\s*/u', $normalized) ?: [];
+        $parts = array_values(array_filter(array_map(function ($part) {
+            return trim((string) $part);
+        }, $parts), function ($part) {
+            return $part !== '' && !$this->isIgnoredGrobDrawingLine((string) $part);
+        }));
+
+        return implode(' | ', array_values(array_unique($parts)));
+    }
+
+    private function isIgnoredGrobDrawingLine(string $line): bool
+    {
+        return preg_match('/^zeichnung\b/iu', trim($line)) === 1;
     }
 
     private function parseGrobItemsFromPages(array $pages): array
@@ -1844,7 +2191,9 @@ class OrderAiScanService
 
     private function finalizeGrobParsedItem(array $item): array
     {
-        $item['product_name'] = trim(implode(' ', array_values(array_filter($item['product_name_lines'] ?? []))));
+        $item['product_name'] = $this->normalizeScannedProductName(
+            trim(implode(' ', array_values(array_filter($item['product_name_lines'] ?? []))))
+        );
         $item['note'] = implode(' | ', array_values(array_unique(array_filter($item['note_lines'] ?? []))));
         unset($item['product_name_lines']);
         unset($item['note_lines']);
@@ -2120,6 +2469,113 @@ class OrderAiScanService
             'ST', 'STK', 'STUECK', 'STUCK', 'STU', 'PCS', 'PIECE' => strtoupper((string) config('ai-order-scan.default_unit', 'KO')),
             default => $unit,
         };
+    }
+
+    private function normalizeScannedProductCode(string $value): string
+    {
+        $parts = $this->extractEmbeddedProductCodeParts($value);
+
+        if (($parts['product_code'] ?? '') !== '') {
+            return (string) $parts['product_code'];
+        }
+
+        $value = Utf8Sanitizer::clean($value);
+        $value = preg_replace('/\s+/u', '', trim($value)) ?? trim($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        if (preg_match('/^(\d+)(?:[.,]0+)$/u', $value, $matches) === 1) {
+            return (string) ($matches[1] ?? '');
+        }
+
+        return $value;
+    }
+
+    private function normalizeScannedProductName(string $value): string
+    {
+        $normalized = trim((string) (preg_replace('/\s+/u', ' ', Utf8Sanitizer::clean($value)) ?? Utf8Sanitizer::clean($value)));
+
+        if ($normalized === '') {
+            return '';
+        }
+
+        return $this->normalizeScannedProductNameLine($normalized);
+    }
+
+    private function normalizeScannedProductNameLine(string $value): string
+    {
+        $normalized = Utf8Sanitizer::clean($value);
+        $normalized = preg_replace('/(?<=[\p{L}\p{N}\/])\s*-\s*(?=[\p{L}\p{N}\/])/u', '-', $normalized) ?? $normalized;
+        $normalized = preg_replace('/(?<=[\p{L}\p{N}])\s*\/\s*(?=[\p{L}\p{N}])/u', '/', $normalized) ?? $normalized;
+
+        return trim((string) (preg_replace('/\s+/u', ' ', $normalized) ?? $normalized));
+    }
+
+    private function normalizeScannedItemIdentity(array $item): array
+    {
+        $parts = $this->extractEmbeddedProductCodeParts((string) ($item['product_code'] ?? ''));
+
+        if (($parts['product_code'] ?? '') !== '') {
+            $item['product_code'] = (string) $parts['product_code'];
+        } else {
+            $item['product_code'] = $this->normalizeScannedProductCode((string) ($item['product_code'] ?? ''));
+        }
+
+        if (($parts['quantity'] ?? 0) > 0) {
+            $item['quantity'] = (float) $parts['quantity'];
+        }
+
+        if (($parts['unit'] ?? '') !== '') {
+            $item['unit'] = $this->normalizeScannedUnit((string) $parts['unit']);
+        }
+
+        return $item;
+    }
+
+    private function sanitizeDisplayPayloadItemCodes(array $payload): array
+    {
+        $payload['items'] = array_values(array_map(function ($item) {
+            if (!is_array($item)) {
+                return $item;
+            }
+
+            $item = $this->normalizeScannedItemIdentity($item);
+            $item['product_name'] = $this->normalizeScannedProductName((string) ($item['product_name'] ?? ''));
+
+            return $item;
+        }, is_array($payload['items'] ?? null) ? $payload['items'] : []));
+
+        return $payload;
+    }
+
+    private function extractEmbeddedProductCodeParts(string $value): array
+    {
+        $value = Utf8Sanitizer::clean($value);
+        $value = trim((string) (preg_replace('/\s+/u', ' ', $value) ?? $value));
+
+        if ($value === '') {
+            return [
+                'product_code' => '',
+                'quantity' => 0.0,
+                'unit' => '',
+            ];
+        }
+
+        if (preg_match('/^([A-Z0-9.\-\/]+)\s+(-?\d{1,3}(?:\.\d{3})*,\d+|-?\d+(?:,\d+)?)\s+([A-Z]{1,5})$/iu', $value, $matches) === 1) {
+            return [
+                'product_code' => trim((string) ($matches[1] ?? '')),
+                'quantity' => $this->parseGermanNumber((string) ($matches[2] ?? '')),
+                'unit' => trim((string) ($matches[3] ?? '')),
+            ];
+        }
+
+        return [
+            'product_code' => '',
+            'quantity' => 0.0,
+            'unit' => '',
+        ];
     }
 
     private function resolveProcessingPageMeta(OrderAiScan $scan, array $payload): array
