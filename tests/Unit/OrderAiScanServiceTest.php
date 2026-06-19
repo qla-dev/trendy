@@ -3,11 +3,16 @@
 namespace Tests\Unit;
 
 use App\Models\OrderAiScan;
+use App\Services\OrderAi\Contracts\OrderAiScanProvider;
+use App\Services\OrderAi\OpenRouterOrderAiScanProvider;
 use App\Services\OrderAi\OrderAiScanService;
+use App\Services\OrderAi\PantheonOrderTransferService;
+use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use App\Services\OrderAi\Support\OrderAiDocumentPreparationService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use ReflectionClass;
+use RuntimeException;
 use Tests\TestCase;
 
 class OrderAiScanServiceTest extends TestCase
@@ -248,6 +253,7 @@ class OrderAiScanServiceTest extends TestCase
             'status' => 'completed',
             'progress_current' => 100,
             'progress_total' => 100,
+            'processed_at' => Carbon::parse('2026-06-04 08:00:14'),
             'normalized_payload' => [
                 'order' => [
                     'page_count' => 2,
@@ -261,6 +267,227 @@ class OrderAiScanServiceTest extends TestCase
         $payload = app(OrderAiScanService::class)->buildStatusPayload($scan);
 
         $this->assertSame(10, $payload['billed_tokens']);
+    }
+
+    public function test_build_status_payload_blocks_transfer_when_duplicate_reference_preview_exists(): void
+    {
+        $scan = new OrderAiScan([
+            'status' => 'completed',
+            'progress_current' => 100,
+            'progress_total' => 100,
+            'processed_at' => Carbon::parse('2026-06-19 10:15:00'),
+            'pantheon_transfer_payload' => [
+                'preview_version' => 2,
+                'preview_error' => 'Narudžba sa referencom "4512109382" već postoji u bazi kao 26-0110-001161.',
+                'preview_error_code' => 'duplicate_reference',
+                'transfer_blocked' => true,
+                'transfer_hint' => 'Narudžba sa ovom referencom već postoji.',
+            ],
+            'normalized_payload' => [
+                'order' => [
+                    'customer_name' => 'Trendy d.o.o.',
+                    'supplier_name' => 'GROB-WERKE',
+                    'external_document_number' => '4512109382',
+                    'document_type' => '0110',
+                    'currency' => 'EUR',
+                    'warnings' => [],
+                ],
+                'items' => [
+                    [
+                        'line_number' => 10,
+                        'product_code' => '4008746',
+                        'product_name' => 'Platte SVTP1841-01',
+                        'quantity' => 6,
+                        'unit' => 'KO',
+                        'unit_price' => 26.70,
+                        'line_total' => 160.20,
+                        'vat_rate' => 17,
+                        'vat_code' => 'P1',
+                    ],
+                ],
+                'summary' => [
+                    'subtotal' => 160.20,
+                    'vat_total' => 27.23,
+                    'grand_total' => 187.43,
+                ],
+            ],
+        ]);
+
+        $payload = app(OrderAiScanService::class)->buildStatusPayload($scan);
+
+        $this->assertFalse($payload['transfer_ready']);
+        $this->assertTrue($payload['transfer_blocked']);
+        $this->assertSame(
+            'AI obrada je završena. Narudžba sa ovom referencom već postoji u bazi.',
+            $payload['processing_step']
+        );
+        $this->assertSame('duplicate_reference', $payload['transfer_preview_error_code']);
+        $this->assertSame(
+            'Narudžba sa referencom "4512109382" već postoji u bazi kao 26-0110-001161.',
+            $payload['transfer_block_reason']
+        );
+        $this->assertSame('Narudžba sa ovom referencom već postoji.', $payload['transfer_button_hint']);
+    }
+
+    public function test_normalize_payload_splits_embedded_grob_quantity_and_unit_out_of_product_code(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('normalizePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['items'][0]['product_code'] = '6482044 1,00 ST';
+        $payload['items'][0]['quantity'] = 0;
+        $payload['items'][0]['unit'] = '';
+
+        $normalized = $method->invoke($service, $payload);
+
+        $this->assertSame('6482044', $normalized['items'][0]['product_code']);
+        $this->assertSame(1.0, $normalized['items'][0]['quantity']);
+        $this->assertSame('KO', $normalized['items'][0]['unit']);
+    }
+
+    public function test_build_status_payload_splits_embedded_grob_quantity_and_unit_out_of_legacy_product_code(): void
+    {
+        $scan = new OrderAiScan([
+            'status' => 'completed',
+            'progress_current' => 100,
+            'progress_total' => 100,
+            'normalized_payload' => [
+                'order' => [
+                    'page_count' => 1,
+                    'warnings' => [],
+                ],
+                'items' => [[
+                    'line_number' => 10,
+                    'product_code' => '6482044 1,00 ST',
+                    'product_name' => 'Traeger',
+                    'drawing_reference' => '',
+                    'material_hint' => '',
+                    'quantity' => 0,
+                    'unit' => '',
+                    'delivery_deadline' => '',
+                    'unit_price' => 10,
+                    'line_total' => 10,
+                    'vat_rate' => 0,
+                    'vat_code' => 'P1',
+                    'discount_percent' => 0,
+                    'priority' => '',
+                    'note' => '',
+                ]],
+                'summary' => [],
+            ],
+        ]);
+
+        $payload = app(OrderAiScanService::class)->buildStatusPayload($scan);
+
+        $this->assertSame('6482044', data_get($payload, 'result.items.0.product_code'));
+        $this->assertSame(1.0, data_get($payload, 'result.items.0.quantity'));
+        $this->assertSame('KO', data_get($payload, 'result.items.0.unit'));
+    }
+
+    public function test_resolve_display_document_metrics_uses_effective_grob_page_count_and_zero_tokens_before_successful_extraction(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+
+        $sourcePath = 'order-ai-scans/4512109400.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf($this->grobPageFixture()));
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'grob',
+            'status' => 'failed',
+            'page_count' => 17,
+            'billed_tokens' => 17,
+            'source_file_name' => '4512109400.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+            'normalized_payload' => [],
+            'processed_at' => null,
+        ]);
+
+        $metrics = app(OrderAiScanService::class)->resolveDisplayDocumentMetrics($scan);
+
+        $this->assertSame(5, $metrics['page_count']);
+        $this->assertSame(5, $metrics['effective_page_count']);
+        $this->assertSame(0, $metrics['billed_tokens']);
+    }
+
+    public function test_resolve_stored_document_metrics_limits_grob_pages_and_starts_with_zero_tokens(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+
+        $sourcePath = 'order-ai-scans/4512109401.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf($this->grobPageFixture()));
+
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('resolveStoredDocumentMetrics');
+        $method->setAccessible(true);
+
+        $metrics = $method->invoke(
+            $service,
+            'local',
+            $sourcePath,
+            '4512109401.pdf',
+            'application/pdf',
+            'grob'
+        );
+
+        $this->assertSame(5, $metrics['page_count']);
+        $this->assertSame(0, $metrics['billed_tokens']);
+        $this->assertSame(5, $metrics['effective_page_count']);
+        $this->assertSame(OrderAiDocumentPreparationService::GROB_PAGE_LIMIT_REASON, $metrics['page_processing_limit_reason']);
+    }
+
+    public function test_build_status_payload_repairs_utf8_mojibake_in_stored_result(): void
+    {
+        $scan = new OrderAiScan([
+            'status' => 'completed',
+            'progress_current' => 100,
+            'progress_total' => 100,
+            'normalized_payload' => [
+                'order' => [
+                    'page_count' => 1,
+                    'warnings' => [],
+                    'note' => hex2bin('42697474652077656973656e205369652066c383c2bc7220c382c2a72031342e'),
+                ],
+                'items' => [[
+                    'line_number' => 20,
+                    'product_code' => '3480234',
+                    'product_name' => hex2bin('5374c383c2b6c383c5b8656c20473531362d313935302d303030302d30322d3130'),
+                    'drawing_reference' => '',
+                    'material_hint' => '',
+                    'quantity' => 30,
+                    'unit' => 'KO',
+                    'delivery_deadline' => '17.06.2026',
+                    'unit_price' => 9.02,
+                    'line_total' => 270.72,
+                    'vat_rate' => 0,
+                    'vat_code' => 'P1',
+                    'discount_percent' => 0,
+                    'priority' => '',
+                    'note' => '',
+                ]],
+                'summary' => [
+                    'subtotal' => 270.72,
+                    'vat_total' => 0,
+                    'grand_total' => 270.72,
+                ],
+            ],
+        ]);
+
+        $payload = app(OrderAiScanService::class)->buildStatusPayload($scan);
+
+        $this->assertSame(
+            hex2bin('5374c3b6c39f656c20473531362d313935302d303030302d30322d3130'),
+            data_get($payload, 'result.items.0.product_name')
+        );
+        $this->assertSame(
+            hex2bin('42697474652077656973656e205369652066c3bc7220c2a72031342e'),
+            data_get($payload, 'result.order.note')
+        );
     }
 
     public function test_grob_document_preparation_limits_ai_input_to_pages_before_attention_marker(): void
@@ -363,7 +590,7 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertStringNotContainsString('Ruesten/Termin abs.', $items[0]['product_name']);
     }
 
-    public function test_post_process_profile_payload_for_grob_keeps_product_name_until_zeichnung_and_moves_extra_description_to_note(): void
+    public function test_post_process_profile_payload_for_grob_keeps_product_name_until_zeichnung_and_ignores_drawing_reference_line(): void
     {
         Storage::fake('local');
         config(['ai-order-scan.storage_disk' => 'local']);
@@ -410,11 +637,155 @@ class OrderAiScanServiceTest extends TestCase
         $payload = $method->invoke($service, $scan, $payload);
 
         $this->assertSame('Platte SVTP1841-01', $payload['items'][0]['product_name']);
-        $this->assertSame('Zeichnung SVTP1841-01 mit Revisionsstand 01', $payload['items'][0]['drawing_reference']);
+        $this->assertSame('', $payload['items'][0]['drawing_reference']);
         $this->assertSame('16MnCrS5', $payload['items'][0]['material_hint']);
         $this->assertStringContainsString('PLACA DE ACO; USINADA; UTILIZADA EM DISPOSITIVO', $payload['items'][0]['note']);
         $this->assertStringContainsString('REF. DES. SVTP1841-01', $payload['items'][0]['note']);
         $this->assertStringNotContainsString('Ruesten/Termin abs.', $payload['items'][0]['product_name']);
+        $this->assertStringNotContainsString('Zeichnung', $payload['items'][0]['note']);
+    }
+
+    public function test_post_process_profile_payload_for_grob_uses_first_row_as_product_code_and_second_and_third_rows_as_product_name(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+
+        $traeger = hex2bin('5472c3a4676572');
+        $sourcePath = 'order-ai-scans/4512120888.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([
+            [
+                'GROB-WERKE GmbH & Co. KG',
+                'BESTELLUNG',
+                'Bestell-Nr.: 4512120888',
+                '10 6482044 1,00 ST',
+                $traeger,
+                'GCU-040-210-01-GM5511/1-1',
+                'Zeichnung GCU-040-210-01-GM5511/1-1 mit Revisionsstand 00',
+                'Nettopreis 10,00 EUR ST 1 10,00',
+                'Lieferdatum: 09.07.2026 1,00 ST',
+                '*********************************** ACHTUNG * *************************************',
+            ],
+        ]));
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'grob',
+            'source_file_name' => '4512120888.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('postProcessProfilePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['order']['supplier_name'] = 'GROB-WERKE GmbH & Co. KG';
+        $payload['items'][0]['line_number'] = 10;
+        $payload['items'][0]['product_code'] = 'GCU-040-210-01-GM5511/1-1';
+        $payload['items'][0]['product_name'] = $traeger . ' GCU-040-210-01-GM5511/1-1 Zeichnung GCU-040-210-01-GM5511/1-1 mit Revisionsstand 00';
+        $payload['items'][0]['drawing_reference'] = 'Zeichnung GCU-040-210-01-GM5511/1-1 mit Revisionsstand 00';
+        $payload['items'][0]['note'] = 'Zeichnung GCU-040-210-01-GM5511/1-1 mit Revisionsstand 00';
+
+        $payload = $method->invoke($service, $scan, $payload);
+
+        $this->assertSame('6482044', $payload['items'][0]['product_code']);
+        $this->assertSame($traeger . ' GCU-040-210-01-GM5511/1-1', $payload['items'][0]['product_name']);
+        $this->assertSame('', $payload['items'][0]['drawing_reference']);
+        $this->assertStringNotContainsString('Zeichnung', $payload['items'][0]['note']);
+    }
+
+    public function test_post_process_profile_payload_for_grob_prefers_parsed_name_rows_even_when_ai_item_identity_is_wrong(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+
+        $traeger = hex2bin('5472c3a4676572');
+        $sourcePath = 'order-ai-scans/4512120889.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([
+            [
+                'GROB-WERKE GmbH & Co. KG',
+                'BESTELLUNG',
+                'Bestell-Nr.: 4512120889',
+                '10 6482044 1,00 ST',
+                $traeger,
+                'GCU-040-210-01-GM5511/1-1',
+                'Zeichnung GCU-040-210-01-GM5511/1-1 mit Revisionsstand 00',
+                'Kontierung: GM5511',
+                'Werkstoff: S235JR',
+                'Nettopreis 199,00 EUR ST 1 199,00',
+                'Lieferdatum: 25.06.2026 1,00 ST',
+                '*********************************** ACHTUNG * *************************************',
+            ],
+        ]));
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'grob',
+            'source_file_name' => '4512120889.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('postProcessProfilePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['order']['supplier_name'] = 'GROB-WERKE GmbH & Co. KG';
+        $payload['items'][0]['line_number'] = 0;
+        $payload['items'][0]['product_code'] = 'GCU-040-210-01-GM5511/1-1';
+        $payload['items'][0]['product_name'] = $traeger;
+        $payload['items'][0]['drawing_reference'] = 'Zeichnung GCU-040-210-01-GM5511/1-1 mit Revisionsstand 00';
+        $payload['items'][0]['note'] = 'Kontierung: GM5511 | Zeichnung GCU-040-210-01-GM5511/1-1 mit Revisionsstand 00';
+
+        $payload = $method->invoke($service, $scan, $payload);
+
+        $this->assertSame('6482044', $payload['items'][0]['product_code']);
+        $this->assertSame($traeger . ' GCU-040-210-01-GM5511/1-1', $payload['items'][0]['product_name']);
+        $this->assertSame(1.0, (float) $payload['items'][0]['quantity']);
+        $this->assertSame('KO', $payload['items'][0]['unit']);
+        $this->assertStringNotContainsString('Zeichnung', $payload['items'][0]['product_name']);
+    }
+
+    public function test_post_process_profile_payload_for_grob_keeps_hyphenated_code_without_spaces_in_product_name(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+
+        $sourcePath = 'order-ai-scans/4512120890.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([
+            [
+                'GROB-WERKE GmbH & Co. KG',
+                'BESTELLUNG',
+                'Bestell-Nr.: 4512120890',
+                '40 8080808 8,00 ST',
+                'Platte',
+                'GM7258/06-1350-75/1-2',
+                'Zeichnung GM7258/06-1350-75/1-2 mit Revisionsstand 00',
+                'Nettopreis 199,00 EUR ST 1 199,00',
+                'Lieferdatum: 25.06.2026 8,00 ST',
+                '*********************************** ACHTUNG * *************************************',
+            ],
+        ]));
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'grob',
+            'source_file_name' => '4512120890.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('postProcessProfilePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['order']['supplier_name'] = 'GROB-WERKE GmbH & Co. KG';
+        $payload['items'][0]['line_number'] = 40;
+        $payload['items'][0]['product_code'] = '8080808';
+        $payload['items'][0]['product_name'] = 'Platte GM7258/06 - 1350 - 75/1 - 2';
+        $payload['items'][0]['note'] = '';
+
+        $payload = $method->invoke($service, $scan, $payload);
+
+        $this->assertSame('Platte GM7258/06-1350-75/1-2', $payload['items'][0]['product_name']);
+        $this->assertStringNotContainsString('GM7258/06 - 1350 - 75/1 - 2', $payload['items'][0]['product_name']);
     }
 
     public function test_grob_document_preparation_stops_before_warenbegleitschein_attachments_when_attention_marker_is_missing(): void
@@ -463,6 +834,361 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertStringNotContainsString('GROB-Identnr.:', $prepared['provider_input_text']);
     }
 
+    public function test_run_extraction_persists_raw_provider_response_when_provider_throws_exception(): void
+    {
+        config(['ai-order-scan.provider' => 'openrouter']);
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new class('Provider returned malformed JSON.') extends RuntimeException {
+                    public function context(): array
+                    {
+                        return [
+                            'provider' => 'openrouter',
+                            'model' => 'demo-model',
+                            'provider_task_id' => 'task-123',
+                            'raw_response' => [
+                                'id' => 'task-123',
+                                'http_status' => 200,
+                                'body' => '{"oops":true}',
+                            ],
+                        ];
+                    }
+                };
+            }
+        });
+
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('runExtraction');
+        $method->setAccessible(true);
+        $scan = $this->makeInMemoryScan([
+            'id' => 321,
+            'status' => 'extracting',
+            'provider' => 'openrouter',
+            'document_profile' => '',
+        ]);
+
+        $result = $method->invoke($service, $scan);
+
+        $this->assertSame($scan, $result);
+        $this->assertSame('failed', $scan->capturedForceFill['status']);
+        $this->assertSame('task-123', $scan->capturedForceFill['provider_task_id']);
+        $this->assertSame('demo-model', $scan->capturedForceFill['model']);
+        $this->assertSame('task-123', $scan->capturedForceFill['raw_provider_response']['id']);
+        $this->assertSame(
+            'Provider returned malformed JSON.',
+            $scan->capturedForceFill['raw_provider_response']['_failure']['message']
+        );
+    }
+
+    public function test_run_extraction_failure_resets_tokens_and_uses_effective_grob_page_count(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+        ]);
+
+        $sourcePath = 'order-ai-scans/4512109402.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf($this->grobPageFixture()));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new class('Provider returned malformed JSON.') extends RuntimeException {
+                    public function context(): array
+                    {
+                        return [
+                            'provider' => 'openrouter',
+                            'model' => 'demo-model',
+                            'provider_task_id' => 'task-124',
+                            'raw_response' => [
+                                'id' => 'task-124',
+                                'http_status' => 200,
+                                'body' => '{"oops":true}',
+                            ],
+                        ];
+                    }
+                };
+            }
+        });
+
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('runExtraction');
+        $method->setAccessible(true);
+        $scan = $this->makeInMemoryScan([
+            'id' => 322,
+            'status' => 'extracting',
+            'provider' => 'openrouter',
+            'document_profile' => 'grob',
+            'page_count' => 17,
+            'billed_tokens' => 17,
+            'source_file_name' => '4512109402.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = $method->invoke($service, $scan);
+
+        $this->assertSame($scan, $result);
+        $this->assertSame('failed', $scan->capturedForceFill['status']);
+        $this->assertSame(5, $scan->capturedForceFill['page_count']);
+        $this->assertSame(0, $scan->capturedForceFill['billed_tokens']);
+        $this->assertSame(0, $scan->capturedForceFill['credits_spent']);
+    }
+
+    public function test_run_extraction_keeps_provider_response_when_downstream_processing_fails(): void
+    {
+        config(['ai-order-scan.provider' => 'openrouter']);
+
+        $rawResponse = [
+            'id' => 'provider-row-1',
+            'choices' => [
+                [
+                    'message' => [
+                        'content' => json_encode($this->basePayload()),
+                    ],
+                ],
+            ],
+            'usage' => [
+                'total_tokens' => 123,
+            ],
+        ];
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class($this->basePayload(), $rawResponse) implements OrderAiScanProvider {
+            public function __construct(
+                private readonly array $payload,
+                private readonly array $rawResponse
+            ) {
+            }
+
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                return [
+                    'provider' => 'openrouter',
+                    'model' => 'demo-model',
+                    'provider_task_id' => 'task-789',
+                    'credits_spent' => 0.1234,
+                    'raw_response' => $this->rawResponse,
+                    'normalized_payload' => $this->payload,
+                ];
+            }
+        });
+
+        app()->instance(OrderAiDocumentMetrics::class, new class {
+            public function calculateBilledTokens(int $pageCount): int
+            {
+                throw new RuntimeException('Synthetic downstream failure.');
+            }
+        });
+
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('runExtraction');
+        $method->setAccessible(true);
+        $scan = $this->makeInMemoryScan([
+            'id' => 654,
+            'status' => 'extracting',
+            'provider' => 'openrouter',
+            'document_profile' => '',
+        ]);
+
+        $result = $method->invoke($service, $scan);
+
+        $this->assertSame($scan, $result);
+        $this->assertSame('failed', $scan->capturedForceFill['status']);
+        $this->assertSame('task-789', $scan->capturedForceFill['provider_task_id']);
+        $this->assertSame('provider-row-1', $scan->capturedForceFill['raw_provider_response']['id']);
+        $this->assertSame(
+            'Synthetic downstream failure.',
+            $scan->capturedForceFill['raw_provider_response']['_failure']['message']
+        );
+    }
+
+    public function test_run_extraction_retries_failed_ai_scan_only_once_automatically(): void
+    {
+        config(['ai-order-scan.provider' => 'openrouter']);
+
+        $attempts = new class {
+            public int $count = 0;
+        };
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class($attempts) implements OrderAiScanProvider {
+            public function __construct(
+                private readonly object $attempts
+            ) {
+            }
+
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                $this->attempts->count++;
+
+                throw new class('Provider timeout during extraction.') extends RuntimeException {
+                    public function context(): array
+                    {
+                        return [
+                            'provider' => 'openrouter',
+                            'model' => 'demo-model',
+                            'provider_task_id' => 'task-timeout',
+                            'raw_response' => [
+                                'id' => 'task-timeout',
+                                'http_status' => 504,
+                                'body' => 'Gateway Timeout',
+                            ],
+                        ];
+                    }
+                };
+            }
+        });
+
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('runExtraction');
+        $method->setAccessible(true);
+        $scan = $this->makeInMemoryScan([
+            'id' => 777,
+            'status' => 'extracting',
+            'provider' => 'openrouter',
+            'document_profile' => '',
+        ]);
+
+        $result = $method->invoke($service, $scan);
+
+        $this->assertSame($scan, $result);
+        $this->assertSame(2, $attempts->count);
+        $this->assertSame('failed', $scan->capturedForceFill['status']);
+        $this->assertSame(
+            1,
+            $scan->capturedForceFill['raw_provider_response']['_failure']['automatic_retry_attempts_used']
+        );
+    }
+
+    public function test_can_retry_failed_scan_allows_terminal_failed_history_row_without_transfer(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $scan = $this->makeInMemoryScan([
+            'status' => 'completed',
+            'error_message' => 'Neuspjesan AI scan.',
+            'transferred_at' => null,
+            'pantheon_order_key' => null,
+            'pantheon_order_view' => null,
+            'pantheon_order_qid' => null,
+        ]);
+
+        $this->assertTrue($service->canRetryFailedScan($scan));
+    }
+
+    public function test_build_request_prompt_instructs_grob_scans_to_preserve_german_characters(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('buildRequestPrompt');
+        $method->setAccessible(true);
+
+        $prompt = (string) $method->invoke($service, 'grob');
+
+        $this->assertStringContainsString('Preserve visible German characters exactly as written', $prompt);
+        $this->assertStringContainsString('UTF-8 / Windows-1252 mojibake', $prompt);
+        $this->assertStringContainsString('"StÃ¶ÃŸel" as "Stößel"', $prompt);
+        $this->assertStringContainsString('Preserve umlauts and eszett in product_name', $prompt);
+        $this->assertStringContainsString('Never append decimal places to a numeric-looking product_code', $prompt);
+        $this->assertStringContainsString('do not keep them inside product_code', $prompt);
+        $this->assertStringContainsString('Do not insert spaces around hyphens inside code-like names', $prompt);
+        $this->assertStringContainsString('treat the second and third stacked rows as product_name', $prompt);
+        $this->assertStringContainsString('ignore it completely', $prompt);
+    }
+
+    public function test_build_status_payload_refreshes_legacy_transfer_preview_for_duplicate_reference(): void
+    {
+        app()->instance(PantheonOrderTransferService::class, new class extends PantheonOrderTransferService {
+            public function isTransferReady(array $normalizedPayload): bool
+            {
+                return true;
+            }
+
+            public function previewFromNormalizedPayload(array $normalizedPayload, mixed $user = null): array
+            {
+                throw new RuntimeException(
+                    'Narudžba sa referencom "4512109382" već postoji u bazi kao 26-0110-001161.'
+                );
+            }
+        });
+
+        $scan = $this->makeInMemoryScan([
+            'id' => 905,
+            'status' => 'completed',
+            'progress_current' => 100,
+            'progress_total' => 100,
+            'processed_at' => now(),
+            'normalized_payload' => [
+                'order' => [
+                    'customer_name' => 'Trendy d.o.o.',
+                    'supplier_name' => 'GROB-WERKE',
+                    'external_document_number' => '4512109382',
+                    'document_type' => '0110',
+                    'currency' => 'EUR',
+                    'warnings' => [],
+                ],
+                'items' => [],
+                'summary' => [],
+            ],
+            'pantheon_transfer_payload' => [
+                'payload' => [
+                    'customer_name' => 'Trendy d.o.o.',
+                    'supplier_name' => 'GROB-WERKE',
+                    'external_document_number' => '4512109382',
+                    'document_type' => '0110',
+                    'currency' => 'EUR',
+                    'items' => [],
+                ],
+            ],
+        ]);
+
+        $payload = app(OrderAiScanService::class)->buildStatusPayload($scan);
+
+        $this->assertFalse($payload['transfer_ready']);
+        $this->assertTrue($payload['transfer_blocked']);
+        $this->assertSame(
+            'AI obrada je završena. Narudžba sa ovom referencom već postoji u bazi.',
+            $payload['processing_step']
+        );
+        $this->assertSame('duplicate_reference', $payload['transfer_preview_error_code']);
+        $this->assertSame('Narudžba sa ovom referencom već postoji.', $payload['transfer_button_hint']);
+        $this->assertSame(
+            'Narudžba sa referencom "4512109382" već postoji u bazi kao 26-0110-001161.',
+            $payload['transfer_block_reason']
+        );
+        $this->assertSame(2, $scan->capturedForceFill['pantheon_transfer_payload']['preview_version']);
+        $this->assertTrue($scan->capturedForceFill['pantheon_transfer_payload']['transfer_blocked']);
+        $this->assertSame(
+            'duplicate_reference',
+            $scan->capturedForceFill['pantheon_transfer_payload']['preview_error_code']
+        );
+    }
+
     private function basePayload(): array
     {
         return [
@@ -506,6 +1232,45 @@ class OrderAiScanServiceTest extends TestCase
                 'grand_total' => 616.6,
             ],
         ];
+    }
+
+    private function makeInMemoryScan(array $attributes = []): OrderAiScan
+    {
+        $scan = new class extends OrderAiScan {
+            public array $capturedForceFill = [];
+
+            public function forceFill(array $attributes)
+            {
+                $this->capturedForceFill = $attributes;
+
+                foreach ($attributes as $key => $value) {
+                    $this->setAttribute($key, $value);
+                }
+
+                return $this;
+            }
+
+            public function save(array $options = []): bool
+            {
+                return true;
+            }
+
+            public function fresh($with = [])
+            {
+                return $this;
+            }
+
+            public function refresh()
+            {
+                return $this;
+            }
+        };
+
+        foreach ($attributes as $key => $value) {
+            $scan->setAttribute($key, $value);
+        }
+
+        return $scan;
     }
 
     private function fixturePath(string $fileName): string

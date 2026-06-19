@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\OrderAiScan;
+use App\Services\OrderAi\OrderAiScanService;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -129,6 +130,7 @@ class AiTokenHistoryController extends Controller
             ->get([
                 'id',
                 'status',
+                'processing_step',
                 'error_message',
                 'processed_at',
                 'transferred_at',
@@ -146,6 +148,44 @@ class AiTokenHistoryController extends Controller
         ];
 
         return response()->json($payload);
+    }
+
+    public function retry(Request $request, OrderAiScan $scan, OrderAiScanService $scanService): JsonResponse
+    {
+        $this->authorizeModuleAccess($request);
+
+        if (!$this->isRetryEligible($scan) || !$scanService->canRetryFailedScan($scan)) {
+            return response()->json([
+                'message' => 'Ponovno AI skeniranje je dostupno samo za neuspješne AI scanove.',
+                'last_loaded_at_display' => now()->format('d.m.Y H:i:s'),
+                'data' => $this->mapHistoryRow($scan->fresh()),
+            ], 422);
+        }
+
+        $retriedScan = $scanService->retryFailedScan(
+            $scan,
+            $request->user(),
+            (string) ($scan->source_origin ?? 'manual') === 'imap'
+        );
+        $retriedScan->refresh();
+
+        if ((string) ($retriedScan->status ?? '') === 'failed') {
+            return response()->json([
+                'message' => trim((string) ($retriedScan->error_message ?? '')) !== ''
+                    ? (string) $retriedScan->error_message
+                    : 'AI skeniranje nije uspjelo ni nakon ponovnog pokretanja.',
+                'last_loaded_at_display' => now()->format('d.m.Y H:i:s'),
+                'data' => $this->mapHistoryRow($retriedScan),
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => (string) ($retriedScan->source_origin ?? 'manual') === 'imap'
+                ? 'AI skeniranje je ponovo pokrenuto. Status će biti osvježen automatski.'
+                : 'AI skeniranje je uspješno ponovo pokrenuto.',
+            'last_loaded_at_display' => now()->format('d.m.Y H:i:s'),
+            'data' => $this->mapHistoryRow($retriedScan),
+        ]);
     }
 
     private function authorizeModuleAccess(Request $request): void
@@ -351,13 +391,20 @@ class AiTokenHistoryController extends Controller
 
     private function mapHistoryStatusRow(OrderAiScan $scan): array
     {
+        $statusOutcome = $this->resolveStatusOutcome($scan);
         $statusMeta = $this->resolveStatusMeta($scan);
         $transferMeta = $this->resolveTransferActionMeta($scan);
+        $retryMeta = $this->resolveRetryActionMeta($scan);
 
         return [
             'id' => (int) $scan->id,
+            'status_outcome' => $statusOutcome,
             'status_label' => $statusMeta['label'],
             'status_tone' => $statusMeta['tone'],
+            'status_error_message' => trim((string) ($scan->error_message ?? '')) ?: null,
+            'retry_enabled' => $retryMeta['retry_enabled'],
+            'retry_icon' => $retryMeta['retry_icon'],
+            'retry_tooltip' => $retryMeta['retry_tooltip'],
             'transfer_enabled' => $transferMeta['transfer_enabled'],
             'transfer_completed' => $transferMeta['transfer_completed'],
             'transfer_icon' => $transferMeta['transfer_icon'],
@@ -372,21 +419,11 @@ class AiTokenHistoryController extends Controller
         if (array_key_exists($cacheKey, $this->documentMetricsCache)) {
             return $this->documentMetricsCache[$cacheKey];
         }
-
-        $pageCount = max(0, (int) ($scan->page_count ?? 0));
-        $billedTokens = max(0, (int) ($scan->billed_tokens ?? 0));
-
-        if ($pageCount <= 0) {
-            $pageCount = max(0, (int) data_get($scan->normalized_payload, 'order.page_count', 0));
-        }
-
-        if ($pageCount > 0 && $billedTokens <= 0) {
-            $billedTokens = $this->resolveBilledTokensFromPageCount($pageCount);
-        }
+        $metrics = app(OrderAiScanService::class)->resolveDisplayDocumentMetrics($scan);
 
         return $this->documentMetricsCache[$cacheKey] = [
-            'page_count' => max(0, $pageCount),
-            'billed_tokens' => max(0, $billedTokens),
+            'page_count' => max(0, (int) ($metrics['page_count'] ?? 0)),
+            'billed_tokens' => max(0, (int) ($metrics['billed_tokens'] ?? 0)),
         ];
     }
 
@@ -625,6 +662,57 @@ class AiTokenHistoryController extends Controller
         ];
     }
 
+    private function resolveRetryActionMeta(OrderAiScan $scan): array
+    {
+        $status = trim((string) ($scan->status ?? ''));
+
+        if ($this->isRetryEligible($scan)) {
+            return [
+                'retry_enabled' => true,
+                'retry_icon' => 'refresh-cw',
+                'retry_tooltip' => 'Ponovi AI scan',
+            ];
+        }
+
+        if (in_array($status, ['uploaded', 'extracting', 'ready_for_transfer', 'transferring'], true)) {
+            return [
+                'retry_enabled' => false,
+                'retry_icon' => 'refresh-cw',
+                'retry_tooltip' => 'AI scan je trenutno u obradi.',
+            ];
+        }
+
+        if ($this->hasTransferResult($scan, $status) || in_array($status, ['completed', 'transferred'], true)) {
+            return [
+                'retry_enabled' => false,
+                'retry_icon' => 'refresh-cw',
+                'retry_tooltip' => 'AI scan je uspješno završen.',
+            ];
+        }
+
+        return [
+            'retry_enabled' => false,
+            'retry_icon' => 'refresh-cw',
+            'retry_tooltip' => 'Ponovno AI skeniranje trenutno nije dostupno.',
+        ];
+    }
+
+    private function isRetryEligible(OrderAiScan $scan): bool
+    {
+        if ($this->resolveStatusOutcome($scan) !== 'failed') {
+            return false;
+        }
+
+        return !$this->isTransferFailure($scan);
+    }
+
+    private function isTransferFailure(OrderAiScan $scan): bool
+    {
+        $haystack = trim((string) ($scan->processing_step ?? '')) . ' ' . trim((string) ($scan->error_message ?? ''));
+
+        return preg_match('/transfer|baza|pantheon/i', $haystack) === 1;
+    }
+
     private function looksTransferReady(array $payload): bool
     {
         $customerName = trim((string) data_get($payload, 'order.customer_name', ''));
@@ -691,6 +779,7 @@ class AiTokenHistoryController extends Controller
         $columns = [
             'id',
             'status',
+            'processing_step',
             'error_message',
             'processed_at',
             'completed_at',
@@ -720,6 +809,7 @@ class AiTokenHistoryController extends Controller
         $columns = [
             'id',
             'status',
+            'processing_step',
             'error_message',
             'processed_at',
             'page_count',

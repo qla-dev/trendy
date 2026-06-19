@@ -161,6 +161,56 @@
     color: #ea5455;
   }
 
+  .ai-inbox-pagination {
+    row-gap: 0.75rem;
+  }
+
+  .ai-inbox-pagination-nav .pagination {
+    margin-bottom: 0;
+    gap: 0.35rem;
+    align-items: center;
+  }
+
+  .ai-inbox-pagination-nav .page-item {
+    margin: 0;
+  }
+
+  .ai-inbox-pagination-nav .page-link {
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0 0.4rem;
+    border: 0;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: #6e6b7b;
+    font-size: 0.92rem;
+    box-shadow: none;
+  }
+
+  .ai-inbox-pagination-nav .page-item.active .page-link {
+    background: #4b5d78;
+    color: #fff;
+  }
+
+  .ai-inbox-pagination-nav .page-item.disabled .page-link {
+    color: #b9b9c3;
+    opacity: 1;
+  }
+
+  .ai-inbox-pagination-nav .page-item:not(.active):not(.disabled) .page-link:hover {
+    background: rgba(75, 93, 120, 0.08);
+    color: #4b5d78;
+  }
+
+  .ai-inbox-pagination-nav .page-item.ellipsis .page-link {
+    background: transparent;
+    color: #9e9eae;
+    pointer-events: none;
+  }
+
   .ai-inbox-action-cell {
     width: 1% !important;
     position: sticky !important;
@@ -251,6 +301,23 @@
     background: #36405a !important;
     background-color: #36405a !important;
     box-shadow: none !important;
+  }
+
+  .dark-layout .ai-inbox-pagination-nav .page-link,
+  .semi-dark-layout .ai-inbox-pagination-nav .page-link {
+    color: #d8def1;
+  }
+
+  .dark-layout .ai-inbox-pagination-nav .page-item.active .page-link,
+  .semi-dark-layout .ai-inbox-pagination-nav .page-item.active .page-link {
+    background: #00cfe8;
+    color: #283046;
+  }
+
+  .dark-layout .ai-inbox-pagination-nav .page-item:not(.active):not(.disabled) .page-link:hover,
+  .semi-dark-layout .ai-inbox-pagination-nav .page-item:not(.active):not(.disabled) .page-link:hover {
+    background: rgba(0, 207, 232, 0.12);
+    color: #00cfe8;
   }
 
   body.dark-layout .ai-inbox-shell .btn.btn-outline-primary,
@@ -372,8 +439,16 @@
       </div>
     </div>
     @if ($aiInboxRows instanceof \Illuminate\Pagination\LengthAwarePaginator && $aiInboxRows->hasPages())
-      <div class="card-footer d-flex justify-content-end">
-        {{ $aiInboxRows->links() }}
+      <div class="card-footer">
+        <div class="d-flex justify-content-between align-items-center flex-wrap ai-inbox-pagination">
+          <div class="text-muted small">
+            Prikazano {{ number_format($aiInboxRows->firstItem() ?? 0, 0, ',', '.') }} - {{ number_format($aiInboxRows->lastItem() ?? 0, 0, ',', '.') }}
+            od {{ number_format($aiInboxRows->total(), 0, ',', '.') }} zapisa
+          </div>
+          <div class="ai-inbox-pagination-nav">
+            {{ $aiInboxRows->onEachSide(2)->links('vendor.pagination.ai-token-history', ['ariaLabel' => 'AI inbox pagination']) }}
+          </div>
+        </div>
       </div>
     @endif
   </div>

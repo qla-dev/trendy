@@ -513,12 +513,26 @@ class OrderAiDocumentTextExtractor
             return '';
         }
 
-        $converted = @iconv('Windows-1252', 'UTF-8//IGNORE', $value);
-        $normalized = is_string($converted) && $converted !== '' ? $converted : $value;
+        if ($this->isUtf8($value)) {
+            $normalized = $value;
+        } else {
+            $converted = @iconv('Windows-1252', 'UTF-8//IGNORE', $value);
+            $normalized = is_string($converted) && $converted !== '' ? $converted : $value;
+        }
+
         $normalized = str_replace("\0", ' ', $normalized);
         $normalized = preg_replace('/\s+/u', ' ', $normalized) ?? $normalized;
 
         return Utf8Sanitizer::clean(trim($normalized));
+    }
+
+    private function isUtf8(string $value): bool
+    {
+        if (function_exists('mb_check_encoding')) {
+            return mb_check_encoding($value, 'UTF-8');
+        }
+
+        return preg_match('//u', $value) === 1;
     }
 
     private function extractFallbackText(string $bytes): string

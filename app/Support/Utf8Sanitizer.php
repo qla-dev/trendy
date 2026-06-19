@@ -33,6 +33,8 @@ class Utf8Sanitizer
             }
         }
 
+        $string = self::repairCommonMojibake($string);
+
         $finalCleanup = @iconv('UTF-8', 'UTF-8//IGNORE', $string);
         if (is_string($finalCleanup)) {
             $string = $finalCleanup;
@@ -95,5 +97,42 @@ class Utf8Sanitizer
         }
 
         return preg_match('//u', $value) === 1;
+    }
+
+    private static function repairCommonMojibake(string $value): string
+    {
+        if ($value === '' || !self::looksLikeUtf8Mojibake($value)) {
+            return $value;
+        }
+
+        $repaired = @iconv('UTF-8', 'Windows-1252//IGNORE', $value);
+
+        if (!is_string($repaired) || $repaired === '' || !self::isUtf8($repaired)) {
+            return $value;
+        }
+
+        return $repaired !== '' ? $repaired : $value;
+    }
+
+    private static function looksLikeUtf8Mojibake(string $value): bool
+    {
+        return str_contains($value, "\xC3\x83")
+            || str_contains($value, "\xC3\x82")
+            || str_contains($value, "\xE2\x80\x9A")
+            || str_contains($value, "\xE2\x80\x9E")
+            || str_contains($value, "\xE2\x80\xA6")
+            || str_contains($value, "\xE2\x80\xA0")
+            || str_contains($value, "\xE2\x80\xA1")
+            || str_contains($value, "\xE2\x82\xAC")
+            || str_contains($value, "\xE2\x80\xB0")
+            || str_contains($value, "\xE2\x80\xB9")
+            || str_contains($value, "\xE2\x80\x98")
+            || str_contains($value, "\xE2\x80\x99")
+            || str_contains($value, "\xE2\x80\x9C")
+            || str_contains($value, "\xE2\x80\x9D")
+            || str_contains($value, "\xE2\x80\xA2")
+            || str_contains($value, "\xE2\x80\x93")
+            || str_contains($value, "\xE2\x80\x94")
+            || str_contains($value, "\xE2\x84\xA2");
     }
 }

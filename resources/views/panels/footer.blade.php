@@ -6,7 +6,14 @@
   class="footer footer-light {{ $configData['footerType'] === 'footer-hidden' ? 'd-none' : '' }} {{ $configData['footerType'] }}">
   <p class="clearfix mb-0">
     <span class="float-md-start d-block text-start footer-app-version">eNalog.app v1.0</span>
-    <span class="float-md-end d-block mt-25 text-end">COPYRIGHT &copy; {{ $copyrightYear }} <a href="https://qla.dev/" target="_blank" rel="noopener noreferrer" class="text-info footer-qla-link"><img src="https://deklarant.ai/build/images/logo-qla.png" alt="qla.dev" class="footer-qla-logo footer-qla-logo-light"><img src="https://deklarant.ai/build/images/logo-qla-dark.png" alt="qla.dev" class="footer-qla-logo footer-qla-logo-dark"></a> | All rights Reserved</span>
+    <span class="float-md-end d-block mt-25 text-end footer-copyright">
+      <span>COPYRIGHT &copy; {{ $copyrightYear }}</span>
+      <a href="https://qla.dev/" target="_blank" rel="noopener noreferrer" class="text-info footer-qla-link" aria-label="qla.dev">
+        <img src="https://deklarant.ai/build/images/logo-qla.png" alt="qla.dev" class="footer-qla-logo footer-qla-logo-light">
+        <img src="https://deklarant.ai/build/images/logo-qla-dark.png" alt="qla.dev" class="footer-qla-logo footer-qla-logo-dark">
+      </a>
+      <span>| All rights Reserved</span>
+    </span>
   </p>
 </footer>
 <style>
@@ -15,20 +22,28 @@
     letter-spacing: 0.01em;
   }
 
+  .footer-copyright {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.34rem;
+    flex-wrap: wrap;
+    line-height: 1.2;
+  }
+
   .footer-qla-link .footer-qla-logo {
     height: 18px;
     width: auto;
-    display: inline-block;
-    vertical-align: middle;
-    transform-origin: center;
-    margin-bottom: 5px;
+    display: block;
+    margin-bottom: 0;
   }
 
   .footer-qla-link {
     display: inline-flex;
     align-items: center;
-    margin-left: 0.24rem;
-    margin-right: 0.34rem;
+    justify-content: center;
+    line-height: 1;
+    vertical-align: middle;
   }
 
   .footer-qla-link .footer-qla-logo-dark {
@@ -87,14 +102,13 @@
       white-space: nowrap;
     }
 
-    .footer-qla-link .footer-qla-logo {
-      height: 14px;
-      margin-bottom: 2px;
+    .footer-copyright {
+      gap: 0.24rem;
+      flex-wrap: nowrap;
     }
 
-    .footer-qla-link {
-      margin-left: 0.32rem;
-      margin-right: 0.42rem;
+    .footer-qla-link .footer-qla-logo {
+      height: 14px;
     }
   }
 </style>
