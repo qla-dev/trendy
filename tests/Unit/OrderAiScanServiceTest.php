@@ -439,7 +439,7 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(10, $payload['billed_tokens']);
     }
 
-    public function test_build_status_payload_keeps_zero_billed_tokens_for_local_digital_rules_scan(): void
+    public function test_build_status_payload_uses_page_based_billed_tokens_for_local_digital_rules_scan(): void
     {
         $scan = new OrderAiScan([
             'status' => 'completed',
@@ -467,7 +467,7 @@ class OrderAiScanServiceTest extends TestCase
 
         $payload = app(OrderAiScanService::class)->buildStatusPayload($scan);
 
-        $this->assertSame(0, $payload['billed_tokens']);
+        $this->assertSame(10, $payload['billed_tokens']);
     }
 
     public function test_build_status_payload_blocks_transfer_when_duplicate_reference_preview_exists(): void
@@ -1332,7 +1332,7 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(1179.2, data_get($result, 'normalized_payload.summary.subtotal'));
     }
 
-    public function test_run_extraction_overwrites_initial_billed_tokens_with_zero_for_local_rules_parser(): void
+    public function test_run_extraction_overwrites_initial_billed_tokens_with_page_based_value_for_local_rules_parser(): void
     {
         Storage::fake('local');
         config([
@@ -1400,7 +1400,7 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('completed', $scan->capturedForceFill['status']);
         $this->assertSame('digital_pdf_rules', $scan->capturedForceFill['provider']);
         $this->assertSame('local-digital-pdf-rules-v1', $scan->capturedForceFill['model']);
-        $this->assertSame(0, $scan->capturedForceFill['billed_tokens']);
+        $this->assertSame(10, $scan->capturedForceFill['billed_tokens']);
         $this->assertSame(0.0, $scan->capturedForceFill['credits_spent']);
     }
 

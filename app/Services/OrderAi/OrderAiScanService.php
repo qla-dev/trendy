@@ -1660,8 +1660,10 @@ class OrderAiScanService
 
         if (!$this->hasSuccessfulExtraction($scan)) {
             $billedTokens = 0;
-        } elseif ($billedTokens <= 0 && $displayPageCount > 0 && $this->shouldEstimateAiBilledTokensForDisplay($scan)) {
+        } elseif ($displayPageCount > 0) {
             $billedTokens = app(OrderAiDocumentMetrics::class)->calculateBilledTokens($displayPageCount);
+        } else {
+            $billedTokens = 0;
         }
 
         return [
@@ -1747,55 +1749,9 @@ class OrderAiScanService
 
     private function resolveExtractionBilledTokens(OrderAiScan $scan, array $result, int $pageCount): int
     {
-        if (!$this->shouldEstimateAiBilledTokensFromResult($scan, $result)) {
-            return 0;
-        }
-
         return $pageCount > 0
             ? app(OrderAiDocumentMetrics::class)->calculateBilledTokens($pageCount)
             : 0;
-    }
-
-    private function shouldEstimateAiBilledTokensFromResult(OrderAiScan $scan, array $result): bool
-    {
-        $provider = trim((string) ($result['provider'] ?? $scan->provider ?? ''));
-
-        if (in_array($provider, ['digital_pdf_rules', 'mock'], true)) {
-            return false;
-        }
-
-        if (max(0, (int) ($result['ai_duration_ms'] ?? 0)) > 0) {
-            return true;
-        }
-
-        if ((float) ($result['credits_spent'] ?? 0) > 0) {
-            return true;
-        }
-
-        return in_array($provider, ['openrouter', 'openai'], true);
-    }
-
-    private function shouldEstimateAiBilledTokensForDisplay(OrderAiScan $scan): bool
-    {
-        $provider = trim((string) ($scan->provider ?? ''));
-
-        if (in_array($provider, ['digital_pdf_rules', 'mock'], true)) {
-            return false;
-        }
-
-        if (max(0, (int) ($scan->ai_duration_ms ?? 0)) > 0) {
-            return true;
-        }
-
-        if ((float) ($scan->credits_spent ?? 0) > 0) {
-            return true;
-        }
-
-        if (max(0, (int) data_get(is_array($scan->raw_provider_response) ? $scan->raw_provider_response : [], 'usage.total_tokens', 0)) > 0) {
-            return true;
-        }
-
-        return $provider === '' || in_array($provider, ['openrouter', 'openai'], true);
     }
 
     private function normalizeScanTimestamp(mixed $value): ?Carbon
