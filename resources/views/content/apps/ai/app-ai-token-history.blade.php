@@ -727,6 +727,7 @@
                 <span
                   class="ai-token-history-amount ai-token-history-amount-{{ $row['amount_tone'] }}"
                   data-bs-toggle="tooltip"
+                  data-bs-trigger="hover"
                   data-bs-placement="top"
                   title="{{ $row['amount_title'] }}">
                   {{ $row['amount_display'] }}
@@ -747,6 +748,7 @@
                       href="{{ $row['download_source_url'] }}"
                       class="btn btn-sm app-table-action-btn app-table-action-btn--primary"
                       data-bs-toggle="tooltip"
+                      data-bs-trigger="hover"
                       data-bs-placement="top"
                       title="Preuzmi PDF"
                       aria-label="Preuzmi PDF">
@@ -761,6 +763,7 @@
                         data-history-retry-button
                         data-scan-id="{{ $row['id'] }}"
                         data-bs-toggle="tooltip"
+                        data-bs-trigger="hover"
                         data-bs-placement="top"
                         title="{{ $row['retry_tooltip'] }}"
                         aria-label="{{ $row['retry_tooltip'] }}">
@@ -769,8 +772,8 @@
                     @else
                       <span
                         class="app-table-action-tooltip"
-                        tabindex="0"
                         data-bs-toggle="tooltip"
+                        data-bs-trigger="hover"
                         data-bs-placement="top"
                         title="{{ $row['retry_tooltip'] }}"
                         aria-label="{{ $row['retry_tooltip'] }}">
@@ -791,6 +794,7 @@
                         data-history-transfer-button
                         data-scan-id="{{ $row['id'] }}"
                         data-bs-toggle="tooltip"
+                        data-bs-trigger="hover"
                         data-bs-placement="top"
                         title="{{ $row['transfer_tooltip'] }}"
                         aria-label="{{ $row['transfer_tooltip'] }}">
@@ -799,8 +803,8 @@
                     @else
                       <span
                         class="app-table-action-tooltip"
-                        tabindex="0"
                         data-bs-toggle="tooltip"
+                        data-bs-trigger="hover"
                         data-bs-placement="top"
                         title="{{ $row['transfer_tooltip'] }}"
                         aria-label="{{ $row['transfer_tooltip'] }}">
@@ -818,6 +822,7 @@
                     class="btn btn-sm app-table-action-btn app-table-action-btn--info"
                     data-history-open-scan-link
                     data-bs-toggle="tooltip"
+                    data-bs-trigger="hover"
                     data-bs-placement="top"
                     title="Otvori scan"
                     aria-label="Otvori scan">
@@ -881,7 +886,7 @@
       }
     }
 
-    function initTooltips(scope) {
+    function disposeTooltips(scope) {
       const root = scope || document;
 
       if (window.bootstrap && window.bootstrap.Tooltip) {
@@ -889,17 +894,44 @@
           const instance = window.bootstrap.Tooltip.getInstance(element);
 
           if (instance) {
+            instance.hide();
             instance.dispose();
           }
 
-          new window.bootstrap.Tooltip(element);
+          element.removeAttribute('aria-describedby');
+        });
+
+        document.querySelectorAll('.tooltip').forEach(function (tooltipNode) {
+          tooltipNode.remove();
         });
 
         return;
       }
 
       if (window.jQuery && window.jQuery.fn && typeof window.jQuery.fn.tooltip === 'function') {
-        window.jQuery(root).find('[data-bs-toggle="tooltip"]').tooltip();
+        window.jQuery(root).find('[data-bs-toggle="tooltip"]').tooltip('hide').tooltip('dispose');
+      }
+    }
+
+    function initTooltips(scope) {
+      const root = scope || document;
+
+      disposeTooltips(root);
+
+      if (window.bootstrap && window.bootstrap.Tooltip) {
+        root.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (element) {
+          new window.bootstrap.Tooltip(element, {
+            trigger: element.getAttribute('data-bs-trigger') || 'hover',
+          });
+        });
+
+        return;
+      }
+
+      if (window.jQuery && window.jQuery.fn && typeof window.jQuery.fn.tooltip === 'function') {
+        window.jQuery(root).find('[data-bs-toggle="tooltip"]').tooltip({
+          trigger: 'hover',
+        });
       }
     }
 
@@ -1032,13 +1064,13 @@
         return '' +
           '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning" ' +
             'data-history-retry-button data-scan-id="' + scanId + '" ' +
-            'data-bs-toggle="tooltip" data-bs-placement="top" title="' + tooltip + '" aria-label="' + tooltip + '">' +
+            'data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="top" title="' + tooltip + '" aria-label="' + tooltip + '">' +
             '<i data-feather="' + icon + '"></i>' +
           '</button>';
       }
 
       return '' +
-        '<span class="app-table-action-tooltip" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="top" title="' + tooltip + '" aria-label="' + tooltip + '">' +
+        '<span class="app-table-action-tooltip" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="top" title="' + tooltip + '" aria-label="' + tooltip + '">' +
           '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning" disabled>' +
             '<i data-feather="' + icon + '"></i>' +
           '</button>' +
@@ -1055,13 +1087,13 @@
         return '' +
           '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success" ' +
             'data-history-transfer-button data-scan-id="' + scanId + '" ' +
-            'data-bs-toggle="tooltip" data-bs-placement="top" title="' + tooltip + '" aria-label="' + tooltip + '">' +
+            'data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="top" title="' + tooltip + '" aria-label="' + tooltip + '">' +
             '<i data-feather="' + icon + '"></i>' +
           '</button>';
       }
 
       return '' +
-        '<span class="app-table-action-tooltip" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="top" title="' + tooltip + '" aria-label="' + tooltip + '">' +
+        '<span class="app-table-action-tooltip" data-bs-toggle="tooltip" data-bs-trigger="hover" data-bs-placement="top" title="' + tooltip + '" aria-label="' + tooltip + '">' +
           '<button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success" disabled>' +
             '<i data-feather="' + icon + '"></i>' +
           '</button>' +
@@ -1072,6 +1104,8 @@
       if (!row || !rowPayload) {
         return;
       }
+
+      disposeTooltips(row);
 
       const statusCell = row.querySelector('[data-history-status-cell]');
       const retryHost = row.querySelector('[data-history-retry-host]');
@@ -1143,6 +1177,25 @@
       return retryUrlTemplate.replace('__SCAN_ID__', encodeURIComponent(resolvedId));
     }
 
+    function buildNoCacheUrl(url) {
+      const resolvedUrl = String(url || '').trim();
+
+      if (resolvedUrl === '') {
+        return '';
+      }
+
+      try {
+        const requestUrl = new URL(resolvedUrl, window.location.origin);
+        requestUrl.searchParams.set('_ts', String(Date.now()));
+
+        return requestUrl.toString();
+      } catch (error) {
+        const separator = resolvedUrl.includes('?') ? '&' : '?';
+
+        return `${resolvedUrl}${separator}_ts=${Date.now()}`;
+      }
+    }
+
     function scheduleNextPoll() {
       pollTimer = window.setTimeout(pollStatuses, 5000);
     }
@@ -1166,12 +1219,13 @@
           query.append('ids[]', id);
         });
 
-        const response = await fetch(pollUrl + '?' + query.toString(), {
+        const response = await fetch(buildNoCacheUrl(pollUrl + '?' + query.toString()), {
           headers: {
             'Accept': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
           },
           credentials: 'same-origin',
+          cache: 'no-store',
         });
 
         if (!response.ok) {
@@ -1258,11 +1312,12 @@
 
       const originalMarkup = button.innerHTML;
       let appliedRowPayload = false;
+      disposeTooltips(row);
       button.disabled = true;
       button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
 
       try {
-        const response = await fetch(retryUrl, {
+        const response = await fetch(buildNoCacheUrl(retryUrl), {
           method: 'POST',
           headers: {
             'Accept': 'application/json',
@@ -1270,6 +1325,7 @@
             'X-Requested-With': 'XMLHttpRequest',
           },
           credentials: 'same-origin',
+          cache: 'no-store',
         });
 
         const payload = await response.json().catch(function () {
@@ -1323,6 +1379,7 @@
         return;
       }
 
+      disposeTooltips(row);
       button.disabled = true;
       button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
 

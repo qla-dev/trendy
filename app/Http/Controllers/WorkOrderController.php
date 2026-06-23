@@ -7225,13 +7225,12 @@ class WorkOrderController extends Controller
             ];
         }
 
-        $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
         $ensureResult = Product::ensureCatalogProduct([
             'product_code' => $productCode,
             'product_name' => trim((string) ($orderContext['product_name'] ?? '')),
             'product_um' => $this->resolveScanCreateWorkOrderUnit($orderRow, $orderContext),
             'product_set' => trim((string) ($orderContext['catalog']['acSetOfItem'] ?? $this->valueTrimmed($orderRow, ['acSetOfItem'], ''))),
-        ], $userId);
+        ], $user);
 
         $catalogRow = is_array($ensureResult['row'] ?? null)
             ? (array) ($ensureResult['row'] ?? [])

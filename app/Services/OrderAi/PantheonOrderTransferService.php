@@ -642,14 +642,13 @@ class PantheonOrderTransferService
             return [];
         }
 
-        $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
         $ensureResult = Product::ensureCatalogProduct([
             'product_code' => $productCode,
             'product_name' => $productName !== '' ? $productName : $productCode,
             'product_um' => (string) config('ai-order-scan.default_unit', 'KO'),
             'product_set' => '120',
             'product_classification' => $primaryClassification,
-        ], $userId);
+        ], $user);
 
         $catalogRow = is_array($ensureResult['row'] ?? null)
             ? (array) ($ensureResult['row'] ?? [])

@@ -26,9 +26,13 @@ Extraction rules:
 - Keep buyer/customer and supplier/sender separate when both are visible.
 - Prefer a purchase-order / narudzba / order reference number when present.
 - Normalize quantities, prices, rebates, and VAT rates into numeric values.
-- Parse German-formatted numbers correctly, including values such as 1.234,56 -> 1234.56.
+- Parse German-formatted numbers correctly, including values such as 1.234,56 -> 1234.56 and 10.807,71 -> 10807.71.
+- Never truncate thousand-separated German totals. Example: 10.807,71 must become 10807.71, never 10.
 - Extract both the visible line unit price and the visible line total price into unit_price and line_total whenever they are shown.
 - If the document shows a row total / amount / value for a line item, preserve that exact numeric value in line_total.
+- Never invent an extra leading digit or a +1000 offset in line_total.
+- Example: 42,60 x 3,00 -> 127,80, never 1127,80. Example: 32,57 x 10,00 -> 325,70, never 1325,70.
+- Only return a thousand-level line_total when the document visibly shows that full amount, such as 1.127,80 or 10.807,71.
 - When a visible document subtotal / net total such as Gesamtbetrag or Nettowert is present below the item table, extract that visible value into summary.subtotal.
 - Keep item ordering as shown in the source document.
 - If a unit is missing, use "KO".
@@ -60,6 +64,10 @@ $grobPromptRules = <<<'PROMPT'
 - Continuation rows without a new position number or new product code belong to the previous numbered item, even across a page break.
 - Rows such as Ruesten/Termin abs., Nettopreis, Lieferdatum, Preis, Preiseinheit, pro, and Wert may continue the previous item and must not start a new item on their own.
 - If one page ends with Bruttopreis for an item and the next page continues the same item without a new position number, use the continued Nettopreis and continued Wert as the final unit_price and line_total for that same item.
+- For GROB rows, do not prepend a stray leading "1" to Wert amounts unless that leading digit is visibly part of the printed amount.
+- Example: if Nettopreis 42,60 and quantity 3,00 are shown, Wert must be 127,80 when the row displays 127,80; never return 1127,80 unless the document visibly shows 1.127,80.
+- If a GROB Nettopreis row ends with a stuck standalone "1" before the final price, ignore that "1" and use only the last amount on the row as line_total.
+- Example: "Nettopreis 18,90 EUR ST 1 302,39" means unit_price 18.90 and line_total 302.39, never 1302.39.
 - Fold continuation amounts into the previous item instead of leaving them only in the summary.
 - Read GROB line items only until the separator line "*********************************** ACHTUNG * *************************************". Ignore everything after that separator for item extraction.
 - If Preiseinheit is ST for a GROB item, return unit as KO.
@@ -115,6 +123,17 @@ return [
     'default_valid_days' => (int) env('AI_ORDER_SCAN_DEFAULT_VALID_DAYS', 5),
     'default_profile' => env('AI_ORDER_SCAN_DEFAULT_PROFILE', 'grob'),
     'storage_disk' => env('AI_ORDER_SCAN_STORAGE_DISK', 'local'),
+    'digital_pdf' => [
+        'provider_input_mode' => env('AI_ORDER_SCAN_DIGITAL_PDF_PROVIDER_INPUT_MODE', 'auto'),
+        'rules_first' => filter_var(env('AI_ORDER_SCAN_DIGITAL_PDF_RULES_FIRST', true), FILTER_VALIDATE_BOOL),
+        'fallback_to_ai' => filter_var(env('AI_ORDER_SCAN_DIGITAL_PDF_FALLBACK_TO_AI', true), FILTER_VALIDATE_BOOL),
+        'min_meaningful_page_chars' => (int) env('AI_ORDER_SCAN_DIGITAL_PDF_MIN_PAGE_CHARS', 30),
+        'min_meaningful_document_chars' => (int) env('AI_ORDER_SCAN_DIGITAL_PDF_MIN_DOCUMENT_CHARS', 80),
+        'digital_page_ratio' => (float) env('AI_ORDER_SCAN_DIGITAL_PDF_DIGITAL_RATIO', 0.8),
+        'hybrid_page_ratio' => (float) env('AI_ORDER_SCAN_DIGITAL_PDF_HYBRID_RATIO', 0.2),
+        'row_y_tolerance' => (float) env('AI_ORDER_SCAN_DIGITAL_PDF_ROW_Y_TOLERANCE', 2.5),
+        'use_text_for_hybrid' => filter_var(env('AI_ORDER_SCAN_DIGITAL_PDF_USE_TEXT_FOR_HYBRID', false), FILTER_VALIDATE_BOOL),
+    ],
     'inbox' => [
         'enabled' => filter_var(env('AI_ORDER_SCAN_INBOX_ENABLED', true), FILTER_VALIDATE_BOOL),
         'subject_keyword' => env('AI_ORDER_SCAN_INBOX_SUBJECT_KEYWORD', 'Bestellung'),
@@ -160,6 +179,7 @@ return [
     'profiles' => [
         'grob' => [
             'prompt_rules' => $grobPromptRules,
+            'default_customer_name' => env('AI_ORDER_SCAN_GROB_DEFAULT_CUSTOMER_NAME', 'Trendy d.o.o.'),
             'subject_aliases' => [
                 'GROB-WERKE',
                 'GROB-WERKE GmbH & Co. KG',

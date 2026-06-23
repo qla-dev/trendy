@@ -43,11 +43,16 @@ class OpenRouterOrderAiScanProvider implements OrderAiScanProvider
         $mime = trim((string) ($scan->source_mime_type ?: 'application/octet-stream'));
         $baseUrl = rtrim((string) config('ai-order-scan.openrouter.base_url', 'https://openrouter.ai/api/v1'), '/');
         $prompt = trim((string) ($scan->request_prompt ?: config('ai-order-scan.prompt')));
+        $preparationStartedAt = microtime(true);
         $preparedDocument = app(OrderAiDocumentPreparationService::class)->prepareDocument(
             (string) ($scan->document_profile ?? ''),
             (string) ($scan->source_file_name ?? 'document'),
             $mime,
             $bytes
+        );
+        $extractionDurationMs = max(
+            (int) round((microtime(true) - $preparationStartedAt) * 1000),
+            (int) ($preparedDocument['extraction_duration_ms'] ?? 0)
         );
 
         $client = Http::withToken($apiKey)
@@ -66,6 +71,7 @@ class OpenRouterOrderAiScanProvider implements OrderAiScanProvider
             $client = $client->withHeaders($headers);
         }
 
+        $aiStartedAt = microtime(true);
         $response = $client->post($baseUrl . '/chat/completions', [
             'model' => $model,
             'temperature' => 0,
@@ -97,6 +103,7 @@ class OpenRouterOrderAiScanProvider implements OrderAiScanProvider
                 ],
             ],
         ]);
+        $aiDurationMs = (int) round((microtime(true) - $aiStartedAt) * 1000);
 
         if (!$response->successful()) {
             $errorPayload = $response->json();
@@ -160,6 +167,9 @@ class OpenRouterOrderAiScanProvider implements OrderAiScanProvider
             'provider_task_id' => $providerTaskId,
             'raw_response' => $data,
             'normalized_payload' => $normalizedPayload,
+            'prepared_document' => $preparedDocument,
+            'extraction_duration_ms' => $extractionDurationMs,
+            'ai_duration_ms' => $aiDurationMs,
         ];
     }
 

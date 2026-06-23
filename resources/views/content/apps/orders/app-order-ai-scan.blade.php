@@ -2619,6 +2619,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
   data-transfer-url="{{ route('app-orders-store') }}"
   data-positions-url="{{ route('app-orders-positions') }}"
   data-status-template="{{ route('app-order-ai-scan-status', ['scan' => '__SCAN__']) }}"
+  data-retry-template="{{ route('app-order-ai-scan-retry', ['scan' => '__SCAN__']) }}"
   data-initial-scan-id="{{ (int) ($initialScanId ?? 0) }}"
   data-opened-from-history="{{ !empty($openedFromHistory) ? '1' : '0' }}"
   data-csrf="{{ csrf_token() }}"
@@ -2835,6 +2836,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                   <button type="button" class="btn order-ai-secondary-action order-ai-secondary-action--accent" id="order-ai-new-order-button">Nova narudžba</button>
                   <a href="{{ route('app-ai-token-history') }}" class="btn order-ai-secondary-action">Historija AI skeniranja</a>
                   <a href="{{ route('app-orders') }}" class="btn order-ai-secondary-action">Moje narudžbe</a>
+                  <button type="button" class="btn order-ai-secondary-action" id="order-ai-retry-scan-button" disabled>Ponovi scan</button>
                   <button type="button" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-order-button">Vidi narudžbu</button>
                   <button type="button" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-positions-button">Pozicije</button>
                 </div>
@@ -3005,6 +3007,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       const transferUrl = app.dataset.transferUrl;
       const positionsUrl = app.dataset.positionsUrl || '';
       const statusTemplate = app.dataset.statusTemplate;
+      const retryTemplate = app.dataset.retryTemplate || '';
       const initialScanId = Number(app.dataset.initialScanId || 0) || null;
       const initialScanState = @json($initialScanState ?? null);
       const openedFromHistory = app.dataset.openedFromHistory === '1';
@@ -3046,6 +3049,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       const transferHint = document.getElementById('order-ai-transfer-hint');
       const viewPdfButton = document.getElementById('order-ai-view-pdf-button');
       const ordersPageUrl = @json(route('app-orders'));
+      const retryScanButton = document.getElementById('order-ai-retry-scan-button');
       const viewPositionsButton = document.getElementById('order-ai-view-positions-button');
       const viewOrderButton = document.getElementById('order-ai-view-order-button');
       const newOrderButton = document.getElementById('order-ai-new-order-button');
@@ -3101,9 +3105,12 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
 
       let pollTimer = null;
       let currentScanId = null;
+      let scanRequestVersion = 0;
+      let activeStatusRequestController = null;
       let uploadProgress = 0;
       let latestStatusPayload = null;
       let isTransferBusy = false;
+      let isRetryBusy = false;
       let extractFillTimer = null;
       let extractVisualProgress = 0;
       let elapsedTimer = null;
@@ -3646,6 +3653,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           enabled: false,
           label: 'Transfer u bazu',
           hint: 'Dokument se čita i priprema se pregled narudžbe.'
+        });
+        setRetryScanButtonState({
+          available: Boolean(statusData.retry_available || statusData.id || currentScanId),
+          busy: false
         });
         setPrimaryActionButtonState({
           enabled: false,
@@ -4302,7 +4313,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             stateClass: totalComparison.hasComparableValues ? (totalComparison.matches ? 'is-match' : 'is-mismatch') : '',
             meta: amountMeta,
           },
-          { label: 'AI krediti', value: formatWholeNumber(statusData.billed_tokens || 0) },
+          { label: 'AI tokeni', value: formatWholeNumber(statusData.billed_tokens || 0) },
           { label: 'Pantheon ključ', value: pantheon.key || '-' }
         ];
 
@@ -4893,29 +4904,93 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         });
       }
 
+      function buildNoCacheUrl(url) {
+        const resolvedUrl = String(url || '').trim();
+
+        if (resolvedUrl === '') {
+          return '';
+        }
+
+        try {
+          const requestUrl = new URL(resolvedUrl, window.location.origin);
+          requestUrl.searchParams.set('_ts', String(Date.now()));
+
+          return requestUrl.toString();
+        } catch (error) {
+          const separator = resolvedUrl.includes('?') ? '&' : '?';
+
+          return `${resolvedUrl}${separator}_ts=${Date.now()}`;
+        }
+      }
+
+      function abortActiveStatusRequest() {
+        if (!activeStatusRequestController) {
+          return;
+        }
+
+        activeStatusRequestController.abort();
+        activeStatusRequestController = null;
+      }
+
+      function invalidateActiveScanRequests() {
+        scanRequestVersion += 1;
+        abortActiveStatusRequest();
+
+        return scanRequestVersion;
+      }
+
       function stopPolling() {
         if (pollTimer) {
           clearTimeout(pollTimer);
           pollTimer = null;
         }
+
+        abortActiveStatusRequest();
       }
 
       async function pollStatus() {
-        if (!currentScanId) {
+        const requestScanId = Math.max(0, Math.round(toFiniteNumber(currentScanId, 0)));
+        const requestVersion = scanRequestVersion;
+
+        if (!requestScanId) {
           return;
         }
 
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+
+        activeStatusRequestController = controller;
+
         try {
-          const response = await fetch(statusTemplate.replace('__SCAN__', currentScanId), {
+          const response = await fetch(buildNoCacheUrl(statusTemplate.replace('__SCAN__', requestScanId)), {
             headers: {
               'Accept': 'application/json',
               'X-Requested-With': 'XMLHttpRequest',
             },
             credentials: 'same-origin',
+            cache: 'no-store',
+            signal: controller ? controller.signal : undefined,
           });
 
-          const payload = await response.json();
-          const data = payload.data || {};
+          const payload = await response.json().catch(function () {
+            return {};
+          });
+
+          if (activeStatusRequestController === controller) {
+            activeStatusRequestController = null;
+          }
+
+          if (requestVersion !== scanRequestVersion || requestScanId !== Math.max(0, Math.round(toFiniteNumber(currentScanId, 0)))) {
+            return;
+          }
+
+          if (!response.ok) {
+            throw new Error(payload && payload.message ? payload.message : 'Status AI obrade trenutno nije dostupan.');
+          }
+
+          const data = payload && payload.data && typeof payload.data === 'object'
+            ? payload.data
+            : {};
+
           renderStatus(data);
           setInitializingState(false);
 
@@ -4926,6 +5001,18 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
 
           pollTimer = window.setTimeout(pollStatus, 1300);
         } catch (error) {
+          if (activeStatusRequestController === controller) {
+            activeStatusRequestController = null;
+          }
+
+          if (error && error.name === 'AbortError') {
+            return;
+          }
+
+          if (requestVersion !== scanRequestVersion || requestScanId !== Math.max(0, Math.round(toFiniteNumber(currentScanId, 0)))) {
+            return;
+          }
+
           setProgressWarningMessage('Status AI obrade trenutno nije dostupan.');
           updateActivityState(null);
           setInitializingState(false);
@@ -4943,6 +5030,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         if (!file) {
           return;
         }
+
+        const requestVersion = invalidateActiveScanRequests();
 
         stopPolling();
         closeSavedOrderModal();
@@ -4997,7 +5086,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         xhr.responseType = 'json';
 
         xhr.upload.addEventListener('progress', function (event) {
-          if (!event.lengthComputable) {
+          if (requestVersion !== scanRequestVersion || !event.lengthComputable) {
             return;
           }
 
@@ -5008,6 +5097,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         });
 
         xhr.addEventListener('load', function () {
+          if (requestVersion !== scanRequestVersion) {
+            return;
+          }
+
           if (xhr.status < 200 || xhr.status >= 300) {
             const response = xhr.response || {};
             setProgressWarningMessage(response.message || 'Upload nije uspio.');
@@ -5027,6 +5120,12 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         });
 
         xhr.addEventListener('error', function () {
+          if (requestVersion !== scanRequestVersion) {
+            return;
+          }
+          if (requestVersion !== scanRequestVersion) {
+            return;
+          }
           setProgressWarningMessage('Greška pri uploadu dokumenta.');
           updateActivityState(null);
         });
@@ -5280,7 +5379,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             stateClass: totalComparison.hasComparableValues ? (totalComparison.matches ? 'is-match' : 'is-mismatch') : '',
             meta: amountMeta,
           },
-          { label: 'AI krediti', value: formatWholeNumber(statusData.billed_tokens || 0) },
+          { label: 'AI tokeni', value: formatWholeNumber(statusData.billed_tokens || 0) },
           { label: 'Pantheon ključ', value: pantheon.key || '-' },
         ];
 
@@ -5525,6 +5624,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           return;
         }
 
+        const requestVersion = invalidateActiveScanRequests();
+
         stopPolling();
         stopElapsedTimer();
         closeSavedOrderModal();
@@ -5595,7 +5696,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         xhr.responseType = 'json';
 
         xhr.upload.addEventListener('progress', function (event) {
-          if (!event.lengthComputable) {
+          if (requestVersion !== scanRequestVersion || !event.lengthComputable) {
             return;
           }
 
@@ -5609,6 +5710,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         });
 
         xhr.addEventListener('load', function () {
+          if (requestVersion !== scanRequestVersion) {
+            return;
+          }
+
           if (xhr.status < 200 || xhr.status >= 300) {
             const response = xhr.response || {};
             setProgressWarningMessage(response.message || 'Upload nije uspio.');
@@ -5703,6 +5808,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         resultStatus.textContent = resolveStatusLabel(status);
         setVisible(savedPreview, false);
         syncSourcePdfButton(latestStatusPayload, showResultCard);
+        setRetryScanButtonState({
+          available: Boolean(latestStatusPayload.retry_available),
+          busy: isRetryBusy
+        });
         setVisible(viewOrderButton, false);
         setVisible(viewPositionsButton, false);
 
@@ -6309,6 +6418,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           label: 'Transfer u bazu',
           hint: 'Dokument se čita i priprema se pregled narudžbe.'
         });
+        setRetryScanButtonState({
+          available: Boolean(statusData.retry_available || statusData.id || currentScanId),
+          busy: false
+        });
         setPrimaryActionButtonState({
           enabled: false,
           label: 'Poduzmi akciju'
@@ -6334,7 +6447,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             stateClass: totalComparison.hasComparableValues ? (totalComparison.matches ? 'is-match' : 'is-mismatch') : '',
             meta: amountMeta,
           },
-          { label: 'AI krediti', value: formatWholeNumber(statusData.billed_tokens || 0) },
+          { label: 'AI tokeni', value: formatWholeNumber(statusData.billed_tokens || 0) },
           { label: 'Pantheon ključ', value: pantheon.key || '-' },
         ];
         const renderSignature = JSON.stringify(factsMarkup);
@@ -6528,7 +6641,135 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         setVisible(viewPdfButton, Boolean(visible) && href !== '');
       }
 
+      function resolveRetryScanUrl(scanId) {
+        const resolvedScanId = Math.max(0, Math.round(toFiniteNumber(scanId, 0)));
+
+        if (!retryTemplate || resolvedScanId <= 0) {
+          return '';
+        }
+
+        return retryTemplate.replace('__SCAN__', String(resolvedScanId));
+      }
+
+      function setRetryScanButtonState(config) {
+        if (!retryScanButton) {
+          return;
+        }
+
+        const available = Boolean(config && config.available);
+        const busy = Boolean(config && config.busy);
+        const label = config && config.label ? String(config.label) : 'Ponovi scan';
+
+        retryScanButton.disabled = !available || busy;
+        retryScanButton.classList.toggle('is-busy', busy);
+        retryScanButton.setAttribute('aria-disabled', !available || busy ? 'true' : 'false');
+
+        if (busy) {
+          retryScanButton.innerHTML = '<span class="spinner-border spinner-border-sm me-50" role="status" aria-hidden="true"></span> ' + escapeHtml(label);
+        } else {
+          retryScanButton.textContent = label;
+        }
+      }
+
+      async function confirmRetryScan() {
+        if (window.Swal && typeof window.Swal.fire === 'function') {
+          const result = await window.Swal.fire({
+            icon: 'warning',
+            title: 'Ponoviti AI scan?',
+            text: 'Isti dokument će biti ponovo obrađen za isti zapis skena.',
+            showCancelButton: true,
+            confirmButtonText: 'Ponovi scan',
+            cancelButtonText: 'Odustani',
+            reverseButtons: true,
+          });
+
+          return Boolean(result && result.isConfirmed);
+        }
+
+        return window.confirm('Ponoviti AI scan za ovaj dokument?');
+      }
+
+      function prepareActiveScanRun(fileName) {
+        stopPolling();
+        stopElapsedTimer();
+        closeSavedOrderModal();
+        closePositionsModal();
+        closeLineTotalModal();
+        closeInlineLineEditor(false);
+        closeTransferErrorModal();
+        resetMessages();
+        currentScanId = null;
+        latestStatusPayload = null;
+        uploadProgress = 0;
+        isTransferBusy = false;
+        isRetryBusy = false;
+        openedFromExistingScan = false;
+        hasAutoScrolledToExtraction = false;
+        hasAutoScrolledToResult = false;
+        lastRenderedStatus = '';
+        resetRenderStateCaches();
+        fileNameEl.textContent = String(fileName || '').trim();
+        fileInput.value = '';
+        setVisible(progressCard, true);
+        setVisible(resultCard, false);
+        setVisible(actions, false);
+        setVisible(savedPreview, false);
+        setVisible(viewOrderButton, false);
+        setVisible(viewPositionsButton, false);
+        setVisible(extractLiveShell, false);
+        syncDropzoneVisibility('uploading');
+        facts.innerHTML = '';
+        linesBody.innerHTML = '';
+        savedPreview.innerHTML = '';
+        orderModalBody.innerHTML = '';
+
+        if (positionsModalContent) {
+          positionsModalContent.innerHTML = '';
+        }
+
+        if (extractLiveGrid) {
+          extractLiveGrid.innerHTML = '';
+        }
+
+        if (extractPhaseList) {
+          extractPhaseList.innerHTML = '';
+        }
+
+        if (extractLiveMeta) {
+          extractLiveMeta.textContent = 'ÄŚekam dokument.';
+        }
+
+        if (extractLive) {
+          extractLive.dataset.phaseIndex = '0';
+        }
+
+        setVisible(linesShell, false);
+        setPositionsModalState({
+          loading: false,
+          showContent: false,
+          html: '',
+          error: '',
+          subtitle: 'Pregled pozicija upisanih u bazu'
+        });
+        renderElapsedRuntime(null);
+        setStageState('upload', false);
+        setStageFill('upload', 0);
+        setStageFill('transfer', 0);
+        stopExtractFillAnimation(0);
+        updateActivityState(null);
+        setTransferButtonState({
+          enabled: false,
+          label: 'Transfer u bazu',
+          hint: 'Dokument se priprema za AI ekstrakciju.'
+        });
+        setPrimaryActionButtonState({
+          enabled: false,
+          label: 'Poduzmi akciju'
+        });
+      }
+
       function resetInterface() {
+        invalidateActiveScanRequests();
         stopPolling();
         stopExtractFillAnimation(0);
         stopElapsedTimer();
@@ -6536,6 +6777,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         uploadProgress = 0;
         latestStatusPayload = null;
         isTransferBusy = false;
+        isRetryBusy = false;
         activeLineTotalIndex = null;
         closeInlineLineEditor(false);
         hasAutoScrolledToExtraction = false;
@@ -6598,6 +6840,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           label: 'Transfer u bazu',
           hint: 'Akcije su na dnu stranice. Nakon završetka obrade omogućava se upis u bazu.'
         });
+        setRetryScanButtonState({
+          available: false,
+          busy: false
+        });
         setPrimaryActionButtonState({
           enabled: false,
           label: 'Poduzmi akciju'
@@ -6610,6 +6856,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           return;
         }
 
+        const requestVersion = invalidateActiveScanRequests();
+
         stopPolling();
         stopElapsedTimer();
         closeSavedOrderModal();
@@ -6620,12 +6868,14 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         latestStatusPayload = null;
         uploadProgress = 0;
         isTransferBusy = false;
+        isRetryBusy = false;
         openedFromExistingScan = false;
         hasAutoScrolledToExtraction = false;
         hasAutoScrolledToResult = false;
         lastRenderedStatus = '';
         resetRenderStateCaches();
         fileNameEl.textContent = file.name;
+        fileInput.value = '';
         setVisible(progressCard, true);
         setVisible(resultCard, false);
         setVisible(actions, false);
@@ -6729,6 +6979,179 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         xhr.send(formData);
       }
 
+      function handleUpload(file) {
+        if (!file) {
+          return;
+        }
+
+        const requestVersion = invalidateActiveScanRequests();
+
+        prepareActiveScanRun(file.name);
+        setProgress(0, 'Priprema lokalnog prihvata fajla...');
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', uploadUrl, true);
+        xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.responseType = 'json';
+
+        xhr.upload.addEventListener('progress', function (event) {
+          if (requestVersion !== scanRequestVersion || !event.lengthComputable) {
+            return;
+          }
+
+          uploadProgress = Math.round((event.loaded / event.total) * 100);
+          setProgress(
+            mapUploadProgressToOverall(uploadProgress),
+            uploadProgress >= 100 ? 'Upload je zavrĹˇen. PokreÄ‡e se AI obrada...' : 'Dokument se uÄŤitava na server...'
+          );
+          setStageState('upload', uploadProgress >= 100);
+          setStageFill('upload', uploadProgress);
+        });
+
+        xhr.addEventListener('load', function () {
+          if (requestVersion !== scanRequestVersion) {
+            return;
+          }
+
+          if (xhr.status < 200 || xhr.status >= 300) {
+            const response = xhr.response || {};
+            setProgressWarningMessage(response.message || 'Upload nije uspio.');
+            updateActivityState(null);
+            return;
+          }
+
+          const response = xhr.response || {};
+          currentScanId = response.scan_id;
+          locallyStartedScanIds.add(Math.max(0, Math.round(toFiniteNumber(response.scan_id, 0))));
+          uploadProgress = 100;
+          showPendingExtractionState(response.data || {
+            source_file_name: file.name,
+            page_count: 1,
+            current_progress: 18,
+          });
+          startPolling(response.scan_id);
+        });
+
+        xhr.addEventListener('error', function () {
+          if (requestVersion !== scanRequestVersion) {
+            return;
+          }
+
+          setProgressWarningMessage('GreĹˇka pri uploadu dokumenta.');
+          updateActivityState(null);
+        });
+
+        xhr.send(formData);
+      }
+
+      async function retryCurrentScan() {
+        if (!retryScanButton || isRetryBusy) {
+          return;
+        }
+
+        const resolvedScanId = Math.max(
+          0,
+          Math.round(toFiniteNumber(currentScanId || (latestStatusPayload && latestStatusPayload.id ? latestStatusPayload.id : 0), 0))
+        );
+
+        if (resolvedScanId <= 0 || !latestStatusPayload || !latestStatusPayload.retry_available) {
+          return;
+        }
+
+        const retryUrl = resolveRetryScanUrl(resolvedScanId);
+
+        if (!retryUrl || !(await confirmRetryScan())) {
+          return;
+        }
+
+        const previousFileName = String(
+          latestStatusPayload && latestStatusPayload.source_file_name
+            ? latestStatusPayload.source_file_name
+            : fileNameEl.textContent
+        ).trim();
+        const requestVersion = invalidateActiveScanRequests();
+
+        stopPolling();
+        resetMessages();
+        closeTransferErrorModal();
+        lastFailedToastSignature = '';
+        isRetryBusy = true;
+        setRetryScanButtonState({
+          available: true,
+          busy: true
+        });
+
+        try {
+          const response = await fetch(buildNoCacheUrl(retryUrl), {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'X-CSRF-TOKEN': csrfToken,
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            cache: 'no-store',
+            body: '{}',
+          });
+          const payload = await response.json().catch(function () {
+            return {};
+          });
+          const statusData = payload && payload.data && typeof payload.data === 'object'
+            ? payload.data
+            : null;
+
+          if (requestVersion !== scanRequestVersion) {
+            return;
+          }
+
+          if (!response.ok) {
+            throw new Error(payload && payload.message ? payload.message : 'Ponovno AI skeniranje nije uspjelo.');
+          }
+
+          isRetryBusy = false;
+          currentScanId = Number(payload && payload.scan_id ? payload.scan_id : resolvedScanId) || resolvedScanId;
+          locallyStartedScanIds.add(Math.max(0, Math.round(toFiniteNumber(currentScanId, 0))));
+
+          if (statusData) {
+            prepareActiveScanRun(statusData.source_file_name || previousFileName);
+            currentScanId = Number(payload && payload.scan_id ? payload.scan_id : resolvedScanId) || resolvedScanId;
+
+            if (['completed', 'transferred', 'failed'].includes(String(statusData.status || '').trim())) {
+              renderStatus(statusData);
+              stopPolling();
+            } else {
+              showPendingExtractionState(statusData);
+              startPolling(currentScanId);
+            }
+          } else {
+            setRetryScanButtonState({
+              available: false,
+              busy: false
+            });
+          }
+        } catch (error) {
+          if (requestVersion !== scanRequestVersion) {
+            return;
+          }
+
+          isRetryBusy = false;
+          setRetryScanButtonState({
+            available: Boolean(latestStatusPayload && latestStatusPayload.retry_available),
+            busy: false
+          });
+
+          if (errorBox) {
+            errorBox.textContent = error && error.message ? error.message : 'Ponovno AI skeniranje nije uspjelo.';
+            setVisible(errorBox, true);
+          }
+        }
+      }
+
       function renderStatus(data) {
         const previousStatus = lastRenderedStatus;
         latestStatusPayload = data || {};
@@ -6818,6 +7241,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         resultStatus.textContent = resolveStatusLabel(status);
         setVisible(savedPreview, false);
         syncSourcePdfButton(latestStatusPayload, showResultCard);
+        setRetryScanButtonState({
+          available: Boolean(latestStatusPayload.retry_available),
+          busy: isRetryBusy
+        });
         setVisible(viewOrderButton, false);
         setVisible(viewPositionsButton, false);
 
@@ -7122,6 +7549,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       }
       viewPositionsButton.addEventListener('click', openPositionsModal);
       viewOrderButton.addEventListener('click', openSavedOrderModal);
+      retryScanButton.addEventListener('click', retryCurrentScan);
       newOrderButton.addEventListener('click', startNewOrder);
       orderModalNewOrderButton.addEventListener('click', startNewOrder);
       positionsModalRefreshButton.addEventListener('click', function () {
