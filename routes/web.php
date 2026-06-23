@@ -100,6 +100,7 @@ Route::middleware('auth:web')->group(function () {
         Route::get('orders/ai-scan/{scan}/source', [OrderAiScanController::class, 'source'])->name('app-order-ai-scan-source');
         Route::get('orders/ai-scan/{scan}/source/download', [OrderAiScanController::class, 'downloadSource'])->name('app-order-ai-scan-source-download');
         Route::get('orders/ai-scan/{scan}/status', [OrderAiScanController::class, 'status'])->name('app-order-ai-scan-status');
+        Route::post('orders/ai-scan/{scan}/retry', [OrderAiScanController::class, 'retry'])->name('app-order-ai-scan-retry');
         Route::get('ai-tokens/history', [AiTokenHistoryController::class, 'index'])->name('app-ai-token-history');
         Route::get('ai-tokens/history/statuses', [AiTokenHistoryController::class, 'statuses'])->name('app-ai-token-history-statuses');
         Route::post('ai-tokens/history/{scan}/retry', [AiTokenHistoryController::class, 'retry'])->name('app-ai-token-history-retry');

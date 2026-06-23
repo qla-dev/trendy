@@ -43,13 +43,19 @@ class OpenAiOrderScanProvider implements OrderAiScanProvider
         $mime = trim((string) ($scan->source_mime_type ?: 'application/octet-stream'));
         $baseUrl = rtrim((string) config('ai-order-scan.openai.base_url', 'https://api.openai.com/v1'), '/');
         $prompt = trim((string) ($scan->request_prompt ?: config('ai-order-scan.prompt')));
+        $preparationStartedAt = microtime(true);
         $preparedDocument = app(OrderAiDocumentPreparationService::class)->prepareDocument(
             (string) ($scan->document_profile ?? ''),
             (string) ($scan->source_file_name ?? 'document'),
             $mime,
             $bytes
         );
+        $extractionDurationMs = max(
+            (int) round((microtime(true) - $preparationStartedAt) * 1000),
+            (int) ($preparedDocument['extraction_duration_ms'] ?? 0)
+        );
         $documentInput = $this->buildDocumentInput($scan, $mime, $bytes, $preparedDocument);
+        $aiStartedAt = microtime(true);
 
         $response = Http::withToken($apiKey)
             ->timeout((int) config('ai-order-scan.timeout', 120))
@@ -86,6 +92,7 @@ class OpenAiOrderScanProvider implements OrderAiScanProvider
                     ],
                 ],
             ]);
+        $aiDurationMs = (int) round((microtime(true) - $aiStartedAt) * 1000);
 
         if (!$response->successful()) {
             $errorPayload = $response->json();
@@ -149,6 +156,9 @@ class OpenAiOrderScanProvider implements OrderAiScanProvider
             'provider_task_id' => $providerTaskId,
             'raw_response' => $data,
             'normalized_payload' => $normalizedPayload,
+            'prepared_document' => $preparedDocument,
+            'extraction_duration_ms' => $extractionDurationMs,
+            'ai_duration_ms' => $aiDurationMs,
         ];
     }
 

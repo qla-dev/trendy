@@ -118,7 +118,7 @@ class AiTokenHistoryController extends Controller
         $ids = $this->resolveRequestedIds($request);
 
         if ($ids === []) {
-            return response()->json([
+            return $this->jsonNoStore([
                 'rows' => [],
                 'last_loaded_at' => now()->toIso8601String(),
                 'last_loaded_at_display' => now()->format('d.m.Y H:i:s'),
@@ -147,22 +147,22 @@ class AiTokenHistoryController extends Controller
             'last_loaded_at_display' => now()->format('d.m.Y H:i:s'),
         ];
 
-        return response()->json($payload);
+        return $this->jsonNoStore($payload);
     }
 
     public function retry(Request $request, OrderAiScan $scan, OrderAiScanService $scanService): JsonResponse
     {
         $this->authorizeModuleAccess($request);
 
-        if (!$this->isRetryEligible($scan) || !$scanService->canRetryFailedScan($scan)) {
-            return response()->json([
+        if (!$this->isRetryEligible($scan) || !$scanService->canRescan($scan)) {
+            return $this->jsonNoStore([
                 'message' => 'Ponovno AI skeniranje je dostupno samo za neuspješne AI scanove.',
                 'last_loaded_at_display' => now()->format('d.m.Y H:i:s'),
                 'data' => $this->mapHistoryRow($scan->fresh()),
             ], 422);
         }
 
-        $retriedScan = $scanService->retryFailedScan(
+        $retriedScan = $scanService->rescan(
             $scan,
             $request->user(),
             (string) ($scan->source_origin ?? 'manual') === 'imap'
@@ -170,7 +170,7 @@ class AiTokenHistoryController extends Controller
         $retriedScan->refresh();
 
         if ((string) ($retriedScan->status ?? '') === 'failed') {
-            return response()->json([
+            return $this->jsonNoStore([
                 'message' => trim((string) ($retriedScan->error_message ?? '')) !== ''
                     ? (string) $retriedScan->error_message
                     : 'AI skeniranje nije uspjelo ni nakon ponovnog pokretanja.',
@@ -179,7 +179,7 @@ class AiTokenHistoryController extends Controller
             ], 422);
         }
 
-        return response()->json([
+        return $this->jsonNoStore([
             'message' => (string) ($retriedScan->source_origin ?? 'manual') === 'imap'
                 ? 'AI skeniranje je ponovo pokrenuto. Status će biti osvježen automatski.'
                 : 'AI skeniranje je uspješno ponovo pokrenuto.',
@@ -699,11 +699,7 @@ class AiTokenHistoryController extends Controller
 
     private function isRetryEligible(OrderAiScan $scan): bool
     {
-        if ($this->resolveStatusOutcome($scan) !== 'failed') {
-            return false;
-        }
-
-        return !$this->isTransferFailure($scan);
+        return app(OrderAiScanService::class)->canRescan($scan);
     }
 
     private function isTransferFailure(OrderAiScan $scan): bool
@@ -875,5 +871,14 @@ class AiTokenHistoryController extends Controller
             ->take(100)
             ->values()
             ->all();
+    }
+
+    private function jsonNoStore(array $payload, int $status = 200): JsonResponse
+    {
+        return response()->json($payload, $status, [
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
     }
 }

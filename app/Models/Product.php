@@ -16,6 +16,7 @@ class Product extends Model
     private static ?array $catalogItemNonInsertableColumnsCache = null;
     private static ?array $productStructureColumnsCache = null;
     private static ?array $productStructureNonInsertableColumnsCache = null;
+    private static ?array $pantheonUsersCache = null;
 
     protected $fillable = [
         'work_order_id',
@@ -94,7 +95,7 @@ class Product extends Model
         return $row === null ? null : self::mapScannerRow((array) $row, 'selected');
     }
 
-    public static function ensureCatalogProduct(array $attributes, int $userId = 0): array
+    public static function ensureCatalogProduct(array $attributes, mixed $auditUser = null): array
     {
         $productCode = trim((string) ($attributes['product_code'] ?? $attributes['acIdent'] ?? ''));
 
@@ -106,6 +107,7 @@ class Product extends Model
         $productUnit = strtoupper(substr(trim((string) ($attributes['product_um'] ?? $attributes['acUM'] ?? '')), 0, 3));
         $productSet = strtoupper(trim((string) ($attributes['product_set'] ?? $attributes['acSetOfItem'] ?? '')));
         $productClassif = trim((string) ($attributes['product_classification'] ?? $attributes['product_classif'] ?? $attributes['acClassif'] ?? ''));
+        $auditUserId = self::resolveCatalogAuditUserId($auditUser);
         $now = now();
         $itemsTable = self::sourceSchema() . '.' . self::itemsTable();
         $existingRow = DB::table($itemsTable)
@@ -129,27 +131,17 @@ class Product extends Model
         $nextQId = array_key_exists('anQId', $catalogColumns)
             ? ((int) (DB::table($itemsTable)->max('anQId') ?? 0)) + 1
             : null;
-        $preferredValues = [
-            'acIdent' => $productCode,
-            'acCode' => $productCode,
-            'acName' => $productName !== '' ? $productName : $productCode,
-            'acUM' => $productUnit,
-            'acSetOfItem' => $productSet,
-            'acClassif' => $productClassif,
-            'anQId' => $nextQId,
-            'anPLUCode' => 0,
-            'anPLUCode2' => 0,
-            'anBuyPrice' => 0,
-            'anPrice' => 0,
-            'anVAT' => 0,
-            'anDeliveryDeadline' => 0,
-            'anUserIns' => $userId > 0 ? $userId : 0,
-            'anUserChg' => $userId > 0 ? $userId : 0,
-            'adTimeIns' => $now,
-            'adTimeChg' => $now,
-            'created_at' => $now,
-            'updated_at' => $now,
-        ];
+        $preferredValues = self::buildCatalogPreferredValues(
+            $attributes,
+            $productCode,
+            $productName,
+            $productUnit,
+            $productSet,
+            $productClassif,
+            $nextQId,
+            $now,
+            $auditUserId
+        );
         $insertPayload = [];
 
         foreach ($catalogColumns as $columnName => $columnMeta) {
@@ -162,7 +154,7 @@ class Product extends Model
             } elseif (($columnMeta['nullable'] ?? true) || ($columnMeta['default'] ?? null) !== null) {
                 continue;
             } else {
-                $insertValue = self::defaultValueForColumnMeta($columnMeta, $now, $userId);
+                $insertValue = self::defaultValueForColumnMeta($columnMeta, $now, $auditUserId);
             }
 
             if (is_string($insertValue)) {
@@ -458,6 +450,63 @@ class Product extends Model
         return (string) config('workorders.catalog_items_table', 'tHE_SetItem');
     }
 
+    private static function buildCatalogPreferredValues(
+        array $attributes,
+        string $productCode,
+        string $productName,
+        string $productUnit,
+        string $productSet,
+        string $productClassif,
+        ?int $nextQId,
+        mixed $timestamp,
+        int $auditUserId
+    ): array {
+        $defaults = self::catalogProductDefaults();
+        $vatCode = self::resolveCatalogStringValue($attributes, ['vat_code', 'acVATCode', 'acVATCodeLow', 'acVATCodeReceive'], (string) ($defaults['vat_code'] ?? 'P1'));
+        $currency = self::resolveCatalogStringValue($attributes, ['currency', 'acCurrency', 'currency_code'], (string) ($defaults['currency'] ?? 'KM'));
+        $purchaseCurrency = self::resolveCatalogStringValue($attributes, ['purchase_currency', 'acPurchCurr'], (string) ($defaults['purchase_currency'] ?? 'KM'));
+        $productionDocType = self::resolveCatalogStringValue($attributes, ['production_doc_type', 'acDocTypeProd'], (string) ($defaults['production_doc_type'] ?? '6000'));
+        $unitDimension2 = self::resolveCatalogStringValue($attributes, ['unit_dimension_2', 'acUMDim2'], (string) ($defaults['unit_dimension_2'] ?? 'KO'));
+        $vatRate = self::resolveCatalogNumericValue($attributes, ['vat_rate', 'anVAT', 'anVATReceive'], (float) ($defaults['vat_rate'] ?? 17));
+        $deliveryDeadline = self::resolveCatalogNumericValue($attributes, ['delivery_deadline', 'anDeliveryDeadline'], (float) ($defaults['delivery_deadline'] ?? 7));
+        $allowedInvShort = self::resolveCatalogNumericValue($attributes, ['allowed_inv_short', 'anAllowedInvShort'], (float) ($defaults['allowed_inv_short'] ?? -1));
+        $prstOptimalQty = self::resolveCatalogNumericValue($attributes, ['prst_optimal_qty', 'anPrStOptimalQty'], (float) ($defaults['prst_optimal_qty'] ?? 0));
+        $prstDailyQty = self::resolveCatalogNumericValue($attributes, ['prst_daily_qty', 'anPrStDailyQty'], (float) ($defaults['prst_daily_qty'] ?? 0));
+
+        return [
+            'acIdent' => $productCode,
+            'acCode' => $productCode,
+            'acName' => $productName !== '' ? $productName : $productCode,
+            'acUM' => $productUnit,
+            'acSetOfItem' => $productSet,
+            'acClassif' => $productClassif,
+            'acCurrency' => $currency,
+            'acPurchCurr' => $purchaseCurrency,
+            'acVATCode' => $vatCode,
+            'acVATCodeLow' => $vatCode,
+            'acVATCodeReceive' => $vatCode,
+            'acDocTypeProd' => $productionDocType,
+            'acUMDim2' => $unitDimension2,
+            'anQId' => $nextQId,
+            'anPLUCode' => 0,
+            'anPLUCode2' => 0,
+            'anBuyPrice' => 0,
+            'anPrice' => 0,
+            'anVAT' => $vatRate,
+            'anVATReceive' => $vatRate,
+            'anDeliveryDeadline' => $deliveryDeadline,
+            'anAllowedInvShort' => $allowedInvShort,
+            'anPrStOptimalQty' => $prstOptimalQty,
+            'anPrStDailyQty' => $prstDailyQty,
+            'anUserIns' => $auditUserId > 0 ? $auditUserId : 0,
+            'anUserChg' => $auditUserId > 0 ? $auditUserId : 0,
+            'adTimeIns' => $timestamp,
+            'adTimeChg' => $timestamp,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ];
+    }
+
     private static function productStructureTable(): string
     {
         return (string) config('workorders.product_structure_table', 'tHF_SetPrSt');
@@ -569,6 +618,13 @@ class Product extends Model
         return (string) config('workorders.schema', 'dbo');
     }
 
+    private static function catalogProductDefaults(): array
+    {
+        $defaults = config('workorders.catalog_product_defaults', []);
+
+        return is_array($defaults) ? $defaults : [];
+    }
+
     private static function catalogItemColumns(): array
     {
         if (self::$catalogItemColumnsCache !== null) {
@@ -623,6 +679,255 @@ class Product extends Model
             ->all();
 
         return self::$catalogItemNonInsertableColumnsCache;
+    }
+
+    private static function resolveCatalogStringValue(array $attributes, array $keys, string $fallback = ''): string
+    {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $attributes)) {
+                continue;
+            }
+
+            $value = trim((string) ($attributes[$key] ?? ''));
+
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return trim($fallback);
+    }
+
+    private static function resolveCatalogNumericValue(array $attributes, array $keys, float $fallback): float
+    {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $attributes)) {
+                continue;
+            }
+
+            $value = $attributes[$key] ?? null;
+
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            if (is_numeric((string) $value)) {
+                return (float) $value;
+            }
+        }
+
+        return $fallback;
+    }
+
+    private static function resolveCatalogAuditUserId(mixed $auditUser): int
+    {
+        $explicitPantheonId = self::extractAuditUserIntegerValue($auditUser, [
+            'pantheon_user_id',
+            'pantheonUserId',
+            'anUserId',
+        ]);
+
+        if ($explicitPantheonId > 0 && self::pantheonUserIdExists($explicitPantheonId)) {
+            return $explicitPantheonId;
+        }
+
+        $numericUserId = self::extractAuditUserIntegerValue($auditUser, ['id', 'user_id', 'anUserIns']);
+
+        if ($numericUserId > 0 && self::pantheonUserIdExists($numericUserId)) {
+            return $numericUserId;
+        }
+
+        $mappedUserId = self::resolveMappedPantheonUserId($auditUser);
+
+        if ($mappedUserId > 0) {
+            return $mappedUserId;
+        }
+
+        return $numericUserId > 0 ? $numericUserId : 0;
+    }
+
+    private static function resolveMappedPantheonUserId(mixed $auditUser): int
+    {
+        $configuredMap = config('workorders.pantheon_user_map', []);
+        $normalizedConfiguredMap = [];
+
+        if (is_array($configuredMap)) {
+            foreach ($configuredMap as $key => $value) {
+                $normalizedKey = self::normalizePantheonUserLookupValue((string) $key);
+                $resolvedValue = is_numeric((string) $value) ? (int) $value : 0;
+
+                if ($normalizedKey !== '' && $resolvedValue > 0) {
+                    $normalizedConfiguredMap[$normalizedKey] = $resolvedValue;
+                }
+            }
+        }
+
+        foreach (self::buildAuditUserLookupCandidates($auditUser) as $candidate) {
+            if ($candidate === '') {
+                continue;
+            }
+
+            if (array_key_exists($candidate, $normalizedConfiguredMap)) {
+                return (int) $normalizedConfiguredMap[$candidate];
+            }
+
+            foreach (self::pantheonUsers() as $pantheonUser) {
+                if ($candidate === (string) ($pantheonUser['normalized_user_code'] ?? '')) {
+                    return (int) ($pantheonUser['id'] ?? 0);
+                }
+
+                if ($candidate === (string) ($pantheonUser['normalized_title'] ?? '')) {
+                    return (int) ($pantheonUser['id'] ?? 0);
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    private static function buildAuditUserLookupCandidates(mixed $auditUser): array
+    {
+        $rawCandidates = [];
+
+        foreach ([
+            'pantheon_username',
+            'pantheon_user_code',
+            'username',
+            'name',
+            'email',
+            'acUserId',
+            'acTitle',
+        ] as $key) {
+            $value = self::extractAuditUserValue($auditUser, $key);
+
+            if (!is_scalar($value) && $value !== null) {
+                continue;
+            }
+
+            $stringValue = trim((string) ($value ?? ''));
+
+            if ($stringValue === '') {
+                continue;
+            }
+
+            $rawCandidates[] = $stringValue;
+
+            if (str_contains($stringValue, '@')) {
+                $localPart = trim((string) strstr($stringValue, '@', true));
+
+                if ($localPart !== '') {
+                    $rawCandidates[] = $localPart;
+                }
+            }
+        }
+
+        $normalizedCandidates = [];
+
+        foreach ($rawCandidates as $candidate) {
+            $normalizedCandidate = self::normalizePantheonUserLookupValue($candidate);
+
+            if ($normalizedCandidate !== '') {
+                $normalizedCandidates[$normalizedCandidate] = true;
+            }
+        }
+
+        return array_keys($normalizedCandidates);
+    }
+
+    private static function normalizePantheonUserLookupValue(string $value): string
+    {
+        $value = Str::ascii(mb_strtolower(trim($value)));
+
+        return preg_replace('/[^a-z0-9]+/', '', $value) ?? '';
+    }
+
+    private static function pantheonUserIdExists(int $pantheonUserId): bool
+    {
+        if ($pantheonUserId < 1) {
+            return false;
+        }
+
+        foreach (self::pantheonUsers() as $pantheonUser) {
+            if ((int) ($pantheonUser['id'] ?? 0) === $pantheonUserId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function pantheonUsers(): array
+    {
+        if (self::$pantheonUsersCache !== null) {
+            return self::$pantheonUsersCache;
+        }
+
+        self::$pantheonUsersCache = DB::connection('sqlsrv')
+            ->table(self::sourceSchema() . '.tPA_User')
+            ->select('anUserId', 'acUserId', 'acTitle', 'acActive')
+            ->get()
+            ->map(function ($row) {
+                $userCode = trim((string) ($row->acUserId ?? ''));
+                $title = trim((string) ($row->acTitle ?? ''));
+
+                return [
+                    'id' => (int) ($row->anUserId ?? 0),
+                    'user_code' => $userCode,
+                    'title' => $title,
+                    'active' => strtoupper(trim((string) ($row->acActive ?? 'T'))) !== 'F',
+                    'normalized_user_code' => self::normalizePantheonUserLookupValue($userCode),
+                    'normalized_title' => self::normalizePantheonUserLookupValue($title),
+                ];
+            })
+            ->filter(function (array $row): bool {
+                return (int) ($row['id'] ?? 0) > 0 && (bool) ($row['active'] ?? true);
+            })
+            ->values()
+            ->all();
+
+        return self::$pantheonUsersCache;
+    }
+
+    private static function extractAuditUserIntegerValue(mixed $auditUser, array $keys): int
+    {
+        foreach ($keys as $key) {
+            $value = self::extractAuditUserValue($auditUser, $key);
+
+            if (!is_numeric((string) $value)) {
+                continue;
+            }
+
+            $resolvedValue = (int) $value;
+
+            if ($resolvedValue > 0) {
+                return $resolvedValue;
+            }
+        }
+
+        if (
+            is_int($auditUser)
+            || is_float($auditUser)
+            || (is_string($auditUser) && is_numeric(trim($auditUser)))
+        ) {
+            $resolvedValue = (int) $auditUser;
+
+            return $resolvedValue > 0 ? $resolvedValue : 0;
+        }
+
+        return 0;
+    }
+
+    private static function extractAuditUserValue(mixed $auditUser, string $key): mixed
+    {
+        if (is_array($auditUser)) {
+            return $auditUser[$key] ?? null;
+        }
+
+        if (is_object($auditUser)) {
+            return $auditUser->{$key} ?? null;
+        }
+
+        return null;
     }
 
     private static function defaultValueForColumnMeta(array $columnMeta, $timestamp, int $userId = 0): mixed

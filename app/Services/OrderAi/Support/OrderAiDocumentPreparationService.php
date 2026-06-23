@@ -16,12 +16,14 @@ class OrderAiDocumentPreparationService
         ?string $mimeType,
         string $bytes
     ): array {
-        $extracted = app(OrderAiDocumentTextExtractor::class)->extract($bytes, $mimeType, $fileName);
-        $pages = is_array($extracted['pages'] ?? null) ? $extracted['pages'] : [];
-        $fullText = Utf8Sanitizer::clean(trim((string) ($extracted['text'] ?? '')));
+        $digitalExtraction = app(OrderAiDigitalPdfExtractor::class)->extract($bytes, $mimeType, $fileName, $documentProfile);
+        $pdfDetection = app(OrderAiPdfTypeDetector::class)->detect($digitalExtraction);
+        $pages = is_array($digitalExtraction['pages'] ?? null) ? $digitalExtraction['pages'] : [];
+        $fullText = Utf8Sanitizer::clean(trim((string) ($digitalExtraction['text'] ?? '')));
         $sourcePageCount = max(
             0,
-            (int) ($extracted['page_count'] ?? 0),
+            (int) ($digitalExtraction['source_page_count'] ?? 0),
+            (int) ($digitalExtraction['page_count'] ?? 0),
             count($pages)
         );
         $processedPages = $pages;
@@ -38,15 +40,28 @@ class OrderAiDocumentPreparationService
             $effectivePageCount = $grobPreparation['effective_page_count'];
             $pageLimitReason = $grobPreparation['page_processing_limit_reason'];
 
-            if ($searchableText !== '') {
-                $providerInputMode = 'text';
-                $providerInputText = $this->buildPreparedGrobInputText(
-                    $processedPages,
-                    $sourcePageCount,
-                    $effectivePageCount,
-                    $pageLimitReason
-                );
+            if (
+                $pageLimitReason === ''
+                && (bool) ($digitalExtraction['truncated_at_attention_marker'] ?? false)
+            ) {
+                $pageLimitReason = self::GROB_PAGE_LIMIT_REASON;
             }
+        }
+
+        if ($this->shouldUseStructuredTextForProvider(
+            (string) config('ai-order-scan.digital_pdf.provider_input_mode', 'auto'),
+            (string) ($pdfDetection['type'] ?? ''),
+            $searchableText
+        )) {
+            $providerInputMode = 'text';
+            $providerInputText = $this->buildPreparedPdfInputText(
+                $documentProfile,
+                $processedPages,
+                $sourcePageCount,
+                $effectivePageCount,
+                $pageLimitReason,
+                $pdfDetection
+            );
         }
 
         return [
@@ -59,6 +74,22 @@ class OrderAiDocumentPreparationService
             'page_processing_limit_reason' => $pageLimitReason,
             'provider_input_mode' => $providerInputMode,
             'provider_input_text' => $providerInputText,
+            'pdf_type' => (string) ($pdfDetection['type'] ?? ''),
+            'extraction_method' => (string) ($pdfDetection['method'] ?? 'ocr'),
+            'extraction_confidence' => (float) ($pdfDetection['confidence'] ?? 0),
+            'extraction_reason' => (string) ($pdfDetection['reason'] ?? ''),
+            'extraction_duration_ms' => (int) ($digitalExtraction['duration_ms'] ?? 0),
+            'coordinates_available' => (bool) ($digitalExtraction['coordinates_available'] ?? false),
+            'raw_extracted_text' => $fullText,
+            'digital_extraction' => [
+                'source' => (string) ($digitalExtraction['source'] ?? ''),
+                'page_count' => $sourcePageCount,
+                'meaningful_text_pages' => (int) ($digitalExtraction['meaningful_text_pages'] ?? 0),
+                'text_character_count' => (int) ($digitalExtraction['text_character_count'] ?? 0),
+                'table_row_count' => (int) ($digitalExtraction['table_row_count'] ?? 0),
+                'coordinates_available' => (bool) ($digitalExtraction['coordinates_available'] ?? false),
+                'pages' => $processedPages,
+            ],
         ];
     }
 
@@ -99,9 +130,14 @@ class OrderAiDocumentPreparationService
             $pageText = Utf8Sanitizer::clean(trim(implode("\n", $pageLines)));
 
             $processedPages[] = [
-                'page_number' => (int) ($page['page_number'] ?? (count($processedPages) + 1)),
+                'page' => (int) ($page['page'] ?? $page['page_number'] ?? (count($processedPages) + 1)),
+                'page_number' => (int) ($page['page_number'] ?? $page['page'] ?? (count($processedPages) + 1)),
                 'lines' => $pageLines,
                 'text' => $pageText,
+                'items' => $this->filterPageItemsBeforeMarker((array) ($page['items'] ?? [])),
+                'text_elements' => is_array($page['text_elements'] ?? null) ? $page['text_elements'] : [],
+                'coordinates_available' => (bool) ($page['coordinates_available'] ?? false),
+                'table_candidates' => is_array($page['table_candidates'] ?? null) ? $page['table_candidates'] : [],
             ];
 
             if ($markerLineIndex !== null) {
@@ -122,43 +158,62 @@ class OrderAiDocumentPreparationService
         ];
     }
 
-    private function buildPreparedGrobInputText(
+    private function buildPreparedPdfInputText(
+        string $documentProfile,
         array $pages,
         int $sourcePageCount,
         int $effectivePageCount,
-        string $pageLimitReason
+        string $pageLimitReason,
+        array $pdfDetection
     ): string {
-        $headerLines = [
-            'Visible text extracted from a GROB-WERKE PDF follows below.',
-            'Only the pages that belong to the order table before the ACHTUNG separator are included.',
+        $payload = [
+            'document_profile' => trim($documentProfile),
+            'pdf_type' => (string) ($pdfDetection['type'] ?? ''),
+            'extraction_method' => (string) ($pdfDetection['method'] ?? ''),
+            'source_page_count' => $sourcePageCount,
+            'effective_page_count' => $effectivePageCount > 0 ? $effectivePageCount : $sourcePageCount,
+            'page_processing_limit_reason' => $pageLimitReason !== '' ? $pageLimitReason : null,
+            'pages' => array_values(array_filter(array_map(function (array $page) {
+                $pageNumber = max(1, (int) ($page['page'] ?? $page['page_number'] ?? 0));
+                $pageText = trim((string) ($page['text'] ?? ''));
+                $pageItems = is_array($page['items'] ?? null) ? $page['items'] : [];
+
+                if ($pageText === '' && $pageItems === []) {
+                    return null;
+                }
+
+                return [
+                    'page' => $pageNumber,
+                    'text' => $pageText,
+                    'items' => array_values(array_filter(array_map(function ($item) {
+                        if (!is_array($item)) {
+                            return null;
+                        }
+
+                        return [
+                            'row_number' => (int) ($item['row_number'] ?? 0),
+                            'y' => (float) ($item['y'] ?? 0),
+                            'text' => trim((string) ($item['text'] ?? '')),
+                            'cells' => array_values(array_filter(array_map(function ($cell) {
+                                if (!is_array($cell)) {
+                                    return null;
+                                }
+
+                                return [
+                                    'x' => round((float) ($cell['x'] ?? 0), 2),
+                                    'text' => trim((string) ($cell['text'] ?? '')),
+                                ];
+                            }, is_array($item['cells'] ?? null) ? $item['cells'] : []))),
+                        ];
+                    }, $pageItems))),
+                ];
+            }, $pages))),
         ];
 
-        if ($sourcePageCount > 0) {
-            $headerLines[] = 'Original PDF pages: ' . $sourcePageCount . '.';
-        }
-
-        if ($effectivePageCount > 0) {
-            $headerLines[] = 'Pages included for extraction: ' . $effectivePageCount . '.';
-        }
-
-        if ($pageLimitReason !== '') {
-            $headerLines[] = $pageLimitReason;
-        }
-
-        $body = implode("\n\n", array_values(array_filter(array_map(function (array $page) {
-            $pageNumber = max(1, (int) ($page['page_number'] ?? 0));
-            $pageText = trim((string) ($page['text'] ?? ''));
-
-            if ($pageText === '') {
-                return '';
-            }
-
-            return '[Page ' . $pageNumber . ']' . "\n" . $pageText;
-        }, $pages))));
-
         return Utf8Sanitizer::clean(trim(implode("\n\n", array_filter([
-            implode("\n", $headerLines),
-            $body,
+            'Structured text extracted from a digital PDF follows as JSON.',
+            'Use NETTOPREIS over BRUTTOPREIS when both values are visible, stop item parsing after footer markers such as ACHTUNG, and keep line totals exactly as shown.',
+            json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ]))));
     }
 
@@ -217,6 +272,55 @@ class OrderAiDocumentPreparationService
     {
         return trim($documentProfile) === 'grob'
             && $this->looksLikePdf($mimeType, $fileName, $bytes);
+    }
+
+    private function shouldUseStructuredTextForProvider(
+        string $providerInputStrategy,
+        string $pdfType,
+        string $searchableText
+    ): bool {
+        $providerInputStrategy = trim($providerInputStrategy);
+        $pdfType = trim($pdfType);
+
+        if ($providerInputStrategy === 'legacy_raw') {
+            return false;
+        }
+
+        if ($providerInputStrategy === 'text_only') {
+            return $searchableText !== '';
+        }
+
+        if ($pdfType === 'digital') {
+            return $searchableText !== '';
+        }
+
+        if ($pdfType === 'hybrid') {
+            return $searchableText !== ''
+                && (bool) config('ai-order-scan.digital_pdf.use_text_for_hybrid', false);
+        }
+
+        return false;
+    }
+
+    private function filterPageItemsBeforeMarker(array $items): array
+    {
+        $filtered = [];
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $text = trim((string) ($item['text'] ?? ''));
+
+            if ($text !== '' && stripos($text, 'ACHTUNG') !== false) {
+                break;
+            }
+
+            $filtered[] = $item;
+        }
+
+        return $filtered;
     }
 
     private function looksLikePdf(?string $mimeType, string $fileName, string $bytes): bool

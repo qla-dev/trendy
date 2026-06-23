@@ -4,6 +4,7 @@ namespace App\Services\OrderAi;
 
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\Contracts\OrderAiScanProvider;
+use App\Services\OrderAi\Support\OrderAiDocumentPreparationService;
 use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use Illuminate\Support\Facades\Storage;
 
@@ -28,6 +29,17 @@ class MockOrderAiScanProvider implements OrderAiScanProvider
             $preview = mb_substr(trim($rawContent), 0, 1500);
         }
 
+        $preparationStartedAt = microtime(true);
+        $preparedDocument = app(OrderAiDocumentPreparationService::class)->prepareDocument(
+            (string) ($scan->document_profile ?? ''),
+            (string) ($scan->source_file_name ?? 'document'),
+            (string) ($scan->source_mime_type ?? 'application/octet-stream'),
+            $rawContent
+        );
+        $extractionDurationMs = max(
+            (int) round((microtime(true) - $preparationStartedAt) * 1000),
+            (int) ($preparedDocument['extraction_duration_ms'] ?? 0)
+        );
         $normalizedPayload = $this->buildFallbackPayload($scan, $rawContent);
 
         return [
@@ -39,6 +51,9 @@ class MockOrderAiScanProvider implements OrderAiScanProvider
                 'preview' => $preview,
             ],
             'normalized_payload' => $normalizedPayload,
+            'prepared_document' => $preparedDocument,
+            'extraction_duration_ms' => $extractionDurationMs,
+            'ai_duration_ms' => 0,
         ];
     }
 

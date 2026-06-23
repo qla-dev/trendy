@@ -49,13 +49,10 @@ class OrderAiScanController extends Controller
 
         $scan = $scanService->createScan($validated['file'], $request->user());
 
-        return response()->json([
-            'message' => 'Dokument je učitan i spreman za AI obradu.',
-            'scan_id' => $scan->id,
-            'status' => $scan->status,
-            'status_url' => route('app-order-ai-scan-status', ['scan' => $scan->id]),
-            'data' => $this->buildScanStatusPayload($scanService, $scan),
-        ], 201);
+        return $this->jsonNoStore(
+            $this->buildScanResponsePayload($scanService, $scan, 'Dokument je učitan i spreman za AI obradu.'),
+            201
+        );
     }
 
     public function status(Request $request, OrderAiScan $scan, OrderAiScanService $scanService): JsonResponse
@@ -69,10 +66,58 @@ class OrderAiScanController extends Controller
             $scan = $scanService->advance($scan, $request->user());
         }
 
-        return response()->json([
+        return $this->jsonNoStore([
             'message' => 'Status AI skena je osvježen.',
             'data' => $this->buildScanStatusPayload($scanService, $scan),
         ]);
+    }
+
+    public function retry(Request $request, OrderAiScan $scan, OrderAiScanService $scanService): JsonResponse
+    {
+        $this->authorizeModuleAccess($request);
+        $this->authorizeScan($request, $scan);
+
+        if (!$scanService->canRescan($scan)) {
+            return $this->jsonNoStore(
+                $this->buildScanResponsePayload(
+                    $scanService,
+                    $scan->fresh() ?? $scan,
+                    'Ponovno AI skeniranje je dostupno samo za neuspješne AI scanove.'
+                ),
+                422
+            );
+        }
+
+        $retriedScan = $scanService->rescan(
+            $scan,
+            $request->user(),
+            (string) ($scan->source_origin ?? 'manual') === 'imap',
+            false
+        );
+        $retriedScan = $retriedScan->fresh() ?? $retriedScan;
+
+        if ((string) ($retriedScan->status ?? '') === 'failed') {
+            return $this->jsonNoStore(
+                $this->buildScanResponsePayload(
+                    $scanService,
+                    $retriedScan,
+                    trim((string) ($retriedScan->error_message ?? '')) !== ''
+                        ? (string) $retriedScan->error_message
+                        : 'AI skeniranje nije uspjelo ni nakon ponovnog pokretanja.'
+                ),
+                422
+            );
+        }
+
+        return $this->jsonNoStore(
+            $this->buildScanResponsePayload(
+                $scanService,
+                $retriedScan,
+                (string) ($retriedScan->source_origin ?? 'manual') === 'imap'
+                    ? 'AI skeniranje je ponovo pokrenuto. Status će biti osvježen automatski.'
+                    : 'AI skeniranje je uspješno ponovo pokrenuto.'
+            )
+        );
     }
 
     public function source(Request $request, OrderAiScan $scan): StreamedResponse
@@ -144,6 +189,17 @@ class OrderAiScanController extends Controller
         return $payload;
     }
 
+    private function buildScanResponsePayload(OrderAiScanService $scanService, OrderAiScan $scan, string $message): array
+    {
+        return [
+            'message' => $message,
+            'scan_id' => $scan->id,
+            'status' => $scan->status,
+            'status_url' => route('app-order-ai-scan-status', ['scan' => $scan->id]),
+            'data' => $this->buildScanStatusPayload($scanService, $scan),
+        ];
+    }
+
     private function buildSourceFileResponse(OrderAiScan $scan, bool $download): StreamedResponse
     {
         $disk = Storage::disk((string) config('ai-order-scan.storage_disk', 'local'));
@@ -165,5 +221,14 @@ class OrderAiScanController extends Controller
         return $download
             ? $disk->download($sourceFilePath, $downloadName, $headers)
             : $disk->response($sourceFilePath, $downloadName, $headers);
+    }
+
+    private function jsonNoStore(array $payload, int $status = 200): JsonResponse
+    {
+        return response()->json($payload, $status, [
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
     }
 }
