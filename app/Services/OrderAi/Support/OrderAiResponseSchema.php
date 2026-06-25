@@ -95,7 +95,7 @@ class OrderAiResponseSchema
                             'unit' => ['type' => 'string'],
                             'delivery_deadline' => [
                                 'type' => 'string',
-                                'description' => 'Optional row-level Liefertermin / shipping deadline for this item only.',
+                                'description' => 'Pantheon delivery deadline (rok isporuke). For GROB use row-level Lieferdatum. For Trendy Germany use the header Liefertermin for every item. This is not a dispatch date.',
                             ],
                             'unit_price' => [
                                 'type' => 'number',

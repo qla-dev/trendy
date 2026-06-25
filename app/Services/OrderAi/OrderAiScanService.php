@@ -2032,15 +2032,16 @@ class OrderAiScanService
 
         $payload['order'] = $order;
         $payload['items'] = $this->postProcessTrendyDeItems(
-            is_array($payload['items'] ?? null) ? $payload['items'] : []
+            is_array($payload['items'] ?? null) ? $payload['items'] : [],
+            $deliveryDeadline
         );
 
         return $payload;
     }
 
-    private function postProcessTrendyDeItems(array $items): array
+    private function postProcessTrendyDeItems(array $items, string $headerDeliveryDeadline = ''): array
     {
-        return array_values(array_map(function ($item) {
+        return array_values(array_map(function ($item) use ($headerDeliveryDeadline) {
             if (!is_array($item)) {
                 return $item;
             }
@@ -2082,7 +2083,9 @@ class OrderAiScanService
 
             $item['product_name'] = $productName;
             $item['note'] = implode(' | ', array_values(array_unique(array_filter($noteLines))));
-            $item['delivery_deadline'] = $deliveryDeadline;
+            $item['delivery_deadline'] = trim($headerDeliveryDeadline) !== ''
+                ? trim($headerDeliveryDeadline)
+                : $deliveryDeadline;
             $item['unit'] = $this->normalizeScannedUnit((string) ($item['unit'] ?? ''));
 
             return $item;

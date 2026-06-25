@@ -1265,6 +1265,7 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('6449473', data_get($result, 'normalized_payload.items.0.product_code'));
         $this->assertSame('Klotz GM4395/01-70-126/1-2-18', data_get($result, 'normalized_payload.items.0.product_name'));
         $this->assertSame('KO', data_get($result, 'normalized_payload.items.0.unit'));
+        $this->assertSame('18.06.2026', data_get($result, 'normalized_payload.items.0.delivery_deadline'));
         $this->assertSame(42.6, data_get($result, 'normalized_payload.items.0.unit_price'));
         $this->assertSame(127.8, data_get($result, 'normalized_payload.items.0.line_total'));
         $this->assertSame(127.8, data_get($result, 'normalized_payload.summary.subtotal'));
@@ -1326,6 +1327,8 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('Trendy Germany 21', data_get($result, 'normalized_payload.order.receiver_name'));
         $this->assertSame('Edina Duzan', data_get($result, 'normalized_payload.order.contact_name'));
         $this->assertSame('1. 6. 2026.', data_get($result, 'normalized_payload.order.delivery_deadline'));
+        $this->assertSame('1. 6. 2026.', data_get($result, 'normalized_payload.items.0.delivery_deadline'));
+        $this->assertSame('1. 6. 2026.', data_get($result, 'normalized_payload.items.1.delivery_deadline'));
         $this->assertSame('65070911', data_get($result, 'normalized_payload.items.0.product_code'));
         $this->assertSame('Halter 884698', data_get($result, 'normalized_payload.items.0.product_name'));
         $this->assertSame('KO', data_get($result, 'normalized_payload.items.0.unit'));
@@ -1828,6 +1831,21 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertStringContainsString('Do not insert spaces around hyphens inside code-like names', $prompt);
         $this->assertStringContainsString('treat the second and third stacked rows as product_name', $prompt);
         $this->assertStringContainsString('ignore it completely', $prompt);
+        $this->assertStringContainsString('extract the visible date next to Lieferdatum', $prompt);
+        $this->assertStringContainsString('not a dispatch/shipping date', $prompt);
+    }
+
+    public function test_build_request_prompt_applies_trendy_liefertermin_to_every_item(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('buildRequestPrompt');
+        $method->setAccessible(true);
+
+        $prompt = (string) $method->invoke($service, 'trendy_de');
+
+        $this->assertStringContainsString('Copy the same visible date into delivery_deadline for every item', $prompt);
+        $this->assertStringContainsString('not a dispatch/shipping date', $prompt);
     }
 
     public function test_build_status_payload_refreshes_legacy_transfer_preview_for_duplicate_reference(): void
