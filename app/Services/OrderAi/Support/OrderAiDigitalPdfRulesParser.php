@@ -150,6 +150,13 @@ class OrderAiDigitalPdfRulesParser
                 (string) ($scan->source_file_name ?? '')
             );
         $deliveryDeadline = $header['delivery_deadline'];
+        if ($deliveryDeadline !== '') {
+            $items = array_values(array_map(function (array $item) use ($deliveryDeadline): array {
+                $item['delivery_deadline'] = $deliveryDeadline;
+
+                return $item;
+            }, $items));
+        }
         $contactName = $header['contact_name'];
         $receiverName = $header['receiver_name'];
         $currency = $this->extractCurrency($searchableText);

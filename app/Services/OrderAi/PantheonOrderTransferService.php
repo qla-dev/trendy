@@ -1061,8 +1061,9 @@ class PantheonOrderTransferService
         $payload['anPVOCForPay'] = $item['grand_total'];
         $payload['anQtyConverted'] = $item['quantity'];
         $payload['acUMConverted'] = $this->fitString('acUMConverted', $resolvedUnit, $stringLengths);
-        $payload['adDeliveryDeadline'] = $itemDeliveryDeadline;
-        $payload['adDeliveryDate'] = $itemDeliveryDeadline;
+        foreach ($this->buildOrderItemDeliveryDatePayload($itemDeliveryDeadline) as $column => $value) {
+            $payload[$column] = $value;
+        }
 
         if ($userId > 0) {
             $payload['anUserIns'] = $userId;
@@ -1093,6 +1094,14 @@ class PantheonOrderTransferService
         return '';
     }
 
+    private function buildOrderItemDeliveryDatePayload(Carbon $deliveryDeadline): array
+    {
+        return [
+            'adDeliveryDeadline' => $deliveryDeadline->copy()->startOfDay(),
+            'adDeliveryDate' => null,
+        ];
+    }
+
     private function buildInternalNote(array $prepared): string
     {
         $warnings = array_values(array_filter(array_map(function ($warning) {
@@ -1114,6 +1123,18 @@ class PantheonOrderTransferService
 
         if ($value === '') {
             return $fallback;
+        }
+
+        if (preg_match('/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\.?$/', $value, $matches) === 1) {
+            try {
+                return Carbon::create(
+                    (int) ($matches[3] ?? 0),
+                    (int) ($matches[2] ?? 0),
+                    (int) ($matches[1] ?? 0)
+                );
+            } catch (\Throwable $exception) {
+                return $fallback;
+            }
         }
 
         try {

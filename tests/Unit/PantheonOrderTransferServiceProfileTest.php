@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Services\OrderAi\PantheonOrderTransferService;
+use Carbon\Carbon;
 use ReflectionClass;
 use RuntimeException;
 use Tests\TestCase;
@@ -187,6 +188,42 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
 
         $this->assertSame('NN', $result['code']);
         $this->assertSame(5.0, $result['rate']);
+    }
+
+    public function test_dotted_german_delivery_date_is_parsed_for_pantheon(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('parseDateOrFallback');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, '1. 6. 2026.', Carbon::parse('2026-01-01'));
+
+        $this->assertSame('2026-06-01', $result->format('Y-m-d'));
+    }
+
+    public function test_order_item_delivery_date_populates_deadline_and_leaves_dispatch_empty(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('buildOrderItemDeliveryDatePayload');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, Carbon::parse('2026-06-11 14:30:00'));
+
+        $this->assertSame('2026-06-11 00:00:00', $result['adDeliveryDeadline']->format('Y-m-d H:i:s'));
+        $this->assertNull($result['adDeliveryDate']);
+
+        $trimMethod = $reflection->getMethod('trimPayloadToInsertableColumns');
+        $trimMethod->setAccessible(true);
+        $insertPayload = $trimMethod->invoke(
+            $service,
+            $result,
+            ['adDeliveryDeadline', 'adDeliveryDate']
+        );
+
+        $this->assertArrayHasKey('adDeliveryDeadline', $insertPayload);
+        $this->assertArrayNotHasKey('adDeliveryDate', $insertPayload);
     }
 
     public function test_duplicate_external_document_reference_is_blocked_before_transfer(): void

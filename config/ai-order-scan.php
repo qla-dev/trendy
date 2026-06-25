@@ -63,6 +63,9 @@ $grobPromptRules = <<<'PROMPT'
 - Ignore Bruttopreis when Nettopreis is also present for the same GROB item.
 - Continuation rows without a new position number or new product code belong to the previous numbered item, even across a page break.
 - Rows such as Ruesten/Termin abs., Nettopreis, Lieferdatum, Preis, Preiseinheit, pro, and Wert may continue the previous item and must not start a new item on their own.
+- For every GROB item, extract the visible date next to Lieferdatum into that item's delivery_deadline.
+- Lieferdatum is the Pantheon delivery deadline ("rok isporuke"), not a dispatch/shipping date.
+- Do not copy Lieferdatum into product_name or note, and do not return any separate dispatch date.
 - If one page ends with Bruttopreis for an item and the next page continues the same item without a new position number, use the continued Nettopreis and continued Wert as the final unit_price and line_total for that same item.
 - For GROB rows, do not prepend a stray leading "1" to Wert amounts unless that leading digit is visibly part of the printed amount.
 - Example: if Nettopreis 42,60 and quantity 3,00 are shown, Wert must be 127,80 when the row displays 127,80; never return 1127,80 unless the document visibly shows 1.127,80.
@@ -82,7 +85,10 @@ $trendyDePromptRules = <<<'PROMPT'
 - This document profile is for Trendy Germany purchase orders.
 - If the document shows "Trendy Germany GmbH" in the upper-right header, set both customer_name and supplier_name to "Trendy Germany GmbH".
 - Extract the order reference number that appears after the heading "Bestellung" into external_document_number.
-- Extract Liefertermin into delivery_deadline.
+- Extract the header Liefertermin into order.delivery_deadline.
+- The header Liefertermin applies to every line item in the Trendy Germany table. Copy the same visible date into delivery_deadline for every item.
+- Liefertermin is the Pantheon delivery deadline ("rok isporuke"), not a dispatch/shipping date.
+- Do not return any separate dispatch date.
 - Extract "Person responsible" into contact_name.
 - Extract "Anlieferadresse" into receiver_name.
 - Preserve the left-side "Lieferant" block as an operational note inside order.note when it is visible.
@@ -91,7 +97,7 @@ $trendyDePromptRules = <<<'PROMPT'
 - Artikel Nr. -> product_code
 - Beschreibung first visible line -> product_name
 - Additional Beschreibung lines before Liefertermin -> note
-- Liefertermin value inside the line-item block -> delivery_deadline for that item
+- Liefertermin value inside the line-item block -> delivery_deadline for that item; otherwise use the header Liefertermin
 - Menge -> quantity
 - Einheit -> unit
 - EK-Preis -> unit_price
