@@ -140,6 +140,55 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame('64820441', $result);
     }
 
+    public function test_new_order_header_note_is_always_empty(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('buildHeaderNote');
+        $method->setAccessible(true);
+
+        $this->assertSame('', $method->invoke($service));
+    }
+
+    public function test_foreign_0110_order_items_use_export_vat_profile(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('resolveOrderItemVatProfile');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, '0110', 'P1', 17);
+
+        $this->assertSame('I0', $result['code']);
+        $this->assertSame(0.0, $result['rate']);
+    }
+
+    public function test_domestic_0200_order_items_use_p1_and_keep_their_rate(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('resolveOrderItemVatProfile');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, '0200', 'I0', 17);
+
+        $this->assertSame('P1', $result['code']);
+        $this->assertSame(17.0, $result['rate']);
+    }
+
+    public function test_other_document_types_keep_their_existing_vat_profile(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('resolveOrderItemVatProfile');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, '0300', 'NN', 5);
+
+        $this->assertSame('NN', $result['code']);
+        $this->assertSame(5.0, $result['rate']);
+    }
+
     public function test_duplicate_external_document_reference_is_blocked_before_transfer(): void
     {
         $service = new class extends PantheonOrderTransferService {
