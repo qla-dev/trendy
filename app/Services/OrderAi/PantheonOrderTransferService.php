@@ -260,6 +260,7 @@ class PantheonOrderTransferService
         $warnings = is_array($order['warnings'] ?? null) ? array_map('strval', $order['warnings']) : [];
         $preparedItems = [];
         $productCodeUsage = [];
+        $documentType = $this->resolvePantheonDocType((string) ($order['document_type'] ?? ''));
 
         foreach (array_values($rawItems) as $rawItem) {
             if (!is_array($rawItem)) {
@@ -385,7 +386,11 @@ class PantheonOrderTransferService
             $unitPrice = round(max(0, (float) ($rawItem['unit_price'] ?? 0)), 4);
             $lineTotal = round(max(0, (float) ($rawItem['line_total'] ?? 0)), 4);
             $discount = round(max(0, (float) ($rawItem['discount_percent'] ?? 0)), 4);
-            $vatRate = round(max(0, (float) ($rawItem['vat_rate'] ?? config('ai-order-scan.default_vat_rate', 17))), 4);
+            $sourceVatRate = round(max(0, (float) ($rawItem['vat_rate'] ?? config('ai-order-scan.default_vat_rate', 17))), 4);
+            $sourceVatCode = trim((string) ($rawItem['vat_code'] ?? config('ai-order-scan.default_vat_code', 'P1')))
+                ?: (string) config('ai-order-scan.default_vat_code', 'P1');
+            $vatProfile = $this->resolveOrderItemVatProfile($documentType, $sourceVatCode, $sourceVatRate);
+            $vatRate = $vatProfile['rate'];
             $discountFactor = max(0, 1 - ($discount / 100));
             $computedBaseValue = round($quantity * $unitPrice * $discountFactor, 4);
 
@@ -423,7 +428,7 @@ class PantheonOrderTransferService
                 'unit_price' => $unitPrice,
                 'line_total' => $lineTotal,
                 'vat_rate' => $vatRate,
-                'vat_code' => trim((string) ($rawItem['vat_code'] ?? config('ai-order-scan.default_vat_code', 'P1'))) ?: (string) config('ai-order-scan.default_vat_code', 'P1'),
+                'vat_code' => $vatProfile['code'],
                 'discount_percent' => $discount,
                 'priority' => trim((string) ($rawItem['priority'] ?? '')),
                 'note' => $itemNote,
@@ -464,7 +469,7 @@ class PantheonOrderTransferService
             'receiver_name' => trim((string) ($order['receiver_name'] ?? $customerName)) ?: $customerName,
             'contact_name' => trim((string) ($order['contact_name'] ?? '')),
             'external_document_number' => trim((string) ($order['external_document_number'] ?? '')),
-            'document_type' => $this->resolvePantheonDocType((string) ($order['document_type'] ?? '')),
+            'document_type' => $documentType,
             'currency' => trim((string) ($order['currency'] ?? config('ai-order-scan.default_currency', 'KM'))) ?: (string) config('ai-order-scan.default_currency', 'KM'),
             'delivery_deadline' => trim((string) ($order['delivery_deadline'] ?? '')),
             'note' => trim((string) ($order['note'] ?? '')),
@@ -708,6 +713,34 @@ class PantheonOrderTransferService
         return $fallback;
     }
 
+    private function resolveOrderItemVatProfile(string $documentType, string $vatCode, float $vatRate): array
+    {
+        $normalizedDocumentType = strtoupper(trim($documentType));
+        $normalizedVatCode = strtoupper(trim($vatCode));
+        $normalizedVatRate = round(max(0, $vatRate), 4);
+
+        if (str_starts_with($normalizedDocumentType, '0110')) {
+            return [
+                'code' => 'I0',
+                'rate' => 0.0,
+            ];
+        }
+
+        if (str_starts_with($normalizedDocumentType, '0200')) {
+            return [
+                'code' => 'P1',
+                'rate' => $normalizedVatRate,
+            ];
+        }
+
+        return [
+            'code' => $normalizedVatCode !== ''
+                ? $normalizedVatCode
+                : (string) config('ai-order-scan.default_vat_code', 'P1'),
+            'rate' => $normalizedVatRate,
+        ];
+    }
+
     private function generateNextOrderNumber(string $docType): array
     {
         $docType = strtoupper(trim($docType));
@@ -874,7 +907,7 @@ class PantheonOrderTransferService
         $payload['anVAT'] = $vatTotal;
         $payload['anForPay'] = $grandTotal;
         $payload['anCurrValue'] = $grandTotal;
-        $payload['acNote'] = $this->fitString('acNote', $this->buildHeaderNote($prepared), $stringLengths);
+        $payload['acNote'] = $this->fitString('acNote', $this->buildHeaderNote(), $stringLengths);
         $payload['acInternalNote'] = $this->fitString('acInternalNote', $this->buildInternalNote($prepared), $stringLengths);
         $payload['adTimeIns'] = $now;
         $payload['adTimeChg'] = $now;
@@ -1055,19 +1088,9 @@ class PantheonOrderTransferService
         return $this->trimPayloadToInsertableColumns($payload, $insertableColumns);
     }
 
-    private function buildHeaderNote(array $prepared): string
+    private function buildHeaderNote(): string
     {
-        $parts = [];
-
-        if (trim((string) ($prepared['external_document_number'] ?? '')) !== '') {
-            $parts[] = 'Izvorni broj: ' . trim((string) $prepared['external_document_number']);
-        }
-
-        if (trim((string) ($prepared['note'] ?? '')) !== '') {
-            $parts[] = trim((string) $prepared['note']);
-        }
-
-        return implode(' | ', $parts);
+        return '';
     }
 
     private function buildInternalNote(array $prepared): string

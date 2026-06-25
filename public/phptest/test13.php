@@ -331,7 +331,7 @@ $resolvedUnit = strtoupper(substr(trim((string) ($selectedMaterial['material_um'
 
 $headerPreviewValues = [
     'acStatus' => '1',
-    'acNote' => 'Izvorni broj: ' . $docNo . ' | ' . $orderNote,
+    'acNote' => '',
     'acInternalNote' => 'Kreirano iz AI skena narudzbe preko eNalog.app',
     'acDoc1' => $docNo,
     'acConsignee' => trim((string) ($_GET['supplier_name'] ?? 'GROB-WERKE')),
@@ -349,7 +349,7 @@ $itemPreviewValues = [
 
 $headerSourceRules = [
     'acStatus' => "Hardcoded u servisu: '1'",
-    'acNote' => 'buildHeaderNote(): Izvorni broj + order note',
+    'acNote' => 'buildHeaderNote(): uvijek prazan string',
     'acInternalNote' => 'buildInternalNote(): AI interni trag',
 ];
 
@@ -457,7 +457,7 @@ echo '</div>';
 echo '<div class="meta">';
 echo '<b>Test material:</b> ' . phptest13_h($resolvedCode) . ' - ' . phptest13_h($resolvedName) . '<br>';
 echo '<b>Sample preview:</b> qty ' . phptest13_h((string) $qty) . ', unit price ' . phptest13_h((string) $unitPrice) . ', line total ' . phptest13_h((string) $lineTotal) . '<br>';
-echo '<b>Header note sample:</b> ' . phptest13_h('Izvorni broj: ' . $docNo . ' | ' . $orderNote) . '<br>';
+echo '<b>Header note sample:</b> [empty by policy]<br>';
 echo '<b>Item note sample:</b> ' . phptest13_h($itemNote);
 echo '</div>';
 
@@ -540,6 +540,7 @@ echo '<pre>' . phptest13_h(json_encode([
     'item_status_columns_found' => array_values(array_filter(array_map(static fn ($row) => (string) ($row['column'] ?? ''), $itemStatusNoteRows))),
     'service_writes_header_status' => in_array('acStatus', $headerPayloadColumns, true),
     'service_writes_header_note' => in_array('acNote', $headerPayloadColumns, true),
+    'header_note_value' => '',
     'service_writes_header_internal_note' => in_array('acInternalNote', $headerPayloadColumns, true),
     'service_writes_item_note' => in_array('acNote', $itemPayloadColumns, true),
     'service_writes_item_status' => (bool) array_values(array_filter($itemPayloadColumns, static fn ($column) => str_contains(strtolower((string) $column), 'status'))),
