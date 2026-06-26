@@ -25,10 +25,7 @@ class OrderAiDigitalPdfExtractor
         }
 
         try {
-            $config = new PdfParserConfig();
-            $config->setIgnoreEncryption(true);
-            $config->setDataTmFontInfoHasToBeIncluded(false);
-            $document = (new Parser([], $config))->parseContent($bytes);
+            $document = $this->parseWithSmalot($bytes, $fileName, $mimeType, $documentProfile);
             $documentPages = $document->getPages();
             $sourcePageCount = is_countable($documentPages) ? count($documentPages) : 0;
             $pages = [];
@@ -63,12 +60,24 @@ class OrderAiDigitalPdfExtractor
                     $truncatedAtAttentionMarker
                 );
             }
+
+            Log::warning('Order AI Smalot PDF extraction produced no usable text pages; using legacy stream fallback.', [
+                'file_name' => (string) $fileName,
+                'mime_type' => (string) $mimeType,
+                'document_profile' => (string) $documentProfile,
+                'source_page_count' => $sourcePageCount,
+                'page_object_count' => is_countable($documentPages) ? count($documentPages) : null,
+                'hint' => 'Smalot loaded the PDF, but no page text/table rows could be extracted.',
+            ]);
         } catch (\Throwable $exception) {
             Log::warning('Order AI Smalot PDF extraction failed; using legacy stream fallback.', [
                 'file_name' => (string) $fileName,
                 'mime_type' => (string) $mimeType,
                 'document_profile' => (string) $documentProfile,
+                'parser_class_available' => class_exists(Parser::class),
+                'config_class_available' => class_exists(PdfParserConfig::class),
                 'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+                'hint' => $this->smalotFailureHint($exception),
             ]);
         }
 
@@ -84,8 +93,27 @@ class OrderAiDigitalPdfExtractor
         }
 
         if ($fallbackPages === []) {
+            Log::warning('Order AI legacy PDF fallback produced no text pages.', [
+                'file_name' => (string) $fileName,
+                'mime_type' => (string) $mimeType,
+                'document_profile' => (string) $documentProfile,
+                'hint' => 'Both Smalot and the legacy stream extractor failed to produce readable text.',
+            ]);
+
             return $this->emptyResult((int) round((microtime(true) - $startedAt) * 1000), true);
         }
+
+        Log::info('Order AI legacy PDF fallback produced text pages.', [
+            'file_name' => (string) $fileName,
+            'mime_type' => (string) $mimeType,
+            'document_profile' => (string) $documentProfile,
+            'page_count' => count($fallbackPages),
+            'text_character_count' => mb_strlen(trim(implode("\n\n", array_map(
+                fn (array $page) => (string) ($page['text'] ?? ''),
+                $fallbackPages
+            )))),
+            'hint' => 'Rules parser may be less reliable on legacy fallback text because PDF coordinates/table rows are not available.',
+        ]);
 
         return $this->finalizeResult(
             $fallbackPages,
@@ -94,6 +122,50 @@ class OrderAiDigitalPdfExtractor
             $fallbackSourcePageCount > 0 ? $fallbackSourcePageCount : null,
             $fallbackTruncatedAtAttentionMarker
         );
+    }
+
+    private function parseWithSmalot(string $bytes, ?string $fileName, ?string $mimeType, ?string $documentProfile): mixed
+    {
+        if (!class_exists(Parser::class)) {
+            throw new \RuntimeException('Class "' . Parser::class . '" not found');
+        }
+
+        if (!class_exists(PdfParserConfig::class)) {
+            Log::warning('Order AI Smalot Config class is missing; using default parser constructor.', [
+                'file_name' => (string) $fileName,
+                'mime_type' => (string) $mimeType,
+                'document_profile' => (string) $documentProfile,
+            ]);
+
+            return (new Parser())->parseContent($bytes);
+        }
+
+        $config = new PdfParserConfig();
+
+        if (method_exists($config, 'setIgnoreEncryption')) {
+            $config->setIgnoreEncryption(true);
+        }
+
+        if (method_exists($config, 'setDataTmFontInfoHasToBeIncluded')) {
+            $config->setDataTmFontInfoHasToBeIncluded(false);
+        }
+
+        return (new Parser([], $config))->parseContent($bytes);
+    }
+
+    private function smalotFailureHint(\Throwable $exception): string
+    {
+        $message = Utf8Sanitizer::cleanExceptionMessage($exception);
+
+        if (str_contains($message, 'Smalot\\PdfParser\\Config')) {
+            return 'The installed smalot/pdfparser package is missing the Config class. Run composer install on the server from composer.lock, or update vendor.';
+        }
+
+        if (str_contains($message, 'Smalot\\PdfParser\\Parser')) {
+            return 'The smalot/pdfparser package is not autoloadable on the server. Run composer install and clear optimized autoload/cache.';
+        }
+
+        return 'Smalot threw an exception before text/table extraction completed. Check the exception message and server Composer vendor state.';
     }
 
     private function extractPage(Page $page, int $pageNumber): ?array

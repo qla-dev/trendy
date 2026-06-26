@@ -4,6 +4,7 @@ namespace App\Services\OrderAi\Support;
 
 use App\Models\OrderAiScan;
 use App\Support\Utf8Sanitizer;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class OrderAiDigitalPdfRulesParser
@@ -39,6 +40,16 @@ class OrderAiDigitalPdfRulesParser
             : $this->parseGrobItemsFromText($searchableText);
 
         if ($parsedItems === []) {
+            Log::warning('Order AI GROB digital PDF rules parser found no items.', [
+                'scan_id' => $scan->id,
+                'source_file_name' => (string) ($scan->source_file_name ?? ''),
+                'source' => (string) data_get($preparedDocument, 'digital_extraction.source', ''),
+                'line_count' => count($this->flattenPreparedLines($preparedDocument)),
+                'text_character_count' => (int) data_get($preparedDocument, 'digital_extraction.text_character_count', mb_strlen($searchableText)),
+                'diagnostics' => $this->buildGrobParserDiagnostics($preparedDocument, $searchableText),
+                'hint' => 'The GROB parser could not find a recognizable position/code/quantity row before the stop marker.',
+            ]);
+
             return null;
         }
 
@@ -139,6 +150,16 @@ class OrderAiDigitalPdfRulesParser
         $items = $this->parseTrendyDeItems($lines);
 
         if ($items === []) {
+            Log::warning('Order AI Trendy DE digital PDF rules parser found no items.', [
+                'scan_id' => $scan->id,
+                'source_file_name' => (string) ($scan->source_file_name ?? ''),
+                'source' => (string) data_get($preparedDocument, 'digital_extraction.source', ''),
+                'line_count' => count($lines),
+                'text_character_count' => (int) data_get($preparedDocument, 'digital_extraction.text_character_count', mb_strlen($searchableText)),
+                'diagnostics' => $this->buildTrendyDeParserDiagnostics($lines),
+                'hint' => 'The Trendy DE parser did not find a complete item table row with product code, description, quantity/unit, and line total.',
+            ]);
+
             return null;
         }
 
@@ -354,6 +375,91 @@ class OrderAiDigitalPdfRulesParser
             return is_array($item)
                 && trim((string) ($item['product_code'] ?? '')) !== '';
         }));
+    }
+
+    private function buildTrendyDeParserDiagnostics(array $lines): array
+    {
+        $lineSamples = [];
+        $tableHeaderLine = '';
+        $codeAmountRows = [];
+        $codeOnlyRows = [];
+        $summaryLines = [];
+
+        foreach ($lines as $line) {
+            $line = trim((string) $line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            if (count($lineSamples) < 12) {
+                $lineSamples[] = $line;
+            }
+
+            $normalized = $this->normalizeKeywordText($line);
+
+            if ($tableHeaderLine === '' && str_contains($normalized, 'artikel nr')) {
+                $tableHeaderLine = $line;
+            }
+
+            if ($this->parseTrendyDeCodeAmountRow($line) !== null && count($codeAmountRows) < 5) {
+                $codeAmountRows[] = $line;
+            }
+
+            if (preg_match('/^\d{6,12}$/u', $line) === 1 && count($codeOnlyRows) < 5) {
+                $codeOnlyRows[] = $line;
+            }
+
+            if ($this->isTrendyDeSummaryLine($normalized) && count($summaryLines) < 5) {
+                $summaryLines[] = $line;
+            }
+        }
+
+        return [
+            'has_table_header_with_artikel_nr' => $tableHeaderLine !== '',
+            'table_header_line' => $tableHeaderLine,
+            'code_amount_row_count' => count($codeAmountRows),
+            'code_amount_row_samples' => $codeAmountRows,
+            'code_only_row_count' => count($codeOnlyRows),
+            'code_only_row_samples' => $codeOnlyRows,
+            'summary_line_samples' => $summaryLines,
+            'first_line_samples' => $lineSamples,
+        ];
+    }
+
+    private function buildGrobParserDiagnostics(array $preparedDocument, string $searchableText): array
+    {
+        $lines = $this->flattenPreparedLines($preparedDocument);
+        $positionRows = [];
+        $keywordRows = [];
+        $lineSamples = [];
+
+        foreach ($lines !== [] ? $lines : $this->splitVisibleTextLines($searchableText) as $line) {
+            $line = trim((string) $line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            if (count($lineSamples) < 12) {
+                $lineSamples[] = $line;
+            }
+
+            if ($this->createGrobParsedItemFromLine($line) !== null && count($positionRows) < 5) {
+                $positionRows[] = $line;
+            }
+
+            if ($this->isGrobKeywordLine($line) && count($keywordRows) < 8) {
+                $keywordRows[] = $line;
+            }
+        }
+
+        return [
+            'position_row_count' => count($positionRows),
+            'position_row_samples' => $positionRows,
+            'keyword_row_samples' => $keywordRows,
+            'first_line_samples' => $lineSamples,
+        ];
     }
 
     private function parseTrendyDeCodeAmountRow(string $line): ?array
