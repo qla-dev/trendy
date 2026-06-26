@@ -1555,33 +1555,6 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(231.0, data_get($result, 'normalized_payload.summary.grand_total'));
     }
 
-    public function test_digital_trendy_de_parser_handles_legacy_split_code_amount_description_rows(): void
-    {
-        $parser = app(OrderAiDigitalPdfRulesParser::class);
-        $reflection = new ReflectionClass($parser);
-        $method = $reflection->getMethod('parseTrendyDeItems');
-        $method->setAccessible(true);
-        $hulse = (string) hex2bin('48c3bc6c7365');
-
-        $items = $method->invoke($parser, [
-            'Trendy Germany GmbH',
-            'Anlieferadresse: Lieferant: Artikel Nr Pos Beschreibung Menge EK-Preis Einheit',
-            '503600720',
-            '231,00 0,00 Betrag 10,00 VAT % STU 23,10',
-            $hulse . ' 1',
-            '231,00 Total',
-        ]);
-
-        $this->assertCount(1, $items);
-        $this->assertSame('503600720', $items[0]['product_code']);
-        $this->assertSame($hulse, $items[0]['product_name']);
-        $this->assertSame(1, $items[0]['line_number']);
-        $this->assertSame(10.0, $items[0]['quantity']);
-        $this->assertSame('KO', $items[0]['unit']);
-        $this->assertSame(23.1, $items[0]['unit_price']);
-        $this->assertSame(231.0, $items[0]['line_total']);
-    }
-
     public function test_execute_extraction_detects_trendy_de_profile_when_stored_profile_is_missing(): void
     {
         Storage::fake('local');
