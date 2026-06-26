@@ -10,6 +10,7 @@ use App\Services\OrderAi\PantheonOrderTransferService;
 use App\Services\OrderAi\Support\OrderAiDigitalPdfRulesParser;
 use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use App\Services\OrderAi\Support\OrderAiDocumentPreparationService;
+use App\Services\OrderAi\Support\OrderAiDigitalPdfRulesParser;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use ReflectionClass;
@@ -576,6 +577,46 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('KO', $normalized['items'][0]['unit']);
     }
 
+    public function test_normalize_payload_deduplicates_repeated_grob_product_name_segments(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('normalizePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['order']['supplier_name'] = 'GROB-WERKE GmbH & Co. KG';
+        $payload['items'][0]['product_code'] = '';
+        $payload['items'][0]['product_name'] = 'Klotz GM4395/01-70-126/1-2-18 Klotz GM4395/01-70-126/1-2-18';
+
+        $normalized = $method->invoke($service, $payload);
+
+        $this->assertSame('Klotz GM4395/01-70-126/1-2-18', $normalized['items'][0]['product_name']);
+    }
+
+    public function test_normalize_payload_uses_catalog_product_name_for_grob_product_code(): void
+    {
+        $service = new class extends OrderAiScanService {
+            protected function resolveCatalogProductNameByCode(string $productCode): string
+            {
+                return $productCode === '5842536'
+                    ? 'Catalog Klotz GM4395/01-70-126/1-2-18'
+                    : '';
+            }
+        };
+        $reflection = new ReflectionClass(OrderAiScanService::class);
+        $method = $reflection->getMethod('normalizePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['order']['supplier_name'] = 'GROB-WERKE GmbH & Co. KG';
+        $payload['items'][0]['product_code'] = '5842536';
+        $payload['items'][0]['product_name'] = 'Klotz GM4395/01-70-126/1-2-18 Klotz GM4395/01-70-126/1-2-18';
+
+        $normalized = $method->invoke($service, $payload);
+
+        $this->assertSame('5842536', $normalized['items'][0]['product_code']);
+        $this->assertSame('Catalog Klotz GM4395/01-70-126/1-2-18', $normalized['items'][0]['product_name']);
+    }
+
     public function test_build_status_payload_splits_embedded_grob_quantity_and_unit_out_of_legacy_product_code(): void
     {
         $scan = new OrderAiScan([
@@ -668,6 +709,27 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(0, $metrics['billed_tokens']);
         $this->assertSame(5, $metrics['effective_page_count']);
         $this->assertSame(OrderAiDocumentPreparationService::GROB_PAGE_LIMIT_REASON, $metrics['page_processing_limit_reason']);
+    }
+
+    public function test_normalize_source_mime_type_keeps_pdf_attachments_as_application_pdf(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('normalizeSourceMimeType');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            'application/pdf',
+            $method->invoke($service, 'application/octet-stream', 'Bestellung_26-020-000945.pdf', '%PDF-1.7 fake')
+        );
+        $this->assertSame(
+            'application/pdf',
+            $method->invoke($service, '', 'document.bin', '%PDF-1.7 fake')
+        );
+        $this->assertSame(
+            'text/plain',
+            $method->invoke($service, 'text/plain', 'document.txt', 'hello')
+        );
     }
 
     public function test_build_status_payload_repairs_utf8_mojibake_in_stored_result(): void
@@ -1335,6 +1397,30 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(127.8, data_get($result, 'normalized_payload.summary.subtotal'));
     }
 
+    public function test_digital_grob_parser_deduplicates_repeated_product_name_rows(): void
+    {
+        $parser = app(OrderAiDigitalPdfRulesParser::class);
+        $reflection = new ReflectionClass($parser);
+        $method = $reflection->getMethod('parseGrobItemsFromText');
+        $method->setAccessible(true);
+
+        $items = $method->invoke($parser, implode("\n", [
+            'GROB-WERKE GmbH & Co. KG',
+            'BESTELLUNG',
+            'Bestell-Nr.: 4512100377',
+            '20 6449473 3,00 ST',
+            'Klotz',
+            'GM4395/01-70-126/1-2-18',
+            'Klotz',
+            'GM4395/01-70-126/1-2-18',
+            'Zeichnung GM4395/01-70-126/1-2-18 mit Revisionsstand 01',
+            'Nettopreis 42,60 EUR ST 1 127,80',
+            'Lieferdatum: 18.06.2026 3,00 ST',
+        ]));
+
+        $this->assertSame('Klotz GM4395/01-70-126/1-2-18', $items[0]['product_name']);
+    }
+
     public function test_execute_extraction_prefers_local_rules_parser_for_trendy_de_pdf(): void
     {
         Storage::fake('local');
@@ -1397,6 +1483,77 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('Halter 884698', data_get($result, 'normalized_payload.items.0.product_name'));
         $this->assertSame('KO', data_get($result, 'normalized_payload.items.0.unit'));
         $this->assertSame(1179.2, data_get($result, 'normalized_payload.summary.subtotal'));
+    }
+
+    public function test_execute_extraction_parses_trendy_de_code_amount_row_split_from_description(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000945.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            'Trendy Germany GmbH',
+            'Kaiserstraße 150',
+            '51643 Gummersbach',
+            'Germany',
+            'Trendy',
+            'Trendy doo',
+            'ID: 236318900009',
+            'Bratstvo 11',
+            '26-020-000945 Edina Duzan',
+            'Trendy Germany 16 25. 6. 2026. Liefertermin',
+            'Datum 24. 8. 2026. Deliver via Bestellung',
+            'Person responsible',
+            'Anlieferadresse: Lieferant: Artikel Nr. Pos. Beschreibung Menge EK-Preis Einheit',
+            '503600720 231,00 0,00 Betrag 10,00 VAT % STU 23,10',
+            'Hülse 1',
+            '231,00 Total',
+            'Steuer 231,00 0,00',
+            'Gesamtpreis EUR',
+        ]]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new RuntimeException('AI provider should not be called for digital rules-first extraction.');
+            }
+        });
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000945.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertSame('26-020-000945', data_get($result, 'normalized_payload.order.external_document_number'));
+        $this->assertSame('Trendy doo', data_get($result, 'normalized_payload.order.receiver_name'));
+        $this->assertSame('Edina Duzan', data_get($result, 'normalized_payload.order.contact_name'));
+        $this->assertSame('25. 6. 2026.', data_get($result, 'normalized_payload.order.delivery_deadline'));
+        $this->assertSame('503600720', data_get($result, 'normalized_payload.items.0.product_code'));
+        $this->assertSame('Hülse', data_get($result, 'normalized_payload.items.0.product_name'));
+        $this->assertSame(1, data_get($result, 'normalized_payload.items.0.line_number'));
+        $this->assertSame(10.0, data_get($result, 'normalized_payload.items.0.quantity'));
+        $this->assertSame('KO', data_get($result, 'normalized_payload.items.0.unit'));
+        $this->assertSame(23.1, data_get($result, 'normalized_payload.items.0.unit_price'));
+        $this->assertSame(231.0, data_get($result, 'normalized_payload.items.0.line_total'));
+        $this->assertSame('', data_get($result, 'normalized_payload.items.0.note'));
+        $this->assertSame(231.0, data_get($result, 'normalized_payload.summary.subtotal'));
+        $this->assertSame(231.0, data_get($result, 'normalized_payload.summary.grand_total'));
     }
 
     public function test_run_extraction_overwrites_initial_billed_tokens_with_page_based_value_for_local_rules_parser(): void

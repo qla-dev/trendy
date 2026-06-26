@@ -338,9 +338,7 @@ class PantheonOrderTransferService
 
             if ($resolvedProductName !== '') {
                 $productName = $resolvedProductName;
-            }
-
-            if ($sourceProductName !== '') {
+            } elseif ($sourceProductName !== '') {
                 $productName = $sourceProductName;
             }
 
@@ -1754,7 +1752,9 @@ class PantheonOrderTransferService
             return '';
         }
 
-        return $this->normalizeTransferProductNameLine($normalized);
+        return $this->deduplicateRepeatedProductNameSegments(
+            $this->normalizeTransferProductNameLine($normalized)
+        );
     }
 
     private function normalizeTransferProductNameLine(string $value): string
@@ -1764,6 +1764,60 @@ class PantheonOrderTransferService
         $normalized = preg_replace('/(?<=[\p{L}\p{N}])\s*\/\s*(?=[\p{L}\p{N}])/u', '/', $normalized) ?? $normalized;
 
         return trim((string) (preg_replace('/\s+/u', ' ', $normalized) ?? $normalized));
+    }
+
+    private function deduplicateRepeatedProductNameSegments(string $value): string
+    {
+        $tokens = preg_split('/\s+/u', trim($value)) ?: [];
+        $tokens = array_values(array_filter($tokens, fn ($token) => trim((string) $token) !== ''));
+
+        if (count($tokens) < 2) {
+            return trim($value);
+        }
+
+        $changed = true;
+
+        while ($changed) {
+            $changed = false;
+            $tokenCount = count($tokens);
+
+            for ($length = (int) floor($tokenCount / 2); $length >= 1; $length--) {
+                for ($offset = 0; $offset + ($length * 2) <= $tokenCount; $offset++) {
+                    $left = array_slice($tokens, $offset, $length);
+                    $right = array_slice($tokens, $offset + $length, $length);
+
+                    if (!$this->productNameTokenSegmentsMatch($left, $right)) {
+                        continue;
+                    }
+
+                    array_splice($tokens, $offset + $length, $length);
+                    $changed = true;
+                    break 2;
+                }
+            }
+        }
+
+        return trim(implode(' ', $tokens));
+    }
+
+    private function productNameTokenSegmentsMatch(array $left, array $right): bool
+    {
+        if ($left === [] || count($left) !== count($right)) {
+            return false;
+        }
+
+        if (count($left) === 1 && mb_strlen((string) ($left[0] ?? '')) < 4) {
+            return false;
+        }
+
+        return $this->normalizeProductNameSegmentKey($left) === $this->normalizeProductNameSegmentKey($right);
+    }
+
+    private function normalizeProductNameSegmentKey(array $tokens): string
+    {
+        $value = strtoupper(Str::ascii(implode(' ', array_map('strval', $tokens))));
+
+        return preg_replace('/[^A-Z0-9]+/', '', $value) ?? '';
     }
 
     private function normalizePantheonText(string $value): string
