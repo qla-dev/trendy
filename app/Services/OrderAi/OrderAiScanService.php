@@ -465,6 +465,7 @@ class OrderAiScanService
                 'text_character_count' => (int) data_get($preparedDocument, 'digital_extraction.text_character_count', 0),
                 'table_row_count' => (int) data_get($preparedDocument, 'digital_extraction.table_row_count', 0),
                 'provider_input_mode' => (string) ($preparedDocument['provider_input_mode'] ?? ''),
+                'hint' => $this->digitalRulesParserFailureHint($preparedDocument),
             ]);
 
             if (!filter_var(config('ai-order-scan.digital_pdf.fallback_to_ai', true), FILTER_VALIDATE_BOOL)) {
@@ -480,6 +481,21 @@ class OrderAiScanService
         }
 
         return $providerResult;
+    }
+
+    private function digitalRulesParserFailureHint(array $preparedDocument): string
+    {
+        $source = (string) data_get($preparedDocument, 'digital_extraction.source', '');
+
+        if ($source === 'legacy_stream_fallback') {
+            return 'Rules parser ran on legacy fallback text, not Smalot coordinates/table rows. Check previous Smalot extraction warnings and Composer vendor install.';
+        }
+
+        if ($source === 'smalot_pdfparser') {
+            return 'Smalot extracted text/table rows, but the profile parser did not recognize a complete item table. Check profile parser diagnostics log.';
+        }
+
+        return 'Digital parser returned no structured items. Check PDF extraction source, profile, and parser diagnostics log.';
     }
 
     public function finalizeExtractionResult(
