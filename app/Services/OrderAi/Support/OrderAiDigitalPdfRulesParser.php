@@ -270,13 +270,15 @@ class OrderAiDigitalPdfRulesParser
         foreach ($lines as $line) {
             $line = trim($line);
             $keywordLine = $this->normalizeKeywordText($line);
+            $codeAmountItem = $this->parseTrendyDeCodeAmountRow($line);
+            $codeOnly = $this->parseTrendyDeCodeOnlyRow($line);
 
             if (!$tableStarted) {
-                if (str_contains($keywordLine, 'pos.') && str_contains($keywordLine, 'artikel nr')) {
+                if ($this->isTrendyDeTableHeaderLine($keywordLine) || $codeAmountItem !== null || $codeOnly !== '') {
                     $tableStarted = true;
+                } else {
+                    continue;
                 }
-
-                continue;
             }
 
             if ($line === '' || $this->isTrendyDeNoiseLine($keywordLine)) {
@@ -287,14 +289,23 @@ class OrderAiDigitalPdfRulesParser
                 break;
             }
 
-            $codeAmountItem = $this->parseTrendyDeCodeAmountRow($line);
-
             if ($codeAmountItem !== null) {
                 if ($this->isTrendyDeItemReady($openItem)) {
                     $items[] = $this->finalizeTrendyDeItem($openItem);
                 }
 
                 $openItem = $codeAmountItem;
+                $queuedItem = null;
+
+                continue;
+            }
+
+            if ($codeOnly !== '') {
+                if ($this->isTrendyDeItemReady($openItem)) {
+                    $items[] = $this->finalizeTrendyDeItem($openItem);
+                }
+
+                $openItem = $this->initializeTrendyDeParsedItem(0, $codeOnly, '');
                 $queuedItem = null;
 
                 continue;
@@ -356,6 +367,12 @@ class OrderAiDigitalPdfRulesParser
         }));
     }
 
+    private function isTrendyDeTableHeaderLine(string $normalizedLine): bool
+    {
+        return str_contains($normalizedLine, 'artikel nr')
+            && preg_match('/\bpos\.?\b/u', $normalizedLine) === 1;
+    }
+
     private function parseTrendyDeCodeAmountRow(string $line): ?array
     {
         $normalized = trim($line);
@@ -388,6 +405,17 @@ class OrderAiDigitalPdfRulesParser
         $item['unit'] = $unit;
 
         return $item;
+    }
+
+    private function parseTrendyDeCodeOnlyRow(string $line): string
+    {
+        $normalized = trim($line);
+
+        if (preg_match('/^\d{6,12}$/u', $normalized) === 1) {
+            return $normalized;
+        }
+
+        return '';
     }
 
     private function splitTrendyDeLineIntoContentAndNextItem(string $line): array
@@ -477,6 +505,22 @@ class OrderAiDigitalPdfRulesParser
 
         $unitMatch = $this->extractTrendyDeUnitToken($line);
         $amounts = $this->extractGermanAmounts($line, true);
+        $keywordLine = $this->normalizeKeywordText($line);
+
+        if (
+            $unitMatch !== ''
+            && count($amounts) >= 4
+            && (str_contains($keywordLine, 'betrag') || str_contains($keywordLine, 'vat %'))
+        ) {
+            $item['line_total'] = (float) ($amounts[0] ?? $item['line_total']);
+            $item['vat_rate'] = (float) ($amounts[1] ?? $item['vat_rate']);
+            $item['quantity'] = (float) ($amounts[2] ?? $item['quantity']);
+            $item['unit_price'] = (float) ($amounts[3] ?? $item['unit_price']);
+            $item['unit'] = $unitMatch;
+
+            return;
+        }
+
         $descriptionText = $this->stripTrendyDeNumbersAndUnits($line);
 
         if ($descriptionText !== '') {
@@ -785,10 +829,10 @@ class OrderAiDigitalPdfRulesParser
 
     private function isTrendyDeTableOrItemRow(string $normalizedLine, string $line): bool
     {
-        return str_contains($normalizedLine, 'artikel nr')
-            || str_contains($normalizedLine, 'pos.')
+        return $this->isTrendyDeTableHeaderLine($normalizedLine)
             || $this->isTrendyDeSummaryLine($normalizedLine)
-            || $this->parseTrendyDeCodeAmountRow($line) !== null;
+            || $this->parseTrendyDeCodeAmountRow($line) !== null
+            || $this->parseTrendyDeCodeOnlyRow($line) !== '';
     }
 
     private function extractTrendyDeReceiverFallback(array $preparedDocument, string $searchableText): string
