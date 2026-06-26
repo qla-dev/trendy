@@ -1089,8 +1089,12 @@ class OrderAiDigitalPdfRulesParser
 
     private function finalizeGrobParsedItem(array $item): array
     {
+        $productNameLines = array_values(array_filter(array_map(function ($line) {
+            return $this->stripGrobProductNameUnitPrefix((string) $line);
+        }, $item['product_name_lines'] ?? [])));
+
         $item['product_name'] = $this->normalizeScannedProductName(
-            trim(implode(' ', array_values(array_filter($item['product_name_lines'] ?? []))))
+            trim(implode(' ', $productNameLines))
         );
         $item['note'] = implode(' | ', array_values(array_unique(array_filter($item['note_lines'] ?? []))));
         unset($item['product_name_lines']);
@@ -1111,6 +1115,17 @@ class OrderAiDigitalPdfRulesParser
         }
 
         return $item;
+    }
+
+    private function stripGrobProductNameUnitPrefix(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        return trim((string) (preg_replace('/^(?:ST|STK|STUECK|STUCK|STU|PCS|PIECE|KO)\s+(?=\S)/iu', '', $value) ?? $value));
     }
 
     private function createGrobParsedItemFromLine(string $line): ?array
@@ -1547,7 +1562,8 @@ class OrderAiDigitalPdfRulesParser
 
     private function normalizeScannedProductName(string $value): string
     {
-        $normalized = trim((string) (preg_replace('/\s+/u', ' ', Utf8Sanitizer::clean($value)) ?? Utf8Sanitizer::clean($value)));
+        $value = Utf8Sanitizer::repairGermanUmlautSpacing(Utf8Sanitizer::clean($value));
+        $normalized = trim((string) (preg_replace('/\s+/u', ' ', $value) ?? $value));
 
         if ($normalized === '') {
             return '';

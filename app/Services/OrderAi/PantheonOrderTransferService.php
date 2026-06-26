@@ -456,8 +456,8 @@ class PantheonOrderTransferService
         $subtotal = round(array_sum(array_column($preparedItems, 'base_value')), 4);
         $vatTotal = round(array_sum(array_column($preparedItems, 'vat_value')), 4);
         $grandTotal = round(array_sum(array_column($preparedItems, 'grand_total')), 4);
-        $customerName = trim((string) ($order['customer_name'] ?? ''));
-        $supplierName = trim((string) ($order['supplier_name'] ?? ''));
+        $customerName = $this->normalizePantheonText((string) ($order['customer_name'] ?? ''));
+        $supplierName = $this->normalizePantheonText((string) ($order['supplier_name'] ?? ''));
 
         if ($strict && $customerName === '') {
             throw new RuntimeException('Naziv kupca je obavezan za kreiranje narudžbe.');
@@ -466,13 +466,13 @@ class PantheonOrderTransferService
         return [
             'customer_name' => $customerName,
             'supplier_name' => $supplierName,
-            'receiver_name' => trim((string) ($order['receiver_name'] ?? $customerName)) ?: $customerName,
-            'contact_name' => trim((string) ($order['contact_name'] ?? '')),
+            'receiver_name' => $this->normalizePantheonText((string) ($order['receiver_name'] ?? $customerName)) ?: $customerName,
+            'contact_name' => $this->normalizePantheonText((string) ($order['contact_name'] ?? '')),
             'external_document_number' => trim((string) ($order['external_document_number'] ?? '')),
             'document_type' => $documentType,
             'currency' => trim((string) ($order['currency'] ?? config('ai-order-scan.default_currency', 'KM'))) ?: (string) config('ai-order-scan.default_currency', 'KM'),
             'delivery_deadline' => trim((string) ($order['delivery_deadline'] ?? '')),
-            'note' => trim((string) ($order['note'] ?? '')),
+            'note' => $this->normalizePantheonText((string) ($order['note'] ?? '')),
             'way_of_sale' => trim((string) ($order['way_of_sale'] ?? config('ai-order-scan.default_way_of_sale', 'D'))) ?: (string) config('ai-order-scan.default_way_of_sale', 'D'),
             'warnings' => array_values(array_unique(array_filter($warnings))),
             'subtotal' => $subtotal,
@@ -511,7 +511,13 @@ class PantheonOrderTransferService
                 continue;
             }
 
-            $nameLines[] = $this->normalizeTransferProductNameLine($line);
+            $nameLine = $this->normalizeTransferProductNameLine($line);
+
+            if ($isGrobOrder) {
+                $nameLine = $this->stripGrobTransferProductNameUnitPrefix($nameLine);
+            }
+
+            $nameLines[] = $nameLine;
         }
 
         if (!$isGrobOrder) {
@@ -556,9 +562,9 @@ class PantheonOrderTransferService
 
         return [
             'product_name' => $resolvedProductName,
-            'drawing_reference' => $drawingReference,
-            'material_hint' => trim((string) (preg_replace('/\s+/', ' ', $materialHint) ?? $materialHint)),
-            'note' => implode(' | ', array_values(array_unique(array_filter($noteParts)))),
+            'drawing_reference' => $this->normalizePantheonText($drawingReference),
+            'material_hint' => $this->normalizePantheonText($materialHint),
+            'note' => $this->normalizePantheonText(implode(' | ', array_values(array_unique(array_filter($noteParts))))),
         ];
     }
 
@@ -568,10 +574,21 @@ class PantheonOrderTransferService
         $lines = preg_split('/\n+/u', $value) ?: [];
 
         return array_values(array_filter(array_map(function ($line) {
-            $line = trim((string) (preg_replace('/\s+/u', ' ', (string) $line) ?? $line));
+            $line = $this->normalizePantheonText((string) $line);
 
             return $line;
         }, $lines)));
+    }
+
+    private function stripGrobTransferProductNameUnitPrefix(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        return trim((string) (preg_replace('/^(?:ST|STK|STUECK|STUCK|STU|PCS|PIECE|KO)\s+(?=\S)/iu', '', $value) ?? $value));
     }
 
     private function resolvePrimaryClassification(string $materialHint, array $order = []): string
@@ -641,7 +658,7 @@ class PantheonOrderTransferService
         mixed $user = null
     ): array {
         $productCode = trim($productCode);
-        $productName = trim($productName);
+        $productName = $this->normalizePantheonText($productName);
 
         if ($productCode === '') {
             return [];
@@ -1288,6 +1305,7 @@ class PantheonOrderTransferService
     private function resolveSubjectQId(string $subject, ?int $fallbackQId = null): ?int
     {
         $subject = trim($subject);
+        $subject = $this->normalizePantheonText($subject);
 
         if ($subject !== '') {
             foreach ($this->subjectLookupCandidates($subject) as $candidate) {
@@ -1313,6 +1331,7 @@ class PantheonOrderTransferService
     private function subjectLookupCandidates(string $subject): array
     {
         $subject = trim((string) preg_replace('/\s+/', ' ', $subject));
+        $subject = $this->normalizePantheonText($subject);
 
         if ($subject === '') {
             return [];
@@ -1396,7 +1415,7 @@ class PantheonOrderTransferService
     private function resolveCatalogMaterial(string $productCode, string $productName): array
     {
         $productCode = trim(Utf8Sanitizer::clean($productCode, 120));
-        $productName = trim(Utf8Sanitizer::clean($productName));
+        $productName = $this->normalizePantheonText($productName);
 
         $codeCandidate = $this->resolveCatalogMaterialByCode($productCode);
         $nameCandidate = $this->resolveCatalogMaterialByName($productName);
@@ -1470,7 +1489,7 @@ class PantheonOrderTransferService
 
     private function resolveCatalogMaterialByName(string $productName): array
     {
-        $productName = Utf8Sanitizer::clean($productName);
+        $productName = $this->normalizePantheonText($productName);
         $cacheKey = $this->normalizeCatalogLookupValue($productName);
 
         if ($cacheKey === '') {
@@ -1573,8 +1592,7 @@ class PantheonOrderTransferService
 
     private function buildCatalogMaterialSearchTerms(string $productName): array
     {
-        $productName = Utf8Sanitizer::clean($productName);
-        $productName = trim((string) (preg_replace('/\s+/', ' ', $productName) ?? $productName));
+        $productName = $this->normalizePantheonText($productName);
 
         if ($productName === '') {
             return [];
@@ -1615,7 +1633,7 @@ class PantheonOrderTransferService
         $normalizedTerms = [];
 
         foreach ($terms as $term) {
-            $term = trim(Utf8Sanitizer::clean($term));
+            $term = $this->normalizePantheonText($term);
 
             if ($term === '') {
                 continue;
@@ -1730,7 +1748,7 @@ class PantheonOrderTransferService
 
     private function normalizeTransferProductName(string $value): string
     {
-        $normalized = trim((string) (preg_replace('/\s+/u', ' ', Utf8Sanitizer::clean($value)) ?? Utf8Sanitizer::clean($value)));
+        $normalized = $this->normalizePantheonText($value);
 
         if ($normalized === '') {
             return '';
@@ -1741,7 +1759,7 @@ class PantheonOrderTransferService
 
     private function normalizeTransferProductNameLine(string $value): string
     {
-        $normalized = Utf8Sanitizer::clean($value);
+        $normalized = $this->normalizePantheonText($value);
         $normalized = preg_replace('/(?<=[\p{L}\p{N}\/])\s*-\s*(?=[\p{L}\p{N}\/])/u', '-', $normalized) ?? $normalized;
         $normalized = preg_replace('/(?<=[\p{L}\p{N}])\s*\/\s*(?=[\p{L}\p{N}])/u', '/', $normalized) ?? $normalized;
 
@@ -1750,9 +1768,9 @@ class PantheonOrderTransferService
 
     private function normalizePantheonText(string $value): string
     {
-        $value = Utf8Sanitizer::clean($value);
+        $value = Utf8Sanitizer::repairGermanUmlautSpacing(Utf8Sanitizer::clean($value));
 
-        return trim((string) (preg_replace('/\s+/', ' ', str_replace(["\r", "\n"], ' ', $value)) ?? $value));
+        return trim((string) (preg_replace('/\s+/u', ' ', str_replace(["\r", "\n"], ' ', $value)) ?? $value));
     }
 
     private function mergePantheonTextParts(array $parts): string

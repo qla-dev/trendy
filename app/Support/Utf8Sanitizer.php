@@ -68,6 +68,29 @@ class Utf8Sanitizer
         return $cleaned;
     }
 
+    public static function repairGermanUmlautSpacing(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        $chars = '\x{00E4}\x{00F6}\x{00FC}\x{00C4}\x{00D6}\x{00DC}\x{00DF}';
+        $normalized = $value;
+
+        for ($attempt = 0; $attempt < 4; $attempt++) {
+            $previous = $normalized;
+            $normalized = preg_replace('/(\p{L})\s+([' . $chars . '])\s*(?=\p{L})/u', '$1$2', $normalized) ?? $normalized;
+            $normalized = preg_replace('/(?<=\p{L})([' . $chars . '])\s+(?=\p{L})/u', '$1', $normalized) ?? $normalized;
+            $normalized = preg_replace('/(^|[^\p{L}])([' . $chars . '])\s+(?=\p{L})/u', '$1$2', $normalized) ?? $normalized;
+
+            if ($normalized === $previous) {
+                break;
+            }
+        }
+
+        return $normalized;
+    }
+
     public static function cleanExceptionMessage(Throwable|string $value, int $maxLength = 600): string
     {
         $message = $value instanceof Throwable ? $value->getMessage() : (string) $value;

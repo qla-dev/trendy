@@ -129,6 +129,51 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame('Platte GM7258/06-1350-75/1-2', $result['product_name']);
     }
 
+    public function test_extract_transfer_item_metadata_repairs_spaces_around_german_umlauts(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('extractTransferItemMetadata');
+        $method->setAccessible(true);
+        $u = (string) hex2bin('c3bc');
+        $o = (string) hex2bin('c3b6');
+        $eszett = (string) hex2bin('c39f');
+
+        $result = $method->invoke($service, [
+            'product_name' => 'H ' . $u . " lse\nSt " . $o . ' ' . $eszett . ' el',
+            'drawing_reference' => '',
+            'note' => 'f ' . $u . ' r Montage',
+            'material_hint' => 'br ' . $u . ' niert',
+        ], [
+            'supplier_name' => 'GROB-WERKE GmbH & Co. KG',
+        ]);
+
+        $this->assertSame('H' . $u . 'lse St' . $o . $eszett . 'el', $result['product_name']);
+        $this->assertSame('f' . $u . 'r Montage', $result['note']);
+        $this->assertSame('br' . $u . 'niert', $result['material_hint']);
+    }
+
+    public function test_extract_transfer_item_metadata_removes_grob_leading_unit_token_from_product_name(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('extractTransferItemMetadata');
+        $method->setAccessible(true);
+        $durchfuehrung = (string) hex2bin('447572636866c3bc6872756e67');
+
+        $result = $method->invoke($service, [
+            'product_name' => 'ST ' . $durchfuehrung . "\nG352-1220-206-0000-06-1",
+            'drawing_reference' => '',
+            'note' => '',
+            'material_hint' => '',
+        ], [
+            'supplier_name' => 'GROB-WERKE GmbH & Co. KG',
+        ]);
+
+        $this->assertSame($durchfuehrung . ' G352-1220-206-0000-06-1', $result['product_name']);
+        $this->assertStringStartsNotWith('ST ', $result['product_name']);
+    }
+
     public function test_normalize_transfer_product_code_strips_decimal_suffix_from_numeric_code(): void
     {
         $service = new PantheonOrderTransferService();
