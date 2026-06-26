@@ -4,6 +4,7 @@ namespace App\Services\OrderAi;
 
 use App\Jobs\ProcessImportedOrderAiScanJob;
 use App\Models\OrderAiScan;
+use App\Models\Product;
 use App\Services\OrderAi\Contracts\OrderAiScanProvider;
 use App\Services\OrderAi\Profiles\OrderDocumentProfileDetector;
 use App\Services\OrderAi\Support\OrderAiDigitalPdfRulesParser;
@@ -28,6 +29,7 @@ class OrderAiScanService
 
     private ?array $orderAiScanColumns = null;
     private array $effectivePageMetaCache = [];
+    private array $catalogProductNameByCodeCache = [];
 
     public function createScan(UploadedFile $file, mixed $user = null): OrderAiScan
     {
@@ -38,6 +40,7 @@ class OrderAiScanService
         $originalName = (string) $file->getClientOriginalName();
         $mimeType = (string) ($file->getMimeType() ?: '');
         $fileBytes = $this->readLocalFileBytes((string) $file->getRealPath());
+        $mimeType = $this->normalizeSourceMimeType($mimeType, $originalName, $fileBytes);
         $documentProfile = $this->detectDocumentProfile($originalName, $mimeType, $fileBytes);
         $requestPrompt = $this->buildRequestPrompt($documentProfile);
         $storedName = Str::uuid()->toString() . '.' . ($file->guessExtension() ?: $file->extension() ?: 'bin');
@@ -88,6 +91,7 @@ class OrderAiScanService
         $resolvedMimeType = trim((string) $mimeType) !== ''
             ? trim((string) $mimeType)
             : $this->guessMimeTypeFromName($originalName);
+        $resolvedMimeType = $this->normalizeSourceMimeType($resolvedMimeType, $originalName, $binaryContent);
         $documentProfile = $this->detectDocumentProfile($originalName, $resolvedMimeType, $binaryContent);
         $requestPrompt = $this->buildRequestPrompt($documentProfile);
         $documentMetrics = $this->resolveStoredDocumentMetrics(
@@ -176,7 +180,11 @@ class OrderAiScanService
 
         $storedBytes = $this->readStoredFileBytes($scan);
         $sourceFileName = (string) ($scan->source_file_name ?? '');
-        $sourceMimeType = (string) ($scan->source_mime_type ?? '');
+        $sourceMimeType = $this->normalizeSourceMimeType(
+            (string) ($scan->source_mime_type ?? ''),
+            $sourceFileName,
+            $storedBytes
+        );
         $documentProfile = $this->detectDocumentProfile($sourceFileName, $sourceMimeType, $storedBytes);
         $documentMetrics = $this->resolveStoredDocumentMetrics(
             (string) config('ai-order-scan.storage_disk', 'local'),
@@ -198,6 +206,7 @@ class OrderAiScanService
             'progress_total' => max(100, (int) ($scan->progress_total ?? 100)),
             'request_prompt' => $requestPrompt,
             'provider_task_id' => null,
+            'source_mime_type' => $sourceMimeType,
             'normalized_payload' => null,
             'pantheon_transfer_payload' => null,
             'raw_provider_response' => null,
@@ -346,6 +355,7 @@ class OrderAiScanService
         $resolvedMimeType = trim((string) $mimeType) !== ''
             ? trim((string) $mimeType)
             : $this->guessMimeTypeFromName($originalName);
+        $resolvedMimeType = $this->normalizeSourceMimeType($resolvedMimeType, $originalName, $bytes);
         $documentProfile = $this->detectDocumentProfile($originalName, $resolvedMimeType, $bytes);
         $requestPrompt = $this->buildRequestPrompt($documentProfile);
         $documentMetrics = $this->resolveStoredDocumentMetrics(
@@ -391,8 +401,33 @@ class OrderAiScanService
             $parsedResult = app(OrderAiDigitalPdfRulesParser::class)->parse($scan, $preparedDocument);
 
             if (is_array($parsedResult)) {
+                Log::info('Order AI digital PDF rules parser matched document.', [
+                    'scan_id' => $scan->id,
+                    'document_profile' => (string) ($scan->document_profile ?? ''),
+                    'pdf_type' => (string) ($preparedDocument['pdf_type'] ?? ''),
+                    'source' => (string) data_get($preparedDocument, 'digital_extraction.source', ''),
+                    'text_character_count' => (int) data_get($preparedDocument, 'digital_extraction.text_character_count', 0),
+                    'table_row_count' => (int) data_get($preparedDocument, 'digital_extraction.table_row_count', 0),
+                    'provider_input_mode' => (string) ($preparedDocument['provider_input_mode'] ?? ''),
+                ]);
+
                 return $parsedResult;
             }
+
+            Log::warning('Order AI digital PDF rules parser did not match document; falling back to AI.', [
+                'scan_id' => $scan->id,
+                'document_profile' => (string) ($scan->document_profile ?? ''),
+                'source_file_name' => (string) ($scan->source_file_name ?? ''),
+                'source_mime_type' => (string) ($scan->source_mime_type ?? ''),
+                'pdf_type' => (string) ($preparedDocument['pdf_type'] ?? ''),
+                'extraction_method' => (string) ($preparedDocument['extraction_method'] ?? ''),
+                'source' => (string) data_get($preparedDocument, 'digital_extraction.source', ''),
+                'source_page_count' => (int) ($preparedDocument['source_page_count'] ?? 0),
+                'meaningful_text_pages' => (int) data_get($preparedDocument, 'digital_extraction.meaningful_text_pages', 0),
+                'text_character_count' => (int) data_get($preparedDocument, 'digital_extraction.text_character_count', 0),
+                'table_row_count' => (int) data_get($preparedDocument, 'digital_extraction.table_row_count', 0),
+                'provider_input_mode' => (string) ($preparedDocument['provider_input_mode'] ?? ''),
+            ]);
 
             if (!filter_var(config('ai-order-scan.digital_pdf.fallback_to_ai', true), FILTER_VALIDATE_BOOL)) {
                 throw new RuntimeException('Lokalni parser nije uspio izdvojiti podatke iz digitalnog PDF-a, a AI fallback je iskljucen.');
@@ -1299,7 +1334,10 @@ class OrderAiScanService
     {
         $order = is_array($payload['order'] ?? null) ? $payload['order'] : [];
         $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];
-        $normalizedItems = array_values(array_filter(array_map(function ($item, int $index) {
+        $supplierName = $this->normalizeSupplierName((string) ($order['supplier_name'] ?? ''));
+        $isGrobOrder = stripos((string) ($order['supplier_name'] ?? ''), 'grob') !== false
+            || stripos($supplierName, 'grob') !== false;
+        $normalizedItems = array_values(array_filter(array_map(function ($item, int $index) use ($isGrobOrder) {
             if (!is_array($item)) {
                 return null;
             }
@@ -1311,11 +1349,18 @@ class OrderAiScanService
                 (string) ($item['drawing_reference'] ?? ''),
                 (string) ($item['material_hint'] ?? '')
             );
+            $productCode = $this->normalizeScannedProductCode((string) ($item['product_code'] ?? ''));
+            $productName = $this->normalizeScannedProductName($itemMeta['product_name']);
+            $catalogProductName = $isGrobOrder ? $this->resolveCatalogProductNameByCode($productCode) : '';
+
+            if ($catalogProductName !== '') {
+                $productName = $catalogProductName;
+            }
 
             return [
                 'line_number' => (int) ($item['line_number'] ?? ($index + 1)),
-                'product_code' => $this->normalizeScannedProductCode((string) ($item['product_code'] ?? '')),
-                'product_name' => $this->normalizeScannedProductName($itemMeta['product_name']),
+                'product_code' => $productCode,
+                'product_name' => $productName,
                 'drawing_reference' => $itemMeta['drawing_reference'],
                 'material_hint' => $itemMeta['material_hint'],
                 'quantity' => (float) ($item['quantity'] ?? 0),
@@ -1334,7 +1379,6 @@ class OrderAiScanService
                 'note' => $itemMeta['note'],
             ];
         }, $items, array_keys($items))));
-        $supplierName = $this->normalizeSupplierName((string) ($order['supplier_name'] ?? ''));
         $warnings = array_values(array_filter(array_map(function ($warning) {
             return trim((string) $warning);
         }, is_array($order['warnings'] ?? null) ? $order['warnings'] : [])));
@@ -1843,6 +1887,23 @@ class OrderAiScanService
         return strtolower(pathinfo($originalName, PATHINFO_EXTENSION)) === 'pdf'
             ? 'application/pdf'
             : 'application/octet-stream';
+    }
+
+    private function normalizeSourceMimeType(?string $mimeType, string $fileName, string $bytes): string
+    {
+        $resolved = trim((string) $mimeType);
+        $normalized = Str::lower($resolved);
+        $normalizedName = Str::lower(trim($fileName));
+
+        if (
+            ($normalized !== '' && str_contains($normalized, 'pdf'))
+            || ($normalizedName !== '' && Str::endsWith($normalizedName, '.pdf'))
+            || str_starts_with($bytes, '%PDF-')
+        ) {
+            return 'application/pdf';
+        }
+
+        return $resolved !== '' ? $resolved : 'application/octet-stream';
     }
 
     private function detectDocumentProfile(string $originalName, ?string $mimeType, string $bytes): string
@@ -3010,7 +3071,9 @@ class OrderAiScanService
             return '';
         }
 
-        return $this->normalizeScannedProductNameLine($normalized);
+        return $this->deduplicateRepeatedProductNameSegments(
+            $this->normalizeScannedProductNameLine($normalized)
+        );
     }
 
     private function normalizeScannedProductNameLine(string $value): string
@@ -3020,6 +3083,93 @@ class OrderAiScanService
         $normalized = preg_replace('/(?<=[\p{L}\p{N}])\s*\/\s*(?=[\p{L}\p{N}])/u', '/', $normalized) ?? $normalized;
 
         return trim((string) (preg_replace('/\s+/u', ' ', $normalized) ?? $normalized));
+    }
+
+    protected function resolveCatalogProductNameByCode(string $productCode): string
+    {
+        $productCode = $this->normalizeScannedProductCode($productCode);
+        $cacheKey = strtoupper($productCode);
+
+        if ($cacheKey === '') {
+            return '';
+        }
+
+        if (array_key_exists($cacheKey, $this->catalogProductNameByCodeCache)) {
+            return $this->catalogProductNameByCodeCache[$cacheKey];
+        }
+
+        try {
+            $product = Product::findCatalogProduct($productCode);
+        } catch (\Throwable $exception) {
+            Log::warning('Order AI catalog product lookup by code failed.', [
+                'product_code' => $productCode,
+                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+            ]);
+
+            return $this->catalogProductNameByCodeCache[$cacheKey] = '';
+        }
+
+        if (!is_array($product)) {
+            return $this->catalogProductNameByCodeCache[$cacheKey] = '';
+        }
+
+        $productName = trim((string) ($product['product_name'] ?? $product['acName'] ?? ''));
+
+        return $this->catalogProductNameByCodeCache[$cacheKey] = $this->normalizeScannedProductName($productName);
+    }
+
+    private function deduplicateRepeatedProductNameSegments(string $value): string
+    {
+        $tokens = preg_split('/\s+/u', trim($value)) ?: [];
+        $tokens = array_values(array_filter($tokens, fn ($token) => trim((string) $token) !== ''));
+
+        if (count($tokens) < 2) {
+            return trim($value);
+        }
+
+        $changed = true;
+
+        while ($changed) {
+            $changed = false;
+            $tokenCount = count($tokens);
+
+            for ($length = (int) floor($tokenCount / 2); $length >= 1; $length--) {
+                for ($offset = 0; $offset + ($length * 2) <= $tokenCount; $offset++) {
+                    $left = array_slice($tokens, $offset, $length);
+                    $right = array_slice($tokens, $offset + $length, $length);
+
+                    if (!$this->productNameTokenSegmentsMatch($left, $right)) {
+                        continue;
+                    }
+
+                    array_splice($tokens, $offset + $length, $length);
+                    $changed = true;
+                    break 2;
+                }
+            }
+        }
+
+        return trim(implode(' ', $tokens));
+    }
+
+    private function productNameTokenSegmentsMatch(array $left, array $right): bool
+    {
+        if ($left === [] || count($left) !== count($right)) {
+            return false;
+        }
+
+        if (count($left) === 1 && mb_strlen((string) ($left[0] ?? '')) < 4) {
+            return false;
+        }
+
+        return $this->normalizeProductNameSegmentKey($left) === $this->normalizeProductNameSegmentKey($right);
+    }
+
+    private function normalizeProductNameSegmentKey(array $tokens): string
+    {
+        $value = strtoupper(Str::ascii(implode(' ', array_map('strval', $tokens))));
+
+        return preg_replace('/[^A-Z0-9]+/', '', $value) ?? '';
     }
 
     private function normalizeScannedItemIdentity(array $item): array

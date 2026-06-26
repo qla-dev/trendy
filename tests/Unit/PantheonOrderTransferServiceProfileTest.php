@@ -174,6 +174,25 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertStringStartsNotWith('ST ', $result['product_name']);
     }
 
+    public function test_extract_transfer_item_metadata_deduplicates_repeated_grob_product_name_segments(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('extractTransferItemMetadata');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [
+            'product_name' => 'Klotz GM4395/01-70-126/1-2-18 Klotz GM4395/01-70-126/1-2-18',
+            'drawing_reference' => '',
+            'note' => '',
+            'material_hint' => '',
+        ], [
+            'supplier_name' => 'GROB-WERKE GmbH & Co. KG',
+        ]);
+
+        $this->assertSame('Klotz GM4395/01-70-126/1-2-18', $result['product_name']);
+    }
+
     public function test_normalize_transfer_product_code_strips_decimal_suffix_from_numeric_code(): void
     {
         $service = new PantheonOrderTransferService();

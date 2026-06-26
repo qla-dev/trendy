@@ -40,7 +40,11 @@ class OpenRouterOrderAiScanProvider implements OrderAiScanProvider
         }
 
         $bytes = Storage::disk($disk)->get($scan->source_file_path);
-        $mime = trim((string) ($scan->source_mime_type ?: 'application/octet-stream'));
+        $mime = $this->normalizeDocumentMime(
+            (string) ($scan->source_mime_type ?: 'application/octet-stream'),
+            (string) ($scan->source_file_name ?: ''),
+            $bytes
+        );
         $baseUrl = rtrim((string) config('ai-order-scan.openrouter.base_url', 'https://openrouter.ai/api/v1'), '/');
         $prompt = trim((string) ($scan->request_prompt ?: config('ai-order-scan.prompt')));
         $preparationStartedAt = microtime(true);
@@ -238,6 +242,23 @@ class OpenRouterOrderAiScanProvider implements OrderAiScanProvider
                 'file_data' => $dataUri,
             ],
         ]];
+    }
+
+    private function normalizeDocumentMime(string $mime, string $fileName, string $bytes): string
+    {
+        $resolved = trim($mime) !== '' ? trim($mime) : 'application/octet-stream';
+        $normalized = strtolower($resolved);
+        $normalizedName = strtolower(trim($fileName));
+
+        if (
+            str_contains($normalized, 'pdf')
+            || ($normalizedName !== '' && str_ends_with($normalizedName, '.pdf'))
+            || str_starts_with($bytes, '%PDF-')
+        ) {
+            return 'application/pdf';
+        }
+
+        return $resolved;
     }
 
     private function extractOutputText(array $response): string
