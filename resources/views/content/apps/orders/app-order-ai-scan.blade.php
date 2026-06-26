@@ -2840,7 +2840,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                   <button type="button" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-order-button">Vidi narudžbu</button>
                   <button type="button" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-positions-button">Pozicije</button>
                 </div>
-                <div class="order-ai-bottom-action-primary">
+                <div class="order-ai-bottom-action-primary" id="order-ai-transfer-tooltip-trigger">
                   <button type="button" class="btn btn-success order-ai-transfer-cta" id="order-ai-transfer-button" disabled>Transfer u bazu</button>
                 </div>
               </div>
@@ -3045,6 +3045,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       const linesBody = document.getElementById('order-ai-lines-body');
       const actions = document.getElementById('order-ai-actions');
       const transferButton = document.getElementById('order-ai-transfer-button');
+      const transferTooltipTrigger = document.getElementById('order-ai-transfer-tooltip-trigger');
       const primaryActionButton = document.getElementById('order-ai-primary-action-button');
       const transferHint = document.getElementById('order-ai-transfer-hint');
       const viewPdfButton = document.getElementById('order-ai-view-pdf-button');
@@ -3222,6 +3223,86 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           .replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#039;');
+      }
+
+      function disposeBootstrapTooltip(node) {
+        if (!node) {
+          return;
+        }
+
+        if (window.bootstrap && window.bootstrap.Tooltip) {
+          const instance = typeof window.bootstrap.Tooltip.getInstance === 'function'
+            ? window.bootstrap.Tooltip.getInstance(node)
+            : null;
+
+          if (instance) {
+            instance.hide();
+            instance.dispose();
+          }
+
+          node.removeAttribute('aria-describedby');
+
+          return;
+        }
+
+        if (window.jQuery && window.jQuery.fn && typeof window.jQuery.fn.tooltip === 'function') {
+          window.jQuery(node).tooltip('hide').tooltip('dispose');
+        }
+
+        node.removeAttribute('aria-describedby');
+      }
+
+      function setTransferButtonTooltip(text, label) {
+        const trigger = transferTooltipTrigger || (transferButton ? transferButton.parentElement : null) || transferButton;
+        const tooltipText = String(text || '').trim();
+        const buttonLabel = String(label || 'Transfer u bazu').trim();
+
+        if (!transferButton || !trigger) {
+          return;
+        }
+
+        disposeBootstrapTooltip(trigger);
+        trigger.removeAttribute('data-bs-original-title');
+        trigger.removeAttribute('data-original-title');
+        trigger.removeAttribute('title');
+        transferButton.removeAttribute('title');
+        transferButton.setAttribute('aria-label', tooltipText !== '' ? `${buttonLabel}. ${tooltipText}` : buttonLabel);
+
+        if (tooltipText === '') {
+          trigger.removeAttribute('data-bs-toggle');
+          trigger.removeAttribute('data-bs-title');
+          trigger.removeAttribute('data-bs-trigger');
+          trigger.removeAttribute('data-bs-placement');
+          trigger.removeAttribute('tabindex');
+
+          return;
+        }
+
+        trigger.setAttribute('data-bs-toggle', 'tooltip');
+        trigger.setAttribute('data-bs-title', tooltipText);
+        trigger.setAttribute('data-bs-trigger', 'hover focus');
+        trigger.setAttribute('data-bs-placement', 'top');
+        trigger.setAttribute('tabindex', '0');
+
+        if (window.bootstrap && window.bootstrap.Tooltip) {
+          new window.bootstrap.Tooltip(trigger, {
+            title: tooltipText,
+            trigger: 'hover focus',
+            placement: 'top',
+            container: 'body',
+          });
+
+          return;
+        }
+
+        if (window.jQuery && window.jQuery.fn && typeof window.jQuery.fn.tooltip === 'function') {
+          window.jQuery(trigger).tooltip({
+            title: tooltipText,
+            trigger: 'hover focus',
+            placement: 'top',
+            container: 'body',
+          });
+        }
       }
 
       function setVisible(node, visible) {
@@ -4270,6 +4351,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           transferButton.textContent = label;
         }
 
+        setTransferButtonTooltip(tooltipText, label);
+
         if (transferHint) {
           transferHint.textContent = config.hint || 'Dugme se aktivira kada AI završi ekstrakciju i pripremi payload.';
         }
@@ -4800,6 +4883,16 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         const stageName = detectStage(data.status, autoTransfer, data.current_progress, data.processing_step);
         const finalizeStage = (data.status === 'completed' && stageName === 'extract' && !autoTransfer)
           || (data.status === 'transferred' && stageName === 'transfer');
+        const transferBlocked = Boolean(data.transfer_blocked);
+        const transferBlockedReason = String(
+          data.transfer_block_reason
+          || data.transfer_preview_error
+          || ''
+        ).trim();
+        const transferBlockedHint = String(
+          data.transfer_button_hint
+          || 'Narudžba sa ovom referencom već postoji.'
+        ).trim();
 
         syncDropzoneVisibility(data.status);
         setVisible(resultCard, true);
@@ -4840,16 +4933,31 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         }
 
         if (data.status === 'completed') {
-          setTransferButtonState({
-            enabled: Boolean(data.transfer_ready),
-            label: 'Transfer u bazu',
-            hint: data.transfer_ready
-              ? 'AI payload je spreman. Pregledaj rezultat i klikni za upis u bazu.'
-              : 'Transfer ostaje zaključan dok svi obavezni podaci nisu pripremljeni.'
-          });
+          if (transferBlocked) {
+            setTransferButtonState({
+              enabled: false,
+              label: 'Transfer u bazu',
+              hint: transferBlockedHint,
+              title: transferBlockedHint
+            });
+          } else {
+            setTransferButtonState({
+              enabled: Boolean(data.transfer_ready),
+              label: 'Transfer u bazu',
+              hint: data.transfer_ready
+                ? 'AI payload je spreman. Pregledaj rezultat i klikni za upis u bazu.'
+                : 'Transfer ostaje zaključan dok svi obavezni podaci nisu pripremljeni.'
+            });
+          }
 
           if (!autoTransfer) {
-            if (data.transfer_ready && data.transfer_preview_error) {
+            if (transferBlocked) {
+              setProgressWarningMessage(
+                transferBlockedReason !== ''
+                  ? transferBlockedReason
+                  : 'Narudžba sa ovom referencom već postoji u bazi.'
+              );
+            } else if (data.transfer_ready && data.transfer_preview_error) {
               setProgressWarningMessage('Priprema preview-a nije uspjela, ali i dalje možeš pokušati ručni transfer u bazu.');
             } else if (data.transfer_ready && data.transfer_preview_available) {
               setProgressWarningMessage('Preview payload je pripremljen. Pregledaj rezultat i pokreni transfer u bazu kada budeš spreman.', {
@@ -5348,12 +5456,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           transferButton.textContent = label;
         }
 
-        transferButton.title = tooltipText;
-        transferButton.setAttribute('aria-label', tooltipText !== '' ? `${label}. ${tooltipText}` : label);
-
-        if (transferButton.parentElement) {
-          transferButton.parentElement.title = tooltipText;
-        }
+        setTransferButtonTooltip(tooltipText, label);
 
         if (transferHint) {
           transferHint.textContent = hintText;
@@ -5856,16 +5959,31 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         }
 
         if (status === 'completed') {
-          setTransferButtonState({
-            enabled: Boolean(latestStatusPayload.transfer_ready),
-            label: 'Transfer u bazu',
-            hint: latestStatusPayload.transfer_ready
-              ? 'Rezultat je spreman. Nakon pregleda podataka može se pokrenuti upis u bazu.'
-              : 'Transfer ostaje zaključan dok se svi obavezni podaci ne pripreme.'
-          });
+          if (transferBlocked) {
+            setTransferButtonState({
+              enabled: false,
+              label: 'Transfer u bazu',
+              hint: transferBlockedHint,
+              title: transferBlockedHint
+            });
+          } else {
+            setTransferButtonState({
+              enabled: Boolean(latestStatusPayload.transfer_ready),
+              label: 'Transfer u bazu',
+              hint: latestStatusPayload.transfer_ready
+                ? 'Rezultat je spreman. Nakon pregleda podataka može se pokrenuti upis u bazu.'
+                : 'Transfer ostaje zaključan dok se svi obavezni podaci ne pripreme.'
+            });
+          }
 
           if (!autoTransfer) {
-            if (latestStatusPayload.transfer_ready && latestStatusPayload.transfer_preview_error) {
+            if (transferBlocked) {
+              setProgressWarningMessage(
+                transferBlockedReason !== ''
+                  ? transferBlockedReason
+                  : 'Narudžba sa ovom referencom već postoji u bazi.'
+              );
+            } else if (latestStatusPayload.transfer_ready && latestStatusPayload.transfer_preview_error) {
               setProgressWarningMessage('Priprema provjere za bazu nije uspjela, ali se i dalje može pokušati ručni transfer.');
             } else if (latestStatusPayload.transfer_ready && latestStatusPayload.transfer_preview_available) {
               setProgressWarningMessage('AI obrada je završena. Narudžba je spremna za provjeru i upis u bazu.', {

@@ -498,7 +498,7 @@ class OrderAiScanService
         if (
             trim((string) ($scan->status ?? '')) === 'completed'
             && is_array($transferPreview)
-            && !empty($transferPreview['transfer_blocked'])
+            && $this->isTransferPreviewBlocking($transferPreview)
         ) {
             $displayProcessingStep = 'AI obrada je završena. Narudžba sa ovom referencom već postoji u bazi.';
         }
@@ -530,15 +530,11 @@ class OrderAiScanService
             'transfer_ready' => $transferReady,
             'auto_transfer' => $autoTransfer,
             'transfer_preview_available' => !empty($transferPreview),
-            'transfer_blocked' => is_array($transferPreview)
-                ? (bool) ($transferPreview['transfer_blocked'] ?? false)
-                : false,
-            'transfer_block_reason' => is_array($transferPreview) && !empty($transferPreview['transfer_blocked'])
+            'transfer_blocked' => $this->isTransferPreviewBlocking($transferPreview),
+            'transfer_block_reason' => $this->isTransferPreviewBlocking($transferPreview)
                 ? (string) ($transferPreview['preview_error'] ?? '')
                 : '',
-            'transfer_button_hint' => is_array($transferPreview) && !empty($transferPreview['transfer_blocked'])
-                ? (string) ($transferPreview['transfer_hint'] ?? '')
-                : '',
+            'transfer_button_hint' => $this->resolveTransferButtonHint($transferPreview),
             'transfer_preview_error_code' => is_array($transferPreview)
                 ? (string) ($transferPreview['preview_error_code'] ?? '')
                 : '',
@@ -737,8 +733,7 @@ class OrderAiScanService
                 $transferReady = (bool) ($finalized['transfer_ready'] ?? false);
                 $transferPreview = $finalized['transfer_preview'] ?? null;
 
-                $transferBlocked = is_array($transferPreview)
-                    && (bool) ($transferPreview['transfer_blocked'] ?? false);
+                $transferBlocked = $this->isTransferPreviewBlocking($transferPreview);
                 $supportsLiveTransfer = array_key_exists('supports_live_transfer', $result)
                     ? (bool) ($result['supports_live_transfer'] ?? false)
                     : $this->resolveProvider($scan)->supportsLiveTransfer();
@@ -1193,7 +1188,7 @@ class OrderAiScanService
             return 'AI obrada je završena. Dokument je spreman za upis u bazu.';
         }
 
-        if (is_array($transferPreview) && !empty($transferPreview['transfer_blocked'])) {
+        if ($this->isTransferPreviewBlocking($transferPreview)) {
             return 'AI obrada je završena. Narudžba sa ovom referencom već postoji u bazi.';
         }
 
@@ -1218,10 +1213,40 @@ class OrderAiScanService
         if ($this->isDuplicateReferencePreviewError($message)) {
             $payload['preview_error_code'] = 'duplicate_reference';
             $payload['transfer_blocked'] = true;
-            $payload['transfer_hint'] = 'Narudžba sa ovom referencom već postoji.';
+            $payload['existing_order_view'] = $this->extractExistingOrderViewFromDuplicateReferenceMessage($message);
+            $payload['transfer_hint'] = $payload['existing_order_view'] !== ''
+                ? 'Narudžba sa ovom referencom već postoji u bazi kao ' . $payload['existing_order_view'] . '.'
+                : 'Narudžba sa ovom referencom već postoji.';
         }
 
         return $payload;
+    }
+
+    private function isTransferPreviewBlocking(mixed $transferPreview): bool
+    {
+        return is_array($transferPreview) && !empty($transferPreview['transfer_blocked']);
+    }
+
+    private function resolveTransferButtonHint(mixed $transferPreview): string
+    {
+        if (!$this->isTransferPreviewBlocking($transferPreview) || !is_array($transferPreview)) {
+            return '';
+        }
+
+        $hint = trim((string) ($transferPreview['transfer_hint'] ?? ''));
+        $existingOrderView = trim((string) ($transferPreview['existing_order_view'] ?? ''));
+
+        if ($existingOrderView === '') {
+            $existingOrderView = $this->extractExistingOrderViewFromDuplicateReferenceMessage(
+                (string) ($transferPreview['preview_error'] ?? '')
+            );
+        }
+
+        if ($existingOrderView !== '' && !str_contains($hint, $existingOrderView)) {
+            return 'Narudžba sa ovom referencom već postoji u bazi kao ' . $existingOrderView . '.';
+        }
+
+        return $hint;
     }
 
     private function isDuplicateReferencePreviewError(string $message): bool
@@ -1231,6 +1256,15 @@ class OrderAiScanService
         return $normalized !== ''
             && str_contains($normalized, 'narudzba sa referencom')
             && str_contains($normalized, 'vec postoji u bazi');
+    }
+
+    private function extractExistingOrderViewFromDuplicateReferenceMessage(string $message): string
+    {
+        if (preg_match('/\bkao\s+([A-Z0-9][A-Z0-9\-\/.]*)/iu', trim($message), $matches) !== 1) {
+            return '';
+        }
+
+        return trim((string) ($matches[1] ?? ''), " \t\n\r\0\x0B.");
     }
 
     private function resolveProvider(OrderAiScan $scan): OrderAiScanProvider
@@ -1308,16 +1342,16 @@ class OrderAiScanService
 
         return [
             'order' => [
-                'customer_name' => trim((string) ($order['customer_name'] ?? '')),
+                'customer_name' => $this->normalizeScannedText((string) ($order['customer_name'] ?? '')),
                 'supplier_name' => $supplierName,
                 'page_count' => max(0, (int) ($order['page_count'] ?? 0)),
-                'receiver_name' => trim((string) ($order['receiver_name'] ?? ($order['customer_name'] ?? ''))),
-                'contact_name' => trim((string) ($order['contact_name'] ?? '')),
+                'receiver_name' => $this->normalizeScannedText((string) ($order['receiver_name'] ?? ($order['customer_name'] ?? ''))),
+                'contact_name' => $this->normalizeScannedText((string) ($order['contact_name'] ?? '')),
                 'external_document_number' => trim((string) ($order['external_document_number'] ?? '')),
                 'document_type' => trim((string) ($order['document_type'] ?? '')),
                 'currency' => trim((string) ($order['currency'] ?? config('ai-order-scan.default_currency', 'KM'))),
                 'delivery_deadline' => trim((string) ($order['delivery_deadline'] ?? '')),
-                'note' => trim((string) ($order['note'] ?? '')),
+                'note' => $this->normalizeScannedText((string) ($order['note'] ?? '')),
                 'way_of_sale' => trim((string) ($order['way_of_sale'] ?? config('ai-order-scan.default_way_of_sale', 'D'))),
                 'confidence' => (float) ($order['confidence'] ?? 0),
                 'warnings' => $warnings,
@@ -1433,7 +1467,7 @@ class OrderAiScanService
             $noteParts[] = $line;
         }
 
-        $drawingReference = implode(' | ', array_values(array_unique(array_filter($drawingParts))));
+        $drawingReference = $this->normalizeScannedText(implode(' | ', array_values(array_unique(array_filter($drawingParts)))));
 
         if ($drawingReference !== '') {
             $noteParts[] = $drawingReference;
@@ -1450,8 +1484,8 @@ class OrderAiScanService
         return [
             'product_name' => $resolvedProductName,
             'drawing_reference' => $drawingReference,
-            'material_hint' => trim((string) (preg_replace('/\s+/', ' ', $materialHint) ?? $materialHint)),
-            'note' => implode(' | ', array_values(array_unique(array_filter($noteParts)))),
+            'material_hint' => $this->normalizeScannedText($materialHint),
+            'note' => $this->normalizeScannedText(implode(' | ', array_values(array_unique(array_filter($noteParts))))),
         ];
     }
 
@@ -1502,15 +1536,15 @@ class OrderAiScanService
         $preparedItems = is_array($prepared['items'] ?? null) ? array_values($prepared['items']) : [];
 
         $payload['order'] = array_merge($order, [
-            'customer_name' => trim((string) ($prepared['customer_name'] ?? ($order['customer_name'] ?? ''))),
+            'customer_name' => $this->normalizeScannedText((string) ($prepared['customer_name'] ?? ($order['customer_name'] ?? ''))),
             'supplier_name' => $this->normalizeSupplierName((string) ($prepared['supplier_name'] ?? ($order['supplier_name'] ?? ''))),
-            'receiver_name' => trim((string) ($prepared['receiver_name'] ?? ($order['receiver_name'] ?? ''))),
-            'contact_name' => trim((string) ($prepared['contact_name'] ?? ($order['contact_name'] ?? ''))),
+            'receiver_name' => $this->normalizeScannedText((string) ($prepared['receiver_name'] ?? ($order['receiver_name'] ?? ''))),
+            'contact_name' => $this->normalizeScannedText((string) ($prepared['contact_name'] ?? ($order['contact_name'] ?? ''))),
             'external_document_number' => trim((string) ($prepared['external_document_number'] ?? ($order['external_document_number'] ?? ''))),
             'document_type' => trim((string) ($prepared['document_type'] ?? ($order['document_type'] ?? ''))),
             'currency' => trim((string) ($prepared['currency'] ?? ($order['currency'] ?? ''))),
             'delivery_deadline' => trim((string) ($prepared['delivery_deadline'] ?? ($order['delivery_deadline'] ?? ''))),
-            'note' => trim((string) ($prepared['note'] ?? ($order['note'] ?? ''))),
+            'note' => $this->normalizeScannedText((string) ($prepared['note'] ?? ($order['note'] ?? ''))),
             'way_of_sale' => trim((string) ($prepared['way_of_sale'] ?? ($order['way_of_sale'] ?? ''))),
             'warnings' => array_values(array_unique(array_filter(
                 is_array($prepared['warnings'] ?? null)
@@ -1528,8 +1562,8 @@ class OrderAiScanService
                 'product_name' => $this->normalizeScannedProductName(
                     trim((string) ($preparedItem['product_name'] ?? ($existingItem['product_name'] ?? '')))
                 ),
-                'drawing_reference' => trim((string) ($preparedItem['drawing_reference'] ?? ($existingItem['drawing_reference'] ?? ''))),
-                'material_hint' => trim((string) ($preparedItem['material_hint'] ?? ($existingItem['material_hint'] ?? ''))),
+                'drawing_reference' => $this->normalizeScannedText((string) ($preparedItem['drawing_reference'] ?? ($existingItem['drawing_reference'] ?? ''))),
+                'material_hint' => $this->normalizeScannedText((string) ($preparedItem['material_hint'] ?? ($existingItem['material_hint'] ?? ''))),
                 'quantity' => (float) ($preparedItem['quantity'] ?? ($existingItem['quantity'] ?? 0)),
                 'unit' => $this->normalizeScannedUnit((string) ($preparedItem['unit'] ?? ($existingItem['unit'] ?? ''))),
                 'delivery_deadline' => trim((string) ($preparedItem['delivery_deadline'] ?? ($existingItem['delivery_deadline'] ?? ''))),
@@ -1539,7 +1573,7 @@ class OrderAiScanService
                 'vat_code' => trim((string) ($preparedItem['vat_code'] ?? ($existingItem['vat_code'] ?? ''))),
                 'discount_percent' => (float) ($preparedItem['discount_percent'] ?? ($existingItem['discount_percent'] ?? 0)),
                 'priority' => trim((string) ($preparedItem['priority'] ?? ($existingItem['priority'] ?? ''))),
-                'note' => trim((string) ($preparedItem['note'] ?? ($existingItem['note'] ?? ''))),
+                'note' => $this->normalizeScannedText((string) ($preparedItem['note'] ?? ($existingItem['note'] ?? ''))),
                 'primary_classification' => trim((string) ($preparedItem['primary_classification'] ?? ($existingItem['primary_classification'] ?? ''))),
                 'catalog_item_exists' => (bool) ($preparedItem['catalog_item_exists'] ?? ($existingItem['catalog_item_exists'] ?? false)),
                 'catalog_item_missing' => (bool) ($preparedItem['catalog_item_missing'] ?? ($existingItem['catalog_item_missing'] ?? false)),
@@ -1562,8 +1596,7 @@ class OrderAiScanService
 
     private function normalizeSupplierName(string $value): string
     {
-        $value = Utf8Sanitizer::clean($value);
-        $value = trim((string) (preg_replace('/\s+/', ' ', str_replace(["\r", "\n"], ' ', $value)) ?? $value));
+        $value = $this->normalizeScannedText($value);
 
         if ($value === '') {
             return '';
@@ -1573,6 +1606,13 @@ class OrderAiScanService
         $value = preg_replace('/\s+GMBH.*$/i', '', $value) ?? $value;
         $value = preg_replace('/\s+D\.O\.O\..*$/i', '', $value) ?? $value;
         return trim((string) $value, " \t\n\r\0\x0B,.-");
+    }
+
+    private function normalizeScannedText(string $value): string
+    {
+        $value = Utf8Sanitizer::repairGermanUmlautSpacing(Utf8Sanitizer::clean($value));
+
+        return trim((string) (preg_replace('/\s+/u', ' ', str_replace(["\r", "\n"], ' ', $value)) ?? $value));
     }
 
     private function orderAiScanColumnExists(string $column): bool
@@ -1684,7 +1724,7 @@ class OrderAiScanService
         }
 
         if ($status === 'completed') {
-            if (is_array($transferPreview) && !empty($transferPreview['transfer_blocked'])) {
+            if ($this->isTransferPreviewBlocking($transferPreview)) {
                 return false;
             }
 
@@ -2280,10 +2320,23 @@ class OrderAiScanService
         $lines = array_values(array_filter(array_map(function ($line) {
             $line = trim((string) $line);
 
-            return $this->isIgnoredGrobDrawingLine($line) ? '' : $this->normalizeScannedProductNameLine($line);
+            return $this->isIgnoredGrobDrawingLine($line)
+                ? ''
+                : $this->normalizeScannedProductNameLine($this->stripGrobProductNameUnitPrefix($line));
         }, $this->splitVisibleTextLines($value))));
 
         return $this->normalizeScannedProductName(trim(implode(' ', $lines)));
+    }
+
+    private function stripGrobProductNameUnitPrefix(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        return trim((string) (preg_replace('/^(?:ST|STK|STUECK|STUCK|STU|PCS|PIECE|KO)\s+(?=\S)/iu', '', $value) ?? $value));
     }
 
     private function sanitizeGrobPayloadAnnotation(string $value): string
@@ -2548,8 +2601,12 @@ class OrderAiScanService
 
     private function finalizeGrobParsedItem(array $item): array
     {
+        $productNameLines = array_values(array_filter(array_map(function ($line) {
+            return $this->stripGrobProductNameUnitPrefix((string) $line);
+        }, $item['product_name_lines'] ?? [])));
+
         $item['product_name'] = $this->normalizeScannedProductName(
-            trim(implode(' ', array_values(array_filter($item['product_name_lines'] ?? []))))
+            trim(implode(' ', $productNameLines))
         );
         $item['note'] = implode(' | ', array_values(array_unique(array_filter($item['note_lines'] ?? []))));
         unset($item['product_name_lines']);
@@ -2947,7 +3004,7 @@ class OrderAiScanService
 
     private function normalizeScannedProductName(string $value): string
     {
-        $normalized = trim((string) (preg_replace('/\s+/u', ' ', Utf8Sanitizer::clean($value)) ?? Utf8Sanitizer::clean($value)));
+        $normalized = $this->normalizeScannedText($value);
 
         if ($normalized === '') {
             return '';
@@ -2958,7 +3015,7 @@ class OrderAiScanService
 
     private function normalizeScannedProductNameLine(string $value): string
     {
-        $normalized = Utf8Sanitizer::clean($value);
+        $normalized = $this->normalizeScannedText($value);
         $normalized = preg_replace('/(?<=[\p{L}\p{N}\/])\s*-\s*(?=[\p{L}\p{N}\/])/u', '-', $normalized) ?? $normalized;
         $normalized = preg_replace('/(?<=[\p{L}\p{N}])\s*\/\s*(?=[\p{L}\p{N}])/u', '/', $normalized) ?? $normalized;
 

@@ -7,6 +7,7 @@ use App\Services\OrderAi\Contracts\OrderAiScanProvider;
 use App\Services\OrderAi\OpenRouterOrderAiScanProvider;
 use App\Services\OrderAi\OrderAiScanService;
 use App\Services\OrderAi\PantheonOrderTransferService;
+use App\Services\OrderAi\Support\OrderAiDigitalPdfRulesParser;
 use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use App\Services\OrderAi\Support\OrderAiDocumentPreparationService;
 use Illuminate\Support\Carbon;
@@ -369,6 +370,35 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertStringContainsString('Skenirani', implode(' ', $normalized['order']['warnings']));
     }
 
+    public function test_normalize_payload_repairs_spaces_around_german_umlauts_in_names(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('normalizePayload');
+        $method->setAccessible(true);
+        $u = (string) hex2bin('c3bc');
+        $o = (string) hex2bin('c3b6');
+        $eszett = (string) hex2bin('c39f');
+        $payload = $this->basePayload();
+        $payload['order']['customer_name'] = 'M ' . $u . ' ller GmbH';
+        $payload['order']['receiver_name'] = 'Gr ' . $u . ' n Werk';
+        $payload['order']['contact_name'] = 'J ' . $o . ' rg M ' . $u . ' ller';
+        $payload['order']['note'] = 'f ' . $u . ' r Produktion';
+        $payload['items'][0]['product_name'] = 'St ' . $o . ' ' . $eszett . ' el';
+        $payload['items'][0]['material_hint'] = 'br ' . $u . ' niert';
+        $payload['items'][0]['note'] = 'f ' . $u . ' r Montage';
+
+        $normalized = $method->invoke($service, $payload);
+
+        $this->assertSame('M' . $u . 'ller GmbH', $normalized['order']['customer_name']);
+        $this->assertSame('Gr' . $u . 'n Werk', $normalized['order']['receiver_name']);
+        $this->assertSame('J' . $o . 'rg M' . $u . 'ller', $normalized['order']['contact_name']);
+        $this->assertSame('f' . $u . 'r Produktion', $normalized['order']['note']);
+        $this->assertSame('St' . $o . $eszett . 'el', $normalized['items'][0]['product_name']);
+        $this->assertSame('br' . $u . 'niert', $normalized['items'][0]['material_hint']);
+        $this->assertSame('f' . $u . 'r Montage', $normalized['items'][0]['note']);
+    }
+
     public function test_build_status_payload_uses_effective_grob_page_count_until_attention_marker(): void
     {
         Storage::fake('local');
@@ -470,7 +500,7 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(10, $payload['billed_tokens']);
     }
 
-    public function test_build_status_payload_blocks_transfer_when_duplicate_reference_preview_exists(): void
+    public function test_build_status_payload_blocks_scanned_order_when_duplicate_reference_preview_exists(): void
     {
         $scan = new OrderAiScan([
             'status' => 'completed',
@@ -515,19 +545,17 @@ class OrderAiScanServiceTest extends TestCase
         ]);
 
         $payload = app(OrderAiScanService::class)->buildStatusPayload($scan);
-
         $this->assertFalse($payload['transfer_ready']);
         $this->assertTrue($payload['transfer_blocked']);
-        $this->assertSame(
-            'AI obrada je završena. Narudžba sa ovom referencom već postoji u bazi.',
-            $payload['processing_step']
-        );
         $this->assertSame('duplicate_reference', $payload['transfer_preview_error_code']);
         $this->assertSame(
             'Narudžba sa referencom "4512109382" već postoji u bazi kao 26-0110-001161.',
             $payload['transfer_block_reason']
         );
-        $this->assertSame('Narudžba sa ovom referencom već postoji.', $payload['transfer_button_hint']);
+        $this->assertSame(
+            'Narudžba sa ovom referencom već postoji u bazi kao 26-0110-001161.',
+            $payload['transfer_button_hint']
+        );
     }
 
     public function test_normalize_payload_splits_embedded_grob_quantity_and_unit_out_of_product_code(): void
@@ -832,6 +860,42 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(160.2, $items[0]['line_total']);
         $this->assertStringNotContainsString('Warenbegleitschein', $items[0]['note']);
         $this->assertStringNotContainsString('Lieferant', $items[0]['note']);
+    }
+
+    public function test_parse_grob_items_from_pages_drops_leading_unit_token_from_product_name_lines(): void
+    {
+        $durchfuehrung = (string) hex2bin('447572636866c3bc6872756e67');
+        $pages = [[
+            'page_number' => 1,
+            'lines' => [
+                '10 3610143 7,00 ST',
+                'ST ' . $durchfuehrung,
+                'G352-1220-206-0000-06-1',
+                'Zeichnung G352-1220-206-0000-06-1 mit Revisionsstand 00',
+                'Werkstoff: AlSi1MgMnT6',
+                'Nettopreis 38,50 EUR ST 1 269,52',
+                'Lieferdatum: 16.07.2026 7,00 ST',
+            ],
+            'text' => '',
+        ]];
+        $expectedName = $durchfuehrung . ' G352-1220-206-0000-06-1';
+
+        $service = app(OrderAiScanService::class);
+        $serviceReflection = new ReflectionClass($service);
+        $serviceMethod = $serviceReflection->getMethod('parseGrobItemsFromPages');
+        $serviceMethod->setAccessible(true);
+        $serviceItems = $serviceMethod->invoke($service, $pages);
+
+        $rulesParser = app(OrderAiDigitalPdfRulesParser::class);
+        $rulesReflection = new ReflectionClass($rulesParser);
+        $rulesMethod = $rulesReflection->getMethod('parseGrobItemsFromPages');
+        $rulesMethod->setAccessible(true);
+        $rulesItems = $rulesMethod->invoke($rulesParser, $pages);
+
+        $this->assertSame($expectedName, $serviceItems[0]['product_name']);
+        $this->assertSame($expectedName, $rulesItems[0]['product_name']);
+        $this->assertStringStartsNotWith('ST ', $serviceItems[0]['product_name']);
+        $this->assertStringStartsNotWith('ST ', $rulesItems[0]['product_name']);
     }
 
     public function test_extract_grob_netto_line_total_ignores_stuck_standalone_one_for_compact_eur_unit(): void
@@ -1848,7 +1912,7 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertStringContainsString('not a dispatch/shipping date', $prompt);
     }
 
-    public function test_build_status_payload_refreshes_legacy_transfer_preview_for_duplicate_reference(): void
+    public function test_build_status_payload_refreshes_legacy_duplicate_reference_preview_and_blocks_transfer(): void
     {
         app()->instance(PantheonOrderTransferService::class, new class extends PantheonOrderTransferService {
             public function isTransferReady(array $normalizedPayload): bool
@@ -1895,15 +1959,13 @@ class OrderAiScanServiceTest extends TestCase
         ]);
 
         $payload = app(OrderAiScanService::class)->buildStatusPayload($scan);
-
         $this->assertFalse($payload['transfer_ready']);
         $this->assertTrue($payload['transfer_blocked']);
-        $this->assertSame(
-            'AI obrada je završena. Narudžba sa ovom referencom već postoji u bazi.',
-            $payload['processing_step']
-        );
         $this->assertSame('duplicate_reference', $payload['transfer_preview_error_code']);
-        $this->assertSame('Narudžba sa ovom referencom već postoji.', $payload['transfer_button_hint']);
+        $this->assertSame(
+            'Narudžba sa ovom referencom već postoji u bazi kao 26-0110-001161.',
+            $payload['transfer_button_hint']
+        );
         $this->assertSame(
             'Narudžba sa referencom "4512109382" već postoji u bazi kao 26-0110-001161.',
             $payload['transfer_block_reason']
@@ -1911,8 +1973,8 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(2, $scan->capturedForceFill['pantheon_transfer_payload']['preview_version']);
         $this->assertTrue($scan->capturedForceFill['pantheon_transfer_payload']['transfer_blocked']);
         $this->assertSame(
-            'duplicate_reference',
-            $scan->capturedForceFill['pantheon_transfer_payload']['preview_error_code']
+            '26-0110-001161',
+            $scan->capturedForceFill['pantheon_transfer_payload']['existing_order_view']
         );
     }
 
