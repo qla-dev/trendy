@@ -10,7 +10,6 @@ use App\Services\OrderAi\PantheonOrderTransferService;
 use App\Services\OrderAi\Support\OrderAiDigitalPdfRulesParser;
 use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use App\Services\OrderAi\Support\OrderAiDocumentPreparationService;
-use App\Services\OrderAi\Support\OrderAiDigitalPdfRulesParser;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use ReflectionClass;
@@ -1556,6 +1555,84 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(231.0, data_get($result, 'normalized_payload.summary.grand_total'));
     }
 
+    public function test_digital_trendy_de_parser_handles_legacy_split_code_amount_description_rows(): void
+    {
+        $parser = app(OrderAiDigitalPdfRulesParser::class);
+        $reflection = new ReflectionClass($parser);
+        $method = $reflection->getMethod('parseTrendyDeItems');
+        $method->setAccessible(true);
+        $hulse = (string) hex2bin('48c3bc6c7365');
+
+        $items = $method->invoke($parser, [
+            'Trendy Germany GmbH',
+            'Anlieferadresse: Lieferant: Artikel Nr Pos Beschreibung Menge EK-Preis Einheit',
+            '503600720',
+            '231,00 0,00 Betrag 10,00 VAT % STU 23,10',
+            $hulse . ' 1',
+            '231,00 Total',
+        ]);
+
+        $this->assertCount(1, $items);
+        $this->assertSame('503600720', $items[0]['product_code']);
+        $this->assertSame($hulse, $items[0]['product_name']);
+        $this->assertSame(1, $items[0]['line_number']);
+        $this->assertSame(10.0, $items[0]['quantity']);
+        $this->assertSame('KO', $items[0]['unit']);
+        $this->assertSame(23.1, $items[0]['unit_price']);
+        $this->assertSame(231.0, $items[0]['line_total']);
+    }
+
+    public function test_execute_extraction_detects_trendy_de_profile_when_stored_profile_is_missing(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000945.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            'Trendy Germany GmbH',
+            '26-020-000945 Edina Duzan',
+            'Trendy Germany 16 25. 6. 2026. Liefertermin',
+            'Anlieferadresse: Lieferant: Artikel Nr. Pos. Beschreibung Menge EK-Preis Einheit',
+            '503600720 231,00 0,00 Betrag 10,00 VAT % STU 23,10',
+            'Hülse 1',
+            '231,00 Total',
+        ]]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new RuntimeException('AI provider should not be called when missing profile can be detected.');
+            }
+        });
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => '',
+            'source_file_name' => 'Bestellung_26-020-000945.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertSame('trendy_de', $result['document_profile']);
+        $this->assertSame('matched', data_get($result, 'parser_payload.status'));
+        $this->assertSame('trendy_de', data_get($result, 'parser_payload.profile'));
+        $this->assertSame('26-020-000945', data_get($result, 'normalized_payload.order.external_document_number'));
+        $this->assertSame('503600720', data_get($result, 'normalized_payload.items.0.product_code'));
+    }
+
     public function test_run_extraction_overwrites_initial_billed_tokens_with_page_based_value_for_local_rules_parser(): void
     {
         Storage::fake('local');
@@ -1701,6 +1778,104 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('openrouter', $result['provider']);
         $this->assertSame('demo-model', $result['model']);
         $this->assertSame('task-rules-disabled', $result['provider_task_id']);
+    }
+
+    public function test_run_extraction_persists_openrouter_and_parser_debug_payloads(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000945-empty.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            'Trendy Germany GmbH',
+            'Bestellung 26-020-000945',
+            'Person responsible Edina Duzan',
+            'Keine Artikellinien',
+        ]]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class($this->basePayload()) implements OrderAiScanProvider {
+            public function __construct(
+                private readonly array $payload
+            ) {
+            }
+
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                return [
+                    'provider' => 'openrouter',
+                    'model' => 'demo-model',
+                    'provider_task_id' => 'task-debug-payload',
+                    'credits_spent' => 0.1234,
+                    'raw_response' => [
+                        'id' => 'task-debug-payload',
+                        'choices' => [],
+                    ],
+                    'normalized_payload' => $this->payload,
+                    'ai_duration_ms' => 91,
+                ];
+            }
+        });
+
+        app()->instance(PantheonOrderTransferService::class, new class extends PantheonOrderTransferService {
+            public function isTransferReady(array $normalizedPayload): bool
+            {
+                return false;
+            }
+        });
+
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $columns = $reflection->getProperty('orderAiScanColumns');
+        $columns->setAccessible(true);
+        $columns->setValue($service, [
+            'document_profile' => true,
+            'page_count' => true,
+            'billed_tokens' => true,
+            'openrouter_payload' => true,
+            'parser_payload' => true,
+            'extraction_method' => true,
+            'raw_extracted_text' => true,
+            'extraction_payload' => true,
+            'validation_warnings' => true,
+            'validation_errors' => true,
+            'confidence_score' => true,
+            'extraction_duration_ms' => true,
+            'ai_duration_ms' => true,
+            'validation_duration_ms' => true,
+        ]);
+        $method = $reflection->getMethod('runExtraction');
+        $method->setAccessible(true);
+        $scan = $this->makeInMemoryScan([
+            'id' => 991,
+            'status' => 'extracting',
+            'provider' => 'openrouter',
+            'document_profile' => '',
+            'source_file_name' => 'Bestellung_26-020-000945-empty.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $method->invoke($service, $scan);
+
+        $this->assertSame('openrouter', $scan->capturedForceFill['provider']);
+        $this->assertSame('trendy_de', $scan->capturedForceFill['document_profile']);
+        $this->assertSame('task-debug-payload', $scan->capturedForceFill['openrouter_payload']['id']);
+        $this->assertSame('not_matched', $scan->capturedForceFill['parser_payload']['status']);
+        $this->assertSame('trendy_de', $scan->capturedForceFill['parser_payload']['profile']);
+        $this->assertStringContainsString(
+            'Bestellung 26-020-000945',
+            $scan->capturedForceFill['parser_payload']['source_text']['searchable_text']
+        );
     }
 
     public function test_run_extraction_persists_raw_provider_response_when_provider_throws_exception(): void

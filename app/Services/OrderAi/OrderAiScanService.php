@@ -241,6 +241,8 @@ class OrderAiScanService
         foreach ([
             'raw_extracted_text',
             'extraction_payload',
+            'openrouter_payload',
+            'parser_payload',
             'validation_warnings',
             'validation_errors',
             'confidence_score',
@@ -392,18 +394,44 @@ class OrderAiScanService
     public function executeExtraction(OrderAiScan $scan, bool $forceProviderScan = false): array
     {
         if ($forceProviderScan) {
-            return $this->executeProviderScan($scan);
+            $providerResult = $this->executeProviderScan($scan);
+            $providerResult['document_profile'] = $this->resolveDocumentProfileKey($scan);
+
+            return $providerResult;
         }
 
         $preparedDocument = $this->prepareDocumentContext($scan);
+        $initialProfile = $this->resolveDocumentProfileKey($scan);
+        $documentProfile = $this->resolvePreparedDocumentProfileKey($scan, $preparedDocument);
+        $storedProfile = trim((string) ($scan->document_profile ?? ''));
+        $profiles = config('ai-order-scan.profiles', []);
 
-        if ($this->shouldUseRulesFirstDigitalExtraction($scan, $preparedDocument)) {
+        if ($documentProfile !== $initialProfile) {
+            $preparedDocument = $this->prepareDocumentContext($scan, $documentProfile);
+        }
+
+        if ($storedProfile === '' || !array_key_exists($storedProfile, $profiles) || $storedProfile !== $documentProfile) {
+            $scan->setAttribute('document_profile', $documentProfile);
+        }
+
+        $parserPayload = null;
+
+        if ($this->shouldUseRulesFirstDigitalExtraction($scan, $preparedDocument, $documentProfile)) {
             $parsedResult = app(OrderAiDigitalPdfRulesParser::class)->parse($scan, $preparedDocument);
 
             if (is_array($parsedResult)) {
+                $parsedResult['document_profile'] = $documentProfile;
+                $parsedResult['parser_payload'] = $this->buildParserPayloadSnapshot(
+                    $scan,
+                    $preparedDocument,
+                    $documentProfile,
+                    'matched',
+                    $parsedResult
+                );
+
                 Log::info('Order AI digital PDF rules parser matched document.', [
                     'scan_id' => $scan->id,
-                    'document_profile' => (string) ($scan->document_profile ?? ''),
+                    'document_profile' => $documentProfile,
                     'pdf_type' => (string) ($preparedDocument['pdf_type'] ?? ''),
                     'source' => (string) data_get($preparedDocument, 'digital_extraction.source', ''),
                     'text_character_count' => (int) data_get($preparedDocument, 'digital_extraction.text_character_count', 0),
@@ -414,9 +442,19 @@ class OrderAiScanService
                 return $parsedResult;
             }
 
+            $parserPayload = $this->buildParserPayloadSnapshot(
+                $scan,
+                $preparedDocument,
+                $documentProfile,
+                'not_matched',
+                null,
+                'parser_returned_null'
+            );
+
             Log::warning('Order AI digital PDF rules parser did not match document; falling back to AI.', [
                 'scan_id' => $scan->id,
-                'document_profile' => (string) ($scan->document_profile ?? ''),
+                'document_profile' => $documentProfile,
+                'stored_document_profile' => (string) ($scan->getOriginal('document_profile') ?? ''),
                 'source_file_name' => (string) ($scan->source_file_name ?? ''),
                 'source_mime_type' => (string) ($scan->source_mime_type ?? ''),
                 'pdf_type' => (string) ($preparedDocument['pdf_type'] ?? ''),
@@ -434,7 +472,14 @@ class OrderAiScanService
             }
         }
 
-        return $this->executeProviderScan($scan);
+        $providerResult = $this->executeProviderScan($scan);
+        $providerResult['document_profile'] = $documentProfile;
+
+        if (is_array($parserPayload)) {
+            $providerResult['parser_payload'] = $parserPayload;
+        }
+
+        return $providerResult;
     }
 
     public function finalizeExtractionResult(
@@ -672,6 +717,35 @@ class OrderAiScanService
         ]);
     }
 
+    private function buildParserPayloadSnapshot(
+        OrderAiScan $scan,
+        array $preparedDocument,
+        string $profileKey,
+        string $status,
+        ?array $parsedResult = null,
+        string $reason = ''
+    ): array {
+        return Utf8Sanitizer::cleanRecursive([
+            'status' => $status,
+            'reason' => $reason,
+            'profile' => $profileKey,
+            'stored_profile' => trim((string) ($scan->getOriginal('document_profile') ?? $scan->document_profile ?? '')),
+            'source_file_name' => (string) ($scan->source_file_name ?? ''),
+            'source_mime_type' => (string) ($scan->source_mime_type ?? ''),
+            'parser_raw_response' => is_array($parsedResult['raw_response'] ?? null)
+                ? $parsedResult['raw_response']
+                : null,
+            'normalized_payload' => is_array($parsedResult['normalized_payload'] ?? null)
+                ? $parsedResult['normalized_payload']
+                : null,
+            'prepared_document' => $this->buildExtractionPayloadSnapshot($preparedDocument, []),
+            'source_text' => [
+                'searchable_text' => (string) ($preparedDocument['searchable_text'] ?? ''),
+                'provider_input_text' => (string) ($preparedDocument['provider_input_text'] ?? ''),
+            ],
+        ]);
+    }
+
     private function resolveDisplayTransferPreview(OrderAiScan $scan, array $normalizedPayload): mixed
     {
         $transferPreview = Utf8Sanitizer::cleanRecursive($scan->pantheon_transfer_payload);
@@ -761,6 +835,10 @@ class OrderAiScanService
                 $modelName = trim(Utf8Sanitizer::clean((string) ($result['model'] ?? $scan->model), 120)) ?: null;
                 $providerTaskId = trim(Utf8Sanitizer::clean((string) ($result['provider_task_id'] ?? ''))) ?: null;
                 $rawProviderResponse = Utf8Sanitizer::cleanRecursive($result['raw_response'] ?? null);
+                $parserPayload = Utf8Sanitizer::cleanRecursive($result['parser_payload'] ?? null);
+                $resultDocumentProfile = $this->normalizeDocumentProfileKey((string) (
+                    $result['document_profile'] ?? $scan->document_profile ?? ''
+                ));
                 $finalized = $this->finalizeExtractionResult($scan, $result, $user, true);
                 $normalizedPayload = $finalized['normalized_payload'];
                 $pageCount = (int) ($finalized['page_count'] ?? 0);
@@ -793,6 +871,10 @@ class OrderAiScanService
                     'error_message' => null,
                 ];
 
+                if ($this->orderAiScanColumnExists('document_profile')) {
+                    $attributes['document_profile'] = $resultDocumentProfile;
+                }
+
                 if ($pageCount > 0 && $this->orderAiScanColumnExists('page_count')) {
                     $attributes['page_count'] = $pageCount;
                 }
@@ -811,6 +893,16 @@ class OrderAiScanService
 
                 if ($this->orderAiScanColumnExists('extraction_payload')) {
                     $attributes['extraction_payload'] = $finalized['extraction_payload'] ?? null;
+                }
+
+                if ($this->orderAiScanColumnExists('openrouter_payload')) {
+                    $attributes['openrouter_payload'] = $providerName === 'openrouter'
+                        ? $rawProviderResponse
+                        : null;
+                }
+
+                if ($this->orderAiScanColumnExists('parser_payload')) {
+                    $attributes['parser_payload'] = is_array($parserPayload) ? $parserPayload : null;
                 }
 
                 if ($this->orderAiScanColumnExists('validation_warnings')) {
@@ -845,7 +937,7 @@ class OrderAiScanService
                     'provider' => $providerName,
                     'model' => $modelName,
                     'provider_task_id' => $providerTaskId,
-                    'document_profile' => $scan->document_profile,
+                    'document_profile' => $resultDocumentProfile,
                     'extraction_method' => $finalized['extraction_method'] ?? '',
                     'confidence_score' => $finalized['confidence_score'] ?? 0,
                     'validation_errors' => $finalized['validation_errors'] ?? [],
@@ -943,6 +1035,12 @@ class OrderAiScanService
             ),
             'credits_spent' => 0,
         ];
+
+        if ($this->orderAiScanColumnExists('openrouter_payload')) {
+            $attributes['openrouter_payload'] = $attributes['provider'] === 'openrouter'
+                ? $attributes['raw_provider_response']
+                : null;
+        }
 
         if ($this->orderAiScanColumnExists('page_count')) {
             $attributes['page_count'] = $documentMetrics['page_count'] > 0
@@ -1053,6 +1151,14 @@ class OrderAiScanService
 
         if ($this->orderAiScanColumnExists('page_count') && array_key_exists('page_count', $failureAttributes)) {
             $payload['page_count'] = $failureAttributes['page_count'];
+        }
+
+        if ($this->orderAiScanColumnExists('openrouter_payload')) {
+            $payload['openrouter_payload'] = null;
+        }
+
+        if ($this->orderAiScanColumnExists('parser_payload')) {
+            $payload['parser_payload'] = null;
         }
 
         return $payload;
@@ -1317,7 +1423,7 @@ class OrderAiScanService
         return app(MockOrderAiScanProvider::class);
     }
 
-    private function shouldUseRulesFirstDigitalExtraction(OrderAiScan $scan, array $preparedDocument): bool
+    private function shouldUseRulesFirstDigitalExtraction(OrderAiScan $scan, array $preparedDocument, ?string $profileKey = null): bool
     {
         if (!filter_var(config('ai-order-scan.digital_pdf.rules_first', true), FILTER_VALIDATE_BOOL)) {
             return false;
@@ -1327,7 +1433,11 @@ class OrderAiScanService
             return false;
         }
 
-        return in_array($this->resolveDocumentProfileKey($scan), ['grob', 'trendy_de'], true);
+        $resolvedProfileKey = $profileKey !== null
+            ? $this->normalizeDocumentProfileKey($profileKey)
+            : $this->resolveDocumentProfileKey($scan);
+
+        return in_array($resolvedProfileKey, ['grob', 'trendy_de'], true);
     }
 
     private function normalizePayload(array $payload): array
@@ -1663,10 +1773,10 @@ class OrderAiScanService
     {
         if ($this->orderAiScanColumns === null) {
             $this->orderAiScanColumns = [];
+        }
 
-            foreach (['page_count', 'billed_tokens', 'document_profile', 'transfer_started_at'] as $candidate) {
-                $this->orderAiScanColumns[$candidate] = Schema::connection('mysql')->hasColumn('order_ai_scans', $candidate);
-            }
+        if (!array_key_exists($column, $this->orderAiScanColumns)) {
+            $this->orderAiScanColumns[$column] = Schema::connection('mysql')->hasColumn('order_ai_scans', $column);
         }
 
         return (bool) ($this->orderAiScanColumns[$column] ?? false);
@@ -1946,6 +2056,27 @@ class OrderAiScanService
     private function resolveDocumentProfileKey(OrderAiScan $scan): string
     {
         return $this->normalizeDocumentProfileKey((string) ($scan->document_profile ?? ''));
+    }
+
+    private function resolvePreparedDocumentProfileKey(OrderAiScan $scan, array $preparedDocument): string
+    {
+        $storedProfile = trim((string) ($scan->document_profile ?? ''));
+        $profiles = config('ai-order-scan.profiles', []);
+
+        if ($storedProfile !== '' && array_key_exists($storedProfile, $profiles)) {
+            return $storedProfile;
+        }
+
+        $detectedProfile = app(OrderDocumentProfileDetector::class)->detectFromText(
+            (string) ($scan->source_file_name ?? ''),
+            (string) (
+                ($preparedDocument['searchable_text'] ?? '')
+                ?: ($preparedDocument['raw_extracted_text'] ?? '')
+                ?: ($preparedDocument['provider_input_text'] ?? '')
+            )
+        );
+
+        return $this->normalizeDocumentProfileKey($detectedProfile);
     }
 
     private function postProcessProfilePayload(OrderAiScan $scan, array $payload): array

@@ -3,6 +3,7 @@
 namespace App\Services\OrderAi\Support;
 
 use App\Support\Utf8Sanitizer;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Smalot\PdfParser\Config as PdfParserConfig;
 use Smalot\PdfParser\Page;
@@ -63,7 +64,12 @@ class OrderAiDigitalPdfExtractor
                 );
             }
         } catch (\Throwable $exception) {
-            // Fall back to the existing in-repo extractor below.
+            Log::warning('Order AI Smalot PDF extraction failed; using legacy stream fallback.', [
+                'file_name' => (string) $fileName,
+                'mime_type' => (string) $mimeType,
+                'document_profile' => (string) $documentProfile,
+                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+            ]);
         }
 
         $fallbackPages = $this->buildPagesFromFallback(

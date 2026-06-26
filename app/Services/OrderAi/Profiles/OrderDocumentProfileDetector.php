@@ -10,7 +10,11 @@ class OrderDocumentProfileDetector
     {
         unset($mimeType);
 
-        $searchableText = $this->extractSearchableText($bytes);
+        return $this->detectFromText($fileName, $this->extractSearchableText($bytes));
+    }
+
+    public function detectFromText(string $fileName, string $searchableText): string
+    {
         $scores = [
             'trendy_de' => $this->scoreTrendyDe($fileName, $searchableText),
             'grob' => $this->scoreGrob($fileName, $searchableText),
