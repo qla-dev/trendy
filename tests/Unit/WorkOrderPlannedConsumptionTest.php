@@ -93,6 +93,22 @@ class WorkOrderPlannedConsumptionTest extends TestCase
         ], $result);
     }
 
+    public function test_resolve_released_material_quantity_uses_scanned_consumed_quantity_first(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('resolveReleasedMaterialQuantity');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            'stock_consumed_qty' => 9,
+            'anQty1' => 7,
+            'anQty' => 7,
+            'anPlanQty' => 25.0866,
+        ]);
+
+        $this->assertSame(9.0, $result);
+    }
+
     public function test_planned_consumption_component_selection_key_prefers_row_uid_when_present(): void
     {
         $controller = new WorkOrderController();
@@ -236,6 +252,59 @@ class WorkOrderPlannedConsumptionTest extends TestCase
         ]);
 
         $this->assertSame(7, $result['kolicina']);
+    }
+
+    public function test_work_order_item_note_column_prefers_ac_note_over_ac_field_se(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('workOrderItemNoteColumn');
+        $method->setAccessible(true);
+
+        $this->assertSame('acNote', $method->invoke($controller, ['acFieldSE', 'acNote']));
+    }
+
+    public function test_work_order_item_display_note_prefers_ac_note_over_ac_field_se(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('workOrderItemDisplayNote');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            'acNote' => 'existing note value',
+            'acFieldSE' => 'old field value',
+        ]);
+
+        $this->assertSame('existing note value', $result);
+    }
+
+    public function test_planned_consumption_has_complete_dimensions_requires_all_positive_values(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('plannedConsumptionHasCompleteDimensions');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            'dim1' => '20',
+            'dim2' => '495',
+            'dim3' => '905',
+        ]);
+
+        $this->assertTrue($result);
+    }
+
+    public function test_planned_consumption_has_complete_dimensions_rejects_missing_values(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('plannedConsumptionHasCompleteDimensions');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            'dim1' => '20',
+            'dim2' => '495',
+            'dim3' => '',
+        ]);
+
+        $this->assertFalse($result);
     }
 
     public function test_work_order_item_statement_adjusts_stock_skips_pending_markers(): void

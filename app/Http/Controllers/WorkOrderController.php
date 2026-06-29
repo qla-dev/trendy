@@ -1868,6 +1868,9 @@ class WorkOrderController extends Controller
             'components.*.anNo' => ['nullable', 'numeric'],
             'components.*.acDescr' => ['nullable', 'string', 'max:200'],
             'components.*.napomena' => ['nullable', 'string', 'max:4000'],
+            'components.*.dim1' => ['nullable', 'string', 'max:64'],
+            'components.*.dim2' => ['nullable', 'string', 'max:64'],
+            'components.*.dim3' => ['nullable', 'string', 'max:64'],
             'components.*.acUM' => ['nullable', 'string', 'max:8'],
             'components.*.acUMSource' => ['nullable', 'string', 'max:8'],
             'components.*.acOperationType' => ['nullable', 'string', 'max:8'],
@@ -1953,11 +1956,13 @@ class WorkOrderController extends Controller
                 $manualUnitSource = $manualUnitSourceRaw === 'AUTO' ? '' : strtoupper(substr($manualUnitSourceRaw, 0, 3));
                 $manualDelayType = strtoupper(substr(trim((string) ($component['acDelayType'] ?? '')), 0, 1));
                 $componentNote = trim((string) ($component['napomena'] ?? ''));
+                $hasCompleteDimensions = $this->plannedConsumptionHasCompleteDimensions($component);
 
                 Log::info('normalize- planned consumption component', [
                     'componentId' => $componentId,
                     'lineNo' => $lineNo,
                     'napomena' => $componentNote,
+                    'has_complete_dimensions' => $hasCompleteDimensions,
                     'origin' => 'storePlannedConsumption',
                 ]);
 
@@ -1967,11 +1972,16 @@ class WorkOrderController extends Controller
                     'anNo' => $lineNo,
                     'acDescr' => trim((string) ($component['acDescr'] ?? '')),
                     'napomena' => $componentNote,
+                    'dim1' => trim((string) ($component['dim1'] ?? '')),
+                    'dim2' => trim((string) ($component['dim2'] ?? '')),
+                    'dim3' => trim((string) ($component['dim3'] ?? '')),
                     'acUM' => $manualUnit,
                     'acUMSource' => $manualUnitSource,
                     'acOperationType' => $manualOperationType,
                     'acDelayType' => $manualDelayType,
-                    'anPlanQty' => $this->toFloatOrNull($component['anPlanQty'] ?? null),
+                    'anPlanQty' => $hasCompleteDimensions
+                        ? 0.0
+                        : $this->toFloatOrNull($component['anPlanQty'] ?? null),
                 ];
             }
 
@@ -2013,6 +2023,9 @@ class WorkOrderController extends Controller
                     'anNo' => (int) ($component['anNo'] ?? 0),
                     'acDescr' => $componentDescription,
                     'napomena' => trim((string) ($component['napomena'] ?? '')),
+                    'dim1' => trim((string) ($component['dim1'] ?? '')),
+                    'dim2' => trim((string) ($component['dim2'] ?? '')),
+                    'dim3' => trim((string) ($component['dim3'] ?? '')),
                     'acUM' => $componentUnit,
                     'acOperationType' => $this->resolveOperationTypeForSave(
                         (string) ($component['acOperationType'] ?? ''),
@@ -8517,6 +8530,19 @@ class WorkOrderController extends Controller
         return $trimmedNote;
     }
 
+    private function plannedConsumptionHasCompleteDimensions(array $component): bool
+    {
+        foreach (['dim1', 'dim2', 'dim3'] as $dimensionKey) {
+            $dimension = $this->toFloatOrNull($component[$dimensionKey] ?? null);
+
+            if ($dimension === null || $dimension <= 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private function resolvePlannedConsumptionNoteForSave(string $note, string $existingRawNote = ''): ?string
     {
         $trimmedNote = trim($note);
@@ -8538,13 +8564,13 @@ class WorkOrderController extends Controller
 
     private function workOrderItemNoteColumn(array $columns): ?string
     {
-        return $this->firstExistingColumn($columns, ['acFieldSE', 'acNote']);
+        return $this->firstExistingColumn($columns, ['acNote', 'acFieldSE']);
     }
 
     private function workOrderItemDisplayNote(array $row): string
     {
         return $this->plannedConsumptionDisplayNote(
-            (string) $this->valueTrimmed($row, ['acFieldSE', 'acNote'], '')
+            (string) $this->valueTrimmed($row, ['acNote', 'acFieldSE'], '')
         );
     }
 
