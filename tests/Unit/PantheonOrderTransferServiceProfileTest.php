@@ -215,6 +215,54 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame('', $method->invoke($service));
     }
 
+    public function test_grob_requester_code_is_used_as_header_consignee_name(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('resolveHeaderConsigneeName');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [
+            'customer_name' => 'Trendy d.o.o.',
+            'supplier_name' => 'GROB-WERKE GmbH & Co. KG',
+            'requester_code' => '040',
+        ], 'GROB-WERKE GmbH & Co. KG');
+
+        $this->assertSame('040', $result);
+    }
+
+    public function test_non_grob_requester_code_does_not_replace_header_consignee_name(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('resolveHeaderConsigneeName');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [
+            'customer_name' => 'Trendy Germany GmbH',
+            'supplier_name' => 'Trendy Germany GmbH',
+            'requester_code' => '040',
+        ], 'Trendy Germany GmbH');
+
+        $this->assertSame('Trendy Germany GmbH', $result);
+    }
+
+    public function test_grob_item_note_is_cleared_before_pantheon_transfer(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('resolvePreparedItemNote');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [
+            'note' => '02 | Kontierung: U38871-GM7260 | 502,00 Ruesten/Termin abs. 136,00 EUR | Lackierung: RAL 7035 Lichtgrau Glatt.',
+        ], [
+            'supplier_name' => 'GROB-WERKE GmbH & Co. KG',
+        ]);
+
+        $this->assertSame('', $result);
+    }
+
     public function test_foreign_0110_order_items_use_export_vat_profile(): void
     {
         $service = new PantheonOrderTransferService();

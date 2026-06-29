@@ -1118,6 +1118,11 @@
       font-weight: 600;
     }
 
+    .order-ai-line-token {
+      display: inline-block;
+      white-space: nowrap;
+    }
+
     .order-ai-line-note {
       margin-top: 0.35rem;
       font-size: 0.78rem;
@@ -3225,6 +3230,26 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           .replace(/'/g, '&#039;');
       }
 
+      function renderNoBreakText(value) {
+        const text = String(value || '').trim();
+
+        if (text === '') {
+          return '-';
+        }
+
+        return text.split(/(\s+)/).map((part) => {
+          if (part === '') {
+            return '';
+          }
+
+          if (/^\s+$/.test(part)) {
+            return escapeHtml(part);
+          }
+
+          return `<span class="order-ai-line-token">${escapeHtml(part)}</span>`;
+        }).join('');
+      }
+
       function disposeBootstrapTooltip(node) {
         if (!node) {
           return;
@@ -4110,6 +4135,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           order: {
             customer_name: String(order.customer_name || '').trim(),
             supplier_name: String(order.supplier_name || '').trim(),
+            requester_code: String(order.requester_code || '').trim(),
             receiver_name: String(order.receiver_name || '').trim(),
             contact_name: String(order.contact_name || '').trim(),
             external_document_number: String(order.external_document_number || '').trim(),
@@ -4386,7 +4412,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           : '';
         const factsMarkup = [
           { label: 'Kupac', value: order.customer_name || '-' },
-          { label: 'Naručitelj', value: order.supplier_name || '-' },
+          { label: 'Naručitelj', value: order.requester_code || order.supplier_name || '-' },
           { label: 'Referenca', value: order.external_document_number || '-' },
           { label: 'Doc type', value: order.document_type || '-' },
           { label: 'Valuta', value: order.currency || '-' },
@@ -4486,7 +4512,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             </div>
             <div class="order-ai-saved-item">
               <div class="text-muted small mb-50">Naručitelj</div>
-              <div class="fw-bolder">${escapeHtml(order.supplier_name || '-')}</div>
+              <div class="fw-bolder">${escapeHtml(order.requester_code || order.supplier_name || '-')}</div>
             </div>
             <div class="order-ai-saved-item">
               <div class="text-muted small mb-50">Pozicije</div>
@@ -4532,7 +4558,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             </div>
             <div class="order-ai-modal-summary-card">
               <div class="text-muted small mb-50">Naručitelj</div>
-              <div class="fw-bolder">${escapeHtml(order.supplier_name || '-')}</div>
+              <div class="fw-bolder">${escapeHtml(order.requester_code || order.supplier_name || '-')}</div>
             </div>
             <div class="order-ai-modal-summary-card">
               <div class="text-muted small mb-50">Ukupno</div>
@@ -5472,7 +5498,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           : '';
         const factsMarkup = [
           { label: 'Kupac', value: order.customer_name || '-' },
-          { label: 'Naručilac', value: order.supplier_name || '-' },
+          { label: 'Naručilac', value: order.requester_code || order.supplier_name || '-' },
           { label: 'Referenca', value: order.external_document_number || '-' },
           { label: 'Vrsta dokumenta', value: order.document_type || '-' },
           { label: 'Valuta', value: order.currency || '-' },
@@ -5566,7 +5592,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             </div>
             <div class="order-ai-saved-item">
               <div class="text-muted small mb-50">Naručilac</div>
-              <div class="fw-bolder">${escapeHtml(order.supplier_name || '-')}</div>
+              <div class="fw-bolder">${escapeHtml(order.requester_code || order.supplier_name || '-')}</div>
             </div>
             <div class="order-ai-saved-item">
               <div class="text-muted small mb-50">Pozicije</div>
@@ -6555,7 +6581,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           : '';
         const factsMarkup = [
           { label: 'Kupac', value: order.customer_name || '-' },
-          { label: 'Naručilac', value: order.supplier_name || '-' },
+          { label: 'Naručilac', value: order.requester_code || order.supplier_name || '-' },
           { label: 'Referenca', value: order.external_document_number || '-' },
           { label: 'Vrsta dokumenta', value: order.document_type || '-' },
           { label: 'Valuta', value: order.currency || '-' },
@@ -6671,7 +6697,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             label: `${lineLabel} - šifra`,
           });
           const productNameMarkup = renderLineEditTrigger(index, 'product_name', `
-            <div class="order-ai-line-name">${escapeHtml(item.product_name || '-')}</div>
+            <div class="order-ai-line-name">${renderNoBreakText(item.product_name || '-')}</div>
             ${catalogMeta.join('')}
           `, {
             editable: allowCellEdit,

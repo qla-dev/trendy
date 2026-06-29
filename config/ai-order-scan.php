@@ -20,6 +20,7 @@ Extraction rules:
 - Never invent product codes, prices, delivery dates, or document numbers.
 - Prefer the buyer/customer name from the document header.
 - Extract the supplier / sender / issuer name from the top header into supplier_name.
+- If the document has a requester/buyer code, return it in requester_code and preserve leading zeros.
 - Extract the total page count of the uploaded document into page_count.
 - page_count must be the total number of pages in the uploaded file, not the current page number and not a subsection-local page counter.
 - Example: if the footer/header says "Seite 4 von 6", then page_count is 6.
@@ -59,6 +60,8 @@ $grobPromptRules = <<<'PROMPT'
 - Do not copy lines beginning with Zeichnung into product_name.
 - If a line begins with Werkstoff:, put only the text after the colon into material_hint and do not include that line in product_name.
 - Example: if an item block shows code 3226090, then Klotz on one line, G552-11000-1000-10-80-1-01-1-30 on the next line, then Zeichnung ... and Werkstoff: RSt37-2, product_name must be "Klotz G552-11000-1000-10-80-1-01-1-30", drawing_reference must contain the Zeichnung line, and material_hint must be "RSt37-2".
+- Extract the exact value after "Ekg:" into order.requester_code. Preserve leading zeros; for example visible "Ekg: 040" must return requester_code "040".
+- For GROB, requester_code is the Pantheon Naručitelj/acConsignee value. Do not copy Ekg into supplier_name, customer_name, product_name, or note.
 - Prefer Nettopreis / net unit price for unit_price when both Nettopreis and Bruttopreis are visible for the same item.
 - Ignore Bruttopreis when Nettopreis is also present for the same GROB item.
 - Continuation rows without a new position number or new product code belong to the previous numbered item, even across a page break.
@@ -75,6 +78,7 @@ $grobPromptRules = <<<'PROMPT'
 - Read GROB line items only until the separator line "*********************************** ACHTUNG * *************************************". Ignore everything after that separator for item extraction.
 - If Preiseinheit is ST for a GROB item, return unit as KO.
 - Do not copy Bruttopreis, subtotal, footer totals, or prices from a previous page into the first unrelated item on the next page.
+- For GROB, return order.note and every item.note as an empty string. Do not put Kontierung, Ruesten/Termin abs., Lackierung, price rows, Lieferdatum, Zeichnung, or continuation text into note.
 - Respect page breaks strictly: page headers, footers, company signatures, and bank/contact blocks are not part of a line item.
 - Never treat a continuation amount row as a standalone summary-only adjustment if it visually belongs to the previous item.
 - Example: if line 70 ends on one page with Bruttopreis 138,70 and the next page continues that same line without a new Pos/code and shows Ruesten/Termin abs. plus Nettopreis 170,70 and Wert 341,40, then the correct JSON for line 70 uses unit_price 170.70 and line_total 341.40.
@@ -106,6 +110,11 @@ $trendyDePromptRules = <<<'PROMPT'
 - Do not copy Liefertermin or its date into product_name or note.
 - If Einheit is STU for a Trendy Germany item, return unit as KO.
 - Prefer the visible Betrag value as line_total for each row.
+- Trendy Germany product codes may be 5-12 digits and may contain a dot suffix, for example 241265.4.
+- Every visible Pos. + Artikel Nr. pair starts a separate item, even if PDF text extraction placed it after a page label or inside the previous description/note.
+- Never put a later position such as "10 1049658 Stossdaempferanschlag" into the previous item's note. Split it into a new item with line_number 10 and product_code 1049658.
+- Ignore page labels such as "Page" or "Page 2/2"; they are not product_name or note content.
+- If process/finish words such as Graviranje, Brueniert, Brüniert, or chemisch vernickelt appear after the article name, keep the article name in product_name and move the process/finish words to note.
 - If footer totals are missing or unclear, leave summary totals at 0 and let downstream normalization compute them from items.
 PROMPT;
 

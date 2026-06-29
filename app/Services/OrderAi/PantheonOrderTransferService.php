@@ -294,12 +294,12 @@ class PantheonOrderTransferService
                 continue;
             }
 
-            $itemMeta = $this->extractTransferItemMetadata($rawItem);
+            $itemMeta = $this->extractTransferItemMetadata($rawItem, $order);
             $productCode = $this->normalizeTransferProductCode((string) ($rawItem['product_code'] ?? ''));
             $productName = $this->normalizePantheonText((string) ($itemMeta['product_name'] ?? ''));
             $sourceProductCode = $productCode;
             $sourceProductName = $productName;
-            $itemNote = $this->normalizePantheonText((string) ($itemMeta['note'] ?? ''));
+            $itemNote = $this->resolvePreparedItemNote($itemMeta, $order);
             $drawingReference = $this->normalizePantheonText((string) ($itemMeta['drawing_reference'] ?? ''));
             $materialHint = $this->normalizePantheonText((string) ($itemMeta['material_hint'] ?? ''));
             $primaryClassification = $this->resolvePrimaryClassification($materialHint, $order);
@@ -464,6 +464,7 @@ class PantheonOrderTransferService
         return [
             'customer_name' => $customerName,
             'supplier_name' => $supplierName,
+            'requester_code' => $this->normalizePantheonText((string) ($order['requester_code'] ?? '')),
             'receiver_name' => $this->normalizePantheonText((string) ($order['receiver_name'] ?? $customerName)) ?: $customerName,
             'contact_name' => $this->normalizePantheonText((string) ($order['contact_name'] ?? '')),
             'external_document_number' => trim((string) ($order['external_document_number'] ?? '')),
@@ -566,6 +567,15 @@ class PantheonOrderTransferService
         ];
     }
 
+    private function resolvePreparedItemNote(array $itemMeta, array $order): string
+    {
+        if ($this->isGrobOrder($order)) {
+            return '';
+        }
+
+        return $this->normalizePantheonText((string) ($itemMeta['note'] ?? ''));
+    }
+
     private function splitTransferTextLines(string $value): array
     {
         $value = str_replace(["\r\n", "\r"], "\n", $value);
@@ -628,6 +638,17 @@ class PantheonOrderTransferService
         }
 
         return false;
+    }
+
+    private function resolveHeaderConsigneeName(array $prepared, string $transferPartyName): string
+    {
+        $requesterCode = $this->normalizePantheonText((string) ($prepared['requester_code'] ?? ''));
+
+        if ($requesterCode !== '' && $this->isGrobOrder($prepared)) {
+            return $requesterCode;
+        }
+
+        return $transferPartyName;
     }
 
     private function buildCatalogItemNotice(string $productCode, string $status): string
@@ -891,12 +912,15 @@ class PantheonOrderTransferService
         $transferPartyName = trim((string) ($prepared['supplier_name'] ?? '')) !== ''
             ? trim((string) $prepared['supplier_name'])
             : trim((string) ($prepared['customer_name'] ?? ''));
+        $consigneeName = $this->resolveHeaderConsigneeName($prepared, $transferPartyName);
+        $receiverName = $transferPartyName !== '' ? $transferPartyName : (string) ($prepared['receiver_name'] ?? '');
+        $consigneeLookupName = $transferPartyName !== '' ? $transferPartyName : $consigneeName;
         $consigneeQId = $this->resolveSubjectQId(
-            $transferPartyName,
+            $consigneeLookupName,
             $this->positiveIntegerOrNull($template['anConsigneeQId'] ?? null)
         );
         $receiverQId = $this->resolveSubjectQId(
-            $transferPartyName !== '' ? $transferPartyName : (string) ($prepared['receiver_name'] ?? ''),
+            $receiverName,
             $this->positiveIntegerOrNull($template['anReceiverQId'] ?? null)
         );
 
@@ -909,8 +933,8 @@ class PantheonOrderTransferService
         $payload['adDateValid'] = $now->copy()->addDays($validDays)->startOfDay();
         $payload['anDaysForValid'] = $validDays;
         $payload['acStatus'] = '1';
-        $payload['acConsignee'] = $this->fitString('acConsignee', $transferPartyName, $stringLengths);
-        $payload['acReceiver'] = $this->fitString('acReceiver', $transferPartyName !== '' ? $transferPartyName : $prepared['receiver_name'], $stringLengths);
+        $payload['acConsignee'] = $this->fitString('acConsignee', $consigneeName, $stringLengths);
+        $payload['acReceiver'] = $this->fitString('acReceiver', $receiverName, $stringLengths);
         $payload['acContactPrsn'] = $this->fitString('acContactPrsn', $prepared['contact_name'], $stringLengths);
         $payload['acContactPrsn3'] = $this->fitString('acContactPrsn3', $prepared['contact_name'], $stringLengths);
         $payload['acCurrency'] = $this->fitString('acCurrency', $prepared['currency'], $stringLengths);

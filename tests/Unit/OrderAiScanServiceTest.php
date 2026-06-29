@@ -137,6 +137,50 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(341.4, $normalized['summary']['subtotal']);
     }
 
+    public function test_post_process_profile_payload_extracts_grob_ekg_requester_code(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+
+        $sourcePath = 'order-ai-scans/4512100377.pdf';
+        Storage::disk('local')->put($sourcePath, implode("\n", [
+            '%PDF-1.4',
+            'GROB-WERKE GmbH & Co. KG',
+            'Bestell-Nr.: 4512100377',
+            'incl. Verpackung Zahlungsbed.: Trenkenschuh, Paul / 5358 Ekg:',
+            'Kunden-Nr.: Lieferbed.: FCA, Trendy d.o.o. , 72290 Novi Travnik, Incoterms',
+            '2010 Abweichend davon: Versicherung:',
+            'incl. Versicherung nach ICC A Verpackung:',
+            '040 Bitte weisen Sie in Ihrer Auftragsbestatigung / Rechnung die praferenzbegunstigte Ursprungsware aus.',
+            '10 65010001 1,00 ST',
+            'Konzola',
+            'Nettopreis 24,50 EUR ST 1 24,50',
+            'Lieferdatum: 14.06.2026 1,00 ST',
+        ]));
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'grob',
+            'source_file_name' => '4512100377.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('postProcessProfilePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['order']['supplier_name'] = 'GROB-WERKE GmbH & Co. KG';
+        $payload['order']['requester_code'] = 'Kunden-Nr.';
+        $payload['order']['note'] = 'GROB header note must not survive.';
+        $payload['items'][0]['note'] = 'Kontierung: U38871-GM7260 | Lackierung: RAL 7035 Lichtgrau Glatt';
+
+        $payload = $method->invoke($service, $scan, $payload);
+
+        $this->assertSame('040', $payload['order']['requester_code']);
+        $this->assertSame('', $payload['order']['note']);
+        $this->assertSame('', $payload['items'][0]['note']);
+    }
+
     public function test_post_process_profile_payload_keeps_grob_netto_preis_when_it_is_on_same_page(): void
     {
         Storage::fake('local');
@@ -1019,10 +1063,8 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('Platte SVTP1841-01', $payload['items'][0]['product_name']);
         $this->assertSame('', $payload['items'][0]['drawing_reference']);
         $this->assertSame('16MnCrS5', $payload['items'][0]['material_hint']);
-        $this->assertStringContainsString('PLACA DE ACO; USINADA; UTILIZADA EM DISPOSITIVO', $payload['items'][0]['note']);
-        $this->assertStringContainsString('REF. DES. SVTP1841-01', $payload['items'][0]['note']);
+        $this->assertSame('', $payload['items'][0]['note']);
         $this->assertStringNotContainsString('Ruesten/Termin abs.', $payload['items'][0]['product_name']);
-        $this->assertStringNotContainsString('Zeichnung', $payload['items'][0]['note']);
     }
 
     public function test_post_process_profile_payload_for_grob_uses_first_row_as_product_code_and_second_and_third_rows_as_product_name(): void
@@ -1347,14 +1389,21 @@ class OrderAiScanServiceTest extends TestCase
             'GROB-WERKE GmbH & Co. KG',
             'BESTELLUNG',
             'Bestell-Nr.: 4512123001',
+            'incl. Verpackung Zahlungsbed.: Trenkenschuh, Paul / 5358 Ekg:',
+            'Kunden-Nr.: Lieferbed.: FCA, Trendy d.o.o. , 72290 Novi Travnik, Incoterms',
+            '2010 Abweichend davon: Versicherung:',
+            'incl. Versicherung nach ICC A Verpackung:',
+            '040 Bitte weisen Sie in Ihrer Auftragsbestatigung / Rechnung die praferenzbegunstigte Ursprungsware aus.',
             '20 6449473 3,00 ST',
             'Klotz',
             'GM4395/01-70-126/1-2-18',
             'Zeichnung GM4395/01-70-126/1-2-18 mit Revisionsstand 01',
+            'Kontierung: U38871-GM7260',
             'Werkstoff: C45',
             'Preiseinheit ST',
             'Nettopreis 42,60 EUR ST 1 127,80',
             'Lieferdatum: 18.06.2026 3,00 ST',
+            'Lackierung: RAL 7035 Lichtgrau Glatt',
             'Nettowert 127,80',
             'Gesamtbetrag 127,80',
         ]]));
@@ -1387,12 +1436,15 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('4512123001', data_get($result, 'normalized_payload.order.external_document_number'));
         $this->assertSame('Trendy d.o.o.', data_get($result, 'normalized_payload.order.customer_name'));
         $this->assertSame('GROB-WERKE GmbH & Co. KG', data_get($result, 'normalized_payload.order.supplier_name'));
+        $this->assertSame('040', data_get($result, 'normalized_payload.order.requester_code'));
+        $this->assertSame('', data_get($result, 'normalized_payload.order.note'));
         $this->assertSame('6449473', data_get($result, 'normalized_payload.items.0.product_code'));
         $this->assertSame('Klotz GM4395/01-70-126/1-2-18', data_get($result, 'normalized_payload.items.0.product_name'));
         $this->assertSame('KO', data_get($result, 'normalized_payload.items.0.unit'));
         $this->assertSame('18.06.2026', data_get($result, 'normalized_payload.items.0.delivery_deadline'));
         $this->assertSame(42.6, data_get($result, 'normalized_payload.items.0.unit_price'));
         $this->assertSame(127.8, data_get($result, 'normalized_payload.items.0.line_total'));
+        $this->assertSame('', data_get($result, 'normalized_payload.items.0.note'));
         $this->assertSame(127.8, data_get($result, 'normalized_payload.summary.subtotal'));
     }
 
@@ -1482,6 +1534,140 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('Halter 884698', data_get($result, 'normalized_payload.items.0.product_name'));
         $this->assertSame('KO', data_get($result, 'normalized_payload.items.0.unit'));
         $this->assertSame(1179.2, data_get($result, 'normalized_payload.summary.subtotal'));
+    }
+
+    public function test_execute_extraction_keeps_parsing_trendy_de_items_after_page_subtotal(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000958.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([
+            [
+                'Trendy Germany GmbH',
+                'Lieferant:',
+                'Trendy doo',
+                'Anlieferadresse:',
+                'Trendy Germany 21',
+                'Datum 9. 5. 2026.',
+                'Liefertermin 1. 6. 2026.',
+                'Person responsible Edina Duzan',
+                'Bestellung 26-020-000958',
+                'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+                '1 65070911 Halter 884698 2,00 STU 308,30 0,00 616,60',
+                '616,60 Total',
+            ],
+            [
+                'Trendy Germany GmbH',
+                'Page 2/2',
+                'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+                '2 65070912 Halter 884699 spiegelbildlich 2,00 STU 281,30 0,00 562,60',
+                '1.179,20 Total',
+                'Gesamtpreis EUR',
+            ],
+        ]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new RuntimeException('AI provider should not be called for digital rules-first extraction.');
+            }
+        });
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000958.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertSame('26-020-000958', data_get($result, 'normalized_payload.order.external_document_number'));
+        $this->assertCount(2, data_get($result, 'normalized_payload.items'));
+        $this->assertSame('65070911', data_get($result, 'normalized_payload.items.0.product_code'));
+        $this->assertSame('65070912', data_get($result, 'normalized_payload.items.1.product_code'));
+        $this->assertSame('Halter 884699 spiegelbildlich', data_get($result, 'normalized_payload.items.1.product_name'));
+        $this->assertSame(562.6, data_get($result, 'normalized_payload.items.1.line_total'));
+        $this->assertSame(1179.2, data_get($result, 'normalized_payload.summary.subtotal'));
+        $this->assertSame(2, data_get($result, 'raw_response.matched_item_count'));
+    }
+
+    public function test_execute_extraction_splits_trendy_de_items_embedded_after_page_break_text(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000958.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            'Trendy Germany GmbH',
+            'Liefertermin 26. 6. 2026.',
+            'Bestellung 26-020-000958',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '1049576 595,20 0,00 Betrag 16,00 VAT % STU 37,20',
+            'Hauptplatte 9 Graviranje',
+            'Brueniert Page 10 1049658 Stossdaempferanschlag Graviranje Brueniert 30,00 STU 4,90 0,00 147,00 11 1049798 Schwenkantriebbefestigung Graviranje 5,00 STU 50,00 0,00 250,00',
+            '992,20 Total',
+            'Gesamtpreis EUR',
+        ]]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new RuntimeException('AI provider should not be called for digital rules-first extraction.');
+            }
+        });
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000958.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertCount(3, data_get($result, 'normalized_payload.items'));
+        $this->assertSame(9, data_get($result, 'normalized_payload.items.0.line_number'));
+        $this->assertSame('1049576', data_get($result, 'normalized_payload.items.0.product_code'));
+        $this->assertSame('Hauptplatte', data_get($result, 'normalized_payload.items.0.product_name'));
+        $this->assertStringNotContainsString('Page', data_get($result, 'normalized_payload.items.0.note'));
+        $this->assertStringNotContainsString('9', data_get($result, 'normalized_payload.items.0.note'));
+        $this->assertStringContainsString('Graviranje', data_get($result, 'normalized_payload.items.0.note'));
+        $this->assertSame(10, data_get($result, 'normalized_payload.items.1.line_number'));
+        $this->assertSame('1049658', data_get($result, 'normalized_payload.items.1.product_code'));
+        $this->assertSame('Stossdaempferanschlag', data_get($result, 'normalized_payload.items.1.product_name'));
+        $this->assertSame(30.0, data_get($result, 'normalized_payload.items.1.quantity'));
+        $this->assertSame(147.0, data_get($result, 'normalized_payload.items.1.line_total'));
+        $this->assertSame(11, data_get($result, 'normalized_payload.items.2.line_number'));
+        $this->assertSame('1049798', data_get($result, 'normalized_payload.items.2.product_code'));
+        $this->assertSame('Schwenkantriebbefestigung', data_get($result, 'normalized_payload.items.2.product_name'));
+        $this->assertSame(250.0, data_get($result, 'normalized_payload.items.2.line_total'));
+        $this->assertSame(992.2, data_get($result, 'normalized_payload.summary.subtotal'));
     }
 
     public function test_execute_extraction_parses_trendy_de_code_amount_row_split_from_description(): void
@@ -2202,6 +2388,9 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertStringContainsString('ignore it completely', $prompt);
         $this->assertStringContainsString('extract the visible date next to Lieferdatum', $prompt);
         $this->assertStringContainsString('not a dispatch/shipping date', $prompt);
+        $this->assertStringContainsString('Extract the exact value after "Ekg:" into order.requester_code', $prompt);
+        $this->assertStringContainsString('requester_code "040"', $prompt);
+        $this->assertStringContainsString('For GROB, return order.note and every item.note as an empty string', $prompt);
     }
 
     public function test_build_request_prompt_applies_trendy_liefertermin_to_every_item(): void
@@ -2215,6 +2404,10 @@ class OrderAiScanServiceTest extends TestCase
 
         $this->assertStringContainsString('Copy the same visible date into delivery_deadline for every item', $prompt);
         $this->assertStringContainsString('not a dispatch/shipping date', $prompt);
+        $this->assertStringContainsString('Trendy Germany product codes may be 5-12 digits', $prompt);
+        $this->assertStringContainsString('Every visible Pos. + Artikel Nr. pair starts a separate item', $prompt);
+        $this->assertStringContainsString('Never put a later position such as "10 1049658 Stossdaempferanschlag" into the previous item', $prompt);
+        $this->assertStringContainsString('Ignore page labels such as "Page"', $prompt);
     }
 
     public function test_build_status_payload_refreshes_legacy_duplicate_reference_preview_and_blocks_transfer(): void
@@ -2289,6 +2482,7 @@ class OrderAiScanServiceTest extends TestCase
             'order' => [
                 'customer_name' => '',
                 'supplier_name' => '',
+                'requester_code' => '',
                 'page_count' => 1,
                 'receiver_name' => '',
                 'contact_name' => '',

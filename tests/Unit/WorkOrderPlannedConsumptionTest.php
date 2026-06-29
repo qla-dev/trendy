@@ -173,6 +173,71 @@ class WorkOrderPlannedConsumptionTest extends TestCase
         $this->assertNull($result);
     }
 
+    public function test_work_order_item_quantity_prefers_non_zero_an_qty1_over_plan_quantity(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('workOrderItemQuantity');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            'anPlanQty' => 4.6,
+            'anQty' => 0,
+            'anQty1' => 7,
+        ]);
+
+        $this->assertSame(7.0, $result);
+    }
+
+    public function test_work_order_item_quantity_falls_back_to_plan_quantity_when_actual_quantities_are_zero(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('workOrderItemQuantity');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            'anPlanQty' => 4.6,
+            'anQty' => 0,
+            'anQty1' => 0,
+        ]);
+
+        $this->assertSame(4.6, $result);
+    }
+
+    public function test_work_order_item_actual_quantity_uses_an_qty1_when_an_qty_is_zero(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('workOrderItemActualQuantity');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            'anQty' => 0,
+            'anQty1' => 7,
+        ]);
+
+        $this->assertSame(7.0, $result);
+    }
+
+    public function test_map_item_row_displays_an_qty1_when_plan_quantity_is_stale(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('mapItemRow');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            'anQId' => 55663,
+            'anNo' => 2,
+            'acKey' => '2660000003492',
+            'acIdent' => 'ALPL5083',
+            'acDescr' => 'Aluminij ploca',
+            'anPlanQty' => 4.6,
+            'anQty' => 0,
+            'anQty1' => 7,
+            'acUM' => 'KG',
+        ]);
+
+        $this->assertSame(7, $result['kolicina']);
+    }
+
     public function test_work_order_item_statement_adjusts_stock_skips_pending_markers(): void
     {
         $controller = new WorkOrderController();
