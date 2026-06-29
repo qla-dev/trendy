@@ -17,6 +17,7 @@ class OrderAiResponseSchema
                     'required' => [
                         'customer_name',
                         'supplier_name',
+                        'requester_code',
                         'page_count',
                         'receiver_name',
                         'contact_name',
@@ -32,6 +33,10 @@ class OrderAiResponseSchema
                     'properties' => [
                         'customer_name' => ['type' => 'string'],
                         'supplier_name' => ['type' => 'string'],
+                        'requester_code' => [
+                            'type' => 'string',
+                            'description' => 'Visible requester/buyer code. For GROB extract the exact value after Ekg:, preserving leading zeros, for example 040.',
+                        ],
                         'page_count' => [
                             'type' => 'integer',
                             'description' => 'Total number of pages in the uploaded file.',

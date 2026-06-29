@@ -5038,6 +5038,7 @@ class WorkOrderController extends Controller
                     'i.acDescr as __item_descr',
                     'i.acUM as __item_um',
                     'i.anQty as __item_qty',
+                    'i.anQty1 as __item_qty1',
                     'i.anPlanQty as __item_plan_qty',
                 ]);
         } else {
@@ -5516,8 +5517,25 @@ class WorkOrderController extends Controller
     private function workOrderItemQuantity(array $row): float
     {
         return (float) ($this->toFloatOrNull(
-            $row['anPlanQty'] ?? $row['anQty'] ?? $row['anQty1'] ?? 0
+            $this->workOrderItemQuantityValue($row, 0)
         ) ?? 0);
+    }
+
+    private function workOrderItemQuantityValue(array $row, mixed $default = 0): mixed
+    {
+        foreach (['anQty1', 'anQty', '__item_qty1', '__item_qty'] as $quantityColumn) {
+            if (!array_key_exists($quantityColumn, $row)) {
+                continue;
+            }
+
+            $quantity = $this->toFloatOrNull($row[$quantityColumn]);
+
+            if ($quantity !== null && abs($quantity) > 0.000001) {
+                return $row[$quantityColumn];
+            }
+        }
+
+        return $this->value($row, ['anPlanQty', '__item_plan_qty', 'anNormQty'], $default);
     }
 
     private function workOrderHeaderQuantity(array $row): float
@@ -5561,7 +5579,7 @@ class WorkOrderController extends Controller
 
     private function resolveReleasedMaterialQuantity(array $row): float
     {
-        foreach (['stock_consumed_qty', 'anQty', 'anQty1', 'anPlanQty'] as $column) {
+        foreach (['stock_consumed_qty', 'anQty1', 'anQty', 'anPlanQty'] as $column) {
             $quantity = abs((float) ($this->toFloatOrNull($row[$column] ?? null) ?? 0.0));
 
             if ($quantity > 0.000001) {
@@ -5574,9 +5592,19 @@ class WorkOrderController extends Controller
 
     private function workOrderItemActualQuantity(array $row): float
     {
-        return (float) ($this->toFloatOrNull(
-            $row['anQty'] ?? $row['anQty1'] ?? 0
-        ) ?? 0);
+        foreach (['anQty1', 'anQty', '__item_qty1', '__item_qty'] as $quantityColumn) {
+            if (!array_key_exists($quantityColumn, $row)) {
+                continue;
+            }
+
+            $quantity = $this->toFloatOrNull($row[$quantityColumn]);
+
+            if ($quantity !== null && abs($quantity) > 0.000001) {
+                return $quantity;
+            }
+        }
+
+        return 0.0;
     }
 
     private function workOrderItemStockQuantity(array $row, ?float $workOrderQuantity = null): float
@@ -8312,7 +8340,7 @@ class WorkOrderController extends Controller
             'artikal' => (string) $this->value($row, ['acIdent'], ''),
             'opis' => (string) $this->value($row, ['acDescr'], ''),
             'napomena' => $displayNote,
-            'kolicina' => $this->normalizeNumber($this->value($row, ['anPlanQty', 'anQty', 'anQty1'], 0)),
+            'kolicina' => $this->normalizeNumber($this->workOrderItemQuantityValue($row, 0)),
             'mj' => (string) $this->value($row, ['acUM'], ''),
             'serija' => $this->normalizeNumber($this->value($row, ['anQtySE', 'anBatch'], 0)),
             'normativna_osnova' => $this->normalizeNumber($this->value($row, ['anQtyBase', 'anQtyBase3'], 0)),
@@ -8592,7 +8620,7 @@ class WorkOrderController extends Controller
             'pozicija' => (string) $this->valueTrimmed($row, ['anNo', 'anLineNo', 'anResNo', '__item_no'], ''),
             'materijal' => (string) $this->valueTrimmed($row, ['acResursID', 'acIdent', 'acResIdent', 'acResource', 'acCode', '__item_ident'], ''),
             'naziv' => (string) $this->valueTrimmed($row, ['acResType', 'acDescr', 'acName', 'acResDescr', '__item_descr', '__item_ident'], ''),
-            'kolicina' => $this->normalizeNumber($this->valueTrimmed($row, ['anPlanQty', 'anQty', 'anNormQty', '__item_plan_qty', '__item_qty'], 0)),
+            'kolicina' => $this->normalizeNumber($this->workOrderItemQuantityValue($row, 0)),
             'mj' => (string) $this->valueTrimmed($row, ['acUM', 'acUMRes', '__item_um'], ''),
             'napomena' => $this->plannedConsumptionDisplayNote((string) $this->valueTrimmed($row, ['acNote'], '')),
         ];
@@ -8606,7 +8634,7 @@ class WorkOrderController extends Controller
             'pozicija' => (string) $this->valueTrimmed($row, ['anNo'], ''),
             'materijal' => (string) $this->valueTrimmed($row, ['acIdent'], ''),
             'naziv' => (string) $this->valueTrimmed($row, ['acDescr', 'acName', 'acIdent'], ''),
-            'kolicina' => $this->normalizeNumber($this->valueTrimmed($row, ['anPlanQty', 'anQty', 'anNormQty'], 0)),
+            'kolicina' => $this->normalizeNumber($this->workOrderItemQuantityValue($row, 0)),
             'mj' => (string) $this->valueTrimmed($row, ['acUM'], ''),
             'napomena' => $this->workOrderItemDisplayNote($row),
         ];

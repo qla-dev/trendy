@@ -86,6 +86,7 @@ class MockOrderAiScanProvider implements OrderAiScanProvider
             'order' => [
                 'customer_name' => $customerName,
                 'supplier_name' => '',
+                'requester_code' => '',
                 'page_count' => $documentMetrics['page_count'],
                 'receiver_name' => $customerName,
                 'contact_name' => '',
@@ -139,6 +140,7 @@ class MockOrderAiScanProvider implements OrderAiScanProvider
             'order' => [
                 'customer_name' => trim((string) ($order['customer_name'] ?? '')),
                 'supplier_name' => trim((string) ($order['supplier_name'] ?? '')),
+                'requester_code' => trim((string) ($order['requester_code'] ?? '')),
                 'page_count' => max(0, (int) ($order['page_count'] ?? 0)),
                 'receiver_name' => trim((string) ($order['receiver_name'] ?? ($order['customer_name'] ?? ''))),
                 'contact_name' => trim((string) ($order['contact_name'] ?? '')),

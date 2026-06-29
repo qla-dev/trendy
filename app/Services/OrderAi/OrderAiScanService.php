@@ -1502,7 +1502,7 @@ class OrderAiScanService
                 'vat_code' => trim((string) ($item['vat_code'] ?? config('ai-order-scan.default_vat_code', 'P1'))),
                 'discount_percent' => (float) ($item['discount_percent'] ?? 0),
                 'priority' => trim((string) ($item['priority'] ?? '')),
-                'note' => $itemMeta['note'],
+                'note' => $isGrobOrder ? '' : $itemMeta['note'],
             ];
         }, $items, array_keys($items))));
         $warnings = array_values(array_filter(array_map(function ($warning) {
@@ -1514,6 +1514,7 @@ class OrderAiScanService
             'order' => [
                 'customer_name' => $this->normalizeScannedText((string) ($order['customer_name'] ?? '')),
                 'supplier_name' => $supplierName,
+                'requester_code' => $this->normalizeScannedText((string) ($order['requester_code'] ?? '')),
                 'page_count' => max(0, (int) ($order['page_count'] ?? 0)),
                 'receiver_name' => $this->normalizeScannedText((string) ($order['receiver_name'] ?? ($order['customer_name'] ?? ''))),
                 'contact_name' => $this->normalizeScannedText((string) ($order['contact_name'] ?? '')),
@@ -1521,7 +1522,7 @@ class OrderAiScanService
                 'document_type' => trim((string) ($order['document_type'] ?? '')),
                 'currency' => trim((string) ($order['currency'] ?? config('ai-order-scan.default_currency', 'KM'))),
                 'delivery_deadline' => trim((string) ($order['delivery_deadline'] ?? '')),
-                'note' => $this->normalizeScannedText((string) ($order['note'] ?? '')),
+                'note' => $isGrobOrder ? '' : $this->normalizeScannedText((string) ($order['note'] ?? '')),
                 'way_of_sale' => trim((string) ($order['way_of_sale'] ?? config('ai-order-scan.default_way_of_sale', 'D'))),
                 'confidence' => (float) ($order['confidence'] ?? 0),
                 'warnings' => $warnings,
@@ -1708,6 +1709,7 @@ class OrderAiScanService
         $payload['order'] = array_merge($order, [
             'customer_name' => $this->normalizeScannedText((string) ($prepared['customer_name'] ?? ($order['customer_name'] ?? ''))),
             'supplier_name' => $this->normalizeSupplierName((string) ($prepared['supplier_name'] ?? ($order['supplier_name'] ?? ''))),
+            'requester_code' => $this->normalizeScannedText((string) ($prepared['requester_code'] ?? ($order['requester_code'] ?? ''))),
             'receiver_name' => $this->normalizeScannedText((string) ($prepared['receiver_name'] ?? ($order['receiver_name'] ?? ''))),
             'contact_name' => $this->normalizeScannedText((string) ($prepared['contact_name'] ?? ($order['contact_name'] ?? ''))),
             'external_document_number' => trim((string) ($prepared['external_document_number'] ?? ($order['external_document_number'] ?? ''))),
@@ -2359,6 +2361,13 @@ class OrderAiScanService
         $effectivePageCount = max(0, (int) ($context['effective_page_count'] ?? 0));
         $sourcePageCount = max(0, (int) ($context['source_page_count'] ?? 0), (int) ($order['page_count'] ?? 0));
         $pageLimitReason = trim((string) ($context['page_processing_limit_reason'] ?? ''));
+        $requesterCode = $this->extractGrobRequesterCode($searchableText);
+
+        if ($requesterCode !== '') {
+            $order['requester_code'] = $requesterCode;
+        }
+
+        $order['note'] = '';
 
         if ($effectivePageCount <= 0) {
             $effectivePageCount = $this->estimateGrobEffectivePageCount(
@@ -2515,9 +2524,7 @@ class OrderAiScanService
         $item['product_name'] = $this->sanitizeGrobPayloadProductName(
             (string) ($item['product_name'] ?? '')
         );
-        $item['note'] = $this->sanitizeGrobPayloadAnnotation(
-            (string) ($item['note'] ?? '')
-        );
+        $item['note'] = '';
         $item['drawing_reference'] = '';
 
         return $item;
@@ -3513,6 +3520,51 @@ class OrderAiScanService
         foreach ([$searchableText, $fileName] as $source) {
             if (preg_match('/Bestellung[\s_:-]*([0-9]{2}-[0-9]{3}-[0-9]+)/i', $source, $matches) === 1) {
                 return trim((string) ($matches[1] ?? ''));
+            }
+        }
+
+        return '';
+    }
+
+    private function extractGrobRequesterCode(string $searchableText): string
+    {
+        $normalized = str_replace(["\r\n", "\r"], "\n", $searchableText);
+        $lines = preg_split('/\n+/u', $normalized) ?: [];
+
+        foreach ($lines as $line) {
+            if (preg_match('/\bEkg\s*:?[ \t]*(.*)$/iu', (string) $line, $matches) !== 1) {
+                continue;
+            }
+
+            $candidate = $this->extractGrobRequesterCodeCandidate((string) ($matches[1] ?? ''));
+
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        if (preg_match('/\bEkg\s*:?/iu', $normalized, $marker, PREG_OFFSET_CAPTURE) !== 1) {
+            return '';
+        }
+
+        $offset = (int) (($marker[0][1] ?? 0) + strlen((string) ($marker[0][0] ?? '')));
+        $window = substr($normalized, $offset, 900);
+        $window = preg_split('/\b(?:Pos\s+Beschreibung|Wert\s+_{5,}|Bestell-Nr\.)\b/iu', $window, 2)[0] ?? $window;
+
+        return $this->extractGrobRequesterCodeCandidate((string) $window);
+    }
+
+    private function extractGrobRequesterCodeCandidate(string $value): string
+    {
+        if (preg_match_all('/\b0*[0-9]{1,3}\b/u', $value, $matches) < 1) {
+            return '';
+        }
+
+        foreach ($matches[0] as $candidate) {
+            $candidate = trim((string) $candidate);
+
+            if ($candidate !== '') {
+                return $this->normalizeScannedText($candidate);
             }
         }
 
