@@ -18,6 +18,7 @@ class PantheonOrderTransferService
     private array $catalogMaterialByCodeCache = [];
     private array $catalogMaterialByNameCache = [];
     private array $createdCatalogItems = [];
+    private ?array $pantheonClerkContactsCache = null;
 
     public function previewFromNormalizedPayload(array $normalizedPayload, mixed $user = null): array
     {
@@ -58,6 +59,8 @@ class PantheonOrderTransferService
                 $user
             );
 
+            $referent = $this->resolvePantheonReferentPayload($headerPayload['anClerk'] ?? null);
+
             Order::newSourceQuery()->insert($headerPayload);
 
             $itemPayloads = [];
@@ -90,6 +93,9 @@ class PantheonOrderTransferService
                 'pantheon_order_view' => (string) ($headerPayload['acKeyView'] ?? ($numberContext['display_key'] ?? '')),
                 'pantheon_order_qid' => $headerPayload['anQId'] ?? null,
                 'item_count' => count($itemPayloads),
+                'referent' => $referent['name'],
+                'referent_id' => $referent['id'],
+                'referent_user_code' => $referent['user_code'],
                 'header_payload' => $headerPayload,
                 'item_payloads' => $itemPayloads,
                 'created_catalog_items' => $this->createdCatalogItems,
@@ -222,6 +228,8 @@ class PantheonOrderTransferService
             $user
         );
 
+        $referent = $this->resolvePantheonReferentPayload($headerPayload['anClerk'] ?? null);
+
         $itemPayloads = [];
         foreach ($prepared['items'] as $index => $item) {
             $itemPayloads[] = $this->buildItemPayload(
@@ -241,6 +249,9 @@ class PantheonOrderTransferService
             'pantheon_order_view' => (string) ($headerPayload['acKeyView'] ?? ($numberContext['display_key'] ?? '')),
             'pantheon_order_qid' => $headerPayload['anQId'] ?? null,
             'item_count' => count($itemPayloads),
+            'referent' => $referent['name'],
+            'referent_id' => $referent['id'],
+            'referent_user_code' => $referent['user_code'],
             'header_payload' => $headerPayload,
             'item_payloads' => $itemPayloads,
             'created_catalog_items' => $this->createdCatalogItems,
@@ -865,6 +876,7 @@ class PantheonOrderTransferService
             'adDate',
             'adDeliveryDeadline',
             'adDateValid',
+            'anClerk',
             'anValue',
             'anDiscount',
             'anVAT',
@@ -909,6 +921,7 @@ class PantheonOrderTransferService
         $vatTotal = $prepared['vat_total'];
         $grandTotal = $prepared['grand_total'];
         $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
+        $clerkUserId = $this->resolvePantheonClerkUserId($user);
         $transferPartyName = trim((string) ($prepared['supplier_name'] ?? '')) !== ''
             ? trim((string) $prepared['supplier_name'])
             : trim((string) ($prepared['customer_name'] ?? ''));
@@ -954,6 +967,10 @@ class PantheonOrderTransferService
         if ($userId > 0) {
             $payload['anUserIns'] = $userId;
             $payload['anUserChg'] = $userId;
+        }
+
+        if (in_array('anClerk', $columns, true) && $clerkUserId > 0) {
+            $payload['anClerk'] = $clerkUserId;
         }
 
         if (in_array('anQId', $columns, true) && $nextQid !== null) {
@@ -1265,6 +1282,289 @@ class PantheonOrderTransferService
         $unit = $this->normalizeUnitCode($unit, $stringLengths);
 
         return $this->isValidPantheonUnit($unit) ? $unit : '';
+    }
+
+    private function resolvePantheonClerkUserId(mixed $user): int
+    {
+        $explicitClerkId = $this->extractUserIntegerValue($user, [
+            'pantheon_clerk_id',
+            'pantheonClerkId',
+            'pantheon_user_id',
+            'pantheonUserId',
+            'anClerk',
+            'anUserID',
+            'anUserId',
+        ]);
+
+        if ($explicitClerkId > 0 && $this->pantheonClerkUserIdExists($explicitClerkId)) {
+            return $explicitClerkId;
+        }
+
+        $mappedClerkId = $this->resolveMappedPantheonClerkUserId($user);
+
+        if ($mappedClerkId > 0) {
+            return $mappedClerkId;
+        }
+
+        foreach ($this->buildPantheonClerkLookupCandidates($user) as $candidate) {
+            foreach ($this->pantheonClerkContacts() as $contact) {
+                if ($candidate === (string) ($contact['normalized_user_code'] ?? '')) {
+                    return (int) ($contact['id'] ?? 0);
+                }
+
+                if ($candidate === (string) ($contact['normalized_contact'] ?? '')) {
+                    return (int) ($contact['id'] ?? 0);
+                }
+
+                if ($candidate === (string) ($contact['normalized_full_name'] ?? '')) {
+                    return (int) ($contact['id'] ?? 0);
+                }
+
+                if ($candidate === (string) ($contact['normalized_web_user'] ?? '')) {
+                    return (int) ($contact['id'] ?? 0);
+                }
+
+                if ($candidate === (string) ($contact['normalized_code'] ?? '')) {
+                    return (int) ($contact['id'] ?? 0);
+                }
+
+                if ($candidate === (string) ($contact['normalized_worker_contact'] ?? '')) {
+                    return (int) ($contact['id'] ?? 0);
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    private function resolveMappedPantheonClerkUserId(mixed $user): int
+    {
+        $configuredMap = config('workorders.pantheon_user_map', []);
+        $normalizedConfiguredMap = [];
+
+        if (is_array($configuredMap)) {
+            foreach ($configuredMap as $key => $value) {
+                $normalizedKey = $this->normalizePantheonUserLookupValue((string) $key);
+                $resolvedValue = is_numeric((string) $value) ? (int) $value : 0;
+
+                if ($normalizedKey !== '' && $resolvedValue > 0) {
+                    $normalizedConfiguredMap[$normalizedKey] = $resolvedValue;
+                }
+            }
+        }
+
+        if (empty($normalizedConfiguredMap)) {
+            return 0;
+        }
+
+        foreach ($this->buildPantheonClerkLookupCandidates($user) as $candidate) {
+            $mappedId = (int) ($normalizedConfiguredMap[$candidate] ?? 0);
+
+            if ($mappedId > 0 && $this->pantheonClerkUserIdExists($mappedId)) {
+                return $mappedId;
+            }
+        }
+
+        return 0;
+    }
+
+    private function buildPantheonClerkLookupCandidates(mixed $user): array
+    {
+        $rawCandidates = [];
+
+        foreach ([
+            'pantheon_username',
+            'pantheon_user_code',
+            'pantheon_clerk_username',
+            'pantheon_clerk_code',
+            'username',
+            'name',
+            'email',
+            'role',
+            'acUserId',
+            'acContact',
+            'acTitle',
+        ] as $key) {
+            $value = $this->extractUserValue($user, $key);
+
+            if (!is_scalar($value) && $value !== null) {
+                continue;
+            }
+
+            $stringValue = trim((string) ($value ?? ''));
+
+            if ($stringValue === '') {
+                continue;
+            }
+
+            $rawCandidates[] = $stringValue;
+
+            if (str_contains($stringValue, '@')) {
+                $localPart = trim((string) strstr($stringValue, '@', true));
+
+                if ($localPart !== '') {
+                    $rawCandidates[] = $localPart;
+                }
+            }
+        }
+
+        $normalizedCandidates = [];
+
+        foreach ($rawCandidates as $candidate) {
+            $normalizedCandidate = $this->normalizePantheonUserLookupValue($candidate);
+
+            if ($normalizedCandidate === '') {
+                continue;
+            }
+
+            $normalizedCandidates[$normalizedCandidate] = true;
+        }
+
+        return array_keys($normalizedCandidates);
+    }
+
+    private function extractUserIntegerValue(mixed $user, array $keys): int
+    {
+        foreach ($keys as $key) {
+            $value = $this->extractUserValue($user, $key);
+
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            if (is_numeric((string) $value)) {
+                $integer = (int) $value;
+
+                if ($integer > 0) {
+                    return $integer;
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    private function extractUserValue(mixed $user, string $key): mixed
+    {
+        if (is_array($user) && array_key_exists($key, $user)) {
+            return $user[$key];
+        }
+
+        if (is_object($user)) {
+            if (isset($user->{$key})) {
+                return $user->{$key};
+            }
+
+            if (method_exists($user, 'getAttribute')) {
+                return $user->getAttribute($key);
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizePantheonUserLookupValue(string $value): string
+    {
+        $value = Str::ascii(mb_strtolower(trim($value), 'UTF-8'));
+
+        return preg_replace('/[^a-z0-9]+/', '', $value) ?? '';
+    }
+
+    private function pantheonClerkUserIdExists(int $pantheonUserId): bool
+    {
+        if ($pantheonUserId < 1) {
+            return false;
+        }
+
+        foreach ($this->pantheonClerkContacts() as $contact) {
+            if ((int) ($contact['id'] ?? 0) === $pantheonUserId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function resolvePantheonReferentPayload(mixed $pantheonUserId): array
+    {
+        $pantheonUserId = $this->positiveIntegerOrNull($pantheonUserId);
+
+        if ($pantheonUserId === null) {
+            return [
+                'id' => null,
+                'name' => '',
+                'user_code' => '',
+            ];
+        }
+
+        foreach ($this->pantheonClerkContacts() as $contact) {
+            if ((int) ($contact['id'] ?? 0) !== $pantheonUserId) {
+                continue;
+            }
+
+            return [
+                'id' => $pantheonUserId,
+                'name' => (string) ($contact['display_name'] ?? ''),
+                'user_code' => (string) ($contact['user_code'] ?? ''),
+            ];
+        }
+
+        return [
+            'id' => $pantheonUserId,
+            'name' => '',
+            'user_code' => '',
+        ];
+    }
+
+    protected function pantheonClerkContacts(): array
+    {
+        if ($this->pantheonClerkContactsCache !== null) {
+            return $this->pantheonClerkContactsCache;
+        }
+
+        $this->pantheonClerkContactsCache = DB::connection('sqlsrv')
+            ->table(Order::sourceSchema() . '.tHE_SetSubjContact')
+            ->select(
+                'anUserID',
+                'acActive',
+                'acName',
+                'acSurname',
+                'acUserId',
+                'acWebUserID',
+                'acContact',
+                'acCode',
+                'acWorkerContact'
+            )
+            ->orderBy('anUserID')
+            ->get()
+            ->map(function ($row) {
+                $name = trim((string) ($row->acName ?? ''));
+                $surname = trim((string) ($row->acSurname ?? ''));
+                $fullName = trim($name . ' ' . $surname);
+                $contactName = trim((string) ($row->acContact ?? ''));
+                $displayName = $contactName !== '' ? $contactName : $fullName;
+
+                return [
+                    'id' => (int) ($row->anUserID ?? 0),
+                    'active' => !in_array(strtoupper(trim((string) ($row->acActive ?? 'T'))), ['D', 'F', 'N', '0'], true),
+                    'display_name' => $displayName,
+                    'user_code' => trim((string) ($row->acUserId ?? '')),
+                    'normalized_name' => $this->normalizePantheonUserLookupValue($name),
+                    'normalized_full_name' => $this->normalizePantheonUserLookupValue($fullName),
+                    'normalized_user_code' => $this->normalizePantheonUserLookupValue((string) ($row->acUserId ?? '')),
+                    'normalized_web_user' => $this->normalizePantheonUserLookupValue((string) ($row->acWebUserID ?? '')),
+                    'normalized_contact' => $this->normalizePantheonUserLookupValue((string) ($row->acContact ?? '')),
+                    'normalized_code' => $this->normalizePantheonUserLookupValue((string) ($row->acCode ?? '')),
+                    'normalized_worker_contact' => $this->normalizePantheonUserLookupValue((string) ($row->acWorkerContact ?? '')),
+                ];
+            })
+            ->filter(function (array $row): bool {
+                return (int) ($row['id'] ?? 0) > 0 && (bool) ($row['active'] ?? true);
+            })
+            ->values()
+            ->all();
+
+        return $this->pantheonClerkContactsCache;
     }
 
     private function isValidPantheonUnit(string $unit): bool

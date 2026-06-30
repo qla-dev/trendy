@@ -73,6 +73,11 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
 
         $this->assertContains('Trendy Germany', $result);
         $this->assertContains('Trendy Germany GmbH', $result);
+
+        $numberedResult = $method->invoke($service, 'Trendy Germany GmbH-45');
+
+        $this->assertContains('Trendy Germany GmbH-45', $numberedResult);
+        $this->assertContains('Trendy Germany GmbH', $numberedResult);
     }
 
     public function test_subject_lookup_candidates_preserve_grob_aliases(): void
@@ -336,6 +341,131 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
 
         $this->assertArrayHasKey('adDeliveryDeadline', $insertPayload);
         $this->assertArrayNotHasKey('adDeliveryDate', $insertPayload);
+    }
+
+    public function test_pantheon_clerk_resolver_does_not_apply_admin_fallback(): void
+    {
+        config(['workorders.pantheon_user_map' => []]);
+
+        $service = new class extends PantheonOrderTransferService {
+            protected function pantheonClerkContacts(): array
+            {
+                return [
+                    [
+                        'id' => 2,
+                        'normalized_user_code' => 'ad',
+                        'normalized_contact' => 'administrator',
+                        'normalized_full_name' => 'administrator',
+                        'normalized_name' => 'administrator',
+                        'normalized_web_user' => '',
+                        'normalized_code' => '',
+                        'normalized_worker_contact' => '',
+                    ],
+                    [
+                        'id' => 39,
+                        'normalized_user_code' => 'trenkra',
+                        'normalized_contact' => 'almakrnjic',
+                        'normalized_full_name' => 'almakrnjic',
+                        'normalized_name' => 'alma',
+                        'normalized_web_user' => '',
+                        'normalized_code' => '',
+                        'normalized_worker_contact' => '',
+                    ],
+                ];
+            }
+        };
+
+        $reflection = new ReflectionClass(PantheonOrderTransferService::class);
+        $method = $reflection->getMethod('resolvePantheonClerkUserId');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, (object) [
+            'id' => 1,
+            'name' => 'Demo Admin',
+            'username' => 'admin',
+            'email' => 'admin@example.com',
+            'role' => 'admin',
+        ]);
+
+        $this->assertSame(0, $result);
+    }
+
+    public function test_pantheon_clerk_resolver_matches_any_contact_full_name(): void
+    {
+        config(['workorders.pantheon_user_map' => []]);
+
+        $service = new class extends PantheonOrderTransferService {
+            protected function pantheonClerkContacts(): array
+            {
+                return [
+                    [
+                        'id' => 39,
+                        'normalized_user_code' => 'trenkra',
+                        'normalized_contact' => 'almakrnjic',
+                        'normalized_full_name' => 'almakrnjic',
+                        'normalized_name' => 'alma',
+                        'normalized_web_user' => '',
+                        'normalized_code' => '',
+                        'normalized_worker_contact' => '',
+                    ],
+                    [
+                        'id' => 58,
+                        'normalized_user_code' => 'trenleh',
+                        'normalized_contact' => 'elvirperva',
+                        'normalized_full_name' => 'elvirperva',
+                        'normalized_name' => 'elvir',
+                        'normalized_web_user' => '',
+                        'normalized_code' => '',
+                        'normalized_worker_contact' => '',
+                    ],
+                ];
+            }
+        };
+
+        $reflection = new ReflectionClass(PantheonOrderTransferService::class);
+        $method = $reflection->getMethod('resolvePantheonClerkUserId');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, (object) [
+            'name' => 'Elvir Perva',
+            'username' => 'elvir.perva',
+        ]);
+
+        $this->assertSame(58, $result);
+    }
+
+    public function test_pantheon_referent_payload_contains_display_name_and_user_code(): void
+    {
+        $service = new class extends PantheonOrderTransferService {
+            protected function pantheonClerkContacts(): array
+            {
+                return [
+                    [
+                        'id' => 34,
+                        'display_name' => 'Selvina Silajdžija',
+                        'user_code' => 'TREN_SIS',
+                        'normalized_user_code' => 'trensis',
+                        'normalized_contact' => 'selvinasilajdzija',
+                        'normalized_full_name' => 'selvinasilajdzija',
+                        'normalized_web_user' => '',
+                        'normalized_code' => '',
+                        'normalized_worker_contact' => '',
+                    ],
+                ];
+            }
+        };
+
+        $reflection = new ReflectionClass(PantheonOrderTransferService::class);
+        $method = $reflection->getMethod('resolvePantheonReferentPayload');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, 34);
+
+        $this->assertSame([
+            'id' => 34,
+            'name' => 'Selvina Silajdžija',
+            'user_code' => 'TREN_SIS',
+        ], $result);
     }
 
     public function test_duplicate_external_document_reference_is_blocked_before_transfer(): void

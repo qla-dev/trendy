@@ -43,7 +43,7 @@ class OrderAiScanServiceTest extends TestCase
         $payload = $method->invoke($service, $scan, $this->basePayload());
 
         $this->assertSame('Trendy Germany GmbH', $payload['order']['customer_name']);
-        $this->assertSame('Trendy Germany GmbH', $payload['order']['supplier_name']);
+        $this->assertSame('Trendy Germany GmbH-21', $payload['order']['supplier_name']);
         $this->assertSame('26-020-000675', $payload['order']['external_document_number']);
         $this->assertSame('1. 6. 2026.', $payload['order']['delivery_deadline']);
         $this->assertSame('Edina Duzan', $payload['order']['contact_name']);
@@ -51,6 +51,25 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('KO', $payload['items'][0]['unit']);
         $this->assertStringContainsString('Trendy doo', $payload['order']['note']);
         $this->assertStringContainsString('Bratstvo 11', $payload['order']['note']);
+    }
+
+    public function test_normalization_preserves_trendy_de_numbered_supplier_subject(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('normalizePayload');
+        $method->setAccessible(true);
+
+        $payload = $method->invoke($service, [
+            'order' => [
+                'customer_name' => 'Trendy Germany GmbH',
+                'supplier_name' => 'Trendy Germany GmbH-45',
+            ],
+            'items' => [],
+            'summary' => [],
+        ]);
+
+        $this->assertSame('Trendy Germany GmbH-45', $payload['order']['supplier_name']);
     }
 
     public function test_post_process_profile_payload_splits_trendy_de_beschreibung_and_item_delivery_deadline(): void
@@ -78,6 +97,498 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('spiegelbildlich', $payload['items'][0]['note']);
         $this->assertSame('14. 6. 2026.', $payload['items'][0]['delivery_deadline']);
         $this->assertSame('KO', $payload['items'][0]['unit']);
+    }
+
+    public function test_post_process_profile_payload_merges_trendy_de_note_fragment_and_renumbers_lines(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000959.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => 'order-ai-scans/Bestellung_26-020-000959.pdf',
+        ]);
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('postProcessProfilePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['items'] = [
+            [
+                'line_number' => 0,
+                'product_code' => '65018647',
+                'product_name' => 'Lagerzapfen',
+                'quantity' => 1,
+                'unit' => 'KO',
+                'delivery_deadline' => '27. 6. 2026.',
+                'unit_price' => 80.7,
+                'line_total' => 80.7,
+                'vat_rate' => 0,
+                'vat_code' => 'P1',
+                'discount_percent' => 0,
+                'note' => '',
+            ],
+            [
+                'line_number' => 0,
+                'product_code' => '65037490',
+                'product_name' => 'Platte',
+                'quantity' => 2,
+                'unit' => 'KO',
+                'delivery_deadline' => '27. 6. 2026.',
+                'unit_price' => 34.65,
+                'line_total' => 69.3,
+                'vat_rate' => 0,
+                'vat_code' => 'P1',
+                'discount_percent' => 0,
+                'note' => '',
+            ],
+            [
+                'line_number' => 0,
+                'product_code' => '65039927',
+                'product_name' => 'Halterung',
+                'quantity' => 1,
+                'unit' => 'KO',
+                'delivery_deadline' => '27. 6. 2026.',
+                'unit_price' => 139.2,
+                'line_total' => 139.2,
+                'vat_rate' => 0,
+                'vat_code' => 'P1',
+                'discount_percent' => 0,
+                'note' => '',
+            ],
+            [
+                'line_number' => 0,
+                'product_code' => '65011594',
+                'product_name' => 'Einsatz',
+                'quantity' => 2,
+                'unit' => 'KO',
+                'delivery_deadline' => '27. 6. 2026.',
+                'unit_price' => 350,
+                'line_total' => 700,
+                'vat_rate' => 0,
+                'vat_code' => 'P1',
+                'discount_percent' => 0,
+                'note' => '',
+            ],
+            [
+                'line_number' => 4,
+                'product_code' => '823926',
+                'product_name' => 'a',
+                'quantity' => 0,
+                'unit' => 'KO',
+                'delivery_deadline' => '27. 6. 2026.',
+                'unit_price' => 0,
+                'line_total' => 0,
+                'vat_rate' => 0,
+                'vat_code' => 'P1',
+                'discount_percent' => 0,
+                'note' => '',
+            ],
+        ];
+
+        $payload = $method->invoke($service, $scan, $payload);
+
+        $this->assertCount(4, $payload['items']);
+        $this->assertSame([1, 2, 3, 4], array_column($payload['items'], 'line_number'));
+        $this->assertSame('Einsatz', $payload['items'][3]['product_name']);
+        $this->assertSame('823926 a', $payload['items'][3]['note']);
+        $this->assertSame(['65018647', '65037490', '65039927', '65011594'], array_column($payload['items'], 'product_code'));
+    }
+
+    public function test_post_process_profile_payload_splits_trendy_de_embedded_note_positions_with_crtez(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000959.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => 'order-ai-scans/Bestellung_26-020-000959.pdf',
+        ]);
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('postProcessProfilePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['items'] = [
+            [
+                'line_number' => 10,
+                'product_code' => 'DN731970',
+                'product_name' => 'STICK',
+                'quantity' => 2,
+                'unit' => 'KO',
+                'delivery_deadline' => '07.09.2026',
+                'unit_price' => 46.9,
+                'line_total' => 93.8,
+                'vat_rate' => 0,
+                'vat_code' => 'P1',
+                'discount_percent' => 0,
+                'note' => 'BRASS | Crtež N01814580 | 11 DN731973_A SIDE PLATE, RIGHT | ANODIZED | Crtež N0181479A | 12 DN731976_A SIDE PLATE, LEFT | ANODIZED | Crtež N0181491A',
+            ],
+            [
+                'line_number' => 13,
+                'product_code' => 'DS1250A070070',
+                'product_name' => 'Klemmhülse',
+                'quantity' => 6,
+                'unit' => 'KO',
+                'delivery_deadline' => '07.09.2026',
+                'unit_price' => 26.7,
+                'line_total' => 160.2,
+                'vat_rate' => 0,
+                'vat_code' => 'P1',
+                'discount_percent' => 0,
+                'note' => 'ANODIZED',
+            ],
+        ];
+
+        $payload = $method->invoke($service, $scan, $payload);
+
+        $this->assertSame([10, 11, 12, 13], array_column($payload['items'], 'line_number'));
+        $this->assertSame('DN731970', $payload['items'][0]['product_code']);
+        $this->assertSame('BRASS | Crtež N01814580', $payload['items'][0]['note']);
+        $this->assertSame('DN731973_A', $payload['items'][1]['product_code']);
+        $this->assertSame('SIDE PLATE, RIGHT', $payload['items'][1]['product_name']);
+        $this->assertSame('ANODIZED | Crtež N0181479A', $payload['items'][1]['note']);
+        $this->assertSame('DN731976_A', $payload['items'][2]['product_code']);
+        $this->assertSame('SIDE PLATE, LEFT', $payload['items'][2]['product_name']);
+        $this->assertSame('ANODIZED | Crtež N0181491A', $payload['items'][2]['note']);
+    }
+
+    public function test_post_process_profile_payload_uses_item_dates_when_trendy_de_header_date_is_blank(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000963.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            '27. 6. 2026.',
+            'Trendy Germany GmbH',
+            'Lieferant:',
+            'Trendy doo',
+            'Anlieferadresse:',
+            'Trendy Germany 21',
+            'Bestellung 26-020-000963',
+            'Person responsible Edina Duzan',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '1 BYPR05C120030 Abdeckblech Oben 15,00 STU 34,65 0,00 519,75',
+            'CHEM.NICKEL PLATED',
+            'Liefertermin: 20.07.2026',
+            '2 EVE280A675030 Gehaeuseblock 6,00 STU 207,10 0,00 1.242,60',
+            'WARM BROWNED',
+            'Liefertermin: 27.07.2026',
+            '1.762,35 Total',
+            'Gesamtpreis EUR',
+        ]]));
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000963.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('postProcessProfilePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['order']['delivery_deadline'] = '27. 6. 2026.';
+        $payload['items'] = [
+            [
+                'line_number' => 1,
+                'product_code' => 'BYPR05C120030',
+                'product_name' => 'Abdeckblech Oben',
+                'quantity' => 15,
+                'unit' => 'KO',
+                'delivery_deadline' => '27. 6. 2026.',
+                'unit_price' => 34.65,
+                'line_total' => 519.75,
+                'vat_rate' => 0,
+                'vat_code' => 'P1',
+                'discount_percent' => 0,
+                'note' => '1 | CHEM.NICKEL PLATED',
+            ],
+            [
+                'line_number' => 2,
+                'product_code' => 'EVE280A675030',
+                'product_name' => 'Gehaeuseblock',
+                'quantity' => 6,
+                'unit' => 'KO',
+                'delivery_deadline' => '27. 6. 2026.',
+                'unit_price' => 207.1,
+                'line_total' => 1242.6,
+                'vat_rate' => 0,
+                'vat_code' => 'P1',
+                'discount_percent' => 0,
+                'note' => '2 | WARM BROWNED',
+            ],
+        ];
+
+        $payload = $method->invoke($service, $scan, $payload);
+
+        $this->assertSame('', $payload['order']['delivery_deadline']);
+        $this->assertSame('20.07.2026', $payload['items'][0]['delivery_deadline']);
+        $this->assertSame('CHEM.NICKEL PLATED', $payload['items'][0]['note']);
+        $this->assertSame('27.07.2026', $payload['items'][1]['delivery_deadline']);
+        $this->assertSame('WARM BROWNED', $payload['items'][1]['note']);
+    }
+
+    public function test_trendy_de_item_deadline_map_reads_page_lines_when_structured_table_items_exist(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('extractTrendyDeItemDeliveryDeadlines');
+        $method->setAccessible(true);
+
+        $deadlines = $method->invoke($service, [[
+            'items' => [
+                ['text' => '1 BYPR05C120030 Abdeckblech Oben 15,00 STU 34,65 0,00 519,75'],
+                ['text' => '2 EVE280A675030 Gehaeuseblock 6,00 STU 207,10 0,00 1.242,60'],
+            ],
+            'lines' => [
+                '27. 6. 2026.',
+                'Trendy Germany GmbH',
+                'Bestellung 26-020-000963',
+                'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+                '1 BYPR05C120030 Abdeckblech Oben 15,00 STU 34,65 0,00 519,75',
+                'CHEM.NICKEL PLATED',
+                'Liefertermin: 20.07.2026',
+                '2 EVE280A675030 Gehaeuseblock 6,00 STU 207,10 0,00 1.242,60',
+                'WARM BROWNED',
+                'Liefertermin: 27.07.2026',
+            ],
+            'text' => '',
+        ]], '');
+
+        $this->assertSame('20.07.2026', $deadlines['line:1']);
+        $this->assertSame('20.07.2026', $deadlines['code:BYPR05C120030']);
+        $this->assertSame('27.07.2026', $deadlines['line:2']);
+        $this->assertSame('27.07.2026', $deadlines['code:EVE280A675030']);
+    }
+
+    public function test_trendy_de_item_deadline_map_prefers_raw_text_when_structured_lines_shift_dates_to_next_row(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('extractTrendyDeItemDeliveryDeadlines');
+        $method->setAccessible(true);
+
+        $deadlines = $method->invoke($service, [[
+            'lines' => [
+                'Anlieferadresse: Lieferant: Artikel Nr. Pos. Beschreibung Menge EK-Preis Einheit',
+                'BYPR05C120030 519,75 0,00 Betrag 15,00 VAT % STU 34,65',
+                'Abdeckblech Oben',
+                '1',
+                'CHEM.NICKEL PLATED',
+                'EVE280A675030 1.242,60 0,00 6,00 Liefertermin: 20.07.2026 STU 207,10',
+                'Gehaeuseblock',
+                '2',
+                'WARM BROWNED',
+                'EVRB10B912110 55,30 0,00 1,00 Liefertermin: 27.07.2026 STU 55,30',
+            ],
+            'text' => '',
+            'items' => [],
+        ]], implode("\n", [
+            'Artikel Nr.Pos. Beschreibung MengeEinheit EK-Preis BetragVAT %',
+            '15,00 34,65STU 519,750,00BYPR05C120030 Abdeckblech Oben1',
+            'CHEM.NICKEL PLATED',
+            'Liefertermin: 20.07.2026',
+            '6,00 207,10STU 1.242,600,00EVE280A675030 Gehaeuseblock2',
+            'WARM BROWNED',
+            'Liefertermin: 27.07.2026',
+        ]));
+
+        $this->assertSame('20.07.2026', $deadlines['line:1']);
+        $this->assertSame('20.07.2026', $deadlines['code:BYPR05C120030']);
+        $this->assertSame('27.07.2026', $deadlines['line:2']);
+        $this->assertSame('27.07.2026', $deadlines['code:EVE280A675030']);
+    }
+
+    public function test_trendy_de_items_do_not_keep_ai_datum_deadline_when_source_context_is_available(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('postProcessTrendyDeItems');
+        $method->setAccessible(true);
+
+        $items = $method->invoke($service, [[
+            'line_number' => 1,
+            'product_code' => 'BYPR05C120030',
+            'product_name' => 'Abdeckblech Oben',
+            'quantity' => 15,
+            'unit' => 'KO',
+            'delivery_deadline' => '27. 6. 2026.',
+            'unit_price' => 34.65,
+            'line_total' => 519.75,
+            'vat_rate' => 0,
+            'vat_code' => 'P1',
+            'discount_percent' => 0,
+            'note' => 'CHEM.NICKEL PLATED',
+        ]], '', [], false, ['27. 6. 2026.']);
+
+        $this->assertSame('', $items[0]['delivery_deadline']);
+    }
+
+    public function test_post_process_profile_payload_keeps_valid_parser_item_deadline_when_source_map_is_empty(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000963.pdf';
+        Storage::disk('local')->put($sourcePath, implode("\n", [
+            '27. 6. 2026.',
+            'Trendy Germany GmbH',
+            'Bestellung 26-020-000963',
+        ]));
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000963.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('postProcessProfilePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['order']['delivery_deadline'] = '';
+        $payload['items'] = [[
+            'line_number' => 1,
+            'product_code' => 'BYPR05C120030',
+            'product_name' => 'Abdeckblech Oben',
+            'quantity' => 15,
+            'unit' => 'KO',
+            'delivery_deadline' => '20.07.2026',
+            'unit_price' => 34.65,
+            'line_total' => 519.75,
+            'vat_rate' => 0,
+            'vat_code' => 'P1',
+            'discount_percent' => 0,
+            'note' => 'CHEM.NICKEL PLATED',
+        ]];
+
+        $payload = $method->invoke($service, $scan, $payload);
+
+        $this->assertSame('', $payload['order']['delivery_deadline']);
+        $this->assertSame('20.07.2026', $payload['items'][0]['delivery_deadline']);
+    }
+
+    public function test_post_process_profile_payload_rejects_existing_item_deadline_when_it_matches_trendy_de_datum(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000963.pdf';
+        Storage::disk('local')->put($sourcePath, implode("\n", [
+            '27. 6. 2026.',
+            'Trendy Germany GmbH',
+            'Bestellung 26-020-000963',
+        ]));
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000963.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('postProcessProfilePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['order']['delivery_deadline'] = '27. 6. 2026.';
+        $payload['items'] = [[
+            'line_number' => 1,
+            'product_code' => 'BYPR05C120030',
+            'product_name' => 'Abdeckblech Oben',
+            'quantity' => 15,
+            'unit' => 'KO',
+            'delivery_deadline' => '27.06.2026',
+            'unit_price' => 34.65,
+            'line_total' => 519.75,
+            'vat_rate' => 0,
+            'vat_code' => 'P1',
+            'discount_percent' => 0,
+            'note' => 'CHEM.NICKEL PLATED',
+        ]];
+
+        $payload = $method->invoke($service, $scan, $payload);
+
+        $this->assertSame('', $payload['order']['delivery_deadline']);
+        $this->assertSame('', $payload['items'][0]['delivery_deadline']);
+    }
+
+    public function test_post_process_profile_payload_rejects_ai_datum_deadline_without_confirmed_trendy_de_header(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000963.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            'Trendy Germany GmbH',
+            'Bestellung 26-020-000963',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '1 BYPR05C120030 Abdeckblech Oben 15,00 STU 34,65 0,00 519,75',
+            'CHEM.NICKEL PLATED',
+            'Liefertermin: 20.07.2026',
+            '2 EVE280A675030 Gehaeuseblock 6,00 STU 207,10 0,00 1.242,60',
+            'WARM BROWNED',
+            'Liefertermin: 27.07.2026',
+        ]]));
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000963.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('postProcessProfilePayload');
+        $method->setAccessible(true);
+        $payload = $this->basePayload();
+        $payload['order']['delivery_deadline'] = '27. 6. 2026.';
+        $payload['items'] = [
+            [
+                'line_number' => 1,
+                'product_code' => 'BYPR05C120030',
+                'product_name' => 'Abdeckblech Oben',
+                'quantity' => 15,
+                'unit' => 'KO',
+                'delivery_deadline' => '27. 6. 2026.',
+                'unit_price' => 34.65,
+                'line_total' => 519.75,
+                'vat_rate' => 0,
+                'vat_code' => 'P1',
+                'discount_percent' => 0,
+                'note' => '1 | CHEM.NICKEL PLATED',
+            ],
+            [
+                'line_number' => 2,
+                'product_code' => 'EVE280A675030',
+                'product_name' => 'Gehaeuseblock',
+                'quantity' => 6,
+                'unit' => 'KO',
+                'delivery_deadline' => '27. 6. 2026.',
+                'unit_price' => 207.1,
+                'line_total' => 1242.6,
+                'vat_rate' => 0,
+                'vat_code' => 'P1',
+                'discount_percent' => 0,
+                'note' => '2 | WARM BROWNED',
+            ],
+        ];
+
+        $payload = $method->invoke($service, $scan, $payload);
+
+        $this->assertSame('', $payload['order']['delivery_deadline']);
+        $this->assertSame('20.07.2026', $payload['items'][0]['delivery_deadline']);
+        $this->assertSame('CHEM.NICKEL PLATED', $payload['items'][0]['note']);
+        $this->assertSame('27.07.2026', $payload['items'][1]['delivery_deadline']);
+        $this->assertSame('WARM BROWNED', $payload['items'][1]['note']);
     }
 
     public function test_post_process_profile_payload_corrects_grob_netto_preis_and_summary_before_attention_block(): void
@@ -1524,7 +2035,7 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('digital_pdf_rules', $result['provider']);
         $this->assertSame('26-020-000675', data_get($result, 'normalized_payload.order.external_document_number'));
         $this->assertSame('Trendy Germany GmbH', data_get($result, 'normalized_payload.order.customer_name'));
-        $this->assertSame('Trendy Germany GmbH', data_get($result, 'normalized_payload.order.supplier_name'));
+        $this->assertSame('Trendy Germany GmbH-21', data_get($result, 'normalized_payload.order.supplier_name'));
         $this->assertSame('Trendy Germany 21', data_get($result, 'normalized_payload.order.receiver_name'));
         $this->assertSame('Edina Duzan', data_get($result, 'normalized_payload.order.contact_name'));
         $this->assertSame('1. 6. 2026.', data_get($result, 'normalized_payload.order.delivery_deadline'));
@@ -1534,6 +2045,405 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('Halter 884698', data_get($result, 'normalized_payload.items.0.product_name'));
         $this->assertSame('KO', data_get($result, 'normalized_payload.items.0.unit'));
         $this->assertSame(1179.2, data_get($result, 'normalized_payload.summary.subtotal'));
+    }
+
+    public function test_execute_extraction_uses_lieferdatum_date_after_label_when_datum_is_on_same_line(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000959.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            '27. 6. 2026.',
+            '28. 6. 2026.',
+            'Trendy Germany GmbH',
+            'Lieferant:',
+            'Trendy doo',
+            'Anlieferadresse:',
+            'Trendy Germany 21',
+            'Person responsible Edina Duzan',
+            'Bestellung 26-020-000959',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '1 65018647 Lagerzapfen 1,00 STU 80,70 0,00 80,70',
+            '830806',
+            '2 65037490 Platte 2,00 STU 34,65 0,00 69,30',
+            '849341 a',
+            '3 65039927 Halterung 1,00 STU 139,20 0,00 139,20',
+            '851655 a',
+            '4 65011594 Einsatz 2,00 STU 350,00 0,00 700,00',
+            '823926 a',
+            '989,20 Total',
+            'Gesamtpreis EUR',
+        ]]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new RuntimeException('AI provider should not be called for digital rules-first extraction.');
+            }
+        });
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000959.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertSame('28. 6. 2026.', data_get($result, 'normalized_payload.order.delivery_deadline'));
+        $this->assertCount(4, data_get($result, 'normalized_payload.items'));
+        $this->assertSame([1, 2, 3, 4], array_column(data_get($result, 'normalized_payload.items'), 'line_number'));
+        $this->assertSame('28. 6. 2026.', data_get($result, 'normalized_payload.items.0.delivery_deadline'));
+        $this->assertSame('Lagerzapfen', data_get($result, 'normalized_payload.items.0.product_name'));
+        $this->assertSame('830806', data_get($result, 'normalized_payload.items.0.note'));
+        $this->assertSame('Einsatz', data_get($result, 'normalized_payload.items.3.product_name'));
+        $this->assertSame('823926 a', data_get($result, 'normalized_payload.items.3.note'));
+        $this->assertSame(989.2, data_get($result, 'normalized_payload.summary.subtotal'));
+    }
+
+    public function test_execute_extraction_keeps_blank_header_liefertermin_and_uses_item_dates(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000963.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            '27. 6. 2026.',
+            'Trendy Germany GmbH',
+            'Lieferant:',
+            'Trendy doo',
+            'Anlieferadresse:',
+            'Trendy Germany 21',
+            'Person responsible Edina Duzan',
+            'Bestellung 26-020-000963',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '1 BYPR05C120030 Abdeckblech Oben 15,00 STU 34,65 0,00 519,75',
+            'CHEM.NICKEL PLATED',
+            'Liefertermin: 20.07.2026',
+            '2 EVE280A675030 Gehaeuseblock 6,00 STU 207,10 0,00 1.242,60',
+            'WARM BROWNED',
+            'Liefertermin: 27.07.2026',
+            '1.762,35 Total',
+            'Gesamtpreis EUR',
+        ]]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new RuntimeException('AI provider should not be called for digital rules-first extraction.');
+            }
+        });
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000963.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertSame('', data_get($result, 'normalized_payload.order.delivery_deadline'));
+        $this->assertCount(2, data_get($result, 'normalized_payload.items'));
+        $this->assertSame('20.07.2026', data_get($result, 'normalized_payload.items.0.delivery_deadline'));
+        $this->assertSame('27.07.2026', data_get($result, 'normalized_payload.items.1.delivery_deadline'));
+        $this->assertSame('Abdeckblech Oben', data_get($result, 'normalized_payload.items.0.product_name'));
+        $this->assertSame('CHEM.NICKEL PLATED', data_get($result, 'normalized_payload.items.0.note'));
+        $this->assertSame(1762.35, data_get($result, 'normalized_payload.summary.subtotal'));
+    }
+
+    public function test_execute_extraction_does_not_use_date_before_blank_trendy_de_liefertermin_label(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000963.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            '27. 6. 2026. Liefertermin',
+            'Trendy Germany GmbH',
+            'Bestellung 26-020-000963',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '1 BYPR05C120030 Abdeckblech Oben 15,00 STU 34,65 0,00 519,75',
+            'CHEM.NICKEL PLATED',
+            'Liefertermin: 20.07.2026',
+            '2 EVE280A675030 Gehaeuseblock 6,00 STU 207,10 0,00 1.242,60',
+            'WARM BROWNED',
+            'Liefertermin: 27.07.2026',
+            '1.762,35 Total',
+            'Gesamtpreis EUR',
+        ]]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new RuntimeException('AI provider should not be called for digital rules-first extraction.');
+            }
+        });
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000963.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertSame('', data_get($result, 'normalized_payload.order.delivery_deadline'));
+        $this->assertSame('20.07.2026', data_get($result, 'normalized_payload.items.0.delivery_deadline'));
+        $this->assertSame('27.07.2026', data_get($result, 'normalized_payload.items.1.delivery_deadline'));
+    }
+
+    public function test_execute_extraction_maps_trendy_de_amount_first_rows_across_page_breaks_to_item_dates(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000963.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([
+            [
+                '27. 6. 2026.',
+                'Trendy Germany GmbH',
+                'Trendy doo',
+                'Trendy Germany 45',
+                'Datum',
+                'Liefertermin',
+                'Bestellung26-020-000963',
+                'Edina Duzan',
+                "Lieferant:\tAnlieferadresse:",
+                "Artikel Nr.Pos.\tBeschreibung\tMengeEinheit EK-Preis\tBetragVAT %",
+                "15,00\t34,65STU\t519,750,00BYPR05C120030 Abdeckblech Oben1",
+                'CHEM.NICKEL PLATED',
+                'Liefertermin: 20.07.2026',
+                "6,00 207,10STU\t1.242,600,00EVE280A675030 Gehaeuseblock2",
+                'WARM BROWNED',
+                'Liefertermin: 27.07.2026',
+                "1,00\t55,30STU\t55,300,00EVRB10B912110 Grundblech Alu3",
+                'UNTREATED',
+                'Liefertermin: 27.07.2026',
+                "2,00\t38,05STU\t76,100,00EVRB10B912130 Grundblech Alu4",
+                'UNTREATED',
+                'Liefertermin: 27.07.2026',
+                "2,00\t40,10STU\t80,200,00ALE002A422070 Anschlag5",
+                'GALVANIZED BLUE',
+                'Liefertermin: 27.07.2026',
+                "4,00\t45,50STU\t182,000,00HS09A03060 Konsole schraeg6",
+                'PAINT',
+                'Liefertermin: 31.08.2026',
+                "2,00 290,70STU\t581,400,00HS09B09170 Konsole kurz7",
+                'PAINT',
+                'Liefertermin: 31.08.2026',
+                "1,00 220,30STU\t220,300,00EVRS10C91503L Endplattenfuehrung- Pl. breite 103-105mm8",
+                'VERNICKELT AUF 50 YM UND POLIERT',
+                'NICKEL 50MY+POLISH',
+                'Liefertermin: 31.08.2026',
+                "1,00 221,30STU\t221,300,00EVRS10C91520L Endplattenfuehrung- Pl. breite 140-142mm9",
+                'NICKEL 50MY+POLISH',
+                'Liefertermin: 31.08.2026',
+                'Page1/2',
+            ],
+            [
+                "Artikel Nr.Pos.\tBeschreibung\tMengeEinheit EK-Preis\tBetragVAT %",
+                "2,00\t39,55STU\t79,100,00DN731970 STICK10",
+                'BRASS',
+                'Crtez N01814580',
+                'Liefertermin: 07.09.2026',
+                "2,00\t46,90STU\t93,800,00DN731973_A SIDE PLATE, RIGHT11",
+                'ANODIZED',
+                'Crtez N0181479A',
+                'Liefertermin: 07.09.2026',
+                "2,00\t46,90STU\t93,800,00DN731976_A SIDE PLATE, LEFT12",
+                'ANODIZED',
+                'Crtez N0181491A',
+                'Liefertermin: 07.09.2026',
+                "6,00\t26,70STU\t160,200,00DS1250A070070 Klemmhuelse13",
+                'ANODIZED',
+                'Liefertermin: 07.09.2026',
+                "4,00\t26,00STU\t104,000,00EXCS35A190170 Endanschlag Fuehrungswelle14",
+                'NICKEL PLATED',
+                'Liefertermin: 07.09.2026',
+                "8,00\t35,80STU\t286,400,00HAD125A011030 Lagerklotz15",
+                'PAINT ACC. DRAWING',
+                'Liefertermin: 07.09.2026',
+                "4,00\t21,20STU\t84,800,00HAD125A030030 Haltekonsole bei Schwinge16",
+                'GALVANIZED BLUE',
+                'Liefertermin: 07.09.2026',
+                "4,00\t99,30STU\t397,200,00HAD125A091010 Rollenachse DM 7017",
+                'WARM BROWNED',
+                'Liefertermin: 07.09.2026',
+                "4,00\t18,90STU\t75,600,00HAD125A095020 Haltedorn Dm20-15018",
+                'GALVANIZED BLUE',
+                'Liefertermin: 07.09.2026',
+                "2,00 278,70STU\t557,400,00HS10A01010 Antriebsachse Dm7019",
+                'WARM BROWNED',
+                'Liefertermin: 07.09.2026',
+                "4,00\t45,50STU\t182,000,00HS10A03060 Konsole 2 schraeg20",
+                'PAINT',
+                'Liefertermin: 07.09.2026',
+                "4,00\t19,40STU\t77,600,002154023601 Aufnahme21",
+                'GALVANIZED BLUE',
+                'Liefertermin: 07.09.2026',
+                "Total\t5.370,85",
+                'Page2/2',
+            ],
+        ]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new RuntimeException('AI provider should not be called for digital rules-first extraction.');
+            }
+        });
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000963.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+        $items = data_get($result, 'normalized_payload.items');
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertSame('Trendy Germany GmbH-45', data_get($result, 'normalized_payload.order.supplier_name'));
+        $this->assertSame('', data_get($result, 'normalized_payload.order.delivery_deadline'));
+        $this->assertCount(21, $items);
+        $this->assertSame(range(1, 21), array_column($items, 'line_number'));
+        $this->assertSame('BYPR05C120030', data_get($items, '0.product_code'));
+        $this->assertSame('20.07.2026', data_get($items, '0.delivery_deadline'));
+        $this->assertSame('EVRS10C91520L', data_get($items, '8.product_code'));
+        $this->assertSame('31.08.2026', data_get($items, '8.delivery_deadline'));
+        $this->assertSame('DN731970', data_get($items, '9.product_code'));
+        $this->assertSame('07.09.2026', data_get($items, '9.delivery_deadline'));
+        $this->assertSame('HAD125A091010', data_get($items, '16.product_code'));
+        $this->assertSame('Rollenachse DM 70', data_get($items, '16.product_name'));
+        $this->assertSame('2154023601', data_get($items, '20.product_code'));
+        $this->assertSame('07.09.2026', data_get($items, '20.delivery_deadline'));
+    }
+
+    public function test_execute_extraction_splits_trendy_de_underscore_codes_and_keeps_crtez_notes(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000959.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            '27. 6. 2026.',
+            '28. 6. 2026.',
+            'Trendy Germany GmbH',
+            'Lieferant:',
+            'Trendy doo',
+            'Anlieferadresse:',
+            'Trendy Germany 21',
+            'Person responsible Edina Duzan',
+            'Bestellung 26-020-000959',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '10 DN731970 STICK 2,00 STU 39,55 0,00 79,10',
+            'BRASS',
+            'Crtež N01814580',
+            'Liefertermin: 07.09.2026',
+            '11 DN731973_A SIDE PLATE, RIGHT 2,00 STU 46,90 0,00 93,80',
+            'ANODIZED',
+            'Crtež N0181479A',
+            'Liefertermin: 07.09.2026',
+            '12 DN731976_A SIDE PLATE, LEFT 2,00 STU 46,90 0,00 93,80',
+            'ANODIZED',
+            'Crtež N0181491A',
+            'Liefertermin: 07.09.2026',
+            '266,70 Total',
+            'Gesamtpreis EUR',
+        ]]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new RuntimeException('AI provider should not be called for digital rules-first extraction.');
+            }
+        });
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000959.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertSame('28. 6. 2026.', data_get($result, 'normalized_payload.order.delivery_deadline'));
+        $this->assertSame([10, 11, 12], array_column(data_get($result, 'normalized_payload.items'), 'line_number'));
+        $this->assertSame('DN731970', data_get($result, 'normalized_payload.items.0.product_code'));
+        $this->assertSame('STICK', data_get($result, 'normalized_payload.items.0.product_name'));
+        $this->assertSame('BRASS | Crtež N01814580', data_get($result, 'normalized_payload.items.0.note'));
+        $this->assertSame('DN731973_A', data_get($result, 'normalized_payload.items.1.product_code'));
+        $this->assertSame('SIDE PLATE, RIGHT', data_get($result, 'normalized_payload.items.1.product_name'));
+        $this->assertSame('ANODIZED | Crtež N0181479A', data_get($result, 'normalized_payload.items.1.note'));
+        $this->assertSame('DN731976_A', data_get($result, 'normalized_payload.items.2.product_code'));
+        $this->assertSame('SIDE PLATE, LEFT', data_get($result, 'normalized_payload.items.2.product_name'));
+        $this->assertSame('ANODIZED | Crtež N0181491A', data_get($result, 'normalized_payload.items.2.note'));
+        $this->assertSame(266.7, data_get($result, 'normalized_payload.summary.subtotal'));
     }
 
     public function test_execute_extraction_keeps_parsing_trendy_de_items_after_page_subtotal(): void
@@ -1691,7 +2601,7 @@ class OrderAiScanServiceTest extends TestCase
             'ID: 236318900009',
             'Bratstvo 11',
             '26-020-000945 Edina Duzan',
-            'Trendy Germany 16 25. 6. 2026. Liefertermin',
+            'Trendy Germany 16 Liefertermin 25. 6. 2026.',
             'Datum 24. 8. 2026. Deliver via Bestellung',
             'Person responsible',
             'Anlieferadresse: Lieferant: Artikel Nr. Pos. Beschreibung Menge EK-Preis Einheit',
@@ -1755,7 +2665,7 @@ class OrderAiScanServiceTest extends TestCase
         Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
             'Trendy Germany GmbH',
             '26-020-000945 Edina Duzan',
-            'Trendy Germany 16 25. 6. 2026. Liefertermin',
+            'Trendy Germany 16 Liefertermin 25. 6. 2026.',
             'Anlieferadresse: Lieferant: Artikel Nr. Pos. Beschreibung Menge EK-Preis Einheit',
             '503600720 231,00 0,00 Betrag 10,00 VAT % STU 23,10',
             'Hülse 1',
@@ -2350,6 +3260,105 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertTrue($service->buildStatusPayload($successfulScan)['retry_available']);
     }
 
+    public function test_rescan_clears_previous_extraction_payloads_before_reprocessing(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+        Storage::disk('local')->put(
+            'order-ai-scans/retry-reset.txt',
+            "27. 6. 2026.\nTrendy Germany GmbH\nBestellung 26-020-000963\n"
+        );
+
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $columns = $reflection->getProperty('orderAiScanColumns');
+        $columns->setAccessible(true);
+        $columns->setValue($service, [
+            'document_profile' => true,
+            'page_count' => true,
+            'billed_tokens' => true,
+            'raw_extracted_text' => true,
+            'extraction_payload' => true,
+            'openrouter_payload' => true,
+            'parser_payload' => true,
+            'validation_warnings' => true,
+            'validation_errors' => true,
+            'confidence_score' => true,
+            'extraction_duration_ms' => true,
+            'ai_duration_ms' => true,
+            'validation_duration_ms' => true,
+            'extraction_method' => true,
+            'transfer_started_at' => true,
+        ]);
+
+        $scan = $this->makeInMemoryScan([
+            'id' => 963,
+            'status' => 'completed',
+            'provider' => 'openrouter',
+            'model' => 'old-model',
+            'source_origin' => 'manual',
+            'source_file_name' => 'retry-reset.txt',
+            'source_file_path' => 'order-ai-scans/retry-reset.txt',
+            'source_mime_type' => 'text/plain',
+            'normalized_payload' => [
+                'order' => [
+                    'delivery_deadline' => '27. 6. 2026.',
+                ],
+            ],
+            'pantheon_transfer_payload' => [
+                'order' => [
+                    'RokIsporuke' => '27.06.2026',
+                ],
+            ],
+            'raw_provider_response' => [
+                'id' => 'old-response',
+            ],
+            'parser_payload' => [
+                'status' => 'old-parser-result',
+            ],
+            'raw_extracted_text' => 'old extracted text',
+            'validation_warnings' => ['old warning'],
+            'validation_errors' => ['old error'],
+            'confidence_score' => 0.4,
+            'extraction_method' => 'old-method',
+            'processed_at' => now(),
+            'completed_at' => now(),
+            'transferred_at' => now(),
+            'transfer_started_at' => now(),
+            'pantheon_order_key' => 'old-order-key',
+            'pantheon_order_view' => 'old-order-view',
+            'pantheon_order_qid' => 123,
+            'error_message' => 'previous bad extraction',
+            'credits_spent' => 2.5,
+        ]);
+
+        $retriedScan = $service->rescan($scan, null, false, false);
+
+        $this->assertSame($scan, $retriedScan);
+        $this->assertSame('uploaded', $scan->capturedForceFill['status']);
+        $this->assertSame('AI skeniranje je ponovo pokrenuto.', $scan->capturedForceFill['processing_step']);
+        $this->assertSame('trendy_de', $scan->capturedForceFill['document_profile']);
+        $this->assertStringContainsString('Never use Datum', $scan->capturedForceFill['request_prompt']);
+        $this->assertNull($scan->capturedForceFill['normalized_payload']);
+        $this->assertNull($scan->capturedForceFill['pantheon_transfer_payload']);
+        $this->assertNull($scan->capturedForceFill['raw_provider_response']);
+        $this->assertNull($scan->capturedForceFill['raw_extracted_text']);
+        $this->assertNull($scan->capturedForceFill['parser_payload']);
+        $this->assertNull($scan->capturedForceFill['validation_warnings']);
+        $this->assertNull($scan->capturedForceFill['validation_errors']);
+        $this->assertNull($scan->capturedForceFill['confidence_score']);
+        $this->assertNull($scan->capturedForceFill['extraction_method']);
+        $this->assertNull($scan->capturedForceFill['processed_at']);
+        $this->assertNull($scan->capturedForceFill['completed_at']);
+        $this->assertNull($scan->capturedForceFill['transferred_at']);
+        $this->assertNull($scan->capturedForceFill['transfer_started_at']);
+        $this->assertNull($scan->capturedForceFill['pantheon_order_key']);
+        $this->assertNull($scan->capturedForceFill['pantheon_order_view']);
+        $this->assertNull($scan->capturedForceFill['pantheon_order_qid']);
+        $this->assertNull($scan->capturedForceFill['error_message']);
+        $this->assertSame(0, $scan->capturedForceFill['credits_spent']);
+    }
+
     public function test_can_retry_failed_scan_returns_false_when_source_document_is_missing(): void
     {
         Storage::fake('local');
@@ -2393,7 +3402,7 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertStringContainsString('For GROB, return order.note and every item.note as an empty string', $prompt);
     }
 
-    public function test_build_request_prompt_applies_trendy_liefertermin_to_every_item(): void
+    public function test_build_request_prompt_describes_trendy_liefertermin_header_and_item_fallback(): void
     {
         $service = app(OrderAiScanService::class);
         $reflection = new ReflectionClass($service);
@@ -2402,11 +3411,16 @@ class OrderAiScanServiceTest extends TestCase
 
         $prompt = (string) $method->invoke($service, 'trendy_de');
 
-        $this->assertStringContainsString('Copy the same visible date into delivery_deadline for every item', $prompt);
+        $this->assertStringContainsString('Never use Datum as order.delivery_deadline or item.delivery_deadline', $prompt);
+        $this->assertStringContainsString('Trendy Germany GmbH-{number}', $prompt);
+        $this->assertStringContainsString('Trendy Germany GmbH-45', $prompt);
+        $this->assertStringContainsString('the second standalone date row before "Trendy Germany GmbH"', $prompt);
+        $this->assertStringContainsString('If there is only one standalone date before "Trendy Germany GmbH"', $prompt);
         $this->assertStringContainsString('not a dispatch/shipping date', $prompt);
-        $this->assertStringContainsString('Trendy Germany product codes may be 5-12 digits', $prompt);
+        $this->assertStringContainsString('DN731973_A', $prompt);
+        $this->assertStringContainsString('Crtež/Crtez rows', $prompt);
         $this->assertStringContainsString('Every visible Pos. + Artikel Nr. pair starts a separate item', $prompt);
-        $this->assertStringContainsString('Never put a later position such as "10 1049658 Stossdaempferanschlag" into the previous item', $prompt);
+        $this->assertStringContainsString('11 DN731973_A SIDE PLATE, RIGHT', $prompt);
         $this->assertStringContainsString('Ignore page labels such as "Page"', $prompt);
     }
 
