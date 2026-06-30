@@ -3230,6 +3230,45 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           .replace(/'/g, '&#039;');
       }
 
+      const ORDER_AI_GROB_DISPLAY_PARTY_NAME = 'GROB-WERKE';
+
+      function resolveDocumentProfileKey(payload, statusData) {
+        const resultPayload = statusData && statusData.result ? statusData.result : {};
+        const order = payload && payload.order ? payload.order : {};
+        const resultOrder = resultPayload && resultPayload.order ? resultPayload.order : {};
+
+        return String(
+          statusData && statusData.document_profile
+          || payload && payload.document_profile
+          || order.document_profile
+          || resultPayload.document_profile
+          || resultOrder.document_profile
+          || ''
+        ).trim().toLowerCase();
+      }
+
+      function isGrobDocumentProfile(payload, statusData) {
+        return resolveDocumentProfileKey(payload, statusData) === 'grob';
+      }
+
+      function resolveDisplayCustomerName(order, payload, statusData) {
+        if (isGrobDocumentProfile(payload, statusData)) {
+          return ORDER_AI_GROB_DISPLAY_PARTY_NAME;
+        }
+
+        return order && order.customer_name ? order.customer_name : '-';
+      }
+
+      function resolveDisplayRequesterName(order, payload, statusData) {
+        if (isGrobDocumentProfile(payload, statusData)) {
+          return ORDER_AI_GROB_DISPLAY_PARTY_NAME;
+        }
+
+        return order && (order.requester_code || order.supplier_name)
+          ? (order.requester_code || order.supplier_name)
+          : '-';
+      }
+
       function renderNoBreakText(value) {
         const text = String(value || '').trim();
 
@@ -4411,8 +4450,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           ? `Razlika: ${formatAmount(totalComparison.difference)}`
           : '';
         const factsMarkup = [
-          { label: 'Kupac', value: order.customer_name || '-' },
-          { label: 'Naručitelj', value: order.requester_code || order.supplier_name || '-' },
+          { label: 'Kupac', value: resolveDisplayCustomerName(order, payload, statusData) },
+          { label: 'Naručitelj', value: resolveDisplayRequesterName(order, payload, statusData) },
           { label: 'Referenca', value: order.external_document_number || '-' },
           { label: 'Doc type', value: order.document_type || '-' },
           { label: 'Valuta', value: order.currency || '-' },
@@ -4508,11 +4547,11 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           <div class="order-ai-saved-grid">
             <div class="order-ai-saved-item">
               <div class="text-muted small mb-50">Kupac</div>
-              <div class="fw-bolder">${escapeHtml(order.customer_name || '-')}</div>
+              <div class="fw-bolder">${escapeHtml(resolveDisplayCustomerName(order, payload, data))}</div>
             </div>
             <div class="order-ai-saved-item">
               <div class="text-muted small mb-50">Naručitelj</div>
-              <div class="fw-bolder">${escapeHtml(order.requester_code || order.supplier_name || '-')}</div>
+              <div class="fw-bolder">${escapeHtml(resolveDisplayRequesterName(order, payload, data))}</div>
             </div>
             <div class="order-ai-saved-item">
               <div class="text-muted small mb-50">Pozicije</div>
@@ -4554,11 +4593,11 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             </div>
             <div class="order-ai-modal-summary-card">
               <div class="text-muted small mb-50">Kupac</div>
-              <div class="fw-bolder">${escapeHtml(order.customer_name || '-')}</div>
+              <div class="fw-bolder">${escapeHtml(resolveDisplayCustomerName(order, payload, data))}</div>
             </div>
             <div class="order-ai-modal-summary-card">
               <div class="text-muted small mb-50">Naručitelj</div>
-              <div class="fw-bolder">${escapeHtml(order.requester_code || order.supplier_name || '-')}</div>
+              <div class="fw-bolder">${escapeHtml(resolveDisplayRequesterName(order, payload, data))}</div>
             </div>
             <div class="order-ai-modal-summary-card">
               <div class="text-muted small mb-50">Ukupno</div>
@@ -5497,8 +5536,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           ? `Razlika: ${formatAmount(totalComparison.difference)}`
           : '';
         const factsMarkup = [
-          { label: 'Kupac', value: order.customer_name || '-' },
-          { label: 'Naručilac', value: order.requester_code || order.supplier_name || '-' },
+          { label: 'Kupac', value: resolveDisplayCustomerName(order, payload, statusData) },
+          { label: 'Naručilac', value: resolveDisplayRequesterName(order, payload, statusData) },
           { label: 'Referenca', value: order.external_document_number || '-' },
           { label: 'Vrsta dokumenta', value: order.document_type || '-' },
           { label: 'Valuta', value: order.currency || '-' },
@@ -5588,11 +5627,11 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           <div class="order-ai-saved-grid">
             <div class="order-ai-saved-item">
               <div class="text-muted small mb-50">Kupac</div>
-              <div class="fw-bolder">${escapeHtml(order.customer_name || '-')}</div>
+              <div class="fw-bolder">${escapeHtml(resolveDisplayCustomerName(order, payload, data))}</div>
             </div>
             <div class="order-ai-saved-item">
               <div class="text-muted small mb-50">Naručilac</div>
-              <div class="fw-bolder">${escapeHtml(order.requester_code || order.supplier_name || '-')}</div>
+              <div class="fw-bolder">${escapeHtml(resolveDisplayRequesterName(order, payload, data))}</div>
             </div>
             <div class="order-ai-saved-item">
               <div class="text-muted small mb-50">Pozicije</div>
@@ -6580,8 +6619,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           ? `Razlika: ${formatAmount(totalComparison.difference)}`
           : '';
         const factsMarkup = [
-          { label: 'Kupac', value: order.customer_name || '-' },
-          { label: 'Naručilac', value: order.requester_code || order.supplier_name || '-' },
+          { label: 'Kupac', value: resolveDisplayCustomerName(order, payload, statusData) },
+          { label: 'Naručilac', value: resolveDisplayRequesterName(order, payload, statusData) },
           { label: 'Referenca', value: order.external_document_number || '-' },
           { label: 'Vrsta dokumenta', value: order.document_type || '-' },
           { label: 'Valuta', value: order.currency || '-' },
@@ -6880,7 +6919,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         }
 
         if (extractLiveMeta) {
-          extractLiveMeta.textContent = 'ÄŚekam dokument.';
+          extractLiveMeta.textContent = 'Čekam dokument.';
         }
 
         if (extractLive) {
@@ -7150,7 +7189,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           uploadProgress = Math.round((event.loaded / event.total) * 100);
           setProgress(
             mapUploadProgressToOverall(uploadProgress),
-            uploadProgress >= 100 ? 'Upload je zavrĹˇen. PokreÄ‡e se AI obrada...' : 'Dokument se uÄŤitava na server...'
+            uploadProgress >= 100 ? 'Upload je završen. Pokreće se AI obrada...' : 'Dokument se učitava na server...'
           );
           setStageState('upload', uploadProgress >= 100);
           setStageFill('upload', uploadProgress);
@@ -7185,7 +7224,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             return;
           }
 
-          setProgressWarningMessage('GreĹˇka pri uploadu dokumenta.');
+          setProgressWarningMessage('Greška pri uploadu dokumenta.');
           updateActivityState(null);
         });
 

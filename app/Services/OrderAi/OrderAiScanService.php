@@ -602,6 +602,7 @@ class OrderAiScanService
         return [
             'id' => $scan->id,
             'status' => Utf8Sanitizer::clean((string) ($scan->status ?? ''), 40),
+            'document_profile' => Utf8Sanitizer::clean((string) ($scan->document_profile ?? ''), 40),
             'processing_step' => $displayProcessingStep,
             'current_progress' => (int) $scan->progress_current,
             'max_progress_steps' => (int) $scan->progress_total,
