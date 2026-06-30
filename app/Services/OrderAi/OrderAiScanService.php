@@ -1672,6 +1672,60 @@ class OrderAiScanService
         }, $lines)));
     }
 
+    private function resolveTrendyDeSupplierName(string $searchableText, string $fallback = ''): string
+    {
+        $supplierNumber = $this->extractTrendyDeSupplierNumber($searchableText);
+
+        if ($supplierNumber !== '') {
+            return self::TRENDY_DE_PARTY_NAME . '-' . $supplierNumber;
+        }
+
+        $fallbackName = $this->normalizeTrendyDeSupplierName($fallback);
+
+        return $fallbackName !== '' ? $fallbackName : self::TRENDY_DE_PARTY_NAME;
+    }
+
+    private function extractTrendyDeSupplierNumber(string $searchableText): string
+    {
+        foreach ($this->splitVisibleTextLines($searchableText) as $line) {
+            if (preg_match('/\bTrendy\s+Germany\s+GmbH\s*-\s*(\d{1,4})\b/iu', $line, $matches) === 1) {
+                return $this->normalizeTrendyDeSupplierNumber((string) ($matches[1] ?? ''));
+            }
+
+            if (preg_match('/\bTrendy\s+Germany\s+(?!GmbH\b)(\d{1,4})\b/iu', $line, $matches) === 1) {
+                return $this->normalizeTrendyDeSupplierNumber((string) ($matches[1] ?? ''));
+            }
+        }
+
+        return '';
+    }
+
+    private function normalizeTrendyDeSupplierName(string $value): string
+    {
+        $value = $this->normalizeScannedText($value);
+
+        if ($value === '' || preg_match('/\bTrendy\s+Germany\b/iu', $value) !== 1) {
+            return '';
+        }
+
+        if (preg_match('/\bTrendy\s+Germany(?:\s+GmbH)?\s*(?:-\s*|\s+)(\d{1,4})\b/iu', $value, $matches) === 1) {
+            return self::TRENDY_DE_PARTY_NAME . '-' . $this->normalizeTrendyDeSupplierNumber((string) ($matches[1] ?? ''));
+        }
+
+        return self::TRENDY_DE_PARTY_NAME;
+    }
+
+    private function normalizeTrendyDeSupplierNumber(string $value): string
+    {
+        $value = preg_replace('/\D+/', '', trim($value)) ?? '';
+
+        if ($value === '') {
+            return '';
+        }
+
+        return ltrim($value, '0') !== '' ? ltrim($value, '0') : '0';
+    }
+
     private function buildSubtotalMismatchWarning(float $subtotalDelta, string $supplierName): string
     {
         $amount = number_format(abs($subtotalDelta), 2, '.', '');
@@ -1772,6 +1826,12 @@ class OrderAiScanService
 
         if ($value === '') {
             return '';
+        }
+
+        $trendyDeSupplierName = $this->normalizeTrendyDeSupplierName($value);
+
+        if ($trendyDeSupplierName !== '') {
+            return $trendyDeSupplierName;
         }
 
         $value = preg_replace('/\s+GMBH\s*&\s*CO\.\s*KG.*$/i', '', $value) ?? $value;
@@ -2224,6 +2284,7 @@ class OrderAiScanService
     private function postProcessTrendyDePayload(array $payload, array $context = []): array
     {
         $order = is_array($payload['order'] ?? null) ? $payload['order'] : [];
+        $sourceOrderDeliveryDeadline = trim((string) ($order['delivery_deadline'] ?? ''));
         $searchableText = (string) ($context['searchable_text'] ?? '');
         $fileName = (string) ($context['file_name'] ?? '');
         $leftSupplierBlock = $this->extractProfileSectionText(
@@ -2241,10 +2302,16 @@ class OrderAiScanService
             $documentNumber = $this->extractTrendyDeDocumentNumber($searchableText, $fileName);
         }
 
-        $deliveryDeadline = trim((string) ($order['delivery_deadline'] ?? ''));
+        $headerDeliveryDeadline = $this->extractTrendyDeHeaderDeliveryDeadline(
+            is_array($context['processed_pages'] ?? null) ? $context['processed_pages'] : [],
+            $searchableText
+        );
+        $deliveryDeadline = '';
 
-        if ($deliveryDeadline === '') {
-            $deliveryDeadline = $this->extractProfileFieldValue($searchableText, 'Liefertermin');
+        if (($headerDeliveryDeadline['value'] ?? '') !== '' || ($headerDeliveryDeadline['label_seen'] ?? false)) {
+            $deliveryDeadline = trim((string) ($headerDeliveryDeadline['value'] ?? ''));
+        } elseif (!$this->hasTrendyDeSourceContext($context)) {
+            $deliveryDeadline = $this->extractDateAfterTrendyDeDeliveryLabel($searchableText);
         }
 
         $contactName = trim((string) ($order['contact_name'] ?? ''));
@@ -2272,40 +2339,93 @@ class OrderAiScanService
             $noteParts[$notePart] = $notePart;
         }
 
+        $supplierName = $this->resolveTrendyDeSupplierName(
+            $searchableText,
+            (string) ($order['supplier_name'] ?? '')
+        );
+
         $order['customer_name'] = self::TRENDY_DE_PARTY_NAME;
-        $order['supplier_name'] = self::TRENDY_DE_PARTY_NAME;
+        $order['supplier_name'] = $supplierName;
         $order['external_document_number'] = $documentNumber;
         $order['delivery_deadline'] = $deliveryDeadline;
         $order['contact_name'] = $contactName;
         $order['receiver_name'] = $receiverName !== '' ? $receiverName : self::TRENDY_DE_PARTY_NAME;
         $order['note'] = implode(' | ', array_values($noteParts));
 
+        $hasSourceContext = $this->hasTrendyDeSourceContext($context);
+        $rejectedItemDeliveryDeadlines = [];
+
+        if ($deliveryDeadline === '' && $hasSourceContext) {
+            foreach ([
+                $this->extractTrendyDeLeadingDocumentDate(
+                    is_array($context['processed_pages'] ?? null) ? $context['processed_pages'] : [],
+                    $searchableText
+                ),
+                $sourceOrderDeliveryDeadline,
+            ] as $rejectedDeadline) {
+                $rejectedDeadline = trim((string) $rejectedDeadline);
+
+                if ($rejectedDeadline !== '') {
+                    $rejectedItemDeliveryDeadlines[] = $rejectedDeadline;
+                }
+            }
+        }
+
+        $itemDeliveryDeadlines = $deliveryDeadline === ''
+            ? $this->extractTrendyDeItemDeliveryDeadlines(
+                is_array($context['processed_pages'] ?? null) ? $context['processed_pages'] : [],
+                $searchableText
+            )
+            : [];
+
         $payload['order'] = $order;
         $payload['items'] = $this->postProcessTrendyDeItems(
             is_array($payload['items'] ?? null) ? $payload['items'] : [],
-            $deliveryDeadline
+            $deliveryDeadline,
+            $itemDeliveryDeadlines,
+            $deliveryDeadline !== '' || !$hasSourceContext,
+            $rejectedItemDeliveryDeadlines
         );
 
         return $payload;
     }
 
-    private function postProcessTrendyDeItems(array $items, string $headerDeliveryDeadline = ''): array
+    private function postProcessTrendyDeItems(
+        array $items,
+        string $headerDeliveryDeadline = '',
+        array $itemDeliveryDeadlines = [],
+        bool $trustExistingItemDeliveryDeadline = true,
+        array $rejectedItemDeliveryDeadlines = []
+    ): array
     {
-        return array_values(array_map(function ($item) use ($headerDeliveryDeadline) {
+        $processedItems = array_values(array_map(function ($item) use (
+            $headerDeliveryDeadline,
+            $itemDeliveryDeadlines,
+            $trustExistingItemDeliveryDeadline,
+            $rejectedItemDeliveryDeadlines
+        ) {
             if (!is_array($item)) {
                 return $item;
             }
 
             $contentLines = [];
-            $deliveryDeadline = trim((string) ($item['delivery_deadline'] ?? ''));
+            $existingDeliveryDeadline = trim((string) ($item['delivery_deadline'] ?? ''));
+            $deliveryDeadline = (
+                $trustExistingItemDeliveryDeadline
+                || !$this->isRejectedTrendyDeItemDeliveryDeadline($existingDeliveryDeadline, $rejectedItemDeliveryDeadlines)
+            )
+                ? $existingDeliveryDeadline
+                : '';
             $pendingDeliveryLabel = false;
+            $lineNumber = (int) ($item['line_number'] ?? 0);
+            $productCode = $this->normalizeScannedProductCode((string) ($item['product_code'] ?? ''));
 
             foreach ($this->splitVisibleTextLines(
                 trim((string) ($item['product_name'] ?? '')) . "\n" . trim((string) ($item['note'] ?? ''))
             ) as $line) {
                 $lineDeliveryDeadline = $this->extractVisibleDateFromLine($line);
 
-                if (preg_match('/\bliefertermin\b/i', $line) === 1) {
+                if ($this->containsTrendyDeDeliveryLabel($line)) {
                     if ($deliveryDeadline === '' && $lineDeliveryDeadline !== '') {
                         $deliveryDeadline = $lineDeliveryDeadline;
                     }
@@ -2332,14 +2452,275 @@ class OrderAiScanService
             $noteLines = array_slice($contentLines, 1);
 
             $item['product_name'] = $productName;
-            $item['note'] = implode(' | ', array_values(array_unique(array_filter($noteLines))));
+            $item['note'] = $this->sanitizeTrendyDeItemNote(
+                implode(' | ', array_values(array_unique(array_filter($noteLines)))),
+                $lineNumber
+            );
             $item['delivery_deadline'] = trim($headerDeliveryDeadline) !== ''
                 ? trim($headerDeliveryDeadline)
-                : $deliveryDeadline;
+                : $this->resolveTrendyDeItemDeliveryDeadline(
+                    $lineNumber,
+                    $productCode,
+                    $itemDeliveryDeadlines,
+                    $deliveryDeadline
+                );
             $item['unit'] = $this->normalizeScannedUnit((string) ($item['unit'] ?? ''));
 
             return $item;
         }, $items));
+
+        $processedItems = $this->splitTrendyDeEmbeddedNoteItems($processedItems);
+        $processedItems = $this->mergeTrendyDeContinuationItems($processedItems);
+
+        return $this->normalizeTrendyDeLineNumbers($processedItems);
+    }
+
+    private function mergeTrendyDeContinuationItems(array $items): array
+    {
+        $merged = [];
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                $merged[] = $item;
+                continue;
+            }
+
+            if ($this->isTrendyDeContinuationOnlyItem($item) && $merged !== []) {
+                $lastIndex = count($merged) - 1;
+                $continuationNote = $this->buildTrendyDeContinuationNote($item);
+
+                if (is_array($merged[$lastIndex] ?? null) && $continuationNote !== '') {
+                    $merged[$lastIndex]['note'] = $this->appendItemNote(
+                        (string) ($merged[$lastIndex]['note'] ?? ''),
+                        $continuationNote
+                    );
+                }
+
+                if (
+                    is_array($merged[$lastIndex] ?? null)
+                    && trim((string) ($merged[$lastIndex]['delivery_deadline'] ?? '')) === ''
+                    && trim((string) ($item['delivery_deadline'] ?? '')) !== ''
+                ) {
+                    $merged[$lastIndex]['delivery_deadline'] = trim((string) $item['delivery_deadline']);
+                }
+
+                continue;
+            }
+
+            $merged[] = $item;
+        }
+
+        return array_values($merged);
+    }
+
+    private function splitTrendyDeEmbeddedNoteItems(array $items): array
+    {
+        $expanded = [];
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                $expanded[] = $item;
+                continue;
+            }
+
+            $noteParts = $this->splitTrendyDeNoteParts((string) ($item['note'] ?? ''));
+            $currentNoteParts = [];
+            $embeddedItems = [];
+            $currentEmbeddedIndex = null;
+
+            foreach ($noteParts as $notePart) {
+                $embeddedStart = $this->parseTrendyDeEmbeddedItemStart($notePart);
+
+                if ($embeddedStart !== null) {
+                    $embeddedItems[] = $this->buildTrendyDeEmbeddedItemFromStart($item, $embeddedStart);
+                    $currentEmbeddedIndex = count($embeddedItems) - 1;
+                    continue;
+                }
+
+                if ($currentEmbeddedIndex === null) {
+                    $currentNoteParts[] = $notePart;
+                    continue;
+                }
+
+                $embeddedItems[$currentEmbeddedIndex]['note'] = $this->appendItemNote(
+                    (string) ($embeddedItems[$currentEmbeddedIndex]['note'] ?? ''),
+                    $notePart
+                );
+            }
+
+            $item['note'] = implode(' | ', array_values(array_unique(array_filter($currentNoteParts))));
+            $expanded[] = $item;
+
+            foreach ($embeddedItems as $embeddedItem) {
+                $expanded[] = $embeddedItem;
+            }
+        }
+
+        return array_values($expanded);
+    }
+
+    private function sanitizeTrendyDeItemNote(string $note, int $lineNumber): string
+    {
+        $parts = $this->splitTrendyDeNoteParts($note);
+
+        if ($lineNumber > 0) {
+            $lineNumberText = (string) $lineNumber;
+            $parts = array_values(array_filter(array_map(function ($part) use ($lineNumberText) {
+                $part = trim((string) $part);
+
+                if ($part === $lineNumberText) {
+                    return '';
+                }
+
+                return trim((string) (preg_replace(
+                    '/^' . preg_quote($lineNumberText, '/') . '\s+(?=\S)/u',
+                    '',
+                    $part
+                ) ?? $part));
+            }, $parts)));
+        }
+
+        return implode(' | ', array_values(array_filter($parts)));
+    }
+
+    private function resolveTrendyDeItemDeliveryDeadline(
+        int $lineNumber,
+        string $productCode,
+        array $itemDeliveryDeadlines,
+        string $fallback
+    ): string {
+        if ($lineNumber > 0) {
+            $lineKey = 'line:' . $lineNumber;
+
+            if (trim((string) ($itemDeliveryDeadlines[$lineKey] ?? '')) !== '') {
+                return trim((string) $itemDeliveryDeadlines[$lineKey]);
+            }
+        }
+
+        if ($productCode !== '') {
+            $codeKey = 'code:' . strtoupper($productCode);
+
+            if (trim((string) ($itemDeliveryDeadlines[$codeKey] ?? '')) !== '') {
+                return trim((string) $itemDeliveryDeadlines[$codeKey]);
+            }
+        }
+
+        return trim($fallback);
+    }
+
+    private function splitTrendyDeNoteParts(string $note): array
+    {
+        $parts = preg_split('/\s*\|\s*|\r\n|\r|\n/u', $note) ?: [];
+
+        return array_values(array_filter(array_map(function ($part) {
+            return trim((string) $part);
+        }, $parts)));
+    }
+
+    private function parseTrendyDeEmbeddedItemStart(string $value): ?array
+    {
+        $productCodePattern = $this->trendyDeProductCodePattern();
+
+        if (preg_match('/^(\d{1,3})\s+(' . $productCodePattern . ')\s+(.+)$/u', trim($value), $matches) !== 1) {
+            return null;
+        }
+
+        $description = trim((string) ($matches[3] ?? ''));
+
+        if ($description === '') {
+            return null;
+        }
+
+        return [
+            'line_number' => (int) ($matches[1] ?? 0),
+            'product_code' => trim((string) ($matches[2] ?? '')),
+            'description' => $description,
+        ];
+    }
+
+    private function buildTrendyDeEmbeddedItemFromStart(array $sourceItem, array $start): array
+    {
+        [$productName, $initialNote] = $this->splitTrendyDeProductNameAndNote((string) ($start['description'] ?? ''));
+
+        $embeddedItem = $sourceItem;
+        $embeddedItem['line_number'] = (int) ($start['line_number'] ?? 0);
+        $embeddedItem['product_code'] = $this->normalizeScannedProductCode((string) ($start['product_code'] ?? ''));
+        $embeddedItem['product_name'] = $this->normalizeScannedProductName($productName);
+        $embeddedItem['note'] = $initialNote;
+
+        return $embeddedItem;
+    }
+
+    private function splitTrendyDeProductNameAndNote(string $description): array
+    {
+        $description = trim($description);
+
+        if ($description === '') {
+            return ['', ''];
+        }
+
+        if (
+            preg_match(
+                '/^(.*?)(\b(?:' . $this->trendyDeProcessOrFinishPattern() . ')\b.*)$/iu',
+                $description,
+                $matches
+            ) === 1
+        ) {
+            $productName = trim((string) ($matches[1] ?? ''));
+            $note = trim((string) ($matches[2] ?? ''));
+
+            if ($productName !== '') {
+                return [$productName, $note];
+            }
+        }
+
+        return [$description, ''];
+    }
+
+    private function isTrendyDeContinuationOnlyItem(array $item): bool
+    {
+        if (
+            (float) ($item['quantity'] ?? 0) > 0
+            || (float) ($item['unit_price'] ?? 0) > 0
+            || (float) ($item['line_total'] ?? 0) > 0
+        ) {
+            return false;
+        }
+
+        $continuationNote = $this->buildTrendyDeContinuationNote($item);
+
+        return $continuationNote !== ''
+            && preg_match('/\b(?:liefertermin|lieferdatum)\b/iu', $continuationNote) !== 1;
+    }
+
+    private function buildTrendyDeContinuationNote(array $item): string
+    {
+        $parts = [];
+
+        foreach (['product_code', 'product_name', 'note'] as $field) {
+            $value = trim((string) ($item[$field] ?? ''));
+
+            if ($value !== '') {
+                $parts[] = $value;
+            }
+        }
+
+        return $this->normalizeScannedText(implode(' ', $parts));
+    }
+
+    private function normalizeTrendyDeLineNumbers(array $items): array
+    {
+        return array_values(array_map(function ($item, int $index) {
+            if (!is_array($item)) {
+                return $item;
+            }
+
+            if ((int) ($item['line_number'] ?? 0) <= 0) {
+                $item['line_number'] = $index + 1;
+            }
+
+            return $item;
+        }, $items, array_keys($items)));
     }
 
     private function postProcessGrobPayload(array $payload, array $context = []): array
@@ -3085,6 +3466,11 @@ class OrderAiScanService
         return '-?(?:\d{1,3}(?:\h*[.\h]\h*\d{3})+|\d+)' . $fractionPattern;
     }
 
+    private function compactGermanAmountPattern(): string
+    {
+        return '-?(?:\d{1,3}(?:\h*[.\h]\h*\d{3})+|\d+),\h*\d{2}';
+    }
+
     private function isGrobKeywordLine(string $line): bool
     {
         return preg_match(
@@ -3150,6 +3536,74 @@ class OrderAiScanService
         }
 
         return '';
+    }
+
+    private function extractDateForProfileLabel(string $value, string $label): string
+    {
+        $labelPattern = preg_quote($label, '/');
+
+        if (preg_match('/^(.*?)\b' . $labelPattern . '\b\s*:?\s*(.*)$/iu', $value, $matches) === 1) {
+            $beforeLabel = trim((string) ($matches[1] ?? ''));
+            $afterLabel = trim((string) ($matches[2] ?? ''));
+            $dateAfterLabel = $this->extractVisibleDateFromLine($afterLabel);
+
+            if ($dateAfterLabel !== '') {
+                return $dateAfterLabel;
+            }
+
+            if (
+                $beforeLabel !== ''
+                && !str_contains($this->normalizeKeywordText($beforeLabel), 'datum')
+                && preg_match_all('/(\d{1,2}\.\s*\d{1,2}\.\s*\d{2,4}\.?)/u', $beforeLabel, $beforeMatches) >= 1
+            ) {
+                $datesBeforeLabel = array_values(array_filter(array_map('trim', $beforeMatches[1] ?? [])));
+
+                return (string) end($datesBeforeLabel);
+            }
+        }
+
+        return '';
+    }
+
+    private function containsTrendyDeDeliveryLabel(string $value): bool
+    {
+        $normalized = $this->normalizeKeywordText($value);
+
+        return str_contains($normalized, 'liefertermin')
+            || str_contains($normalized, 'lieferdatum');
+    }
+
+    private function extractDateForTrendyDeDeliveryLabel(string $value): string
+    {
+        return $this->extractDateForProfileLabel($value, 'Liefertermin')
+            ?: $this->extractDateForProfileLabel($value, 'Lieferdatum');
+    }
+
+    private function extractDateAfterTrendyDeDeliveryLabel(string $value): string
+    {
+        return $this->extractDateAfterProfileLabel($value, 'Liefertermin')
+            ?: $this->extractDateAfterProfileLabel($value, 'Lieferdatum');
+    }
+
+    private function extractDateAfterProfileLabel(string $value, string $label): string
+    {
+        $labelPattern = preg_quote($label, '/');
+
+        if (preg_match('/\b' . $labelPattern . '\b\s*:?\s*(.*)$/iu', $value, $matches) !== 1) {
+            return '';
+        }
+
+        return $this->extractVisibleDateFromLine(trim((string) ($matches[1] ?? '')));
+    }
+
+    private function trendyDeProductCodePattern(): string
+    {
+        return '(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24}';
+    }
+
+    private function trendyDeProcessOrFinishPattern(): string
+    {
+        return 'Graviranje|Br[ĂĽu]niert|Brueniert|chemisch\s+vernickelt|vernickelt|anodized|brass|nickel\s+plated|chem\.?\s*nickel\s+plated|warm\s+browned';
     }
 
     private function parseGermanNumber(string $value): float
@@ -3582,6 +4036,449 @@ class OrderAiScanService
         return '';
     }
 
+    private function extractTrendyDeHeaderDeliveryDeadline(array $processedPages, string $searchableText): array
+    {
+        $lines = $this->flattenTrendyDeContextLines($processedPages, $searchableText);
+        $leadingHeaderDeadline = $this->resolveTrendyDeHeaderDeadlineFromLeadingLines($lines);
+
+        if ((bool) ($leadingHeaderDeadline['resolved'] ?? false)) {
+            return [
+                'value' => trim((string) ($leadingHeaderDeadline['value'] ?? '')),
+                'label_seen' => true,
+            ];
+        }
+
+        $pendingDeliveryLabel = false;
+        $labelSeen = false;
+
+        foreach ($lines as $line) {
+            $line = trim((string) $line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            $normalized = $this->normalizeKeywordText($line);
+
+            if ($this->isTrendyDeTableHeaderText($normalized) || $this->isTrendyDeItemStartText($line)) {
+                break;
+            }
+
+            if ($pendingDeliveryLabel) {
+                $deliveryDeadline = $this->extractVisibleDateFromLine($line);
+
+                if ($deliveryDeadline !== '') {
+                    return [
+                        'value' => $deliveryDeadline,
+                        'label_seen' => true,
+                    ];
+                }
+            }
+
+            $pendingDeliveryLabel = false;
+
+            if (!$this->containsTrendyDeDeliveryLabel($line)) {
+                continue;
+            }
+
+            $labelSeen = true;
+            $deliveryDeadline = $this->extractDateAfterTrendyDeDeliveryLabel($line);
+
+            if ($deliveryDeadline !== '') {
+                return [
+                    'value' => $deliveryDeadline,
+                    'label_seen' => true,
+                ];
+            }
+
+            $pendingDeliveryLabel = true;
+        }
+
+        return [
+            'value' => '',
+            'label_seen' => $labelSeen,
+        ];
+    }
+
+    private function extractTrendyDeLeadingDocumentDate(array $processedPages, string $searchableText): string
+    {
+        foreach ($this->flattenTrendyDeContextLines($processedPages, $searchableText) as $line) {
+            $line = trim((string) $line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            $normalized = $this->normalizeKeywordText($line);
+
+            if (str_starts_with($normalized, '%pdf-')) {
+                continue;
+            }
+
+            if (str_contains($normalized, 'trendy germany gmbh')) {
+                return '';
+            }
+
+            if (preg_match('/^\d{1,2}\.\s*\d{1,2}\.\s*\d{2,4}\.?\s*$/u', $line) === 1) {
+                return $this->extractVisibleDateFromLine($line);
+            }
+
+            return '';
+        }
+
+        return '';
+    }
+
+    private function isRejectedTrendyDeItemDeliveryDeadline(string $value, array $rejectedDeliveryDeadlines): bool
+    {
+        $valueKey = $this->normalizeVisibleDateKey($value);
+
+        if ($valueKey === '') {
+            return false;
+        }
+
+        foreach ($rejectedDeliveryDeadlines as $rejectedDeadline) {
+            if ($valueKey === $this->normalizeVisibleDateKey((string) $rejectedDeadline)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeVisibleDateKey(string $value): string
+    {
+        $date = $this->extractVisibleDateFromLine($value);
+
+        if (
+            $date === ''
+            || preg_match('/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{2,4})\.?$/u', $date, $matches) !== 1
+        ) {
+            return '';
+        }
+
+        $year = (int) ($matches[3] ?? 0);
+
+        if ($year > 0 && $year < 100) {
+            $year += 2000;
+        }
+
+        return sprintf('%04d-%02d-%02d', $year, (int) ($matches[2] ?? 0), (int) ($matches[1] ?? 0));
+    }
+
+    private function hasTrendyDeSourceContext(array $context): bool
+    {
+        if (trim((string) ($context['searchable_text'] ?? '')) !== '') {
+            return true;
+        }
+
+        foreach ((array) ($context['processed_pages'] ?? []) as $page) {
+            if (
+                !empty($page['items'])
+                || !empty($page['lines'])
+                || trim((string) ($page['text'] ?? '')) !== ''
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function resolveTrendyDeHeaderDeadlineFromLeadingLines(array $lines): array
+    {
+        $companyIndex = null;
+        $leadingLines = [];
+
+        foreach (array_values($lines) as $index => $line) {
+            $line = trim((string) $line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            if (str_starts_with($this->normalizeKeywordText($line), '%pdf-')) {
+                continue;
+            }
+
+            if (str_contains($this->normalizeKeywordText($line), 'trendy germany gmbh')) {
+                $companyIndex = count($leadingLines);
+                break;
+            }
+
+            $leadingLines[] = $line;
+
+            if (count($leadingLines) >= 8) {
+                break;
+            }
+        }
+
+        if ($companyIndex === null || $companyIndex <= 0) {
+            return [
+                'resolved' => false,
+                'value' => '',
+            ];
+        }
+
+        $dates = [];
+
+        foreach (array_slice($leadingLines, 0, $companyIndex) as $line) {
+            if (preg_match('/^\d{1,2}\.\s*\d{1,2}\.\s*\d{2,4}\.?\s*$/u', trim($line)) !== 1) {
+                return [
+                    'resolved' => false,
+                    'value' => '',
+                ];
+            }
+
+            if (preg_match_all('/(\d{1,2}\.\s*\d{1,2}\.\s*\d{2,4}\.?)/u', $line, $matches) < 1) {
+                continue;
+            }
+
+            foreach ($matches[1] ?? [] as $date) {
+                $dates[] = trim((string) $date);
+            }
+        }
+
+        return [
+            'resolved' => true,
+            'value' => (string) ($dates[1] ?? ''),
+        ];
+    }
+
+    private function extractTrendyDeItemDeliveryDeadlines(array $processedPages, string $searchableText): array
+    {
+        $searchableLines = $this->splitVisibleTextLines($searchableText);
+
+        if ($searchableLines !== []) {
+            $deadlines = $this->extractTrendyDeItemDeliveryDeadlinesFromLines($searchableLines);
+
+            if ($deadlines !== []) {
+                return $deadlines;
+            }
+        }
+
+        return $this->extractTrendyDeItemDeliveryDeadlinesFromLines(
+            $this->flattenTrendyDeContextLines($processedPages, $searchableText)
+        );
+    }
+
+    private function extractTrendyDeItemDeliveryDeadlinesFromLines(array $lines): array
+    {
+        $deadlines = [];
+        $currentLineNumber = 0;
+        $currentProductCode = '';
+        $pendingDeliveryLabel = false;
+
+        foreach ($lines as $line) {
+            $line = trim((string) $line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            $itemStart = $this->parseTrendyDeItemStartText($line);
+
+            if ($itemStart !== null) {
+                $currentLineNumber = (int) ($itemStart['line_number'] ?? 0);
+                $currentProductCode = $this->normalizeScannedProductCode((string) ($itemStart['product_code'] ?? ''));
+                $pendingDeliveryLabel = false;
+                continue;
+            }
+
+            if ($currentLineNumber <= 0 && $currentProductCode === '') {
+                continue;
+            }
+
+            if ($pendingDeliveryLabel) {
+                $deliveryDeadline = $this->extractVisibleDateFromLine($line);
+
+                if ($deliveryDeadline !== '') {
+                    $this->recordTrendyDeItemDeliveryDeadline(
+                        $deadlines,
+                        $currentLineNumber,
+                        $currentProductCode,
+                        $deliveryDeadline
+                    );
+                    $pendingDeliveryLabel = false;
+                    continue;
+                }
+            }
+
+            $pendingDeliveryLabel = false;
+
+            if (!$this->containsTrendyDeDeliveryLabel($line)) {
+                continue;
+            }
+
+            $deliveryDeadline = $this->extractDateForTrendyDeDeliveryLabel($line);
+
+            if ($deliveryDeadline !== '') {
+                $this->recordTrendyDeItemDeliveryDeadline(
+                    $deadlines,
+                    $currentLineNumber,
+                    $currentProductCode,
+                    $deliveryDeadline
+                );
+                continue;
+            }
+
+            $pendingDeliveryLabel = true;
+        }
+
+        return $deadlines;
+    }
+
+    private function recordTrendyDeItemDeliveryDeadline(
+        array &$deadlines,
+        int $lineNumber,
+        string $productCode,
+        string $deliveryDeadline
+    ): void {
+        $deliveryDeadline = trim($deliveryDeadline);
+
+        if ($deliveryDeadline === '') {
+            return;
+        }
+
+        if ($lineNumber > 0) {
+            $deadlines['line:' . $lineNumber] = $deliveryDeadline;
+        }
+
+        if ($productCode !== '') {
+            $deadlines['code:' . strtoupper($productCode)] = $deliveryDeadline;
+        }
+    }
+
+    private function parseTrendyDeItemStartText(string $line): ?array
+    {
+        $line = trim($line);
+
+        if (preg_match('/^(\d{1,3})\s+(' . $this->trendyDeProductCodePattern() . ')\b/u', $line, $matches) === 1) {
+            return [
+                'line_number' => (int) ($matches[1] ?? 0),
+                'product_code' => trim((string) ($matches[2] ?? '')),
+            ];
+        }
+
+        $amountPattern = $this->compactGermanAmountPattern();
+
+        if (
+            preg_match(
+                '/^' . $amountPattern . '\s+' . $amountPattern . '\s*(?:STU|ST|PCS|PIECE|KO)\s+'
+                . $amountPattern . '\s*' . $amountPattern . '\s*(' . $this->trendyDeProductCodePattern() . ')\s+(.+)$/u',
+                $line,
+                $matches
+            ) !== 1
+        ) {
+            return null;
+        }
+
+        [, $lineNumber] = $this->splitTrendyDeTrailingLineNumber((string) ($matches[2] ?? ''));
+
+        if ($lineNumber <= 0) {
+            return null;
+        }
+
+        return [
+            'line_number' => $lineNumber,
+            'product_code' => trim((string) ($matches[1] ?? '')),
+        ];
+    }
+
+    private function splitTrendyDeTrailingLineNumber(string $value): array
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return ['', 0];
+        }
+
+        $bestDescription = '';
+        $bestLineNumber = 0;
+
+        for ($length = 1; $length <= 3; $length++) {
+            if (strlen($value) <= $length) {
+                break;
+            }
+
+            $suffix = substr($value, -$length);
+
+            if (!ctype_digit($suffix) || ($length > 1 && str_starts_with($suffix, '0'))) {
+                continue;
+            }
+
+            $description = trim(substr($value, 0, -$length));
+            $lineNumber = (int) $suffix;
+
+            if ($description === '' || $lineNumber <= 0) {
+                continue;
+            }
+
+            $bestDescription = $description;
+            $bestLineNumber = $lineNumber;
+        }
+
+        return [$bestDescription, $bestLineNumber];
+    }
+
+    private function flattenTrendyDeContextLines(array $processedPages, string $searchableText): array
+    {
+        $lines = [];
+
+        foreach ($processedPages as $page) {
+            $pageLines = is_array($page['lines'] ?? null)
+                ? $page['lines']
+                : $this->splitVisibleTextLines((string) ($page['text'] ?? ''));
+
+            foreach ($pageLines as $line) {
+                $line = trim((string) $line);
+
+                if ($line !== '') {
+                    $lines[] = $line;
+                }
+            }
+        }
+
+        if ($lines !== []) {
+            return $lines;
+        }
+
+        foreach ($processedPages as $page) {
+            foreach ((array) ($page['items'] ?? []) as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                $text = trim((string) ($row['text'] ?? ''));
+
+                if ($text !== '') {
+                    $lines[] = $text;
+                }
+            }
+        }
+
+        if ($lines !== []) {
+            return $lines;
+        }
+
+        return $this->splitVisibleTextLines($searchableText);
+    }
+
+    private function isTrendyDeTableHeaderText(string $normalizedLine): bool
+    {
+        return $normalizedLine !== ''
+            && str_contains($normalizedLine, 'artikel nr')
+            && (
+                str_contains($normalizedLine, 'pos')
+                || str_contains($normalizedLine, 'beschreibung')
+            );
+    }
+
+    private function isTrendyDeItemStartText(string $line): bool
+    {
+        return $this->parseTrendyDeItemStartText($line) !== null;
+    }
+
     private function extractProfileSectionText(string $searchableText, string $startPattern, array $endPatterns): string
     {
         if (preg_match($startPattern, $searchableText, $startMatch, PREG_OFFSET_CAPTURE) !== 1) {
@@ -3619,5 +4516,10 @@ class OrderAiScanService
         }, $lines)));
 
         return implode(' | ', $lines);
+    }
+
+    private function normalizeKeywordText(string $value): string
+    {
+        return Str::lower(trim(Str::ascii(Utf8Sanitizer::clean($value))));
     }
 }

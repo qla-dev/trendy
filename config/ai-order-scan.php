@@ -87,11 +87,14 @@ PROMPT;
 
 $trendyDePromptRules = <<<'PROMPT'
 - This document profile is for Trendy Germany purchase orders.
-- If the document shows "Trendy Germany GmbH" in the upper-right header, set both customer_name and supplier_name to "Trendy Germany GmbH".
+- If the document shows "Trendy Germany GmbH" in the upper-right header, set customer_name to "Trendy Germany GmbH".
+- Set supplier_name to the Pantheon subject format "Trendy Germany GmbH-{number}" when a visible line such as "Trendy Germany 45" or "Trendy Germany 21" appears in the address block. Use no spaces around the hyphen, for example "Trendy Germany GmbH-45". If no such number is visible, use "Trendy Germany GmbH".
 - Extract the order reference number that appears after the heading "Bestellung" into external_document_number.
-- Extract the header Liefertermin into order.delivery_deadline.
-- The header Liefertermin applies to every line item in the Trendy Germany table. Copy the same visible date into delivery_deadline for every item.
-- Liefertermin is the Pantheon delivery deadline ("rok isporuke"), not a dispatch/shipping date.
+- Never use Datum as order.delivery_deadline or item.delivery_deadline.
+- At the start of Trendy Germany PDFs, the first standalone date row is Datum and the second standalone date row before "Trendy Germany GmbH" is the header Liefertermin/Lieferdatum. If those first rows are "27. 6. 2026.", "28. 9. 2026.", "Trendy Germany GmbH", then order.delivery_deadline and every item.delivery_deadline should be "28. 9. 2026.".
+- If there is only one standalone date before "Trendy Germany GmbH", then the header Liefertermin/Lieferdatum is blank. Set order.delivery_deadline to an empty string and use each line-item Liefertermin/Lieferdatum value individually.
+- Extract the header Liefertermin/Lieferdatum into order.delivery_deadline only when a visible delivery date is confirmed by the second standalone date row or by an explicit delivery label. If Datum and Liefertermin/Lieferdatum appear on the same line, use the date after/right of the delivery label, not the earlier Datum date.
+- Liefertermin/Lieferdatum is the Pantheon delivery deadline ("rok isporuke"), not a dispatch/shipping date.
 - Do not return any separate dispatch date.
 - Extract "Person responsible" into contact_name.
 - Extract "Anlieferadresse" into receiver_name.
@@ -100,19 +103,19 @@ $trendyDePromptRules = <<<'PROMPT'
 - Pos. -> line_number
 - Artikel Nr. -> product_code
 - Beschreibung first visible line -> product_name
-- Additional Beschreibung lines before Liefertermin -> note
-- Liefertermin value inside the line-item block -> delivery_deadline for that item; otherwise use the header Liefertermin
+- Additional Beschreibung lines before Liefertermin/Lieferdatum -> note, including Crtež/Crtez rows and their following drawing/code value.
+- Liefertermin/Lieferdatum value inside the line-item block -> delivery_deadline for that item; otherwise use the header Liefertermin/Lieferdatum
 - Menge -> quantity
 - Einheit -> unit
 - EK-Preis -> unit_price
 - VAT % -> vat_rate
 - Betrag -> line_total
-- Do not copy Liefertermin or its date into product_name or note.
+- Do not copy Liefertermin/Lieferdatum or its date into product_name or note.
 - If Einheit is STU for a Trendy Germany item, return unit as KO.
 - Prefer the visible Betrag value as line_total for each row.
-- Trendy Germany product codes may be 5-12 digits and may contain a dot suffix, for example 241265.4.
+- Trendy Germany product codes may be numeric or alphanumeric and may contain dots or underscores, for example 241265.4, BYPR05C120030, or DN731973_A.
 - Every visible Pos. + Artikel Nr. pair starts a separate item, even if PDF text extraction placed it after a page label or inside the previous description/note.
-- Never put a later position such as "10 1049658 Stossdaempferanschlag" into the previous item's note. Split it into a new item with line_number 10 and product_code 1049658.
+- Never put a later position such as "10 1049658 Stossdaempferanschlag" or "11 DN731973_A SIDE PLATE, RIGHT" into the previous item's note. Split it into a new item with the visible line_number and product_code.
 - Ignore page labels such as "Page" or "Page 2/2"; they are not product_name or note content.
 - If process/finish words such as Graviranje, Brueniert, Brüniert, or chemisch vernickelt appear after the article name, keep the article name in product_name and move the process/finish words to note.
 - If footer totals are missing or unclear, leave summary totals at 0 and let downstream normalization compute them from items.

@@ -166,6 +166,7 @@ class OrderAiDigitalPdfRulesParser
                 $searchableText,
                 (string) ($scan->source_file_name ?? '')
             );
+        $supplierName = $this->resolveTrendyDeSupplierName($searchableText);
         $deliveryDeadline = $header['delivery_deadline'];
         if ($deliveryDeadline !== '') {
             $items = array_values(array_map(function (array $item) use ($deliveryDeadline): array {
@@ -208,7 +209,7 @@ class OrderAiDigitalPdfRulesParser
         $payload = [
             'order' => [
                 'customer_name' => self::TRENDY_DE_PARTY_NAME,
-                'supplier_name' => self::TRENDY_DE_PARTY_NAME,
+                'supplier_name' => $supplierName,
                 'page_count' => $pageCount,
                 'receiver_name' => $receiverName !== '' ? $receiverName : self::TRENDY_DE_PARTY_NAME,
                 'contact_name' => $contactName,
@@ -376,10 +377,12 @@ class OrderAiDigitalPdfRulesParser
             $items[] = $this->finalizeTrendyDeItem($queuedItem);
         }
 
-        return array_values(array_filter($items, function ($item) {
+        $items = array_values(array_filter($items, function ($item) {
             return is_array($item)
                 && trim((string) ($item['product_code'] ?? '')) !== '';
         }));
+
+        return $this->normalizeTrendyDeParsedLineNumbers($items);
     }
 
     private function buildTrendyDeParserDiagnostics(array $lines): array
@@ -470,6 +473,11 @@ class OrderAiDigitalPdfRulesParser
     private function parseTrendyDeCodeAmountRow(string $line): ?array
     {
         $normalized = trim($line);
+        $amountFirstItem = $this->parseTrendyDeAmountFirstRow($normalized);
+
+        if ($amountFirstItem !== null) {
+            return $amountFirstItem;
+        }
 
         if (preg_match('/^(' . $this->trendyDeProductCodePattern() . ')\s+(.+)$/u', $normalized, $matches) !== 1) {
             return null;
@@ -499,6 +507,92 @@ class OrderAiDigitalPdfRulesParser
         $item['unit'] = $unit;
 
         return $item;
+    }
+
+    private function parseTrendyDeAmountFirstRow(string $line): ?array
+    {
+        $amountPattern = $this->compactGermanAmountPattern();
+
+        if (
+            preg_match(
+                '/^(' . $amountPattern . ')\s+(' . $amountPattern . ')\s*(STU|ST|PCS|PIECE|KO)\s+'
+                . '(' . $amountPattern . ')\s*(' . $amountPattern . ')\s*(' . $this->trendyDeProductCodePattern() . ')\s+(.+)$/u',
+                trim($line),
+                $matches
+            ) !== 1
+        ) {
+            return null;
+        }
+
+        [$description, $lineNumber] = $this->splitTrendyDeTrailingLineNumber((string) ($matches[7] ?? ''));
+
+        if ($description === '' || $lineNumber <= 0) {
+            return null;
+        }
+
+        $item = $this->initializeTrendyDeParsedItem(
+            $lineNumber,
+            trim((string) ($matches[6] ?? '')),
+            $description
+        );
+        $item['quantity'] = $this->parseGermanNumber((string) ($matches[1] ?? '0'));
+        $item['unit_price'] = $this->parseGermanNumber((string) ($matches[2] ?? '0'));
+        $item['unit'] = trim((string) ($matches[3] ?? ''));
+        $item['line_total'] = $this->parseGermanNumber((string) ($matches[4] ?? '0'));
+        $item['vat_rate'] = $this->parseGermanNumber((string) ($matches[5] ?? '0'));
+
+        return $item;
+    }
+
+    private function splitTrendyDeTrailingLineNumber(string $value): array
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return ['', 0];
+        }
+
+        $bestDescription = '';
+        $bestLineNumber = 0;
+
+        for ($length = 1; $length <= 3; $length++) {
+            if (strlen($value) <= $length) {
+                break;
+            }
+
+            $suffix = substr($value, -$length);
+
+            if (!ctype_digit($suffix) || ($length > 1 && str_starts_with($suffix, '0'))) {
+                continue;
+            }
+
+            $description = trim(substr($value, 0, -$length));
+            $lineNumber = (int) $suffix;
+
+            if ($description === '' || $lineNumber <= 0) {
+                continue;
+            }
+
+            $bestDescription = $description;
+            $bestLineNumber = $lineNumber;
+        }
+
+        return [$bestDescription, $bestLineNumber];
+    }
+
+    private function normalizeTrendyDeParsedLineNumbers(array $items): array
+    {
+        return array_values(array_map(function ($item, int $index) {
+            if (!is_array($item)) {
+                return $item;
+            }
+
+            if ((int) ($item['line_number'] ?? 0) <= 0) {
+                $item['line_number'] = $index + 1;
+            }
+
+            return $item;
+        }, $items, array_keys($items)));
     }
 
     private function splitTrendyDeLineIntoContentAndNextItem(string $line): array
@@ -565,6 +659,10 @@ class OrderAiDigitalPdfRulesParser
             return [''];
         }
 
+        if ($this->parseTrendyDeAmountFirstRow($line) !== null) {
+            return [$line];
+        }
+
         $pattern = '/(?:^|\s+)(?:page\s+)?(\d{1,3})\s+(' . $this->trendyDeProductCodePattern() . ')\b/iu';
 
         if (preg_match_all($pattern, $line, $matches, PREG_OFFSET_CAPTURE) < 1 || empty($matches[0])) {
@@ -619,7 +717,7 @@ class OrderAiDigitalPdfRulesParser
 
     private function trendyDeProductCodePattern(): string
     {
-        return '\d{5,12}(?:\.\d+)?';
+        return '(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24}';
     }
 
     private function initializeTrendyDeParsedItem(int $lineNumber, string $productCode, string $initialDescription = ''): array
@@ -652,6 +750,14 @@ class OrderAiDigitalPdfRulesParser
         }
 
         if (
+            (int) ($item['line_number'] ?? 0) > 0
+            && preg_match('/^\d{1,3}$/u', $line) === 1
+            && (int) $line === (int) ($item['line_number'] ?? 0)
+        ) {
+            return;
+        }
+
+        if (
             (int) ($item['line_number'] ?? 0) <= 0
             && preg_match('/^(.+?)\s+(\d{1,3})(?:\s+(.+))?$/u', $line, $matches) === 1
         ) {
@@ -670,7 +776,7 @@ class OrderAiDigitalPdfRulesParser
             }
         }
 
-        if (str_contains($this->normalizeKeywordText($line), 'liefertermin')) {
+        if ($this->containsTrendyDeDeliveryLabel($line)) {
             $deliveryDeadline = $this->extractVisibleDateFromLine($line);
 
             if ($deliveryDeadline !== '') {
@@ -982,6 +1088,16 @@ class OrderAiDigitalPdfRulesParser
         $deliveryDeadline = '';
         $contactName = '';
         $documentNumber = '';
+        $tableStarted = false;
+        $headerDeadlineResolved = false;
+        $leadingHeaderDeadline = $this->resolveTrendyDeHeaderDeadlineFromLeadingLines(array_values(array_map(function ($row) {
+            return is_array($row) ? trim((string) ($row['text'] ?? '')) : '';
+        }, $partyRows)));
+
+        if ((bool) ($leadingHeaderDeadline['resolved'] ?? false)) {
+            $deliveryDeadline = trim((string) ($leadingHeaderDeadline['value'] ?? ''));
+            $headerDeadlineResolved = true;
+        }
 
         foreach ($partyRows as $row) {
             $text = trim((string) ($row['text'] ?? ''));
@@ -989,6 +1105,16 @@ class OrderAiDigitalPdfRulesParser
             $cells = is_array($row['cells'] ?? null) ? $row['cells'] : [];
 
             if ($normalized === '') {
+                continue;
+            }
+
+            if ($this->isTrendyDeTableHeaderLine($normalized) || $this->isTrendyDeItemStartLine($text)) {
+                $partySectionMode = null;
+                $tableStarted = true;
+                continue;
+            }
+
+            if ($tableStarted) {
                 continue;
             }
 
@@ -1013,7 +1139,7 @@ class OrderAiDigitalPdfRulesParser
             }
 
             if ($partySectionMode !== null) {
-                if (str_starts_with($normalized, 'datum ') || str_contains($normalized, 'liefertermin')) {
+                if (str_starts_with($normalized, 'datum ') || $this->containsTrendyDeDeliveryLabel($text)) {
                     $partySectionMode = null;
                 } elseif ($this->isTrendyDeTableOrItemRow($normalized, $text)) {
                     $partySectionMode = null;
@@ -1050,8 +1176,8 @@ class OrderAiDigitalPdfRulesParser
                     : $this->normalizeProfileWhitespace((string) ($matches[2] ?? ''));
             }
 
-            if ($deliveryDeadline === '' && str_contains($normalized, 'liefertermin')) {
-                $deliveryDeadline = $this->extractVisibleDateFromLine($text);
+            if (!$headerDeadlineResolved && $deliveryDeadline === '' && $this->containsTrendyDeDeliveryLabel($text)) {
+                $deliveryDeadline = $this->extractDateAfterTrendyDeDeliveryLabel($text);
             }
 
             if ($contactName === '' && preg_match('/person\s+responsible\s+(.+)$/iu', $text, $matches) === 1) {
@@ -1067,10 +1193,8 @@ class OrderAiDigitalPdfRulesParser
             $contactName = $this->extractProfileFieldValue($searchableText, 'Person responsible');
         }
 
-        if ($deliveryDeadline === '') {
-            $deliveryDeadline = $this->extractVisibleDateFromLine(
-                $this->extractProfileFieldValue($searchableText, 'Liefertermin')
-            );
+        if (!$headerDeadlineResolved && $deliveryDeadline === '') {
+            $deliveryDeadline = $this->extractTrendyDeHeaderDeliveryDeadlineFromText($searchableText);
         }
 
         if ($documentNumber === '') {
@@ -1101,7 +1225,120 @@ class OrderAiDigitalPdfRulesParser
         return str_contains($normalizedLine, 'artikel nr')
             || str_contains($normalizedLine, 'pos.')
             || $this->isTrendyDeSummaryLine($normalizedLine)
-            || $this->parseTrendyDeCodeAmountRow($line) !== null;
+            || $this->parseTrendyDeCodeAmountRow($line) !== null
+            || $this->isTrendyDeItemStartLine($line);
+    }
+
+    private function isTrendyDeItemStartLine(string $line): bool
+    {
+        [, $detectedNextItem] = $this->splitTrendyDeLineIntoContentAndNextItem($line);
+
+        return $detectedNextItem !== null || $this->parseTrendyDeCodeAmountRow($line) !== null;
+    }
+
+    private function extractTrendyDeHeaderDeliveryDeadlineFromText(string $searchableText): string
+    {
+        $leadingHeaderDeadline = $this->resolveTrendyDeHeaderDeadlineFromLeadingLines(
+            $this->splitVisibleTextLines($searchableText)
+        );
+
+        if ((bool) ($leadingHeaderDeadline['resolved'] ?? false)) {
+            return trim((string) ($leadingHeaderDeadline['value'] ?? ''));
+        }
+
+        $pendingDeliveryLabel = false;
+
+        foreach ($this->splitVisibleTextLines($searchableText) as $line) {
+            $normalized = $this->normalizeKeywordText($line);
+
+            if ($this->isTrendyDeTableHeaderLine($normalized) || $this->isTrendyDeItemStartLine($line)) {
+                break;
+            }
+
+            if ($pendingDeliveryLabel) {
+                $deliveryDeadline = $this->extractVisibleDateFromLine($line);
+
+                if ($deliveryDeadline !== '') {
+                    return $deliveryDeadline;
+                }
+            }
+
+            $pendingDeliveryLabel = false;
+
+            if (!$this->containsTrendyDeDeliveryLabel($line)) {
+                continue;
+            }
+
+            $deliveryDeadline = $this->extractDateAfterTrendyDeDeliveryLabel($line);
+
+            if ($deliveryDeadline !== '') {
+                return $deliveryDeadline;
+            }
+
+            $pendingDeliveryLabel = true;
+        }
+
+        return '';
+    }
+
+    private function resolveTrendyDeHeaderDeadlineFromLeadingLines(array $lines): array
+    {
+        $companyIndex = null;
+        $leadingLines = [];
+
+        foreach (array_values($lines) as $line) {
+            $line = trim((string) $line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            if (str_starts_with($this->normalizeKeywordText($line), '%pdf-')) {
+                continue;
+            }
+
+            if (str_contains($this->normalizeKeywordText($line), 'trendy germany gmbh')) {
+                $companyIndex = count($leadingLines);
+                break;
+            }
+
+            $leadingLines[] = $line;
+
+            if (count($leadingLines) >= 8) {
+                break;
+            }
+        }
+
+        if ($companyIndex === null || $companyIndex <= 0) {
+            return [
+                'resolved' => false,
+                'value' => '',
+            ];
+        }
+
+        $dates = [];
+
+        foreach (array_slice($leadingLines, 0, $companyIndex) as $line) {
+            if (preg_match('/^\d{1,2}\.\s*\d{1,2}\.\s*\d{2,4}\.?\s*$/u', trim($line)) !== 1) {
+                return [
+                    'resolved' => false,
+                    'value' => '',
+                ];
+            }
+
+            if (preg_match_all('/(\d{1,2}\.\s*\d{1,2}\.\s*\d{2,4}\.?)/u', $line, $matches) < 1) {
+                continue;
+            }
+
+            foreach ($matches[1] ?? [] as $date) {
+                $dates[] = trim((string) $date);
+            }
+        }
+
+        return [
+            'resolved' => true,
+            'value' => (string) ($dates[1] ?? ''),
+        ];
     }
 
     private function extractTrendyDeReceiverFallback(array $preparedDocument, string $searchableText): string
@@ -1916,6 +2153,11 @@ class OrderAiDigitalPdfRulesParser
         return '-?(?:\d{1,3}(?:\h*[.\h]\h*\d{3})+|\d+)' . $fractionPattern;
     }
 
+    private function compactGermanAmountPattern(): string
+    {
+        return '-?(?:\d{1,3}(?:\h*[.\h]\h*\d{3})+|\d+),\h*\d{2}';
+    }
+
     private function extractLastGermanAmountAfterLabels(string $value, array $labels): float
     {
         $amount = 0.0;
@@ -1942,6 +2184,64 @@ class OrderAiDigitalPdfRulesParser
     {
         if (preg_match('/(\d{1,2}\.\s*\d{1,2}\.\s*\d{2,4}\.?)/u', $value, $matches) === 1) {
             return trim((string) ($matches[1] ?? ''));
+        }
+
+        return '';
+    }
+
+    private function containsTrendyDeDeliveryLabel(string $value): bool
+    {
+        $normalized = $this->normalizeKeywordText($value);
+
+        return str_contains($normalized, 'liefertermin')
+            || str_contains($normalized, 'lieferdatum');
+    }
+
+    private function extractDateForTrendyDeDeliveryLabel(string $value): string
+    {
+        return $this->extractDateForProfileLabel($value, 'Liefertermin')
+            ?: $this->extractDateForProfileLabel($value, 'Lieferdatum');
+    }
+
+    private function extractDateAfterTrendyDeDeliveryLabel(string $value): string
+    {
+        return $this->extractDateAfterProfileLabel($value, 'Liefertermin')
+            ?: $this->extractDateAfterProfileLabel($value, 'Lieferdatum');
+    }
+
+    private function extractDateAfterProfileLabel(string $value, string $label): string
+    {
+        $labelPattern = preg_quote($label, '/');
+
+        if (preg_match('/\b' . $labelPattern . '\b\s*:?\s*(.*)$/iu', $value, $matches) !== 1) {
+            return '';
+        }
+
+        return $this->extractVisibleDateFromLine(trim((string) ($matches[1] ?? '')));
+    }
+
+    private function extractDateForProfileLabel(string $value, string $label): string
+    {
+        $labelPattern = preg_quote($label, '/');
+
+        if (preg_match('/^(.*?)\b' . $labelPattern . '\b\s*:?\s*(.*)$/iu', $value, $matches) === 1) {
+            $beforeLabel = trim((string) ($matches[1] ?? ''));
+            $afterLabel = trim((string) ($matches[2] ?? ''));
+            $dateAfterLabel = $this->extractVisibleDateFromLine($afterLabel);
+
+            if ($dateAfterLabel !== '') {
+                return $dateAfterLabel;
+            }
+
+            if (
+                $beforeLabel !== ''
+                && !str_contains($this->normalizeKeywordText($beforeLabel), 'datum')
+                && preg_match_all('/(\d{1,2}\.\s*\d{1,2}\.\s*\d{2,4}\.?)/u', $beforeLabel, $beforeMatches) >= 1
+            ) {
+                $datesBeforeLabel = array_values(array_filter(array_map('trim', $beforeMatches[1] ?? [])));
+
+                return (string) end($datesBeforeLabel);
+            }
         }
 
         return '';
@@ -2299,6 +2599,60 @@ class OrderAiDigitalPdfRulesParser
 
             return $line;
         }, $lines)));
+    }
+
+    private function resolveTrendyDeSupplierName(string $searchableText, string $fallback = ''): string
+    {
+        $supplierNumber = $this->extractTrendyDeSupplierNumber($searchableText);
+
+        if ($supplierNumber !== '') {
+            return self::TRENDY_DE_PARTY_NAME . '-' . $supplierNumber;
+        }
+
+        $fallbackName = $this->normalizeTrendyDeSupplierName($fallback);
+
+        return $fallbackName !== '' ? $fallbackName : self::TRENDY_DE_PARTY_NAME;
+    }
+
+    private function extractTrendyDeSupplierNumber(string $searchableText): string
+    {
+        foreach ($this->splitVisibleTextLines($searchableText) as $line) {
+            if (preg_match('/\bTrendy\s+Germany\s+GmbH\s*-\s*(\d{1,4})\b/iu', $line, $matches) === 1) {
+                return $this->normalizeTrendyDeSupplierNumber((string) ($matches[1] ?? ''));
+            }
+
+            if (preg_match('/\bTrendy\s+Germany\s+(?!GmbH\b)(\d{1,4})\b/iu', $line, $matches) === 1) {
+                return $this->normalizeTrendyDeSupplierNumber((string) ($matches[1] ?? ''));
+            }
+        }
+
+        return '';
+    }
+
+    private function normalizeTrendyDeSupplierName(string $value): string
+    {
+        $value = $this->normalizeProfileWhitespace($value);
+
+        if ($value === '' || preg_match('/\bTrendy\s+Germany\b/iu', $value) !== 1) {
+            return '';
+        }
+
+        if (preg_match('/\bTrendy\s+Germany(?:\s+GmbH)?\s*(?:-\s*|\s+)(\d{1,4})\b/iu', $value, $matches) === 1) {
+            return self::TRENDY_DE_PARTY_NAME . '-' . $this->normalizeTrendyDeSupplierNumber((string) ($matches[1] ?? ''));
+        }
+
+        return self::TRENDY_DE_PARTY_NAME;
+    }
+
+    private function normalizeTrendyDeSupplierNumber(string $value): string
+    {
+        $value = preg_replace('/\D+/', '', trim($value)) ?? '';
+
+        if ($value === '') {
+            return '';
+        }
+
+        return ltrim($value, '0') !== '' ? ltrim($value, '0') : '0';
     }
 
     private function appendItemNote(string $existingNote, string $extraNote): string

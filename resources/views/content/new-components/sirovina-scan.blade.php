@@ -4397,8 +4397,8 @@
         unitWeight: unitWeight,
         totalWeight: unitWeight,
         note: rawNote,
-        calculatedPlanirano: formatQuantity(unitWeight),
-        calculationText: calculationText,
+        calculatedPlanirano: '0',
+        calculationText: calculationText + ' (informativno)',
         isLocked: true
       };
     }
@@ -4424,7 +4424,7 @@
 
       if (isLocked) {
         currentNote = computedNote;
-        currentPlanirano = computedPlanirano;
+        currentPlanirano = '0';
 
         if (!row.mj || String(row.mj).trim().toUpperCase() === 'AUTO') {
           row.mj = 'KG';
@@ -4444,7 +4444,7 @@
       }
 
       row._computedNapomena = computedNote;
-      row._computedPlanirano = computedPlanirano;
+      row._computedPlanirano = isLocked ? '0' : computedPlanirano;
       row._fineAdjustLocked = isLocked;
       row.napomena = currentNote;
       row.planirano = currentPlanirano;

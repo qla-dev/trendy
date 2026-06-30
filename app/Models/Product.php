@@ -247,7 +247,7 @@ class Product extends Model
             $normalizedComponents,
             $userId
         ) {
-            $noteColumn = self::firstExistingColumn(array_keys($structureColumns), ['acFieldSE', 'acNote']);
+            $noteColumn = self::firstExistingColumn(array_keys($structureColumns), ['acNote', 'acFieldSE']);
             $exists = DB::table($structureTable)
                 ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
                 ->exists();

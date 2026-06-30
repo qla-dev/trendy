@@ -32,7 +32,10 @@ class OrderAiResponseSchema
                     ],
                     'properties' => [
                         'customer_name' => ['type' => 'string'],
-                        'supplier_name' => ['type' => 'string'],
+                        'supplier_name' => [
+                            'type' => 'string',
+                            'description' => 'Supplier/Pantheon subject name. For Trendy Germany use Trendy Germany GmbH-{number} from the visible Trendy Germany number line, with no spaces around the hyphen, for example Trendy Germany GmbH-45.',
+                        ],
                         'requester_code' => [
                             'type' => 'string',
                             'description' => 'Visible requester/buyer code. For GROB extract the exact value after Ekg:, preserving leading zeros, for example 040.',
@@ -100,7 +103,7 @@ class OrderAiResponseSchema
                             'unit' => ['type' => 'string'],
                             'delivery_deadline' => [
                                 'type' => 'string',
-                                'description' => 'Pantheon delivery deadline (rok isporuke). For GROB use row-level Lieferdatum. For Trendy Germany use the header Liefertermin for every item. This is not a dispatch date.',
+                                'description' => 'Pantheon delivery deadline (rok isporuke). Never use Datum. For GROB use row-level Lieferdatum. For Trendy Germany use the second standalone date before Trendy Germany GmbH as the header delivery date only when it exists; if only one standalone date appears before the company name, leave the header blank and use item-level Liefertermin/Lieferdatum values. This is not a dispatch date.',
                             ],
                             'unit_price' => [
                                 'type' => 'number',
