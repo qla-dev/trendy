@@ -217,6 +217,7 @@ class Product extends Model
                 'napomena' => trim((string) ($component['napomena'] ?? '')),
                 'acUM' => strtoupper(substr(trim((string) ($component['acUM'] ?? '')), 0, 3)),
                 'acOperationType' => strtoupper(substr(trim((string) ($component['acOperationType'] ?? '')), 0, 1)),
+                'acDelayType' => strtoupper(substr(trim((string) ($component['acDelayType'] ?? '')), 0, 1)),
                 'anNo' => $lineNo !== null && $lineNo > 0 ? $lineNo : ($index + 1),
                 'anGrossQty' => $grossQty,
             ];
@@ -248,15 +249,35 @@ class Product extends Model
             $userId
         ) {
             $noteColumn = self::firstExistingColumn(array_keys($structureColumns), ['acNote', 'acFieldSE']);
-            $exists = DB::table($structureTable)
+            $existingRows = DB::table($structureTable)
+                ->select(array_values(array_intersect(['anNo', 'acIdentChild'], array_keys($structureColumns))))
                 ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
-                ->exists();
+                ->get()
+                ->map(static function ($row) {
+                    return (array) $row;
+                })
+                ->all();
+            $existingExactKeys = [];
+            $existingComponentKeys = [];
+            $usedLineNos = [];
 
-            if ($exists) {
-                return [
-                    'created' => false,
-                    'count' => 0,
-                ];
+            foreach ($existingRows as $existingRow) {
+                $existingLineNo = self::toIntOrNull($existingRow['anNo'] ?? null);
+                $existingComponent = strtolower(trim((string) ($existingRow['acIdentChild'] ?? '')));
+
+                if ($existingLineNo !== null && $existingLineNo > 0) {
+                    $usedLineNos[$existingLineNo] = true;
+                }
+
+                if ($existingComponent === '') {
+                    continue;
+                }
+
+                if ($existingLineNo !== null && $existingLineNo > 0) {
+                    $existingExactKeys[self::productStructureSelectionKey($existingLineNo, $existingComponent)] = true;
+                }
+
+                $existingComponentKeys[$existingComponent] = true;
             }
 
             $now = now();
@@ -264,16 +285,49 @@ class Product extends Model
                 ? ((int) (DB::table($structureTable)->max('anQId') ?? 0)) + 1
                 : null;
             $rowsToInsert = [];
+            $nextLineNo = self::nextAvailableProductStructureLineNo($usedLineNos);
 
             foreach ($normalizedComponents as $index => $component) {
+                $componentIdent = strtolower(trim((string) ($component['acIdentChild'] ?? '')));
+                $preferredLineNo = (int) ($component['anNo'] ?? ($index + 1));
+
+                if ($componentIdent === '') {
+                    continue;
+                }
+
+                if (
+                    $preferredLineNo > 0
+                    && isset($existingExactKeys[self::productStructureSelectionKey($preferredLineNo, $componentIdent)])
+                ) {
+                    continue;
+                }
+
+                if (isset($existingComponentKeys[$componentIdent])) {
+                    continue;
+                }
+
+                $insertLineNo = $preferredLineNo > 0 && !isset($usedLineNos[$preferredLineNo])
+                    ? $preferredLineNo
+                    : $nextLineNo;
+
+                while (isset($usedLineNos[$insertLineNo])) {
+                    $insertLineNo++;
+                }
+
+                $usedLineNos[$insertLineNo] = true;
+                $existingExactKeys[self::productStructureSelectionKey($insertLineNo, $componentIdent)] = true;
+                $existingComponentKeys[$componentIdent] = true;
+                $nextLineNo = self::nextAvailableProductStructureLineNo($usedLineNos, $insertLineNo + 1);
+
                 $preferredValues = [
                     'acIdent' => $productCode,
                     'acIdentChild' => (string) ($component['acIdentChild'] ?? ''),
                     'acDescr' => (string) ($component['acDescr'] ?? ''),
                     'acUM' => (string) ($component['acUM'] ?? ''),
                     'acOperationType' => (string) ($component['acOperationType'] ?? ''),
-                    'anNo' => (int) ($component['anNo'] ?? ($index + 1)),
-                    'anQId' => $nextQId !== null ? ($nextQId + $index) : null,
+                    'acDelayType' => (string) ($component['acDelayType'] ?? ''),
+                    'anNo' => $insertLineNo,
+                    'anQId' => $nextQId,
                     'anGrossQty' => (float) ($component['anGrossQty'] ?? 0),
                     'anQty' => (float) ($component['anGrossQty'] ?? 0),
                     'anNormQty' => (float) ($component['anGrossQty'] ?? 0),
@@ -317,6 +371,10 @@ class Product extends Model
                 }
 
                 $rowsToInsert[] = $insertPayload;
+
+                if ($nextQId !== null) {
+                    $nextQId++;
+                }
             }
 
             if (!empty($rowsToInsert)) {
@@ -328,6 +386,22 @@ class Product extends Model
                 'count' => count($rowsToInsert),
             ];
         });
+    }
+
+    private static function productStructureSelectionKey(int $lineNo, string $componentCode): string
+    {
+        return $lineNo . '|' . strtolower(trim($componentCode));
+    }
+
+    private static function nextAvailableProductStructureLineNo(array $usedLineNos, int $startAt = 1): int
+    {
+        $lineNo = max(1, $startAt);
+
+        while (isset($usedLineNos[$lineNo])) {
+            $lineNo++;
+        }
+
+        return $lineNo;
     }
 
     public static function deleteCatalogProductStructure(string $productCode): array

@@ -155,6 +155,100 @@ class WorkOrderPlannedConsumptionTest extends TestCase
         $this->assertSame([7], $result);
     }
 
+    public function test_resolve_work_order_item_insert_no_prefers_available_bom_position(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('resolveWorkOrderItemInsertNo');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, 10, 1, []);
+
+        $this->assertSame(10, $result);
+    }
+
+    public function test_resolve_work_order_item_insert_no_falls_back_when_bom_position_is_used(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('resolveWorkOrderItemInsertNo');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, 10, 1, [
+            1 => true,
+            10 => true,
+        ]);
+
+        $this->assertSame(2, $result);
+    }
+
+    public function test_pantheon_basic_sastavnica_copy_parameters_enable_full_pantheon_copy(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('pantheonBasicSastavnicaCopyParameters');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, '2660000003564', '3276631', [
+            ['anVariant' => 0],
+        ], [
+            'anVariant' => 0,
+        ], 1);
+
+        $this->assertSame([
+            '3276631',
+            0,
+            '2660000003564',
+            0,
+            1.0,
+            'T',
+            'T',
+            'T',
+            'T',
+            'P',
+            1,
+            'T',
+            'F',
+        ], $result);
+    }
+
+    public function test_resolve_work_order_item_quantity_payload_for_manual_save_leaves_plan_quantity_to_pantheon(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('resolveWorkOrderItemQuantityPayloadForSave');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, 'manual', 50.0, 0.0);
+
+        $this->assertSame([
+            'anQty' => 0.0,
+            'anQty1' => 50.0,
+        ], $result);
+        $this->assertArrayNotHasKey('anPlanQty', $result);
+    }
+
+    public function test_resolve_work_order_item_quantity_payload_for_barcode_save_keeps_actual_quantity(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('resolveWorkOrderItemQuantityPayloadForSave');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, 'barcode', 50.0, 300.0);
+
+        $this->assertSame([
+            'anPlanQty' => 50.0,
+            'anQty' => 300.0,
+            'anQty1' => 300.0,
+        ], $result);
+    }
+
+    public function test_resolve_operation_type_for_save_maps_operation_catalog_marker_to_pantheon_task_type(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('resolveOperationTypeForSave');
+        $method->setAccessible(true);
+
+        $this->assertSame('D', $method->invoke($controller, 'O', 'OPR'));
+        $this->assertSame('D', $method->invoke($controller, '', 'OPR'));
+    }
+
     public function test_build_removed_planned_consumption_stock_adjustment_returns_reverse_delta_for_materials(): void
     {
         $controller = new WorkOrderController();
