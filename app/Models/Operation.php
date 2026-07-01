@@ -85,7 +85,7 @@ class Operation extends Model
                 'acDescr' => $operationName !== '' ? $operationName : ($operationCode !== '' ? $operationCode : '-'),
                 'acUM' => strtoupper(substr(trim((string) ($row['operation_um'] ?? '')), 0, 3)),
                 'anGrossQty' => $parsedQty,
-                'acOperationType' => 'O',
+                'acOperationType' => 'D',
             ];
 
             if (count($operations) >= $resolvedLimit) {

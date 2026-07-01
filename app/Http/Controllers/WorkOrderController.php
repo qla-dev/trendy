@@ -664,6 +664,18 @@ class WorkOrderController extends Controller
         }
 
         try {
+            $workOrderRow = $this->findWorkOrderRow($workOrderId);
+
+            if ($workOrderRow === null) {
+                return;
+            }
+
+            $workOrderKey = trim((string) $this->valueTrimmed($workOrderRow, ['acKey'], ''));
+
+            if ($workOrderKey === '') {
+                return;
+            }
+
             $bomRows = $this->fetchBomComponentsByProduct($productCode, $this->bomLimit());
 
             if (empty($bomRows)) {
@@ -676,6 +688,10 @@ class WorkOrderController extends Controller
 
             if ($resolvedQuantityFactor > 0) {
                 $this->syncWorkOrderHeaderQuantityFromSastavnica($workOrderId, $resolvedQuantityFactor);
+            }
+
+            if ($this->copyPantheonBasicSastavnicaToWorkOrder($workOrderKey, $productCode, $bomRows, $workOrderRow)) {
+                return;
             }
 
             $components = array_values(array_filter(array_map(function ($bomRow) {
@@ -718,6 +734,137 @@ class WorkOrderController extends Controller
                 'message' => $exception->getMessage(),
             ]);
         }
+    }
+
+    private function copyPantheonBasicSastavnicaToWorkOrder(
+        string $workOrderKey,
+        string $productCode,
+        array $bomRows,
+        array $workOrderRow
+    ): bool {
+        $workOrderKey = trim($workOrderKey);
+        $productCode = trim($productCode);
+
+        if ($workOrderKey === '' || $productCode === '') {
+            return false;
+        }
+
+        if (!$this->storedProcedureExists('pHF_PrStCopyBasic2WO')) {
+            Log::warning('Pantheon BOM copy procedure is not available; using fallback sastavnica insert.', [
+                'work_order_key' => $workOrderKey,
+                'product_code' => $productCode,
+            ]);
+
+            return false;
+        }
+
+        $beforeCount = (int) $this->newItemTableQuery()
+            ->where('acKey', $workOrderKey)
+            ->count();
+        $params = $this->pantheonBasicSastavnicaCopyParameters(
+            $workOrderKey,
+            $productCode,
+            $bomRows,
+            $workOrderRow,
+            (int) (auth()->id() ?? 0)
+        );
+
+        try {
+            DB::statement(
+                'EXEC [dbo].[pHF_PrStCopyBasic2WO] ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?',
+                $params
+            );
+        } catch (Throwable $exception) {
+            Log::warning('Pantheon BOM copy procedure failed; using fallback sastavnica insert.', [
+                'work_order_key' => $workOrderKey,
+                'product_code' => $productCode,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return false;
+        }
+
+        $afterCount = (int) $this->newItemTableQuery()
+            ->where('acKey', $workOrderKey)
+            ->count();
+
+        if ($afterCount <= 0) {
+            Log::warning('Pantheon BOM copy procedure completed without RN item rows; using fallback sastavnica insert.', [
+                'work_order_key' => $workOrderKey,
+                'product_code' => $productCode,
+                'before_count' => $beforeCount,
+                'after_count' => $afterCount,
+            ]);
+
+            return false;
+        }
+
+        Log::info('Pantheon BOM copy procedure created RN sastavnica.', [
+            'work_order_key' => $workOrderKey,
+            'product_code' => $productCode,
+            'before_count' => $beforeCount,
+            'after_count' => $afterCount,
+        ]);
+
+        return true;
+    }
+
+    private function pantheonBasicSastavnicaCopyParameters(
+        string $workOrderKey,
+        string $productCode,
+        array $bomRows,
+        array $workOrderRow,
+        int $userId
+    ): array {
+        $sourceVariant = 0;
+
+        foreach ($bomRows as $bomRow) {
+            if (!is_array($bomRow)) {
+                continue;
+            }
+
+            $resolvedVariant = $this->toFloatOrNull($bomRow['anVariant'] ?? null);
+            if ($resolvedVariant !== null && $resolvedVariant >= 0 && $resolvedVariant <= 255) {
+                $sourceVariant = (int) $resolvedVariant;
+                break;
+            }
+        }
+
+        $selectedVariant = $this->toFloatOrNull($this->valueTrimmed($workOrderRow, ['anVariant'], $sourceVariant));
+        $selectedVariant = $selectedVariant !== null && $selectedVariant >= 0 && $selectedVariant <= 255
+            ? (int) $selectedVariant
+            : $sourceVariant;
+
+        return [
+            trim($productCode),
+            $sourceVariant,
+            trim($workOrderKey),
+            $selectedVariant,
+            1.0,
+            'T',
+            'T',
+            'T',
+            'T',
+            'P',
+            max(0, $userId),
+            'T',
+            'F',
+        ];
+    }
+
+    private function storedProcedureExists(string $procedureName): bool
+    {
+        $procedureName = trim($procedureName);
+
+        if ($procedureName === '') {
+            return false;
+        }
+
+        return DB::table('INFORMATION_SCHEMA.ROUTINES')
+            ->where('ROUTINE_SCHEMA', $this->tableSchema())
+            ->where('ROUTINE_NAME', $procedureName)
+            ->where('ROUTINE_TYPE', 'PROCEDURE')
+            ->exists();
     }
 
     private function sumSastavnicaHeaderQuantity(array $bomRows): ?float
@@ -2047,7 +2194,7 @@ class WorkOrderController extends Controller
                 }
             }
 
-            if ($saveMode === 'manual' && empty($bomRows)) {
+            if ($saveMode === 'manual') {
                 $structureEnsureResult = Product::ensureCatalogProductStructure(
                     $productId,
                     $normalizedComponents,
@@ -2063,6 +2210,8 @@ class WorkOrderController extends Controller
             }
 
             $bomRowsByKey = [];
+            $bomRowsByComponent = [];
+            $bomComponentCounts = [];
             foreach ($bomRows as $row) {
                 $lineNo = (int) ($this->toFloatOrNull($row['anNo'] ?? null) ?? 0);
                 $componentId = trim((string) ($row['acIdentChild'] ?? ''));
@@ -2071,9 +2220,21 @@ class WorkOrderController extends Controller
                     continue;
                 }
 
+                $componentKey = strtolower($componentId);
                 $key = $this->bomSelectionKey($lineNo, $componentId);
                 if (!array_key_exists($key, $bomRowsByKey)) {
                     $bomRowsByKey[$key] = $row;
+                }
+
+                $bomComponentCounts[$componentKey] = ($bomComponentCounts[$componentKey] ?? 0) + 1;
+                if (!array_key_exists($componentKey, $bomRowsByComponent)) {
+                    $bomRowsByComponent[$componentKey] = $row;
+                }
+            }
+
+            foreach ($bomComponentCounts as $componentKey => $count) {
+                if ($count !== 1) {
+                    unset($bomRowsByComponent[$componentKey]);
                 }
             }
 
@@ -2083,6 +2244,7 @@ class WorkOrderController extends Controller
 
             foreach ($normalizedComponents as $component) {
                 $key = $this->bomSelectionKey((int) ($component['anNo'] ?? 0), (string) ($component['acIdentChild'] ?? ''));
+                $componentKey = strtolower(trim((string) ($component['acIdentChild'] ?? '')));
 
                 if (array_key_exists($key, $bomRowsByKey)) {
                     $bomMatchedCount++;
@@ -2090,6 +2252,16 @@ class WorkOrderController extends Controller
                         'source' => 'bom',
                         'requested' => $component,
                         'bom' => $bomRowsByKey[$key],
+                    ];
+                    continue;
+                }
+
+                if ($componentKey !== '' && array_key_exists($componentKey, $bomRowsByComponent)) {
+                    $bomMatchedCount++;
+                    $resolvedRows[] = [
+                        'source' => 'bom',
+                        'requested' => $component,
+                        'bom' => $bomRowsByComponent[$componentKey],
                     ];
                     continue;
                 }
@@ -2174,9 +2346,27 @@ class WorkOrderController extends Controller
             ) {
                 $nextNo = null;
                 $nextQId = null;
+                $usedItemNos = [];
 
                 if ($manualNoInsert) {
+                    $existingItemNos = $this->newItemTableQuery()
+                        ->where('acKey', $workOrderKey)
+                        ->pluck('anNo')
+                        ->all();
+
+                    foreach ($existingItemNos as $existingItemNo) {
+                        $resolvedItemNo = $this->positiveIntOrNull($existingItemNo);
+
+                        if ($resolvedItemNo !== null) {
+                            $usedItemNos[$resolvedItemNo] = true;
+                        }
+                    }
+
                     $nextNo = ((int) ($this->newItemTableQuery()->where('acKey', $workOrderKey)->max('anNo') ?? 0)) + 1;
+
+                    while (isset($usedItemNos[$nextNo])) {
+                        $nextNo++;
+                    }
                 }
 
                 if ($manualQIdInsert) {
@@ -2195,7 +2385,9 @@ class WorkOrderController extends Controller
                     $bomRow = is_array($resolvedRow['bom'] ?? null) ? $resolvedRow['bom'] : [];
 
                     $componentId = trim((string) ($requestedRow['acIdentChild'] ?? ($bomRow['acIdentChild'] ?? '')));
-                    $lineNo = (int) (($requestedRow['anNo'] ?? $bomRow['anNo'] ?? 0));
+                    $lineNo = (int) ($source === 'bom'
+                        ? ($bomRow['anNo'] ?? $requestedRow['anNo'] ?? 0)
+                        : ($requestedRow['anNo'] ?? $bomRow['anNo'] ?? 0));
                     $descriptionFromRequested = trim((string) ($requestedRow['acDescr'] ?? ''));
                     $descriptionFromBom = trim((string) ($bomRow['acDescr'] ?? ''));
                     $componentNote = trim((string) ($requestedRow['napomena'] ?? ''));
@@ -2350,21 +2542,29 @@ class WorkOrderController extends Controller
                     $statementMarker = $saveMode === 'barcode'
                         ? 'PLANNED_BARCODE'
                         : ($source === 'bom' ? 'PLANNED_BOM_PENDING' : 'PLANNED_RAW_PENDING');
+                    $quantityPayload = $this->resolveWorkOrderItemQuantityPayloadForSave(
+                        $saveMode,
+                        $displayQty,
+                        $actualQty
+                    );
                     $insertPayload = [
                         'acKey' => $workOrderKey,
                         'anVariant' => $variant,
                         'acIdent' => substr($componentId, 0, 16),
                         'acDescr' => $description === '' ? null : substr($description, 0, 80),
                         'acOperationType' => $operationType === '' ? null : $operationType,
-                        'anPlanQty' => $displayQty,
-                        'anQty' => $actualQty,
-                        'anQty1' => $actualQty,
+                        'anQty' => $quantityPayload['anQty'],
+                        'anQty1' => $quantityPayload['anQty1'],
                         'anQtyBase' => 0,
                         'adTimeIns' => $now,
                         'adTimeChg' => $now,
                         'anUserIns' => $userId,
                         'anUserChg' => $userId,
                     ];
+
+                    if (array_key_exists('anPlanQty', $quantityPayload)) {
+                        $insertPayload['anPlanQty'] = $quantityPayload['anPlanQty'];
+                    }
 
                     if ($itemNoteColumn !== null) {
                         $insertPayload[$itemNoteColumn] = $this->resolveWorkOrderItemNoteForSave(
@@ -2389,8 +2589,24 @@ class WorkOrderController extends Controller
                         $insertPayload['anIssuePerc'] = $issuePercent;
                     }
 
+                    $insertedNo = null;
+
                     if ($manualNoInsert && $nextNo !== null) {
-                        $insertPayload['anNo'] = $nextNo;
+                        $preferredNo = $lineNo > 0 ? $lineNo : null;
+                        $insertedNo = $this->resolveWorkOrderItemInsertNo($preferredNo, $nextNo, $usedItemNos);
+
+                        if ($insertedNo !== null) {
+                            $insertPayload['anNo'] = $insertedNo;
+                            $usedItemNos[$insertedNo] = true;
+
+                            if ($nextNo <= $insertedNo) {
+                                $nextNo = $insertedNo + 1;
+
+                                while (isset($usedItemNos[$nextNo])) {
+                                    $nextNo++;
+                                }
+                            }
+                        }
                     }
 
                     if ($manualQIdInsert && $nextQId !== null) {
@@ -2400,7 +2616,7 @@ class WorkOrderController extends Controller
                     $this->newItemTableQuery()->insert($insertPayload);
                     $insertedIdentity = $this->resolveInsertedWorkOrderItemIdentity(
                         $workOrderKey,
-                        $nextNo,
+                        $insertedNo,
                         $componentId
                     );
                     $insertedItemQId = $insertedIdentity['anQId'] ?? $nextQId;
@@ -2418,7 +2634,7 @@ class WorkOrderController extends Controller
                     $saved[] = [
                         'action' => 'inserted',
                         'source' => $source,
-                        'anNo' => $insertedIdentity['anNo'] ?? $nextNo,
+                        'anNo' => $insertedIdentity['anNo'] ?? $insertedNo,
                         'anQId' => $insertedItemQId,
                         'acIdent' => $componentId,
                         'acDescr' => $description,
@@ -2430,14 +2646,10 @@ class WorkOrderController extends Controller
                         'unit_input_qty' => $saveMode === 'barcode' ? $quantityFactor : null,
                         'work_order_qty' => $saveMode === 'barcode' ? $barcodeWorkOrderQuantity : null,
                         'stock_consumed_qty' => $saveMode === 'barcode' ? $plannedQty : 0.0,
-                        'anPlanQty' => $displayQty,
-                        'anQty' => $actualQty,
-                        'anQty1' => $actualQty,
+                        'anPlanQty' => $quantityPayload['anPlanQty'] ?? null,
+                        'anQty' => $quantityPayload['anQty'],
+                        'anQty1' => $quantityPayload['anQty1'],
                     ];
-
-                    if ($manualNoInsert && $nextNo !== null) {
-                        $nextNo++;
-                    }
 
                     if ($manualQIdInsert && $nextQId !== null) {
                         $nextQId++;
@@ -3561,6 +3773,39 @@ class WorkOrderController extends Controller
         sort($duplicates);
 
         return $duplicates;
+    }
+
+    private function resolveWorkOrderItemInsertNo(?int $preferredNo, ?int $nextNo, array $usedNos): ?int
+    {
+        if ($preferredNo !== null && $preferredNo > 0 && !isset($usedNos[$preferredNo])) {
+            return $preferredNo;
+        }
+
+        if ($nextNo === null || $nextNo < 1) {
+            return null;
+        }
+
+        while (isset($usedNos[$nextNo])) {
+            $nextNo++;
+        }
+
+        return $nextNo;
+    }
+
+    private function resolveWorkOrderItemQuantityPayloadForSave(string $saveMode, float $displayQty, float $actualQty): array
+    {
+        if ($saveMode === 'barcode') {
+            return [
+                'anPlanQty' => $displayQty,
+                'anQty' => $actualQty,
+                'anQty1' => $actualQty,
+            ];
+        }
+
+        return [
+            'anQty' => 0.0,
+            'anQty1' => $displayQty,
+        ];
     }
 
     private function bomLimit(): int
@@ -8757,14 +9002,15 @@ class WorkOrderController extends Controller
 
     private function resolveOperationTypeForSave(string $operationType, string $catalogSet): string
     {
+        $normalizedSet = strtoupper(trim($catalogSet));
         $normalizedType = strtoupper(substr(trim($operationType), 0, 1));
-        if ($normalizedType !== '') {
-            return $normalizedType;
+
+        if ($normalizedSet === self::OPERATIONS_SET) {
+            return $normalizedType === '' || $normalizedType === 'O' ? 'D' : $normalizedType;
         }
 
-        $normalizedSet = strtoupper(trim($catalogSet));
-        if ($normalizedSet === self::OPERATIONS_SET) {
-            return 'O';
+        if ($normalizedType !== '') {
+            return $normalizedType;
         }
 
         if (in_array($normalizedSet, self::MATERIALS_SETS, true)) {
