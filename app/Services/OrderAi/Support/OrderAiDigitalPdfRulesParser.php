@@ -143,7 +143,20 @@ class OrderAiDigitalPdfRulesParser
     {
         $searchableText = trim((string) ($preparedDocument['searchable_text'] ?? ''));
         $lines = $this->flattenPreparedLines($preparedDocument);
-        $items = $this->parseTrendyDeItems($lines);
+        $tableRowLines = $this->flattenPreparedTableRowLines($preparedDocument);
+        $searchableLines = $this->splitVisibleTextLines($searchableText);
+        $noteSourceLines = array_merge(
+            $lines,
+            $tableRowLines,
+            $searchableLines
+        );
+        $this->logTrendyDeExtractedTextTableSnapshot($preparedDocument, $lines, $tableRowLines);
+        $expectedTotal = $this->extractTrendyDeTotal($preparedDocument, $searchableText);
+        [$items, $itemSource, $itemSourceCandidates] = $this->parseTrendyDeItemsFromBestSource([
+            'prepared_lines' => $lines,
+            'table_rows' => $tableRowLines,
+            'searchable_text' => $searchableLines,
+        ], $noteSourceLines, $expectedTotal);
 
         if ($items === []) {
             Log::warning('Order AI Trendy DE digital PDF rules parser found no items.', [
@@ -186,7 +199,7 @@ class OrderAiDigitalPdfRulesParser
         $lineTotalSum = round(array_reduce($items, function (float $carry, array $item): float {
             return $carry + max(0, (float) ($item['line_total'] ?? 0));
         }, 0.0), 4);
-        $netTotal = $this->extractTrendyDeTotal($preparedDocument, $searchableText);
+        $netTotal = $expectedTotal;
 
         if ($netTotal <= 0) {
             $netTotal = $this->extractLastGermanAmountAfterLabels($searchableText, ['Nettowert', 'Gesamtbetrag', 'Betrag']);
@@ -234,6 +247,8 @@ class OrderAiDigitalPdfRulesParser
             'profile' => 'trendy_de',
             'matched_item_count' => count($items),
             'line_total_sum' => $lineTotalSum,
+            'item_source' => $itemSource,
+            'item_source_candidates' => $itemSourceCandidates,
         ]);
     }
 
@@ -278,9 +293,10 @@ class OrderAiDigitalPdfRulesParser
         ];
     }
 
-    private function parseTrendyDeItems(array $lines): array
+    private function parseTrendyDeItems(array $lines, array $noteSourceLines = []): array
     {
         $lines = $this->expandTrendyDeEmbeddedItemLines($lines);
+        $positionNoteMap = $this->extractTrendyDePositionNoteMap(array_merge($lines, $noteSourceLines));
         $items = [];
         $openItem = null;
         $queuedItem = null;
@@ -303,6 +319,28 @@ class OrderAiDigitalPdfRulesParser
                 || $this->isTrendyDeNoiseLine($keywordLine)
                 || $this->isTrendyDeTableHeaderLine($keywordLine)
             ) {
+                continue;
+            }
+
+            $leadingPositionNote = $this->parseTrendyDeLeadingPositionNoteLine($line);
+
+            if ($leadingPositionNote !== null) {
+                if (is_array($openItem)) {
+                    $noteLineNumber = (int) ($leadingPositionNote['line_number'] ?? 0);
+                    $openLineNumber = (int) ($openItem['line_number'] ?? 0);
+
+                    if ($openLineNumber <= 0 || $openLineNumber === $noteLineNumber) {
+                        if ($openLineNumber <= 0 && $noteLineNumber > 0) {
+                            $openItem['line_number'] = $noteLineNumber;
+                        }
+
+                        $this->appendTrendyDeParsedItemNote(
+                            $openItem,
+                            (string) ($leadingPositionNote['note'] ?? '')
+                        );
+                    }
+                }
+
                 continue;
             }
 
@@ -382,7 +420,98 @@ class OrderAiDigitalPdfRulesParser
                 && trim((string) ($item['product_code'] ?? '')) !== '';
         }));
 
-        return $this->normalizeTrendyDeParsedLineNumbers($items);
+        $items = $this->normalizeTrendyDeParsedLineNumbers($items);
+
+        return $this->applyTrendyDePositionNoteMap($items, $positionNoteMap);
+    }
+
+    private function parseTrendyDeItemsFromBestSource(
+        array $sourceLinesByName,
+        array $noteSourceLines,
+        float $expectedTotal
+    ): array {
+        $bestItems = [];
+        $bestSource = '';
+        $bestScore = [
+            'item_count' => -1,
+            'total_delta' => PHP_FLOAT_MAX,
+            'line_total_sum' => 0.0,
+        ];
+        $candidates = [];
+        $seenFingerprints = [];
+
+        foreach ($sourceLinesByName as $sourceName => $sourceLines) {
+            $sourceLines = array_values(array_filter(array_map(function ($line) {
+                return trim((string) (preg_replace('/\s+/u', ' ', (string) $line) ?? $line));
+            }, is_array($sourceLines) ? $sourceLines : [])));
+
+            if ($sourceLines === []) {
+                continue;
+            }
+
+            $fingerprint = sha1(implode("\n", $sourceLines));
+
+            if (isset($seenFingerprints[$fingerprint])) {
+                continue;
+            }
+
+            $seenFingerprints[$fingerprint] = true;
+            $items = $this->parseTrendyDeItems($sourceLines, $noteSourceLines);
+            $lineTotalSum = round(array_reduce($items, function (float $carry, array $item): float {
+                return $carry + max(0, (float) ($item['line_total'] ?? 0));
+            }, 0.0), 4);
+            $totalDelta = $expectedTotal > 0
+                ? abs($lineTotalSum - $expectedTotal)
+                : PHP_FLOAT_MAX;
+            $score = [
+                'item_count' => count($items),
+                'total_delta' => $totalDelta,
+                'line_total_sum' => $lineTotalSum,
+            ];
+
+            $candidates[] = [
+                'source' => (string) $sourceName,
+                'line_count' => count($sourceLines),
+                'item_count' => $score['item_count'],
+                'line_total_sum' => $lineTotalSum,
+                'total_delta' => is_finite($totalDelta) ? round($totalDelta, 4) : null,
+            ];
+
+            if ($this->isBetterTrendyDeItemSourceScore($score, $bestScore)) {
+                $bestItems = $items;
+                $bestSource = (string) $sourceName;
+                $bestScore = $score;
+            }
+        }
+
+        Log::info('Order AI Trendy DE item source selected.', [
+            'selected_source' => $bestSource,
+            'selected_item_count' => count($bestItems),
+            'selected_line_total_sum' => round((float) ($bestScore['line_total_sum'] ?? 0), 4),
+            'expected_total' => $expectedTotal > 0 ? round($expectedTotal, 4) : null,
+            'candidates' => $candidates,
+        ]);
+
+        return [$bestItems, $bestSource, $candidates];
+    }
+
+    private function isBetterTrendyDeItemSourceScore(array $candidateScore, array $bestScore): bool
+    {
+        $candidateItemCount = (int) ($candidateScore['item_count'] ?? 0);
+        $bestItemCount = (int) ($bestScore['item_count'] ?? 0);
+
+        if ($candidateItemCount !== $bestItemCount) {
+            return $candidateItemCount > $bestItemCount;
+        }
+
+        $candidateDelta = (float) ($candidateScore['total_delta'] ?? PHP_FLOAT_MAX);
+        $bestDelta = (float) ($bestScore['total_delta'] ?? PHP_FLOAT_MAX);
+
+        if (abs($candidateDelta - $bestDelta) > 0.0001) {
+            return $candidateDelta < $bestDelta;
+        }
+
+        return (float) ($candidateScore['line_total_sum'] ?? 0) > (float) ($bestScore['line_total_sum'] ?? 0);
     }
 
     private function buildTrendyDeParserDiagnostics(array $lines): array
@@ -595,6 +724,146 @@ class OrderAiDigitalPdfRulesParser
         }, $items, array_keys($items)));
     }
 
+    private function extractTrendyDePositionNoteMap(array $lines): array
+    {
+        $notesByLineNumber = [];
+        $currentLineNumber = 0;
+
+        foreach (array_values($lines) as $sourceIndex => $line) {
+            $line = trim((string) (preg_replace('/\s+/u', ' ', (string) $line) ?? $line));
+
+            if ($line === '') {
+                continue;
+            }
+
+            $leadingPositionNote = $this->parseTrendyDeLeadingPositionNoteLine($line);
+
+            if ($leadingPositionNote !== null) {
+                $lineNumber = (int) ($leadingPositionNote['line_number'] ?? 0);
+                $note = trim((string) ($leadingPositionNote['note'] ?? ''));
+
+                if ($lineNumber > 0 && $note !== '') {
+                    $notesByLineNumber[$lineNumber] = $this->appendItemNote(
+                        (string) ($notesByLineNumber[$lineNumber] ?? ''),
+                        $note
+                    );
+                    $currentLineNumber = $lineNumber;
+                }
+
+                continue;
+            }
+
+            $codeAmountItem = $this->parseTrendyDeCodeAmountRow($line);
+
+            if ($codeAmountItem !== null && (int) ($codeAmountItem['line_number'] ?? 0) > 0) {
+                $currentLineNumber = (int) ($codeAmountItem['line_number'] ?? 0);
+                continue;
+            }
+
+            [, $detectedNextItem] = $this->splitTrendyDeLineIntoContentAndNextItem($line);
+
+            if ($detectedNextItem !== null && (int) ($detectedNextItem['line_number'] ?? 0) > 0) {
+                $currentLineNumber = (int) ($detectedNextItem['line_number'] ?? 0);
+                continue;
+            }
+
+            if ($currentLineNumber > 0 && $this->isTrendyDeStandaloneNoteText($line)) {
+                $notesByLineNumber[$currentLineNumber] = $this->appendItemNote(
+                    (string) ($notesByLineNumber[$currentLineNumber] ?? ''),
+                    $line
+                );
+            }
+        }
+
+        return $notesByLineNumber;
+    }
+
+    private function applyTrendyDePositionNoteMap(array $items, array $positionNoteMap): array
+    {
+        if ($positionNoteMap === []) {
+            return $items;
+        }
+
+        return array_values(array_map(function (array $item) use ($positionNoteMap): array {
+            $lineNumber = (int) ($item['line_number'] ?? 0);
+
+            if ($lineNumber <= 0 || !array_key_exists($lineNumber, $positionNoteMap)) {
+                return $item;
+            }
+
+            $note = trim((string) ($positionNoteMap[$lineNumber] ?? ''));
+
+            if ($note === '') {
+                return $item;
+            }
+
+            $existingNote = (string) ($item['note'] ?? '');
+            $item['note'] = $this->appendTrendyDeNoteSegments($existingNote, $note);
+
+            return $item;
+        }, $items));
+    }
+
+    private function appendTrendyDeNoteSegments(string $existingNote, string $extraNote): string
+    {
+        $notes = [];
+
+        foreach ([$existingNote, $extraNote] as $noteGroup) {
+            foreach (preg_split('/\s*\|\s*/u', trim($noteGroup)) ?: [] as $note) {
+                $note = trim((string) $note);
+
+                if ($note === '') {
+                    continue;
+                }
+
+                $notes[$note] = $note;
+            }
+        }
+
+        return implode(' | ', array_values($notes));
+    }
+
+    private function parseTrendyDeLeadingPositionNoteLine(string $line): ?array
+    {
+        $line = trim((string) (preg_replace('/\s+/u', ' ', $line) ?? $line));
+
+        if ($line === '') {
+            return null;
+        }
+
+        if (preg_match('/^(\d{1,3})\s+(.+)$/u', $line, $matches) !== 1) {
+            return null;
+        }
+
+        $lineNumber = (int) ($matches[1] ?? 0);
+        $note = trim((string) ($matches[2] ?? ''));
+
+        if ($lineNumber <= 0 || !$this->isTrendyDeStandaloneNoteText($note)) {
+            return null;
+        }
+
+        return [
+            'line_number' => $lineNumber,
+            'note' => $note,
+        ];
+    }
+
+    private function appendTrendyDeParsedItemNote(array &$item, string $note): void
+    {
+        $note = trim((string) (preg_replace('/\s+/u', ' ', $note) ?? $note));
+
+        if ($note === '') {
+            return;
+        }
+
+        if (!empty($item['description_lines'])) {
+            $item['description_lines'][] = $note;
+            return;
+        }
+
+        $item['note_lines'][] = $note;
+    }
+
     private function splitTrendyDeLineIntoContentAndNextItem(string $line): array
     {
         $normalized = trim($line);
@@ -726,6 +995,7 @@ class OrderAiDigitalPdfRulesParser
             'line_number' => $lineNumber,
             'product_code' => trim($productCode),
             'description_lines' => [],
+            'note_lines' => [],
             'quantity' => 0.0,
             'unit' => '',
             'unit_price' => 0.0,
@@ -896,8 +1166,10 @@ class OrderAiDigitalPdfRulesParser
             $item['description_lines'][] = $productText;
         }
 
-        if ($noteText !== '') {
+        if ($noteText !== '' && ($productText !== '' || !empty($item['description_lines']))) {
             $item['description_lines'][] = $noteText;
+        } elseif ($noteText !== '') {
+            $item['note_lines'][] = $noteText;
         }
     }
 
@@ -907,6 +1179,10 @@ class OrderAiDigitalPdfRulesParser
 
         if ($descriptionText === '') {
             return ['', ''];
+        }
+
+        if ($this->isTrendyDeStandaloneNoteText($descriptionText)) {
+            return ['', $descriptionText];
         }
 
         if (
@@ -929,12 +1205,27 @@ class OrderAiDigitalPdfRulesParser
 
     private function isTrendyDeProcessOrFinishText(string $value): bool
     {
-        return preg_match('/\b(?:' . $this->trendyDeProcessOrFinishPattern() . ')\b/iu', $value) === 1;
+        return $this->isTrendyDeStandaloneNoteText($value)
+            || preg_match('/\b(?:' . $this->trendyDeProcessOrFinishPattern() . ')\b/iu', $value) === 1;
     }
 
     private function trendyDeProcessOrFinishPattern(): string
     {
-        return 'Graviranje|Br[üu]niert|Brueniert|chemisch\s+vernickelt|vernickelt';
+        return 'Graviranje|Br[üu]niert|Brueniert|chemisch\s+vernickelt|vernickelt|warm\s+browned|nickel\s+plated|galvanized\s+blue|anodized|paint(?:\s+acc\.?\s+drawing)?|untreated|nickel\s+\d+\s*my\s*\+\s*polish';
+    }
+
+    private function isTrendyDeStandaloneNoteText(string $value): bool
+    {
+        $value = trim((string) (preg_replace('/\s+/u', ' ', $value) ?? $value));
+
+        if ($value === '') {
+            return false;
+        }
+
+        return preg_match(
+            '/^(?:ALUMINIUM|ALUMINUM|WARM\s+BROWNED|NICKEL(?:\s+\d+\s*MY)?(?:\s*\+\s*POLISH)?|NICKEL\s+PLATED|GALVANIZED\s+BLUE|BRASS|ANODIZED|PAINT(?:\s+ACC\.?\s+DRAWING)?|UNTREATED|CHEM\.?\s*NICKEL\s+PLATED|VERNICKELT(?:\s+AUF\s+\d+\s+Y?M\s+UND\s+POLIERT)?)$/iu',
+            $value
+        ) === 1;
     }
 
     private function isTrendyDeDescriptionNoise(string $descriptionText): bool
@@ -959,7 +1250,13 @@ class OrderAiDigitalPdfRulesParser
             return trim((string) $line);
         }, $item['description_lines'] ?? [])));
         $productName = trim((string) ($descriptionLines[0] ?? ''));
-        $note = implode(' | ', array_values(array_filter(array_slice($descriptionLines, 1))));
+        $noteLines = array_merge(
+            array_slice($descriptionLines, 1),
+            array_values(array_filter(array_map(function ($line) {
+                return trim((string) $line);
+            }, $item['note_lines'] ?? [])))
+        );
+        $note = implode(' | ', array_values(array_unique(array_filter($noteLines))));
 
         return [
             'line_number' => (int) ($item['line_number'] ?? 0),
@@ -1068,6 +1365,143 @@ class OrderAiDigitalPdfRulesParser
         }
 
         return $this->splitVisibleTextLines((string) ($preparedDocument['searchable_text'] ?? ''));
+    }
+
+    private function flattenPreparedTableRowLines(array $preparedDocument): array
+    {
+        $rows = [];
+
+        foreach ((array) ($preparedDocument['processed_pages'] ?? []) as $page) {
+            foreach ((array) ($page['items'] ?? []) as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                $text = trim((string) (preg_replace('/\s+/u', ' ', (string) ($row['text'] ?? '')) ?? ''));
+
+                if ($text !== '') {
+                    $rows[] = $text;
+                    continue;
+                }
+
+                $cellText = $this->joinTrendyDeRowCellTexts(is_array($row['cells'] ?? null) ? $row['cells'] : []);
+
+                if ($cellText !== '') {
+                    $rows[] = $cellText;
+                }
+            }
+        }
+
+        return $rows;
+    }
+
+    private function logTrendyDeExtractedTextTableSnapshot(
+        array $preparedDocument,
+        array $lines,
+        array $tableRowLines
+    ): void {
+        Log::info('Order AI Trendy DE extracted text table snapshot.', [
+            'source' => (string) data_get($preparedDocument, 'digital_extraction.source', ''),
+            'provider_input_mode' => (string) ($preparedDocument['provider_input_mode'] ?? ''),
+            'text_character_count' => (int) data_get($preparedDocument, 'digital_extraction.text_character_count', mb_strlen((string) ($preparedDocument['searchable_text'] ?? ''))),
+            'line_count' => count($lines),
+            'table_row_line_count' => count($tableRowLines),
+            'lines' => $this->buildTrendyDeLineSnapshot($lines),
+            'table_rows' => $this->buildTrendyDeTableRowSnapshot($preparedDocument),
+        ]);
+    }
+
+    private function buildTrendyDeLineSnapshot(array $lines, int $limit = 80): array
+    {
+        $snapshot = [];
+
+        foreach (array_values($lines) as $index => $line) {
+            if (count($snapshot) >= $limit) {
+                break;
+            }
+
+            $text = trim((string) (preg_replace('/\s+/u', ' ', (string) $line) ?? $line));
+
+            if ($text === '') {
+                continue;
+            }
+
+            $snapshot[] = [
+                'index' => $index,
+                'text' => $text,
+            ];
+        }
+
+        return $snapshot;
+    }
+
+    private function buildTrendyDeTableRowSnapshot(array $preparedDocument, int $limit = 80): array
+    {
+        $snapshot = [];
+
+        foreach ((array) ($preparedDocument['processed_pages'] ?? []) as $pageIndex => $page) {
+            if (!is_array($page)) {
+                continue;
+            }
+
+            foreach ((array) ($page['items'] ?? []) as $rowIndex => $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                if (count($snapshot) >= $limit) {
+                    return $snapshot;
+                }
+
+                $cells = is_array($row['cells'] ?? null)
+                    ? array_values(array_filter(array_map(function ($cell): ?array {
+                        if (!is_array($cell)) {
+                            return null;
+                        }
+
+                        $text = trim((string) (preg_replace('/\s+/u', ' ', (string) ($cell['text'] ?? '')) ?? ''));
+
+                        if ($text === '') {
+                            return null;
+                        }
+
+                        return [
+                            'x' => round((float) ($cell['x'] ?? 0), 2),
+                            'text' => $text,
+                        ];
+                    }, $row['cells'])))
+                    : [];
+
+                $snapshot[] = [
+                    'page' => (int) ($page['page'] ?? $page['page_number'] ?? ($pageIndex + 1)),
+                    'row_number' => (int) ($row['row_number'] ?? ($rowIndex + 1)),
+                    'y' => round((float) ($row['y'] ?? 0), 2),
+                    'text' => trim((string) (preg_replace('/\s+/u', ' ', (string) ($row['text'] ?? '')) ?? '')),
+                    'cells' => array_slice($cells, 0, 16),
+                ];
+            }
+        }
+
+        return $snapshot;
+    }
+
+    private function joinTrendyDeRowCellTexts(array $cells): string
+    {
+        $parts = [];
+
+        foreach ($cells as $cell) {
+            if (!is_array($cell)) {
+                continue;
+            }
+
+            $text = trim((string) (preg_replace('/\s+/u', ' ', (string) ($cell['text'] ?? '')) ?? ''));
+
+            if ($text !== '') {
+                $parts[] = $text;
+            }
+        }
+
+        return trim(implode(' ', $parts));
     }
 
     private function extractTrendyDeHeader(array $preparedDocument, string $searchableText): array

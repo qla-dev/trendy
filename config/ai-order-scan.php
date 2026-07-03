@@ -104,6 +104,7 @@ $trendyDePromptRules = <<<'PROMPT'
 - Artikel Nr. -> product_code
 - Beschreibung first visible line -> product_name
 - Additional Beschreibung lines before Liefertermin/Lieferdatum -> note, including Crtež/Crtez rows and their following drawing/code value.
+- In amount-first extracted text, a standalone finish/material line immediately after the product description plus trailing Pos. number belongs to that same position's note. Example: if "... Saugkopf links1" is followed by "ALUMINIUM", item 1 note is "ALUMINIUM".
 - Liefertermin/Lieferdatum value inside the line-item block -> delivery_deadline for that item; otherwise use the header Liefertermin/Lieferdatum
 - Menge -> quantity
 - Einheit -> unit
