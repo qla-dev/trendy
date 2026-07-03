@@ -421,6 +421,13 @@ class OrderAiScanService
 
             if (is_array($parsedResult)) {
                 $parsedResult['document_profile'] = $documentProfile;
+                $parsedResult = $this->applyTrendyDeMatchedParserNoteFallback(
+                    $scan,
+                    $parsedResult,
+                    $preparedDocument,
+                    $documentProfile
+                );
+                $parsedResult['document_profile'] = $documentProfile;
                 $parsedResult['parser_payload'] = $this->buildParserPayloadSnapshot(
                     $scan,
                     $preparedDocument,
@@ -481,6 +488,302 @@ class OrderAiScanService
         }
 
         return $providerResult;
+    }
+
+    private function applyTrendyDeMatchedParserNoteFallback(
+        OrderAiScan $scan,
+        array $parsedResult,
+        array $preparedDocument,
+        string $documentProfile
+    ): array {
+        if (!$this->shouldUseTrendyDeMatchedParserNoteFallback($parsedResult, $preparedDocument, $documentProfile)) {
+            return $parsedResult;
+        }
+
+        $fallbackMeta = [
+            'attempted' => true,
+            'applied_count' => 0,
+            'source_note_count' => count($this->extractLikelyTrendyDeSourcePositionNotes($preparedDocument)),
+            'reason' => 'matched_parser_missing_position_notes',
+        ];
+
+        if (!filter_var(config('ai-order-scan.digital_pdf.fallback_to_ai', true), FILTER_VALIDATE_BOOL)) {
+            $fallbackMeta['skipped'] = true;
+            $fallbackMeta['skip_reason'] = 'fallback_to_ai_disabled';
+
+            return $this->withTrendyDeAiNoteFallbackMeta($parsedResult, $fallbackMeta);
+        }
+
+        try {
+            $providerResult = $this->executeProviderScan($scan);
+        } catch (\Throwable $exception) {
+            Log::warning('Order AI Trendy DE matched parser note fallback failed; keeping local parser result.', [
+                'scan_id' => $scan->id,
+                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+            ]);
+
+            $fallbackMeta['error'] = Utf8Sanitizer::cleanExceptionMessage($exception);
+
+            return $this->withTrendyDeAiNoteFallbackMeta($parsedResult, $fallbackMeta);
+        }
+
+        $mergeResult = $this->mergeTrendyDeAiFallbackNotes(
+            is_array($parsedResult['normalized_payload'] ?? null) ? $parsedResult['normalized_payload'] : [],
+            is_array($providerResult['normalized_payload'] ?? null) ? $providerResult['normalized_payload'] : []
+        );
+
+        $fallbackMeta = array_merge($fallbackMeta, [
+            'applied_count' => (int) ($mergeResult['applied_count'] ?? 0),
+            'provider' => (string) ($providerResult['provider'] ?? ''),
+            'model' => (string) ($providerResult['model'] ?? ''),
+            'credits_spent' => (float) ($providerResult['credits_spent'] ?? 0),
+            'provider_task_id' => trim((string) ($providerResult['provider_task_id'] ?? '')),
+        ]);
+
+        if (is_array($mergeResult['payload'] ?? null)) {
+            $parsedResult['normalized_payload'] = $mergeResult['payload'];
+        }
+
+        $parsedResult['credits_spent'] = (float) ($parsedResult['credits_spent'] ?? 0)
+            + (float) ($providerResult['credits_spent'] ?? 0);
+        $parsedResult['ai_duration_ms'] = (int) ($parsedResult['ai_duration_ms'] ?? 0)
+            + (int) ($providerResult['ai_duration_ms'] ?? 0);
+        $parsedResult['extraction_duration_ms'] = (int) ($parsedResult['extraction_duration_ms'] ?? 0)
+            + (int) ($providerResult['extraction_duration_ms'] ?? 0);
+
+        return $this->withTrendyDeAiNoteFallbackMeta($parsedResult, $fallbackMeta);
+    }
+
+    private function shouldUseTrendyDeMatchedParserNoteFallback(
+        array $parsedResult,
+        array $preparedDocument,
+        string $documentProfile
+    ): bool {
+        if ($this->normalizeDocumentProfileKey($documentProfile) !== 'trendy_de') {
+            return false;
+        }
+
+        $items = is_array($parsedResult['normalized_payload']['items'] ?? null)
+            ? $parsedResult['normalized_payload']['items']
+            : [];
+
+        if ($items === []) {
+            return false;
+        }
+
+        $hasMissingNote = false;
+        $parsedNoteCounts = [];
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $note = $this->normalizeTrendyDeNoteForComparison((string) ($item['note'] ?? ''));
+
+            if ($note === '') {
+                $hasMissingNote = true;
+                continue;
+            }
+
+            $parsedNoteCounts[$note] = ($parsedNoteCounts[$note] ?? 0) + 1;
+        }
+
+        if (!$hasMissingNote) {
+            return false;
+        }
+
+        $sourceNotes = $this->extractLikelyTrendyDeSourcePositionNotes($preparedDocument);
+
+        if ($sourceNotes === []) {
+            return false;
+        }
+
+        foreach ($sourceNotes as $sourceNote) {
+            $note = $this->normalizeTrendyDeNoteForComparison($sourceNote);
+
+            if ($note === '') {
+                continue;
+            }
+
+            $parsedCount = (int) ($parsedNoteCounts[$note] ?? 0);
+
+            if ($parsedCount <= 0) {
+                return true;
+            }
+
+            $parsedNoteCounts[$note] = $parsedCount - 1;
+        }
+
+        return false;
+    }
+
+    private function mergeTrendyDeAiFallbackNotes(array $parserPayload, array $aiPayload): array
+    {
+        $parserItems = is_array($parserPayload['items'] ?? null) ? $parserPayload['items'] : [];
+        $aiItems = is_array($aiPayload['items'] ?? null) ? $aiPayload['items'] : [];
+        $aiNotesByIdentity = [];
+
+        foreach ($aiItems as $aiItem) {
+            if (!is_array($aiItem)) {
+                continue;
+            }
+
+            $identity = $this->trendyDeItemIdentityKey($aiItem);
+            $note = $this->sanitizeTrendyDeItemNote(
+                trim((string) ($aiItem['note'] ?? '')),
+                (int) ($aiItem['line_number'] ?? 0)
+            );
+
+            if ($identity === '' || $note === '') {
+                continue;
+            }
+
+            $aiNotesByIdentity[$identity] = $note;
+        }
+
+        if ($aiNotesByIdentity === []) {
+            return [
+                'payload' => $parserPayload,
+                'applied_count' => 0,
+            ];
+        }
+
+        $appliedCount = 0;
+
+        foreach ($parserItems as $index => $parserItem) {
+            if (!is_array($parserItem) || trim((string) ($parserItem['note'] ?? '')) !== '') {
+                continue;
+            }
+
+            $identity = $this->trendyDeItemIdentityKey($parserItem);
+
+            if ($identity === '' || trim((string) ($aiNotesByIdentity[$identity] ?? '')) === '') {
+                continue;
+            }
+
+            $parserItems[$index]['note'] = $aiNotesByIdentity[$identity];
+            $appliedCount++;
+        }
+
+        $parserPayload['items'] = array_values($parserItems);
+
+        return [
+            'payload' => $parserPayload,
+            'applied_count' => $appliedCount,
+        ];
+    }
+
+    private function trendyDeItemIdentityKey(array $item): string
+    {
+        $lineNumber = (int) ($item['line_number'] ?? 0);
+        $productCode = $this->normalizeScannedProductCode((string) ($item['product_code'] ?? ''));
+
+        if ($lineNumber <= 0 || $productCode === '') {
+            return '';
+        }
+
+        return $lineNumber . '|' . strtoupper($productCode);
+    }
+
+    private function withTrendyDeAiNoteFallbackMeta(array $parsedResult, array $fallbackMeta): array
+    {
+        $rawResponse = is_array($parsedResult['raw_response'] ?? null)
+            ? $parsedResult['raw_response']
+            : [];
+        $rawResponse['ai_note_fallback'] = Utf8Sanitizer::cleanRecursive($fallbackMeta);
+        $parsedResult['raw_response'] = $rawResponse;
+
+        return $parsedResult;
+    }
+
+    private function extractLikelyTrendyDeSourcePositionNotes(array $preparedDocument): array
+    {
+        $notes = [];
+        $expectingNote = false;
+
+        foreach ($this->preparedDocumentVisibleLines($preparedDocument) as $line) {
+            $line = trim((string) $line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            if ($this->isLikelyTrendyDeAmountFirstItemLine($line)) {
+                $expectingNote = true;
+                continue;
+            }
+
+            if (!$expectingNote) {
+                continue;
+            }
+
+            if ($this->containsTrendyDeDeliveryLabel($line) || $this->isLikelyTrendyDeAmountFirstItemLine($line)) {
+                $expectingNote = false;
+                continue;
+            }
+
+            if ($this->isLikelyTrendyDeStandalonePositionNote($line)) {
+                $notes[] = trim((string) (preg_replace('/\s+/u', ' ', $line) ?? $line));
+                continue;
+            }
+
+            $expectingNote = false;
+        }
+
+        return array_values(array_unique(array_filter($notes)));
+    }
+
+    private function preparedDocumentVisibleLines(array $preparedDocument): array
+    {
+        $lines = [];
+
+        foreach (is_array($preparedDocument['processed_pages'] ?? null) ? $preparedDocument['processed_pages'] : [] as $page) {
+            foreach (is_array($page['lines'] ?? null) ? $page['lines'] : [] as $line) {
+                $line = trim((string) $line);
+
+                if ($line !== '') {
+                    $lines[] = $line;
+                }
+            }
+        }
+
+        if ($lines !== []) {
+            return $lines;
+        }
+
+        return $this->splitVisibleTextLines((string) ($preparedDocument['searchable_text'] ?? ''));
+    }
+
+    private function isLikelyTrendyDeAmountFirstItemLine(string $line): bool
+    {
+        $amount = '(?:\d{1,3}(?:[.\s]\d{3})+|\d+),\s*\d{2}';
+
+        return preg_match(
+            '/^\s*' . $amount . '\s+' . $amount . '\s*(?:STU|ST|PCS|PIECE|KO)\b.*[A-Z0-9][A-Z0-9._\-\/]{4,24}\s+.+\d{1,3}\s*$/iu',
+            $line
+        ) === 1;
+    }
+
+    private function isLikelyTrendyDeStandalonePositionNote(string $line): bool
+    {
+        $line = trim((string) (preg_replace('/\s+/u', ' ', $line) ?? $line));
+
+        if ($line === '') {
+            return false;
+        }
+
+        return preg_match(
+            '/^(?:ALUMINIUM|ALUMINUM|WARM\s+BROWNED|NICKEL(?:\s+\d+\s*MY)?(?:\s*\+\s*POLISH)?|NICKEL\s+PLATED|GALVANIZED\s+BLUE|BRASS|ANODIZED|PAINT(?:\s+ACC\.?\s+DRAWING)?|UNTREATED|CHEM\.?\s*NICKEL\s+PLATED|VERNICKELT(?:\s+AUF\s+\d+\s+Y?M\s+UND\s+POLIERT)?)$/iu',
+            $line
+        ) === 1;
+    }
+
+    private function normalizeTrendyDeNoteForComparison(string $note): string
+    {
+        $note = trim((string) (preg_replace('/\s+/u', ' ', $note) ?? $note));
+
+        return strtoupper($note);
     }
 
     private function digitalRulesParserFailureHint(array $preparedDocument): string
@@ -2457,6 +2760,7 @@ class OrderAiScanService
                 implode(' | ', array_values(array_unique(array_filter($noteLines)))),
                 $lineNumber
             );
+
             $item['delivery_deadline'] = trim($headerDeliveryDeadline) !== ''
                 ? trim($headerDeliveryDeadline)
                 : $this->resolveTrendyDeItemDeliveryDeadline(

@@ -2371,6 +2371,410 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('07.09.2026', data_get($items, '20.delivery_deadline'));
     }
 
+    public function test_execute_extraction_keeps_trendy_de_amount_first_position_notes_without_ai(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000986.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            '3. 7. 2026.',
+            '24. 8. 2026.',
+            'Trendy Germany GmbH',
+            'Trendy doo',
+            'Trendy Germany 45',
+            'Person responsible Edina Duzan',
+            'Bestellung26-020-000986',
+            "Artikel Nr.Pos.\tBeschreibung\tMengeEinheit EK-Preis\tBetragVAT %",
+            "1,00 206,90STU\t206,900,002158279700 Saugkopf links1",
+            'ALUMINIUM',
+            "1,00\t84,90STU\t84,900,00EVRB10A461050 Quertrager unten2",
+            'WARM BROWNED',
+            "1,00\t134,10STU\t134,100,00EVRS10A73401L Fuhrungsbahn 1 Ausschussst. 105-138mm3",
+            'NICKEL 50MY+POLISH',
+            "1,00\t134,10STU\t134,100,00EVRS10A73401R Fuhrungsbahn 2 Ausschussst. 105-138mm4",
+            'NICKEL 50MY+POLISH',
+            "1,00\t71,65STU\t71,650,00EVRS10A73414L Vakuumkammer5",
+            'GALVANIZED BLUE',
+            "1,00\t71,65STU\t71,650,00EVRS10A73414R Vakuumkammer6",
+            'GALVANIZED BLUE',
+            "2,00\t301,40STU\t602,800,00EXCI40A092020 Wellenhalter7",
+            'NICKEL PLATED',
+            "Total\t1.306,10",
+        ]]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new RuntimeException('AI provider should not be called when local parser extracts Trendy DE notes.');
+            }
+        });
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000986.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+        $items = data_get($result, 'normalized_payload.items');
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertCount(7, $items);
+        $this->assertSame([
+            'ALUMINIUM',
+            'WARM BROWNED',
+            'NICKEL 50MY+POLISH',
+            'NICKEL 50MY+POLISH',
+            'GALVANIZED BLUE',
+            'GALVANIZED BLUE',
+            'NICKEL PLATED',
+        ], array_column($items, 'note'));
+    }
+
+    public function test_trendy_de_parser_uses_searchable_text_when_prepared_lines_only_contain_last_compact_position(): void
+    {
+        $searchableLines = [
+            '1. 7. 2026.',
+            '27. 7. 2026.',
+            'Trendy Germany GmbH',
+            'Trendy doo',
+            'Trendy Germany GmbH-61',
+            'Datum',
+            'Liefertermin',
+            'Deliver via',
+            'Person responsible',
+            'Bestellung26-020-000978',
+            'Edina Duzan',
+            "Lieferant:\tAnlieferadresse:",
+            "Artikel Nr.Pos.\tBeschreibung\tMengeEinheit EK-Preis\tBetragVAT %",
+            "5,00\t57,90STU\t289,500,000624-269-004 BASISPLAAT1",
+            "1,00\t90,85STU\t90,850,000531-950-052 KLEMBLOK2",
+            "1,00\t90,85STU\t90,850,000531-950-051 KLEMBLOK3",
+            "1,00\t90,85STU\t90,850,000531-950-172 KLEMBLOK4",
+            "1,00 111,70STU\t111,700,000449-015-006 KOPPELING MOTOR MOTOR5",
+            "1,00\t77,70STU\t77,700,000447-015-109 MOTORPLAAT6",
+            "Total\t751,45",
+            '0,00Steuer',
+            '751,45GesamtpreisEUR',
+            'Page1/1',
+        ];
+        $preparedLines = [
+            'Trendy Germany GmbH',
+            'Trendy Germany GmbH-61',
+            'Bestellung26-020-000978',
+            "Artikel Nr.Pos.\tBeschreibung\tMengeEinheit EK-Preis\tBetragVAT %",
+            "1,00\t77,70STU\t77,700,000447-015-109 MOTORPLAAT6",
+            "Total\t751,45",
+        ];
+        $preparedDocument = [
+            'pdf_type' => 'digital',
+            'provider_input_mode' => 'text',
+            'effective_page_count' => 1,
+            'source_page_count' => 1,
+            'searchable_text' => implode("\n", $searchableLines),
+            'digital_extraction' => [
+                'source' => 'smalot_pdfparser',
+                'text_character_count' => strlen(implode("\n", $searchableLines)),
+            ],
+            'processed_pages' => [[
+                'page' => 1,
+                'text' => implode("\n", $preparedLines),
+                'lines' => $preparedLines,
+                'items' => array_values(array_map(function (string $row, int $index): array {
+                    return [
+                        'row_number' => $index + 1,
+                        'y' => (float) (($index + 1) * 12),
+                        'text' => $row,
+                        'cells' => [
+                            [
+                                'x' => 18.0,
+                                'text' => $row,
+                            ],
+                        ],
+                    ];
+                }, $preparedLines, array_keys($preparedLines))),
+            ]],
+        ];
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000978.pdf',
+            'source_mime_type' => 'application/pdf',
+        ]);
+
+        $result = app(OrderAiDigitalPdfRulesParser::class)->parse($scan, $preparedDocument);
+        $items = data_get($result, 'normalized_payload.items');
+
+        $this->assertSame('searchable_text', data_get($result, 'raw_response.item_source'));
+        $this->assertCount(6, $items);
+        $this->assertSame(range(1, 6), array_column($items, 'line_number'));
+        $this->assertSame([
+            '0624-269-004',
+            '0531-950-052',
+            '0531-950-051',
+            '0531-950-172',
+            '0449-015-006',
+            '0447-015-109',
+        ], array_column($items, 'product_code'));
+        $this->assertSame('BASISPLAAT', data_get($items, '0.product_name'));
+        $this->assertSame('KOPPELING MOTOR', data_get($items, '4.product_name'));
+        $this->assertSame('MOTORPLAAT', data_get($items, '5.product_name'));
+        $this->assertSame(751.45, data_get($result, 'normalized_payload.summary.subtotal'));
+    }
+
+    public function test_trendy_de_parser_recovers_position_prefixed_notes_from_extracted_table_rows(): void
+    {
+        $itemLines = [
+            '3. 7. 2026.',
+            '24. 8. 2026.',
+            'Trendy Germany GmbH',
+            'Trendy doo',
+            'Trendy Germany 45',
+            'Person responsible Edina Duzan',
+            'Bestellung26-020-000986',
+            "Artikel Nr.Pos.\tBeschreibung\tMengeEinheit EK-Preis\tBetragVAT %",
+            "1,00 206,90STU\t206,900,002158279700 Saugkopf links1",
+            "1,00\t84,90STU\t84,900,00EVRB10A461050 Quertrager unten2",
+            "1,00\t134,10STU\t134,100,00EVRS10A73401L Fuhrungsbahn 1 Ausschussst. 105-138mm3",
+            "1,00\t134,10STU\t134,100,00EVRS10A73401R Fuhrungsbahn 2 Ausschussst. 105-138mm4",
+            "1,00\t71,65STU\t71,650,00EVRS10A73414L Vakuumkammer5",
+            "1,00\t71,65STU\t71,650,00EVRS10A73414R Vakuumkammer6",
+            "2,00\t301,40STU\t602,800,00EXCI40A092020 Wellenhalter7",
+            "Total\t1.306,10",
+        ];
+        $tableRows = [
+            '3. 7. 2026.',
+            '24. 8. 2026.',
+            'Trendy Germany GmbH',
+            'Trendy doo',
+            'Trendy Germany 45',
+            'Person responsible Edina Duzan',
+            'Bestellung26-020-000986',
+            "Artikel Nr.Pos.\tBeschreibung\tMengeEinheit EK-Preis\tBetragVAT %",
+            "1,00 206,90STU\t206,900,002158279700 Saugkopf links1",
+            '1 ALUMINIUM',
+            "1,00\t84,90STU\t84,900,00EVRB10A461050 Quertrager unten2",
+            '2 WARM BROWNED',
+            "1,00\t134,10STU\t134,100,00EVRS10A73401L Fuhrungsbahn 1 Ausschussst. 105-138mm3",
+            '3 NICKEL 50MY+POLISH',
+            "1,00\t134,10STU\t134,100,00EVRS10A73401R Fuhrungsbahn 2 Ausschussst. 105-138mm4",
+            '4 NICKEL 50MY+POLISH',
+            "1,00\t71,65STU\t71,650,00EVRS10A73414L Vakuumkammer5",
+            '5 GALVANIZED BLUE',
+            "1,00\t71,65STU\t71,650,00EVRS10A73414R Vakuumkammer6",
+            '6 GALVANIZED BLUE',
+            "2,00\t301,40STU\t602,800,00EXCI40A092020 Wellenhalter7",
+            '7 NICKEL PLATED',
+            "Total\t1.306,10",
+        ];
+        $preparedDocument = [
+            'pdf_type' => 'digital',
+            'provider_input_mode' => 'text',
+            'effective_page_count' => 1,
+            'source_page_count' => 1,
+            'searchable_text' => implode("\n", $tableRows),
+            'digital_extraction' => [
+                'source' => 'smalot_pdfparser',
+                'text_character_count' => strlen(implode("\n", $tableRows)),
+            ],
+            'processed_pages' => [[
+                'page' => 1,
+                'text' => implode("\n", $itemLines),
+                'lines' => $itemLines,
+                'items' => array_values(array_map(function (string $row, int $index): array {
+                    return [
+                        'row_number' => $index + 1,
+                        'y' => (float) (($index + 1) * 12),
+                        'text' => $row,
+                        'cells' => [
+                            [
+                                'x' => 18.0,
+                                'text' => $row,
+                            ],
+                        ],
+                    ];
+                }, $tableRows, array_keys($tableRows))),
+            ]],
+        ];
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000986.pdf',
+            'source_mime_type' => 'application/pdf',
+        ]);
+
+        $result = app(OrderAiDigitalPdfRulesParser::class)->parse($scan, $preparedDocument);
+        $items = data_get($result, 'normalized_payload.items');
+
+        $this->assertSame('digital_pdf_rules', data_get($result, 'provider'));
+        $this->assertSame([
+            'ALUMINIUM',
+            'WARM BROWNED',
+            'NICKEL 50MY+POLISH',
+            'NICKEL 50MY+POLISH',
+            'GALVANIZED BLUE',
+            'GALVANIZED BLUE',
+            'NICKEL PLATED',
+        ], array_column($items, 'note'));
+    }
+
+    public function test_matched_trendy_de_parser_uses_ai_only_to_fill_missing_position_notes(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-000986.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            'Trendy Germany GmbH',
+            'Trendy Germany 45',
+            'Bestellung26-020-000986',
+            "Artikel Nr.Pos.\tBeschreibung\tMengeEinheit EK-Preis\tBetragVAT %",
+            "1,00 206,90STU\t206,900,002158279700 Saugkopf links1",
+            'ALUMINIUM',
+            "1,00\t84,90STU\t84,900,00EVRB10A461050 Quertrager unten2",
+            'WARM BROWNED',
+        ]]));
+
+        app()->instance(OrderAiDigitalPdfRulesParser::class, new class extends OrderAiDigitalPdfRulesParser {
+            public function parse(OrderAiScan $scan, array $preparedDocument): ?array
+            {
+                return [
+                    'provider' => 'digital_pdf_rules',
+                    'model' => 'local-digital-pdf-rules-v1',
+                    'credits_spent' => 0.0,
+                    'raw_response' => [
+                        'strategy' => 'digital_pdf_rules',
+                        'parser' => 'test_blank_notes',
+                    ],
+                    'normalized_payload' => [
+                        'order' => [
+                            'customer_name' => 'Trendy Germany GmbH',
+                            'supplier_name' => 'Trendy Germany GmbH-45',
+                            'external_document_number' => '26-020-000986',
+                            'currency' => 'EUR',
+                        ],
+                        'summary' => [
+                            'subtotal' => 291.8,
+                            'vat_total' => 0,
+                            'grand_total' => 291.8,
+                        ],
+                        'items' => [
+                            [
+                                'line_number' => 1,
+                                'product_code' => '2158279700',
+                                'product_name' => 'Saugkopf links',
+                                'quantity' => 1.0,
+                                'unit' => 'KO',
+                                'unit_price' => 206.9,
+                                'line_total' => 206.9,
+                                'vat_rate' => 0.0,
+                                'vat_code' => 'I0',
+                                'note' => '',
+                            ],
+                            [
+                                'line_number' => 2,
+                                'product_code' => 'EVRB10A461050',
+                                'product_name' => 'Quertrager unten',
+                                'quantity' => 1.0,
+                                'unit' => 'KO',
+                                'unit_price' => 84.9,
+                                'line_total' => 84.9,
+                                'vat_rate' => 0.0,
+                                'vat_code' => 'I0',
+                                'note' => '',
+                            ],
+                        ],
+                    ],
+                    'prepared_document' => $preparedDocument,
+                    'extraction_duration_ms' => 0,
+                    'ai_duration_ms' => 0,
+                    'supports_live_transfer' => true,
+                ];
+            }
+        });
+
+        $provider = new class implements OrderAiScanProvider {
+            public int $calls = 0;
+
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                $this->calls++;
+
+                return [
+                    'provider' => 'openrouter',
+                    'model' => 'test-note-fallback',
+                    'credits_spent' => 2.0,
+                    'provider_task_id' => 'note-fallback-1',
+                    'raw_response' => ['ok' => true],
+                    'normalized_payload' => [
+                        'items' => [
+                            [
+                                'line_number' => 1,
+                                'product_code' => '2158279700',
+                                'product_name' => 'Wrong AI name',
+                                'unit_price' => 9999.0,
+                                'note' => 'ALUMINIUM',
+                            ],
+                            [
+                                'line_number' => 2,
+                                'product_code' => 'EVRB10A461050',
+                                'product_name' => 'Wrong AI name',
+                                'unit_price' => 9999.0,
+                                'note' => 'WARM BROWNED',
+                            ],
+                        ],
+                    ],
+                    'prepared_document' => [],
+                    'extraction_duration_ms' => 5,
+                    'ai_duration_ms' => 5,
+                ];
+            }
+        };
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, $provider);
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000986.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+
+        $this->assertSame(1, $provider->calls);
+        $this->assertSame('ALUMINIUM', data_get($result, 'normalized_payload.items.0.note'));
+        $this->assertSame('WARM BROWNED', data_get($result, 'normalized_payload.items.1.note'));
+        $this->assertSame('Saugkopf links', data_get($result, 'normalized_payload.items.0.product_name'));
+        $this->assertSame(206.9, data_get($result, 'normalized_payload.items.0.unit_price'));
+        $this->assertSame(2, data_get($result, 'raw_response.ai_note_fallback.applied_count'));
+        $this->assertSame('test-note-fallback', data_get($result, 'raw_response.ai_note_fallback.model'));
+    }
+
     public function test_execute_extraction_splits_trendy_de_underscore_codes_and_keeps_crtez_notes(): void
     {
         Storage::fake('local');

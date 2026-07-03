@@ -343,6 +343,40 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertArrayNotHasKey('adDeliveryDate', $insertPayload);
     }
 
+    public function test_order_item_insert_batches_do_not_mix_optional_note_columns(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('buildOrderItemInsertBatches');
+        $method->setAccessible(true);
+
+        $batches = $method->invoke($service, [
+            [
+                'acKey' => '2601100001681',
+                'acIdent' => '2158279700',
+                'anNo' => 1,
+            ],
+            [
+                'acKey' => '2601100001681',
+                'acIdent' => 'EXCI40A092020',
+                'acNote' => 'NICKEL PLATED',
+                'anNo' => 7,
+            ],
+            [
+                'anNo' => 2,
+                'acIdent' => 'EVRB10A461050',
+                'acKey' => '2601100001681',
+            ],
+        ]);
+
+        $this->assertCount(2, $batches);
+        $this->assertCount(2, $batches[0]);
+        $this->assertCount(1, $batches[1]);
+        $this->assertSame(array_keys($batches[0][0]), array_keys($batches[0][1]));
+        $this->assertArrayNotHasKey('acNote', $batches[0][0]);
+        $this->assertArrayHasKey('acNote', $batches[1][0]);
+    }
+
     public function test_pantheon_clerk_resolver_does_not_apply_admin_fallback(): void
     {
         config(['workorders.pantheon_user_map' => []]);

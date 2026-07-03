@@ -76,8 +76,8 @@ class PantheonOrderTransferService
                 );
             }
 
-            if (!empty($itemPayloads)) {
-                OrderItem::newSourceQuery()->insert($itemPayloads);
+            foreach ($this->buildOrderItemInsertBatches($itemPayloads) as $itemPayloadBatch) {
+                OrderItem::newSourceQuery()->insert($itemPayloadBatch);
             }
 
                 Log::info('Order AI Pantheon transfer prepared.', [
@@ -2196,6 +2196,31 @@ class PantheonOrderTransferService
 
             return true;
         }, ARRAY_FILTER_USE_BOTH);
+    }
+
+    private function buildOrderItemInsertBatches(array $itemPayloads): array
+    {
+        $batches = [];
+
+        foreach ($itemPayloads as $payload) {
+            if (!is_array($payload) || $payload === []) {
+                continue;
+            }
+
+            $columns = array_keys($payload);
+            sort($columns, SORT_STRING);
+
+            $normalizedPayload = [];
+
+            foreach ($columns as $column) {
+                $normalizedPayload[$column] = $payload[$column];
+            }
+
+            $batchKey = implode("\x1F", $columns);
+            $batches[$batchKey][] = $normalizedPayload;
+        }
+
+        return array_values($batches);
     }
 
     private function fitString(string $column, string $value, array $stringLengths): string
