@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\OrderAiScanService;
+use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -419,11 +420,14 @@ class AiTokenHistoryController extends Controller
         if (array_key_exists($cacheKey, $this->documentMetricsCache)) {
             return $this->documentMetricsCache[$cacheKey];
         }
-        $metrics = app(OrderAiScanService::class)->resolveDisplayDocumentMetrics($scan);
+        $pageCount = max(0, (int) ($scan->page_count ?? 0));
+        $billedTokens = $scan->processed_at !== null
+            ? app(OrderAiDocumentMetrics::class)->calculateBilledTokens($pageCount)
+            : 0;
 
         return $this->documentMetricsCache[$cacheKey] = [
-            'page_count' => max(0, (int) ($metrics['page_count'] ?? 0)),
-            'billed_tokens' => max(0, (int) ($metrics['billed_tokens'] ?? 0)),
+            'page_count' => $pageCount,
+            'billed_tokens' => max(0, $billedTokens),
         ];
     }
 
