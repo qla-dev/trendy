@@ -20,6 +20,7 @@ use App\Http\Controllers\UserInterfaceController;
 use App\Http\Controllers\CardsController;
 use App\Http\Controllers\ComponentsController;
 use App\Http\Controllers\ExtensionController;
+use App\Http\Controllers\ExportPaymentDocumentController;
 use App\Http\Controllers\PageLayoutController;
 use App\Http\Controllers\FormsController;
 use App\Http\Controllers\TableController;
@@ -102,6 +103,7 @@ Route::middleware('auth:web')->group(function () {
         Route::get('orders/ai-scan/{scan}/status', [OrderAiScanController::class, 'status'])->name('app-order-ai-scan-status');
         Route::post('orders/ai-scan/{scan}/retry', [OrderAiScanController::class, 'retry'])->name('app-order-ai-scan-retry');
         Route::get('ai-tokens/history', [AiTokenHistoryController::class, 'index'])->name('app-ai-token-history');
+        Route::get('ai-tokens/history/payment/{document}', ExportPaymentDocumentController::class)->name('app-ai-token-history-payment');
         Route::get('ai-tokens/history/statuses', [AiTokenHistoryController::class, 'statuses'])->name('app-ai-token-history-statuses');
         Route::post('ai-tokens/history/{scan}/retry', [AiTokenHistoryController::class, 'retry'])->name('app-ai-token-history-retry');
         Route::get('ai-assistant/whitelist', [AiInboxWhitelistController::class, 'index'])->name('app-ai-whitelist');

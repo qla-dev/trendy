@@ -45,7 +45,9 @@
   }
 
   .ai-token-history-inline-filter-form .form-select-sm,
-  .ai-token-history-inline-filter-form .btn-sm {
+  .ai-token-history-inline-filter-form .btn-sm,
+  .ai-token-history-action-control {
+    height: 2.35rem;
     min-height: 2.35rem;
     border-radius: 0.357rem;
   }
@@ -53,6 +55,13 @@
   .ai-token-history-inline-filter-form .form-select-sm {
     padding-top: 0.48rem;
     padding-bottom: 0.48rem;
+  }
+
+  .ai-token-history-inline-filter-form .btn-sm,
+  .ai-token-history-action-control {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .ai-token-history-inline-select-month {
@@ -457,6 +466,7 @@
   data-status-poll-url="{{ route('app-ai-token-history-statuses') }}"
   data-retry-url-template="{{ route('app-ai-token-history-retry', ['scan' => '__SCAN_ID__']) }}"
   data-transfer-url="{{ route('app-orders-store') }}"
+  data-payment-url-template="{{ route('app-ai-token-history-payment', ['document' => '__DOCUMENT__']) }}"
   data-csrf="{{ csrf_token() }}"
   data-last-loaded-display="{{ $tokenHistoryLastLoadedAtDisplay ?? now()->format('d.m.Y H:i:s') }}">
   <div class="content-header row">
@@ -584,16 +594,24 @@
             @endforeach
           </select>
 
-          <button type="submit" class="btn btn-primary btn-sm">
+          <button type="submit" class="btn btn-primary btn-sm ai-token-history-action-control">
             <i data-feather="filter" class="me-50"></i> Primijeni
           </button>
         </form>
 
-        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-toggle-filters" aria-expanded="false">
+        <button
+          type="button"
+          class="btn btn-outline-success btn-sm ai-token-history-action-control"
+          id="btn-payment-document"
+          data-bs-toggle="modal"
+          data-bs-target="#ai-token-payment-modal">
+          <i data-feather="credit-card" class="me-50"></i> Pla&#263;anje
+        </button>
+        <button type="button" class="btn btn-outline-primary btn-sm ai-token-history-action-control" id="btn-toggle-filters" aria-expanded="false">
           <i data-feather="filter" class="me-50"></i> Poka&#382;i filtere
         </button>
-        <a href="{{ route('app-ai-token-history') }}" class="btn btn-outline-danger btn-sm">
-          <i data-feather="trash-2" class="me-50"></i> Obri&#353;i filter
+        <a href="{{ route('app-ai-token-history') }}" class="btn btn-outline-danger btn-sm ai-token-history-action-control">
+          <i data-feather="trash-2" class="me-50"></i> Obri&#353;i filtere
         </a>
       </div>
     </div>
@@ -856,6 +874,43 @@
       </div>
     @endif
   </div>
+
+  <div class="modal fade" id="ai-token-payment-modal" tabindex="-1" aria-labelledby="ai-token-payment-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="ai-token-payment-modal-title">Pla&#263;anje</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted mb-2" id="ai-token-history-payment-period">
+            Ra&#269;un za mjesec {{ $summary['period_label'] ?? '' }}
+          </p>
+          <div class="d-grid gap-1">
+            <a
+              href="#"
+              class="btn btn-primary"
+              data-payment-document-link
+              data-payment-document="predracun"
+              target="_blank"
+              rel="noopener">
+              <i data-feather="file-text" class="me-50"></i> Predra&#269;un
+            </a>
+            <a
+              href="#"
+              class="btn btn-outline-primary"
+              data-payment-document-link
+              data-payment-document="a4-faktura"
+              target="_blank"
+              rel="noopener">
+              <i data-feather="printer" class="me-50"></i> A4 faktura
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </section>
 @endsection
 
@@ -875,6 +930,7 @@
     const pollUrl = app ? (app.dataset.statusPollUrl || '') : '';
     const retryUrlTemplate = app ? (app.dataset.retryUrlTemplate || '') : '';
     const transferUrl = app ? (app.dataset.transferUrl || '') : '';
+    const paymentUrlTemplate = app ? (app.dataset.paymentUrlTemplate || '') : '';
     const csrfToken = app ? (app.dataset.csrf || '') : '';
     let pollTimer = null;
     let feedbackTimer = null;
@@ -1025,6 +1081,12 @@
         });
       });
     }
+
+    syncPaymentLinks();
+    document.getElementById('btn-payment-document')?.addEventListener('click', syncPaymentLinks);
+    app?.querySelectorAll('select[name="month"], select[name="year"]').forEach(function (select) {
+      select.addEventListener('change', syncPaymentLinks);
+    });
 
     function collectIds() {
       if (!app) {
@@ -1193,6 +1255,94 @@
         const separator = resolvedUrl.includes('?') ? '&' : '?';
 
         return `${resolvedUrl}${separator}_ts=${Date.now()}`;
+      }
+    }
+
+    function buildPaymentUrl(documentType) {
+      const resolvedDocumentType = String(documentType || '').trim();
+
+      if (!paymentUrlTemplate || resolvedDocumentType === '') {
+        return '#';
+      }
+
+      const monthSelect = app ? app.querySelector('select[name="month"]') : null;
+      const yearSelect = app ? app.querySelector('select[name="year"]') : null;
+      const month = monthSelect ? String(monthSelect.value || '').trim() : '';
+      const year = yearSelect ? String(yearSelect.value || '').trim() : '';
+      const resolvedUrl = paymentUrlTemplate.replace('__DOCUMENT__', encodeURIComponent(resolvedDocumentType));
+
+      try {
+        const requestUrl = new URL(resolvedUrl, window.location.origin);
+
+        if (month !== '') {
+          requestUrl.searchParams.set('month', month);
+        }
+
+        if (year !== '') {
+          requestUrl.searchParams.set('year', year);
+        }
+
+        return requestUrl.toString();
+      } catch (error) {
+        const query = new URLSearchParams();
+
+        if (month !== '') {
+          query.set('month', month);
+        }
+
+        if (year !== '') {
+          query.set('year', year);
+        }
+
+        return resolvedUrl + (query.toString() ? '?' + query.toString() : '');
+      }
+    }
+
+    function resolvePaymentMonthLabel(month, year) {
+      if (!app) {
+        return `${month}/${year}`;
+      }
+
+      const monthOption = app.querySelector(`select[name="month"] option[value="${month}"]`);
+      const monthLabel = monthOption ? String(monthOption.textContent || '').trim() : String(month).padStart(2, '0');
+
+      return `${monthLabel} ${year}`;
+    }
+
+    function resolvePaymentPeriodLabel() {
+      const monthSelect = app ? app.querySelector('select[name="month"]') : null;
+      const yearSelect = app ? app.querySelector('select[name="year"]') : null;
+      const selectedMonth = monthSelect ? Number(monthSelect.value || 0) : 0;
+      const selectedYear = yearSelect ? Number(yearSelect.value || 0) : 0;
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      if (selectedMonth >= 1 && selectedMonth <= 12 && selectedYear > 0) {
+        const selectedEnd = new Date(selectedYear, selectedMonth, 0);
+
+        if (selectedEnd < today) {
+          return resolvePaymentMonthLabel(selectedMonth, selectedYear);
+        }
+      }
+
+      const fallback = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+
+      return resolvePaymentMonthLabel(fallback.getMonth() + 1, fallback.getFullYear());
+    }
+
+    function syncPaymentLinks() {
+      if (!app) {
+        return;
+      }
+
+      app.querySelectorAll('[data-payment-document-link]').forEach(function (link) {
+        link.setAttribute('href', buildPaymentUrl(link.dataset.paymentDocument || ''));
+      });
+
+      const paymentPeriod = document.getElementById('ai-token-history-payment-period');
+
+      if (paymentPeriod) {
+        paymentPeriod.textContent = `Ra\u010dun za mjesec ${resolvePaymentPeriodLabel()}`;
       }
     }
 
