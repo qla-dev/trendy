@@ -14,6 +14,7 @@ Extraction rules:
 - Example: return "StÃ¶ÃŸel" as "Stößel" and "MÃ¼ller" as "Müller".
 - Keep product_code and product_name separate: product_code is only the visible code, while product_name must contain only the visible article/name block for that same line item.
 - Treat product_code as a literal text identifier, not as a number for calculation.
+- Preserve intentional spaces inside product_code. Example: return "PP 05 456" exactly as "PP 05 456", never as "PP05456" or "PP-05-456".
 - Never append decimal places to a numeric-looking product_code.
 - Example: return product_code "64820441" exactly as "64820441", never as "64820441.00" or "64820441,00".
 - If a value is missing or uncertain, return an empty string for text fields or 0 for numeric fields.
@@ -114,7 +115,8 @@ $trendyDePromptRules = <<<'PROMPT'
 - Do not copy Liefertermin/Lieferdatum or its date into product_name or note.
 - If Einheit is STU for a Trendy Germany item, return unit as KO.
 - Prefer the visible Betrag value as line_total for each row.
-- Trendy Germany product codes may be numeric or alphanumeric and may contain dots or underscores, for example 241265.4, BYPR05C120030, or DN731973_A.
+- Trendy Germany product codes may be numeric or alphanumeric and may contain dots, underscores, or intentional internal spaces, for example 241265.4, BYPR05C120030, DN731973_A, or PP 05 456.
+- For Trendy Germany codes such as PP 05 456, keep the spaces inside product_code; do not compact them to PP05456.
 - Every visible Pos. + Artikel Nr. pair starts a separate item, even if PDF text extraction placed it after a page label or inside the previous description/note.
 - Never put a later position such as "10 1049658 Stossdaempferanschlag" or "11 DN731973_A SIDE PLATE, RIGHT" into the previous item's note. Split it into a new item with the visible line_number and product_code.
 - Ignore page labels such as "Page" or "Page 2/2"; they are not product_name or note content.

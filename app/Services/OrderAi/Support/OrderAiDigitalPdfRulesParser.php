@@ -31,10 +31,8 @@ class OrderAiDigitalPdfRulesParser
 
     private function parseGrob(OrderAiScan $scan, array $preparedDocument, float $startedAt): ?array
     {
-        $searchableText = trim((string) ($preparedDocument['searchable_text'] ?? ''));
-        $processedPages = is_array($preparedDocument['processed_pages'] ?? null)
-            ? $preparedDocument['processed_pages']
-            : [];
+        $searchableText = $this->resolvePreparedSearchableText($preparedDocument);
+        $processedPages = $this->extractPreparedPages($preparedDocument);
         $parsedItems = $processedPages !== []
             ? $this->parseGrobItemsFromPages($processedPages)
             : $this->parseGrobItemsFromText($searchableText);
@@ -141,7 +139,7 @@ class OrderAiDigitalPdfRulesParser
 
     private function parseTrendyDe(OrderAiScan $scan, array $preparedDocument, float $startedAt): ?array
     {
-        $searchableText = trim((string) ($preparedDocument['searchable_text'] ?? ''));
+        $searchableText = $this->resolvePreparedSearchableText($preparedDocument);
         $lines = $this->flattenPreparedLines($preparedDocument);
         $tableRowLines = $this->flattenPreparedTableRowLines($preparedDocument);
         $searchableLines = $this->splitVisibleTextLines($searchableText);
@@ -767,6 +765,14 @@ class OrderAiDigitalPdfRulesParser
                 continue;
             }
 
+            if ($currentLineNumber > 0 && $this->isTrendyDeProcessOrFinishText($line)) {
+                $notesByLineNumber[$currentLineNumber] = $this->appendItemNote(
+                    (string) ($notesByLineNumber[$currentLineNumber] ?? ''),
+                    $line
+                );
+                continue;
+            }
+
             if ($currentLineNumber > 0 && $this->isTrendyDeStandaloneNoteText($line)) {
                 $notesByLineNumber[$currentLineNumber] = $this->appendItemNote(
                     (string) ($notesByLineNumber[$currentLineNumber] ?? ''),
@@ -986,7 +992,7 @@ class OrderAiDigitalPdfRulesParser
 
     private function trendyDeProductCodePattern(): string
     {
-        return '(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24}';
+        return '(?:[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24})';
     }
 
     private function initializeTrendyDeParsedItem(int $lineNumber, string $productCode, string $initialDescription = ''): array
@@ -1024,6 +1030,14 @@ class OrderAiDigitalPdfRulesParser
             && preg_match('/^\d{1,3}$/u', $line) === 1
             && (int) $line === (int) ($item['line_number'] ?? 0)
         ) {
+            return;
+        }
+
+        if (
+            (int) ($item['line_number'] ?? 0) <= 0
+            && preg_match('/^\d{1,3}$/u', $line) === 1
+        ) {
+            $item['line_number'] = (int) $line;
             return;
         }
 
@@ -1198,6 +1212,10 @@ class OrderAiDigitalPdfRulesParser
             if ($productText !== '') {
                 return [$productText, $noteText];
             }
+
+            if ($noteText !== '') {
+                return ['', $noteText];
+            }
         }
 
         return [$descriptionText, ''];
@@ -1220,6 +1238,10 @@ class OrderAiDigitalPdfRulesParser
 
         if ($value === '') {
             return false;
+        }
+
+        if (preg_match('/^(?:' . $this->trendyDeProcessOrFinishPattern() . ')\b.*$/iu', $value) === 1) {
+            return true;
         }
 
         return preg_match(
@@ -1347,11 +1369,43 @@ class OrderAiDigitalPdfRulesParser
             || str_contains($normalizedLine, 'datum ');
     }
 
+    private function extractPreparedPages(array $preparedDocument): array
+    {
+        foreach (['processed_pages', 'pages'] as $key) {
+            if (is_array($preparedDocument[$key] ?? null) && $preparedDocument[$key] !== []) {
+                return array_values($preparedDocument[$key]);
+            }
+        }
+
+        $digitalPages = data_get($preparedDocument, 'digital_extraction.pages');
+
+        return is_array($digitalPages) ? array_values($digitalPages) : [];
+    }
+
+    private function resolvePreparedSearchableText(array $preparedDocument): string
+    {
+        $searchableText = trim((string) ($preparedDocument['searchable_text'] ?? ''));
+
+        if ($searchableText !== '') {
+            return $searchableText;
+        }
+
+        $digitalText = trim((string) data_get($preparedDocument, 'digital_extraction.text', ''));
+
+        if ($digitalText !== '') {
+            return $digitalText;
+        }
+
+        $pageText = trim(implode("\n\n", array_values(array_filter(array_map(function ($page) {
+            return is_array($page) ? trim((string) ($page['text'] ?? '')) : '';
+        }, $this->extractPreparedPages($preparedDocument))))));
+
+        return $pageText;
+    }
+
     private function flattenPreparedLines(array $preparedDocument): array
     {
-        $pages = is_array($preparedDocument['processed_pages'] ?? null)
-            ? $preparedDocument['processed_pages']
-            : [];
+        $pages = $this->extractPreparedPages($preparedDocument);
         $lines = [];
 
         foreach ($pages as $page) {
@@ -1364,14 +1418,14 @@ class OrderAiDigitalPdfRulesParser
             return $lines;
         }
 
-        return $this->splitVisibleTextLines((string) ($preparedDocument['searchable_text'] ?? ''));
+        return $this->splitVisibleTextLines($this->resolvePreparedSearchableText($preparedDocument));
     }
 
     private function flattenPreparedTableRowLines(array $preparedDocument): array
     {
         $rows = [];
 
-        foreach ((array) ($preparedDocument['processed_pages'] ?? []) as $page) {
+        foreach ($this->extractPreparedPages($preparedDocument) as $page) {
             foreach ((array) ($page['items'] ?? []) as $row) {
                 if (!is_array($row)) {
                     continue;
@@ -1403,7 +1457,7 @@ class OrderAiDigitalPdfRulesParser
         Log::info('Order AI Trendy DE extracted text table snapshot.', [
             'source' => (string) data_get($preparedDocument, 'digital_extraction.source', ''),
             'provider_input_mode' => (string) ($preparedDocument['provider_input_mode'] ?? ''),
-            'text_character_count' => (int) data_get($preparedDocument, 'digital_extraction.text_character_count', mb_strlen((string) ($preparedDocument['searchable_text'] ?? ''))),
+            'text_character_count' => (int) data_get($preparedDocument, 'digital_extraction.text_character_count', mb_strlen($this->resolvePreparedSearchableText($preparedDocument))),
             'line_count' => count($lines),
             'table_row_line_count' => count($tableRowLines),
             'lines' => $this->buildTrendyDeLineSnapshot($lines),
@@ -1439,7 +1493,7 @@ class OrderAiDigitalPdfRulesParser
     {
         $snapshot = [];
 
-        foreach ((array) ($preparedDocument['processed_pages'] ?? []) as $pageIndex => $page) {
+        foreach ($this->extractPreparedPages($preparedDocument) as $pageIndex => $page) {
             if (!is_array($page)) {
                 continue;
             }
@@ -1508,7 +1562,7 @@ class OrderAiDigitalPdfRulesParser
     {
         $partyRows = [];
 
-        foreach ((array) ($preparedDocument['processed_pages'] ?? []) as $page) {
+        foreach ($this->extractPreparedPages($preparedDocument) as $page) {
             foreach ((array) ($page['items'] ?? []) as $row) {
                 if (is_array($row)) {
                     $partyRows[] = $row;
@@ -2733,7 +2787,8 @@ class OrderAiDigitalPdfRulesParser
         }
 
         $value = Utf8Sanitizer::clean($value);
-        $value = preg_replace('/\s+/u', '', trim($value)) ?? trim($value);
+        $value = trim((string) (preg_replace('/\s+/u', ' ', trim($value)) ?? trim($value)));
+        $value = preg_replace('/\s*([._\-\/])\s*/u', '$1', $value) ?? $value;
 
         if ($value === '') {
             return '';
@@ -2829,7 +2884,9 @@ class OrderAiDigitalPdfRulesParser
             ];
         }
 
-        if (preg_match('/^([A-Z0-9.\-\/]+)\s+(' . $this->germanAmountPattern(true) . ')\s+([A-Z]{1,5})$/iu', $value, $matches) === 1) {
+        $productCodePattern = '(?:[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|[A-Z0-9.\-\/]+)';
+
+        if (preg_match('/^(' . $productCodePattern . ')\s+(' . $this->germanAmountPattern(true) . ')\s+([A-Z]{1,5})$/iu', $value, $matches) === 1) {
             return [
                 'product_code' => trim((string) ($matches[1] ?? '')),
                 'quantity' => $this->parseGermanNumber((string) ($matches[2] ?? '')),

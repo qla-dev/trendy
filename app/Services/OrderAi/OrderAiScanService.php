@@ -718,8 +718,7 @@ class OrderAiScanService
                 continue;
             }
 
-            if ($this->containsTrendyDeDeliveryLabel($line) || $this->isLikelyTrendyDeAmountFirstItemLine($line)) {
-                $expectingNote = false;
+            if ($this->containsTrendyDeDeliveryLabel($line)) {
                 continue;
             }
 
@@ -738,7 +737,7 @@ class OrderAiScanService
     {
         $lines = [];
 
-        foreach (is_array($preparedDocument['processed_pages'] ?? null) ? $preparedDocument['processed_pages'] : [] as $page) {
+        foreach ($this->extractPreparedDocumentPages($preparedDocument) as $page) {
             foreach (is_array($page['lines'] ?? null) ? $page['lines'] : [] as $line) {
                 $line = trim((string) $line);
 
@@ -752,15 +751,35 @@ class OrderAiScanService
             return $lines;
         }
 
-        return $this->splitVisibleTextLines((string) ($preparedDocument['searchable_text'] ?? ''));
+        $searchableText = trim((string) ($preparedDocument['searchable_text'] ?? ''));
+
+        if ($searchableText !== '') {
+            return $this->splitVisibleTextLines($searchableText);
+        }
+
+        return $this->splitVisibleTextLines(trim((string) data_get($preparedDocument, 'digital_extraction.text', '')));
+    }
+
+    private function extractPreparedDocumentPages(array $preparedDocument): array
+    {
+        foreach (['processed_pages', 'pages'] as $key) {
+            if (is_array($preparedDocument[$key] ?? null) && $preparedDocument[$key] !== []) {
+                return array_values($preparedDocument[$key]);
+            }
+        }
+
+        $digitalPages = data_get($preparedDocument, 'digital_extraction.pages');
+
+        return is_array($digitalPages) ? array_values($digitalPages) : [];
     }
 
     private function isLikelyTrendyDeAmountFirstItemLine(string $line): bool
     {
         $amount = '(?:\d{1,3}(?:[.\s]\d{3})+|\d+),\s*\d{2}';
+        $productCodePattern = $this->trendyDeProductCodePattern();
 
         return preg_match(
-            '/^\s*' . $amount . '\s+' . $amount . '\s*(?:STU|ST|PCS|PIECE|KO)\b.*[A-Z0-9][A-Z0-9._\-\/]{4,24}\s+.+\d{1,3}\s*$/iu',
+            '/^\s*' . $amount . '\s+' . $amount . '\s*(?:STU|ST|PCS|PIECE|KO)\b.*' . $productCodePattern . '\s+.+\d{1,3}\s*$/iu',
             $line
         ) === 1;
     }
@@ -771,6 +790,10 @@ class OrderAiScanService
 
         if ($line === '') {
             return false;
+        }
+
+        if (preg_match('/^(?:' . $this->trendyDeProcessOrFinishPattern() . ')\b.*$/iu', $line) === 1) {
+            return true;
         }
 
         return preg_match(
@@ -2977,6 +3000,10 @@ class OrderAiScanService
             if ($productName !== '') {
                 return [$productName, $note];
             }
+
+            if ($note !== '') {
+                return ['', $note];
+            }
         }
 
         return [$description, ''];
@@ -3903,7 +3930,7 @@ class OrderAiScanService
 
     private function trendyDeProductCodePattern(): string
     {
-        return '(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24}';
+        return '(?:[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24})';
     }
 
     private function trendyDeProcessOrFinishPattern(): string
@@ -3963,7 +3990,8 @@ class OrderAiScanService
         }
 
         $value = Utf8Sanitizer::clean($value);
-        $value = preg_replace('/\s+/u', '', trim($value)) ?? trim($value);
+        $value = trim((string) (preg_replace('/\s+/u', ' ', trim($value)) ?? trim($value)));
+        $value = preg_replace('/\s*([._\-\/])\s*/u', '$1', $value) ?? $value;
 
         if ($value === '') {
             return '';
@@ -4135,7 +4163,9 @@ class OrderAiScanService
             ];
         }
 
-        if (preg_match('/^([A-Z0-9.\-\/]+)\s+(' . $this->germanAmountPattern(true) . ')\s+([A-Z]{1,5})$/iu', $value, $matches) === 1) {
+        $productCodePattern = '(?:[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|[A-Z0-9.\-\/]+)';
+
+        if (preg_match('/^(' . $productCodePattern . ')\s+(' . $this->germanAmountPattern(true) . ')\s+([A-Z]{1,5})$/iu', $value, $matches) === 1) {
             return [
                 'product_code' => trim((string) ($matches[1] ?? '')),
                 'quantity' => $this->parseGermanNumber((string) ($matches[2] ?? '')),
