@@ -159,6 +159,15 @@
       color: #fff;
     }
 
+    .toolbar-right {
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .toolbar-right .invoice-pdf-button {
+      margin-left: auto;
+    }
+
     .payment-select {
       cursor: default;
       color: var(--invoice-gray-700);
@@ -619,8 +628,7 @@
 
     @media (max-width: 900px) {
       .invoice-toolbar {
-        align-items: stretch;
-        flex-direction: column;
+        flex-wrap: wrap;
       }
 
       .invoice-totals {
@@ -854,7 +862,7 @@
         </div>
       </div>
       <div class="toolbar-right">
-        <button type="button" class="toolbar-button is-primary" id="invoice-print-button">
+        <button type="button" class="toolbar-button is-primary invoice-pdf-button" id="invoice-print-button">
           Preuzmi PDF
         </button>
       </div>
