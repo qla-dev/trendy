@@ -115,11 +115,7 @@ class ExportPaymentDocumentController extends Controller
             $year = (int) $today->year;
         }
 
-        $selectedStart = Carbon::create($year, $month, 1)->startOfMonth();
-        $selectedEnd = $selectedStart->copy()->endOfMonth();
-        $periodStart = $selectedEnd->lt($today)
-            ? $selectedStart
-            : $today->copy()->subMonthNoOverflow()->startOfMonth();
+        $periodStart = Carbon::create($year, $month, 1)->startOfMonth();
         $periodEnd = $periodStart->copy()->endOfMonth();
 
         return [
