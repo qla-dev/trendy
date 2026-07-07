@@ -109,6 +109,7 @@ class AiTokenHistoryController extends Controller
             'tokenHistoryPerPageOptions' => self::PER_PAGE_OPTIONS,
             'tokenHistoryLastLoadedAtDisplay' => now()->format('d.m.Y H:i:s'),
             'showAiTokenUsdSpend' => $showUsdSpend,
+            'tokenHistoryCanShowPaymentDocument' => $this->canShowPaymentDocument($filters),
         ]);
     }
 
@@ -854,6 +855,11 @@ class AiTokenHistoryController extends Controller
             'start' => $start,
             'end' => $start->copy()->endOfMonth(),
         ];
+    }
+
+    private function canShowPaymentDocument(array $filters): bool
+    {
+        return $this->resolveMonthRange($filters)['end']->lt(Carbon::today());
     }
 
     private function resolveRequestedIds(Request $request): array

@@ -8,6 +8,7 @@
   $hasMultiplePrintPages = count($printItemPages) > 1;
   $hasLongPrintTable = count($items) > 10;
   $hasExpandedPrintNotes = strlen($notes) > 260 || $noteLineCount > 4;
+  $qlaLogoUrl = 'https://deklarant.ai/build/images/logo-qla.png';
   $formatMoney = static function ($amount) use ($currency): string {
       return $currency . ' ' . number_format((float) $amount, 2, '.', ',');
   };
@@ -205,7 +206,8 @@
     }
 
     .invoice-header {
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       align-items: flex-start;
       justify-content: space-between;
       gap: 1.5rem;
@@ -219,7 +221,7 @@
     }
 
     .invoice-brand-logo {
-      height: 3rem;
+      height: 2.75rem;
       width: auto;
       object-fit: contain;
       display: block;
@@ -227,11 +229,11 @@
     }
 
     .invoice-brand-fallback {
-      display: block;
+      display: none;
       color: var(--invoice-gray-900);
       font-size: 1.8rem;
       font-weight: 800;
-      letter-spacing: -0.02em;
+      letter-spacing: 0;
     }
 
     .invoice-brand-tagline {
@@ -250,6 +252,8 @@
     }
 
     .invoice-title-block {
+      justify-self: end;
+      min-width: 42mm;
       text-align: right;
     }
 
@@ -259,7 +263,7 @@
       font-size: 2rem;
       line-height: 1.1;
       font-weight: 800;
-      letter-spacing: -0.02em;
+      letter-spacing: 0;
     }
 
     .invoice-number-line {
@@ -344,17 +348,17 @@
     .invoice-meta {
       display: flex;
       align-items: flex-start;
-      justify-content: space-between;
+      justify-content: flex-end;
       gap: 1rem;
       margin-bottom: 2rem;
     }
 
     .meta-grid {
-      display: grid;
       grid-template-columns: minmax(8.75rem, auto) minmax(10rem, 1fr);
       column-gap: 1.5rem;
       row-gap: 0.75rem;
       font-size: 0.76rem;
+      display: none;
     }
 
     .meta-label {
@@ -373,6 +377,7 @@
       border-radius: 0.75rem;
       background: var(--invoice-gray-50);
       text-align: right;
+      margin-left: auto;
     }
 
     .amount-due-box .amount-label {
@@ -389,7 +394,7 @@
       font-size: 1.5rem;
       line-height: 1.1;
       font-weight: 800;
-      letter-spacing: -0.02em;
+      letter-spacing: 0;
     }
 
     .invoice-items-table {
@@ -399,7 +404,8 @@
       user-select: text;
     }
 
-    .invoice-items-table table {
+    .invoice-items-table table,
+    table.invoice-items-table {
       width: 100%;
       border-collapse: collapse;
       text-align: left;
@@ -426,10 +432,12 @@
     }
 
     .item-description {
+      padding-left: 1rem;
       padding-right: 1rem;
       color: var(--invoice-gray-800);
       font-weight: 700;
       line-height: 1.45;
+      text-align: center;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
     }
@@ -465,6 +473,14 @@
       font-weight: 700;
     }
 
+    .invoice-items-table thead th {
+      color: var(--invoice-gray-700);
+    }
+
+    .item-description-heading {
+      text-align: center;
+    }
+
     .invoice-empty-row {
       color: var(--invoice-gray-500);
       font-weight: 500;
@@ -477,16 +493,15 @@
     }
 
     .invoice-footer-grid {
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 20rem;
       align-items: flex-start;
-      justify-content: space-between;
       gap: 2rem;
     }
 
     .invoice-notes {
       width: 100%;
-      max-width: 26rem;
-      flex: 1;
+      max-width: none;
     }
 
     .invoice-print-notes,
@@ -547,7 +562,7 @@
       color: var(--invoice-gray-900);
       font-family: Inter, ui-sans-serif, system-ui, sans-serif;
       font-size: 1rem;
-      letter-spacing: -0.02em;
+      letter-spacing: 0;
     }
 
     .invoice-approval {
@@ -598,38 +613,17 @@
     }
 
     .print-only,
-    .print-invoice-items-pages,
-    .invoice-print-payment-details {
+    .print-invoice-items-pages {
       display: none;
     }
 
     @media (max-width: 900px) {
-      .invoice-toolbar,
-      .invoice-meta,
-      .invoice-footer-grid {
+      .invoice-toolbar {
         align-items: stretch;
         flex-direction: column;
       }
 
-      .invoice-party-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .invoice-header {
-        flex-direction: column;
-      }
-
-      .invoice-title-block {
-        width: 100%;
-        text-align: left;
-      }
-
-      .invoice-number-line {
-        justify-content: flex-start;
-      }
-
-      .invoice-totals,
-      .amount-due-box {
+      .invoice-totals {
         width: 100%;
       }
     }
@@ -702,17 +696,33 @@
         flex: 0 0 auto !important;
       }
 
-      .invoice-footer {
-        position: absolute !important;
-        left: 10mm !important;
-        right: 10mm !important;
-        bottom: 6mm !important;
-        margin-top: 0 !important;
+      .invoice-meta {
+        display: none !important;
       }
 
-      .has-multiple-print-pages .invoice-footer,
-      .has-long-print-table .invoice-footer,
-      .has-expanded-print-notes .invoice-footer {
+      .amount-due-box {
+        width: 58mm !important;
+        min-width: 58mm !important;
+        margin-left: auto !important;
+      }
+
+      .invoice-header {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto !important;
+        align-items: flex-start !important;
+      }
+
+      .invoice-title-block {
+        justify-self: end !important;
+        min-width: 42mm !important;
+        text-align: right !important;
+      }
+
+      .invoice-number-line {
+        justify-content: flex-end !important;
+      }
+
+      .invoice-footer {
         position: static !important;
         left: auto !important;
         right: auto !important;
@@ -762,6 +772,33 @@
         display: table-header-group;
       }
 
+      .invoice-item-print-page .invoice-items-table {
+        width: 100% !important;
+        table-layout: fixed !important;
+        border-collapse: collapse !important;
+      }
+
+      .invoice-item-print-page .item-date-time {
+        width: 32mm !important;
+      }
+
+      .invoice-item-print-page .item-center {
+        width: 20mm !important;
+      }
+
+      .invoice-item-print-page .item-right {
+        width: 31mm !important;
+      }
+
+      .invoice-item-print-page .item-total {
+        width: 29mm !important;
+      }
+
+      .invoice-item-print-page .item-description,
+      .invoice-item-print-page .item-description-heading {
+        width: auto !important;
+      }
+
       .invoice-items-table tr {
         break-inside: avoid;
         page-break-inside: avoid;
@@ -809,6 +846,20 @@
 </head>
 <body>
   <div id="app-root-container" class="invoice-screen" data-invoice='@json($invoice)'>
+    <div class="invoice-toolbar no-print">
+      <div class="toolbar-left">
+        <div class="toolbar-title">
+          <strong>{{ $documentTypeLabel }} {{ $invoice['fiscalNumber'] ?? '' }}</strong>
+          <span>{{ $invoice['buyer']['name'] ?? '' }}</span>
+        </div>
+      </div>
+      <div class="toolbar-right">
+        <button type="button" class="toolbar-button is-primary" id="invoice-print-button">
+          Preuzmi PDF
+        </button>
+      </div>
+    </div>
+
     <div class="invoice-layout">
       <div class="invoice-paper-shell">
         <div
@@ -818,6 +869,13 @@
           <div class="invoice-main">
             <div class="invoice-header">
               <div class="invoice-brand">
+                <img
+                  src="{{ $qlaLogoUrl }}"
+                  alt="qla.dev"
+                  class="invoice-brand-logo"
+                  referrerpolicy="no-referrer"
+                  onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
+                >
                 <div class="invoice-brand-fallback">qla.dev</div>
                 <p class="invoice-brand-tagline">
                   <span>Developing</span>
@@ -873,7 +931,7 @@
               </div>
             </div>
 
-            <div class="invoice-meta no-print">
+            <div class="invoice-meta">
               <div class="meta-grid">
                 <div class="meta-label">Datum fakture:</div>
                 <div class="meta-value">{{ $formatDateForDisplay($invoice['createdAt'] ?? '') }}</div>
@@ -896,9 +954,9 @@
                 <thead>
                   <tr>
                     <th class="item-date-time">Datum i vrijeme</th>
-                    <th>Stavke</th>
+                    <th class="item-description-heading">Stavke</th>
                     <th class="item-center">Koli&#269;ina</th>
-                    <th class="item-right">Cijena ({{ $currency }})</th>
+                    <th class="item-right">Jed. cijena ({{ $currency }})</th>
                     <th class="item-total">Total ({{ $currency }})</th>
                   </tr>
                 </thead>
@@ -927,9 +985,9 @@
                     <thead>
                       <tr>
                         <th class="item-date-time">Datum i vrijeme</th>
-                        <th>Stavke</th>
+                        <th class="item-description-heading">Stavke</th>
                         <th class="item-center">Koli&#269;ina</th>
-                        <th class="item-right">Cijena ({{ $currency }})</th>
+                        <th class="item-right">Jed. cijena ({{ $currency }})</th>
                         <th class="item-total">Total ({{ $currency }})</th>
                       </tr>
                     </thead>
@@ -967,7 +1025,7 @@
 
               <div class="invoice-totals">
                 <div class="total-row">
-                  <span>Total (Zbroj):</span>
+                  <span>Total:</span>
                   <span>{{ $formatMoney($totals['subtotal'] ?? 0) }}</span>
                 </div>
                 @if (($totals['discount'] ?? 0) > 0)
@@ -977,7 +1035,7 @@
                   </div>
                 @endif
                 <div class="total-row">
-                  <span>Porez (PDV 17%):</span>
+                  <span>Porez:</span>
                   <span>{{ $formatMoney($totals['vat'] ?? 0) }}</span>
                 </div>
                 @if ($invoiceType === 'avansna')
@@ -1052,9 +1110,6 @@
       }
 
       window.close();
-    });
-    window.addEventListener('load', function () {
-      window.setTimeout(handlePrint, 150);
     });
   </script>
 </body>

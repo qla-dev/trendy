@@ -11,6 +11,7 @@
   $perPage = (int) ($tokenHistoryPerPage ?? 10);
   $perPageOptions = $tokenHistoryPerPageOptions ?? [10, 25, 50, 100];
   $showUsdSpend = (bool) ($showAiTokenUsdSpend ?? false);
+  $canShowPaymentDocument = (bool) ($tokenHistoryCanShowPaymentDocument ?? false);
 @endphp
 
 @section('vendor-style')
@@ -468,6 +469,7 @@
   data-transfer-url="{{ route('app-orders-store') }}"
   data-payment-url-template="{{ route('app-ai-token-history-payment', ['document' => '__DOCUMENT__']) }}"
   data-csrf="{{ csrf_token() }}"
+  data-billing-today="{{ now()->toDateString() }}"
   data-last-loaded-display="{{ $tokenHistoryLastLoadedAtDisplay ?? now()->format('d.m.Y H:i:s') }}">
   <div class="content-header row">
     <div class="content-header-left col-12 mb-2">
@@ -601,7 +603,7 @@
 
         <button
           type="button"
-          class="btn btn-outline-success btn-sm ai-token-history-action-control"
+          class="btn btn-outline-success btn-sm ai-token-history-action-control {{ $canShowPaymentDocument ? '' : 'd-none' }}"
           id="btn-payment-document"
           data-bs-toggle="modal"
           data-bs-target="#ai-token-payment-modal">
@@ -894,7 +896,7 @@
               data-payment-document="predracun"
               target="_blank"
               rel="noopener">
-              <i data-feather="file-text" class="me-50"></i> Predra&#269;un
+              <i data-feather="file-text" class="me-50"></i> Preuzmi predra&#269;un
             </a>
             <a
               href="#"
@@ -903,7 +905,7 @@
               data-payment-document="a4-faktura"
               target="_blank"
               rel="noopener">
-              <i data-feather="printer" class="me-50"></i> A4 faktura
+              <i data-feather="printer" class="me-50"></i> Preuzmi A4 fakturu
             </a>
           </div>
         </div>
@@ -925,6 +927,7 @@
     const app = document.getElementById('ai-token-history-app');
     const filterBody = document.getElementById('filters-body');
     const toggleButton = document.getElementById('btn-toggle-filters');
+    const paymentButton = document.getElementById('btn-payment-document');
     const lastLoadedEl = document.getElementById('ai-token-history-last-loaded');
     const transferFeedback = document.getElementById('ai-token-history-transfer-feedback');
     const pollUrl = app ? (app.dataset.statusPollUrl || '') : '';
@@ -1314,25 +1317,54 @@
       const yearSelect = app ? app.querySelector('select[name="year"]') : null;
       const selectedMonth = monthSelect ? Number(monthSelect.value || 0) : 0;
       const selectedYear = yearSelect ? Number(yearSelect.value || 0) : 0;
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
       if (selectedMonth >= 1 && selectedMonth <= 12 && selectedYear > 0) {
-        const selectedEnd = new Date(selectedYear, selectedMonth, 0);
-
-        if (selectedEnd < today) {
-          return resolvePaymentMonthLabel(selectedMonth, selectedYear);
-        }
+        return resolvePaymentMonthLabel(selectedMonth, selectedYear);
       }
 
-      const fallback = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const now = resolveBillingToday();
 
-      return resolvePaymentMonthLabel(fallback.getMonth() + 1, fallback.getFullYear());
+      return resolvePaymentMonthLabel(now.getMonth() + 1, now.getFullYear());
+    }
+
+    function resolveBillingToday() {
+      const billingToday = app ? String(app.dataset.billingToday || '').trim() : '';
+      const parts = billingToday.split('-').map(function (part) {
+        return Number(part);
+      });
+
+      if (parts.length === 3 && parts[0] > 0 && parts[1] >= 1 && parts[1] <= 12 && parts[2] >= 1 && parts[2] <= 31) {
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+      }
+
+      const now = new Date();
+
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
+    function hasSelectedPaymentMonthEnded() {
+      const monthSelect = app ? app.querySelector('select[name="month"]') : null;
+      const yearSelect = app ? app.querySelector('select[name="year"]') : null;
+      const selectedMonth = monthSelect ? Number(monthSelect.value || 0) : 0;
+      const selectedYear = yearSelect ? Number(yearSelect.value || 0) : 0;
+
+      if (selectedMonth < 1 || selectedMonth > 12 || selectedYear <= 0) {
+        return false;
+      }
+
+      const today = resolveBillingToday();
+      const selectedEnd = new Date(selectedYear, selectedMonth, 0);
+
+      return selectedEnd < today;
     }
 
     function syncPaymentLinks() {
       if (!app) {
         return;
+      }
+
+      if (paymentButton) {
+        paymentButton.classList.toggle('d-none', !hasSelectedPaymentMonthEnded());
       }
 
       app.querySelectorAll('[data-payment-document-link]').forEach(function (link) {
