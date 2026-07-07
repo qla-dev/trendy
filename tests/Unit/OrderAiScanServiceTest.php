@@ -2535,6 +2535,93 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(751.45, data_get($result, 'normalized_payload.summary.subtotal'));
     }
 
+    public function test_trendy_de_parser_preserves_spaced_product_codes_from_amount_rows(): void
+    {
+        $structuredLines = [
+            '6. 7. 2026.',
+            'Trendy Germany GmbH',
+            'Trendy Germany 47',
+            'Bestellung26-020-000993',
+            'Edina Duzan',
+            'Artikel Nr. Pos. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            'PP 05 456 536,00 0,00 Betrag 16,00 VAT % STU 33,50',
+            'SUPT COLLIER LASER',
+            '1',
+            'Liefertermin: 24.08.2026',
+            'PP 02 711 79,65 0,00 3,00 Graviranje: PP 05 456 STU 26,55',
+            'ENTRETOISE TETE CODEUR',
+            '2',
+            'Liefertermin: 24.08.2026',
+            'Total 615,65',
+            'Gesamtpreis EUR 615,65',
+        ];
+        $rawTextLines = [
+            '6. 7. 2026.',
+            'Trendy Germany GmbH',
+            'Trendy Germany 47',
+            'Bestellung26-020-000993',
+            'Edina Duzan',
+            "Artikel Nr.Pos.\tBeschreibung\tMengeEinheit EK-Preis\tBetragVAT %",
+            "16,00\t33,50STU\t536,000,00PP 05 456 SUPT COLLIER LASER1",
+            'Liefertermin: 24.08.2026',
+            'Graviranje: PP 05 456',
+            "3,00\t26,55STU\t79,650,00PP 02 711 ENTRETOISE TETE CODEUR2",
+            'Liefertermin: 24.08.2026',
+            'Graviranje: PP 02 711',
+            "Total\t615,65",
+        ];
+        $pagePayload = [
+            'page' => 1,
+            'text' => implode("\n", $rawTextLines),
+            'lines' => $structuredLines,
+            'items' => array_values(array_map(function (string $row, int $index): array {
+                return [
+                    'row_number' => $index + 1,
+                    'y' => (float) (800 - ($index * 12)),
+                    'text' => $row,
+                    'cells' => [[
+                        'x' => 61.44,
+                        'text' => $row,
+                    ]],
+                ];
+            }, $structuredLines, array_keys($structuredLines))),
+        ];
+        $preparedDocument = [
+            'pdf_type' => 'digital',
+            'provider_input_mode' => 'text',
+            'effective_page_count' => 1,
+            'source_page_count' => 1,
+            'searchable_text' => '',
+            'digital_extraction' => [
+                'source' => 'smalot_pdfparser',
+                'text_character_count' => strlen(implode("\n", $rawTextLines)),
+                'pages' => [$pagePayload],
+            ],
+            'pages' => [$pagePayload],
+        ];
+
+        $scan = new OrderAiScan([
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000993.pdf',
+            'source_mime_type' => 'application/pdf',
+        ]);
+
+        $result = app(OrderAiDigitalPdfRulesParser::class)->parse($scan, $preparedDocument);
+        $items = data_get($result, 'normalized_payload.items');
+
+        $this->assertIsArray($items);
+        $this->assertCount(2, $items);
+        $this->assertSame(['PP 05 456', 'PP 02 711'], array_column($items, 'product_code'));
+        $this->assertSame([1, 2], array_column($items, 'line_number'));
+        $this->assertSame('SUPT COLLIER LASER', data_get($items, '0.product_name'));
+        $this->assertSame('ENTRETOISE TETE CODEUR', data_get($items, '1.product_name'));
+        $this->assertSame('Graviranje: PP 05 456', data_get($items, '0.note'));
+        $this->assertSame('Graviranje: PP 02 711', data_get($items, '1.note'));
+        $this->assertSame(16.0, data_get($items, '0.quantity'));
+        $this->assertSame(3.0, data_get($items, '1.quantity'));
+        $this->assertSame(615.65, data_get($result, 'normalized_payload.summary.subtotal'));
+    }
+
     public function test_trendy_de_parser_recovers_position_prefixed_notes_from_extracted_table_rows(): void
     {
         $itemLines = [
@@ -3826,6 +3913,8 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertStringContainsString('Every visible Pos. + Artikel Nr. pair starts a separate item', $prompt);
         $this->assertStringContainsString('11 DN731973_A SIDE PLATE, RIGHT', $prompt);
         $this->assertStringContainsString('Ignore page labels such as "Page"', $prompt);
+        $this->assertStringContainsString('PP 05 456', $prompt);
+        $this->assertStringContainsString('do not compact them to PP05456', $prompt);
     }
 
     public function test_build_status_payload_refreshes_legacy_duplicate_reference_preview_and_blocks_transfer(): void

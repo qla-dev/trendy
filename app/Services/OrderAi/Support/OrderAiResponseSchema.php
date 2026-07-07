@@ -85,7 +85,7 @@ class OrderAiResponseSchema
                             'line_number' => ['type' => 'integer'],
                             'product_code' => [
                                 'type' => 'string',
-                                'description' => 'Visible item/material code only. Keep it separate from the long item description.',
+                                'description' => 'Visible item/material code only. Keep it separate from the long item description. Preserve intentional internal spaces, for example PP 05 456 must not be compacted to PP05456.',
                             ],
                             'product_name' => [
                                 'type' => 'string',
