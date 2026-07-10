@@ -216,6 +216,7 @@ class PantheonOrderTransferService
 
             return $targetConnection->transaction(function () use ($normalizedPayload, $user) {
                 $prepared = $this->prepareTransferData($normalizedPayload, true, true, $user);
+                $prepared['referent_id'] = $this->resolveTransferReferentId($prepared, $user);
                 $this->assertUniqueExternalDocumentReference($prepared);
                 $numberContext = $this->generateNextOrderNumber($prepared['document_type']);
                 $headerTemplate = $this->resolveHeaderTemplate($prepared['document_type']);
@@ -395,6 +396,7 @@ class PantheonOrderTransferService
 
     private function buildTransferPayload(array $prepared, mixed $user = null): array
     {
+        $prepared['referent_id'] = $this->resolveTransferReferentId($prepared, $user);
         $this->assertUniqueExternalDocumentReference($prepared);
         $numberContext = $this->generateNextOrderNumber($prepared['document_type']);
         $headerTemplate = $this->resolveHeaderTemplate($prepared['document_type']);
@@ -668,6 +670,7 @@ class PantheonOrderTransferService
         $grandTotal = round(array_sum(array_column($preparedItems, 'grand_total')), 4);
         $customerName = $this->normalizePantheonText((string) ($order['customer_name'] ?? ''));
         $supplierName = $this->normalizePantheonText((string) ($order['supplier_name'] ?? ''));
+        $referentId = $this->resolvePayloadReferentId($normalizedPayload);
 
         if ($strict && $customerName === '') {
             throw new RuntimeException('Naziv kupca je obavezan za kreiranje narudžbe.');
@@ -690,7 +693,39 @@ class PantheonOrderTransferService
             'vat_total' => $vatTotal,
             'grand_total' => $grandTotal,
             'items' => $preparedItems,
+            'referent_id' => $referentId,
         ];
+    }
+
+    private function resolvePayloadReferentId(array $payload): ?int
+    {
+        $candidates = [
+            $payload['referent_id'] ?? null,
+            $payload['order']['referent_id'] ?? null,
+            $payload['payload']['referent_id'] ?? null,
+            $payload['payload']['order']['referent_id'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $referentId = $this->positiveIntegerOrNull($candidate);
+
+            if ($referentId !== null) {
+                return $referentId;
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveTransferReferentId(array $prepared, mixed $user): int
+    {
+        $referentId = $this->positiveIntegerOrNull($prepared['referent_id'] ?? null);
+
+        if ($referentId !== null) {
+            return $referentId;
+        }
+
+        return $this->resolvePantheonClerkUserId($user);
     }
 
     private function extractTransferItemMetadata(array $rawItem, array $order = []): array
@@ -1078,6 +1113,7 @@ class PantheonOrderTransferService
             'adDeliveryDeadline',
             'adDateValid',
             'anClerk',
+            'anNoteClerk',
             'anValue',
             'anDiscount',
             'anVAT',
@@ -1095,6 +1131,7 @@ class PantheonOrderTransferService
             'acWayOfSale',
             'acWarehouse',
             'acDoc1',
+            'acDoc2',
             'acNote',
             'acInternalNote',
             'acAddress',
@@ -1117,16 +1154,17 @@ class PantheonOrderTransferService
 
         $now = Carbon::now();
         $validDays = max(0, (int) config('ai-order-scan.default_valid_days', 5));
-        $deliveryDeadline = $this->parseDateOrFallback($prepared['delivery_deadline'] ?? '', $now->copy()->addDays($validDays));
         $valueBeforeDiscount = $prepared['subtotal'];
         $vatTotal = $prepared['vat_total'];
         $grandTotal = $prepared['grand_total'];
-        $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
-        $clerkUserId = $this->resolvePantheonClerkUserId($user);
+        $referentId = $this->resolveTransferReferentId($prepared, $user);
+        $requesterCode = $this->normalizePantheonText((string) ($prepared['requester_code'] ?? ''));
         $transferPartyName = trim((string) ($prepared['supplier_name'] ?? '')) !== ''
             ? trim((string) $prepared['supplier_name'])
             : trim((string) ($prepared['customer_name'] ?? ''));
-        $consigneeName = $this->resolveHeaderConsigneeName($prepared, $transferPartyName);
+        $consigneeName = $requesterCode !== ''
+            ? $requesterCode
+            : $this->resolveHeaderConsigneeName($prepared, $transferPartyName);
         $receiverName = $transferPartyName !== '' ? $transferPartyName : (string) ($prepared['receiver_name'] ?? '');
         $consigneeLookupName = $transferPartyName !== '' ? $transferPartyName : $consigneeName;
         $consigneeQId = $this->resolveSubjectQId(
@@ -1143,7 +1181,6 @@ class PantheonOrderTransferService
         $payload['acDocType'] = $this->fitString('acDocType', $numberContext['doc_type'], $stringLengths);
         $payload['acRefNo1'] = $this->fitString('acRefNo1', (string) config('ai-order-scan.default_ref_no', '99'), $stringLengths);
         $payload['adDate'] = $now->copy()->startOfDay();
-        $payload['adDeliveryDeadline'] = $deliveryDeadline->copy()->startOfDay();
         $payload['adDateValid'] = $now->copy()->addDays($validDays)->startOfDay();
         $payload['anDaysForValid'] = $validDays;
         $payload['acStatus'] = '1';
@@ -1155,6 +1192,7 @@ class PantheonOrderTransferService
         $payload['acWayOfSale'] = $this->fitString('acWayOfSale', $prepared['way_of_sale'], $stringLengths);
         $payload['acWarehouse'] = $this->fitString('acWarehouse', (string) config('ai-order-scan.default_warehouse', ''), $stringLengths);
         $payload['acDoc1'] = $this->fitString('acDoc1', $prepared['external_document_number'], $stringLengths);
+        $payload['acDoc2'] = $this->fitString('acDoc2', $requesterCode, $stringLengths);
         $payload['anValue'] = $valueBeforeDiscount;
         $payload['anDiscount'] = 0;
         $payload['anVAT'] = $vatTotal;
@@ -1165,13 +1203,17 @@ class PantheonOrderTransferService
         $payload['adTimeIns'] = $now;
         $payload['adTimeChg'] = $now;
 
-        if ($userId > 0) {
-            $payload['anUserIns'] = $userId;
-            $payload['anUserChg'] = $userId;
+        if ($referentId > 0) {
+            $payload['anUserIns'] = $referentId;
+            $payload['anUserChg'] = $referentId;
         }
 
-        if (in_array('anClerk', $columns, true) && $clerkUserId > 0) {
-            $payload['anClerk'] = $clerkUserId;
+        if (in_array('anClerk', $columns, true) && $referentId > 0) {
+            $payload['anClerk'] = $referentId;
+        }
+
+        if (in_array('anNoteClerk', $columns, true) && $referentId > 0) {
+            $payload['anNoteClerk'] = $referentId;
         }
 
         if (in_array('anQId', $columns, true) && $nextQid !== null) {
@@ -1265,7 +1307,7 @@ class PantheonOrderTransferService
 
         $now = Carbon::now();
         $userId = is_object($user) ? (int) ($user->id ?? 0) : 0;
-        $headerDeliveryDeadline = $headerPayload['adDeliveryDeadline'] instanceof Carbon
+        $headerDeliveryDeadline = ($headerPayload['adDeliveryDeadline'] ?? null) instanceof Carbon
             ? $headerPayload['adDeliveryDeadline']->copy()->startOfDay()
             : $now->copy()->startOfDay();
         $itemDeliveryDeadline = $this->parseDateOrFallback(
@@ -1355,7 +1397,7 @@ class PantheonOrderTransferService
     {
         return [
             'adDeliveryDeadline' => $deliveryDeadline->copy()->startOfDay(),
-            'adDeliveryDate' => null,
+            'adDeliveryDate' => $deliveryDeadline->copy()->startOfDay(),
         ];
     }
 
