@@ -94,6 +94,20 @@ return [
             'login_timeout' => (int) env('DB_LOGIN_TIMEOUT', 10),
         ],
 
+        'ai_order_target' => [
+            'driver' => 'sqlsrv',
+            'host' => env('AI_ORDER_TARGET_DB_HOST', ''),
+            'port' => env('AI_ORDER_TARGET_DB_PORT', '1433'),
+            'database' => env('AI_ORDER_TARGET_DB_DATABASE', ''),
+            'username' => env('AI_ORDER_TARGET_DB_USERNAME', ''),
+            'password' => env('AI_ORDER_TARGET_DB_PASSWORD', ''),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'encrypt' => filter_var(env('AI_ORDER_TARGET_DB_ENCRYPT', true), FILTER_VALIDATE_BOOL) ? 'yes' : 'no',
+            'trust_server_certificate' => filter_var(env('AI_ORDER_TARGET_DB_TRUST_SERVER_CERTIFICATE', true), FILTER_VALIDATE_BOOL),
+        ],
+
     ],
 
     /*

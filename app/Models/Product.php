@@ -12,11 +12,11 @@ class Product extends Model
 {
     use HasFactory;
 
-    private static ?array $catalogItemColumnsCache = null;
-    private static ?array $catalogItemNonInsertableColumnsCache = null;
+    private static array $catalogItemColumnsCache = [];
+    private static array $catalogItemNonInsertableColumnsCache = [];
     private static ?array $productStructureColumnsCache = null;
     private static ?array $productStructureNonInsertableColumnsCache = null;
-    private static ?array $pantheonUsersCache = null;
+    private static array $pantheonUsersCache = [];
 
     protected $fillable = [
         'work_order_id',
@@ -95,7 +95,11 @@ class Product extends Model
         return $row === null ? null : self::mapScannerRow((array) $row, 'selected');
     }
 
-    public static function ensureCatalogProduct(array $attributes, mixed $auditUser = null): array
+    public static function ensureCatalogProduct(
+        array $attributes,
+        mixed $auditUser = null,
+        ?string $connectionName = null
+    ): array
     {
         $productCode = trim((string) ($attributes['product_code'] ?? $attributes['acIdent'] ?? ''));
 
@@ -107,10 +111,11 @@ class Product extends Model
         $productUnit = strtoupper(substr(trim((string) ($attributes['product_um'] ?? $attributes['acUM'] ?? '')), 0, 3));
         $productSet = strtoupper(trim((string) ($attributes['product_set'] ?? $attributes['acSetOfItem'] ?? '')));
         $productClassif = trim((string) ($attributes['product_classification'] ?? $attributes['product_classif'] ?? $attributes['acClassif'] ?? ''));
-        $auditUserId = self::resolveCatalogAuditUserId($auditUser);
+        $connection = self::db($connectionName);
+        $auditUserId = self::resolveCatalogAuditUserId($auditUser, $connectionName);
         $now = now();
         $itemsTable = self::sourceSchema() . '.' . self::itemsTable();
-        $existingRow = DB::table($itemsTable)
+        $existingRow = $connection->table($itemsTable)
             ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
             ->first();
 
@@ -121,15 +126,15 @@ class Product extends Model
             ];
         }
 
-        $catalogColumns = self::catalogItemColumns();
-        $nonInsertableColumns = self::catalogItemNonInsertableColumns();
+        $catalogColumns = self::catalogItemColumns($connectionName);
+        $nonInsertableColumns = self::catalogItemNonInsertableColumns($connectionName);
 
         if (empty($catalogColumns)) {
             throw new \RuntimeException('Catalog item columns could not be resolved.');
         }
 
         $nextQId = array_key_exists('anQId', $catalogColumns)
-            ? ((int) (DB::table($itemsTable)->max('anQId') ?? 0)) + 1
+            ? ((int) ($connection->table($itemsTable)->max('anQId') ?? 0)) + 1
             : null;
         $preferredValues = self::buildCatalogPreferredValues(
             $attributes,
@@ -168,9 +173,9 @@ class Product extends Model
             $insertPayload[$columnName] = $insertValue;
         }
 
-        DB::table($itemsTable)->insert($insertPayload);
+        $connection->table($itemsTable)->insert($insertPayload);
 
-        $createdRow = DB::table($itemsTable)
+        $createdRow = $connection->table($itemsTable)
             ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
             ->first();
 
@@ -687,6 +692,20 @@ class Product extends Model
         return min($limit, 100);
     }
 
+    private static function connectionCacheKey(?string $connectionName = null): string
+    {
+        $connectionName = trim((string) $connectionName);
+
+        return $connectionName !== '' ? $connectionName : (string) config('database.default');
+    }
+
+    private static function db(?string $connectionName = null)
+    {
+        $connectionName = trim((string) $connectionName);
+
+        return $connectionName !== '' ? DB::connection($connectionName) : DB::connection();
+    }
+
     private static function sourceSchema(): string
     {
         return (string) config('workorders.schema', 'dbo');
@@ -699,13 +718,16 @@ class Product extends Model
         return is_array($defaults) ? $defaults : [];
     }
 
-    private static function catalogItemColumns(): array
+    private static function catalogItemColumns(?string $connectionName = null): array
     {
-        if (self::$catalogItemColumnsCache !== null) {
-            return self::$catalogItemColumnsCache;
+        $cacheKey = self::connectionCacheKey($connectionName);
+
+        if (array_key_exists($cacheKey, self::$catalogItemColumnsCache)) {
+            return self::$catalogItemColumnsCache[$cacheKey];
         }
 
-        self::$catalogItemColumnsCache = DB::table('INFORMATION_SCHEMA.COLUMNS')
+        self::$catalogItemColumnsCache[$cacheKey] = self::db($connectionName)
+            ->table('INFORMATION_SCHEMA.COLUMNS')
             ->select('COLUMN_NAME', 'DATA_TYPE', 'CHARACTER_MAXIMUM_LENGTH', 'IS_NULLABLE', 'COLUMN_DEFAULT')
             ->where('TABLE_SCHEMA', self::sourceSchema())
             ->where('TABLE_NAME', self::itemsTable())
@@ -725,16 +747,19 @@ class Product extends Model
             })
             ->all();
 
-        return self::$catalogItemColumnsCache;
+        return self::$catalogItemColumnsCache[$cacheKey];
     }
 
-    private static function catalogItemNonInsertableColumns(): array
+    private static function catalogItemNonInsertableColumns(?string $connectionName = null): array
     {
-        if (self::$catalogItemNonInsertableColumnsCache !== null) {
-            return self::$catalogItemNonInsertableColumnsCache;
+        $cacheKey = self::connectionCacheKey($connectionName);
+
+        if (array_key_exists($cacheKey, self::$catalogItemNonInsertableColumnsCache)) {
+            return self::$catalogItemNonInsertableColumnsCache[$cacheKey];
         }
 
-        self::$catalogItemNonInsertableColumnsCache = DB::table('sys.columns as c')
+        self::$catalogItemNonInsertableColumnsCache[$cacheKey] = self::db($connectionName)
+            ->table('sys.columns as c')
             ->join('sys.tables as t', 'c.object_id', '=', 't.object_id')
             ->join('sys.schemas as s', 't.schema_id', '=', 's.schema_id')
             ->where('s.name', self::sourceSchema())
@@ -752,7 +777,7 @@ class Product extends Model
             ->flip()
             ->all();
 
-        return self::$catalogItemNonInsertableColumnsCache;
+        return self::$catalogItemNonInsertableColumnsCache[$cacheKey];
     }
 
     private static function resolveCatalogStringValue(array $attributes, array $keys, string $fallback = ''): string
@@ -793,7 +818,7 @@ class Product extends Model
         return $fallback;
     }
 
-    private static function resolveCatalogAuditUserId(mixed $auditUser): int
+    private static function resolveCatalogAuditUserId(mixed $auditUser, ?string $connectionName = null): int
     {
         $explicitPantheonId = self::extractAuditUserIntegerValue($auditUser, [
             'pantheon_user_id',
@@ -801,17 +826,17 @@ class Product extends Model
             'anUserId',
         ]);
 
-        if ($explicitPantheonId > 0 && self::pantheonUserIdExists($explicitPantheonId)) {
+        if ($explicitPantheonId > 0 && self::pantheonUserIdExists($explicitPantheonId, $connectionName)) {
             return $explicitPantheonId;
         }
 
         $numericUserId = self::extractAuditUserIntegerValue($auditUser, ['id', 'user_id', 'anUserIns']);
 
-        if ($numericUserId > 0 && self::pantheonUserIdExists($numericUserId)) {
+        if ($numericUserId > 0 && self::pantheonUserIdExists($numericUserId, $connectionName)) {
             return $numericUserId;
         }
 
-        $mappedUserId = self::resolveMappedPantheonUserId($auditUser);
+        $mappedUserId = self::resolveMappedPantheonUserId($auditUser, $connectionName);
 
         if ($mappedUserId > 0) {
             return $mappedUserId;
@@ -820,7 +845,7 @@ class Product extends Model
         return $numericUserId > 0 ? $numericUserId : 0;
     }
 
-    private static function resolveMappedPantheonUserId(mixed $auditUser): int
+    private static function resolveMappedPantheonUserId(mixed $auditUser, ?string $connectionName = null): int
     {
         $configuredMap = config('workorders.pantheon_user_map', []);
         $normalizedConfiguredMap = [];
@@ -845,7 +870,7 @@ class Product extends Model
                 return (int) $normalizedConfiguredMap[$candidate];
             }
 
-            foreach (self::pantheonUsers() as $pantheonUser) {
+            foreach (self::pantheonUsers($connectionName) as $pantheonUser) {
                 if ($candidate === (string) ($pantheonUser['normalized_user_code'] ?? '')) {
                     return (int) ($pantheonUser['id'] ?? 0);
                 }
@@ -915,13 +940,13 @@ class Product extends Model
         return preg_replace('/[^a-z0-9]+/', '', $value) ?? '';
     }
 
-    private static function pantheonUserIdExists(int $pantheonUserId): bool
+    private static function pantheonUserIdExists(int $pantheonUserId, ?string $connectionName = null): bool
     {
         if ($pantheonUserId < 1) {
             return false;
         }
 
-        foreach (self::pantheonUsers() as $pantheonUser) {
+        foreach (self::pantheonUsers($connectionName) as $pantheonUser) {
             if ((int) ($pantheonUser['id'] ?? 0) === $pantheonUserId) {
                 return true;
             }
@@ -930,13 +955,15 @@ class Product extends Model
         return false;
     }
 
-    private static function pantheonUsers(): array
+    private static function pantheonUsers(?string $connectionName = null): array
     {
-        if (self::$pantheonUsersCache !== null) {
-            return self::$pantheonUsersCache;
+        $cacheKey = self::connectionCacheKey($connectionName);
+
+        if (array_key_exists($cacheKey, self::$pantheonUsersCache)) {
+            return self::$pantheonUsersCache[$cacheKey];
         }
 
-        self::$pantheonUsersCache = DB::connection('sqlsrv')
+        self::$pantheonUsersCache[$cacheKey] = self::db($connectionName)
             ->table(self::sourceSchema() . '.tPA_User')
             ->select('anUserId', 'acUserId', 'acTitle', 'acActive')
             ->get()
@@ -959,7 +986,7 @@ class Product extends Model
             ->values()
             ->all();
 
-        return self::$pantheonUsersCache;
+        return self::$pantheonUsersCache[$cacheKey];
     }
 
     private static function extractAuditUserIntegerValue(mixed $auditUser, array $keys): int
