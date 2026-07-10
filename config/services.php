@@ -14,6 +14,10 @@ return [
     |
     */
 
+    'ai_order' => [
+        'target_connection' => env('AI_ORDER_TARGET_CONNECTION', 'sqlsrv'),
+    ],
+
     'mailgun' => [
         'domain' => env('MAILGUN_DOMAIN'),
         'secret' => env('MAILGUN_SECRET'),

@@ -18,7 +18,186 @@ class PantheonOrderTransferService
     private array $catalogMaterialByCodeCache = [];
     private array $catalogMaterialByNameCache = [];
     private array $createdCatalogItems = [];
-    private ?array $pantheonClerkContactsCache = null;
+    private array $orderColumnsCache = [];
+    private array $orderColumnMetadataCache = [];
+    private array $orderNonInsertableColumnsCache = [];
+    private array $orderItemColumnsCache = [];
+    private array $orderItemColumnMetadataCache = [];
+    private array $orderItemNonInsertableColumnsCache = [];
+    private array $knownUnitsCache = [];
+    private array $pantheonClerkContactsCache = [];
+
+    private function targetConnectionName(): string
+    {
+        $connection = trim((string) config('services.ai_order.target_connection', 'sqlsrv'));
+
+        return $connection !== '' ? $connection : 'sqlsrv';
+    }
+
+    private function targetConnection()
+    {
+        return DB::connection($this->targetConnectionName());
+    }
+
+    private function orderSourceQuery()
+    {
+        return $this->targetConnection()->table(Order::qualifiedSourceTableName());
+    }
+
+    private function orderItemSourceQuery()
+    {
+        return $this->targetConnection()->table(OrderItem::qualifiedSourceTableName());
+    }
+
+    private function orderColumns(): array
+    {
+        return $this->resolveTableColumns(Order::sourceTableName(), 'orderColumnsCache');
+    }
+
+    private function orderColumnMetadata(): array
+    {
+        return $this->resolveTableColumnMetadata(Order::sourceTableName(), 'orderColumnMetadataCache');
+    }
+
+    private function orderStringLengths(): array
+    {
+        return array_map(
+            fn (array $metadata) => $metadata['length'] ?? null,
+            $this->orderColumnMetadata()
+        );
+    }
+
+    private function orderNonInsertableColumns(): array
+    {
+        return $this->resolveTableNonInsertableColumns(Order::sourceTableName(), 'orderNonInsertableColumnsCache');
+    }
+
+    private function orderInsertableColumns(): array
+    {
+        return array_values(array_diff($this->orderColumns(), $this->orderNonInsertableColumns()));
+    }
+
+    private function orderItemColumns(): array
+    {
+        return $this->resolveTableColumns(OrderItem::sourceTableName(), 'orderItemColumnsCache');
+    }
+
+    private function orderItemColumnMetadata(): array
+    {
+        return $this->resolveTableColumnMetadata(OrderItem::sourceTableName(), 'orderItemColumnMetadataCache');
+    }
+
+    private function orderItemStringLengths(): array
+    {
+        return array_map(
+            fn (array $metadata) => $metadata['length'] ?? null,
+            $this->orderItemColumnMetadata()
+        );
+    }
+
+    private function orderItemNonInsertableColumns(): array
+    {
+        return $this->resolveTableNonInsertableColumns(OrderItem::sourceTableName(), 'orderItemNonInsertableColumnsCache');
+    }
+
+    private function orderItemInsertableColumns(): array
+    {
+        return array_values(array_diff($this->orderItemColumns(), $this->orderItemNonInsertableColumns()));
+    }
+
+    private function tableCacheKey(string $tableName): string
+    {
+        return implode('|', [
+            $this->targetConnectionName(),
+            Order::sourceSchema(),
+            $tableName,
+        ]);
+    }
+
+    private function resolveTableColumns(string $tableName, string $cacheProperty): array
+    {
+        $cacheKey = $this->tableCacheKey($tableName);
+
+        if (!array_key_exists($cacheKey, $this->{$cacheProperty})) {
+            $this->{$cacheProperty}[$cacheKey] = $this->targetConnection()
+                ->table('INFORMATION_SCHEMA.COLUMNS')
+                ->where('TABLE_SCHEMA', Order::sourceSchema())
+                ->where('TABLE_NAME', $tableName)
+                ->pluck('COLUMN_NAME')
+                ->map(function ($columnName) {
+                    return (string) $columnName;
+                })
+                ->values()
+                ->all();
+        }
+
+        return $this->{$cacheProperty}[$cacheKey];
+    }
+
+    private function resolveTableColumnMetadata(string $tableName, string $cacheProperty): array
+    {
+        $cacheKey = $this->tableCacheKey($tableName);
+
+        if (!array_key_exists($cacheKey, $this->{$cacheProperty})) {
+            $this->{$cacheProperty}[$cacheKey] = $this->targetConnection()
+                ->table('INFORMATION_SCHEMA.COLUMNS')
+                ->select([
+                    'COLUMN_NAME',
+                    'DATA_TYPE',
+                    'CHARACTER_MAXIMUM_LENGTH',
+                    'NUMERIC_PRECISION',
+                    'NUMERIC_SCALE',
+                ])
+                ->where('TABLE_SCHEMA', Order::sourceSchema())
+                ->where('TABLE_NAME', $tableName)
+                ->get()
+                ->mapWithKeys(function ($row) {
+                    return [
+                        (string) $row->COLUMN_NAME => [
+                            'data_type' => (string) $row->DATA_TYPE,
+                            'length' => $row->CHARACTER_MAXIMUM_LENGTH !== null
+                                ? (int) $row->CHARACTER_MAXIMUM_LENGTH
+                                : null,
+                            'precision' => $row->NUMERIC_PRECISION !== null ? (int) $row->NUMERIC_PRECISION : null,
+                            'scale' => $row->NUMERIC_SCALE !== null ? (int) $row->NUMERIC_SCALE : null,
+                        ],
+                    ];
+                })
+                ->all();
+        }
+
+        return $this->{$cacheProperty}[$cacheKey];
+    }
+
+    private function resolveTableNonInsertableColumns(string $tableName, string $cacheProperty): array
+    {
+        $cacheKey = $this->tableCacheKey($tableName);
+
+        if (array_key_exists($cacheKey, $this->{$cacheProperty})) {
+            return $this->{$cacheProperty}[$cacheKey];
+        }
+
+        if ($this->targetConnection()->getDriverName() !== 'sqlsrv') {
+            return $this->{$cacheProperty}[$cacheKey] = [];
+        }
+
+        return $this->{$cacheProperty}[$cacheKey] = $this->targetConnection()
+            ->table('sys.columns as c')
+            ->join('sys.tables as t', 'c.object_id', '=', 't.object_id')
+            ->join('sys.schemas as s', 't.schema_id', '=', 's.schema_id')
+            ->where('s.name', Order::sourceSchema())
+            ->where('t.name', $tableName)
+            ->where(function ($query) {
+                $query->where('c.is_identity', 1)
+                    ->orWhere('c.is_computed', 1);
+            })
+            ->pluck('c.name')
+            ->map(function ($columnName) {
+                return (string) $columnName;
+            })
+            ->values()
+            ->all();
+    }
 
     public function previewFromNormalizedPayload(array $normalizedPayload, mixed $user = null): array
     {
@@ -33,12 +212,14 @@ class PantheonOrderTransferService
         $this->createdCatalogItems = [];
 
         try {
-            return DB::connection('sqlsrv')->transaction(function () use ($normalizedPayload, $user) {
-            $prepared = $this->prepareTransferData($normalizedPayload, true, true, $user);
-            $this->assertUniqueExternalDocumentReference($prepared);
-            $numberContext = $this->generateNextOrderNumber($prepared['document_type']);
-            $headerTemplate = $this->resolveHeaderTemplate($prepared['document_type']);
-            $itemTemplate = $this->resolveItemTemplate($headerTemplate['acKey'] ?? null);
+            $targetConnection = $this->targetConnection();
+
+            return $targetConnection->transaction(function () use ($normalizedPayload, $user) {
+                $prepared = $this->prepareTransferData($normalizedPayload, true, true, $user);
+                $this->assertUniqueExternalDocumentReference($prepared);
+                $numberContext = $this->generateNextOrderNumber($prepared['document_type']);
+                $headerTemplate = $this->resolveHeaderTemplate($prepared['document_type']);
+                $itemTemplate = $this->resolveItemTemplate($headerTemplate['acKey'] ?? null);
 
             if (empty($headerTemplate)) {
                 throw new RuntimeException('Nije moguće pronaći template narudžbe za Pantheon.');
@@ -48,8 +229,18 @@ class PantheonOrderTransferService
                 throw new RuntimeException('Nije moguće pronaći template stavke narudžbe za Pantheon.');
             }
 
-            $headerQid = $this->nextIntegerValue(Order::newSourceQuery(), Order::sourceColumns(), Order::sourceNonInsertableColumns(), 'anQId');
-            $itemQid = $this->nextIntegerValue(OrderItem::newSourceQuery(), OrderItem::sourceColumns(), OrderItem::sourceNonInsertableColumns(), 'anQId');
+            $headerQid = $this->nextIntegerValue(
+                $this->orderSourceQuery(),
+                $this->orderColumns(),
+                $this->orderNonInsertableColumns(),
+                'anQId'
+            );
+            $itemQid = $this->nextIntegerValue(
+                $this->orderItemSourceQuery(),
+                $this->orderItemColumns(),
+                $this->orderItemNonInsertableColumns(),
+                'anQId'
+            );
 
             $headerPayload = $this->buildHeaderPayload(
                 $headerTemplate,
@@ -61,7 +252,7 @@ class PantheonOrderTransferService
 
             $referent = $this->resolvePantheonReferentPayload($headerPayload['anClerk'] ?? null);
 
-            Order::newSourceQuery()->insert($headerPayload);
+            $this->orderSourceQuery()->insert($headerPayload);
 
             $itemPayloads = [];
             foreach ($prepared['items'] as $index => $item) {
@@ -77,7 +268,7 @@ class PantheonOrderTransferService
             }
 
             foreach ($this->buildOrderItemInsertBatches($itemPayloads) as $itemPayloadBatch) {
-                OrderItem::newSourceQuery()->insert($itemPayloadBatch);
+                $this->orderItemSourceQuery()->insert($itemPayloadBatch);
             }
 
                 Log::info('Order AI Pantheon transfer prepared.', [
@@ -167,7 +358,7 @@ class PantheonOrderTransferService
             return null;
         }
 
-        $columns = Order::sourceColumns();
+        $columns = $this->orderColumns();
 
         if (!in_array('acDoc1', $columns, true)) {
             return null;
@@ -185,7 +376,7 @@ class PantheonOrderTransferService
             $selects[] = DB::raw("LTRIM(RTRIM(ISNULL(acKeyView, ''))) as acKeyView");
         }
 
-        $existingOrder = Order::newSourceQuery()
+        $existingOrder = $this->orderSourceQuery()
             ->select($selects)
             ->whereRaw("LTRIM(RTRIM(ISNULL(acDoc1, ''))) = ?", [$reference])
             ->orderByDesc('acKey')
@@ -217,8 +408,18 @@ class PantheonOrderTransferService
             throw new RuntimeException('Nije moguće pronaći template stavke narudžbe za Pantheon.');
         }
 
-        $headerQid = $this->nextIntegerValue(Order::newSourceQuery(), Order::sourceColumns(), Order::sourceNonInsertableColumns(), 'anQId');
-        $itemQid = $this->nextIntegerValue(OrderItem::newSourceQuery(), OrderItem::sourceColumns(), OrderItem::sourceNonInsertableColumns(), 'anQId');
+        $headerQid = $this->nextIntegerValue(
+            $this->orderSourceQuery(),
+            $this->orderColumns(),
+            $this->orderNonInsertableColumns(),
+            'anQId'
+        );
+        $itemQid = $this->nextIntegerValue(
+            $this->orderItemSourceQuery(),
+            $this->orderItemColumns(),
+            $this->orderItemNonInsertableColumns(),
+            'anQId'
+        );
 
         $headerPayload = $this->buildHeaderPayload(
             $headerTemplate,
@@ -700,7 +901,7 @@ class PantheonOrderTransferService
             'product_um' => (string) config('ai-order-scan.default_unit', 'KO'),
             'product_set' => '120',
             'product_classification' => $primaryClassification,
-        ], $user);
+        ], $user, $this->targetConnectionName());
 
         $catalogRow = is_array($ensureResult['row'] ?? null)
             ? (array) ($ensureResult['row'] ?? [])
@@ -737,7 +938,7 @@ class PantheonOrderTransferService
             return $fallback;
         }
 
-        $maxLength = (int) (Order::sourceStringLengths()['acDocType'] ?? 4);
+        $maxLength = (int) ($this->orderStringLengths()['acDocType'] ?? 4);
 
         if ($maxLength > 0 && strlen($candidate) > $maxLength) {
             Log::info('Order AI doc type fallback applied because extracted document type is not a Pantheon code.', [
@@ -793,12 +994,12 @@ class PantheonOrderTransferService
         $docType = strtoupper(trim($docType));
         $yearPrefix = Carbon::now()->format('y');
         $rawPrefix = $yearPrefix . $docType;
-        $stringLength = Order::sourceStringLengths()['acKey'] ?? null;
+        $stringLength = $this->orderStringLengths()['acKey'] ?? null;
         $sequenceLength = is_int($stringLength) && $stringLength > strlen($rawPrefix)
             ? $stringLength - strlen($rawPrefix)
             : 7;
 
-        $lastKey = (string) (Order::newSourceQuery()
+        $lastKey = (string) ($this->orderSourceQuery()
             ->where('acDocType', $docType)
             ->where('acKey', 'like', $rawPrefix . '%')
             ->orderByDesc('acKey')
@@ -822,7 +1023,7 @@ class PantheonOrderTransferService
 
     private function resolveHeaderTemplate(string $docType): array
     {
-        $query = Order::newSourceQuery();
+        $query = $this->orderSourceQuery();
 
         $row = $query
             ->where('acDocType', $docType)
@@ -830,7 +1031,7 @@ class PantheonOrderTransferService
             ->first();
 
         if ($row === null) {
-            $row = Order::newSourceQuery()->orderByDesc('anQId')->first();
+            $row = $this->orderSourceQuery()->orderByDesc('anQId')->first();
         }
 
         return $row ? (array) $row : [];
@@ -838,7 +1039,7 @@ class PantheonOrderTransferService
 
     private function resolveItemTemplate(?string $templateOrderKey): array
     {
-        $query = OrderItem::newSourceQuery();
+        $query = $this->orderItemSourceQuery();
 
         if ($templateOrderKey !== null && trim($templateOrderKey) !== '') {
             $row = $query
@@ -851,7 +1052,7 @@ class PantheonOrderTransferService
             }
         }
 
-        $row = OrderItem::newSourceQuery()->orderByDesc('anQId')->first();
+        $row = $this->orderItemSourceQuery()->orderByDesc('anQId')->first();
 
         return $row ? (array) $row : [];
     }
@@ -863,9 +1064,9 @@ class PantheonOrderTransferService
         ?int $nextQid,
         mixed $user = null
     ): array {
-        $columns = Order::sourceColumns();
-        $insertableColumns = Order::sourceInsertableColumns();
-        $stringLengths = Order::sourceStringLengths();
+        $columns = $this->orderColumns();
+        $insertableColumns = $this->orderInsertableColumns();
+        $stringLengths = $this->orderStringLengths();
         $payload = [];
         $excludedCopyColumns = [
             'acKey',
@@ -1009,9 +1210,9 @@ class PantheonOrderTransferService
         int $lineNumber,
         mixed $user = null
     ): array {
-        $columns = OrderItem::sourceColumns();
-        $insertableColumns = OrderItem::sourceInsertableColumns();
-        $stringLengths = OrderItem::sourceStringLengths();
+        $columns = $this->orderItemColumns();
+        $insertableColumns = $this->orderItemInsertableColumns();
+        $stringLengths = $this->orderItemStringLengths();
         $payload = [];
         $excludedCopyColumns = [
             'acKey',
@@ -1273,7 +1474,7 @@ class PantheonOrderTransferService
             return '';
         }
 
-        $unit = (string) (OrderItem::newSourceQuery()
+        $unit = (string) ($this->orderItemSourceQuery()
             ->where('acIdent', $productCode)
             ->whereRaw("LTRIM(RTRIM(ISNULL(acUM, ''))) <> ''")
             ->orderByDesc('anQId')
@@ -1518,11 +1719,13 @@ class PantheonOrderTransferService
 
     protected function pantheonClerkContacts(): array
     {
-        if ($this->pantheonClerkContactsCache !== null) {
-            return $this->pantheonClerkContactsCache;
+        $cacheKey = $this->targetConnectionName();
+
+        if (array_key_exists($cacheKey, $this->pantheonClerkContactsCache)) {
+            return $this->pantheonClerkContactsCache[$cacheKey];
         }
 
-        $this->pantheonClerkContactsCache = DB::connection('sqlsrv')
+        $this->pantheonClerkContactsCache[$cacheKey] = $this->targetConnection()
             ->table(Order::sourceSchema() . '.tHE_SetSubjContact')
             ->select(
                 'anUserID',
@@ -1564,7 +1767,7 @@ class PantheonOrderTransferService
             ->values()
             ->all();
 
-        return $this->pantheonClerkContactsCache;
+        return $this->pantheonClerkContactsCache[$cacheKey];
     }
 
     private function isValidPantheonUnit(string $unit): bool
@@ -1575,10 +1778,10 @@ class PantheonOrderTransferService
             return false;
         }
 
-        static $knownUnits = null;
+        $cacheKey = $this->targetConnectionName();
 
-        if ($knownUnits === null) {
-            $knownUnits = DB::connection('sqlsrv')
+        if (!array_key_exists($cacheKey, $this->knownUnitsCache)) {
+            $this->knownUnitsCache[$cacheKey] = $this->targetConnection()
                 ->table(Order::sourceSchema() . '.tHE_SetUM')
                 ->select('acUM')
                 ->get()
@@ -1590,7 +1793,7 @@ class PantheonOrderTransferService
                 ->all();
         }
 
-        return in_array($unit, $knownUnits, true);
+        return in_array($unit, $this->knownUnitsCache[$cacheKey], true);
     }
 
     private function normalizeUnitCode(string $unit, array $stringLengths): string
@@ -1698,7 +1901,7 @@ class PantheonOrderTransferService
         }
 
         try {
-            $query = DB::connection('sqlsrv')
+            $query = $this->targetConnection()
                 ->table(Order::sourceSchema() . '.tHE_SetSubj')
                 ->select('anQId')
                 ->whereRaw("LTRIM(RTRIM(ISNULL(acSubject, ''))) <> ''");
@@ -1802,7 +2005,7 @@ class PantheonOrderTransferService
             return $this->catalogMaterialByCodeCache[$cacheKey];
         }
 
-        $candidate = Material::scannerFindByBarcode($productCode);
+        $candidate = Material::scannerFindByBarcode($productCode, [], $this->targetConnectionName());
 
         return $this->catalogMaterialByCodeCache[$cacheKey] = $candidate !== null
             ? $this->normalizeCatalogMaterialCandidate($candidate)
@@ -1826,7 +2029,7 @@ class PantheonOrderTransferService
         $bestScore = 0.0;
 
         foreach ($this->buildCatalogMaterialSearchTerms($productName) as $searchTerm) {
-            $rows = Material::scannerList($searchTerm, 25);
+            $rows = Material::scannerList($searchTerm, 25, [], 0, $this->targetConnectionName());
 
             foreach ($rows as $row) {
                 $candidate = $this->normalizeCatalogMaterialCandidate($row);

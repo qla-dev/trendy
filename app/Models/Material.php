@@ -44,7 +44,8 @@ class Material extends Model
         string $search = '',
         int $limit = 100,
         array $materialsSets = [],
-        int $offset = 0
+        int $offset = 0,
+        ?string $connectionName = null
     ): array
     {
         $resolvedLimit = self::resolveScannerLimit($limit);
@@ -52,7 +53,7 @@ class Material extends Model
         $normalizedSets = self::normalizeMaterialsSets($materialsSets);
         $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
         $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
-        $query = DB::table($itemsTable)
+        $query = self::db($connectionName)->table($itemsTable)
             ->leftJoin($stockTable, function ($join) {
                 $join->whereRaw("LTRIM(RTRIM(ISNULL(s.acIdent, ''))) = LTRIM(RTRIM(ISNULL(i.acIdent, '')))");
             })
@@ -298,7 +299,11 @@ class Material extends Model
         );
     }
 
-    public static function scannerFindByBarcode(string $barcode, array $materialsSets = []): ?array
+    public static function scannerFindByBarcode(
+        string $barcode,
+        array $materialsSets = [],
+        ?string $connectionName = null
+    ): ?array
     {
         $normalizedBarcode = self::normalizeScannerBarcode($barcode);
 
@@ -309,7 +314,7 @@ class Material extends Model
         $normalizedSets = self::normalizeMaterialsSets($materialsSets);
         $stockTable = self::sourceSchema() . '.' . self::stockTable() . ' as s';
         $itemsTable = self::sourceSchema() . '.' . self::itemsTable() . ' as i';
-        $query = DB::table($itemsTable)
+        $query = self::db($connectionName)->table($itemsTable)
             ->leftJoin($stockTable, function ($join) {
                 $join->whereRaw("LTRIM(RTRIM(ISNULL(s.acIdent, ''))) = LTRIM(RTRIM(ISNULL(i.acIdent, '')))");
             })
@@ -1221,6 +1226,13 @@ class Material extends Model
     private static function normalizedBarcodeSql(string $column): string
     {
         return "REPLACE(REPLACE(REPLACE(UPPER(LTRIM(RTRIM(ISNULL($column, '')))), '-', ''), ' ', ''), '/', '')";
+    }
+
+    private static function db(?string $connectionName = null)
+    {
+        $connectionName = trim((string) $connectionName);
+
+        return $connectionName !== '' ? DB::connection($connectionName) : DB::connection();
     }
 
     private static function itemsTable(): string
