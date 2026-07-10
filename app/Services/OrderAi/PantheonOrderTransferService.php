@@ -683,12 +683,7 @@ class PantheonOrderTransferService
             'receiver_name' => $this->normalizePantheonText((string) ($order['receiver_name'] ?? $customerName)) ?: $customerName,
             'contact_name' => $this->normalizePantheonText((string) ($order['contact_name'] ?? '')),
             'external_document_number' => trim((string) ($order['external_document_number'] ?? '')),
-            'external_document_date' => trim((string) (
-                $order['external_document_date']
-                ?? $order['order_received_date']
-                ?? $order['document_date']
-                ?? ''
-            )),
+            'external_document_date' => $this->resolvePreparedExternalDocumentDate($normalizedPayload, $order),
             'document_type' => $documentType,
             'currency' => trim((string) ($order['currency'] ?? config('ai-order-scan.default_currency', 'KM'))) ?: (string) config('ai-order-scan.default_currency', 'KM'),
             'delivery_deadline' => trim((string) ($order['delivery_deadline'] ?? '')),
@@ -701,6 +696,46 @@ class PantheonOrderTransferService
             'items' => $preparedItems,
             'referent_id' => $referentId,
         ];
+    }
+
+    private function resolvePreparedExternalDocumentDate(array $normalizedPayload, array $order): string
+    {
+        $candidates = [
+            $order['external_document_date'] ?? null,
+            data_get($normalizedPayload, 'payload.order.external_document_date'),
+            data_get($normalizedPayload, 'payload.external_document_date'),
+            data_get($normalizedPayload, 'external_document_date'),
+            data_get($normalizedPayload, 'header_payload.external_document_date'),
+            $order['order_received_date'] ?? null,
+            data_get($normalizedPayload, 'payload.order.order_received_date'),
+            data_get($normalizedPayload, 'payload.order_received_date'),
+            $order['document_date'] ?? null,
+            data_get($normalizedPayload, 'payload.order.document_date'),
+            data_get($normalizedPayload, 'payload.document_date'),
+        ];
+
+        foreach ($candidates as $candidate) {
+            $value = $this->normalizeExternalDocumentDateCandidate($candidate);
+
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    private function normalizeExternalDocumentDateCandidate(mixed $value): string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        }
+
+        if (is_scalar($value)) {
+            return trim((string) $value);
+        }
+
+        return '';
     }
 
     private function resolvePayloadReferentId(array $payload): ?int

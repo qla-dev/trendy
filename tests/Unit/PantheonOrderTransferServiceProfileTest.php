@@ -354,6 +354,28 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame('09.07.2026', $result['external_document_date']);
     }
 
+    public function test_prepare_transfer_data_keeps_flattened_payload_external_document_date(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('prepareTransferData');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [
+            'order' => [
+                'customer_name' => 'Trendy d.o.o.',
+                'supplier_name' => 'GROB-WERKE',
+            ],
+            'payload' => [
+                'external_document_date' => '09.07.2026',
+            ],
+            'items' => [],
+            'summary' => [],
+        ], false, false, null);
+
+        $this->assertSame('09.07.2026', $result['external_document_date']);
+    }
+
     public function test_order_item_delivery_date_populates_delivery_and_dispatch_dates(): void
     {
         $service = new PantheonOrderTransferService();
