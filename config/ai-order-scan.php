@@ -27,6 +27,7 @@ Extraction rules:
 - Example: if the footer/header says "Seite 4 von 6", then page_count is 6.
 - Keep buyer/customer and supplier/sender separate when both are visible.
 - Prefer a purchase-order / narudzba / order reference number when present.
+- Extract the visible customer order/document date into order.external_document_date. For GROB this is the exact date after "Bestell-Dat."; this is not a delivery deadline.
 - Normalize quantities, prices, rebates, and VAT rates into numeric values.
 - Parse German-formatted numbers correctly, including values such as 1.234,56 -> 1234.56 and 10.807,71 -> 10807.71.
 - Never truncate thousand-separated German totals. Example: 10.807,71 must become 10807.71, never 10.
@@ -62,6 +63,7 @@ $grobPromptRules = <<<'PROMPT'
 - If a line begins with Werkstoff:, put only the text after the colon into material_hint and do not include that line in product_name.
 - Example: if an item block shows code 3226090, then Klotz on one line, G552-11000-1000-10-80-1-01-1-30 on the next line, then Zeichnung ... and Werkstoff: RSt37-2, product_name must be "Klotz G552-11000-1000-10-80-1-01-1-30", drawing_reference must contain the Zeichnung line, and material_hint must be "RSt37-2".
 - Extract the exact value after "Ekg:" into order.requester_code. Preserve leading zeros; for example visible "Ekg: 040" must return requester_code "040".
+- Extract the exact value after "Bestell-Dat." into order.external_document_date, for example "09.07.2026".
 - For GROB, requester_code is the Pantheon Naručitelj/acConsignee value. Do not copy Ekg into supplier_name, customer_name, product_name, or note.
 - Prefer Nettopreis / net unit price for unit_price when both Nettopreis and Bruttopreis are visible for the same item.
 - Ignore Bruttopreis when Nettopreis is also present for the same GROB item.
@@ -91,6 +93,7 @@ $trendyDePromptRules = <<<'PROMPT'
 - If the document shows "Trendy Germany GmbH" in the upper-right header, set customer_name to "Trendy Germany GmbH".
 - Set supplier_name to the Pantheon subject format "Trendy Germany GmbH-{number}" when a visible line such as "Trendy Germany 45" or "Trendy Germany 21" appears in the address block. Use no spaces around the hyphen, for example "Trendy Germany GmbH-45". If no such number is visible, use "Trendy Germany GmbH".
 - Extract the order reference number that appears after the heading "Bestellung" into external_document_number.
+- Extract the visible Datum value into order.external_document_date, but never use it as a delivery deadline.
 - Never use Datum as order.delivery_deadline or item.delivery_deadline.
 - At the start of Trendy Germany PDFs, the first standalone date row is Datum and the second standalone date row before "Trendy Germany GmbH" is the header Liefertermin/Lieferdatum. If those first rows are "27. 6. 2026.", "28. 9. 2026.", "Trendy Germany GmbH", then order.delivery_deadline and every item.delivery_deadline should be "28. 9. 2026.".
 - If there is only one standalone date before "Trendy Germany GmbH", then the header Liefertermin/Lieferdatum is blank. Set order.delivery_deadline to an empty string and use each line-item Liefertermin/Lieferdatum value individually.

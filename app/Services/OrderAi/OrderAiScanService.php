@@ -1846,6 +1846,7 @@ class OrderAiScanService
                 'receiver_name' => $this->normalizeScannedText((string) ($order['receiver_name'] ?? ($order['customer_name'] ?? ''))),
                 'contact_name' => $this->normalizeScannedText((string) ($order['contact_name'] ?? '')),
                 'external_document_number' => trim((string) ($order['external_document_number'] ?? '')),
+                'external_document_date' => trim((string) ($order['external_document_date'] ?? '')),
                 'document_type' => trim((string) ($order['document_type'] ?? '')),
                 'currency' => trim((string) ($order['currency'] ?? config('ai-order-scan.default_currency', 'KM'))),
                 'delivery_deadline' => trim((string) ($order['delivery_deadline'] ?? '')),
@@ -2094,6 +2095,7 @@ class OrderAiScanService
             'receiver_name' => $this->normalizeScannedText((string) ($prepared['receiver_name'] ?? ($order['receiver_name'] ?? ''))),
             'contact_name' => $this->normalizeScannedText((string) ($prepared['contact_name'] ?? ($order['contact_name'] ?? ''))),
             'external_document_number' => trim((string) ($prepared['external_document_number'] ?? ($order['external_document_number'] ?? ''))),
+            'external_document_date' => trim((string) ($prepared['external_document_date'] ?? ($order['external_document_date'] ?? ''))),
             'document_type' => trim((string) ($prepared['document_type'] ?? ($order['document_type'] ?? ''))),
             'currency' => trim((string) ($prepared['currency'] ?? ($order['currency'] ?? ''))),
             'delivery_deadline' => trim((string) ($prepared['delivery_deadline'] ?? ($order['delivery_deadline'] ?? ''))),
@@ -3075,9 +3077,14 @@ class OrderAiScanService
         $sourcePageCount = max(0, (int) ($context['source_page_count'] ?? 0), (int) ($order['page_count'] ?? 0));
         $pageLimitReason = trim((string) ($context['page_processing_limit_reason'] ?? ''));
         $requesterCode = $this->extractGrobRequesterCode($searchableText);
+        $externalDocumentDate = $this->extractGrobExternalDocumentDate($searchableText);
 
         if ($requesterCode !== '') {
             $order['requester_code'] = $requesterCode;
+        }
+
+        if ($externalDocumentDate !== '') {
+            $order['external_document_date'] = $externalDocumentDate;
         }
 
         $order['note'] = '';
@@ -4341,6 +4348,24 @@ class OrderAiScanService
         $window = preg_split('/\b(?:Pos\s+Beschreibung|Wert\s+_{5,}|Bestell-Nr\.)\b/iu', $window, 2)[0] ?? $window;
 
         return $this->extractGrobRequesterCodeCandidate((string) $window);
+    }
+
+    private function extractGrobExternalDocumentDate(string $searchableText): string
+    {
+        $normalized = str_replace(["\r\n", "\r"], "\n", $searchableText);
+        $patterns = [
+            '/\bBestell[\s-]*Dat\.?\s*:?\s*([0-9]{1,2}\.\s*[0-9]{1,2}\.\s*[0-9]{2,4}\.?)/iu',
+            '/\bBestelldatum\s*:?\s*([0-9]{1,2}\.\s*[0-9]{1,2}\.\s*[0-9]{2,4}\.?)/iu',
+            '/\bBestell\s*Datum\s*:?\s*([0-9]{1,2}\.\s*[0-9]{1,2}\.\s*[0-9]{2,4}\.?)/iu',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $normalized, $matches) === 1) {
+                return $this->extractVisibleDateFromLine((string) ($matches[1] ?? ''));
+            }
+        }
+
+        return '';
     }
 
     private function extractGrobRequesterCodeCandidate(string $value): string

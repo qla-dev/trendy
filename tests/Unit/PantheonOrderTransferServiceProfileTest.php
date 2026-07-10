@@ -319,6 +319,41 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame('2026-06-01', $result->format('Y-m-d'));
     }
 
+    public function test_external_document_date_parser_handles_grob_bestell_date(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('parseDateOrNull');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, '09.07.2026');
+
+        $this->assertInstanceOf(Carbon::class, $result);
+        $this->assertSame('2026-07-09', $result->format('Y-m-d'));
+        $this->assertNull($method->invoke($service, ''));
+        $this->assertNull($method->invoke($service, 'not a date'));
+    }
+
+    public function test_prepare_transfer_data_keeps_external_document_date(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('prepareTransferData');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [
+            'order' => [
+                'customer_name' => 'Trendy d.o.o.',
+                'supplier_name' => 'GROB-WERKE',
+                'external_document_date' => '09.07.2026',
+            ],
+            'items' => [],
+            'summary' => [],
+        ], false, false, null);
+
+        $this->assertSame('09.07.2026', $result['external_document_date']);
+    }
+
     public function test_order_item_delivery_date_populates_delivery_and_dispatch_dates(): void
     {
         $service = new PantheonOrderTransferService();

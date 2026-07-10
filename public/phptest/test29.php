@@ -616,6 +616,7 @@ function phptest29_payload_locations(
 
     $headerMap = [
         'external_document_number' => ['acDoc1'],
+        'external_document_date' => ['adDateDoc1'],
         'requester_code' => ['acConsignee', 'acDoc2'],
         'document_type' => ['acDocType'],
         'currency' => ['acCurrency'],
@@ -633,9 +634,9 @@ function phptest29_payload_locations(
             return [phptest29_info_row(
                 $path,
                 $value,
-                $database . '.' . $schema . '.' . $orderTable . '.adDateDoc1/adDeliveryDeadline',
+                $database . '.' . $schema . '.' . $orderTable . '.adDeliveryDeadline',
                 'not written from payload',
-                'Header date fields are not sourced from payload.delivery_deadline. Item delivery dates are traced on payload.items[*].delivery_deadline.'
+                'Header delivery deadline is not sourced from payload.delivery_deadline. Header external document date is traced on payload.external_document_date; item delivery dates are traced on payload.items[*].delivery_deadline.'
             )];
         }
 
@@ -838,9 +839,23 @@ function phptest29_render_table(string $title, array $rows): void
 
 function phptest29_default_payload_json(): string
 {
-    return <<<'JSON'
+    $json = <<<'JSON'
 {"payload":{"customer_name":"Trendy d.o.o.","supplier_name":"GROB-WERKE","requester_code":"043","receiver_name":"Trendy d.o.o.","contact_name":"","external_document_number":"4512132032","document_type":"0110","currency":"EUR","delivery_deadline":"","note":"","way_of_sale":"D","warnings":["GROB obrada stavki je ograni\u010dena do ACHTUNG reda."],"subtotal":149.4,"vat_total":0,"grand_total":149.4,"items":[{"line_number":10,"product_code":"5803379","product_name":"Stift GM5335\/11-01-100\/1-23","drawing_reference":"","material_hint":"16MnCr5SVA","quantity":2,"unit":"KO","delivery_deadline":"09.09.2026","unit_price":74.7,"line_total":149.4,"vat_rate":0,"vat_code":"I0","discount_percent":0,"priority":"","note":"","primary_classification":"\u010cELIK","catalog_item_exists":true,"catalog_item_missing":false,"catalog_item_auto_create":false,"catalog_item_created":false,"catalog_item_status":"matched","catalog_item_notice":"","catalog_unit_hint":"KO","product_qid":13167,"source_product_code":"5803379","source_product_name":"Stift GM5335\/11-01-100\/1-23","base_value":149.4,"vat_value":0,"grand_total":149.4}]},"pantheon_order_key":"2601100001708","pantheon_order_view":"26-0110-0001708","pantheon_order_qid":null,"item_count":1,"referent":"Lejla Krnji\u0107","referent_id":46,"referent_user_code":"","header_payload":{"acStatus":"1","acPriceRate":"1","acPayMethod":"2","anDaysForValid":5,"anDaysForPayment":"45","acDoc2":"043","adDateDoc1":"2026-07-07 00:00:00","anBnkAcctNo":"1","acCode1":"02","acCode2":"30","acCode3":"11","anFgnBankNo":"0","anNoteClerk":46,"anRoundItem":".0100","anRoundValue":".0100","acRoundVATOnDoc":"F","anSigner1":"0","anSigner2":"0","anSigner3":"0","anFieldNA":".000000","anFieldNB":".000000","anFieldNC":".000000","anFieldND":".000000","anFieldNE":".000000","anFieldNF":".000000","anFieldNG":".000000","anFieldNH":".000000","anFieldNI":".000000","anFieldNJ":".000000","anCurrValue":149.4,"acTriangTrans":"0","acUPNPrint":"F","anRoundItemFC":".0100","anRoundPrice":".0001","anRoundValueOC":".0100","anOurBankAcctNo":"0","anOurBankAcctNoFgn":"0","acRetailSale":"F","anFXRate":"1.955830","acInsertedFrom":"P","acFiscStatus":"0","anDeliveryPriority":"5","anDeliveryDays":"0","anDeptQId":"1","anTransporterQId":"1","anWarehouseQId":"1","acKey":"2601100001708","acDocType":"0110","acRefNo1":"99","adDate":"2026-07-10T00:00:00.000000Z","adDateValid":"2026-07-15T00:00:00.000000Z","acConsignee":"043","acReceiver":"GROB-WERKE","acCurrency":"EUR","acWayOfSale":"D","acWarehouse":"Veleprodajno skladi\u0139\u02c7te","acDoc1":"4512132032","anValue":149.4,"anDiscount":0,"anVAT":0,"anForPay":149.4,"acInternalNote":"Kreirano iz AI skena narud\u017ebe preko eNalog.app | AI napomene: GROB obrada stavki je ograni\u010dena do ACHTUNG reda.","adTimeIns":"2026-07-10T08:23:56.059919Z","adTimeChg":"2026-07-10T08:23:56.059919Z","anUserIns":46,"anUserChg":46,"anClerk":46,"anBuyerCostCenterIdDef":0,"anBuyerIdDef":0,"anConsigneeQId":255,"anReceiverQId":255},"item_payloads":[{"anExcise":"0.0","anExciseP":"0.0","anSalePrice":".0000","anPackQty":"1.000000","anVariant":"0","anDimVolume":"0.0","anDimWeight":"10.300000000000001","anDimWeightBrutto":"10.300000000000001","anRebate1":"0.0","anRebate2":"0.0","anRebate3":"0.0","anRetailPrice":"142.9000","anPriceCurrency":74.7,"anRTPrice":"142.9000","anReserved":".000000","anExciseInc":"0.0","anExciseNotInc":"0.0","anExciseIncP":"0.0","anExciseNotIncP":"0.0","anLastprice":"371.5","anUMDecPlaces":".0000","anRound":"0","anRTPriceConverted":"0.0","acWeighed":"F","anColorCode":"0","anPrstTime":"0.0","acPrstUMTime":"H","anCostDrvQId":"1","anDeptQId":"1","acKey":"2601100001708","anNo":1,"acIdent":"5803379","acName":"Stift GM5335\/11-01-100\/1-23","anQty":2,"anQtyDispDoc":0,"acUM":"KO","anPrice":74.7,"anRebate":0,"acVATCode":"I0","anVAT":0,"anLnkNo":0,"adTimeIns":"2026-07-10T08:23:56.706458Z","adTimeChg":"2026-07-10T08:23:56.706458Z","anPVValue":149.4,"anPVDiscount":0,"anPVExcise":0,"anPVVATBase":149.4,"anPVVAT":0,"anPVForPay":149.4,"anPVOCValue":149.4,"anPVOCDiscount":0,"anPVOCExcise":0,"anPVOCVATBase":149.4,"anPVOCVAT":0,"anPVOCForPay":149.4,"anQtyConverted":2,"acUMConverted":"KO","adDeliveryDate":"2026-09-09T00:00:00.000000Z","adDeliveryDeadline":"2026-09-09T00:00:00.000000Z","anUserIns":1,"anUserChg":1,"anIdentQId":13167}],"created_catalog_items":[],"created_catalog_item_count":0}
 JSON;
+
+    $payload = json_decode($json, true);
+
+    if (is_array($payload)) {
+        $payload['payload']['external_document_date'] = '09.07.2026';
+        $payload['header_payload']['adDateDoc1'] = '2026-07-09 00:00:00';
+        $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if (is_string($encoded) && $encoded !== '') {
+            return $encoded;
+        }
+    }
+
+    return $json;
 }
 
 function phptest29_payload_json(): string
@@ -1077,7 +1092,7 @@ $summaryRows = [[
 
 $headerSummaryRows = [];
 if ($headerRow !== null) {
-    foreach (['acKey', 'acKeyView', 'acDocType', 'acDoc1', 'acDoc2', 'acConsignee', 'acReceiver', 'acCurrency', 'acWayOfSale', 'acWarehouse', 'anValue', 'anVAT', 'anForPay', 'anClerk', 'anNoteClerk', 'anUserIns', 'anUserChg', 'anConsigneeQId', 'anReceiverQId'] as $column) {
+    foreach (['acKey', 'acKeyView', 'acDocType', 'acDoc1', 'adDateDoc1', 'acDoc2', 'acConsignee', 'acReceiver', 'acCurrency', 'acWayOfSale', 'acWarehouse', 'anValue', 'anVAT', 'anForPay', 'anClerk', 'anNoteClerk', 'anUserIns', 'anUserChg', 'anConsigneeQId', 'anReceiverQId'] as $column) {
         if (array_key_exists($column, $headerRow)) {
             $headerSummaryRows[] = [
                 'table' => $database . '.' . $schema . '.' . $orderTable,
