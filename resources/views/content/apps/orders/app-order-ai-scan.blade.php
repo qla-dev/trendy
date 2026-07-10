@@ -4178,6 +4178,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             receiver_name: String(order.receiver_name || '').trim(),
             contact_name: String(order.contact_name || '').trim(),
             external_document_number: String(order.external_document_number || '').trim(),
+            external_document_date: String(order.external_document_date || '').trim(),
             document_type: String(order.document_type || '').trim(),
             currency: String(order.currency || '').trim(),
             delivery_deadline: String(order.delivery_deadline || '').trim(),
