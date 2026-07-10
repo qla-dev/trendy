@@ -319,7 +319,7 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame('2026-06-01', $result->format('Y-m-d'));
     }
 
-    public function test_order_item_delivery_date_populates_deadline_and_leaves_dispatch_empty(): void
+    public function test_order_item_delivery_date_populates_delivery_and_dispatch_dates(): void
     {
         $service = new PantheonOrderTransferService();
         $reflection = new ReflectionClass($service);
@@ -329,7 +329,7 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $result = $method->invoke($service, Carbon::parse('2026-06-11 14:30:00'));
 
         $this->assertSame('2026-06-11 00:00:00', $result['adDeliveryDeadline']->format('Y-m-d H:i:s'));
-        $this->assertNull($result['adDeliveryDate']);
+        $this->assertSame('2026-06-11 00:00:00', $result['adDeliveryDate']->format('Y-m-d H:i:s'));
 
         $trimMethod = $reflection->getMethod('trimPayloadToInsertableColumns');
         $trimMethod->setAccessible(true);
@@ -340,7 +340,7 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         );
 
         $this->assertArrayHasKey('adDeliveryDeadline', $insertPayload);
-        $this->assertArrayNotHasKey('adDeliveryDate', $insertPayload);
+        $this->assertArrayHasKey('adDeliveryDate', $insertPayload);
     }
 
     public function test_order_item_insert_batches_do_not_mix_optional_note_columns(): void
