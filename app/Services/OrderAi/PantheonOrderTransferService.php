@@ -252,6 +252,7 @@ class PantheonOrderTransferService
             );
 
             $referent = $this->resolvePantheonReferentPayload($headerPayload['anClerk'] ?? null);
+            $this->logExternalDocumentDateTransferTrace($prepared, $headerPayload, $numberContext);
 
             $this->orderSourceQuery()->insert($headerPayload);
 
@@ -683,12 +684,7 @@ class PantheonOrderTransferService
             'receiver_name' => $this->normalizePantheonText((string) ($order['receiver_name'] ?? $customerName)) ?: $customerName,
             'contact_name' => $this->normalizePantheonText((string) ($order['contact_name'] ?? '')),
             'external_document_number' => trim((string) ($order['external_document_number'] ?? '')),
-            'external_document_date' => trim((string) (
-                $order['external_document_date']
-                ?? $order['order_received_date']
-                ?? $order['document_date']
-                ?? ''
-            )),
+            'external_document_date' => trim((string) ($order['external_document_date'] ?? '')),
             'document_type' => $documentType,
             'currency' => trim((string) ($order['currency'] ?? config('ai-order-scan.default_currency', 'KM'))) ?: (string) config('ai-order-scan.default_currency', 'KM'),
             'delivery_deadline' => trim((string) ($order['delivery_deadline'] ?? '')),
@@ -701,6 +697,52 @@ class PantheonOrderTransferService
             'items' => $preparedItems,
             'referent_id' => $referentId,
         ];
+    }
+
+    private function logExternalDocumentDateTransferTrace(
+        array $prepared,
+        array $headerPayload,
+        array $numberContext
+    ): void {
+        $preparedDate = trim((string) ($prepared['external_document_date'] ?? ''));
+        $parsedDate = $this->parseDateOrNull($preparedDate);
+        $hasHeaderDate = array_key_exists('adDateDoc1', $headerPayload);
+        $connectionName = $this->targetConnectionName();
+        $context = [
+            'target_connection' => $connectionName,
+            'target_database' => config('database.connections.' . $connectionName . '.database'),
+            'pantheon_order_key' => $headerPayload['acKey'] ?? ($numberContext['raw_key'] ?? null),
+            'pantheon_order_view' => $headerPayload['acKeyView'] ?? ($numberContext['display_key'] ?? null),
+            'external_document_number' => $prepared['external_document_number'] ?? null,
+            'prepared_external_document_date' => $preparedDate,
+            'parsed_external_document_date' => $parsedDate?->format('Y-m-d H:i:s'),
+            'header_has_adDateDoc1' => $hasHeaderDate,
+            'header_adDateDoc1' => $this->formatDateForLog($headerPayload['adDateDoc1'] ?? null),
+            'adDateDoc1_column_exists' => in_array('adDateDoc1', $this->orderColumns(), true),
+        ];
+
+        if ($preparedDate !== '' && !$hasHeaderDate) {
+            Log::warning('Order AI external_document_date did not map to adDateDoc1 before transfer insert.', $context);
+
+            return;
+        }
+
+        Log::info('Order AI external_document_date transfer trace.', $context);
+    }
+
+    private function formatDateForLog(mixed $value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        }
+
+        if (is_scalar($value)) {
+            $value = trim((string) $value);
+
+            return $value !== '' ? $value : null;
+        }
+
+        return null;
     }
 
     private function resolvePayloadReferentId(array $payload): ?int
