@@ -22,6 +22,7 @@ class OrderAiResponseSchema
                         'receiver_name',
                         'contact_name',
                         'external_document_number',
+                        'external_document_date',
                         'document_type',
                         'currency',
                         'delivery_deadline',
@@ -47,6 +48,10 @@ class OrderAiResponseSchema
                         'receiver_name' => ['type' => 'string'],
                         'contact_name' => ['type' => 'string'],
                         'external_document_number' => ['type' => 'string'],
+                        'external_document_date' => [
+                            'type' => 'string',
+                            'description' => 'Visible customer order/document date. For GROB extract Bestell-Dat. exactly as shown, for example 09.07.2026. This is not a delivery deadline.',
+                        ],
                         'document_type' => ['type' => 'string'],
                         'currency' => ['type' => 'string'],
                         'delivery_deadline' => ['type' => 'string'],

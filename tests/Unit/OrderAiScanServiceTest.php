@@ -64,12 +64,14 @@ class OrderAiScanServiceTest extends TestCase
             'order' => [
                 'customer_name' => 'Trendy Germany GmbH',
                 'supplier_name' => 'Trendy Germany GmbH-45',
+                'external_document_date' => '09.07.2026',
             ],
             'items' => [],
             'summary' => [],
         ]);
 
         $this->assertSame('Trendy Germany GmbH-45', $payload['order']['supplier_name']);
+        $this->assertSame('09.07.2026', $payload['order']['external_document_date']);
     }
 
     public function test_post_process_profile_payload_splits_trendy_de_beschreibung_and_item_delivery_deadline(): void
@@ -1900,6 +1902,7 @@ class OrderAiScanServiceTest extends TestCase
             'GROB-WERKE GmbH & Co. KG',
             'BESTELLUNG',
             'Bestell-Nr.: 4512123001',
+            'Bestell-Dat.: 09.07.2026',
             'incl. Verpackung Zahlungsbed.: Trenkenschuh, Paul / 5358 Ekg:',
             'Kunden-Nr.: Lieferbed.: FCA, Trendy d.o.o. , 72290 Novi Travnik, Incoterms',
             '2010 Abweichend davon: Versicherung:',
@@ -1948,6 +1951,7 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('Trendy d.o.o.', data_get($result, 'normalized_payload.order.customer_name'));
         $this->assertSame('GROB-WERKE GmbH & Co. KG', data_get($result, 'normalized_payload.order.supplier_name'));
         $this->assertSame('040', data_get($result, 'normalized_payload.order.requester_code'));
+        $this->assertSame('09.07.2026', data_get($result, 'normalized_payload.order.external_document_date'));
         $this->assertSame('', data_get($result, 'normalized_payload.order.note'));
         $this->assertSame('6449473', data_get($result, 'normalized_payload.items.0.product_code'));
         $this->assertSame('Klotz GM4395/01-70-126/1-2-18', data_get($result, 'normalized_payload.items.0.product_name'));
@@ -3889,6 +3893,8 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertStringContainsString('extract the visible date next to Lieferdatum', $prompt);
         $this->assertStringContainsString('not a dispatch/shipping date', $prompt);
         $this->assertStringContainsString('Extract the exact value after "Ekg:" into order.requester_code', $prompt);
+        $this->assertStringContainsString('Bestell-Dat.', $prompt);
+        $this->assertStringContainsString('order.external_document_date', $prompt);
         $this->assertStringContainsString('requester_code "040"', $prompt);
         $this->assertStringContainsString('For GROB, return order.note and every item.note as an empty string', $prompt);
     }
@@ -3994,6 +4000,7 @@ class OrderAiScanServiceTest extends TestCase
                 'receiver_name' => '',
                 'contact_name' => '',
                 'external_document_number' => '',
+                'external_document_date' => '',
                 'document_type' => '',
                 'currency' => 'EUR',
                 'delivery_deadline' => '',

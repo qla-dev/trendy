@@ -683,6 +683,12 @@ class PantheonOrderTransferService
             'receiver_name' => $this->normalizePantheonText((string) ($order['receiver_name'] ?? $customerName)) ?: $customerName,
             'contact_name' => $this->normalizePantheonText((string) ($order['contact_name'] ?? '')),
             'external_document_number' => trim((string) ($order['external_document_number'] ?? '')),
+            'external_document_date' => trim((string) (
+                $order['external_document_date']
+                ?? $order['order_received_date']
+                ?? $order['document_date']
+                ?? ''
+            )),
             'document_type' => $documentType,
             'currency' => trim((string) ($order['currency'] ?? config('ai-order-scan.default_currency', 'KM'))) ?: (string) config('ai-order-scan.default_currency', 'KM'),
             'delivery_deadline' => trim((string) ($order['delivery_deadline'] ?? '')),
@@ -1110,6 +1116,7 @@ class PantheonOrderTransferService
             'acRefNo1',
             'acRefNo2',
             'adDate',
+            'adDateDoc1',
             'adDeliveryDeadline',
             'adDateValid',
             'anClerk',
@@ -1193,6 +1200,10 @@ class PantheonOrderTransferService
         $payload['acWarehouse'] = $this->fitString('acWarehouse', (string) config('ai-order-scan.default_warehouse', ''), $stringLengths);
         $payload['acDoc1'] = $this->fitString('acDoc1', $prepared['external_document_number'], $stringLengths);
         $payload['acDoc2'] = $this->fitString('acDoc2', $requesterCode, $stringLengths);
+        $externalDocumentDate = $this->parseDateOrNull((string) ($prepared['external_document_date'] ?? ''));
+        if ($externalDocumentDate !== null && in_array('adDateDoc1', $columns, true)) {
+            $payload['adDateDoc1'] = $externalDocumentDate->copy()->startOfDay();
+        }
         $payload['anValue'] = $valueBeforeDiscount;
         $payload['anDiscount'] = 0;
         $payload['anVAT'] = $vatTotal;
@@ -1418,28 +1429,37 @@ class PantheonOrderTransferService
 
     private function parseDateOrFallback(string $value, Carbon $fallback): Carbon
     {
-        $value = trim($value);
+        return $this->parseDateOrNull($value) ?? $fallback;
+    }
 
+    private function parseDateOrNull(string $value): ?Carbon
+    {
+        $value = trim($value);
         if ($value === '') {
-            return $fallback;
+            return null;
         }
 
         if (preg_match('/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\.?$/', $value, $matches) === 1) {
+            $formattedDate = sprintf(
+                '%04d-%02d-%02d',
+                (int) ($matches[3] ?? 0),
+                (int) ($matches[2] ?? 0),
+                (int) ($matches[1] ?? 0)
+            );
+
             try {
-                return Carbon::create(
-                    (int) ($matches[3] ?? 0),
-                    (int) ($matches[2] ?? 0),
-                    (int) ($matches[1] ?? 0)
-                );
+                $date = Carbon::createFromFormat('!Y-m-d', $formattedDate);
+
+                return $date !== false && $date->format('Y-m-d') === $formattedDate ? $date : null;
             } catch (\Throwable $exception) {
-                return $fallback;
+                return null;
             }
         }
 
         try {
             return Carbon::parse($value);
         } catch (\Throwable $exception) {
-            return $fallback;
+            return null;
         }
     }
 

@@ -60,6 +60,7 @@ class OrderAiDigitalPdfRulesParser
             '/\bBestell-Nr\.?\s*:?\s*([A-Z0-9\-\/\.]+)/iu',
             '/\bBestellung\s*:?\s*([A-Z0-9\-\/\.]+)/iu',
         ]);
+        $externalDocumentDate = $this->extractGrobExternalDocumentDate($searchableText);
         $requesterCode = $this->extractGrobRequesterCode($searchableText);
         $currency = $this->extractCurrency($searchableText);
         $pageCount = max(
@@ -96,6 +97,7 @@ class OrderAiDigitalPdfRulesParser
                 'receiver_name' => $customerName,
                 'contact_name' => '',
                 'external_document_number' => $documentNumber,
+                'external_document_date' => $externalDocumentDate,
                 'document_type' => (string) config('ai-order-scan.default_doc_type', '0110'),
                 'currency' => $currency !== '' ? $currency : 'EUR',
                 'delivery_deadline' => '',
@@ -225,6 +227,7 @@ class OrderAiDigitalPdfRulesParser
                 'receiver_name' => $receiverName !== '' ? $receiverName : self::TRENDY_DE_PARTY_NAME,
                 'contact_name' => $contactName,
                 'external_document_number' => $documentNumber,
+                'external_document_date' => (string) ($header['document_date'] ?? ''),
                 'document_type' => (string) config('ai-order-scan.default_doc_type', '0110'),
                 'currency' => $currency !== '' ? $currency : 'EUR',
                 'delivery_deadline' => $deliveryDeadline,
@@ -1574,6 +1577,7 @@ class OrderAiDigitalPdfRulesParser
         $receiverLines = [];
         $partySectionMode = null;
         $deliveryDeadline = '';
+        $documentDate = '';
         $contactName = '';
         $documentNumber = '';
         $tableStarted = false;
@@ -1584,6 +1588,7 @@ class OrderAiDigitalPdfRulesParser
 
         if ((bool) ($leadingHeaderDeadline['resolved'] ?? false)) {
             $deliveryDeadline = trim((string) ($leadingHeaderDeadline['value'] ?? ''));
+            $documentDate = trim((string) ($leadingHeaderDeadline['document_date'] ?? ''));
             $headerDeadlineResolved = true;
         }
 
@@ -1668,6 +1673,10 @@ class OrderAiDigitalPdfRulesParser
                 $deliveryDeadline = $this->extractDateAfterTrendyDeDeliveryLabel($text);
             }
 
+            if ($documentDate === '' && str_starts_with($normalized, 'datum ')) {
+                $documentDate = $this->extractVisibleDateFromLine($text);
+            }
+
             if ($contactName === '' && preg_match('/person\s+responsible\s+(.+)$/iu', $text, $matches) === 1) {
                 $contactName = $this->normalizeProfileWhitespace((string) ($matches[1] ?? ''));
             }
@@ -1702,6 +1711,7 @@ class OrderAiDigitalPdfRulesParser
         return [
             'supplier_note' => implode(' | ', array_values($supplierLines)),
             'receiver_name' => $receiverName,
+            'document_date' => $documentDate,
             'delivery_deadline' => $deliveryDeadline,
             'contact_name' => $contactName,
             'document_number' => $documentNumber,
@@ -1825,6 +1835,7 @@ class OrderAiDigitalPdfRulesParser
 
         return [
             'resolved' => true,
+            'document_date' => (string) ($dates[0] ?? ''),
             'value' => (string) ($dates[1] ?? ''),
         ];
     }
@@ -2942,6 +2953,24 @@ class OrderAiDigitalPdfRulesParser
         $window = preg_split('/\b(?:Pos\s+Beschreibung|Wert\s+_{5,}|Bestell-Nr\.)\b/iu', $window, 2)[0] ?? $window;
 
         return $this->extractGrobRequesterCodeCandidate((string) $window);
+    }
+
+    private function extractGrobExternalDocumentDate(string $searchableText): string
+    {
+        $normalized = str_replace(["\r\n", "\r"], "\n", $searchableText);
+        $patterns = [
+            '/\bBestell[\s-]*Dat\.?\s*:?\s*([0-9]{1,2}\.\s*[0-9]{1,2}\.\s*[0-9]{2,4}\.?)/iu',
+            '/\bBestelldatum\s*:?\s*([0-9]{1,2}\.\s*[0-9]{1,2}\.\s*[0-9]{2,4}\.?)/iu',
+            '/\bBestell\s*Datum\s*:?\s*([0-9]{1,2}\.\s*[0-9]{1,2}\.\s*[0-9]{2,4}\.?)/iu',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $normalized, $matches) === 1) {
+                return $this->extractVisibleDateFromLine((string) ($matches[1] ?? ''));
+            }
+        }
+
+        return '';
     }
 
     private function extractGrobRequesterCodeCandidate(string $value): string
