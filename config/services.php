@@ -19,7 +19,7 @@ return [
     ],
 
     'work_order' => [
-        'target_connection' => env('WORK_ORDER_TARGET_CONNECTION', 'sqlsrv'),
+        'target_connection' => env('WORK_ORDER_TARGET_CONNECTION', 'work_order_target'),
     ],
 
     'mailgun' => [

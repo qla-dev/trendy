@@ -1634,12 +1634,14 @@ class WorkOrderController extends Controller
                 'statusStats' => $statusStats,
                 'meta' => array_merge($result['meta'], [
                     'connection' => config('database.default'),
+                    'database' => DB::connection()->getDatabaseName(),
                     'table' => $this->qualifiedTableName(),
                 ]),
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order API list query failed.', [
                 'connection' => config('database.default'),
+                'database' => $this->currentDatabaseNameForLog(),
                 'table' => $this->qualifiedTableName(),
                 'message' => $exception->getMessage(),
             ]);
@@ -11246,6 +11248,15 @@ class WorkOrderController extends Controller
     private function newTableQuery(): Builder
     {
         return DB::table($this->qualifiedTableName());
+    }
+
+    private function currentDatabaseNameForLog(): string
+    {
+        try {
+            return (string) DB::connection()->getDatabaseName();
+        } catch (Throwable) {
+            return '';
+        }
     }
 
     private function newItemTableQuery(): Builder
