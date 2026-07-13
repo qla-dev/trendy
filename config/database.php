@@ -120,6 +120,7 @@ return [
             'prefix_indexes' => true,
             'encrypt' => filter_var(env('WORK_ORDER_TARGET_DB_ENCRYPT', env('DB_ENCRYPT', true)), FILTER_VALIDATE_BOOL) ? 'yes' : 'no',
             'trust_server_certificate' => filter_var(env('WORK_ORDER_TARGET_DB_TRUST_SERVER_CERTIFICATE', env('DB_TRUST_SERVER_CERTIFICATE', true)), FILTER_VALIDATE_BOOL),
+            'login_timeout' => (int) env('WORK_ORDER_TARGET_DB_LOGIN_TIMEOUT', env('DB_LOGIN_TIMEOUT', 10)),
         ],
 
     ],
