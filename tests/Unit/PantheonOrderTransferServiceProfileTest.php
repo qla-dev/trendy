@@ -352,6 +352,7 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         ], false, false, null);
 
         $this->assertSame('09.07.2026', $result['external_document_date']);
+        $this->assertSame('works', $result['server']);
     }
 
     public function test_trendy_germany_header_blanks_contact_and_pay_method_and_uses_referent_as_odgovorni(): void
