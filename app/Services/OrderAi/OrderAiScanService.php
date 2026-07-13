@@ -1283,6 +1283,50 @@ class OrderAiScanService
             }
         }
 
+        return $this->resolveStoredScanSourceTextFromFile($scan);
+    }
+
+    private function resolveStoredScanSourceTextFromFile(OrderAiScan $scan): string
+    {
+        $bytes = $this->readStoredFileBytes($scan);
+
+        if ($bytes === '') {
+            return '';
+        }
+
+        try {
+            $preparedDocument = $this->prepareDocumentContext($scan, $this->resolveDocumentProfileKey($scan), $bytes);
+        } catch (\Throwable $exception) {
+            Log::warning('Order AI stored trendy_de source file text fallback failed.', [
+                'scan_id' => $scan->id,
+                'source_file_name' => (string) ($scan->source_file_name ?? ''),
+                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+            ]);
+
+            return '';
+        }
+
+        $candidates = [
+            $preparedDocument['searchable_text'] ?? '',
+            $preparedDocument['raw_extracted_text'] ?? '',
+            $preparedDocument['provider_input_text'] ?? '',
+        ];
+
+        foreach (is_array($preparedDocument['processed_pages'] ?? null) ? $preparedDocument['processed_pages'] : [] as $page) {
+            if (is_array($page)) {
+                $candidates[] = implode("\n", array_filter(array_map('strval', $page['lines'] ?? [])));
+                $candidates[] = (string) ($page['text'] ?? '');
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            $candidate = trim((string) $candidate);
+
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
         return '';
     }
 
