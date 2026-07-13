@@ -243,6 +243,9 @@ class OrderAiScanServiceTest extends TestCase
                 'payload' => [
                     'external_document_date' => '7. 9. 2026.',
                 ],
+                'header_payload' => [
+                    'adDateDoc1' => '2026-09-07 00:00:00',
+                ],
             ],
         ]);
 
@@ -254,6 +257,10 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(
             '2. 7. 2026.',
             data_get($scan->capturedForceFill, 'pantheon_transfer_payload.payload.external_document_date')
+        );
+        $this->assertSame(
+            '2026-07-02 00:00:00',
+            data_get($scan->capturedForceFill, 'pantheon_transfer_payload.header_payload.adDateDoc1')
         );
     }
 

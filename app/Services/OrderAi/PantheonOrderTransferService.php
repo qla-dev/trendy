@@ -217,7 +217,7 @@ class PantheonOrderTransferService
         try {
             $targetConnection = $this->targetConnection();
 
-            return $targetConnection->transaction(function () use ($normalizedPayload, $user) {
+            $result = $targetConnection->transaction(function () use ($normalizedPayload, $user) {
                 $prepared = $this->prepareTransferData($normalizedPayload, true, true, $user);
                 $prepared['referent_id'] = $this->resolveTransferReferentId($prepared, $user);
                 $this->assertUniqueExternalDocumentReference($prepared);
@@ -311,6 +311,17 @@ class PantheonOrderTransferService
 
                 return $result;
             }, 3);
+
+            $this->logExternalDocumentDateDatabaseWrite(
+                is_array($result['payload'] ?? null) ? $result['payload'] : [],
+                is_array($result['header_payload'] ?? null) ? $result['header_payload'] : [],
+                [
+                    'raw_key' => $result['pantheon_order_key'] ?? null,
+                    'display_key' => $result['pantheon_order_view'] ?? null,
+                ]
+            );
+
+            return $result;
         } catch (\Throwable $exception) {
             Log::error('Order AI Pantheon transfer failed.', [
                 'message' => $exception->getMessage(),
@@ -812,6 +823,56 @@ class PantheonOrderTransferService
         }
 
         Log::info('Order AI external_document_date transfer trace.', $context);
+    }
+
+    private function logExternalDocumentDateDatabaseWrite(
+        array $prepared,
+        array $headerPayload,
+        array $numberContext
+    ): void {
+        $connectionName = $this->targetConnectionName();
+        $preparedDate = trim((string) ($prepared['external_document_date'] ?? ''));
+        $parsedDate = $this->parseDateOrNull($preparedDate);
+        $headerDate = $this->formatDateForLog($headerPayload['adDateDoc1'] ?? null);
+        $storedDate = null;
+
+        try {
+            $storedDate = $this->formatDateForLog(
+                $this->orderSourceQuery()
+                    ->where('acKey', (string) ($headerPayload['acKey'] ?? ''))
+                    ->value('adDateDoc1')
+            );
+        } catch (\Throwable $exception) {
+            Log::warning('Order AI external_document_date database readback failed.', [
+                'target_connection' => $connectionName,
+                'target_database' => config('database.connections.' . $connectionName . '.database'),
+                'target_table' => 'dbo.tHE_Order',
+                'target_column' => 'adDateDoc1',
+                'pantheon_order_key' => $headerPayload['acKey'] ?? ($numberContext['raw_key'] ?? null),
+                'pantheon_order_view' => $headerPayload['acKeyView'] ?? ($numberContext['display_key'] ?? null),
+                'external_document_number' => $prepared['external_document_number'] ?? null,
+                'pdf_extracted_external_document_date' => $preparedDate,
+                'header_payload_adDateDoc1' => $headerDate,
+                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+            ]);
+
+            return;
+        }
+
+        Log::info('Order AI external_document_date database write.', [
+            'target_connection' => $connectionName,
+            'target_database' => config('database.connections.' . $connectionName . '.database'),
+            'target_table' => 'dbo.tHE_Order',
+            'target_column' => 'adDateDoc1',
+            'pantheon_order_key' => $headerPayload['acKey'] ?? ($numberContext['raw_key'] ?? null),
+            'pantheon_order_view' => $headerPayload['acKeyView'] ?? ($numberContext['display_key'] ?? null),
+            'external_document_number' => $prepared['external_document_number'] ?? null,
+            'pdf_extracted_external_document_date' => $preparedDate,
+            'parsed_external_document_date' => $parsedDate?->format('Y-m-d H:i:s'),
+            'header_payload_adDateDoc1' => $headerDate,
+            'stored_adDateDoc1' => $storedDate,
+            'stored_matches_header_payload' => $storedDate !== null && $headerDate !== null && $storedDate === $headerDate,
+        ]);
     }
 
     private function logHeaderClerkAssignment(array $headerPayload, int $referentId): void

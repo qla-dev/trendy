@@ -1322,6 +1322,14 @@ class OrderAiScanService
             $transferPreview['payload']['external_document_date'] = $externalDocumentDate;
         }
 
+        if (is_array($transferPreview['header_payload'] ?? null)) {
+            $dateKey = $this->normalizeVisibleDateKey($externalDocumentDate);
+
+            if ($dateKey !== '') {
+                $transferPreview['header_payload']['adDateDoc1'] = $dateKey . ' 00:00:00';
+            }
+        }
+
         return $transferPreview;
     }
 
