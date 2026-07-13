@@ -690,6 +690,7 @@ function phptest29_payload_locations(
         'document_type' => ['acDocType'],
         'currency' => ['acCurrency'],
         'contact_name' => ['acContactPrsn', 'acContactPrsn3'],
+        'delivery_deadline' => ['adDeliveryDate', 'adDeliveryDeadline'],
         'way_of_sale' => ['acWayOfSale'],
         'subtotal' => ['anValue'],
         'vat_total' => ['anVAT'],
@@ -698,16 +699,6 @@ function phptest29_payload_locations(
 
     if (preg_match('/^payload\.([A-Za-z0-9_]+)$/', $path, $matches) === 1) {
         $field = $matches[1];
-
-        if ($field === 'delivery_deadline') {
-            return [phptest29_info_row(
-                $path,
-                $value,
-                $database . '.' . $schema . '.' . $orderTable . '.adDeliveryDeadline',
-                'not written from payload',
-                'Header delivery deadline is not sourced from payload.delivery_deadline. Header external document date is traced on payload.external_document_date; item delivery dates are traced on payload.items[*].delivery_deadline.'
-            )];
-        }
 
         if ($field === 'contact_name' && phptest29_is_trendy_germany_payload($payload)) {
             foreach (['acContactPrsn', 'acContactPrsn3'] as $column) {

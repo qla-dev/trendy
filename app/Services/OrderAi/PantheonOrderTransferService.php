@@ -1500,6 +1500,14 @@ class PantheonOrderTransferService
         if ($externalDocumentDate !== null && in_array('adDateDoc1', $columns, true)) {
             $payload['adDateDoc1'] = $externalDocumentDate->copy()->startOfDay();
         }
+        $headerDeliveryDeadline = $this->parseDateOrNull((string) ($prepared['delivery_deadline'] ?? ''));
+        if ($headerDeliveryDeadline !== null) {
+            foreach (['adDeliveryDate', 'adDeliveryDeadline'] as $headerDeliveryColumn) {
+                if (in_array($headerDeliveryColumn, $columns, true)) {
+                    $payload[$headerDeliveryColumn] = $headerDeliveryDeadline->copy()->startOfDay();
+                }
+            }
+        }
         $payload['anValue'] = $valueBeforeDiscount;
         $payload['anDiscount'] = 0;
         $payload['anVAT'] = $vatTotal;
