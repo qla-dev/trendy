@@ -14,31 +14,34 @@ class OperationsController extends Controller
 
     public function scannerIndex(Request $request, string $id): JsonResponse
     {
-        try {
-            $search = trim((string) $request->query('q', ''));
-            $limit = $this->resolveLimit((int) $request->integer('limit', 100));
-            $operations = Operation::scannerList($search, $limit, self::OPERATIONS_SET);
+        return $this->runWithWorkOrderTargetConnection(function () use ($request, $id) {
+            try {
+                $search = trim((string) $request->query('q', ''));
+                $limit = $this->resolveLimit((int) $request->integer('limit', 100));
+                $operations = Operation::scannerList($search, $limit, self::OPERATIONS_SET);
 
-            return response()->json([
-                'data' => $operations,
-                'meta' => [
-                    'count' => count($operations),
-                    'limit' => $limit,
-                    'search' => $search,
-                ],
-            ]);
-        } catch (Throwable $exception) {
-            Log::error('Operations scanner list failed.', [
-                'id' => $id,
-                'connection' => config('database.default'),
-                'table' => Operation::scannerSourceTable(),
-                'message' => $exception->getMessage(),
-            ]);
+                return response()->json([
+                    'data' => $operations,
+                    'meta' => [
+                        'count' => count($operations),
+                        'limit' => $limit,
+                        'search' => $search,
+                    ],
+                ]);
+            } catch (Throwable $exception) {
+                Log::error('Operations scanner list failed.', [
+                    'id' => $id,
+                    'connection' => config('database.default'),
+                    'target_connection' => $this->workOrderTargetConnectionName(),
+                    'table' => Operation::scannerSourceTable(),
+                    'message' => $exception->getMessage(),
+                ]);
 
-            return response()->json([
-                'message' => 'Greška pri učitavanju operacija.',
-            ], 500);
-        }
+                return response()->json([
+                    'message' => 'Greška pri učitavanju operacija.',
+                ], 500);
+            }
+        });
     }
 
     private function resolveLimit(?int $requestedLimit = null): int

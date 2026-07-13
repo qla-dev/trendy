@@ -40,40 +40,43 @@ class MaterialsController extends Controller
 
     public function scannerIndex(Request $request, string $id): JsonResponse
     {
-        try {
-            $search = trim((string) $request->query('q', ''));
-            $limit = $this->resolveLimit((int) $request->integer('limit', 100));
-            $offset = max(0, (int) $request->integer('offset', 0));
-            $materials = Material::scannerList(
-                $search,
-                $limit,
-                self::MATERIALS_SETS,
-                $offset
-            );
-            $totalAll = Material::scannerTotalCount(self::MATERIALS_SETS);
+        return $this->runWithWorkOrderTargetConnection(function () use ($request, $id) {
+            try {
+                $search = trim((string) $request->query('q', ''));
+                $limit = $this->resolveLimit((int) $request->integer('limit', 100));
+                $offset = max(0, (int) $request->integer('offset', 0));
+                $materials = Material::scannerList(
+                    $search,
+                    $limit,
+                    self::MATERIALS_SETS,
+                    $offset
+                );
+                $totalAll = Material::scannerTotalCount(self::MATERIALS_SETS);
 
-            return response()->json([
-                'data' => $materials,
-                'meta' => [
-                    'count' => count($materials),
-                    'total_all' => $totalAll,
-                    'limit' => $limit,
-                    'offset' => $offset,
-                    'search' => $search,
-                ],
-            ]);
-        } catch (Throwable $exception) {
-            Log::error('Materials scanner list failed.', [
-                'id' => $id,
-                'connection' => config('database.default'),
-                'table' => Material::scannerSourceTable(),
-                'message' => $exception->getMessage(),
-            ]);
+                return response()->json([
+                    'data' => $materials,
+                    'meta' => [
+                        'count' => count($materials),
+                        'total_all' => $totalAll,
+                        'limit' => $limit,
+                        'offset' => $offset,
+                        'search' => $search,
+                    ],
+                ]);
+            } catch (Throwable $exception) {
+                Log::error('Materials scanner list failed.', [
+                    'id' => $id,
+                    'connection' => config('database.default'),
+                    'target_connection' => $this->workOrderTargetConnectionName(),
+                    'table' => Material::scannerSourceTable(),
+                    'message' => $exception->getMessage(),
+                ]);
 
-            return response()->json([
-                'message' => 'Greška pri učitavanju materijala.',
-            ], 500);
-        }
+                return response()->json([
+                    'message' => 'Greška pri učitavanju materijala.',
+                ], 500);
+            }
+        });
     }
 
     public function stockIndex(Request $request)
