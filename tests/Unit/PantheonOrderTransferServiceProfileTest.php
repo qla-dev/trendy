@@ -355,6 +355,20 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame('works', $result['server']);
     }
 
+    public function test_catalog_weight_sync_uses_string_comparison_for_numeric_product_codes(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+
+        $keyMethod = $reflection->getMethod('catalogWeightUpdateKey');
+        $keyMethod->setAccessible(true);
+        $whereMethod = $reflection->getMethod('catalogWeightProductCodeWhereSql');
+        $whereMethod->setAccessible(true);
+
+        $this->assertSame('code:6515427', $keyMethod->invoke($service, '6515427'));
+        $this->assertStringContainsString('CONVERT(nvarchar(255), ?)', $whereMethod->invoke($service));
+    }
+
     public function test_trendy_germany_header_blanks_contact_and_pay_method_and_uses_referent_as_odgovorni(): void
     {
         $service = new PantheonOrderTransferService();
