@@ -3,6 +3,7 @@
 namespace App\Services\OrderAi;
 
 use App\Jobs\ProcessImportedOrderAiScanJob;
+use App\Models\Material;
 use App\Models\OrderAiScan;
 use App\Models\Product;
 use App\Services\OrderAi\Contracts\OrderAiScanProvider;
@@ -25,11 +26,12 @@ class OrderAiScanService
     private const TRENDY_DE_PARTY_NAME = 'Trendy Germany GmbH';
     private const GROB_ATTENTION_MARKER = '*********************************** ACHTUNG * *************************************';
     private const MAX_AUTOMATIC_EXTRACTION_RETRIES = 1;
-    private const TRANSFER_PREVIEW_VERSION = 2;
+    private const TRANSFER_PREVIEW_VERSION = 3;
 
     private ?array $orderAiScanColumns = null;
     private array $effectivePageMetaCache = [];
     private array $catalogProductNameByCodeCache = [];
+    private array $catalogWeightsByCodeCache = [];
 
     public function createScan(UploadedFile $file, mixed $user = null): OrderAiScan
     {
@@ -903,6 +905,7 @@ class OrderAiScanService
         $transferPreview = $this->resolveDisplayTransferPreview($scan, $payload);
         $payload = $this->overlayTransferPreview($payload, $transferPreview);
         $payload = $this->repairStoredTrendyDePayloadFromSourceText($scan, $payload, false);
+        $payload = $this->overlayCatalogWeightsForDisplay($payload);
         $processingPageMeta = $this->resolveProcessingPageMeta($scan, $payload);
         $documentMetrics = $this->resolveDisplayDocumentMetrics($scan, $payload, $processingPageMeta);
 
@@ -2367,6 +2370,103 @@ class OrderAiScanService
         ]);
 
         return $payload;
+    }
+
+    private function overlayCatalogWeightsForDisplay(array $payload): array
+    {
+        if (!is_array($payload['items'] ?? null)) {
+            return $payload;
+        }
+
+        $payload['items'] = array_map(function ($item) {
+            if (!is_array($item)) {
+                return $item;
+            }
+
+            $productCode = trim((string) ($item['product_code'] ?? ''));
+
+            if ($productCode === '') {
+                return $item;
+            }
+
+            $weights = $this->resolveCatalogWeightsForDisplay($productCode);
+
+            if ($weights === null) {
+                return $item;
+            }
+
+            if (array_key_exists('net', $weights)) {
+                $item['catalog_weight_net'] = $weights['net'];
+            }
+
+            if (array_key_exists('gross', $weights)) {
+                $item['catalog_weight_gross'] = $weights['gross'];
+            }
+
+            return $item;
+        }, array_values($payload['items']));
+
+        return $payload;
+    }
+
+    private function resolveCatalogWeightsForDisplay(string $productCode): ?array
+    {
+        $cacheKey = $this->normalizeCatalogWeightLookupKey($productCode);
+
+        if ($cacheKey === '') {
+            return null;
+        }
+
+        if (array_key_exists($cacheKey, $this->catalogWeightsByCodeCache)) {
+            return $this->catalogWeightsByCodeCache[$cacheKey];
+        }
+
+        try {
+            $material = Material::scannerFindByBarcode(
+                $productCode,
+                [],
+                (string) config('services.ai_order.target_connection', 'sqlsrv')
+            );
+        } catch (\Throwable $exception) {
+            Log::warning('Order AI catalog weight display lookup failed.', [
+                'product_code' => Utf8Sanitizer::clean($productCode, 80),
+                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+            ]);
+
+            return $this->catalogWeightsByCodeCache[$cacheKey] = null;
+        }
+
+        if (!is_array($material)) {
+            return $this->catalogWeightsByCodeCache[$cacheKey] = null;
+        }
+
+        $netWeight = $this->catalogWeightNumberOrNull($material['material_weight_net'] ?? null);
+        $grossWeight = $this->catalogWeightNumberOrNull($material['material_weight_gross'] ?? null);
+
+        if ($netWeight === null && $grossWeight === null) {
+            return $this->catalogWeightsByCodeCache[$cacheKey] = null;
+        }
+
+        return $this->catalogWeightsByCodeCache[$cacheKey] = [
+            'net' => $netWeight,
+            'gross' => $grossWeight,
+        ];
+    }
+
+    private function normalizeCatalogWeightLookupKey(string $productCode): string
+    {
+        return strtoupper(preg_replace('/\s+/', '', trim($productCode)) ?? '');
+    }
+
+    private function catalogWeightNumberOrNull(mixed $value): ?float
+    {
+        $normalized = str_replace(',', '.', trim((string) $value));
+
+        if ($normalized === '' || !is_numeric($normalized)) {
+            return null;
+        }
+
+        return round(max(0, (float) $normalized), 6);
     }
 
     private function normalizeSupplierName(string $value): string

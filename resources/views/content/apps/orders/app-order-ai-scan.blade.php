@@ -1094,13 +1094,6 @@
       width: 7rem;
     }
 
-    .order-ai-weight-input {
-      min-width: 6.5rem;
-      max-width: 7rem;
-      padding-inline: 0.55rem;
-      text-align: right;
-    }
-
     .order-ai-line-row.is-catalog-missing > td,
     .order-ai-line-row.is-catalog-created > td {
       transition: background-color 0.2s ease;
@@ -2839,11 +2832,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                       <th>Šifra</th>
                       <th class="order-ai-wrap">Naziv</th>
                       <th>Količina</th>
+                      <th class="order-ai-weight-cell">Težina</th>
                       <th>JM</th>
                       <th>Jed. cijena</th>
                       <th class="order-ai-wrap">Total provjera</th>
-                      <th class="order-ai-weight-cell">Neto</th>
-                      <th class="order-ai-weight-cell">Bruto</th>
                     </tr>
                   </thead>
                   <tbody id="order-ai-lines-body"></tbody>
@@ -3235,6 +3227,27 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             return parseAmountInput(value);
           },
         },
+        catalog_weight: {
+          label: 'Težina',
+          title: 'Uredi težinu',
+          control: 'input',
+          inputMode: 'decimal',
+          help: 'Vrijednost se upisuje i kao neto i kao bruto težina. Dozvoljeni su 0.1 i 0,1.',
+          formatValue: function (item) {
+            return formatWeightInputValue(resolveCatalogWeightValue(item));
+          },
+          normalize: function (value, item) {
+            const parsed = normalizeDecimalNumber(value);
+            const resolved = parsed === null ? null : Math.round(Math.max(0, parsed) * 1000000) / 1000000;
+
+            if (item) {
+              item.catalog_weight_net = resolved;
+              item.catalog_weight_gross = resolved;
+            }
+
+            return resolved;
+          },
+        },
       };
 
       function escapeHtml(value) {
@@ -3507,65 +3520,24 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         return parsed === null ? '-' : String(Math.round(Math.max(0, parsed) * 1000000) / 1000000);
       }
 
-      function findWeightInput(index, field) {
-        if (!Number.isInteger(index) || !['catalog_weight_net', 'catalog_weight_gross'].includes(field)) {
+      function resolveCatalogWeightValue(item) {
+        if (!item) {
           return null;
         }
 
-        return linesBody.querySelector(`[data-weight-edit-index="${index}"][data-weight-edit-field="${field}"]`);
-      }
+        const directWeight = normalizeDecimalNumber(item.catalog_weight);
 
-      function focusWeightInput(index, field) {
-        const target = findWeightInput(index, field);
-
-        if (!target) {
-          return false;
+        if (directWeight !== null) {
+          return directWeight;
         }
 
-        target.focus();
+        const netWeight = normalizeDecimalNumber(item.catalog_weight_net);
 
-        if (typeof target.select === 'function') {
-          target.select();
+        if (netWeight !== null) {
+          return netWeight;
         }
 
-        return true;
-      }
-
-      function moveWeightInputFocus(input, key) {
-        const index = Number(input.dataset.weightEditIndex);
-        const field = String(input.dataset.weightEditField || '').trim();
-        const fieldOrder = ['catalog_weight_net', 'catalog_weight_gross'];
-        const fieldIndex = fieldOrder.indexOf(field);
-
-        if (!Number.isInteger(index) || fieldIndex === -1) {
-          return false;
-        }
-
-        if (key === 'ArrowUp') {
-          return focusWeightInput(index - 1, field);
-        }
-
-        if (key === 'ArrowDown') {
-          return focusWeightInput(index + 1, field);
-        }
-
-        if (key === 'ArrowLeft') {
-          if (fieldIndex > 0) {
-            return focusWeightInput(index, fieldOrder[fieldIndex - 1]);
-          }
-
-          return focusWeightInput(index - 1, fieldOrder[fieldOrder.length - 1]);
-        }
-
-        if (key === 'ArrowRight') {
-          if (fieldIndex < fieldOrder.length - 1) {
-            return focusWeightInput(index, fieldOrder[fieldIndex + 1]);
-          }
-
-          return focusWeightInput(index + 1, fieldOrder[0]);
-        }
-
-        return false;
+        return normalizeDecimalNumber(item.catalog_weight_gross);
       }
 
       function resolveLoadedScanLabel(fileName) {
@@ -4311,8 +4283,9 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
               discount_percent: toFiniteNumber(item.discount_percent, 0),
               priority: String(item.priority || '').trim(),
               note: String(item.note || '').trim(),
-              catalog_weight_net: normalizeDecimalNumber(item.catalog_weight_net),
-              catalog_weight_gross: normalizeDecimalNumber(item.catalog_weight_gross),
+              catalog_weight: resolveCatalogWeightValue(item),
+              catalog_weight_net: resolveCatalogWeightValue(item),
+              catalog_weight_gross: resolveCatalogWeightValue(item),
             };
           }),
           summary: {
@@ -6795,8 +6768,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
               catalog_item_status: item.catalog_item_status || '',
               catalog_item_notice: item.catalog_item_notice || '',
               primary_classification: item.primary_classification || '',
-              catalog_weight_net: formatWeightInputValue(item.catalog_weight_net),
-              catalog_weight_gross: formatWeightInputValue(item.catalog_weight_gross),
+              catalog_weight: formatWeightInputValue(resolveCatalogWeightValue(item)),
             };
           }),
         });
@@ -6835,15 +6807,14 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             catalogMeta.push(`<div class="order-ai-line-note">Primarna klasifikacija: ${escapeHtml(item.primary_classification)}</div>`);
           }
 
-          const weightNetValue = formatWeightInputValue(item.catalog_weight_net);
-          const weightGrossValue = formatWeightInputValue(item.catalog_weight_gross);
-          const netWeightMarkup = allowCellEdit
-            ? `<input type="number" min="0" step="0.000001" class="form-control form-control-sm order-ai-weight-input" data-weight-edit-index="${index}" data-weight-edit-field="catalog_weight_net" value="${escapeHtml(weightNetValue)}">`
-            : `<span>${escapeHtml(formatWeightDisplay(weightNetValue))}</span>`;
-          const grossWeightMarkup = allowCellEdit
-            ? `<input type="number" min="0" step="0.000001" class="form-control form-control-sm order-ai-weight-input" data-weight-edit-index="${index}" data-weight-edit-field="catalog_weight_gross" value="${escapeHtml(weightGrossValue)}">`
-            : `<span>${escapeHtml(formatWeightDisplay(weightGrossValue))}</span>`;
           const lineLabel = `Uredi stavku ${escapeHtml(String(item.line_number || index + 1))}`;
+          const weightMarkup = renderLineEditTrigger(index, 'catalog_weight', `
+            <span>${escapeHtml(formatWeightDisplay(resolveCatalogWeightValue(item)))}</span>
+          `, {
+            editable: allowCellEdit,
+            compact: true,
+            label: `${lineLabel} - težina`,
+          });
           const productCodeMarkup = renderLineEditTrigger(index, 'product_code', `
             <div class="order-ai-line-code-stack">
               <span>${escapeHtml(item.product_code || '-')}</span>
@@ -6890,6 +6861,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                 ${productNameMarkup}
               </td>
               <td>${quantityMarkup}</td>
+              <td class="order-ai-weight-cell">${weightMarkup}</td>
               <td>${unitMarkup}</td>
               <td>${unitPriceMarkup}</td>
               <td class="order-ai-wrap">
@@ -6906,8 +6878,6 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                   </span>
                 </button>
               </td>
-              <td class="order-ai-weight-cell">${netWeightMarkup}</td>
-              <td class="order-ai-weight-cell">${grossWeightMarkup}</td>
             </tr>
           `;
         }).join('');
@@ -7776,45 +7746,6 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
 
         closeInlineLineEditor(false);
         openLineTotalModal(index);
-      });
-
-      linesBody.addEventListener('input', function (event) {
-        const input = event.target.closest('[data-weight-edit-field]');
-
-        if (!input || !canEditScannedLines()) {
-          return;
-        }
-
-        const index = Number(input.dataset.weightEditIndex);
-        const field = String(input.dataset.weightEditField || '').trim();
-
-        if (!Number.isInteger(index) || !['catalog_weight_net', 'catalog_weight_gross'].includes(field)) {
-          return;
-        }
-
-        const item = resolveEditableLineItem(index);
-
-        if (!item) {
-          return;
-        }
-
-        item[field] = normalizeDecimalNumber(input.value);
-        lastLinesSignature = '';
-      });
-
-      linesBody.addEventListener('keydown', function (event) {
-        const input = event.target.closest('[data-weight-edit-field]');
-
-        if (!input || !canEditScannedLines()) {
-          return;
-        }
-
-        if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
-          return;
-        }
-
-        event.preventDefault();
-        moveWeightInputFocus(input, event.key);
       });
 
       if (inlineEditorCloseButton) {

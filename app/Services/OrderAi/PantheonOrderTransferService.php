@@ -384,7 +384,11 @@ class PantheonOrderTransferService
                 $updates['anDimWeightBrutto'] = $grossWeight;
             }
 
-            $updatesByCode[$productCode] = $updates;
+            // Numeric-looking item codes must stay strings; PHP casts numeric array keys to integers.
+            $updatesByCode[$this->catalogWeightUpdateKey($productCode)] = [
+                'product_code' => $productCode,
+                'updates' => $updates,
+            ];
         }
 
         if ($updatesByCode === []) {
@@ -395,18 +399,35 @@ class PantheonOrderTransferService
         $qualifiedCatalogTable = Order::sourceSchema() . '.' . $catalogTable;
         $changedAt = Carbon::now();
 
-        foreach ($updatesByCode as $productCode => $updates) {
+        foreach ($updatesByCode as $entry) {
+            $productCode = trim((string) ($entry['product_code'] ?? ''));
+            $updates = is_array($entry['updates'] ?? null) ? $entry['updates'] : [];
+
+            if ($productCode === '' || $updates === []) {
+                continue;
+            }
+
             if ($hasChangedAtColumn) {
                 $updates['adTimeChg'] = $changedAt;
             }
 
             $updatedRows += (int) $this->targetConnection()
                 ->table($qualifiedCatalogTable)
-                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
+                ->whereRaw($this->catalogWeightProductCodeWhereSql(), [$productCode])
                 ->update($updates);
         }
 
         return $updatedRows;
+    }
+
+    private function catalogWeightUpdateKey(string $productCode): string
+    {
+        return 'code:' . $productCode;
+    }
+
+    private function catalogWeightProductCodeWhereSql(): string
+    {
+        return "LTRIM(RTRIM(ISNULL(acIdent, ''))) = CONVERT(nvarchar(255), ?)";
     }
 
     protected function assertUniqueExternalDocumentReference(array $prepared): void
@@ -603,8 +624,9 @@ class PantheonOrderTransferService
             $primaryClassification = $this->resolvePrimaryClassification($materialHint, $order);
             $quantity = round(max(0, (float) ($rawItem['quantity'] ?? 0)), 6);
             $itemDeliveryDeadline = trim((string) ($rawItem['delivery_deadline'] ?? ''));
-            $requestedProductWeightNet = $this->numericValueOrNull($rawItem['catalog_weight_net'] ?? null);
-            $requestedProductWeightGross = $this->numericValueOrNull($rawItem['catalog_weight_gross'] ?? null);
+            $requestedProductWeight = $this->numericValueOrNull($rawItem['catalog_weight'] ?? null);
+            $requestedProductWeightNet = $requestedProductWeight ?? $this->numericValueOrNull($rawItem['catalog_weight_net'] ?? null);
+            $requestedProductWeightGross = $requestedProductWeight ?? $this->numericValueOrNull($rawItem['catalog_weight_gross'] ?? null);
 
             if ($quantity <= 0) {
                 continue;

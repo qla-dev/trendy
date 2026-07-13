@@ -1313,7 +1313,7 @@ class OrderAiScanServiceTest extends TestCase
             'progress_total' => 100,
             'processed_at' => Carbon::parse('2026-06-19 10:15:00'),
             'pantheon_transfer_payload' => [
-                'preview_version' => 2,
+                'preview_version' => 3,
                 'preview_error' => 'Narudžba sa referencom "4512109382" već postoji u bazi kao 26-0110-001161.',
                 'preview_error_code' => 'duplicate_reference',
                 'transfer_blocked' => true,
@@ -4230,7 +4230,7 @@ class OrderAiScanServiceTest extends TestCase
             'Narudžba sa referencom "4512109382" već postoji u bazi kao 26-0110-001161.',
             $payload['transfer_block_reason']
         );
-        $this->assertSame(2, $scan->capturedForceFill['pantheon_transfer_payload']['preview_version']);
+        $this->assertSame(3, $scan->capturedForceFill['pantheon_transfer_payload']['preview_version']);
         $this->assertTrue($scan->capturedForceFill['pantheon_transfer_payload']['transfer_blocked']);
         $this->assertSame(
             '26-0110-001161',
