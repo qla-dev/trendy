@@ -791,6 +791,7 @@ class PantheonOrderTransferService
             'grand_total' => $grandTotal,
             'items' => $preparedItems,
             'referent_id' => $referentId,
+            'server' => 'works',
         ];
     }
 
