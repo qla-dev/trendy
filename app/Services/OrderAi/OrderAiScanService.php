@@ -2136,6 +2136,12 @@ class OrderAiScanService
                 'catalog_item_created' => (bool) ($preparedItem['catalog_item_created'] ?? ($existingItem['catalog_item_created'] ?? false)),
                 'catalog_item_status' => trim((string) ($preparedItem['catalog_item_status'] ?? ($existingItem['catalog_item_status'] ?? ''))),
                 'catalog_item_notice' => trim((string) ($preparedItem['catalog_item_notice'] ?? ($existingItem['catalog_item_notice'] ?? ''))),
+                'catalog_weight_net' => is_numeric((string) ($preparedItem['catalog_weight_net'] ?? ($existingItem['catalog_weight_net'] ?? '')))
+                    ? (float) ($preparedItem['catalog_weight_net'] ?? ($existingItem['catalog_weight_net'] ?? 0))
+                    : null,
+                'catalog_weight_gross' => is_numeric((string) ($preparedItem['catalog_weight_gross'] ?? ($existingItem['catalog_weight_gross'] ?? '')))
+                    ? (float) ($preparedItem['catalog_weight_gross'] ?? ($existingItem['catalog_weight_gross'] ?? 0))
+                    : null,
             ]);
         }
 
@@ -2631,6 +2637,11 @@ class OrderAiScanService
             $documentNumber = $this->extractTrendyDeDocumentNumber($searchableText, $fileName);
         }
 
+        $externalDocumentDate = $this->extractTrendyDeDocumentDate(
+            is_array($context['processed_pages'] ?? null) ? $context['processed_pages'] : [],
+            $searchableText
+        );
+
         $headerDeliveryDeadline = $this->extractTrendyDeHeaderDeliveryDeadline(
             is_array($context['processed_pages'] ?? null) ? $context['processed_pages'] : [],
             $searchableText
@@ -2676,6 +2687,9 @@ class OrderAiScanService
         $order['customer_name'] = self::TRENDY_DE_PARTY_NAME;
         $order['supplier_name'] = $supplierName;
         $order['external_document_number'] = $documentNumber;
+        if ($externalDocumentDate !== '') {
+            $order['external_document_date'] = $externalDocumentDate;
+        }
         $order['delivery_deadline'] = $deliveryDeadline;
         $order['contact_name'] = $contactName;
         $order['receiver_name'] = $receiverName !== '' ? $receiverName : self::TRENDY_DE_PARTY_NAME;
@@ -4484,6 +4498,59 @@ class OrderAiScanService
             }
 
             return '';
+        }
+
+        return '';
+    }
+
+    private function extractTrendyDeDocumentDate(array $processedPages, string $searchableText): string
+    {
+        $pendingDateLabel = false;
+
+        foreach ($this->flattenTrendyDeContextLines($processedPages, $searchableText) as $line) {
+            $line = trim((string) $line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            $normalized = $this->normalizeKeywordText($line);
+
+            if (str_starts_with($normalized, '%pdf-')) {
+                continue;
+            }
+
+            if (
+                $this->isTrendyDeTableHeaderText($normalized)
+                || $this->isTrendyDeItemStartText($line)
+            ) {
+                break;
+            }
+
+            if ($pendingDateLabel) {
+                $documentDate = $this->extractVisibleDateFromLine($line);
+
+                if ($documentDate !== '') {
+                    return $documentDate;
+                }
+            }
+
+            $pendingDateLabel = false;
+
+            if (
+                !str_starts_with($normalized, 'datum')
+                || $this->containsTrendyDeDeliveryLabel($line)
+            ) {
+                continue;
+            }
+
+            $documentDate = $this->extractVisibleDateFromLine($line);
+
+            if ($documentDate !== '') {
+                return $documentDate;
+            }
+
+            $pendingDateLabel = true;
         }
 
         return '';

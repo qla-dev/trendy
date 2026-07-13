@@ -354,6 +354,103 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame('09.07.2026', $result['external_document_date']);
     }
 
+    public function test_trendy_germany_header_blanks_contact_and_pay_method_and_uses_referent_as_odgovorni(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $keyMethod = $reflection->getMethod('tableCacheKey');
+        $keyMethod->setAccessible(true);
+        $cacheKey = $keyMethod->invoke($service, \App\Models\Order::sourceTableName());
+        $columns = [
+            'acKey',
+            'acKeyView',
+            'acDocType',
+            'acRefNo1',
+            'adDate',
+            'adDateDoc1',
+            'adDateValid',
+            'anDaysForValid',
+            'acStatus',
+            'acConsignee',
+            'acReceiver',
+            'acContactPrsn',
+            'acContactPrsn3',
+            'acPayMethod',
+            'acCurrency',
+            'acWayOfSale',
+            'acWarehouse',
+            'acDoc1',
+            'acDoc2',
+            'anValue',
+            'anDiscount',
+            'anVAT',
+            'anForPay',
+            'anCurrValue',
+            'acNote',
+            'acInternalNote',
+            'adTimeIns',
+            'adTimeChg',
+            'anUserIns',
+            'anUserChg',
+            'anClerk',
+            'anNoteClerk',
+            'anConsigneeQId',
+            'anReceiverQId',
+        ];
+
+        $columnsProperty = $reflection->getProperty('orderColumnsCache');
+        $columnsProperty->setAccessible(true);
+        $columnsProperty->setValue($service, [$cacheKey => $columns]);
+
+        $metadataProperty = $reflection->getProperty('orderColumnMetadataCache');
+        $metadataProperty->setAccessible(true);
+        $metadataProperty->setValue($service, [$cacheKey => array_fill_keys($columns, ['length' => null])]);
+
+        $nonInsertableProperty = $reflection->getProperty('orderNonInsertableColumnsCache');
+        $nonInsertableProperty->setAccessible(true);
+        $nonInsertableProperty->setValue($service, [$cacheKey => []]);
+
+        $method = $reflection->getMethod('buildHeaderPayload');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [
+            'acContactPrsn' => 'Edina Duzan',
+            'acContactPrsn3' => 'Edina Duzan',
+            'acPayMethod' => '2',
+            'anConsigneeQId' => 255,
+            'anReceiverQId' => 255,
+        ], [
+            'customer_name' => 'Trendy Germany GmbH',
+            'supplier_name' => 'Trendy Germany GmbH-45',
+            'receiver_name' => 'Trendy Germany GmbH-45',
+            'contact_name' => 'Edina Duzan',
+            'external_document_number' => '26-020-000738',
+            'external_document_date' => '21. 5. 2026.',
+            'document_type' => '0110',
+            'currency' => 'EUR',
+            'way_of_sale' => 'D',
+            'warnings' => [],
+            'subtotal' => 2579.9,
+            'vat_total' => 0.0,
+            'grand_total' => 2579.9,
+            'referent_id' => 46,
+        ], [
+            'raw_key' => '2601100001713',
+            'display_key' => '26-0110-001713',
+            'doc_type' => '0110',
+        ], null, null);
+
+        $this->assertSame('', $result['acContactPrsn']);
+        $this->assertSame('', $result['acContactPrsn3']);
+        $this->assertSame('', $result['acPayMethod']);
+        $this->assertSame(46, $result['anClerk']);
+        $this->assertSame(46, $result['anNoteClerk']);
+        $this->assertSame(46, $result['anUserIns']);
+        $this->assertSame(46, $result['anUserChg']);
+        $this->assertInstanceOf(Carbon::class, $result['adDateDoc1']);
+        $this->assertSame('2026-05-21', $result['adDateDoc1']->format('Y-m-d'));
+    }
+
     public function test_order_item_delivery_date_populates_delivery_and_dispatch_dates(): void
     {
         $service = new PantheonOrderTransferService();
