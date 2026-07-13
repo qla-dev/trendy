@@ -264,6 +264,64 @@ class OrderAiScanServiceTest extends TestCase
         );
     }
 
+    public function test_prepare_payload_for_transfer_repairs_stale_trendy_de_date_from_stored_file_fallback(): void
+    {
+        Storage::fake('local');
+        config(['ai-order-scan.storage_disk' => 'local']);
+        Storage::disk('local')->put('order-ai-scans/Bestellung_26-020-000983.pdf', 'pdf bytes');
+
+        app()->instance(OrderAiDocumentPreparationService::class, new class extends OrderAiDocumentPreparationService {
+            public function prepareDocument(
+                string $documentProfile,
+                string $fileName,
+                ?string $mimeType,
+                string $bytes
+            ): array {
+                return [
+                    'searchable_text' => implode("\n", [
+                        '2. 7. 2026.',
+                        '7. 9. 2026.',
+                        'Trendy Germany GmbH',
+                        'Kaiserstrasse 150',
+                    ]),
+                    'raw_extracted_text' => '',
+                    'provider_input_text' => '',
+                    'processed_pages' => [],
+                ];
+            }
+        });
+
+        $payload = [
+            'order' => [
+                'customer_name' => 'Trendy Germany GmbH',
+                'supplier_name' => 'Trendy Germany GmbH',
+                'receiver_name' => 'Trendy doo',
+                'external_document_number' => '26-020-000983',
+                'external_document_date' => '7. 9. 2026.',
+                'delivery_deadline' => '7. 9. 2026.',
+                'document_type' => '0110',
+                'currency' => 'EUR',
+                'warnings' => [],
+            ],
+            'items' => [],
+            'summary' => [],
+        ];
+
+        $scan = $this->makeInMemoryScan([
+            'id' => 984,
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000983.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => 'order-ai-scans/Bestellung_26-020-000983.pdf',
+            'normalized_payload' => $payload,
+        ]);
+
+        $repaired = app(OrderAiScanService::class)->preparePayloadForTransfer($scan, $payload);
+
+        $this->assertSame('2. 7. 2026.', data_get($repaired, 'order.external_document_date'));
+        $this->assertSame('2. 7. 2026.', data_get($scan->capturedForceFill, 'normalized_payload.order.external_document_date'));
+    }
+
     public function test_post_process_profile_payload_splits_trendy_de_beschreibung_and_item_delivery_deadline(): void
     {
         Storage::fake('local');
