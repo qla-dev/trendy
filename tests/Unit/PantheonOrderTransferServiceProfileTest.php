@@ -369,6 +369,8 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
             'acRefNo1',
             'adDate',
             'adDateDoc1',
+            'adDeliveryDate',
+            'adDeliveryDeadline',
             'adDateValid',
             'anDaysForValid',
             'acStatus',
@@ -427,6 +429,7 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
             'contact_name' => 'Edina Duzan',
             'external_document_number' => '26-020-000738',
             'external_document_date' => '21. 5. 2026.',
+            'delivery_deadline' => '20. 7. 2026.',
             'document_type' => '0110',
             'currency' => 'EUR',
             'way_of_sale' => 'D',
@@ -454,6 +457,87 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame(46, $result['anUserChg']);
         $this->assertInstanceOf(Carbon::class, $result['adDateDoc1']);
         $this->assertSame('2026-05-21', $result['adDateDoc1']->format('Y-m-d'));
+        $this->assertInstanceOf(Carbon::class, $result['adDeliveryDate']);
+        $this->assertInstanceOf(Carbon::class, $result['adDeliveryDeadline']);
+        $this->assertSame('2026-07-20', $result['adDeliveryDate']->format('Y-m-d'));
+        $this->assertSame('2026-07-20', $result['adDeliveryDeadline']->format('Y-m-d'));
+    }
+
+    public function test_header_delivery_dates_are_not_written_when_order_delivery_deadline_is_blank(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $keyMethod = $reflection->getMethod('tableCacheKey');
+        $keyMethod->setAccessible(true);
+        $cacheKey = $keyMethod->invoke($service, \App\Models\Order::sourceTableName());
+        $columns = [
+            'acKey',
+            'acKeyView',
+            'acDocType',
+            'acRefNo1',
+            'adDate',
+            'adDateDoc1',
+            'adDeliveryDate',
+            'adDeliveryDeadline',
+            'adDateValid',
+            'anDaysForValid',
+            'acStatus',
+            'acConsignee',
+            'acReceiver',
+            'acCurrency',
+            'acWayOfSale',
+            'acWarehouse',
+            'acDoc1',
+            'anValue',
+            'anDiscount',
+            'anVAT',
+            'anForPay',
+            'anCurrValue',
+            'acNote',
+            'acInternalNote',
+            'adTimeIns',
+            'adTimeChg',
+        ];
+
+        $columnsProperty = $reflection->getProperty('orderColumnsCache');
+        $columnsProperty->setAccessible(true);
+        $columnsProperty->setValue($service, [$cacheKey => $columns]);
+
+        $metadataProperty = $reflection->getProperty('orderColumnMetadataCache');
+        $metadataProperty->setAccessible(true);
+        $metadataProperty->setValue($service, [$cacheKey => array_fill_keys($columns, ['length' => null])]);
+
+        $nonInsertableProperty = $reflection->getProperty('orderNonInsertableColumnsCache');
+        $nonInsertableProperty->setAccessible(true);
+        $nonInsertableProperty->setValue($service, [$cacheKey => []]);
+
+        $method = $reflection->getMethod('buildHeaderPayload');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [], [
+            'customer_name' => 'Trendy Germany GmbH',
+            'supplier_name' => 'Trendy Germany GmbH',
+            'receiver_name' => 'Trendy Germany 45',
+            'contact_name' => '',
+            'external_document_number' => '26-020-000738',
+            'external_document_date' => '21. 5. 2026.',
+            'delivery_deadline' => '',
+            'document_type' => '0110',
+            'currency' => 'EUR',
+            'way_of_sale' => 'D',
+            'warnings' => [],
+            'subtotal' => 2579.9,
+            'vat_total' => 0.0,
+            'grand_total' => 2579.9,
+            'referent_id' => 46,
+        ], [
+            'raw_key' => '2601100001713',
+            'display_key' => '26-0110-001713',
+            'doc_type' => '0110',
+        ], null, null);
+
+        $this->assertArrayNotHasKey('adDeliveryDate', $result);
+        $this->assertArrayNotHasKey('adDeliveryDeadline', $result);
     }
 
     public function test_order_item_delivery_date_populates_delivery_and_dispatch_dates(): void
