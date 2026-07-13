@@ -1573,22 +1573,25 @@ class OrderAiDigitalPdfRulesParser
             }
         }
 
+        $partyLineTexts = array_values(array_map(function ($row) {
+            return is_array($row) ? trim((string) ($row['text'] ?? '')) : '';
+        }, $partyRows));
         $supplierLines = [];
         $receiverLines = [];
         $partySectionMode = null;
         $deliveryDeadline = '';
-        $documentDate = '';
+        $documentDate = $this->extractTrendyDeDocumentDateFromLines($partyLineTexts);
         $contactName = '';
         $documentNumber = '';
         $tableStarted = false;
         $headerDeadlineResolved = false;
-        $leadingHeaderDeadline = $this->resolveTrendyDeHeaderDeadlineFromLeadingLines(array_values(array_map(function ($row) {
-            return is_array($row) ? trim((string) ($row['text'] ?? '')) : '';
-        }, $partyRows)));
+        $leadingHeaderDeadline = $this->resolveTrendyDeHeaderDeadlineFromLeadingLines($partyLineTexts);
 
         if ((bool) ($leadingHeaderDeadline['resolved'] ?? false)) {
             $deliveryDeadline = trim((string) ($leadingHeaderDeadline['value'] ?? ''));
-            $documentDate = trim((string) ($leadingHeaderDeadline['document_date'] ?? ''));
+            if ($documentDate === '') {
+                $documentDate = trim((string) ($leadingHeaderDeadline['document_date'] ?? ''));
+            }
             $headerDeadlineResolved = true;
         }
 
@@ -1774,6 +1777,59 @@ class OrderAiDigitalPdfRulesParser
             }
 
             $pendingDeliveryLabel = true;
+        }
+
+        return '';
+    }
+
+    private function extractTrendyDeDocumentDateFromLines(array $lines): string
+    {
+        $pendingDateLabel = false;
+
+        foreach ($lines as $line) {
+            $line = trim((string) $line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            $normalized = $this->normalizeKeywordText($line);
+
+            if (str_starts_with($normalized, '%pdf-')) {
+                continue;
+            }
+
+            if (
+                $this->isTrendyDeTableHeaderLine($normalized)
+                || $this->isTrendyDeItemStartLine($line)
+            ) {
+                break;
+            }
+
+            if ($pendingDateLabel) {
+                $documentDate = $this->extractVisibleDateFromLine($line);
+
+                if ($documentDate !== '') {
+                    return $documentDate;
+                }
+            }
+
+            $pendingDateLabel = false;
+
+            if (
+                !str_starts_with($normalized, 'datum')
+                || $this->containsTrendyDeDeliveryLabel($line)
+            ) {
+                continue;
+            }
+
+            $documentDate = $this->extractVisibleDateFromLine($line);
+
+            if ($documentDate !== '') {
+                return $documentDate;
+            }
+
+            $pendingDateLabel = true;
         }
 
         return '';

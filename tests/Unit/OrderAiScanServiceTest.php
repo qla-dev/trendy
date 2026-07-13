@@ -2038,6 +2038,7 @@ class OrderAiScanServiceTest extends TestCase
 
         $this->assertSame('digital_pdf_rules', $result['provider']);
         $this->assertSame('26-020-000675', data_get($result, 'normalized_payload.order.external_document_number'));
+        $this->assertSame('9. 5. 2026.', data_get($result, 'normalized_payload.order.external_document_date'));
         $this->assertSame('Trendy Germany GmbH', data_get($result, 'normalized_payload.order.customer_name'));
         $this->assertSame('Trendy Germany GmbH-21', data_get($result, 'normalized_payload.order.supplier_name'));
         $this->assertSame('Trendy Germany 21', data_get($result, 'normalized_payload.order.receiver_name'));

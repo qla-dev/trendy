@@ -455,6 +455,21 @@ function phptest29_product_code_for_item(array $payload, int $index): string
     return '';
 }
 
+function phptest29_is_trendy_germany_payload(array $payload): bool
+{
+    $order = is_array($payload['payload'] ?? null) ? $payload['payload'] : [];
+
+    foreach (['customer_name', 'supplier_name', 'receiver_name'] as $field) {
+        $value = trim((string) ($order[$field] ?? ''));
+
+        if ($value !== '' && stripos($value, 'trendy germany') !== false) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function phptest29_payload_locations(
     string $path,
     $value,
@@ -535,6 +550,60 @@ function phptest29_payload_locations(
             'vat_value' => ['anPVVAT', 'anPVOCVAT'],
             'grand_total' => ['anPVForPay', 'anPVOCForPay'],
         ];
+
+        if ($field === 'catalog_weight_net') {
+            return [
+                phptest29_location_row(
+                    $path,
+                    $value,
+                    $database,
+                    $schema,
+                    $orderItemTable,
+                    'anDimWeight',
+                    $itemSelector,
+                    $itemRow,
+                    'Order item net weight is copied from the article catalog at transfer time.'
+                ),
+                phptest29_location_row(
+                    $path,
+                    $value,
+                    $database,
+                    $schema,
+                    $catalogTable,
+                    'anDimWeight',
+                    'acIdent=' . ($productCode !== '' ? $productCode : '(blank)'),
+                    $catalogRow,
+                    'Article catalog net weight used for this item.'
+                ),
+            ];
+        }
+
+        if ($field === 'catalog_weight_gross') {
+            return [
+                phptest29_location_row(
+                    $path,
+                    $value,
+                    $database,
+                    $schema,
+                    $orderItemTable,
+                    'anDimWeightBrutto',
+                    $itemSelector,
+                    $itemRow,
+                    'Order item gross weight is copied from the article catalog at transfer time.'
+                ),
+                phptest29_location_row(
+                    $path,
+                    $value,
+                    $database,
+                    $schema,
+                    $catalogTable,
+                    'anDimWeightBrutto',
+                    'acIdent=' . ($productCode !== '' ? $productCode : '(blank)'),
+                    $catalogRow,
+                    'Article catalog gross weight used for this item.'
+                ),
+            ];
+        }
 
         if ($field === 'delivery_deadline') {
             return [
@@ -640,6 +709,24 @@ function phptest29_payload_locations(
             )];
         }
 
+        if ($field === 'contact_name' && phptest29_is_trendy_germany_payload($payload)) {
+            foreach (['acContactPrsn', 'acContactPrsn3'] as $column) {
+                $rows[] = phptest29_location_row(
+                    $path,
+                    '',
+                    $database,
+                    $schema,
+                    $orderTable,
+                    $column,
+                    $selector,
+                    $headerRow,
+                    'For Trendy Germany scans, the scanned contact/person responsible is kept in scan data only; the Pantheon header contact fields must remain empty.'
+                );
+            }
+
+            return $rows;
+        }
+
         if (array_key_exists($field, $headerMap)) {
             foreach ($headerMap[$field] as $column) {
                 $rows[] = phptest29_location_row($path, $value, $database, $schema, $orderTable, $column, $selector, $headerRow);
@@ -687,8 +774,12 @@ function phptest29_payload_locations(
         foreach ($topLevelMap[$path] as $target) {
             $row = $target['table'] === $orderItemTable ? ($itemRows[0] ?? null) : ($target['table'] === $contactTable ? $contactRow : $headerRow);
             $targetSelector = $target['table'] === $orderItemTable ? $selector . ', first item row' : $selector;
+            $note = '';
             if ($target['table'] === $contactTable) {
                 $targetSelector = 'anUserID=' . phptest29_value($payload['referent_id'] ?? '');
+            }
+            if ($path === 'referent_id' && $target['column'] === 'anNoteClerk') {
+                $note = 'Pantheon preview "odgovorni" uses the same referent_id value as the Referent dropdown.';
             }
 
             $rows[] = phptest29_location_row(
@@ -699,7 +790,8 @@ function phptest29_payload_locations(
                 $target['table'],
                 $target['column'],
                 $targetSelector,
-                $row
+                $row,
+                $note
             );
         }
 
@@ -1092,7 +1184,7 @@ $summaryRows = [[
 
 $headerSummaryRows = [];
 if ($headerRow !== null) {
-    foreach (['acKey', 'acKeyView', 'acDocType', 'acDoc1', 'adDateDoc1', 'acDoc2', 'acConsignee', 'acReceiver', 'acCurrency', 'acWayOfSale', 'acWarehouse', 'anValue', 'anVAT', 'anForPay', 'anClerk', 'anNoteClerk', 'anUserIns', 'anUserChg', 'anConsigneeQId', 'anReceiverQId'] as $column) {
+    foreach (['acKey', 'acKeyView', 'acDocType', 'acDoc1', 'adDateDoc1', 'adDeliveryDeadline', 'adDeliveryDate', 'acDoc2', 'acConsignee', 'acReceiver', 'acContactPrsn', 'acContactPrsn3', 'acPayMethod', 'acCurrency', 'acWayOfSale', 'acWarehouse', 'anValue', 'anVAT', 'anForPay', 'anClerk', 'anNoteClerk', 'anUserIns', 'anUserChg', 'anConsigneeQId', 'anReceiverQId'] as $column) {
         if (array_key_exists($column, $headerRow)) {
             $headerSummaryRows[] = [
                 'table' => $database . '.' . $schema . '.' . $orderTable,
@@ -1118,6 +1210,8 @@ foreach ($itemRows as $row) {
         'anPVForPay' => phptest29_value($row['anPVForPay'] ?? ''),
         'rok_isporuke_adDeliveryDate' => phptest29_value($row['adDeliveryDate'] ?? ''),
         'rok_otpreme_adDeliveryDeadline' => phptest29_value($row['adDeliveryDeadline'] ?? ''),
+        'neto_anDimWeight' => phptest29_value($row['anDimWeight'] ?? ''),
+        'bruto_anDimWeightBrutto' => phptest29_value($row['anDimWeightBrutto'] ?? ''),
         'anIdentQId' => phptest29_value($row['anIdentQId'] ?? ''),
     ];
 }
@@ -1132,6 +1226,8 @@ foreach ($catalogRows as $code => $row) {
         'code' => phptest29_value($row['acIdent'] ?? ''),
         'name' => phptest29_value($row['acName'] ?? ''),
         'unit' => phptest29_value($row['acUM'] ?? ''),
+        'neto_anDimWeight' => phptest29_value($row['anDimWeight'] ?? ''),
+        'bruto_anDimWeightBrutto' => phptest29_value($row['anDimWeightBrutto'] ?? ''),
     ];
 }
 foreach ($subjectRows as $row) {

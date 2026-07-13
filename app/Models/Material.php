@@ -73,9 +73,11 @@ class Material extends Model
             ->selectRaw("$codeExpr as material_code")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acName, ''))) as material_name")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as material_um")
+            ->selectRaw("CAST(ISNULL(i.anDimWeight, 0) as float) as material_weight_net")
+            ->selectRaw("CAST(ISNULL(i.anDimWeightBrutto, 0) as float) as material_weight_gross")
             ->selectRaw("MIN(LTRIM(RTRIM(ISNULL(s.acWarehouse, '')))) as material_warehouse")
             ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as material_qty")
-            ->groupBy('i.acIdent', 'i.acName', 'i.acUM')
+            ->groupBy('i.acIdent', 'i.acName', 'i.acUM', 'i.anDimWeight', 'i.anDimWeightBrutto')
             ->orderByRaw("CASE WHEN LEFT($codeExpr, 1) LIKE '[A-Za-z]' THEN 0 WHEN LEFT($codeExpr, 1) LIKE '[0-9]' THEN 2 ELSE 1 END ASC")
             ->orderByRaw("UPPER($codeExpr) ASC")
             ->offset($resolvedOffset)
@@ -106,6 +108,12 @@ class Material extends Model
                 'acUM' => strtoupper(substr(trim((string) ($row['material_um'] ?? '')), 0, 3)),
                 'acWarehouse' => trim((string) ($row['material_warehouse'] ?? '')),
                 'anGrossQty' => $parsedQty,
+                'material_weight_net' => is_numeric((string) ($row['material_weight_net'] ?? null))
+                    ? (float) $row['material_weight_net']
+                    : null,
+                'material_weight_gross' => is_numeric((string) ($row['material_weight_gross'] ?? null))
+                    ? (float) $row['material_weight_gross']
+                    : null,
                 'acOperationType' => 'M',
             ];
 
@@ -357,6 +365,8 @@ class Material extends Model
             ->selectRaw("CAST(ISNULL(i.anPrice, 0) as float) as material_price")
             ->selectRaw("CAST(ISNULL(i.anVAT, 0) as float) as material_vat_rate")
             ->selectRaw("CAST(ISNULL(i.anDeliveryDeadline, 0) as int) as material_delivery_deadline")
+            ->selectRaw("CAST(ISNULL(i.anDimWeight, 0) as float) as material_weight_net")
+            ->selectRaw("CAST(ISNULL(i.anDimWeightBrutto, 0) as float) as material_weight_gross")
             ->selectRaw("CONVERT(varchar(19), i.adTimeChg, 120) as material_changed_at")
             ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as material_qty")
             ->groupBy(
@@ -371,6 +381,8 @@ class Material extends Model
                 'i.anPrice',
                 'i.anVAT',
                 'i.anDeliveryDeadline',
+                'i.anDimWeight',
+                'i.anDimWeightBrutto',
                 'i.adTimeChg'
             )
             ->orderByRaw("CASE WHEN " . self::normalizedBarcodeSql('i.acIdent') . " = ? THEN 0 ELSE 1 END", [$normalizedBarcode])
@@ -409,6 +421,12 @@ class Material extends Model
                 : null,
             'material_delivery_deadline' => is_numeric((string) ($row->material_delivery_deadline ?? null))
                 ? (int) $row->material_delivery_deadline
+                : null,
+            'material_weight_net' => is_numeric((string) ($row->material_weight_net ?? null))
+                ? (float) $row->material_weight_net
+                : null,
+            'material_weight_gross' => is_numeric((string) ($row->material_weight_gross ?? null))
+                ? (float) $row->material_weight_gross
                 : null,
             'material_changed_at' => trim((string) ($row->material_changed_at ?? '')),
             'material_qty' => $materialQty,

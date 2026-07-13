@@ -24,6 +24,7 @@ class PantheonOrderTransferService
     private array $orderItemColumnsCache = [];
     private array $orderItemColumnMetadataCache = [];
     private array $orderItemNonInsertableColumnsCache = [];
+    private array $catalogItemColumnsCache = [];
     private array $knownUnitsCache = [];
     private array $pantheonClerkContactsCache = [];
 
@@ -218,6 +219,7 @@ class PantheonOrderTransferService
                 $prepared = $this->prepareTransferData($normalizedPayload, true, true, $user);
                 $prepared['referent_id'] = $this->resolveTransferReferentId($prepared, $user);
                 $this->assertUniqueExternalDocumentReference($prepared);
+                $catalogWeightUpdateCount = $this->syncCatalogWeightsForPreparedItems($prepared['items']);
                 $numberContext = $this->generateNextOrderNumber($prepared['document_type']);
                 $headerTemplate = $this->resolveHeaderTemplate($prepared['document_type']);
                 $itemTemplate = $this->resolveItemTemplate($headerTemplate['acKey'] ?? null);
@@ -278,6 +280,7 @@ class PantheonOrderTransferService
                     'pantheon_order_view' => $headerPayload['acKeyView'] ?? ($numberContext['display_key'] ?? null),
                     'header_payload' => $headerPayload,
                     'item_payloads' => $itemPayloads,
+                    'catalog_weight_update_count' => $catalogWeightUpdateCount,
                 ]);
 
                 $result = [
@@ -293,6 +296,7 @@ class PantheonOrderTransferService
                 'item_payloads' => $itemPayloads,
                 'created_catalog_items' => $this->createdCatalogItems,
                 'created_catalog_item_count' => count($this->createdCatalogItems),
+                'catalog_weight_update_count' => $catalogWeightUpdateCount,
                 ];
 
                 Log::info('Order AI Pantheon transfer completed.', [
@@ -324,6 +328,72 @@ class PantheonOrderTransferService
         }
 
         return !empty($prepared['items']);
+    }
+
+    private function syncCatalogWeightsForPreparedItems(array $items): int
+    {
+        $catalogTable = (string) config('workorders.catalog_items_table', 'tHE_SetItem');
+        $catalogColumns = $this->resolveTableColumns($catalogTable, 'catalogItemColumnsCache');
+        $hasNetColumn = in_array('anDimWeight', $catalogColumns, true);
+        $hasGrossColumn = in_array('anDimWeightBrutto', $catalogColumns, true);
+        $hasChangedAtColumn = in_array('adTimeChg', $catalogColumns, true);
+        $updatesByCode = [];
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $productCode = trim((string) ($item['product_code'] ?? ''));
+
+            if ($productCode === '') {
+                continue;
+            }
+
+            $netWeight = $this->numericValueOrNull($item['catalog_weight_net'] ?? null);
+            $grossWeight = $this->numericValueOrNull($item['catalog_weight_gross'] ?? null);
+
+            if ($netWeight === null && $grossWeight === null) {
+                continue;
+            }
+
+            if (($netWeight !== null && !$hasNetColumn) || ($grossWeight !== null && !$hasGrossColumn)) {
+                throw new RuntimeException('Kolone za težine nisu dostupne u katalogu artikala.');
+            }
+
+            $updates = [];
+
+            if ($netWeight !== null) {
+                $updates['anDimWeight'] = $netWeight;
+            }
+
+            if ($grossWeight !== null) {
+                $updates['anDimWeightBrutto'] = $grossWeight;
+            }
+
+            $updatesByCode[$productCode] = $updates;
+        }
+
+        if ($updatesByCode === []) {
+            return 0;
+        }
+
+        $updatedRows = 0;
+        $qualifiedCatalogTable = Order::sourceSchema() . '.' . $catalogTable;
+        $changedAt = Carbon::now();
+
+        foreach ($updatesByCode as $productCode => $updates) {
+            if ($hasChangedAtColumn) {
+                $updates['adTimeChg'] = $changedAt;
+            }
+
+            $updatedRows += (int) $this->targetConnection()
+                ->table($qualifiedCatalogTable)
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
+                ->update($updates);
+        }
+
+        return $updatedRows;
     }
 
     protected function assertUniqueExternalDocumentReference(array $prepared): void
@@ -520,6 +590,8 @@ class PantheonOrderTransferService
             $primaryClassification = $this->resolvePrimaryClassification($materialHint, $order);
             $quantity = round(max(0, (float) ($rawItem['quantity'] ?? 0)), 6);
             $itemDeliveryDeadline = trim((string) ($rawItem['delivery_deadline'] ?? ''));
+            $requestedProductWeightNet = $this->numericValueOrNull($rawItem['catalog_weight_net'] ?? null);
+            $requestedProductWeightGross = $this->numericValueOrNull($rawItem['catalog_weight_gross'] ?? null);
 
             if ($quantity <= 0) {
                 continue;
@@ -545,6 +617,10 @@ class PantheonOrderTransferService
             $resolvedProductName = trim((string) ($resolvedCatalogMaterial['material_name'] ?? ''));
             $resolvedProductUnit = trim((string) ($resolvedCatalogMaterial['material_um'] ?? ''));
             $resolvedProductQid = $this->positiveIntegerOrNull($resolvedCatalogMaterial['material_qid'] ?? null);
+            $resolvedProductWeightNet = $requestedProductWeightNet
+                ?? $this->numericValueOrNull($resolvedCatalogMaterial['material_weight_net'] ?? null);
+            $resolvedProductWeightGross = $requestedProductWeightGross
+                ?? $this->numericValueOrNull($resolvedCatalogMaterial['material_weight_gross'] ?? null);
             $catalogItemCreated = false;
 
             if ($resolvedProductCode !== '') {
@@ -575,6 +651,10 @@ class PantheonOrderTransferService
                     $resolvedProductName = trim((string) ($resolvedCatalogMaterial['material_name'] ?? $productName));
                     $resolvedProductUnit = trim((string) ($resolvedCatalogMaterial['material_um'] ?? config('ai-order-scan.default_unit', 'KO')));
                     $resolvedProductQid = $this->positiveIntegerOrNull($resolvedCatalogMaterial['material_qid'] ?? null);
+                    $resolvedProductWeightNet = $requestedProductWeightNet
+                        ?? $this->numericValueOrNull($resolvedCatalogMaterial['material_weight_net'] ?? null);
+                    $resolvedProductWeightGross = $requestedProductWeightGross
+                        ?? $this->numericValueOrNull($resolvedCatalogMaterial['material_weight_gross'] ?? null);
                     $catalogItemCreated = $resolvedProductQid !== null;
 
                     if ($resolvedProductCode !== '') {
@@ -654,6 +734,8 @@ class PantheonOrderTransferService
                 'catalog_item_notice' => $catalogItemNotice,
                 'catalog_unit_hint' => $resolvedProductUnit,
                 'product_qid' => $resolvedProductQid,
+                'catalog_weight_net' => $resolvedProductWeightNet,
+                'catalog_weight_gross' => $resolvedProductWeightGross,
                 'source_product_code' => $sourceProductCode,
                 'source_product_name' => $sourceProductName,
                 'base_value' => $baseValue,
@@ -1159,6 +1241,7 @@ class PantheonOrderTransferService
             'acRefNo2',
             'adDate',
             'adDateDoc1',
+            'adDeliveryDate',
             'adDeliveryDeadline',
             'adDateValid',
             'anClerk',
@@ -1207,6 +1290,7 @@ class PantheonOrderTransferService
         $vatTotal = $prepared['vat_total'];
         $grandTotal = $prepared['grand_total'];
         $referentId = $this->resolveTransferReferentId($prepared, $user);
+        $isTrendyGermany = $this->isTrendyGermanyOrder($prepared);
         $requesterCode = $this->normalizePantheonText((string) ($prepared['requester_code'] ?? ''));
         $transferPartyName = trim((string) ($prepared['supplier_name'] ?? '')) !== ''
             ? trim((string) $prepared['supplier_name'])
@@ -1235,8 +1319,12 @@ class PantheonOrderTransferService
         $payload['acStatus'] = '1';
         $payload['acConsignee'] = $this->fitString('acConsignee', $consigneeName, $stringLengths);
         $payload['acReceiver'] = $this->fitString('acReceiver', $receiverName, $stringLengths);
-        $payload['acContactPrsn'] = $this->fitString('acContactPrsn', $prepared['contact_name'], $stringLengths);
-        $payload['acContactPrsn3'] = $this->fitString('acContactPrsn3', $prepared['contact_name'], $stringLengths);
+        $headerContactName = $isTrendyGermany ? '' : (string) ($prepared['contact_name'] ?? '');
+        $payload['acContactPrsn'] = $this->fitString('acContactPrsn', $headerContactName, $stringLengths);
+        $payload['acContactPrsn3'] = $this->fitString('acContactPrsn3', $headerContactName, $stringLengths);
+        if ($isTrendyGermany && in_array('acPayMethod', $columns, true)) {
+            $payload['acPayMethod'] = '';
+        }
         $payload['acCurrency'] = $this->fitString('acCurrency', $prepared['currency'], $stringLengths);
         $payload['acWayOfSale'] = $this->fitString('acWayOfSale', $prepared['way_of_sale'], $stringLengths);
         $payload['acWarehouse'] = $this->fitString('acWarehouse', (string) config('ai-order-scan.default_warehouse', ''), $stringLengths);
@@ -1293,7 +1381,11 @@ class PantheonOrderTransferService
             }
         }
 
-        return $this->trimPayloadToInsertableColumns($payload, $insertableColumns);
+        return $this->trimPayloadToInsertableColumns(
+            $payload,
+            $insertableColumns,
+            $isTrendyGermany ? ['acContactPrsn', 'acContactPrsn3', 'acPayMethod'] : []
+        );
     }
 
     private function buildItemPayload(
@@ -1436,6 +1528,14 @@ class PantheonOrderTransferService
         }
         if (in_array('acPriority', $columns, true)) {
             $payload['acPriority'] = $this->fitString('acPriority', $item['priority'], $stringLengths);
+        }
+        $catalogWeightNet = $this->numericValueOrNull($item['catalog_weight_net'] ?? null);
+        if (in_array('anDimWeight', $columns, true) && $catalogWeightNet !== null) {
+            $payload['anDimWeight'] = $catalogWeightNet;
+        }
+        $catalogWeightGross = $this->numericValueOrNull($item['catalog_weight_gross'] ?? null);
+        if (in_array('anDimWeightBrutto', $columns, true) && $catalogWeightGross !== null) {
+            $payload['anDimWeightBrutto'] = $catalogWeightGross;
         }
 
         return $this->trimPayloadToInsertableColumns($payload, $insertableColumns);
@@ -2041,6 +2141,19 @@ class PantheonOrderTransferService
         return null;
     }
 
+    private function numericValueOrNull(mixed $value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_numeric((string) $value)) {
+            return (float) $value;
+        }
+
+        return null;
+    }
+
     private function resolveCatalogMaterial(string $productCode, string $productName): array
     {
         $productCode = trim(Utf8Sanitizer::clean($productCode, 120));
@@ -2177,6 +2290,8 @@ class PantheonOrderTransferService
         $materialName = trim((string) ($candidate['material_name'] ?? $candidate['acDescr'] ?? $candidate['acName'] ?? ''));
         $materialUnit = trim((string) ($candidate['material_um'] ?? $candidate['acUM'] ?? ''));
         $materialQid = $this->positiveIntegerOrNull($candidate['material_qid'] ?? $candidate['anQId'] ?? null);
+        $materialWeightNet = $this->numericValueOrNull($candidate['material_weight_net'] ?? $candidate['anDimWeight'] ?? null);
+        $materialWeightGross = $this->numericValueOrNull($candidate['material_weight_gross'] ?? $candidate['anDimWeightBrutto'] ?? null);
 
         if ($materialCode === '' && $materialName === '') {
             return [];
@@ -2191,6 +2306,8 @@ class PantheonOrderTransferService
             'material_set' => trim((string) ($candidate['material_set'] ?? $candidate['acSetOfItem'] ?? '')),
             'material_supplier' => trim((string) ($candidate['material_supplier'] ?? $candidate['acSupplier'] ?? '')),
             'material_classification' => trim((string) ($candidate['material_classification'] ?? $candidate['acClassif'] ?? '')),
+            'material_weight_net' => $materialWeightNet,
+            'material_weight_gross' => $materialWeightGross,
         ];
     }
 
@@ -2211,6 +2328,10 @@ class PantheonOrderTransferService
         $merged = array_merge($resolvedByCode, $candidate);
         $merged['material_qid'] = $this->positiveIntegerOrNull($candidate['material_qid'] ?? null)
             ?? $this->positiveIntegerOrNull($resolvedByCode['material_qid'] ?? null);
+        $merged['material_weight_net'] = $this->numericValueOrNull($candidate['material_weight_net'] ?? null)
+            ?? $this->numericValueOrNull($resolvedByCode['material_weight_net'] ?? null);
+        $merged['material_weight_gross'] = $this->numericValueOrNull($candidate['material_weight_gross'] ?? null)
+            ?? $this->numericValueOrNull($resolvedByCode['material_weight_gross'] ?? null);
         $merged['_match_score'] = max(
             (float) ($candidate['_match_score'] ?? 0),
             (float) ($resolvedByCode['_match_score'] ?? 0)
@@ -2486,9 +2607,12 @@ class PantheonOrderTransferService
         return implode(' | ', $merged);
     }
 
-    private function trimPayloadToInsertableColumns(array $payload, array $insertableColumns): array
-    {
-        return array_filter($payload, function ($value, $column) use ($insertableColumns) {
+    private function trimPayloadToInsertableColumns(
+        array $payload,
+        array $insertableColumns,
+        array $allowEmptyStringColumns = []
+    ): array {
+        return array_filter($payload, function ($value, $column) use ($insertableColumns, $allowEmptyStringColumns) {
             if (!in_array($column, $insertableColumns, true)) {
                 return false;
             }
@@ -2498,6 +2622,10 @@ class PantheonOrderTransferService
             }
 
             if (is_string($value)) {
+                if (in_array($column, $allowEmptyStringColumns, true)) {
+                    return true;
+                }
+
                 return trim($value) !== '';
             }
 
