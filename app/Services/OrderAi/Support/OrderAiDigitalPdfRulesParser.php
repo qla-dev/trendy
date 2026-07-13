@@ -1816,14 +1816,11 @@ class OrderAiDigitalPdfRulesParser
 
             $pendingDateLabel = false;
 
-            if (
-                !str_starts_with($normalized, 'datum')
-                || $this->containsTrendyDeDeliveryLabel($line)
-            ) {
+            if (!str_starts_with($normalized, 'datum')) {
                 continue;
             }
 
-            $documentDate = $this->extractVisibleDateFromLine($line);
+            $documentDate = $this->extractTrendyDeDocumentDateFromDatumLine($line);
 
             if ($documentDate !== '') {
                 return $documentDate;
@@ -1832,7 +1829,33 @@ class OrderAiDigitalPdfRulesParser
             $pendingDateLabel = true;
         }
 
-        return '';
+        $leadingHeaderDeadline = $this->resolveTrendyDeHeaderDeadlineFromLeadingLines($lines);
+
+        return (bool) ($leadingHeaderDeadline['resolved'] ?? false)
+            ? trim((string) ($leadingHeaderDeadline['document_date'] ?? ''))
+            : '';
+    }
+
+    private function extractTrendyDeDocumentDateFromDatumLine(string $line): string
+    {
+        $candidate = trim((string) preg_replace('/^\s*datum\b\s*:?\s*/iu', '', $line));
+
+        if ($candidate === '') {
+            return '';
+        }
+
+        if (preg_match('/\b(?:liefertermin|lieferdatum)\b/iu', $candidate, $matches, PREG_OFFSET_CAPTURE) === 1) {
+            $beforeDeliveryLabel = trim(substr($candidate, 0, (int) ($matches[0][1] ?? 0)));
+            $documentDate = $this->extractVisibleDateFromLine($beforeDeliveryLabel);
+
+            if ($documentDate !== '') {
+                return $documentDate;
+            }
+
+            return '';
+        }
+
+        return $this->extractVisibleDateFromLine($candidate);
     }
 
     private function resolveTrendyDeHeaderDeadlineFromLeadingLines(array $lines): array

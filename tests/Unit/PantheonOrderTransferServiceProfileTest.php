@@ -417,12 +417,12 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
             'acContactPrsn' => 'Edina Duzan',
             'acContactPrsn3' => 'Edina Duzan',
             'acPayMethod' => '2',
-            'anConsigneeQId' => 255,
+            'anConsigneeQId' => 1776,
             'anReceiverQId' => 255,
         ], [
             'customer_name' => 'Trendy Germany GmbH',
-            'supplier_name' => 'Trendy Germany GmbH-45',
-            'receiver_name' => 'Trendy Germany GmbH-45',
+            'supplier_name' => 'Trendy Germany GmbH',
+            'receiver_name' => 'Trendy Germany 45',
             'contact_name' => 'Edina Duzan',
             'external_document_number' => '26-020-000738',
             'external_document_date' => '21. 5. 2026.',
@@ -443,6 +443,10 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame('', $result['acContactPrsn']);
         $this->assertSame('', $result['acContactPrsn3']);
         $this->assertSame('', $result['acPayMethod']);
+        $this->assertSame('Trendy Germany GmbH-45', $result['acConsignee']);
+        $this->assertSame('Trendy Germany GmbH-45', $result['acReceiver']);
+        $this->assertSame(1776, $result['anConsigneeQId']);
+        $this->assertSame(1776, $result['anReceiverQId']);
         $this->assertSame(46, $result['anClerk']);
         $this->assertSame(46, $result['anNoteClerk']);
         $this->assertSame(46, $result['anUserIns']);

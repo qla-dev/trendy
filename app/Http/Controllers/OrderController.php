@@ -462,6 +462,10 @@ class OrderController extends WorkOrderController
             ], 422);
         }
 
+        if ($scan !== null) {
+            $normalizedPayload = $orderAiScanService->preparePayloadForTransfer($scan, $normalizedPayload);
+        }
+
         try {
             if ($scan !== null) {
                 $scanAttributes = [

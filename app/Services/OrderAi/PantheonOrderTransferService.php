@@ -15,6 +15,8 @@ use RuntimeException;
 
 class PantheonOrderTransferService
 {
+    private const TRENDY_GERMANY_SUBJECT_BASE = 'Trendy Germany GmbH';
+
     private array $catalogMaterialByCodeCache = [];
     private array $catalogMaterialByNameCache = [];
     private array $createdCatalogItems = [];
@@ -812,6 +814,43 @@ class PantheonOrderTransferService
         Log::info('Order AI external_document_date transfer trace.', $context);
     }
 
+    private function logHeaderClerkAssignment(array $headerPayload, int $referentId): void
+    {
+        $clerkId = $this->positiveIntegerOrNull($headerPayload['anClerk'] ?? null);
+        $noteClerkId = $this->positiveIntegerOrNull($headerPayload['anNoteClerk'] ?? null);
+        $clerk = $this->safeResolvePantheonReferentPayload($clerkId);
+        $noteClerk = $this->safeResolvePantheonReferentPayload($noteClerkId);
+
+        Log::info('Order AI Pantheon header clerk assignment.', [
+            'target_connection' => $this->targetConnectionName(),
+            'target_database' => config('database.connections.' . $this->targetConnectionName() . '.database'),
+            'pantheon_order_key' => $headerPayload['acKey'] ?? null,
+            'pantheon_order_view' => $headerPayload['acKeyView'] ?? null,
+            'referent_id' => $referentId > 0 ? $referentId : null,
+            'anClerk' => $clerkId,
+            'anNoteClerk' => $noteClerkId,
+            'same_user_id' => $clerkId !== null && $noteClerkId !== null && $clerkId === $noteClerkId,
+            'clerk_name' => $clerk['name'] ?? '',
+            'clerk_user_code' => $clerk['user_code'] ?? '',
+            'note_clerk_name' => $noteClerk['name'] ?? '',
+            'note_clerk_user_code' => $noteClerk['user_code'] ?? '',
+            'note_clerk_has_user_code' => trim((string) ($noteClerk['user_code'] ?? '')) !== '',
+        ]);
+    }
+
+    private function safeResolvePantheonReferentPayload(mixed $pantheonUserId): array
+    {
+        try {
+            return $this->resolvePantheonReferentPayload($pantheonUserId);
+        } catch (\Throwable $exception) {
+            return [
+                'id' => $this->positiveIntegerOrNull($pantheonUserId),
+                'name' => '',
+                'user_code' => '',
+            ];
+        }
+    }
+
     private function formatDateForLog(mixed $value): ?string
     {
         if ($value instanceof \DateTimeInterface) {
@@ -1002,6 +1041,52 @@ class PantheonOrderTransferService
         }
 
         return false;
+    }
+
+    private function resolveTrendyGermanyBusinessSubjectName(array $prepared, string $transferPartyName): string
+    {
+        $fallback = '';
+
+        foreach ([
+            $prepared['supplier_name'] ?? '',
+            $prepared['receiver_name'] ?? '',
+            $transferPartyName,
+            $prepared['customer_name'] ?? '',
+        ] as $candidate) {
+            $subjectName = $this->normalizeTrendyGermanyBusinessSubjectName((string) $candidate);
+
+            if ($subjectName === '') {
+                continue;
+            }
+
+            if ($fallback === '') {
+                $fallback = $subjectName;
+            }
+
+            if (preg_match('/-\d+$/', $subjectName) === 1) {
+                return $subjectName;
+            }
+        }
+
+        return $fallback !== '' ? $fallback : trim($transferPartyName);
+    }
+
+    private function normalizeTrendyGermanyBusinessSubjectName(string $value): string
+    {
+        $value = $this->normalizePantheonText($value);
+
+        if ($value === '' || stripos($value, 'trendy germany') === false) {
+            return '';
+        }
+
+        if (preg_match('/\bTrendy\s+Germany(?:\s+GmbH)?\s*(?:-\s*|\s+)(\d{1,4})\b/iu', $value, $matches) === 1) {
+            $number = preg_replace('/\D+/', '', (string) ($matches[1] ?? '')) ?? '';
+            $number = ltrim($number, '0') !== '' ? ltrim($number, '0') : '0';
+
+            return self::TRENDY_GERMANY_SUBJECT_BASE . '-' . $number;
+        }
+
+        return self::TRENDY_GERMANY_SUBJECT_BASE;
     }
 
     private function isGrobOrder(array $order): bool
@@ -1295,19 +1380,38 @@ class PantheonOrderTransferService
         $transferPartyName = trim((string) ($prepared['supplier_name'] ?? '')) !== ''
             ? trim((string) $prepared['supplier_name'])
             : trim((string) ($prepared['customer_name'] ?? ''));
-        $consigneeName = $requesterCode !== ''
-            ? $requesterCode
-            : $this->resolveHeaderConsigneeName($prepared, $transferPartyName);
-        $receiverName = $transferPartyName !== '' ? $transferPartyName : (string) ($prepared['receiver_name'] ?? '');
-        $consigneeLookupName = $transferPartyName !== '' ? $transferPartyName : $consigneeName;
-        $consigneeQId = $this->resolveSubjectQId(
-            $consigneeLookupName,
-            $this->positiveIntegerOrNull($template['anConsigneeQId'] ?? null)
-        );
-        $receiverQId = $this->resolveSubjectQId(
-            $receiverName,
-            $this->positiveIntegerOrNull($template['anReceiverQId'] ?? null)
-        );
+        $trendyGermanySubjectName = $isTrendyGermany
+            ? $this->resolveTrendyGermanyBusinessSubjectName($prepared, $transferPartyName)
+            : '';
+        $consigneeName = $trendyGermanySubjectName !== ''
+            ? $trendyGermanySubjectName
+            : (
+                $requesterCode !== ''
+                    ? $requesterCode
+                    : $this->resolveHeaderConsigneeName($prepared, $transferPartyName)
+            );
+        $receiverName = $trendyGermanySubjectName !== ''
+            ? $trendyGermanySubjectName
+            : ($transferPartyName !== '' ? $transferPartyName : (string) ($prepared['receiver_name'] ?? ''));
+
+        if ($trendyGermanySubjectName !== '') {
+            $trendyGermanySubjectQId = $this->resolveSubjectQId(
+                $trendyGermanySubjectName,
+                $this->positiveIntegerOrNull($template['anConsigneeQId'] ?? ($template['anReceiverQId'] ?? null))
+            );
+            $consigneeQId = $trendyGermanySubjectQId;
+            $receiverQId = $trendyGermanySubjectQId;
+        } else {
+            $consigneeLookupName = $transferPartyName !== '' ? $transferPartyName : $consigneeName;
+            $consigneeQId = $this->resolveSubjectQId(
+                $consigneeLookupName,
+                $this->positiveIntegerOrNull($template['anConsigneeQId'] ?? null)
+            );
+            $receiverQId = $this->resolveSubjectQId(
+                $receiverName,
+                $this->positiveIntegerOrNull($template['anReceiverQId'] ?? null)
+            );
+        }
 
         $payload['acKey'] = $this->fitString('acKey', $numberContext['raw_key'], $stringLengths);
         $payload['acKeyView'] = $this->fitString('acKeyView', $numberContext['display_key'], $stringLengths);
@@ -1349,13 +1453,17 @@ class PantheonOrderTransferService
             $payload['anUserChg'] = $referentId;
         }
 
-        if (in_array('anClerk', $columns, true) && $referentId > 0) {
-            $payload['anClerk'] = $referentId;
+        if ($referentId > 0) {
+            if (in_array('anClerk', $columns, true)) {
+                $payload['anClerk'] = $referentId;
+            }
+
+            if (in_array('anNoteClerk', $columns, true)) {
+                $payload['anNoteClerk'] = (int) ($payload['anClerk'] ?? $referentId);
+            }
         }
 
-        if (in_array('anNoteClerk', $columns, true) && $referentId > 0) {
-            $payload['anNoteClerk'] = $referentId;
-        }
+        $this->logHeaderClerkAssignment($payload, $referentId);
 
         if (in_array('anQId', $columns, true) && $nextQid !== null) {
             $payload['anQId'] = $nextQid;
