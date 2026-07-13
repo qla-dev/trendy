@@ -74,6 +74,189 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('09.07.2026', $payload['order']['external_document_date']);
     }
 
+    public function test_trendy_de_document_date_uses_datum_date_before_liefertermin_on_same_line(): void
+    {
+        $lines = [
+            'Datum 21. 5. 2026. Liefertermin 20. 7. 2026.',
+            'Bestellung 26-020-000738',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+        ];
+
+        $service = app(OrderAiScanService::class);
+        $serviceReflection = new ReflectionClass($service);
+        $serviceMethod = $serviceReflection->getMethod('extractTrendyDeDocumentDate');
+        $serviceMethod->setAccessible(true);
+
+        $this->assertSame('21. 5. 2026.', $serviceMethod->invoke($service, [['lines' => $lines]], ''));
+
+        $parser = new OrderAiDigitalPdfRulesParser();
+        $parserReflection = new ReflectionClass($parser);
+        $parserMethod = $parserReflection->getMethod('extractTrendyDeDocumentDateFromLines');
+        $parserMethod->setAccessible(true);
+
+        $this->assertSame('21. 5. 2026.', $parserMethod->invoke($parser, $lines));
+    }
+
+    public function test_trendy_de_document_date_uses_first_leading_date_when_no_datum_label_exists(): void
+    {
+        $lines = [
+            '2. 7. 2026.',
+            '7. 9. 2026.',
+            'Trendy Germany GmbH',
+            'Kaiserstraße 150',
+            '51643 Gummersbach',
+            'Germany',
+            'Bestellung 26-020-000983',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+        ];
+
+        $service = app(OrderAiScanService::class);
+        $serviceReflection = new ReflectionClass($service);
+        $documentDateMethod = $serviceReflection->getMethod('extractTrendyDeDocumentDate');
+        $documentDateMethod->setAccessible(true);
+        $deadlineMethod = $serviceReflection->getMethod('extractTrendyDeHeaderDeliveryDeadline');
+        $deadlineMethod->setAccessible(true);
+
+        $this->assertSame('2. 7. 2026.', $documentDateMethod->invoke($service, [['lines' => $lines]], ''));
+        $this->assertSame(
+            ['value' => '7. 9. 2026.', 'label_seen' => true],
+            $deadlineMethod->invoke($service, [['lines' => $lines]], '')
+        );
+
+        $parser = new OrderAiDigitalPdfRulesParser();
+        $parserReflection = new ReflectionClass($parser);
+        $parserMethod = $parserReflection->getMethod('extractTrendyDeDocumentDateFromLines');
+        $parserMethod->setAccessible(true);
+
+        $this->assertSame('2. 7. 2026.', $parserMethod->invoke($parser, $lines));
+    }
+
+    public function test_trendy_de_post_process_overrides_provider_date_with_first_header_date(): void
+    {
+        $sourceText = implode("\n", [
+            '2. 7. 2026.',
+            '7. 9. 2026.',
+            'Trendy Germany GmbH',
+            'Kaiserstrasse 150',
+            '51643 Gummersbach',
+            'Germany',
+            'Bestellung 26-020-000983',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+        ]);
+
+        $payload = [
+            'order' => [
+                'customer_name' => 'Trendy Germany GmbH',
+                'supplier_name' => 'Trendy Germany GmbH',
+                'requester_code' => '',
+                'page_count' => 1,
+                'receiver_name' => 'Trendy doo',
+                'contact_name' => 'Edina Duzan',
+                'external_document_number' => '26-020-000983',
+                'external_document_date' => '7. 9. 2026.',
+                'document_type' => '0110',
+                'currency' => 'EUR',
+                'delivery_deadline' => '7. 9. 2026.',
+                'note' => '',
+                'way_of_sale' => 'D',
+                'confidence' => 0.99,
+                'warnings' => [],
+            ],
+            'items' => [
+                [
+                    'line_number' => 1,
+                    'product_code' => '11922038',
+                    'product_name' => 'BUCHSE',
+                    'drawing_reference' => '',
+                    'material_hint' => '',
+                    'quantity' => 22,
+                    'unit' => 'KO',
+                    'delivery_deadline' => '7. 9. 2026.',
+                    'unit_price' => 175,
+                    'line_total' => 3850,
+                    'vat_rate' => 0,
+                    'vat_code' => 'P1',
+                    'discount_percent' => 0,
+                    'priority' => '',
+                    'note' => 'S355J2;EN 10025-2',
+                ],
+            ],
+            'summary' => [
+                'subtotal' => 3850,
+                'vat_total' => 0,
+                'grand_total' => 3850,
+            ],
+        ];
+
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('postProcessTrendyDePayload');
+        $method->setAccessible(true);
+
+        $processed = $method->invoke($service, $payload, [
+            'file_name' => 'Bestellung_26-020-000983 (1).pdf',
+            'searchable_text' => $sourceText,
+            'processed_pages' => [
+                [
+                    'lines' => explode("\n", $sourceText),
+                ],
+            ],
+        ]);
+
+        $this->assertSame('2. 7. 2026.', data_get($processed, 'order.external_document_date'));
+        $this->assertSame('7. 9. 2026.', data_get($processed, 'order.delivery_deadline'));
+        $this->assertSame('7. 9. 2026.', data_get($processed, 'items.0.delivery_deadline'));
+    }
+
+    public function test_prepare_payload_for_transfer_repairs_stale_trendy_de_date_from_stored_text(): void
+    {
+        $payload = [
+            'order' => [
+                'customer_name' => 'Trendy Germany GmbH',
+                'supplier_name' => 'Trendy Germany GmbH',
+                'receiver_name' => 'Trendy doo',
+                'external_document_number' => '26-020-000983',
+                'external_document_date' => '7. 9. 2026.',
+                'delivery_deadline' => '7. 9. 2026.',
+                'document_type' => '0110',
+                'currency' => 'EUR',
+                'warnings' => [],
+            ],
+            'items' => [],
+            'summary' => [],
+        ];
+
+        $scan = $this->makeInMemoryScan([
+            'id' => 983,
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-000983 (1).pdf',
+            'raw_extracted_text' => implode("\n", [
+                '2. 7. 2026.',
+                '7. 9. 2026.',
+                'Trendy Germany GmbH',
+                'Kaiserstrasse 150',
+                '51643 Gummersbach',
+                'Germany',
+            ]),
+            'normalized_payload' => $payload,
+            'pantheon_transfer_payload' => [
+                'payload' => [
+                    'external_document_date' => '7. 9. 2026.',
+                ],
+            ],
+        ]);
+
+        $repaired = app(OrderAiScanService::class)->preparePayloadForTransfer($scan, $payload);
+
+        $this->assertSame('2. 7. 2026.', data_get($repaired, 'order.external_document_date'));
+        $this->assertSame('7. 9. 2026.', data_get($repaired, 'order.delivery_deadline'));
+        $this->assertSame('2. 7. 2026.', data_get($scan->capturedForceFill, 'normalized_payload.order.external_document_date'));
+        $this->assertSame(
+            '2. 7. 2026.',
+            data_get($scan->capturedForceFill, 'pantheon_transfer_payload.payload.external_document_date')
+        );
+    }
+
     public function test_post_process_profile_payload_splits_trendy_de_beschreibung_and_item_delivery_deadline(): void
     {
         Storage::fake('local');

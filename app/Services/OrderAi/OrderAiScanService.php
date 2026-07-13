@@ -833,10 +833,20 @@ class OrderAiScanService
         $preparedDocument = is_array($result['prepared_document'] ?? null)
             ? $result['prepared_document']
             : $this->prepareDocumentContext($scan);
+        $resultDocumentProfile = $this->normalizeDocumentProfileKey((string) ($result['document_profile'] ?? ''));
+        $originalDocumentProfile = $scan->document_profile;
+
+        if ($resultDocumentProfile !== '') {
+            $scan->setAttribute('document_profile', $resultDocumentProfile);
+        }
+
         $profilePayload = $this->postProcessProfilePayload(
             $scan,
             is_array($result['normalized_payload'] ?? null) ? $result['normalized_payload'] : []
         );
+
+        $scan->setAttribute('document_profile', $originalDocumentProfile);
+
         $normalizedPayload = Utf8Sanitizer::cleanRecursive($this->normalizePayload($profilePayload));
         $validationStartedAt = microtime(true);
         $validationReport = app(OrderAiExtractionValidationService::class)->validate(
@@ -889,8 +899,10 @@ class OrderAiScanService
     public function buildStatusPayload(OrderAiScan $scan): array
     {
         $payload = is_array($scan->normalized_payload) ? $scan->normalized_payload : [];
+        $payload = $this->repairStoredTrendyDePayloadFromSourceText($scan, $payload);
         $transferPreview = $this->resolveDisplayTransferPreview($scan, $payload);
         $payload = $this->overlayTransferPreview($payload, $transferPreview);
+        $payload = $this->repairStoredTrendyDePayloadFromSourceText($scan, $payload, false);
         $processingPageMeta = $this->resolveProcessingPageMeta($scan, $payload);
         $documentMetrics = $this->resolveDisplayDocumentMetrics($scan, $payload, $processingPageMeta);
 
@@ -977,6 +989,13 @@ class OrderAiScanService
             'result' => $payload,
             'error_message' => $displayErrorMessage,
         ];
+    }
+
+    public function preparePayloadForTransfer(OrderAiScan $scan, array $payload): array
+    {
+        return Utf8Sanitizer::cleanRecursive(
+            $this->repairStoredTrendyDePayloadFromSourceText($scan, $payload)
+        );
     }
 
     private function applyValidationReportToPayload(array $payload, array $validationReport): array
@@ -1162,6 +1181,148 @@ class OrderAiScanService
             || trim((string) ($scan->pantheon_order_key ?? '')) !== ''
             || trim((string) ($scan->pantheon_order_view ?? '')) !== ''
             || (int) ($scan->pantheon_order_qid ?? 0) > 0;
+    }
+
+    private function repairStoredTrendyDePayloadFromSourceText(
+        OrderAiScan $scan,
+        array $payload,
+        bool $persist = true
+    ): array {
+        if (!is_array($payload['order'] ?? null)) {
+            return $payload;
+        }
+
+        $sourceText = $this->resolveStoredScanSourceText($scan);
+
+        if ($sourceText === '' || !$this->storedPayloadLooksLikeTrendyDe($scan, $payload, $sourceText)) {
+            return $payload;
+        }
+
+        $externalDocumentDate = $this->extractTrendyDeDocumentDate([], $sourceText);
+
+        if ($externalDocumentDate === '') {
+            return $payload;
+        }
+
+        $currentExternalDocumentDate = trim((string) ($payload['order']['external_document_date'] ?? ''));
+
+        if (
+            $this->normalizeVisibleDateKey($currentExternalDocumentDate)
+            === $this->normalizeVisibleDateKey($externalDocumentDate)
+        ) {
+            return $payload;
+        }
+
+        $payload['order']['external_document_date'] = $externalDocumentDate;
+
+        Log::info('Order AI stored trendy_de external_document_date repaired from source text.', [
+            'scan_id' => $scan->id,
+            'source_file_name' => (string) ($scan->source_file_name ?? ''),
+            'old_external_document_date' => $currentExternalDocumentDate,
+            'new_external_document_date' => $externalDocumentDate,
+        ]);
+
+        if ($persist && !$this->hasPersistedPantheonOrder($scan)) {
+            $fill = [
+                'normalized_payload' => $payload,
+            ];
+            $transferPreview = is_array($scan->pantheon_transfer_payload) ? $scan->pantheon_transfer_payload : [];
+            $repairedTransferPreview = $this->repairTrendyDeTransferPreviewExternalDocumentDate(
+                $transferPreview,
+                $externalDocumentDate
+            );
+
+            if ($repairedTransferPreview !== $transferPreview) {
+                $fill['pantheon_transfer_payload'] = $repairedTransferPreview;
+            }
+
+            try {
+                $scan->forceFill($fill)->save();
+            } catch (\Throwable $exception) {
+                Log::warning('Order AI stored trendy_de external_document_date repair could not be persisted.', [
+                    'scan_id' => $scan->id,
+                    'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+                ]);
+            }
+        }
+
+        return $payload;
+    }
+
+    private function resolveStoredScanSourceText(OrderAiScan $scan): string
+    {
+        $candidates = [
+            $scan->raw_extracted_text ?? '',
+            data_get($scan->extraction_payload, 'source_text.searchable_text', ''),
+            data_get($scan->extraction_payload, 'searchable_text', ''),
+            data_get($scan->extraction_payload, 'raw_extracted_text', ''),
+            data_get($scan->parser_payload, 'source_text.searchable_text', ''),
+            data_get($scan->parser_payload, 'prepared_document.searchable_text', ''),
+            data_get($scan->parser_payload, 'prepared_document.raw_extracted_text', ''),
+        ];
+
+        foreach (is_array($scan->extraction_payload) ? ($scan->extraction_payload['pages'] ?? []) : [] as $page) {
+            if (is_array($page)) {
+                $candidates[] = implode("\n", array_filter(array_map('strval', $page['lines'] ?? [])));
+                $candidates[] = (string) ($page['text'] ?? '');
+            }
+        }
+
+        foreach (is_array($scan->parser_payload) ? ($scan->parser_payload['pages'] ?? []) : [] as $page) {
+            if (is_array($page)) {
+                $candidates[] = implode("\n", array_filter(array_map('strval', $page['lines'] ?? [])));
+                $candidates[] = (string) ($page['text'] ?? '');
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            $candidate = trim((string) $candidate);
+
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return '';
+    }
+
+    private function storedPayloadLooksLikeTrendyDe(OrderAiScan $scan, array $payload, string $sourceText): bool
+    {
+        $profileKey = $this->resolveDocumentProfileKey($scan);
+
+        if ($profileKey === 'trendy_de') {
+            return true;
+        }
+
+        foreach ([
+            (string) ($scan->source_file_name ?? ''),
+            (string) data_get($payload, 'order.customer_name', ''),
+            (string) data_get($payload, 'order.supplier_name', ''),
+            (string) data_get($payload, 'order.receiver_name', ''),
+            $sourceText,
+        ] as $value) {
+            $normalized = $this->normalizeKeywordText($value);
+
+            if (
+                str_contains($normalized, 'trendy germany gmbh')
+                || str_contains($normalized, 'bestellung_')
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function repairTrendyDeTransferPreviewExternalDocumentDate(
+        array $transferPreview,
+        string $externalDocumentDate
+    ): array {
+        if (is_array($transferPreview['payload'] ?? null)) {
+            $transferPreview['payload']['external_document_date'] = $externalDocumentDate;
+        }
+
+        return $transferPreview;
     }
 
     private function runExtraction(OrderAiScan $scan, mixed $user = null): OrderAiScan
@@ -1511,6 +1672,7 @@ class OrderAiScanService
     {
         try {
             $normalizedPayload = Utf8Sanitizer::cleanRecursive((array) $scan->normalized_payload);
+            $normalizedPayload = $this->preparePayloadForTransfer($scan, $normalizedPayload);
             $result = Utf8Sanitizer::cleanRecursive(
                 app(PantheonOrderTransferService::class)
                     ->createFromNormalizedPayload($normalizedPayload, $user)
@@ -2492,16 +2654,50 @@ class OrderAiScanService
         return $this->normalizeDocumentProfileKey($detectedProfile);
     }
 
+    private function preparedDocumentLooksLikeProfile(
+        OrderAiScan $scan,
+        array $preparedDocument,
+        string $profileKey
+    ): bool {
+        $haystack = $this->normalizeKeywordText(implode("\n", [
+            (string) ($scan->source_file_name ?? ''),
+            (string) ($preparedDocument['searchable_text'] ?? ''),
+            (string) ($preparedDocument['raw_extracted_text'] ?? ''),
+            (string) ($preparedDocument['provider_input_text'] ?? ''),
+        ]));
+
+        if ($profileKey === 'trendy_de') {
+            return str_contains($haystack, 'trendy germany gmbh')
+                || str_contains($haystack, 'bestellung_');
+        }
+
+        if ($profileKey === 'grob') {
+            return str_contains($haystack, 'grob-werke')
+                || str_contains($haystack, 'grob werke')
+                || str_contains($haystack, 'bestell-nr');
+        }
+
+        return false;
+    }
+
     private function postProcessProfilePayload(OrderAiScan $scan, array $payload): array
     {
         $profileKey = $this->resolveDocumentProfileKey($scan);
+        $bytes = $this->readStoredFileBytes($scan);
+        $preparedDocument = $this->prepareDocumentContext($scan, $profileKey, $bytes);
+
+        if (!in_array($profileKey, ['trendy_de', 'grob'], true)) {
+            $detectedProfile = $this->resolvePreparedDocumentProfileKey($scan, $preparedDocument);
+
+            if ($this->preparedDocumentLooksLikeProfile($scan, $preparedDocument, $detectedProfile)) {
+                $profileKey = $detectedProfile;
+                $preparedDocument = $this->prepareDocumentContext($scan, $profileKey, $bytes);
+            }
+        }
 
         if (!in_array($profileKey, ['trendy_de', 'grob'], true)) {
             return $payload;
         }
-
-        $bytes = $this->readStoredFileBytes($scan);
-        $preparedDocument = $this->prepareDocumentContext($scan, $profileKey, $bytes);
 
         $context = [
             'file_name' => (string) ($scan->source_file_name ?? ''),
@@ -4537,14 +4733,11 @@ class OrderAiScanService
 
             $pendingDateLabel = false;
 
-            if (
-                !str_starts_with($normalized, 'datum')
-                || $this->containsTrendyDeDeliveryLabel($line)
-            ) {
+            if (!str_starts_with($normalized, 'datum')) {
                 continue;
             }
 
-            $documentDate = $this->extractVisibleDateFromLine($line);
+            $documentDate = $this->extractTrendyDeDocumentDateFromDatumLine($line);
 
             if ($documentDate !== '') {
                 return $documentDate;
@@ -4553,7 +4746,29 @@ class OrderAiScanService
             $pendingDateLabel = true;
         }
 
-        return '';
+        return $this->extractTrendyDeLeadingDocumentDate($processedPages, $searchableText);
+    }
+
+    private function extractTrendyDeDocumentDateFromDatumLine(string $line): string
+    {
+        $candidate = trim((string) preg_replace('/^\s*datum\b\s*:?\s*/iu', '', $line));
+
+        if ($candidate === '') {
+            return '';
+        }
+
+        if (preg_match('/\b(?:liefertermin|lieferdatum)\b/iu', $candidate, $matches, PREG_OFFSET_CAPTURE) === 1) {
+            $beforeDeliveryLabel = trim(substr($candidate, 0, (int) ($matches[0][1] ?? 0)));
+            $documentDate = $this->extractVisibleDateFromLine($beforeDeliveryLabel);
+
+            if ($documentDate !== '') {
+                return $documentDate;
+            }
+
+            return '';
+        }
+
+        return $this->extractVisibleDateFromLine($candidate);
     }
 
     private function isRejectedTrendyDeItemDeliveryDeadline(string $value, array $rejectedDeliveryDeadlines): bool
