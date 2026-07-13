@@ -65,6 +65,13 @@ class WorkOrderController extends Controller
     private ?string $workOrderOrderItemLinkInsertTableCache = null;
     private array $linkedOrderCache = [];
 
+    public function __construct()
+    {
+        $this->middleware(function ($request, $next) {
+            return $this->runWithWorkOrderTargetConnection(fn () => $next($request));
+        });
+    }
+
     public function invoiceList()
     {
         $pageConfigs = ['pageHeader' => false];

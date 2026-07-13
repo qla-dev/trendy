@@ -108,6 +108,20 @@ return [
             'trust_server_certificate' => filter_var(env('AI_ORDER_TARGET_DB_TRUST_SERVER_CERTIFICATE', true), FILTER_VALIDATE_BOOL),
         ],
 
+        'work_order_target' => [
+            'driver' => 'sqlsrv',
+            'host' => env('WORK_ORDER_TARGET_DB_HOST', env('DB_HOST', '')),
+            'port' => env('WORK_ORDER_TARGET_DB_PORT', env('DB_PORT', '1433')),
+            'database' => env('WORK_ORDER_TARGET_DB_DATABASE', ''),
+            'username' => env('WORK_ORDER_TARGET_DB_USERNAME', env('DB_USERNAME', '')),
+            'password' => env('WORK_ORDER_TARGET_DB_PASSWORD', env('DB_PASSWORD', '')),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'encrypt' => filter_var(env('WORK_ORDER_TARGET_DB_ENCRYPT', env('DB_ENCRYPT', true)), FILTER_VALIDATE_BOOL) ? 'yes' : 'no',
+            'trust_server_certificate' => filter_var(env('WORK_ORDER_TARGET_DB_TRUST_SERVER_CERTIFICATE', env('DB_TRUST_SERVER_CERTIFICATE', true)), FILTER_VALIDATE_BOOL),
+        ],
+
     ],
 
     /*
