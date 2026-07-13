@@ -1094,6 +1094,13 @@
       width: 7rem;
     }
 
+    .order-ai-weight-input {
+      min-width: 6.5rem;
+      max-width: 7rem;
+      padding-inline: 0.55rem;
+      text-align: right;
+    }
+
     .order-ai-line-row.is-catalog-missing > td,
     .order-ai-line-row.is-catalog-created > td {
       transition: background-color 0.2s ease;
@@ -2832,10 +2839,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                       <th>Šifra</th>
                       <th class="order-ai-wrap">Naziv</th>
                       <th>Količina</th>
-                      <th class="order-ai-weight-cell">Težina</th>
                       <th>JM</th>
                       <th>Jed. cijena</th>
                       <th class="order-ai-wrap">Total provjera</th>
+                      <th class="order-ai-weight-cell">Težina</th>
                     </tr>
                   </thead>
                   <tbody id="order-ai-lines-body"></tbody>
@@ -3538,6 +3545,48 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         }
 
         return normalizeDecimalNumber(item.catalog_weight_gross);
+      }
+
+      function findWeightInput(index) {
+        if (!Number.isInteger(index)) {
+          return null;
+        }
+
+        return linesBody.querySelector(`[data-weight-edit-index="${index}"][data-weight-edit-field="catalog_weight"]`);
+      }
+
+      function focusWeightInput(index) {
+        const target = findWeightInput(index);
+
+        if (!target) {
+          return false;
+        }
+
+        target.focus();
+
+        if (typeof target.select === 'function') {
+          target.select();
+        }
+
+        return true;
+      }
+
+      function moveWeightInputFocus(input, key) {
+        const index = Number(input.dataset.weightEditIndex);
+
+        if (!Number.isInteger(index)) {
+          return false;
+        }
+
+        if (key === 'ArrowUp') {
+          return focusWeightInput(index - 1);
+        }
+
+        if (key === 'ArrowDown') {
+          return focusWeightInput(index + 1);
+        }
+
+        return false;
       }
 
       function resolveLoadedScanLabel(fileName) {
@@ -6808,13 +6857,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           }
 
           const lineLabel = `Uredi stavku ${escapeHtml(String(item.line_number || index + 1))}`;
-          const weightMarkup = renderLineEditTrigger(index, 'catalog_weight', `
-            <span>${escapeHtml(formatWeightDisplay(resolveCatalogWeightValue(item)))}</span>
-          `, {
-            editable: allowCellEdit,
-            compact: true,
-            label: `${lineLabel} - težina`,
-          });
+          const weightValue = formatWeightInputValue(resolveCatalogWeightValue(item));
+          const weightMarkup = allowCellEdit
+            ? `<input type="text" inputmode="decimal" class="form-control form-control-sm order-ai-weight-input" data-weight-edit-index="${index}" data-weight-edit-field="catalog_weight" value="${escapeHtml(weightValue)}">`
+            : `<span>${escapeHtml(formatWeightDisplay(weightValue))}</span>`;
           const productCodeMarkup = renderLineEditTrigger(index, 'product_code', `
             <div class="order-ai-line-code-stack">
               <span>${escapeHtml(item.product_code || '-')}</span>
@@ -6861,7 +6907,6 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                 ${productNameMarkup}
               </td>
               <td>${quantityMarkup}</td>
-              <td class="order-ai-weight-cell">${weightMarkup}</td>
               <td>${unitMarkup}</td>
               <td>${unitPriceMarkup}</td>
               <td class="order-ai-wrap">
@@ -6878,6 +6923,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                   </span>
                 </button>
               </td>
+              <td class="order-ai-weight-cell">${weightMarkup}</td>
             </tr>
           `;
         }).join('');
@@ -7746,6 +7792,45 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
 
         closeInlineLineEditor(false);
         openLineTotalModal(index);
+      });
+
+      linesBody.addEventListener('input', function (event) {
+        const input = event.target.closest('[data-weight-edit-field]');
+
+        if (!input || !canEditScannedLines()) {
+          return;
+        }
+
+        const index = Number(input.dataset.weightEditIndex);
+        const field = String(input.dataset.weightEditField || '').trim();
+
+        if (!Number.isInteger(index) || field !== 'catalog_weight') {
+          return;
+        }
+
+        const item = resolveEditableLineItem(index);
+
+        if (!item) {
+          return;
+        }
+
+        const parsedWeight = normalizeDecimalNumber(input.value);
+        item.catalog_weight = parsedWeight;
+        item.catalog_weight_net = parsedWeight;
+        item.catalog_weight_gross = parsedWeight;
+        lastLinesSignature = '';
+      });
+
+      linesBody.addEventListener('keydown', function (event) {
+        const input = event.target.closest('[data-weight-edit-field]');
+
+        if (!input || !canEditScannedLines() || !['ArrowUp', 'ArrowDown'].includes(event.key)) {
+          return;
+        }
+
+        if (moveWeightInputFocus(input, event.key)) {
+          event.preventDefault();
+        }
       });
 
       if (inlineEditorCloseButton) {
