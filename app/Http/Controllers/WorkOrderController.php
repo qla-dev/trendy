@@ -3920,6 +3920,9 @@ class WorkOrderController extends Controller
         }
 
         return [
+            // eNalog's entered planned quantity must be available to both the
+            // Pantheon calculation path and the displayed/normative field.
+            'anPlanQty' => $displayQty,
             'anQty' => 0.0,
             'anQty1' => $displayQty,
         ];

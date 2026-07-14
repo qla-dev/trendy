@@ -209,7 +209,7 @@ class WorkOrderPlannedConsumptionTest extends TestCase
         ], $result);
     }
 
-    public function test_resolve_work_order_item_quantity_payload_for_manual_save_leaves_plan_quantity_to_pantheon(): void
+    public function test_resolve_work_order_item_quantity_payload_for_manual_save_sets_planned_and_input_quantity(): void
     {
         $controller = new WorkOrderController();
         $method = (new ReflectionClass($controller))->getMethod('resolveWorkOrderItemQuantityPayloadForSave');
@@ -218,10 +218,10 @@ class WorkOrderPlannedConsumptionTest extends TestCase
         $result = $method->invoke($controller, 'manual', 50.0, 0.0);
 
         $this->assertSame([
+            'anPlanQty' => 50.0,
             'anQty' => 0.0,
             'anQty1' => 50.0,
         ], $result);
-        $this->assertArrayNotHasKey('anPlanQty', $result);
     }
 
     public function test_resolve_work_order_item_quantity_payload_for_barcode_save_keeps_actual_quantity(): void
