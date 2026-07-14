@@ -258,14 +258,61 @@ if (PHP_SAPI !== 'cli') {
     </style></head><body>';
 }
 
-$rn1Input = trim((string) ($_GET['rn1'] ?? '26-6000-002731'));
+$rn1Input = trim((string) ($_GET['rn1'] ?? '26-6000-003618'));
 $rn2Input = trim((string) ($_GET['rn2'] ?? '26-6000-002766'));
+
+$testDatabase = trim((string) phptest_env('WORK_ORDER_TARGET_DB_DATABASE', 'BA_TRENDY_TESTNA'));
+$testConn = null;
+$testConnectionError = null;
+
+if ($testDatabase !== '' && strcasecmp($testDatabase, $database) !== 0) {
+    $testConn = sqlsrv_connect($server, [
+        'Database' => $testDatabase,
+        'UID' => $username,
+        'PWD' => $password,
+        'CharacterSet' => 'UTF-8',
+        'Encrypt' => false,
+        'TrustServerCertificate' => true,
+        'LoginTimeout' => 10,
+    ]);
+
+    if (!$testConn) {
+        $testConnectionError = sqlsrv_errors();
+    }
+}
 
 phptest6_render_heading('Pantheon RN snapshot compare', 1);
 phptest6_render_note(
-    'Params: rn1, rn2. Supports visible number or internal key. Defaults: 26-6000-002731 and 26-6000-002732.',
+    'Databases: ' . $database . ($testConn ? ', ' . $testDatabase : '') . '. Params: rn1, rn2. Supports visible number or internal key. Defaults: 26-6000-002731 and 26-6000-002732.',
     'meta'
 );
+
+if ($testConnectionError !== null) {
+    phptest6_render_note(
+        'Could not connect to ' . ($testDatabase !== '' ? $testDatabase : 'the test database') . ': ' . print_r($testConnectionError, true),
+        'note'
+    );
+}
+
+$connectionTargets = [
+    [
+        'database' => $database,
+        'connection' => $conn,
+    ],
+];
+$primaryConn = $conn;
+
+if ($testConn) {
+    $connectionTargets[] = [
+        'database' => $testDatabase,
+        'connection' => $testConn,
+    ];
+}
+
+foreach ($connectionTargets as $connectionTarget) {
+    $conn = $connectionTarget['connection'];
+
+    phptest6_render_heading('Database: ' . (string) ($connectionTarget['database'] ?? ''), 2);
 
 $targets = [
     phptest6_locate_work_order($conn, $defaultSchema, $rn1Input),
@@ -485,7 +532,9 @@ foreach ($targets as $target) {
     phptest6_render_table('Move trace (Move + MoveItem)', $moveTrace);
 }
 
-sqlsrv_close($conn);
+}
+
+sqlsrv_close($primaryConn);
 
 if (PHP_SAPI !== 'cli') {
     echo '</body></html>';

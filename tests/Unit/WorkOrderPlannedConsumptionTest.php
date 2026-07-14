@@ -348,6 +348,61 @@ class WorkOrderPlannedConsumptionTest extends TestCase
         $this->assertSame(7, $result['kolicina']);
     }
 
+    public function test_work_order_display_uses_fourteen_day_start_and_enalog_end_time(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('resolveWorkOrderDisplaySchedule');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            'adDeliveryDeadline' => '2026-07-15',
+            'adSchedStartTime' => '2026-07-15 14:00:00',
+            'acNote' => 'Kreirano iz eNalog.app preko QR skena narudžbe 26-0110-000999',
+        ], [
+            'datum_zavrsetka' => '2026-07-15',
+        ]);
+
+        $this->assertSame('2026-07-01 14:00:00', $result['planned_start']);
+        $this->assertSame('2026-07-15 14:00:00', $result['delivery_deadline']);
+    }
+
+    public function test_work_order_display_uses_protection_lead_time_for_existing_enalog_work_order(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('resolveWorkOrderDisplaySchedule');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            'adDeliveryDeadline' => '2026-07-15',
+            'adSchedStartTime' => '2026-07-15 14:00:00',
+            'acCostDrv' => ' Plazma+Lakiranje ',
+            'acNote' => 'Kreirano iz eNalog.app preko QR skena narudžbe 26-0110-000999',
+        ], [
+            'datum_zavrsetka' => '2026-07-15',
+        ]);
+
+        $this->assertSame('2026-06-17 14:00:00', $result['planned_start']);
+        $this->assertSame('2026-07-15 14:00:00', $result['delivery_deadline']);
+    }
+
+    public function test_work_order_display_preserves_stored_start_time_for_non_enalog_work_orders(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('resolveWorkOrderDisplaySchedule');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, [
+            'adDeliveryDeadline' => '2026-07-15',
+            'adSchedStartTime' => '2026-07-15 08:00:00',
+            'acNote' => 'Created directly in Pantheon',
+        ], [
+            'datum_zavrsetka' => '2026-07-15',
+        ]);
+
+        $this->assertSame('2026-07-01 08:00:00', $result['planned_start']);
+        $this->assertSame('2026-07-15', $result['delivery_deadline']);
+    }
+
     public function test_work_order_item_note_column_prefers_ac_note_over_ac_field_se(): void
     {
         $controller = new WorkOrderController();
