@@ -505,6 +505,133 @@
     margin: 0.85rem 0 1rem;
   }
 
+  .wo-scan-create-rn-swal .wo-scan-create-protection-card {
+    margin: 0.85rem 0 1rem;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-label {
+    display: block;
+    margin-bottom: 0.55rem;
+    font-size: 0.74rem;
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+    font-weight: 700;
+    color: #8f9ab4;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-control {
+    position: relative;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-trigger {
+    width: 100%;
+    height: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.26);
+    padding: 0.72rem 0.9rem;
+    background: rgba(255, 255, 255, 0.92);
+    color: #334155;
+    font-size: 0.98rem;
+    font-weight: 600;
+    text-align: left;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-trigger:hover {
+    border-color: rgba(74, 179, 148, 0.5);
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-trigger:focus {
+    outline: none;
+    border-color: rgba(74, 179, 148, 0.62);
+    box-shadow: 0 0 0 0.18rem rgba(74, 179, 148, 0.12);
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-chevron {
+    flex: 0 0 auto;
+    width: 0.55rem;
+    height: 0.55rem;
+    margin: -0.22rem 0.15rem 0 0;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform 0.18s ease;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-control.is-open .wo-scan-create-protection-chevron {
+    margin-top: 0.22rem;
+    transform: rotate(-135deg);
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-menu {
+    display: block;
+    position: absolute;
+    top: auto;
+    right: 0;
+    bottom: 100%;
+    left: 0;
+    z-index: 1080;
+    max-height: min(17rem, 36vh);
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    padding: 0.35rem;
+    overflow-y: auto;
+    border: 1px solid rgba(148, 163, 184, 0.26);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 0.8rem 1.5rem rgba(15, 23, 42, 0.12);
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-menu[hidden] {
+    display: none;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-option {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.12rem;
+    border: 0;
+    border-radius: 10px;
+    padding: 0.65rem 0.72rem;
+    background: transparent;
+    color: #475569;
+    font-size: 0.94rem;
+    font-weight: 600;
+    line-height: 1.25;
+    text-align: left;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-option:hover,
+  .wo-scan-create-rn-swal .wo-scan-create-protection-option:focus {
+    outline: none;
+    background: rgba(74, 179, 148, 0.12);
+    color: #1f6d5c;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-option.is-selected {
+    background: rgba(74, 179, 148, 0.18);
+    color: #17624f;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-protection-option-description {
+    color: #8f9ab4;
+    font-size: 0.77rem;
+    font-weight: 500;
+  }
+
   .wo-scan-create-rn-swal .wo-scan-create-qty-label,
   .wo-scan-create-rn-swal .wo-scan-create-notice-title {
     display: block;
@@ -531,6 +658,8 @@
 
   .wo-scan-create-rn-swal .wo-scan-create-qty-input {
     width: 100%;
+    min-width: 0;
+    flex: 1 1 0;
     margin: 0;
     height: 3rem;
     border-radius: 14px;
@@ -562,6 +691,41 @@
     font-size: 0.88rem;
     font-weight: 700;
     text-align: center;
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-projected-date {
+    display: inline-block;
+    margin: 0 -0.3rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    --wo-scan-date-highlight: rgba(74, 179, 148, 0.22);
+  }
+
+  .wo-scan-create-rn-swal .wo-scan-create-projected-date.is-updated {
+    animation: wo-scan-projected-date-updated 0.85s ease-out;
+  }
+
+  @keyframes wo-scan-projected-date-updated {
+    0% {
+      background-color: var(--wo-scan-date-highlight);
+      box-shadow: 0 0 0 0.2rem var(--wo-scan-date-highlight);
+      opacity: 0.5;
+      transform: scale(0.96);
+    }
+
+    35% {
+      background-color: var(--wo-scan-date-highlight);
+      box-shadow: 0 0 0 0.28rem var(--wo-scan-date-highlight);
+      opacity: 1;
+      transform: scale(1.02);
+    }
+
+    100% {
+      background-color: transparent;
+      box-shadow: 0 0 0 0 transparent;
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 
   .wo-scan-create-rn-swal .wo-scan-create-notice {
@@ -638,6 +802,39 @@
     background: rgba(12, 17, 28, 0.78);
   }
 
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-trigger,
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-menu,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-trigger,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-menu {
+    border-color: rgba(170, 183, 212, 0.24);
+    background: rgba(15, 23, 42, 0.96);
+    color: #e5edf9;
+  }
+
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-option,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-option {
+    color: #dce6fb;
+  }
+
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-option:hover,
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-option:focus,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-option:hover,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-option:focus {
+    background: rgba(74, 179, 148, 0.2);
+    color: #e2fff4;
+  }
+
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-option.is-selected,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-option.is-selected {
+    background: rgba(74, 179, 148, 0.3);
+    color: #f1fffa;
+  }
+
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-option-description,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-protection-option-description {
+    color: #9fb0d6;
+  }
+
   body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-notice,
   body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-notice {
     border-color: rgba(245, 158, 11, 0.28);
@@ -660,29 +857,78 @@
     color: #e5edf9;
   }
 
+  body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-projected-date,
+  body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-projected-date {
+    --wo-scan-date-highlight: rgba(74, 179, 148, 0.32);
+  }
+
   body.dark-layout .wo-scan-create-rn-swal .wo-scan-create-notice-copy,
   body.semi-dark-layout .wo-scan-create-rn-swal .wo-scan-create-notice-copy {
     color: #fbd38d;
   }
 
   @media (max-width: 575.98px) {
+    .swal2-container .wo-scan-create-rn-swal {
+      width: calc(100vw - 1.25rem);
+      padding: 1rem 1rem 0.85rem;
+      overflow: visible;
+    }
+
+    .swal2-container .wo-scan-create-rn-swal .swal2-html-container {
+      margin: 0.55rem 0 0;
+      overflow: visible;
+    }
+
+    .swal2-container .wo-scan-create-rn-swal .swal2-actions {
+      margin: 0.75rem auto 0;
+    }
+
+    .wo-scan-create-rn-swal .wo-scan-create-head {
+      margin-bottom: 0.7rem;
+    }
+
+    .wo-scan-create-rn-swal .wo-scan-create-doc-card {
+      margin-bottom: 0.7rem;
+    }
+
     .wo-scan-create-rn-swal .wo-scan-create-doc-head {
-      flex-direction: column;
-      align-items: flex-start;
+      gap: 0.5rem;
+      margin-bottom: 0.4rem;
     }
 
     .wo-scan-create-rn-swal .wo-scan-create-last {
-      text-align: left;
-      white-space: normal;
+      font-size: 0.72rem;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .wo-scan-create-rn-swal .wo-scan-create-doc-option {
+      padding: 0.68rem 0.75rem;
+    }
+
+    .wo-scan-create-rn-swal .wo-scan-create-protection-card,
+    .wo-scan-create-rn-swal .wo-scan-create-qty-card {
+      margin: 0.65rem 0 0.75rem;
+    }
+
+    .wo-scan-create-rn-swal .wo-scan-create-qty-card {
+      padding: 0.75rem 0.85rem;
     }
 
     .wo-scan-create-rn-swal .wo-scan-create-qty-wrap {
-      flex-direction: column;
-      align-items: stretch;
+      flex-direction: row;
+      align-items: center;
+      gap: 0.6rem;
     }
 
     .wo-scan-create-rn-swal .wo-scan-create-qty-unit {
-      min-width: 0;
+      min-width: 3.1rem;
+      padding: 0.7rem 0.55rem;
+    }
+
+    .wo-scan-create-rn-swal .wo-scan-create-qty-input,
+    .wo-scan-create-rn-swal .wo-scan-create-protection-trigger {
+      height: 2.8rem;
     }
 
     #qr-scanner-modal .wo-scanner-close-fab {
@@ -1044,7 +1290,7 @@
       return rawValue;
     }
 
-  function buildScanDetailRowsHtml(context) {
+  function buildScanDetailRowsHtml(context, projectedDateId) {
     var details = [];
     var brojNarudzbe = context && context.broj_narudzbe ? formatOrderNumberForDisplay(context.broj_narudzbe) : '';
     var poz = context && context.poz ? String(context.poz) : '';
@@ -1073,7 +1319,10 @@
         details.push('<div><span class="fw-bolder">Datum isporuke narudžbe:</span> ' + escapeHtml(datumIsporuke) + '</div>');
       }
       if (datumIzradeRn) {
-        details.push('<div><span class="fw-bolder">Projektovani datum izrade RN:</span> ' + escapeHtml(datumIzradeRn) + '</div>');
+        var projectedDateValue = projectedDateId
+          ? '<span class="wo-scan-create-projected-date" id="' + escapeHtml(projectedDateId) + '">' + escapeHtml(datumIzradeRn) + '</span>'
+          : escapeHtml(datumIzradeRn);
+        details.push('<div><span class="fw-bolder">Projektovani datum izrade RN:</span> ' + projectedDateValue + '</div>');
       }
       if (sifra) {
         details.push('<div><span class="fw-bolder">Šifra proizvoda:</span> ' + escapeHtml(sifra) + '</div>');
@@ -1173,8 +1422,251 @@
       };
     }
 
-    function buildCreateWorkOrderPromptHtml(order, docTypeState) {
+    function normalizeCreateProtectionPayload(payload) {
+      var rawOptions = payload && Array.isArray(payload.protection_options)
+        ? payload.protection_options
+        : [];
+      var options = [{
+        value: '',
+        id: null,
+        code: '',
+        label: 'Bez zaštite / nije odabrano',
+        weeks: 2
+      }];
+
+      rawOptions.forEach(function (option) {
+        if (!option || typeof option !== 'object') {
+          return;
+        }
+
+        var value = String(option.value == null ? option.code || '' : option.value).trim();
+        var code = String(option.code == null ? '' : option.code).trim();
+
+        if (!value || !code) {
+          return;
+        }
+
+        options.push({
+          value: value,
+          id: option.id == null ? null : String(option.id),
+          code: code,
+          label: String(option.label || code),
+          description: String(option.description || ''),
+          weeks: Number(option.weeks) === 4 ? 4 : (Number(option.weeks) === 3 ? 3 : 2)
+        });
+      });
+
+      return {
+        selected: '',
+        options: options
+      };
+    }
+
+    function getCreateProtectionOption(protectionState, value) {
+      var options = protectionState && Array.isArray(protectionState.options)
+        ? protectionState.options
+        : [];
+      var selectedValue = String(value == null ? '' : value).trim();
+
+      return options.find(function (option) {
+        return String(option.value || '').trim() === selectedValue;
+      }) || options[0] || {
+        value: '',
+        id: null,
+        code: '',
+        label: 'Bez zaštite / nije odabrano',
+        weeks: 2
+      };
+    }
+
+    function dateOnlyParts(value) {
+      var text = String(value == null ? '' : value).trim();
+      var match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+      if (!match) {
+        match = text.match(/^(\d{2})[./](\d{2})[./](\d{4})/);
+
+        if (!match) {
+          return null;
+        }
+
+        match = [match[0], match[3], match[2], match[1]];
+      }
+
+      var year = Number(match[1]);
+      var month = Number(match[2]);
+      var day = Number(match[3]);
+      var daysInMonth = function (y, m) {
+        if (m === 2) {
+          return (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 29 : 28;
+        }
+
+        return [4, 6, 9, 11].indexOf(m) !== -1 ? 30 : 31;
+      };
+
+      if (!year || month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) {
+        return null;
+      }
+
+      return { year: year, month: month, day: day };
+    }
+
+    function subtractCalendarDays(value, days) {
+      var parts = dateOnlyParts(value);
+
+      if (!parts || !Number.isFinite(Number(days))) {
+        return null;
+      }
+
+      var remaining = Math.max(0, Math.round(Number(days)));
+      var daysInMonth = function (y, m) {
+        if (m === 2) {
+          return (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 29 : 28;
+        }
+
+        return [4, 6, 9, 11].indexOf(m) !== -1 ? 30 : 31;
+      };
+
+      while (remaining > 0) {
+        if (parts.day > 1) {
+          parts.day -= 1;
+        } else {
+          parts.month -= 1;
+
+          if (parts.month < 1) {
+            parts.month = 12;
+            parts.year -= 1;
+          }
+
+          parts.day = daysInMonth(parts.year, parts.month);
+        }
+
+        remaining -= 1;
+      }
+
+      return parts;
+    }
+
+    function formatDateOnly(parts) {
+      if (!parts) {
+        return '';
+      }
+
+      return String(parts.day).padStart(2, '0') + '.'
+        + String(parts.month).padStart(2, '0') + '.'
+        + String(parts.year);
+    }
+
+    function syncProjectedProductionDate(popup, order, protectionState, selectedValue, animateChange) {
+      var projectedDateEl = popup ? popup.querySelector('#wo-scan-create-projected-date') : null;
+      var selectedOption = getCreateProtectionOption(protectionState, selectedValue);
+      var deliveryDate = order && (order.datum_isporuke || order.delivery_date)
+        ? (order.datum_isporuke || order.delivery_date)
+        : '';
+      var weeks = Number(selectedOption.weeks);
+      var projectedDate = subtractCalendarDays(deliveryDate, (weeks === 4 ? 4 : (weeks === 3 ? 3 : 2)) * 7);
+
+      if (projectedDateEl) {
+        var nextDateText = formatDateOnly(projectedDate) || '-';
+        var dateChanged = projectedDateEl.textContent !== nextDateText;
+        projectedDateEl.textContent = nextDateText;
+
+        if (animateChange && dateChanged) {
+          projectedDateEl.classList.remove('is-updated');
+          void projectedDateEl.offsetWidth;
+          projectedDateEl.classList.add('is-updated');
+        }
+      }
+    }
+
+    function bindCreateProtectionSwitch(popup, order, protectionState, onChange) {
+      var control = popup ? popup.querySelector('#wo-scan-create-protection-control') : null;
+      var valueInput = popup ? popup.querySelector('#wo-scan-create-protection') : null;
+      var trigger = popup ? popup.querySelector('#wo-scan-create-protection-trigger') : null;
+      var valueLabel = popup ? popup.querySelector('#wo-scan-create-protection-value') : null;
+      var menu = popup ? popup.querySelector('#wo-scan-create-protection-menu') : null;
+
+      if (!control || !valueInput || !trigger || !valueLabel || !menu) {
+        return;
+      }
+
+      function closeMenu() {
+        control.classList.remove('is-open');
+        trigger.setAttribute('aria-expanded', 'false');
+        menu.hidden = true;
+      }
+
+      function openMenu() {
+        control.classList.add('is-open');
+        trigger.setAttribute('aria-expanded', 'true');
+        menu.hidden = false;
+      }
+
+      function selectProtection(value, animateDateChange) {
+        protectionState.selected = String(value || '').trim();
+        valueInput.value = protectionState.selected;
+
+        var selectedOption = getCreateProtectionOption(protectionState, protectionState.selected);
+        valueLabel.textContent = selectedOption.label || selectedOption.code || 'Bez zaštite / nije odabrano';
+
+        Array.prototype.forEach.call(menu.querySelectorAll('.wo-scan-create-protection-option'), function (optionButton) {
+          var isSelected = String(optionButton.getAttribute('data-protection-value') || '') === protectionState.selected;
+          optionButton.classList.toggle('is-selected', isSelected);
+          optionButton.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+        });
+
+        syncProjectedProductionDate(popup, order, protectionState, protectionState.selected, animateDateChange);
+
+        if (typeof onChange === 'function') {
+          onChange(protectionState.selected, selectedOption);
+        }
+      }
+
+      trigger.addEventListener('click', function () {
+        if (menu.hidden) {
+          openMenu();
+          return;
+        }
+
+        closeMenu();
+      });
+
+      trigger.addEventListener('keydown', function (event) {
+        if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openMenu();
+
+          var selectedButton = menu.querySelector('.wo-scan-create-protection-option.is-selected')
+            || menu.querySelector('.wo-scan-create-protection-option');
+          if (selectedButton) {
+            selectedButton.focus();
+          }
+        }
+      });
+
+      Array.prototype.forEach.call(menu.querySelectorAll('.wo-scan-create-protection-option'), function (optionButton) {
+        optionButton.addEventListener('click', function () {
+          closeMenu();
+          selectProtection(optionButton.getAttribute('data-protection-value') || '', true);
+          trigger.focus();
+        });
+
+        optionButton.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            closeMenu();
+            trigger.focus();
+          }
+        });
+      });
+
+      selectProtection(protectionState.selected, false);
+      closeMenu();
+    }
+
+    function buildCreateWorkOrderPromptHtml(order, docTypeState, protectionState) {
       var selectedOption = getCreateDocTypeOption(docTypeState, docTypeState.selected);
+      var selectedProtectionOption = getCreateProtectionOption(protectionState, protectionState.selected);
       var nextWorkOrder = selectedOption.next_work_order || {};
       var lastWorkOrder = selectedOption.last_work_order || {};
       var quantityValue = formatPromptQuantityValue(order && order.kolicina != null ? order.kolicina : '');
@@ -1211,9 +1703,31 @@
         '</div>',
         '</div>',
         '<div class="small lh-lg">',
-        buildScanDetailRowsHtml(order),
+        buildScanDetailRowsHtml(order, 'wo-scan-create-projected-date'),
         '</div>',
         catalogNotice,
+        '<div class="wo-scan-create-protection-card">',
+        '<div class="wo-scan-create-protection-label" id="wo-scan-create-protection-label">Površinska zaštita / Termička obrada</div>',
+        '<div class="wo-scan-create-protection-control" id="wo-scan-create-protection-control">',
+        '<input type="hidden" id="wo-scan-create-protection" value="' + escapeHtml(protectionState.selected || '') + '">',
+        '<button type="button" class="wo-scan-create-protection-trigger" id="wo-scan-create-protection-trigger" aria-expanded="false" aria-haspopup="listbox" aria-controls="wo-scan-create-protection-menu" aria-labelledby="wo-scan-create-protection-label wo-scan-create-protection-value">',
+        '<span class="wo-scan-create-protection-value" id="wo-scan-create-protection-value">' + escapeHtml(selectedProtectionOption.label || selectedProtectionOption.code || 'Bez zaštite / nije odabrano') + '</span>',
+        '<span class="wo-scan-create-protection-chevron" aria-hidden="true"></span>',
+        '</button>',
+        '<div class="wo-scan-create-protection-menu" id="wo-scan-create-protection-menu" role="listbox" aria-labelledby="wo-scan-create-protection-label" hidden>',
+        (protectionState.options || []).map(function (option) {
+          var isSelected = String(option.value || '') === String(protectionState.selected || '');
+          var selectedClass = isSelected ? ' is-selected' : '';
+          var description = String(option.description || '').trim();
+
+          return '<button type="button" class="wo-scan-create-protection-option' + selectedClass + '" role="option" data-protection-value="' + escapeHtml(option.value || '') + '" aria-selected="' + (isSelected ? 'true' : 'false') + '">'
+            + '<span>' + escapeHtml(option.label || option.code || '') + '</span>'
+            + (description ? '<span class="wo-scan-create-protection-option-description">' + escapeHtml(description) + '</span>' : '')
+            + '</button>';
+        }).join(''),
+        '</div>',
+        '</div>',
+        '</div>',
         '<div class="wo-scan-create-qty-card">',
         '<label class="wo-scan-create-qty-label" for="wo-scan-create-quantity">Količina koja će se prebaciti na RN</label>',
         '<div class="wo-scan-create-qty-wrap">',
@@ -1288,7 +1802,8 @@
         datum_isporuke: primary.datum_isporuke || fallback.datum_isporuke || '',
         datum_isporuke_display: primary.datum_isporuke_display || fallback.datum_isporuke_display || '',
         datum_izrade_rn: primary.datum_izrade_rn || fallback.datum_izrade_rn || '',
-        datum_izrade_rn_display: primary.datum_izrade_rn_display || fallback.datum_izrade_rn_display || ''
+        datum_izrade_rn_display: primary.datum_izrade_rn_display || fallback.datum_izrade_rn_display || '',
+        protection_type: primary.protection_type || fallback.protection_type || ''
       };
     }
 
@@ -1331,7 +1846,7 @@
       });
     }
 
-    async function createWorkOrderFromScan(identifier, docType, quantity) {
+    async function createWorkOrderFromScan(identifier, docType, quantity, protectionType) {
       return requestJson(scanCreateUrl, {
         method: 'POST',
         headers: {
@@ -1344,7 +1859,8 @@
         body: JSON.stringify({
           identifier: identifier,
           doc_type: docType || '6000',
-          quantity: quantity
+          quantity: quantity,
+          protection_type: protectionType || ''
         })
       });
     }
@@ -1484,12 +2000,14 @@
       var orderPayload = payload && payload.order ? payload.order : {};
       var order = Object.assign({}, orderPayload, mergeScanContext(scanMeta, orderPayload));
       var docTypeState = normalizeCreateDocTypePayload(payload);
+      var protectionState = normalizeCreateProtectionPayload(payload);
       var selectedDocType = docTypeState.selected;
+      var selectedProtection = protectionState.selected;
 
       var result = await Swal.fire(swalWithProjectTheme({
         title: 'RN nije pronađen',
         target: modal,
-        html: buildCreateWorkOrderPromptHtml(order, docTypeState),
+        html: buildCreateWorkOrderPromptHtml(order, docTypeState, protectionState),
         icon: 'question',
         showCancelButton: true,
         reverseButtons: true,
@@ -1505,6 +2023,7 @@
         preConfirm: function () {
           var popup = Swal.getPopup();
           var quantityInput = popup ? popup.querySelector('#wo-scan-create-quantity') : null;
+          var protectionInput = popup ? popup.querySelector('#wo-scan-create-protection') : null;
           var resolvedQuantity = parsePromptQuantityValue(quantityInput ? quantityInput.value : '');
 
           if (resolvedQuantity === null) {
@@ -1513,12 +2032,16 @@
           }
 
           return {
-            quantity: resolvedQuantity
+            quantity: resolvedQuantity,
+            protection_type: protectionInput ? String(protectionInput.value || '').trim() : ''
           };
         },
         didOpen: function (popup) {
           bindCreateDocTypeSwitch(popup, docTypeState, function (nextDocType) {
             selectedDocType = nextDocType;
+          });
+          bindCreateProtectionSwitch(popup, order, protectionState, function (nextProtection) {
+            selectedProtection = nextProtection;
           });
         }
       }));
@@ -1531,6 +2054,9 @@
       var selectedDocTypeOption = getCreateDocTypeOption(docTypeState, selectedDocType);
       var selectedNextWorkOrder = selectedDocTypeOption.next_work_order || {};
       var selectedQuantity = result && result.value ? result.value.quantity : parsePromptQuantityValue(order && order.kolicina != null ? order.kolicina : '');
+      selectedProtection = result && result.value && result.value.protection_type != null
+        ? String(result.value.protection_type).trim()
+        : selectedProtection;
       var loadingCopy = order && order.catalog_item_missing
         ? 'Kreiram RN, dopunjavam šifrarnik artikala i otvaram radni nalog...'
         : 'Prepisujem podatke sa narudžbe i otvaram radni nalog...';
@@ -1561,7 +2087,7 @@
       }));
 
       try {
-        var createResponse = await createWorkOrderFromScan(identifier, selectedDocType, selectedQuantity);
+        var createResponse = await createWorkOrderFromScan(identifier, selectedDocType, selectedQuantity, selectedProtection);
         var createdWorkOrder = createResponse && createResponse.data && createResponse.data.work_order
           ? createResponse.data.work_order
           : {};

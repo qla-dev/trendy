@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exceptions\InsufficientRawMaterialStockException;
 use App\Models\Material;
 use App\Models\Product;
+use App\Services\WorkOrder\ProjectedProductionDateCalculator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -64,6 +65,8 @@ class WorkOrderController extends Controller
     private ?string $workOrderOrderItemLinkTableCache = null;
     private ?string $workOrderOrderItemLinkInsertTableCache = null;
     private array $linkedOrderCache = [];
+    private ?array $scanCreateProtectionOptionsCache = null;
+    private ?ProjectedProductionDateCalculator $projectedProductionDateCalculator = null;
 
     public function __construct()
     {
@@ -151,6 +154,7 @@ class WorkOrderController extends Controller
             $workOrderItems = $this->fetchMappedWorkOrderItems($raw);
             $workOrderItemResources = $this->fetchMappedWorkOrderItemResources($raw);
             $workOrderRegOperations = $this->fetchMappedWorkOrderRegOperations($raw);
+            $displaySchedule = $this->resolveWorkOrderDisplaySchedule($raw, $workOrder);
             unset($workOrder['raw']);
 
             $sender = [
@@ -172,7 +176,8 @@ class WorkOrderController extends Controller
                 $workOrder,
                 $workOrderItems,
                 $workOrderItemResources,
-                $workOrderRegOperations
+                $workOrderRegOperations,
+                $displaySchedule
             );
 
             $successNotice = null;
@@ -208,8 +213,8 @@ class WorkOrderController extends Controller
                 'recipient' => $recipient,
                 'invoiceNumber' => $this->formatWorkOrderNumberForCalendar((string) ($workOrder['broj_naloga'] ?? '')),
                 'issueDate' => $this->displayDate($workOrder['datum_kreiranja'] ?? null),
-                'plannedStartDate' => $this->formatMetaDateTime($this->value($raw, ['adSchedStartTime'], null)),
-                'dueDate' => $this->displayDate($workOrder['datum_zavrsetka'] ?? null),
+                'plannedStartDate' => $this->formatMetaDateTime($displaySchedule['planned_start'] ?? null),
+                'dueDate' => $this->displayDate($displaySchedule['delivery_deadline'] ?? null),
                 'scanLookupNotice' => $successNotice,
             ]);
         } catch (Throwable $exception) {
@@ -248,6 +253,7 @@ class WorkOrderController extends Controller
             $workOrderItems = $this->fetchMappedWorkOrderItems($raw);
             $workOrderItemResources = $this->fetchMappedWorkOrderItemResources($raw);
             $workOrderRegOperations = $this->fetchMappedWorkOrderRegOperations($raw);
+            $displaySchedule = $this->resolveWorkOrderDisplaySchedule($raw, $workOrder);
             unset($workOrder['raw']);
 
             $sender = [
@@ -269,7 +275,8 @@ class WorkOrderController extends Controller
                 $workOrder,
                 $workOrderItems,
                 $workOrderItemResources,
-                $workOrderRegOperations
+                $workOrderRegOperations,
+                $displaySchedule
             );
 
             return view('/content/apps/invoice/app-invoice-print', [
@@ -283,8 +290,8 @@ class WorkOrderController extends Controller
                 'recipient' => $recipient,
                 'invoiceNumber' => $this->formatWorkOrderNumberForCalendar((string) ($workOrder['broj_naloga'] ?? '')),
                 'issueDate' => $this->displayDate($workOrder['datum_kreiranja'] ?? null),
-                'plannedStartDate' => $this->formatMetaDateTime($this->value($raw, ['adSchedStartTime'], null)),
-                'dueDate' => $this->displayDate($workOrder['datum_zavrsetka'] ?? null),
+                'plannedStartDate' => $this->formatMetaDateTime($displaySchedule['planned_start'] ?? null),
+                'dueDate' => $this->displayDate($displaySchedule['delivery_deadline'] ?? null),
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order print query failed.', [
@@ -332,10 +339,11 @@ class WorkOrderController extends Controller
                             'id' => $routeId,
                             'number' => $workOrderNumber,
                             'broj_narudzbe' => (string) ($workOrder['broj_narudzbe'] ?? ''),
-                            'poz' => (string) ($workOrder['broj_pozicije_narudzbe'] ?? ''),
-                            'sifra' => (string) ($workOrder['sifra'] ?? ''),
-                            'naziv' => (string) ($workOrder['naziv'] ?? ''),
-                            'preview_url' => route('app-invoice-preview', [
+                        'poz' => (string) ($workOrder['broj_pozicije_narudzbe'] ?? ''),
+                        'sifra' => (string) ($workOrder['sifra'] ?? ''),
+                        'naziv' => (string) ($workOrder['naziv'] ?? ''),
+                        'protection_type' => (string) ($workOrder['povrsinska_zastita'] ?? ''),
+                        'preview_url' => route('app-invoice-preview', [
                                 'id' => $routeId,
                                 'scan' => 1,
                             ]),
@@ -388,6 +396,7 @@ class WorkOrderController extends Controller
                     'status' => 'create_available',
                     'doc_type' => $defaultDocType,
                     'doc_type_options' => $docTypeOptions,
+                    'protection_options' => $this->scanCreateProtectionOptions(),
                     'message' => 'Da li želite kreirati RN broj ' . $numberContext['next_display'] . '?',
                     'order' => [
                         'narudzba_kljuc' => (string) ($orderContext['order_key'] ?? ''),
@@ -402,6 +411,7 @@ class WorkOrderController extends Controller
                         'datum_isporuke_display' => (string) ($orderContext['delivery_date_display'] ?? ''),
                         'datum_izrade_rn' => (string) ($orderContext['projected_issue_date'] ?? ''),
                         'datum_izrade_rn_display' => (string) ($orderContext['projected_issue_date_display'] ?? ''),
+                        'protection_type' => '',
                         'catalog_item_missing' => (bool) ($orderContext['catalog_item_missing'] ?? false),
                         'catalog_item_notice' => (string) ($orderContext['catalog_item_notice'] ?? ''),
                     ],
@@ -436,6 +446,7 @@ class WorkOrderController extends Controller
             'identifier' => ['required', 'string', 'max:255'],
             'doc_type' => ['nullable', 'string', 'max:4'],
             'quantity' => ['nullable', 'numeric', 'gt:0'],
+            'protection_type' => ['nullable', 'string', 'max:100'],
         ]);
 
         if ($validator->fails()) {
@@ -448,6 +459,17 @@ class WorkOrderController extends Controller
         $identifier = trim((string) $validator->validated()['identifier']);
         $requestedDocType = trim((string) ($validator->validated()['doc_type'] ?? ''));
         $requestedQuantity = $this->toFloatOrNull($validator->validated()['quantity'] ?? null);
+        $requestedProtectionType = trim((string) ($validator->validated()['protection_type'] ?? ''));
+        $protectionOption = $this->resolveScanCreateProtectionOption($requestedProtectionType);
+
+        if ($requestedProtectionType !== '' && $protectionOption === null) {
+            return response()->json([
+                'message' => 'Odabrana površinska zaštita nije pronađena u Pantheon katalogu.',
+                'errors' => [
+                    'protection_type' => ['Odaberite važeću vrijednost iz kataloga Nositelj troškova.'],
+                ],
+            ], 422);
+        }
 
         if ($requestedDocType !== '' && !in_array($requestedDocType, self::SCAN_CREATE_DOC_TYPES, true)) {
             return response()->json([
@@ -461,6 +483,7 @@ class WorkOrderController extends Controller
             'identifier' => $identifier,
             'doc_type' => $selectedDocType,
             'requested_quantity' => $requestedQuantity,
+            'requested_protection_type' => $requestedProtectionType,
             'order_locator' => $orderLocator,
         ];
 
@@ -471,7 +494,7 @@ class WorkOrderController extends Controller
         }
 
         try {
-            $result = DB::transaction(function () use ($request, $orderLocator, $identifier, $selectedDocType, $requestedQuantity, &$debugContext) {
+            $result = DB::transaction(function () use ($request, $orderLocator, $identifier, $selectedDocType, $requestedQuantity, $protectionOption, &$debugContext) {
                 $existingRow = $this->findWorkOrderRowByOrderLocator(
                     (string) ($orderLocator['order_number'] ?? ''),
                     (int) ($orderLocator['order_position'] ?? 0),
@@ -506,6 +529,7 @@ class WorkOrderController extends Controller
                 }
 
                 $orderContext = $this->buildOrderLocatorContext($orderRow, $orderLocator);
+                $orderContext['protection'] = $protectionOption ?? $this->emptyScanCreateProtectionOption();
                 $numberContext = $this->generateNextWorkOrderNumber(
                     Carbon::now(),
                     $selectedDocType
@@ -576,11 +600,21 @@ class WorkOrderController extends Controller
                 return [
                     'status' => 'created',
                     'row' => $createdRow,
+                    // Pantheon's BOM-copy procedure runs after this transaction and
+                    // can replace the header schedule. Keep the validated schedule so
+                    // it can be persisted again after that procedure completes.
+                    'schedule' => [
+                        'adSchedStartTime' => $payload['adSchedStartTime'] ?? null,
+                        'adSchedEndTime' => $payload['adSchedEndTime'] ?? null,
+                        'adDeliveryDeadline' => $payload['adDeliveryDeadline'] ?? null,
+                        'adDateOut' => $payload['adDateOut'] ?? null,
+                    ],
                 ];
             }, 3);
 
             $mapped = $this->mapRow((array) $result['row'], false, [], true);
             $routeId = trim((string) ($mapped['id'] ?? $mapped['broj_naloga'] ?? ''));
+            $workOrderKey = trim((string) ($result['row']['acKey'] ?? $routeId));
             $workOrderNumber = $this->formatWorkOrderNumberForCalendar((string) ($mapped['broj_naloga'] ?? $routeId));
             $created = (string) ($result['status'] ?? '') === 'created';
 
@@ -590,6 +624,11 @@ class WorkOrderController extends Controller
                     trim((string) ($mapped['sifra'] ?? $mapped['acIdent'] ?? $mapped['product_code'] ?? '')),
                     true,
                     $this->toFloatOrNull($mapped['kolicina'] ?? null)
+                );
+
+                $this->persistScanCreateSchedule(
+                    $workOrderKey,
+                    is_array($result['schedule'] ?? null) ? $result['schedule'] : []
                 );
             }
 
@@ -608,6 +647,7 @@ class WorkOrderController extends Controller
                         'poz' => (string) ($mapped['broj_pozicije_narudzbe'] ?? ''),
                         'sifra' => (string) ($mapped['sifra'] ?? ''),
                         'naziv' => (string) ($mapped['naziv'] ?? ''),
+                        'protection_type' => (string) ($mapped['povrsinska_zastita'] ?? ''),
                         'preview_url' => route('app-invoice-preview', [
                             'id' => $routeId,
                             'scan' => 1,
@@ -741,6 +781,74 @@ class WorkOrderController extends Controller
                 'message' => $exception->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Re-apply the schedule calculated during scan creation after Pantheon has
+     * copied the BOM. pHF_PrStCopyBasic2WO may reset adSchedStartTime to the
+     * delivery date, so the initial insert alone is not sufficient.
+     *
+     * @param array<string, mixed> $schedule
+     */
+    private function persistScanCreateSchedule(string $workOrderKey, array $schedule): void
+    {
+        $workOrderKey = trim($workOrderKey);
+
+        if ($workOrderKey === '') {
+            throw new \RuntimeException('Nije moguće sačuvati planirani datum: nedostaje ključ RN-a.');
+        }
+
+        $columns = $this->tableColumns();
+        $updates = [];
+
+        foreach (['adSchedStartTime', 'adSchedEndTime', 'adDeliveryDeadline', 'adDateOut'] as $column) {
+            if (!in_array($column, $columns, true) || !array_key_exists($column, $schedule)) {
+                continue;
+            }
+
+            $value = $schedule[$column];
+
+            if ($value !== null && !(is_string($value) && trim($value) === '')) {
+                $updates[$column] = $value;
+            }
+        }
+
+        if (empty($updates)) {
+            throw new \RuntimeException('Nije moguće sačuvati planirani datum: nedostaju kolone rasporeda RN-a.');
+        }
+
+        $this->newTableQuery()
+            ->where('acKey', $workOrderKey)
+            ->update($updates);
+
+        $storedRow = $this->newTableQuery()
+            ->where('acKey', $workOrderKey)
+            ->first();
+
+        if ($storedRow === null) {
+            throw new \RuntimeException('RN nije moguće provjeriti nakon čuvanja planiranog datuma.');
+        }
+
+        $stored = (array) $storedRow;
+
+        foreach (['adSchedStartTime', 'adSchedEndTime'] as $column) {
+            if (!array_key_exists($column, $updates)) {
+                continue;
+            }
+
+            $expectedDate = $this->projectedProductionDateCalculator()->dateOnly($updates[$column])?->format('Y-m-d');
+            $storedDate = $this->projectedProductionDateCalculator()->dateOnly($stored[$column] ?? null)?->format('Y-m-d');
+
+            if ($expectedDate === null || $storedDate !== $expectedDate) {
+                throw new \RuntimeException('Planirani datum RN-a nije sačuvan u Pantheon bazi.');
+            }
+        }
+
+        Log::info('Re-applied scan-created work-order schedule after BOM copy.', [
+            'work_order_key' => $workOrderKey,
+            'scheduled_start' => $updates['adSchedStartTime'] ?? null,
+            'scheduled_end' => $updates['adSchedEndTime'] ?? null,
+        ]);
     }
 
     private function copyPantheonBasicSastavnicaToWorkOrder(
@@ -7423,16 +7531,26 @@ class WorkOrderController extends Controller
         $now = Carbon::now();
         $deliveryDate = $this->resolveScanCreateDeliveryDateCarbon($orderRow, $orderContext);
         $deliveryDay = $deliveryDate?->copy()->startOfDay();
-        $projectedIssueDate = $deliveryDay !== null
-            ? $deliveryDay->copy()->subDays(14)->startOfDay()
+        $protection = is_array($orderContext['protection'] ?? null)
+            ? $orderContext['protection']
+            : $this->emptyScanCreateProtectionOption();
+        $projectedDate = $this->projectedProductionDateCalculator()->calculate(
+            $deliveryDay?->format('Y-m-d'),
+            trim((string) ($protection['code'] ?? '')),
+            isset($protection['id']) && is_numeric((string) $protection['id'])
+                ? (int) $protection['id']
+                : null
+        );
+        $projectedIssueDate = $projectedDate !== null
+            ? Carbon::createFromFormat('!Y-m-d', $projectedDate)->startOfDay()
             : $now->copy()->startOfDay();
 
         return [
             'delivery_date' => $deliveryDay,
             'projected_issue_date' => $projectedIssueDate,
-            'scheduled_start' => $projectedIssueDate->copy()->setTime(8, 0, 0),
+            'scheduled_start' => $projectedIssueDate->copy()->setTime(14, 0, 0),
             'scheduled_end' => $deliveryDay !== null
-                ? $deliveryDay->copy()->endOfDay()
+                ? $deliveryDay->copy()->setTime(14, 0, 0)
                 : $now->copy()->endOfDay(),
         ];
     }
@@ -7450,17 +7568,16 @@ class WorkOrderController extends Controller
             'due_date',
         ];
 
-        $resolvedOrderDate = $this->resolveFirstAvailableDateFromRow($orderRow, $dateColumns);
-        if ($resolvedOrderDate !== null) {
-            return $resolvedOrderDate;
-        }
-
         $orderItemRow = $this->findOrderItemRowByOrderContext($orderContext);
-        if (!is_array($orderItemRow)) {
-            return null;
+        if (is_array($orderItemRow)) {
+            $resolvedOrderItemDate = $this->resolveFirstAvailableDateFromRow($orderItemRow, $dateColumns);
+
+            if ($resolvedOrderItemDate !== null) {
+                return $resolvedOrderItemDate;
+            }
         }
 
-        return $this->resolveFirstAvailableDateFromRow($orderItemRow, $dateColumns);
+        return $this->resolveFirstAvailableDateFromRow($orderRow, $dateColumns);
     }
 
     private function resolveFirstAvailableDateFromRow(array $row, array $columns): ?Carbon
@@ -7609,6 +7726,98 @@ class WorkOrderController extends Controller
         return $this->formatOrderNumberForDisplay($displayNumber !== '' ? $displayNumber : $fallbackNormalizedOrderNumber);
     }
 
+    private function projectedProductionDateCalculator(): ProjectedProductionDateCalculator
+    {
+        return $this->projectedProductionDateCalculator ??= new ProjectedProductionDateCalculator();
+    }
+
+    private function emptyScanCreateProtectionOption(): array
+    {
+        return [
+            'value' => '',
+            'id' => null,
+            'code' => '',
+            'label' => '',
+            'weeks' => $this->projectedProductionDateCalculator()->weeksForProtection(),
+        ];
+    }
+
+    private function scanCreateProtectionOptions(): array
+    {
+        if ($this->scanCreateProtectionOptionsCache !== null) {
+            return $this->scanCreateProtectionOptionsCache;
+        }
+
+        try {
+            $rows = DB::table($this->qualifiedProtectionCatalogueTableName())
+                ->select(['acCostDrv', 'acName', 'anQId'])
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acCostDrv, ''))) <> ''")
+                ->orderBy('acCostDrv')
+                ->get();
+
+            $calculator = $this->projectedProductionDateCalculator();
+            $options = [];
+
+            foreach ($rows as $row) {
+                $code = trim((string) ($row->acCostDrv ?? ''));
+
+                if ($code === '') {
+                    continue;
+                }
+
+                $id = is_numeric((string) ($row->anQId ?? null)) && (int) $row->anQId > 0
+                    ? (int) $row->anQId
+                    : null;
+
+                $options[] = [
+                    'value' => $id !== null ? (string) $id : $code,
+                    'id' => $id,
+                    'code' => $code,
+                    'label' => $code,
+                    'description' => trim((string) ($row->acName ?? '')),
+                    'weeks' => $calculator->weeksForProtection($code, $id),
+                ];
+            }
+
+            return $this->scanCreateProtectionOptionsCache = $options;
+        } catch (Throwable $exception) {
+            Log::warning('Unable to load work-order protection catalogue.', [
+                'connection' => config('database.default'),
+                'table' => $this->qualifiedProtectionCatalogueTableName(),
+                'message' => $exception->getMessage(),
+            ]);
+
+            return $this->scanCreateProtectionOptionsCache = [];
+        }
+    }
+
+    private function resolveScanCreateProtectionOption(string $selection): ?array
+    {
+        $selection = trim($selection);
+
+        if ($selection === '') {
+            return $this->emptyScanCreateProtectionOption();
+        }
+
+        $normalizedSelection = strtolower($selection);
+
+        foreach ($this->scanCreateProtectionOptions() as $option) {
+            $optionValue = trim((string) ($option['value'] ?? ''));
+            $optionCode = trim((string) ($option['code'] ?? ''));
+
+            if (
+                $selection === $optionValue
+                || strcasecmp($selection, $optionCode) === 0
+                || ($option['id'] ?? null) !== null && (string) $option['id'] === $selection
+                || strtolower($optionCode) === $normalizedSelection
+            ) {
+                return $option;
+            }
+        }
+
+        return null;
+    }
+
     private function findCatalogItemByProductCode(string $productCode): array
     {
         $productCode = trim($productCode);
@@ -7737,6 +7946,7 @@ class WorkOrderController extends Controller
             'acName',
             'acDescr',
             'title',
+            'acCostDrv',
             'acStatusMF',
             'acStatus',
             'status',
@@ -7782,6 +7992,7 @@ class WorkOrderController extends Controller
         $resolvedQuantity = $requestedQuantity !== null && $requestedQuantity > 0
             ? $requestedQuantity
             : $this->resolveScanCreateWorkOrderQuantity($orderRow, $orderContext);
+        $protectionCode = trim((string) ($orderContext['protection']['code'] ?? ''));
         $datePlan = $this->resolveScanCreateDatePlan($orderRow, $orderContext);
         $dayStart = $now->copy()->startOfDay();
         $plannedStart = $datePlan['scheduled_start'] instanceof Carbon
@@ -7805,6 +8016,7 @@ class WorkOrderController extends Controller
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acName', $productName);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acDescr', $productName, false);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'title', $productName, false);
+        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acCostDrv', $protectionCode);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adDate', $dayStart);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adLnkDate', $dayStart);
         $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'adDateIns', $now);
@@ -8354,6 +8566,7 @@ class WorkOrderController extends Controller
             'broj_pozicije_narudzbe' => $orderPosition,
             'kolicina' => $quantity,
             'mj' => $unit,
+            'povrsinska_zastita' => (string) $this->valueTrimmed($row, ['acCostDrv'], ''),
         ];
 
         if ($includeRaw) {
@@ -8395,12 +8608,109 @@ class WorkOrderController extends Controller
         return $normalizedNote;
     }
 
+    private function resolveWorkOrderDisplaySchedule(array $raw, array $workOrder): array
+    {
+        $orderItemRow = $this->findOrderItemRowByOrderContext([
+            'order_key' => $this->valueTrimmed($raw, ['acLnkKey'], $workOrder['narudzba_kljuc'] ?? ''),
+            'order_number' => $this->valueTrimmed($raw, ['acLnkKeyView'], $workOrder['broj_narudzbe'] ?? ''),
+            'order_position' => $this->value($raw, ['anLnkNo'], $workOrder['broj_pozicije_narudzbe'] ?? 0),
+            'product_code' => $this->valueTrimmed($raw, ['acIdent', 'acCode'], $workOrder['sifra'] ?? ''),
+        ]);
+
+        $deliveryDeadline = is_array($orderItemRow)
+            ? $this->resolveFirstAvailableDateFromRow($orderItemRow, [
+                'adDeliveryDeadline',
+                'adDateOut',
+                'adDueDate',
+                'adDeliveryDate',
+            ])
+            : null;
+
+        if ($deliveryDeadline === null) {
+            $deliveryDeadline = $this->normalizeDate($this->value(
+                $raw,
+                ['adDeliveryDeadline', 'adDateOut'],
+                $workOrder['datum_zavrsetka'] ?? null
+            ));
+        }
+
+        if ($deliveryDeadline instanceof \DateTimeInterface) {
+            $deliveryDeadline = Carbon::instance($deliveryDeadline)->format('Y-m-d');
+        }
+
+        $deliveryDateOnly = $this->projectedProductionDateCalculator()
+            ->dateOnly($deliveryDeadline)
+            ?->format('Y-m-d');
+
+        if ($deliveryDateOnly !== null && $this->isEnaLogWorkOrder($raw)) {
+            // Work-order deadlines are calendar dates. Build the display timestamp
+            // from its date portion instead of parsing it as a UTC instant.
+            $deliveryDeadline = $deliveryDateOnly . ' 14:00:00';
+        }
+
+        $plannedStart = $this->value($raw, ['adSchedStartTime'], null);
+
+        if ($deliveryDateOnly !== null) {
+            try {
+                $projectedStartDate = $this->projectedProductionDateCalculator()->calculate(
+                    $deliveryDateOnly,
+                    (string) $this->valueTrimmed($raw, ['acCostDrv'], '')
+                );
+                $plannedStartDate = $projectedStartDate !== null
+                    ? Carbon::createFromFormat('!Y-m-d', $projectedStartDate)->startOfDay()
+                    : null;
+
+                if ($plannedStartDate === null) {
+                    return [
+                        'planned_start' => $plannedStart,
+                        'delivery_deadline' => $deliveryDeadline,
+                    ];
+                }
+
+                if ($this->isEnaLogWorkOrder($raw)) {
+                    $plannedStartDate->setTime(14, 0, 0);
+                } else {
+                    $storedStart = $plannedStart !== null && $plannedStart !== ''
+                        ? ($plannedStart instanceof \DateTimeInterface
+                            ? Carbon::instance($plannedStart)
+                            : Carbon::parse((string) $plannedStart))
+                        : null;
+
+                    if ($storedStart !== null && $storedStart->format('H:i:s') !== '00:00:00') {
+                        $plannedStartDate->setTime(
+                            (int) $storedStart->format('H'),
+                            (int) $storedStart->format('i'),
+                            (int) $storedStart->format('s')
+                        );
+                    }
+                }
+
+                $plannedStart = $plannedStartDate->format('Y-m-d H:i:s');
+            } catch (Throwable $exception) {
+                // Keep the existing planned start if the resolved deadline cannot be parsed.
+            }
+        }
+
+        return [
+            'planned_start' => $plannedStart,
+            'delivery_deadline' => $deliveryDeadline,
+        ];
+    }
+
+    private function isEnaLogWorkOrder(array $raw): bool
+    {
+        $note = (string) $this->valueTrimmed($raw, ['acNote', 'description'], '');
+
+        return stripos($note, 'eNalog.app') !== false;
+    }
+
     private function buildWorkOrderMetadata(
         array $raw,
         array $workOrder,
         array $workOrderItems,
         array $workOrderItemResources,
-        array $workOrderRegOperations
+        array $workOrderRegOperations,
+        array $displaySchedule = []
     ): array {
         $unit = (string) $this->valueTrimmed($raw, ['acUM'], '');
         $planQty = $this->toFloatOrNull($this->valueTrimmed($raw, ['anPlanQty'], null));
@@ -8480,8 +8790,8 @@ class WorkOrderController extends Controller
 
         $timelineRows = [
             ['label' => 'Datum naloga', 'raw' => $this->value($raw, ['adDate'], null)],
-            ['label' => 'Planirani start', 'raw' => $this->value($raw, ['adSchedStartTime'], null)],
-            ['label' => 'Planirani kraj', 'raw' => $this->value($raw, ['adSchedEndTime'], null)],
+            ['label' => 'Planirani start', 'raw' => $displaySchedule['planned_start'] ?? $this->value($raw, ['adSchedStartTime'], null)],
+            ['label' => 'Planirani kraj', 'raw' => $displaySchedule['delivery_deadline'] ?? $this->value($raw, ['adSchedEndTime'], null)],
             ['label' => 'Završetak WO', 'raw' => $this->value($raw, ['adWOFinishDate'], null)],
             ['label' => 'Datum veze', 'raw' => $this->value($raw, ['adLnkDate'], null)],
             ['label' => 'Vrijeme unosa', 'raw' => $this->value($raw, ['adTimeIns'], null)],
@@ -8500,7 +8810,7 @@ class WorkOrderController extends Controller
             ['label' => 'QID CA', 'value' => (string) $this->valueTrimmed($raw, ['anQIdCA'], '-')],
             ['label' => 'Korisnik unosa', 'value' => (string) $this->valueTrimmed($raw, ['anUserIns'], '-')],
             ['label' => 'Korisnik izmjene', 'value' => (string) $this->valueTrimmed($raw, ['anUserChg'], '-')],
-            ['label' => 'Nosilac troška', 'value' => (string) $this->valueTrimmed($raw, ['acCostDrv'], '-')],
+            ['label' => 'Površinska zaštita / Termička obrada', 'value' => (string) $this->valueTrimmed($raw, ['acCostDrv'], '-')],
             ['label' => 'Izvor kreiranja', 'value' => (string) $this->valueTrimmed($raw, ['acCreateFrom'], '-')],
             ['label' => 'Tip kroja', 'value' => (string) $this->valueTrimmed($raw, ['acCropType'], '-')],
         ];
@@ -11141,7 +11451,13 @@ class WorkOrderController extends Controller
                 return Carbon::instance($value)->format('Y-m-d');
             }
 
-            return Carbon::parse((string) $value)->format('Y-m-d');
+            $stringValue = trim((string) $value);
+
+            if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $stringValue, $matches) === 1) {
+                return Carbon::createFromFormat('!Y-m-d', $matches[1])->format('Y-m-d');
+            }
+
+            return Carbon::parse($stringValue)->format('Y-m-d');
         } catch (Throwable $exception) {
             $stringValue = substr((string) $value, 0, 10);
 
@@ -11428,6 +11744,11 @@ class WorkOrderController extends Controller
         return (string) config('workorders.catalog_items_table', 'tHE_SetItem');
     }
 
+    private function protectionCatalogueTableName(): string
+    {
+        return (string) config('workorders.protection_catalogue_table', 'tHE_CostDrv');
+    }
+
     private function stockTableName(): string
     {
         return (string) config('workorders.stock_table', 'tHE_Stock');
@@ -11481,6 +11802,11 @@ class WorkOrderController extends Controller
     private function qualifiedCatalogItemsTableName(): string
     {
         return $this->tableSchema() . '.' . $this->catalogItemsTableName();
+    }
+
+    private function qualifiedProtectionCatalogueTableName(): string
+    {
+        return $this->tableSchema() . '.' . $this->protectionCatalogueTableName();
     }
 
     private function qualifiedStockTableName(): string

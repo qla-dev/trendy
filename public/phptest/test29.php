@@ -22,6 +22,38 @@ if (PHP_SAPI === 'cli') {
 
 function phptest29_env(string $key, ?string $default = null): ?string
 {
+    static $values = null;
+    static $resolved = [];
+
+    if ($values !== null) {
+        if (!array_key_exists($key, $values)) {
+            return $default;
+        }
+
+        if (array_key_exists($key, $resolved)) {
+            return $resolved[$key];
+        }
+
+        $resolve = function (string $value, array $stack = []) use (&$resolve, &$values): string {
+            return (string) preg_replace_callback(
+                '/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/',
+                function (array $matches) use (&$resolve, &$values, $stack): string {
+                    $referencedKey = $matches[1];
+
+                    if (!array_key_exists($referencedKey, $values) || in_array($referencedKey, $stack, true)) {
+                        return $matches[0];
+                    }
+
+                    return $resolve($values[$referencedKey], [...$stack, $referencedKey]);
+                },
+                $value
+            );
+        };
+
+        return $resolved[$key] = $resolve($values[$key], [$key]);
+    }
+
+    $values = [];
     $root = dirname(__DIR__, 2);
     $path = $root . DIRECTORY_SEPARATOR . '.env';
 
@@ -43,20 +75,38 @@ function phptest29_env(string $key, ?string $default = null): ?string
 
         [$candidateKey, $value] = explode('=', $line, 2);
 
-        if (trim($candidateKey) !== $key) {
-            continue;
-        }
-
         $value = trim($value);
 
         if ($value !== '' && (($value[0] === '"' && substr($value, -1) === '"') || ($value[0] === "'" && substr($value, -1) === "'"))) {
             $value = substr($value, 1, -1);
         }
 
-        return $value;
+        $values[trim($candidateKey)] = $value;
     }
 
-    return $default;
+    if (!array_key_exists($key, $values)) {
+        return $default;
+    }
+
+    $resolve = function (string $value, array $stack = []) use (&$resolve, &$values): string {
+        return (string) preg_replace_callback(
+            '/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/',
+            function (array $matches) use (&$resolve, &$values, $stack): string {
+                $referencedKey = $matches[1];
+
+                if (!array_key_exists($referencedKey, $values) || in_array($referencedKey, $stack, true)) {
+                    return $matches[0];
+                }
+
+                return $resolve($values[$referencedKey], [...$stack, $referencedKey]);
+            },
+            $value
+        );
+    };
+
+    $resolved[$key] = $resolve($values[$key], [$key]);
+
+    return $resolved[$key];
 }
 
 function phptest29_bool_env(string $key, bool $default): bool
