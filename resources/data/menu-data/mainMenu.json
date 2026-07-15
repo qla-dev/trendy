@@ -65,6 +65,18 @@
       "slug": "app-released-material-documents"
     },
     {
+      "name": "Razdužene operacije",
+      "icon": "tool",
+      "url": "app/documents/released-operations",
+      "slug": "app-released-operation-documents"
+    },
+    {
+      "name": "Prijem VP skladište",
+      "icon": "package",
+      "url": "app/documents/finished-goods-receipts",
+      "slug": "app-finished-goods-receipt-documents"
+    },
+    {
       "navheader": "Administracija",
       "slug": ""
     },
