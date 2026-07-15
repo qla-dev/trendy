@@ -1087,6 +1087,26 @@ class WorkOrderController extends Controller
             $resolvedStatusValue = $this->resolveStatusStorageValue($selectedStatus, $row, $statusColumn);
             $updates = [$statusColumn => $resolvedStatusValue];
 
+            // Pantheon's confirmed status pairs are N/R for partial close and
+            // I/Z for full close. Keep both fields aligned when users choose
+            // either closing state from eNalog's status modal.
+            $normalizedSelectedStatus = $this->normalizeSearchValue($selectedStatus);
+            if ($normalizedSelectedStatus === 'djelomicno zakljucen') {
+                if (in_array('acStatus', $columns, true)) {
+                    $updates['acStatus'] = 'N';
+                }
+                if (in_array('acStatusMF', $columns, true)) {
+                    $updates['acStatusMF'] = 'R';
+                }
+            } elseif ($normalizedSelectedStatus === 'zakljucen') {
+                if (in_array('acStatus', $columns, true)) {
+                    $updates['acStatus'] = 'I';
+                }
+                if (in_array('acStatusMF', $columns, true)) {
+                    $updates['acStatusMF'] = 'Z';
+                }
+            }
+
             // Do not override planned start / entry time when updating status
             unset($updates['adSchedStartTime'], $updates['adTimeIns']);
 
@@ -10223,17 +10243,17 @@ class WorkOrderController extends Controller
     private function statusCodeMap(): array
     {
         return [
-            'F' => ['label' => "Zavr\u{0161}eno", 'bucket' => 'zakljucen'],
+            'F' => ['label' => "Zaklju\u{010D}en", 'bucket' => 'zakljucen'],
             'P' => ['label' => 'U toku', 'bucket' => 'u_radu'],
-            'I' => ['label' => "Zavr\u{0161}eno", 'bucket' => 'zakljucen'],
+            'I' => ['label' => "Zaklju\u{010D}en", 'bucket' => 'zakljucen'],
             'N' => ['label' => 'Novo', 'bucket' => 'planiran'],
             'C' => ['label' => 'Otkazano', 'bucket' => null],
             'D' => ['label' => 'Raspisan', 'bucket' => 'raspisan'],
             'O' => ['label' => 'Otvoren', 'bucket' => 'otvoren'],
-            'R' => ['label' => "Djelimi\u{010D}no zavr\u{0161}eno", 'bucket' => 'djelimicno_zakljucen'],
+            'R' => ['label' => "Djelomi\u{010D}no zaklju\u{010D}en", 'bucket' => 'djelimicno_zakljucen'],
             'S' => ['label' => 'Raspisan', 'bucket' => 'raspisan'],
             'E' => ['label' => 'U radu', 'bucket' => 'u_radu'],
-            'Z' => ['label' => "Zavr\u{0161}en", 'bucket' => 'zakljucen'],
+            'Z' => ['label' => "Zaklju\u{010D}en", 'bucket' => 'zakljucen'],
         ];
     }
 
@@ -10274,11 +10294,11 @@ class WorkOrderController extends Controller
             return 'u_radu';
         }
 
-        if ($normalized === "djelimi\u{010D}no zavr\u{0161}eno" || $normalized === 'djelimicno zavrseno') {
+        if (in_array($normalized, ["djelimi\u{010D}no zavr\u{0161}eno", 'djelimicno zavrseno', "djelomi\u{010D}no zaklju\u{010D}en", 'djelomicno zakljucen'], true)) {
             return 'djelimicno_zakljucen';
         }
 
-        if ($normalized === "zavr\u{0161}eno" || $normalized === 'zavrseno') {
+        if (in_array($normalized, ["zavr\u{0161}eno", 'zavrseno', "zaklju\u{010D}en", 'zakljucen'], true)) {
             return 'zakljucen';
         }
 
@@ -10669,8 +10689,8 @@ class WorkOrderController extends Controller
             'rezerviran' => 'Rezerviran',
             'raspisan' => 'Raspisan',
             'u radu', 'u toku' => 'U radu',
-            'djelimicno zavrsen', 'djelimicno zavrseno' => 'Djelimično završen',
-            'zavrsen', 'zavrseno' => 'Završen',
+            'djelimicno zavrsen', 'djelimicno zavrseno', 'djelomicno zakljucen' => 'Djelomično zaključen',
+            'zavrsen', 'zavrseno', 'zakljucen' => 'Zaključen',
             default => null,
         };
     }
@@ -10696,8 +10716,8 @@ class WorkOrderController extends Controller
             'otvoren' => 'O',
             'raspisan' => 'D',
             'u radu', 'u toku' => 'E',
-            'djelimicno zavrsen', 'djelimicno zavrseno' => 'R',
-            'zavrsen', 'zavrseno' => 'Z',
+            'djelimicno zavrsen', 'djelimicno zavrseno', 'djelomicno zakljucen' => 'R',
+            'zavrsen', 'zavrseno', 'zakljucen' => 'Z',
             default => null,
         };
     }

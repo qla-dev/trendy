@@ -23,7 +23,7 @@ class WorkOrderClosingValidationTest extends TestCase
     }
 
     /** @dataProvider invalidTimes */
-    public function test_invalid_negative_and_empty_time_are_rejected(mixed $time): void
+    public function test_invalid_nonempty_time_is_rejected(mixed $time): void
     {
         $validator = Validator::make(['operations' => [[
             'item_qid' => 10,
@@ -36,18 +36,17 @@ class WorkOrderClosingValidationTest extends TestCase
 
     public function invalidTimes(): array
     {
-        return [[null], [''], ['-1'], ['abc']];
+        return [['-1'], ['abc']];
     }
 
-    public function test_worker_is_required_and_copied_operation_rows_are_allowed(): void
+    public function test_incomplete_rows_and_copied_operation_rows_are_allowed(): void
     {
-        $missingWorker = Validator::make(['operations' => [
+        $partialRows = Validator::make(['operations' => [
             ['item_qid' => 10, 'worker_id' => null, 'time' => '1'],
-            ['item_qid' => 10, 'worker_id' => 20, 'time' => '1'],
+            ['item_qid' => 10, 'worker_id' => null, 'time' => null],
         ]], (new CloseWorkOrderRequest())->rules());
 
-        $this->assertTrue($missingWorker->fails());
-        $this->assertArrayHasKey('operations.0.worker_id', $missingWorker->errors()->toArray());
+        $this->assertFalse($partialRows->fails());
 
         $copiedRows = Validator::make(['operations' => [
             ['item_qid' => 10, 'worker_id' => 20, 'time' => '1'],

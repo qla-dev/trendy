@@ -111,6 +111,34 @@ class WorkOrderClosingPantheonTest extends TestCase
         $this->assertSame('O', trim((string) $this->pantheon->table('dbo.tHF_WOEx')->where('acKey', self::WORK_ORDER_KEY)->value('acStatusMF')));
     }
 
+    public function test_incomplete_operation_input_marks_the_order_partially_closed_without_documents(): void
+    {
+        $this->pantheon->beginTransaction();
+
+        try {
+            $result = app(WorkOrderClosingService::class)->close(self::WORK_ORDER_KEY, [[
+                'item_qid' => self::OPERATION_ITEM_QID,
+                'worker_id' => null,
+                'time' => null,
+                'start_time' => '',
+                'end_time' => '',
+            ]], 1);
+
+            $workOrder = $this->pantheon->table('dbo.tHF_WOEx')
+                ->where('acKey', self::WORK_ORDER_KEY)
+                ->first(['acStatus', 'acStatusMF']);
+            $this->assertTrue($result['partial']);
+            $this->assertSame('djelomično zaključen', $result['status']);
+            $this->assertSame('N', trim((string) $workOrder->acStatus));
+            $this->assertSame('R', trim((string) $workOrder->acStatusMF));
+            $this->assertSame(0, $this->closingDocumentCount());
+        } finally {
+            while ($this->pantheon->transactionLevel() > 0) {
+                $this->pantheon->rollBack();
+            }
+        }
+    }
+
     public function test_copied_operation_rows_are_aggregated_to_one_document_time(): void
     {
         $this->pantheon->beginTransaction();
@@ -131,8 +159,8 @@ class WorkOrderClosingPantheonTest extends TestCase
                     'item_qid' => self::OPERATION_ITEM_QID,
                     'worker_id' => self::WORKER_QID,
                     'time' => '999',
-                    'start_time' => '10:00',
-                    'end_time' => '10:20',
+                    'start_time' => '11:00',
+                    'end_time' => '11:20',
                 ],
             ], 1);
 
@@ -158,6 +186,40 @@ class WorkOrderClosingPantheonTest extends TestCase
         }
 
         $this->assertSame(0, $this->closingDocumentCount());
+    }
+
+    public function test_break_time_is_normalized_before_operation_document_creation(): void
+    {
+        $this->pantheon->beginTransaction();
+
+        try {
+            $producedQuantity = (string) $this->pantheon->table('dbo.tHF_WOEx')
+                ->where('acKey', self::WORK_ORDER_KEY)
+                ->value('anPlanQty');
+            $result = app(WorkOrderClosingService::class)->close(self::WORK_ORDER_KEY, [[
+                'item_qid' => self::OPERATION_ITEM_QID,
+                'worker_id' => self::WORKER_QID,
+                'time' => '999',
+                'start_time' => '09:00',
+                'end_time' => '10:15',
+            ]], 1);
+
+            $operationDocument = $result['documents'][0];
+            $item = $this->pantheon->table('dbo.tHE_MoveItem')
+                ->where('acKey', $operationDocument['document_key'])
+                ->first(['anQty']);
+            $workerEntry = $this->pantheon->table('dbo.tHF_WOExItemWork')
+                ->where('acLnkKey', $operationDocument['document_key'])
+                ->first(['anTn', 'adBeginTime', 'adEndTime']);
+
+            $this->assertSame(bcmul('60', $producedQuantity, 6), number_format((float) $item->anQty, 6, '.', ''));
+            $this->assertSame('60.000000', (string) $workerEntry->anTn);
+            $this->assertStringContainsString('10:00:00', (string) $workerEntry->adEndTime);
+        } finally {
+            while ($this->pantheon->transactionLevel() > 0) {
+                $this->pantheon->rollBack();
+            }
+        }
     }
 
     private function payload(): array
