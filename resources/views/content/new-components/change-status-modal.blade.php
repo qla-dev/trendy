@@ -7,13 +7,17 @@
     return trim((string) $normalizedValue);
   };
   $normalizedCurrentStatus = $normalizeStatus($currentStatus);
+  // Values are already normalized with Str::ascii above, so keep aliases in
+  // the same normalized form. Pantheon's Z close code is displayed as
+  // "Završen", the value available in the status dropdown.
   $statusAliases = [
+    'zatvoren' => 'zavrsen',
     'novo' => 'planiran',
     'u toku' => 'u radu',
-    'djelimično zavrseno' => 'djelimično zavrsen',
-    'djelimično zavrsen' => 'djelimično zavrsen',
-    'završeno' => 'završen',
-    'završen' => 'završen',
+    'djelimicno zavrseno' => 'djelimicno zavrsen',
+    'djelimicno zavrsen' => 'djelimicno zavrsen',
+    'zavrseno' => 'zavrsen',
+    'zavrsen' => 'zavrsen',
   ];
 
   if (array_key_exists($normalizedCurrentStatus, $statusAliases)) {

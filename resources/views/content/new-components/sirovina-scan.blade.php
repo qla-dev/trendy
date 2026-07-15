@@ -5504,8 +5504,8 @@
         return null;
       }
 
-      if (!Number.isFinite(quantity) || quantity <= 0) {
-        notify('warning', 'Neispravna količina', 'Unesite količinu veću od 0');
+      if (!Number.isFinite(quantity) || quantity < 0) {
+        notify('warning', 'Neispravna količina', 'Unesite nenegativnu količinu');
         return null;
       }
 
@@ -6500,11 +6500,18 @@
     function savePlannedConsumption() {
       var selected = currentConfirmRows();
       var rawQuantityValue = quantityInput ? normalizeQuantityInputValue(quantityInput.value || '') : '';
-      var quantity = rawQuantityValue ? Number(rawQuantityValue) : 0;
+
+      // An empty value must not be converted to zero. Zero remains valid when entered.
+      if (rawQuantityValue === '') {
+        notify('warning', 'Nedostaje količina', 'Unesite količinu preko tastature na ekranu.');
+        return;
+      }
+
+      var quantity = Number(rawQuantityValue);
       var quantityUnit = quantityUnitSelect ? String(quantityUnitSelect.value || 'AUTO').toUpperCase() : 'AUTO';
 
-      if (!(quantity > 0)) {
-        notify('warning', 'Nedostaje količina', 'Unesite količinu preko tastature na ekranu.');
+      if (!Number.isFinite(quantity) || quantity < 0) {
+        notify('warning', 'Neispravna količina', 'Unesite nenegativnu količinu.');
         return;
       }
 

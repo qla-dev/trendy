@@ -147,6 +147,75 @@
   .wo-other-options-toggle[aria-expanded="true"] .wo-other-options-chevron {
     transform: rotate(180deg);
   }
+  .wo-close-table .form-control {
+    min-width: 180px;
+  }
+  .wo-close-table .wo-close-start-time,
+  .wo-close-table .wo-close-end-time {
+    min-width: 130px;
+  }
+  .wo-close-worker-suggestions {
+    position: fixed;
+    z-index: 1085;
+    max-height: 210px;
+    overflow-y: auto;
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid #d8d6de;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.25rem 1rem rgba(34, 41, 47, 0.16);
+  }
+  .wo-close-worker-suggestion {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 0;
+    background: transparent;
+    text-align: left;
+  }
+  .wo-close-worker-suggestion:hover,
+  .wo-close-worker-suggestion:focus {
+    background: rgba(115, 103, 240, 0.08);
+  }
+  .wo-close-action-buttons {
+    display: inline-flex;
+    gap: 0.45rem;
+  }
+  .wo-close-copy-row-btn,
+  .wo-close-delete-row-btn {
+    display: inline-flex;
+    width: 2.25rem;
+    height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .wo-close-copy-row-btn:focus,
+  .wo-close-delete-row-btn:focus {
+    box-shadow: none;
+  }
+  .wo-close-copy-row-btn,
+  .wo-close-copy-row-btn:focus,
+  .wo-close-copy-row-btn:active,
+  .wo-close-copy-row-btn.active {
+    color: #7367f0 !important;
+    background-color: transparent !important;
+    border-color: #7367f0 !important;
+    box-shadow: none !important;
+  }
+  .wo-close-copy-row-btn:hover,
+  .wo-close-copy-row-btn:hover:focus,
+  .wo-close-copy-row-btn:hover:active {
+    color: #fff !important;
+    background-color: #7367f0 !important;
+    border-color: #7367f0 !important;
+  }
+  .wo-close-operation-error {
+    display: none;
+    font-size: 0.78rem;
+  }
+  .wo-close-operation-row.is-invalid .wo-close-operation-error {
+    display: block;
+  }
   .wo-meta-shell {
     border: 1px solid #ebe9f1;
     border-radius: 10px;
@@ -1593,7 +1662,7 @@
       font-size: 1.04rem;
     }
   }
-  @media (max-width: 480px) {
+  @media (max-width: 767.98px) {
     .wo-other-options-toggle {
       display: flex !important;
       margin-bottom: 0 !important;
@@ -1726,6 +1795,15 @@
   }
   $statusUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-update-status', ['id' => $workOrderRouteId]) : '';
   $priorityUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-update-priority', ['id' => $workOrderRouteId]) : '';
+  $closeWorkOrderUrl = $hasLoadedWorkOrder ? route('app-invoice-close', ['id' => $workOrderRouteId]) : '';
+  $pantheonWorkersUrl = $hasLoadedWorkOrder ? route('app-invoice-pantheon-workers', ['id' => $workOrderRouteId]) : '';
+  $normalizedClosingStatus = mb_strtolower(trim((string) ($workOrder['status'] ?? '')));
+  $isClosedWorkOrder = $hasLoadedWorkOrder && (
+    str_contains($normalizedClosingStatus, 'zatvoren')
+    || str_contains($normalizedClosingStatus, 'zaklju')
+    || str_contains($normalizedClosingStatus, 'zavr')
+    || $normalizedClosingStatus === 'z'
+  );
   $productsFetchUrl = $hasLoadedWorkOrder ? route('app-invoice-products', ['id' => $workOrderRouteId]) : '';
   $bomFetchUrl = $hasLoadedWorkOrder ? route('app-invoice-bom', ['id' => $workOrderRouteId]) : '';
   $bomDestroyUrl = ($hasLoadedWorkOrder && $isAdminUser)
@@ -2400,6 +2478,17 @@
               <i class="fa fa-chevron-down me-50 wo-other-options-chevron" style="font-size: 12px;"></i> Ostale opcije
             </button>
             <div class="collapse wo-other-options-collapse" id="wo-other-options-collapse">
+          <button
+            id="wo-close-order-btn"
+            class="btn btn-outline-success w-100 mb-75 d-flex justify-content-center align-items-center"
+            type="button"
+            data-bs-toggle="modal"
+            data-bs-target="#close-work-order-modal"
+            @if (!$hasLoadedWorkOrder || $closeWorkOrderUrl === '' || $isClosedWorkOrder) disabled aria-disabled="true" title="{{ $isClosedWorkOrder ? 'Radni nalog je završen' : 'Skeniraj radni nalog prvo' }}" @endif
+          >
+            <i class="fa fa-check-circle me-50"></i>
+            <span class="wo-close-order-label">{{ $isClosedWorkOrder ? 'Nalog završen' : 'Zatvori nalog' }}</span>
+          </button>
           <button id="wo-status-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $statusToneClass }}" data-bs-toggle="modal" data-bs-target="#change-status-modal" @if (!$hasLoadedWorkOrder) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
             <i class="fa fa-circle-notch me-50"></i> Status: <span id="wo-status-label" class="ms-25">{{ $statusDisplayLabel }}</span>
           </button>
@@ -2447,6 +2536,109 @@
     <!-- /Invoice Actions -->
   </div>
 </section>
+
+<div class="modal fade" id="close-work-order-modal" tabindex="-1" aria-labelledby="close-work-order-modal-label" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title" id="close-work-order-modal-label">Zatvori nalog {{ $invoiceNumberDisplay }}</h5>
+          <small class="text-muted">Vrijeme se unosi u minutama za jednu proizvedenu jedinicu.</small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
+      </div>
+      <div class="modal-body">
+        <ul class="nav nav-tabs" role="tablist">
+          <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#close-work-order-operations" type="button" role="tab">Operacije</button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#close-work-order-materials" type="button" role="tab">Materijali</button>
+          </li>
+        </ul>
+        <div class="tab-content pt-1">
+          <div class="tab-pane fade show active" id="close-work-order-operations" role="tabpanel">
+            <div class="table-responsive">
+              <table class="table align-middle wo-close-table">
+                <thead>
+                  <tr>
+                    <th>Pozicija</th>
+                    <th>Operacija</th>
+                    <th>Naziv</th>
+                    <th>Radnik</th>
+                    <th>Početak izrade</th>
+                    <th>Kraj izrade</th>
+                    <th>Trajanje (min/jedinica)</th>
+                    <th class="text-center">Akcije</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @forelse(($closingWorkOrderOperations ?? $workOrderRegOperations ?? []) as $operation)
+                    <tr class="wo-close-operation-row" data-item-qid="{{ (int) ($operation['id'] ?? 0) }}">
+                      <td>{{ $displayValue($operation['pozicija'] ?? null) }}</td>
+                      <td>{{ $displayValue($operation['operacija'] ?? null) }}</td>
+                      <td>{{ $displayValue($operation['naziv'] ?? null) }}</td>
+                      <td class="position-relative">
+                        <input class="form-control wo-close-worker-search" type="text" autocomplete="off" placeholder="Upišite ime radnika" aria-label="Radnik" aria-autocomplete="list">
+                        <input class="wo-close-worker" type="hidden" value="">
+                        <div class="wo-close-worker-suggestions d-none" role="listbox"></div>
+                        <div class="text-danger wo-close-operation-error">Odaberite Pantheon radnika.</div>
+                      </td>
+                      <td>
+                        <input class="form-control wo-close-start-time" type="time" aria-label="Početak izrade">
+                      </td>
+                      <td>
+                        <input class="form-control wo-close-end-time" type="time" aria-label="Kraj izrade">
+                      </td>
+                      <td>
+                        <input class="form-control wo-close-time" type="text" inputmode="decimal" placeholder="Minute" autocomplete="off" aria-label="Trajanje u minutama po jedinici">
+                        <div class="text-danger wo-close-operation-error">Unesite oba vremena ili nenegativan broj minuta. Završno vrijeme ne može biti prije početnog.</div>
+                      </td>
+                      <td class="text-center">
+                        <div class="wo-close-action-buttons">
+                          <button type="button" class="btn btn-outline-primary btn-sm wo-close-copy-row-btn" title="Kopiraj red" aria-label="Kopiraj red"><i class="fa fa-copy" aria-hidden="true"></i></button>
+                          <button type="button" class="btn btn-outline-danger btn-sm wo-close-delete-row-btn" title="Izbriši red" aria-label="Izbriši red"><i class="fa fa-trash" aria-hidden="true"></i></button>
+                        </div>
+                      </td>
+                    </tr>
+                  @empty
+                    <tr><td colspan="8" class="text-center text-muted py-2">Nema operacija za zatvaranje.</td></tr>
+                  @endforelse
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="tab-pane fade" id="close-work-order-materials" role="tabpanel">
+            <div class="table-responsive">
+              <table class="table align-middle">
+                <thead><tr><th>Pozicija</th><th>Materijal</th><th>Naziv</th><th>Količina</th><th>MJ</th></tr></thead>
+                <tbody>
+                  @forelse(($workOrderItemResources ?? []) as $material)
+                    <tr>
+                      <td>{{ $displayValue($material['pozicija'] ?? null) }}</td>
+                      <td>{{ $displayValue($material['materijal'] ?? null) }}</td>
+                      <td>{{ $displayValue($material['naziv'] ?? null) }}</td>
+                      <td>{{ $displayValue($material['kolicina'] ?? null) }}</td>
+                      <td>{{ $displayValue($material['mj'] ?? null) }}</td>
+                    </tr>
+                  @empty
+                    <tr><td colspan="5" class="text-center text-muted py-2">Nema materijala za ovaj radni nalog.</td></tr>
+                  @endforelse
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Odustani</button>
+        <button type="button" class="btn btn-success" id="wo-close-submit-btn" disabled>
+          <i class="fa fa-check-circle me-50"></i> Zatvori nalog
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Send Invoice Sidebar -->
 <div class="modal modal-slide-in fade" id="send-invoice-sidebar" aria-hidden="true">
@@ -2593,6 +2785,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var mutationConfig = {
       statusUrl: @json($statusUpdateUrl),
       priorityUrl: @json($priorityUpdateUrl),
+      closeUrl: @json($closeWorkOrderUrl),
+      workersUrl: @json($pantheonWorkersUrl),
       plannedConsumptionUpdateUrl: @json($plannedConsumptionUpdateUrl),
       plannedConsumptionRemoveUrl: @json($plannedConsumptionRemoveUrl),
       csrfToken: @json(csrf_token())
@@ -2606,6 +2800,10 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var priorityLabel = document.getElementById('wo-priority-label');
     var statusTriggerButton = document.getElementById('wo-status-trigger-btn');
     var priorityTriggerButton = document.getElementById('wo-priority-trigger-btn');
+    var closeWorkOrderButton = document.getElementById('wo-close-order-btn');
+    var closeWorkOrderSubmit = document.getElementById('wo-close-submit-btn');
+    var closeWorkOrderModal = document.getElementById('close-work-order-modal');
+    var pantheonWorkerSearchCache = Object.create(null);
     var deleteWorkOrderButton = document.getElementById('wo-delete-order-btn');
     var statusModalElement = document.getElementById('change-status-modal');
     var priorityModalElement = document.getElementById('change-priority-modal');
@@ -2826,6 +3024,465 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
           return body;
         });
+      });
+    }
+
+    function validateWorkOrderClosing(showErrors) {
+      var rows = Array.prototype.slice.call(document.querySelectorAll('.wo-close-operation-row[data-item-qid]'));
+      var allValid = rows.length > 0;
+      var numericPattern = /^(?:0|[1-9]\d*)(?:[.,]\d+)?$/;
+
+      rows.forEach(function (row) {
+        var worker = row.querySelector('.wo-close-worker');
+        var time = row.querySelector('.wo-close-time');
+        var start = row.querySelector('.wo-close-start-time');
+        var end = row.querySelector('.wo-close-end-time');
+        var workerValid = !!(worker && String(worker.value || '').trim());
+        var timeValue = time ? String(time.value || '').trim() : '';
+        var timeValid = numericPattern.test(timeValue) && operationTimeRangeIsValid(start, end);
+        var valid = workerValid && timeValid;
+
+        allValid = allValid && valid;
+        if (showErrors) {
+          row.classList.toggle('is-invalid', !valid);
+          if (time) {
+            time.classList.toggle('is-invalid', !timeValid);
+          }
+        } else if (valid) {
+          row.classList.remove('is-invalid');
+          if (time) {
+            time.classList.remove('is-invalid');
+          }
+        }
+      });
+
+      if (closeWorkOrderSubmit && !closeWorkOrderSubmit.dataset.processing) {
+        closeWorkOrderSubmit.disabled = !allValid;
+      }
+
+      return allValid;
+    }
+
+    function clockMinutes(value) {
+      var match = /^(?:[01]\d|2[0-3]):[0-5]\d$/.exec(String(value || '').trim());
+      if (!match) {
+        return null;
+      }
+
+      var parts = match[0].split(':');
+      return (Number(parts[0]) * 60) + Number(parts[1]);
+    }
+
+    function operationTimeRangeIsValid(start, end) {
+      var startValue = String((start || {}).value || '').trim();
+      var endValue = String((end || {}).value || '').trim();
+
+      if (startValue === '' && endValue === '') {
+        return true;
+      }
+
+      var startMinutes = clockMinutes(startValue);
+      var endMinutes = clockMinutes(endValue);
+
+      return startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes;
+    }
+
+    function syncOperationTime(row) {
+      var start = row.querySelector('.wo-close-start-time');
+      var end = row.querySelector('.wo-close-end-time');
+      var time = row.querySelector('.wo-close-time');
+
+      if (!start || !end || !time) {
+        return;
+      }
+
+      var startValue = String(start.value || '').trim();
+      var endValue = String(end.value || '').trim();
+
+      if (startValue !== '' && endValue !== '') {
+        var startMinutes = clockMinutes(startValue);
+        var endMinutes = clockMinutes(endValue);
+        time.readOnly = true;
+        time.classList.toggle('is-invalid', startMinutes === null || endMinutes === null || endMinutes < startMinutes);
+        time.value = startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes
+          ? String(endMinutes - startMinutes)
+          : '';
+        return;
+      }
+
+      time.readOnly = false;
+      time.classList.toggle('is-invalid', startValue !== '' || endValue !== '');
+    }
+
+    function hideWorkerSuggestions(row) {
+      var suggestions = row && row.querySelector('.wo-close-worker-suggestions');
+      if (suggestions) {
+        suggestions.replaceChildren();
+        suggestions.classList.add('d-none');
+      }
+    }
+
+    function showWorkerSuggestions(row, workers) {
+      var suggestions = row && row.querySelector('.wo-close-worker-suggestions');
+      if (!suggestions) {
+        return;
+      }
+
+      suggestions.replaceChildren();
+      (workers || []).forEach(function (worker) {
+        var workerId = Number(worker && worker.id || 0);
+        if (!Number.isFinite(workerId) || workerId < 1) {
+          return;
+        }
+
+        var option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'wo-close-worker-suggestion';
+        option.setAttribute('role', 'option');
+        option.dataset.workerId = String(workerId);
+        option.dataset.workerText = String(worker.text || worker.worker || '');
+        option.textContent = option.dataset.workerText;
+        suggestions.appendChild(option);
+      });
+
+      if (!suggestions.childElementCount || !closeWorkOrderModal || !closeWorkOrderModal.classList.contains('show')) {
+        suggestions.classList.add('d-none');
+        return;
+      }
+
+      suggestions.classList.remove('d-none');
+      positionWorkerSuggestions(row);
+    }
+
+    function positionWorkerSuggestions(row) {
+      var input = row && row.querySelector('.wo-close-worker-search');
+      var suggestions = row && row.querySelector('.wo-close-worker-suggestions');
+      if (!input || !suggestions || suggestions.classList.contains('d-none') || !closeWorkOrderModal) {
+        return;
+      }
+
+      var inputRect = input.getBoundingClientRect();
+      var modalRect = closeWorkOrderModal.getBoundingClientRect();
+      var width = Math.max(inputRect.width, 180);
+      suggestions.style.width = Math.round(width) + 'px';
+      suggestions.style.left = Math.round(inputRect.left) + 'px';
+
+      var height = Math.min(suggestions.offsetHeight || 210, 210);
+      var top = inputRect.bottom + 4;
+      if (top + height > modalRect.bottom - 8) {
+        top = Math.max(modalRect.top + 8, inputRect.top - height - 4);
+      }
+      suggestions.style.top = Math.round(top) + 'px';
+    }
+
+    function selectWorkerSuggestion(suggestion) {
+      var suggestionRow = suggestion && suggestion.closest ? suggestion.closest('.wo-close-operation-row') : null;
+      if (!suggestionRow) {
+        return;
+      }
+
+      var search = suggestionRow.querySelector('.wo-close-worker-search');
+      var worker = suggestionRow.querySelector('.wo-close-worker');
+      if (search) search.value = suggestion.dataset.workerText || '';
+      if (worker) worker.value = suggestion.dataset.workerId || '';
+      hideWorkerSuggestions(suggestionRow);
+      validateWorkOrderClosing(false);
+    }
+
+    function closingFocusableFields(scope) {
+      var root = scope || closeWorkOrderModal;
+      if (!root) {
+        return [];
+      }
+
+      return Array.prototype.slice.call(root.querySelectorAll(
+        '.wo-close-worker-search, .wo-close-start-time, .wo-close-end-time, .wo-close-time, .wo-close-copy-row-btn, .wo-close-delete-row-btn'
+      )).filter(function (element) {
+        return !element.disabled && element.offsetParent !== null;
+      });
+    }
+
+    function focusClosingField(field) {
+      if (!field) {
+        return;
+      }
+
+      field.focus();
+      if (field.tagName === 'INPUT' && field.type !== 'time' && typeof field.select === 'function') {
+        field.select();
+      }
+    }
+
+    function moveClosingFieldFocus(current, key) {
+      var currentRow = current && current.closest ? current.closest('.wo-close-operation-row') : null;
+      if (!currentRow || !closeWorkOrderModal) {
+        return;
+      }
+
+      var rowFields = closingFocusableFields(currentRow);
+      var columnIndex = rowFields.indexOf(current);
+      if (columnIndex < 0) {
+        return;
+      }
+
+      if (key === 'ArrowLeft' || key === 'ArrowRight') {
+        focusClosingField(rowFields[columnIndex + (key === 'ArrowRight' ? 1 : -1)]);
+        return;
+      }
+
+      var rows = Array.prototype.slice.call(closeWorkOrderModal.querySelectorAll('.wo-close-operation-row[data-item-qid]'));
+      var rowIndex = rows.indexOf(currentRow);
+      var targetRow = rows[rowIndex + (key === 'ArrowDown' ? 1 : -1)];
+      if (!targetRow) {
+        return;
+      }
+
+      // Up/down preserves the active column while moving to an adjacent row.
+      focusClosingField(closingFocusableFields(targetRow)[columnIndex]);
+    }
+
+    function searchPantheonWorkers(input) {
+      var row = input && input.closest ? input.closest('.wo-close-operation-row') : null;
+      var query = String((input || {}).value || '').trim();
+      if (!row || query.length < 1 || !mutationConfig.workersUrl) {
+        hideWorkerSuggestions(row);
+        return;
+      }
+
+      var cacheKey = query.toLocaleLowerCase();
+      var searchToken = String(Number(input.dataset.workerSearchToken || 0) + 1);
+      input.dataset.workerSearchToken = searchToken;
+
+      if (Object.prototype.hasOwnProperty.call(pantheonWorkerSearchCache, cacheKey)) {
+        showWorkerSuggestions(row, pantheonWorkerSearchCache[cacheKey]);
+        return;
+      }
+
+      var separator = mutationConfig.workersUrl.indexOf('?') === -1 ? '?' : '&';
+      var url = mutationConfig.workersUrl + separator + 'q=' + encodeURIComponent(query);
+
+      fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (response) {
+          return response.ok ? response.json() : { data: [] };
+        })
+        .then(function (payload) {
+          var workers = payload && Array.isArray(payload.data) ? payload.data : [];
+          pantheonWorkerSearchCache[cacheKey] = workers;
+          if (input.dataset.workerSearchToken !== searchToken || String(input.value || '').trim() !== query) {
+            return;
+          }
+          showWorkerSuggestions(row, workers);
+        })
+        .catch(function () {
+          hideWorkerSuggestions(row);
+        });
+    }
+
+    function closingPayload() {
+      return {
+        operations: Array.prototype.slice.call(document.querySelectorAll('.wo-close-operation-row[data-item-qid]')).map(function (row) {
+          return {
+            item_qid: Number(row.getAttribute('data-item-qid') || 0),
+            worker_id: Number((row.querySelector('.wo-close-worker') || {}).value || 0),
+            time: String((row.querySelector('.wo-close-time') || {}).value || '').trim().replace(',', '.'),
+            start_time: String((row.querySelector('.wo-close-start-time') || {}).value || '').trim(),
+            end_time: String((row.querySelector('.wo-close-end-time') || {}).value || '').trim()
+          };
+        })
+      };
+    }
+
+    function escapeClosingHtml(value) {
+      return String(value === null || typeof value === 'undefined' ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    function closingResultHtml(data) {
+      var documents = data && Array.isArray(data.documents) ? data.documents : [];
+      return documents.map(function (document) {
+        var lines = [
+          '<strong>' + escapeClosingHtml(document.document_number || '') + '</strong> (' + escapeClosingHtml(document.document_type || '') + ')'
+        ];
+        if (document.item_code) lines.push('Artikal: ' + escapeClosingHtml(document.item_code));
+        if (document.work_order_code) lines.push('Radni nalog: ' + escapeClosingHtml(document.work_order_code));
+        if (document.quantity) lines.push('Količina: ' + escapeClosingHtml(document.quantity));
+        if (document.price_per_unit) lines.push('Cijena po jedinici: ' + escapeClosingHtml(document.price_per_unit));
+        if (document.total_price) lines.push('Ukupna cijena: ' + escapeClosingHtml(document.total_price));
+        if (document.operation_cost) lines.push('Trošak operacija: ' + escapeClosingHtml(document.operation_cost));
+        if (document.material_cost) lines.push('Trošak materijala: ' + escapeClosingHtml(document.material_cost));
+        return '<div class="text-start mb-1">' + lines.join('<br>') + '</div>';
+      }).join('');
+    }
+
+    if (closeWorkOrderModal) {
+      closeWorkOrderModal.addEventListener('shown.bs.modal', function () {
+        closeWorkOrderModal.querySelectorAll('.wo-close-operation-row').forEach(syncOperationTime);
+        validateWorkOrderClosing(false);
+      });
+
+      closeWorkOrderModal.addEventListener('input', function (event) {
+        var target = event.target;
+        var row = target && target.closest ? target.closest('.wo-close-operation-row') : null;
+        if (!row) {
+          return;
+        }
+
+        if (target.classList.contains('wo-close-worker-search')) {
+          var worker = row.querySelector('.wo-close-worker');
+          if (worker) worker.value = '';
+          searchPantheonWorkers(target);
+        }
+
+        if (target.classList.contains('wo-close-start-time') || target.classList.contains('wo-close-end-time')) {
+          syncOperationTime(row);
+        }
+
+        if (target.classList.contains('wo-close-time') || target.classList.contains('wo-close-start-time') || target.classList.contains('wo-close-end-time') || target.classList.contains('wo-close-worker-search')) {
+          validateWorkOrderClosing(false);
+        }
+      });
+
+      closeWorkOrderModal.addEventListener('keydown', function (event) {
+        if (event.ctrlKey || event.altKey || event.metaKey) {
+          return;
+        }
+
+        var field = event.target;
+        if (!field || !field.matches('.wo-close-worker-search, .wo-close-start-time, .wo-close-end-time, .wo-close-time, .wo-close-copy-row-btn, .wo-close-delete-row-btn')) {
+          return;
+        }
+
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+          return;
+        }
+
+        event.preventDefault();
+        moveClosingFieldFocus(field, event.key);
+      });
+
+      closeWorkOrderModal.addEventListener('click', function (event) {
+        var target = event.target;
+        var suggestion = target && target.closest ? target.closest('.wo-close-worker-suggestion') : null;
+        if (suggestion) {
+          selectWorkerSuggestion(suggestion);
+          return;
+        }
+
+        var copyButton = target && target.closest ? target.closest('.wo-close-copy-row-btn') : null;
+        if (copyButton) {
+          event.preventDefault();
+          var sourceRow = copyButton.closest('.wo-close-operation-row');
+          copyButton.classList.remove('active');
+          var copiedRow = sourceRow.cloneNode(true);
+          copiedRow.classList.remove('is-invalid');
+          copiedRow.querySelectorAll('.wo-close-copy-row-btn, .wo-close-delete-row-btn').forEach(function (button) {
+            button.classList.remove('active');
+            button.removeAttribute('aria-pressed');
+          });
+          copiedRow.querySelector('.wo-close-worker-suggestions').replaceChildren();
+          copiedRow.querySelector('.wo-close-worker-suggestions').classList.add('d-none');
+          sourceRow.parentNode.insertBefore(copiedRow, sourceRow.nextSibling);
+          syncOperationTime(copiedRow);
+          validateWorkOrderClosing(false);
+          copyButton.classList.remove('active');
+          window.setTimeout(function () { copyButton.blur(); }, 0);
+          return;
+        }
+
+        var deleteButton = target && target.closest ? target.closest('.wo-close-delete-row-btn') : null;
+        if (deleteButton) {
+          event.preventDefault();
+          var rowToDelete = deleteButton.closest('.wo-close-operation-row');
+          var itemQid = rowToDelete.getAttribute('data-item-qid');
+          var matchingRows = closeWorkOrderModal.querySelectorAll('.wo-close-operation-row[data-item-qid="' + itemQid + '"]');
+          if (matchingRows.length > 1) {
+            rowToDelete.remove();
+          } else {
+            rowToDelete.classList.add('is-invalid');
+          }
+          validateWorkOrderClosing(false);
+          deleteButton.classList.remove('active');
+          window.setTimeout(function () { deleteButton.blur(); }, 0);
+        }
+      });
+
+      closeWorkOrderModal.addEventListener('mousedown', function (event) {
+        var suggestion = event.target && event.target.closest ? event.target.closest('.wo-close-worker-suggestion') : null;
+        if (!suggestion) {
+          return;
+        }
+
+        // Choose on pointer down, before the textbox blur can hide the popup.
+        event.preventDefault();
+        selectWorkerSuggestion(suggestion);
+      });
+
+      closeWorkOrderModal.addEventListener('scroll', function () {
+        closeWorkOrderModal.querySelectorAll('.wo-close-worker-suggestions:not(.d-none)').forEach(function (suggestions) {
+          positionWorkerSuggestions(suggestions.closest('.wo-close-operation-row'));
+        });
+      }, true);
+
+      closeWorkOrderModal.addEventListener('focusout', function (event) {
+        var input = event.target;
+        if (!input || !input.classList.contains('wo-close-worker-search')) {
+          return;
+        }
+        var row = input.closest('.wo-close-operation-row');
+        window.setTimeout(function () { hideWorkerSuggestions(row); }, 150);
+      });
+    }
+
+    if (closeWorkOrderSubmit) {
+      closeWorkOrderSubmit.addEventListener('click', function () {
+        if (!validateWorkOrderClosing(true) || !mutationConfig.closeUrl) {
+          return;
+        }
+
+        closeWorkOrderSubmit.dataset.processing = '1';
+        setActionButtonLoading(closeWorkOrderSubmit, true);
+        if (closeWorkOrderButton) {
+          closeWorkOrderButton.disabled = true;
+          closeWorkOrderButton.setAttribute('aria-disabled', 'true');
+        }
+
+        requestMutation(mutationConfig.closeUrl, closingPayload(), 'Zatvaranje radnog naloga nije uspjelo.')
+          .then(function (response) {
+            var data = response && response.data ? response.data : {};
+            hideModal(closeWorkOrderModal);
+
+            if (closeWorkOrderButton) {
+              var label = closeWorkOrderButton.querySelector('.wo-close-order-label');
+              if (label) label.textContent = 'Nalog završen';
+              closeWorkOrderButton.title = 'Radni nalog je završen';
+            }
+            if (statusLabel) statusLabel.textContent = 'Završen';
+            updateSideButtonTone(statusTriggerButton, 'success');
+
+            return Swal.fire(swalWithTheme({
+              icon: 'success',
+              title: response.message || data.message || 'Dokumenti su kreirani',
+              html: closingResultHtml(data),
+              confirmButtonText: 'U redu',
+              customClass: { confirmButton: 'btn btn-success' },
+              buttonsStyling: false
+            }));
+          })
+          .catch(function (error) {
+            delete closeWorkOrderSubmit.dataset.processing;
+            setActionButtonLoading(closeWorkOrderSubmit, false);
+            validateWorkOrderClosing(false);
+            if (closeWorkOrderButton) {
+              closeWorkOrderButton.disabled = false;
+              closeWorkOrderButton.removeAttribute('aria-disabled');
+            }
+            Swal.fire(swalWithTheme({
+              icon: 'error',
+              title: 'Zatvaranje nije uspjelo',
+              text: error && error.message ? error.message : 'Sve promjene su poništene.'
+            }));
+          });
       });
     }
 

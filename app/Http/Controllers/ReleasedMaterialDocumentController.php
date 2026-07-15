@@ -13,7 +13,11 @@ use Throwable;
 
 class ReleasedMaterialDocumentController extends Controller
 {
-    private const DOCUMENT_TYPE = '6400';
+    protected const DOCUMENT_TYPE = '6400';
+    protected const DATA_ROUTE = 'app-released-material-documents-data';
+    protected const DELETE_ROUTE = 'app-released-material-documents-destroy';
+    protected const TITLE = 'Razduženi materijali';
+    protected const SUBTITLE = 'RN Rasknjiženje materijala';
 
     public function index(Request $request)
     {
@@ -23,10 +27,12 @@ class ReleasedMaterialDocumentController extends Controller
 
         return view('content.apps.documents.released-materials', [
             'pageConfigs' => ['pageHeader' => false],
-            'releasedMaterialsDataUrl' => route('app-released-material-documents-data'),
-            'releasedMaterialsDeleteUrl' => route('app-released-material-documents-destroy'),
+            'releasedMaterialsDataUrl' => route(static::DATA_ROUTE),
+            'releasedMaterialsDeleteUrl' => route(static::DELETE_ROUTE),
             'canDeleteReleasedMaterialDocuments' => $this->canDeleteDocuments($request->user()),
-            'documentType' => self::DOCUMENT_TYPE,
+            'documentType' => static::DOCUMENT_TYPE,
+            'documentTitle' => static::TITLE,
+            'documentSubtitle' => static::SUBTITLE,
         ]);
     }
 
@@ -51,7 +57,7 @@ class ReleasedMaterialDocumentController extends Controller
 
         $validated = $validator->validated();
         $documentKey = trim((string) ($validated['document_key'] ?? ''));
-        $connection = DB::connection('sqlsrv');
+        $connection = DB::connection($this->workOrderTargetConnectionName());
 
         try {
             $documentRow = $connection
@@ -59,7 +65,7 @@ class ReleasedMaterialDocumentController extends Controller
                 ->selectRaw($this->trimExpr('acKey') . ' as document_key')
                 ->selectRaw($this->trimExpr('acKeyView') . ' as document_number')
                 ->where('acKey', $documentKey)
-                ->where('acDocType', self::DOCUMENT_TYPE)
+                ->where('acDocType', static::DOCUMENT_TYPE)
                 ->first();
 
             if ($documentRow === null) {
@@ -80,7 +86,20 @@ class ReleasedMaterialDocumentController extends Controller
                     'fx_rates' => 0,
                     'items' => 0,
                     'documents' => 0,
+                    'operation_work' => 0,
                 ];
+
+                if (static::DOCUMENT_TYPE === '6600') {
+                    $moveItemQIds = $connection->table($this->qualifiedReleasedMaterialMoveItemTableName())
+                        ->where('acKey', $documentKey)
+                        ->pluck('anQId')
+                        ->all();
+                    if ($moveItemQIds !== []) {
+                        $deleted['operation_work'] = $connection->table('dbo.tHF_WOExItemWork')
+                            ->whereIn('anMoveItemQId', $moveItemQIds)
+                            ->delete();
+                    }
+                }
 
                 $deleted['move_item_links'] = $connection
                     ->table($this->qualifiedReleasedMaterialMoveItemWorkOrderItemLinkTableName())
@@ -105,7 +124,7 @@ class ReleasedMaterialDocumentController extends Controller
                 $deleted['documents'] = $connection
                     ->table($this->qualifiedReleasedMaterialMoveTableName())
                     ->where('acKey', $documentKey)
-                    ->where('acDocType', self::DOCUMENT_TYPE)
+                    ->where('acDocType', static::DOCUMENT_TYPE)
                     ->delete();
 
                 if ($deleted['documents'] < 1) {
@@ -188,12 +207,12 @@ class ReleasedMaterialDocumentController extends Controller
                     'count' => count($rows),
                     'total' => $total,
                     'filtered_total' => $filteredTotal,
-                    'document_type' => self::DOCUMENT_TYPE,
+                    'document_type' => static::DOCUMENT_TYPE,
                 ],
             ]);
         } catch (Throwable $exception) {
             Log::error('Released material documents list failed.', [
-                'document_type' => self::DOCUMENT_TYPE,
+                'document_type' => static::DOCUMENT_TYPE,
                 'filters' => $request->except(['_token']),
                 'message' => $exception->getMessage(),
             ]);
@@ -213,7 +232,7 @@ class ReleasedMaterialDocumentController extends Controller
         $catalogBuyPriceExpr = $this->releasedMaterialCatalogBuyPriceExpr();
         $expectedRnPriceExpr = $this->releasedMaterialExpectedRnPriceExpr();
 
-        return DB::connection('sqlsrv')
+        return DB::connection($this->workOrderTargetConnectionName())
             ->table('dbo.tHE_Move as m')
             ->join('dbo.tHE_MoveItem as mi', 'mi.acKey', '=', 'm.acKey')
             ->leftJoin('dbo.tHF_LinkMoveWOEx as move_wo', 'move_wo.acKey', '=', 'm.acKey')
@@ -223,7 +242,7 @@ class ReleasedMaterialDocumentController extends Controller
                 $join->whereRaw('item_qid.anQId IS NULL')
                     ->whereRaw("LTRIM(RTRIM(ISNULL(item_code.acIdent, ''))) = LTRIM(RTRIM(ISNULL(mi.acIdent, '')))");
             })
-            ->where('m.acDocType', self::DOCUMENT_TYPE)
+            ->where('m.acDocType', static::DOCUMENT_TYPE)
             ->selectRaw($this->trimExpr('m.acKey') . ' as document_key')
             ->selectRaw($this->trimExpr('m.acKeyView') . ' as document_number')
             ->selectRaw($this->trimExpr('m.acDocType') . ' as document_type')
@@ -379,10 +398,14 @@ class ReleasedMaterialDocumentController extends Controller
         $orderNumber = trim((string) ($row->order_number ?? ''));
         $resolvedOrderNumber = $orderNumber !== '' ? $orderNumber : $this->extractOrderNumberFromReference($orderReference);
         $unitPrice = $this->nullableFloat($row->document_price ?? null);
+        $quantity = $this->nullableFloat($row->quantity ?? null);
         $storedRnPrice = $this->nullableFloat($row->stored_rn_price ?? null);
         $buyPrice = $this->nullableFloat($row->buy_price ?? null);
         $expectedRnPrice = $this->nullableFloat($row->expected_rn_price ?? null);
         $resolvedRnPrice = $expectedRnPrice ?? $storedRnPrice;
+        if (static::DOCUMENT_TYPE === '6600' && $resolvedRnPrice !== null && $quantity !== null) {
+            $resolvedRnPrice *= $quantity;
+        }
         $roundedRnPrice = $resolvedRnPrice === null ? null : round($resolvedRnPrice, 2);
         $roundedUnitPrice = $unitPrice === null ? null : round($unitPrice, 2);
         $note = $this->resolveReleasedMaterialNote($row, $workOrderNumber);
@@ -390,7 +413,7 @@ class ReleasedMaterialDocumentController extends Controller
         return [
             'document_key' => $documentKey,
             'document_number' => $documentNumber !== '' ? $documentNumber : $this->formatPantheonDocumentNumber($documentKey),
-            'document_type' => trim((string) ($row->document_type ?? self::DOCUMENT_TYPE)),
+            'document_type' => trim((string) ($row->document_type ?? static::DOCUMENT_TYPE)),
             'document_date' => trim((string) ($row->document_date ?? '')),
             'document_date_display' => $this->formatDate((string) ($row->document_date ?? '')),
             'predracun' => $workOrderNumber,
@@ -403,7 +426,7 @@ class ReleasedMaterialDocumentController extends Controller
             'pozicija' => (int) ($row->position ?? 0),
             'sifra' => trim((string) ($row->material_code ?? '')),
             'naziv' => trim((string) ($row->material_name ?? '')),
-            'kolicina' => $this->nullableFloat($row->quantity ?? null),
+            'kolicina' => $quantity,
             'jm' => strtoupper(trim((string) ($row->unit ?? ''))),
             'cijena' => $roundedRnPrice,
             'cijena_display' => $this->formatMoney($roundedRnPrice),
@@ -504,6 +527,11 @@ class ReleasedMaterialDocumentController extends Controller
     private function releasedMaterialBarcodeCreatedExpr(): string
     {
         $insertedFromExpr = $this->trimExpr('m.acInsertedFrom');
+
+        if (in_array(static::DOCUMENT_TYPE, ['6100', '6600'], true)) {
+            $closingMarkerExpr = $this->trimExpr('m.acInternalNote');
+            return "CASE WHEN {$closingMarkerExpr} = 'eNalog.app work order closing' AND {$insertedFromExpr} = 'D' THEN 1 ELSE 0 END";
+        }
 
         return "CASE WHEN EXISTS (
             SELECT 1

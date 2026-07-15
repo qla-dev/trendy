@@ -73,10 +73,14 @@ class MenuServiceProvider extends ServiceProvider
         if (isset($menuData->menu)) {
             foreach ($menuData->menu as $menu) {
                 if (isset($menu->name)) {
-                    $menu->name = __('locale.' . $menu->name);
+                    $translationKey = 'locale.' . $menu->name;
+                    $translatedName = __($translationKey);
+                    $menu->name = $translatedName === $translationKey ? $menu->name : $translatedName;
                 }
                 if (isset($menu->navheader)) {
-                    $menu->navheader = __('locale.' . $menu->navheader);
+                    $translationKey = 'locale.' . $menu->navheader;
+                    $translatedHeader = __($translationKey);
+                    $menu->navheader = $translatedHeader === $translationKey ? $menu->navheader : $translatedHeader;
                 }
                 if (isset($menu->submenu)) {
                     $this->translateMenuItems((object)['menu' => $menu->submenu]);
@@ -144,6 +148,8 @@ class MenuServiceProvider extends ServiceProvider
             'app-orders',
             'app-documents-navheader',
             'app-released-material-documents',
+            'app-released-operation-documents',
+            'app-finished-goods-receipt-documents',
         ];
 
         $menuData->menu = array_values(array_filter($menuData->menu, function ($menu) use ($adminOnlySlugs) {

@@ -1,6 +1,6 @@
 @extends('layouts/contentLayoutMaster')
 
-@section('title', 'Razduženi materijali')
+@section('title', $documentTitle ?? 'Razduženi materijali')
 
 @php
   $releasedMaterialsConfig = [
@@ -9,6 +9,11 @@
       'canDeleteDocuments' => (bool) ($canDeleteReleasedMaterialDocuments ?? false),
       'documentType' => (string) ($documentType ?? '6400'),
   ];
+  $documentItemLabel = match ($releasedMaterialsConfig['documentType']) {
+      '6600' => 'operacije',
+      '6100' => 'gotovog proizvoda',
+      default => 'materijala',
+  };
 @endphp
 
 @section('vendor-style')
@@ -382,7 +387,7 @@
     <div class="content-header-left col-12 mb-2">
         <div class="row breadcrumbs-top">
         <div class="col-12">
-          <h2 class="content-header-title float-start mb-0">Razduženi materijali</h2>
+          <h2 class="content-header-title float-start mb-0">{{ $documentTitle ?? 'Razduženi materijali' }}</h2>
         </div>
       </div>
     </div>
@@ -392,7 +397,7 @@
     <div class="card-header d-flex justify-content-between align-items-center">
       <div>
         <h4 class="mb-0">Filter dokumenata</h4>
-        <small class="text-muted">Dokumenti tipa {{ $releasedMaterialsConfig['documentType'] }} - RN Rasknjiženje materijala</small>
+        <small class="text-muted">Dokumenti tipa {{ $releasedMaterialsConfig['documentType'] }} - {{ $documentSubtitle ?? 'RN Rasknjiženje materijala' }}</small>
       </div>
       <div class="d-flex align-items-center flex-wrap gap-2 released-doc-filter-actions">
         <div id="released-doc-active-filters" class="released-doc-active-filters d-none"></div>
@@ -410,7 +415,7 @@
           <label class="form-label">Dokument</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="file-text"></i></span>
-            <input type="text" class="form-control released-doc-filter-input" id="filter-dokument" placeholder="26-6400-...">
+            <input type="text" class="form-control released-doc-filter-input" id="filter-dokument" placeholder="{{ now()->format('y') }}-{{ $releasedMaterialsConfig['documentType'] }}-...">
           </div>
         </div>
         <div class="col-md-3">
@@ -431,7 +436,7 @@
           <label class="form-label">Šifra</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="hash"></i></span>
-            <input type="text" class="form-control released-doc-filter-input" id="filter-sifra" placeholder="Šifra materijala">
+            <input type="text" class="form-control released-doc-filter-input" id="filter-sifra" placeholder="Šifra {{ $documentItemLabel }}">
           </div>
         </div>
       </div>
@@ -440,7 +445,7 @@
           <label class="form-label">Naziv</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="search"></i></span>
-            <input type="text" class="form-control released-doc-filter-input" id="filter-naziv" placeholder="Naziv materijala">
+            <input type="text" class="form-control released-doc-filter-input" id="filter-naziv" placeholder="Naziv {{ $documentItemLabel }}">
           </div>
         </div>
         <div class="col-md-3">

@@ -1,0 +1,97 @@
+<?php
+
+namespace Tests\Unit;
+
+use PHPUnit\Framework\TestCase;
+
+class WorkOrderClosingFlowStructureTest extends TestCase
+{
+    private string $view;
+    private string $service;
+    private string $writer;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->view = file_get_contents(__DIR__ . '/../../resources/views/content/apps/invoice/app-invoice-preview.blade.php');
+        $this->service = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/WorkOrderClosingService.php');
+        $this->writer = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonDocumentWriter.php');
+    }
+
+    public function test_close_action_is_inside_other_options_and_directly_above_status(): void
+    {
+        $collapse = strpos($this->view, 'id="wo-other-options-collapse"');
+        $close = strpos($this->view, 'id="wo-close-order-btn"');
+        $status = strpos($this->view, 'id="wo-status-trigger-btn"');
+
+        $this->assertNotFalse($collapse);
+        $this->assertTrue($collapse < $close && $close < $status);
+        $this->assertStringContainsString('@media (max-width: 767.98px)', $this->view);
+        $this->assertStringContainsString('.wo-other-options-collapse.collapse:not(.show)', $this->view);
+    }
+
+    public function test_modal_has_operations_materials_worker_and_time_fields(): void
+    {
+        $this->assertStringContainsString('id="close-work-order-modal"', $this->view);
+        $this->assertStringContainsString('data-bs-target="#close-work-order-operations"', $this->view);
+        $this->assertStringContainsString('data-bs-target="#close-work-order-materials"', $this->view);
+        $this->assertStringContainsString('wo-close-worker', $this->view);
+        $this->assertStringContainsString('wo-close-worker-search', $this->view);
+        $this->assertStringContainsString('wo-close-time', $this->view);
+        $this->assertStringContainsString('wo-close-start-time', $this->view);
+        $this->assertStringContainsString('wo-close-end-time', $this->view);
+        $this->assertStringContainsString('Početak izrade', $this->view);
+        $this->assertStringContainsString('Kraj izrade', $this->view);
+        $this->assertStringContainsString('Trajanje (min/jedinica)', $this->view);
+        $this->assertStringContainsString('wo-close-copy-row-btn', $this->view);
+        $this->assertStringContainsString('wo-close-delete-row-btn', $this->view);
+        $this->assertStringContainsString('searchPantheonWorkers', $this->view);
+        $this->assertStringContainsString('positionWorkerSuggestions', $this->view);
+        $this->assertStringContainsString('copyButton.blur()', $this->view);
+        $this->assertStringContainsString('closingFocusableFields', $this->view);
+        $this->assertStringContainsString("['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']", $this->view);
+        $this->assertStringContainsString('Up/down preserves the active column', $this->view);
+        $this->assertStringContainsString("copyButton.classList.remove('active')", $this->view);
+        $this->assertStringContainsString('endMinutes >= startMinutes', $this->view);
+        $this->assertStringContainsString('modal-dialog-centered', $this->view);
+    }
+
+    public function test_closing_is_transactional_duplicate_protected_and_updates_closed_status(): void
+    {
+        $this->assertStringContainsString('$this->connection->transaction(', $this->service);
+        $this->assertStringContainsString('existingClosingDocuments', $this->service);
+        $this->assertStringContainsString("whereIn('m.acDocType', ['6100', '6600'])", $this->service);
+        $this->assertStringContainsString("'acStatusMF' => 'Z'", $this->service);
+        $this->assertStringContainsString("'acReceiveFinished' => 'Y'", $this->service);
+        $receipt = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonFinishedGoodsReceiptService.php');
+        $stock = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonFinishedGoodsStockService.php');
+        $this->assertStringContainsString('$this->stock->receive(', $receipt);
+        $this->assertStringContainsString('dbo.tHE_Stock WITH (UPDLOCK, HOLDLOCK)', $stock);
+        $this->assertStringContainsString('$submittedByItem[$qid][] = $operation', $this->service);
+        $this->assertStringContainsString("'worker_entries' => \$workerEntries", $this->service);
+        $this->assertStringContainsString('Završno vrijeme ne može biti prije početnog vremena.', $this->service);
+    }
+
+    public function test_closed_work_order_uses_pantheon_z_code_and_dropdown_label(): void
+    {
+        $controller = file_get_contents(__DIR__ . '/../../app/Http/Controllers/WorkOrderController.php');
+        $statusModal = file_get_contents(__DIR__ . '/../../resources/views/content/new-components/change-status-modal.blade.php');
+
+        $this->assertStringContainsString("'acStatusMF' => 'Z'", $this->service);
+        $this->assertStringContainsString("'Z' => ['label' => \"Zavr\\u{0161}en\"", $controller);
+        $this->assertStringContainsString("'zatvoren' => 'zavrsen'", $statusModal);
+        $this->assertStringContainsString("'Završen'", $statusModal);
+    }
+
+    public function test_confirmed_date_sources_and_link_types_are_present(): void
+    {
+        $this->assertStringContainsString("\$workOrder['adLnkDate']", $this->writer);
+        $this->assertStringContainsString("\$workOrder['adDate']", $this->writer);
+        $this->assertStringContainsString("(string) \$number['type'] === '6100'", $this->writer);
+        $operation = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonOperationDocumentService.php');
+        $receipt = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonFinishedGoodsReceiptService.php');
+        $this->assertStringContainsString("\$workOrder['acKey'], 'P'", $operation);
+        $this->assertStringContainsString("\$workOrder['acKey'], 'M'", $receipt);
+        $this->assertStringContainsString("'acUMConverted' => 'MIN'", $operation);
+    }
+}

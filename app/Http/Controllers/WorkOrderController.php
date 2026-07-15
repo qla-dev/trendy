@@ -154,6 +154,9 @@ class WorkOrderController extends Controller
             $workOrderItems = $this->fetchMappedWorkOrderItems($raw);
             $workOrderItemResources = $this->fetchMappedWorkOrderItemResources($raw);
             $workOrderRegOperations = $this->fetchMappedWorkOrderRegOperations($raw);
+            $closingWorkOrderOperations = $this->fetchMappedOperationsFromItems(
+                trim((string) $this->value($raw, ['acKey'], ''))
+            );
             $displaySchedule = $this->resolveWorkOrderDisplaySchedule($raw, $workOrder);
             unset($workOrder['raw']);
 
@@ -208,6 +211,7 @@ class WorkOrderController extends Controller
                 'workOrderItems' => $workOrderItems,
                 'workOrderItemResources' => $workOrderItemResources,
                 'workOrderRegOperations' => $workOrderRegOperations,
+                'closingWorkOrderOperations' => $closingWorkOrderOperations,
                 'workOrderMeta' => $workOrderMeta,
                 'sender' => $sender,
                 'recipient' => $recipient,
@@ -2122,7 +2126,8 @@ class WorkOrderController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'product_id' => ['required', 'string', 'max:64'],
-            'quantity' => ['required', 'numeric', 'gt:0'],
+            // An explicit zero is valid; required keeps empty input distinct from zero.
+            'quantity' => ['required', 'numeric', 'min:0'],
             'quantity_unit' => ['nullable', 'string', 'in:AUTO,KG,MJ,RDS'],
             'description' => ['nullable', 'string', 'max:500'],
             'save_mode' => ['nullable', 'string', 'in:manual,barcode'],
@@ -2179,9 +2184,9 @@ class WorkOrderController extends Controller
                 ], 422);
             }
 
-            if ($quantityFactor <= 0) {
+            if ($quantityFactor < 0) {
                 return response()->json([
-                    'message' => 'Količina mora biti veća od 0.',
+                    'message' => 'Količina ne može biti negativna.',
                 ], 422);
             }
 
@@ -2582,9 +2587,11 @@ class WorkOrderController extends Controller
                         $existingQty = $this->workOrderItemQuantity($existingRow);
                         $updatedQty = $plannedQty;
                         $updatePayload = [
+                            // Store the entered per-unit weight in both Pantheon
+                            // fields; anQty remains the total used for stock.
                             'anPlanQty' => $displayQty,
                             'anQty' => $updatedQty,
-                            'anQty1' => $updatedQty,
+                            'anQty1' => $displayQty,
                             'adTimeChg' => $now,
                             'anUserChg' => $userId,
                         ];
@@ -2626,7 +2633,7 @@ class WorkOrderController extends Controller
                         $existingMaterialItemsByIdent[$componentKey] = array_merge($existingRow, [
                             'anPlanQty' => $displayQty,
                             'anQty' => $updatedQty,
-                            'anQty1' => $updatedQty,
+                            'anQty1' => $displayQty,
                             'acStatement' => $updatePayload['acStatement'] ?? ($existingRow['acStatement'] ?? null),
                             'acUM' => $updatePayload['acUM'] ?? ($existingRow['acUM'] ?? null),
                             'acDescr' => $updatePayload['acDescr'] ?? ($existingRow['acDescr'] ?? null),
@@ -2650,7 +2657,7 @@ class WorkOrderController extends Controller
                             'stock_consumed_qty' => $plannedQty,
                             'anPlanQty' => $displayQty,
                             'anQty' => $updatedQty,
-                            'anQty1' => $updatedQty,
+                            'anQty1' => $displayQty,
                         ];
 
                         continue;
@@ -3913,9 +3920,10 @@ class WorkOrderController extends Controller
     {
         if ($saveMode === 'barcode') {
             return [
+                // Keep the entered per-unit weight in both Pantheon fields.
                 'anPlanQty' => $displayQty,
                 'anQty' => $actualQty,
-                'anQty1' => $actualQty,
+                'anQty1' => $displayQty,
             ];
         }
 
@@ -10225,7 +10233,7 @@ class WorkOrderController extends Controller
             'R' => ['label' => "Djelimi\u{010D}no zavr\u{0161}eno", 'bucket' => 'djelimicno_zakljucen'],
             'S' => ['label' => 'Raspisan', 'bucket' => 'raspisan'],
             'E' => ['label' => 'U radu', 'bucket' => 'u_radu'],
-            'Z' => ['label' => "Zavr\u{0161}eno", 'bucket' => 'zakljucen'],
+            'Z' => ['label' => "Zavr\u{0161}en", 'bucket' => 'zakljucen'],
         ];
     }
 

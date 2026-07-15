@@ -224,7 +224,7 @@ class WorkOrderPlannedConsumptionTest extends TestCase
         ], $result);
     }
 
-    public function test_resolve_work_order_item_quantity_payload_for_barcode_save_keeps_actual_quantity(): void
+    public function test_resolve_work_order_item_quantity_payload_for_barcode_save_keeps_pantheon_fields_in_sync(): void
     {
         $controller = new WorkOrderController();
         $method = (new ReflectionClass($controller))->getMethod('resolveWorkOrderItemQuantityPayloadForSave');
@@ -235,8 +235,32 @@ class WorkOrderPlannedConsumptionTest extends TestCase
         $this->assertSame([
             'anPlanQty' => 50.0,
             'anQty' => 300.0,
-            'anQty1' => 300.0,
+            'anQty1' => 50.0,
         ], $result);
+    }
+
+    public function test_resolve_work_order_item_quantity_payload_for_barcode_save_preserves_decimal_precision(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('resolveWorkOrderItemQuantityPayloadForSave');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, 'barcode', 0.125, 0.75);
+
+        $this->assertSame(0.125, $result['anPlanQty']);
+        $this->assertSame($result['anQty1'], $result['anPlanQty']);
+    }
+
+    public function test_resolve_work_order_item_quantity_payload_for_barcode_save_keeps_an_explicit_zero(): void
+    {
+        $controller = new WorkOrderController();
+        $method = (new ReflectionClass($controller))->getMethod('resolveWorkOrderItemQuantityPayloadForSave');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($controller, 'barcode', 0.0, 0.0);
+
+        $this->assertSame(0.0, $result['anPlanQty']);
+        $this->assertSame(0.0, $result['anQty1']);
     }
 
     public function test_resolve_operation_type_for_save_maps_operation_catalog_marker_to_pantheon_task_type(): void
