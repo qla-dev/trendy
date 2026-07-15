@@ -16,6 +16,9 @@ use RuntimeException;
 class PantheonOrderTransferService
 {
     private const TRENDY_GERMANY_SUBJECT_BASE = 'Trendy Germany GmbH';
+    private const SQL_SERVER_SAFE_PARAMETER_LIMIT = 2000;
+    // A catalog lookup uses at most five bindings per requested item code.
+    private const CATALOG_LOOKUP_CHUNK_SIZE = 400;
 
     private array $catalogMaterialByCodeCache = [];
     private array $catalogMaterialByNameCache = [];
@@ -210,14 +213,18 @@ class PantheonOrderTransferService
         return $this->buildTransferPayload($prepared, $user);
     }
 
-    public function createFromNormalizedPayload(array $normalizedPayload, mixed $user = null): array
+    public function createFromNormalizedPayload(
+        array $normalizedPayload,
+        mixed $user = null,
+        ?callable $onItemChunkProgress = null
+    ): array
     {
         $this->createdCatalogItems = [];
 
         try {
             $targetConnection = $this->targetConnection();
 
-            $result = $targetConnection->transaction(function () use ($normalizedPayload, $user) {
+            $result = $targetConnection->transaction(function () use ($normalizedPayload, $user, $onItemChunkProgress) {
                 $prepared = $this->prepareTransferData($normalizedPayload, true, true, $user);
                 $prepared['referent_id'] = $this->resolveTransferReferentId($prepared, $user);
                 $this->assertUniqueExternalDocumentReference($prepared);
@@ -273,15 +280,85 @@ class PantheonOrderTransferService
                 );
             }
 
-            foreach ($this->buildOrderItemInsertBatches($itemPayloads) as $itemPayloadBatch) {
+            $itemPayloadBatches = $this->buildOrderItemInsertBatches($itemPayloads);
+            $totalItemChunks = count($itemPayloadBatches);
+            $rowsInserted = 0;
+
+            $this->notifyItemChunkProgress($onItemChunkProgress, [
+                'state' => 'prepared',
+                'pantheon_order_key' => $headerPayload['acKey'] ?? null,
+                'total_item_count' => count($itemPayloads),
+                'total_chunks' => $totalItemChunks,
+                'current_chunk' => 0,
+                'rows_inserted' => 0,
+            ]);
+
+            foreach ($itemPayloadBatches as $chunkIndex => $itemPayloadBatch) {
+                $chunkNumber = $chunkIndex + 1;
+                $columnCount = count($itemPayloadBatch[0] ?? []);
+                $chunkSize = $this->orderItemInsertChunkSize($columnCount);
+
+                Log::info('Order AI Pantheon order item chunk insert started.', [
+                    'pantheon_order_key' => $headerPayload['acKey'] ?? null,
+                    'total_item_count' => count($itemPayloads),
+                    'columns_per_row' => $columnCount,
+                    'calculated_chunk_size' => $chunkSize,
+                    'total_chunks' => $totalItemChunks,
+                    'current_chunk' => $chunkNumber,
+                    'rows_to_insert' => count($itemPayloadBatch),
+                ]);
+
+                $this->notifyItemChunkProgress($onItemChunkProgress, [
+                    'state' => 'inserting',
+                    'pantheon_order_key' => $headerPayload['acKey'] ?? null,
+                    'total_item_count' => count($itemPayloads),
+                    'columns_per_row' => $columnCount,
+                    'calculated_chunk_size' => $chunkSize,
+                    'total_chunks' => $totalItemChunks,
+                    'current_chunk' => $chunkNumber,
+                    'rows_in_current_chunk' => count($itemPayloadBatch),
+                    'rows_inserted' => $rowsInserted,
+                ]);
+
                 $this->orderItemSourceQuery()->insert($itemPayloadBatch);
+                $rowsInserted += count($itemPayloadBatch);
+
+                Log::info('Order AI Pantheon order item chunk inserted.', [
+                    'pantheon_order_key' => $headerPayload['acKey'] ?? null,
+                    'total_item_count' => count($itemPayloads),
+                    'columns_per_row' => $columnCount,
+                    'calculated_chunk_size' => $chunkSize,
+                    'total_chunks' => $totalItemChunks,
+                    'current_chunk' => $chunkNumber,
+                    'rows_inserted' => count($itemPayloadBatch),
+                ]);
+
+                $this->notifyItemChunkProgress($onItemChunkProgress, [
+                    'state' => 'chunk_inserted',
+                    'pantheon_order_key' => $headerPayload['acKey'] ?? null,
+                    'total_item_count' => count($itemPayloads),
+                    'columns_per_row' => $columnCount,
+                    'calculated_chunk_size' => $chunkSize,
+                    'total_chunks' => $totalItemChunks,
+                    'current_chunk' => $chunkNumber,
+                    'rows_in_current_chunk' => count($itemPayloadBatch),
+                    'rows_inserted' => $rowsInserted,
+                ]);
             }
+
+            $this->notifyItemChunkProgress($onItemChunkProgress, [
+                'state' => 'item_chunks_finished',
+                'pantheon_order_key' => $headerPayload['acKey'] ?? null,
+                'total_item_count' => count($itemPayloads),
+                'total_chunks' => $totalItemChunks,
+                'current_chunk' => $totalItemChunks,
+                'rows_inserted' => $rowsInserted,
+            ]);
 
                 Log::info('Order AI Pantheon transfer prepared.', [
                     'pantheon_order_key' => $headerPayload['acKey'] ?? null,
                     'pantheon_order_view' => $headerPayload['acKeyView'] ?? ($numberContext['display_key'] ?? null),
-                    'header_payload' => $headerPayload,
-                    'item_payloads' => $itemPayloads,
+                    'item_count' => count($itemPayloads),
                     'catalog_weight_update_count' => $catalogWeightUpdateCount,
                 ]);
 
@@ -305,8 +382,7 @@ class PantheonOrderTransferService
                     'pantheon_order_key' => $result['pantheon_order_key'] ?? null,
                     'pantheon_order_qid' => $result['pantheon_order_qid'] ?? null,
                     'item_count' => $result['item_count'] ?? 0,
-                    'header_payload' => $result['header_payload'] ?? [],
-                    'item_payloads' => $result['item_payloads'] ?? [],
+                    'total_item_chunks' => $totalItemChunks,
                 ]);
 
                 return $result;
@@ -395,9 +471,7 @@ class PantheonOrderTransferService
             return 0;
         }
 
-        $updatedRows = 0;
-        $qualifiedCatalogTable = Order::sourceSchema() . '.' . $catalogTable;
-        $changedAt = Carbon::now();
+        $updatesByColumnSet = [];
 
         foreach ($updatesByCode as $entry) {
             $productCode = trim((string) ($entry['product_code'] ?? ''));
@@ -407,17 +481,97 @@ class PantheonOrderTransferService
                 continue;
             }
 
-            if ($hasChangedAtColumn) {
-                $updates['adTimeChg'] = $changedAt;
-            }
-
-            $updatedRows += (int) $this->targetConnection()
-                ->table($qualifiedCatalogTable)
-                ->whereRaw($this->catalogWeightProductCodeWhereSql(), [$productCode])
-                ->update($updates);
+            $columns = array_keys($updates);
+            sort($columns, SORT_STRING);
+            $columnSetKey = implode('|', $columns);
+            $updatesByColumnSet[$columnSetKey]['columns'] = $columns;
+            $updatesByColumnSet[$columnSetKey]['rows'][] = [
+                'product_code' => $productCode,
+                'updates' => $updates,
+            ];
         }
 
+        $updatedRows = 0;
+        $chunkCount = 0;
+        $changedAt = $hasChangedAtColumn ? Carbon::now() : null;
+
+        foreach ($updatesByColumnSet as $updateGroup) {
+            $columns = is_array($updateGroup['columns'] ?? null) ? $updateGroup['columns'] : [];
+            $rows = is_array($updateGroup['rows'] ?? null) ? $updateGroup['rows'] : [];
+
+            if ($columns === [] || $rows === []) {
+                continue;
+            }
+
+            foreach (array_chunk($rows, $this->catalogWeightUpdateChunkSize(count($columns), $hasChangedAtColumn)) as $chunk) {
+                $updatedRows += $this->bulkUpdateCatalogWeightChunk(
+                    $catalogTable,
+                    $columns,
+                    $chunk,
+                    $changedAt
+                );
+                $chunkCount++;
+            }
+        }
+
+        Log::info('Order AI Pantheon catalog weights synchronized.', [
+            'unique_item_count' => count($updatesByCode),
+            'update_group_count' => count($updatesByColumnSet),
+            'chunk_count' => $chunkCount,
+            'rows_affected' => $updatedRows,
+        ]);
+
         return $updatedRows;
+    }
+
+    private function catalogWeightUpdateChunkSize(int $weightColumnCount, bool $updatesChangedAt): int
+    {
+        $parametersPerRow = 1 + max(1, $weightColumnCount); // item code + weight values
+        $fixedParameterCount = $updatesChangedAt ? 1 : 0;
+
+        return max(1, intdiv(self::SQL_SERVER_SAFE_PARAMETER_LIMIT - $fixedParameterCount, $parametersPerRow));
+    }
+
+    private function bulkUpdateCatalogWeightChunk(
+        string $catalogTable,
+        array $weightColumns,
+        array $rows,
+        ?Carbon $changedAt
+    ): int {
+        if ($rows === [] || $weightColumns === []) {
+            return 0;
+        }
+
+        $sourceColumns = array_merge(['acIdent'], $weightColumns);
+        $rowPlaceholder = '(' . implode(', ', array_fill(0, count($sourceColumns), '?')) . ')';
+        $valueRowsSql = implode(', ', array_fill(0, count($rows), $rowPlaceholder));
+        $setClauses = array_map(
+            fn (string $column) => 'catalog.[' . $column . '] = sourceValues.[' . $column . ']',
+            $weightColumns
+        );
+        $bindings = [];
+
+        if ($changedAt !== null) {
+            $setClauses[] = 'catalog.[adTimeChg] = ?';
+            $bindings[] = $changedAt;
+        }
+
+        foreach ($rows as $row) {
+            $bindings[] = trim((string) ($row['product_code'] ?? ''));
+            $updates = is_array($row['updates'] ?? null) ? $row['updates'] : [];
+
+            foreach ($weightColumns as $column) {
+                $bindings[] = $updates[$column] ?? null;
+            }
+        }
+
+        $sql = 'UPDATE catalog SET ' . implode(', ', $setClauses)
+            . ' FROM ' . Order::sourceSchema() . '.' . $catalogTable . ' AS catalog'
+            . ' INNER JOIN (VALUES ' . $valueRowsSql . ') AS sourceValues ('
+            . implode(', ', array_map(fn (string $column) => '[' . $column . ']', $sourceColumns))
+            . ') ON LTRIM(RTRIM(ISNULL(catalog.[acIdent], \'\'))) = CONVERT(nvarchar(255), sourceValues.[acIdent])';
+
+        return (int) $this->targetConnection()->affectingStatement($sql, $bindings);
     }
 
     private function catalogWeightUpdateKey(string $productCode): string
@@ -580,6 +734,11 @@ class PantheonOrderTransferService
         $preparedItems = [];
         $productCodeUsage = [];
         $documentType = $this->resolvePantheonDocType((string) ($order['document_type'] ?? ''));
+
+        // Large orders previously issued a remote SQL Server catalog query for
+        // every item. Prime the same cache with parameter-safe bulk queries so
+        // previewing and transferring remain fast for dozens of items.
+        $this->preloadCatalogMaterialsByCode($rawItems);
 
         foreach (array_values($rawItems) as $rawItem) {
             if (!is_array($rawItem)) {
@@ -2429,6 +2588,140 @@ class PantheonOrderTransferService
             : [];
     }
 
+    private function preloadCatalogMaterialsByCode(array $rawItems): void
+    {
+        $lookupKeys = [];
+        $numericLookupToCacheKeys = [];
+
+        foreach ($rawItems as $rawItem) {
+            if (!is_array($rawItem)) {
+                continue;
+            }
+
+            $productCode = $this->normalizeTransferProductCode((string) ($rawItem['product_code'] ?? ''));
+            $cacheKey = $this->normalizeCatalogLookupValue($productCode);
+
+            if ($cacheKey === '') {
+                continue;
+            }
+
+            if (array_key_exists($cacheKey, $this->catalogMaterialByCodeCache)) {
+                continue;
+            }
+
+            $lookupKeys[$cacheKey] = $cacheKey;
+
+            if (ctype_digit($cacheKey)) {
+                $numericLookupToCacheKeys[$this->numericCatalogLookupValue($cacheKey)][] = $cacheKey;
+            }
+        }
+
+        if ($lookupKeys === []) {
+            return;
+        }
+
+        $lookupKeys = array_values($lookupKeys);
+        $startedAt = microtime(true);
+        $resolvedCount = 0;
+
+        try {
+            foreach (array_chunk($lookupKeys, self::CATALOG_LOOKUP_CHUNK_SIZE) as $lookupKeyChunk) {
+                $numericLookupKeys = array_values(array_unique(array_filter(array_map(
+                    fn (string $key) => $this->numericCatalogLookupValue($key),
+                    array_filter($lookupKeyChunk, 'ctype_digit')
+                ))));
+                $normalizedIdent = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(LTRIM(RTRIM(ISNULL(acIdent, '')))), '-', ''), ' ', ''), '/', ''), '_', ''), '.', '')";
+                $normalizedCode = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(LTRIM(RTRIM(ISNULL(acCode, '')))), '-', ''), ' ', ''), '/', ''), '_', ''), '.', '')";
+
+                $rows = $this->targetConnection()
+                    ->table(Order::sourceSchema() . '.' . (string) config('workorders.catalog_items_table', 'tHE_SetItem'))
+                    ->selectRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) as material_code")
+                    ->selectRaw("LTRIM(RTRIM(ISNULL(acName, ''))) as material_name")
+                    ->selectRaw("LTRIM(RTRIM(ISNULL(acUM, ''))) as material_um")
+                    ->selectRaw("LTRIM(RTRIM(ISNULL(acCode, ''))) as material_code_alt")
+                    ->selectRaw("LTRIM(RTRIM(ISNULL(acSetOfItem, ''))) as material_set")
+                    ->selectRaw("LTRIM(RTRIM(ISNULL(acSupplier, ''))) as material_supplier")
+                    ->selectRaw('CAST(ISNULL(anPLUCode, 0) as varchar(64)) as material_plu_code')
+                    ->selectRaw('CAST(ISNULL(anPLUCode2, 0) as varchar(64)) as material_plu_code_2')
+                    ->selectRaw('CAST(ISNULL(anQId, 0) as varchar(64)) as material_qid')
+                    ->selectRaw('CAST(ISNULL(anDimWeight, 0) as float) as material_weight_net')
+                    ->selectRaw('CAST(ISNULL(anDimWeightBrutto, 0) as float) as material_weight_gross')
+                    ->where(function ($query) use ($lookupKeyChunk, $numericLookupKeys, $normalizedIdent, $normalizedCode) {
+                        $query->whereIn(DB::raw($normalizedIdent), $lookupKeyChunk)
+                            ->orWhereIn(DB::raw($normalizedCode), $lookupKeyChunk);
+
+                        if ($numericLookupKeys !== []) {
+                            $query->orWhereIn(DB::raw('CAST(ISNULL(anPLUCode, 0) as varchar(64))'), $numericLookupKeys)
+                                ->orWhereIn(DB::raw('CAST(ISNULL(anPLUCode2, 0) as varchar(64))'), $numericLookupKeys)
+                                ->orWhereIn(DB::raw('CAST(ISNULL(anQId, 0) as varchar(64))'), $numericLookupKeys);
+                        }
+                    })
+                    ->get();
+
+                $bestMatches = [];
+
+                foreach ($rows as $row) {
+                    $candidate = $this->normalizeCatalogMaterialCandidate((array) $row);
+
+                    if ($candidate === []) {
+                        continue;
+                    }
+
+                    $candidates = [
+                        [$this->normalizeCatalogLookupValue((string) ($row->material_code ?? '')), 0],
+                        [$this->normalizeCatalogLookupValue((string) ($row->material_code_alt ?? '')), 1],
+                        [$this->numericCatalogLookupValue((string) ($row->material_plu_code ?? '')), 2],
+                        [$this->numericCatalogLookupValue((string) ($row->material_plu_code_2 ?? '')), 2],
+                        [$this->numericCatalogLookupValue((string) ($row->material_qid ?? '')), 2],
+                    ];
+
+                    foreach ($candidates as [$candidateKey, $priority]) {
+                        if ($candidateKey === '') {
+                            continue;
+                        }
+
+                        $matchingCacheKeys = $priority === 2
+                            ? ($numericLookupToCacheKeys[$candidateKey] ?? [])
+                            : (in_array($candidateKey, $lookupKeyChunk, true) ? [$candidateKey] : []);
+
+                        foreach ($matchingCacheKeys as $cacheKey) {
+                            if (isset($bestMatches[$cacheKey]) && $priority >= $bestMatches[$cacheKey]['priority']) {
+                                continue;
+                            }
+
+                            $bestMatches[$cacheKey] = [
+                                'priority' => $priority,
+                                'candidate' => $candidate,
+                            ];
+                        }
+                    }
+                }
+
+                foreach ($lookupKeyChunk as $cacheKey) {
+                    $this->catalogMaterialByCodeCache[$cacheKey] = $bestMatches[$cacheKey]['candidate'] ?? [];
+
+                    if (isset($bestMatches[$cacheKey])) {
+                        $resolvedCount++;
+                    }
+                }
+            }
+
+            Log::info('Order AI Pantheon catalog items preloaded.', [
+                'requested_item_count' => count($lookupKeys),
+                'resolved_item_count' => $resolvedCount,
+                'missing_item_count' => count($lookupKeys) - $resolvedCount,
+                'query_chunk_count' => (int) ceil(count($lookupKeys) / self::CATALOG_LOOKUP_CHUNK_SIZE),
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]);
+        } catch (\Throwable $exception) {
+            Log::warning('Order AI Pantheon catalog preload failed; using individual catalog lookup fallback.', [
+                'requested_item_count' => count($lookupKeys),
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+            ]);
+        }
+    }
+
     private function resolveCatalogMaterialByName(string $productName): array
     {
         $productName = $this->normalizePantheonText($productName);
@@ -2680,6 +2973,17 @@ class PantheonOrderTransferService
         return preg_replace('/[^A-Z0-9]+/', '', strtoupper(trim($value))) ?? '';
     }
 
+    private function numericCatalogLookupValue(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '' || !ctype_digit($value)) {
+            return '';
+        }
+
+        return ltrim($value, '0') ?: '0';
+    }
+
     private function normalizeTransferProductCode(string $value): string
     {
         $value = Utf8Sanitizer::clean($value);
@@ -2836,6 +3140,8 @@ class PantheonOrderTransferService
     private function buildOrderItemInsertBatches(array $itemPayloads): array
     {
         $batches = [];
+        $currentBatchKey = null;
+        $currentBatch = [];
 
         foreach ($itemPayloads as $payload) {
             if (!is_array($payload) || $payload === []) {
@@ -2852,10 +3158,56 @@ class PantheonOrderTransferService
             }
 
             $batchKey = implode("\x1F", $columns);
-            $batches[$batchKey][] = $normalizedPayload;
+
+            // A bulk insert can only include one shared set of columns. Flush a
+            // changed column set immediately so the DB insertion order remains
+            // identical to the source order (including anNo sequencing).
+            if ($currentBatch !== [] && $batchKey !== $currentBatchKey) {
+                $batches = array_merge($batches, $this->chunkOrderItemInsertBatch($currentBatch));
+                $currentBatch = [];
+            }
+
+            $currentBatchKey = $batchKey;
+            $currentBatch[] = $normalizedPayload;
         }
 
-        return array_values($batches);
+        if ($currentBatch !== []) {
+            $batches = array_merge($batches, $this->chunkOrderItemInsertBatch($currentBatch));
+        }
+
+        return $batches;
+    }
+
+    private function chunkOrderItemInsertBatch(array $batch): array
+    {
+        if ($batch === []) {
+            return [];
+        }
+
+        return array_chunk($batch, $this->orderItemInsertChunkSize(count($batch[0])));
+    }
+
+    private function orderItemInsertChunkSize(int $columnCount): int
+    {
+        return max(1, intdiv(self::SQL_SERVER_SAFE_PARAMETER_LIMIT, max(1, $columnCount)));
+    }
+
+    private function notifyItemChunkProgress(?callable $callback, array $progress): void
+    {
+        if ($callback === null) {
+            return;
+        }
+
+        try {
+            $callback($progress);
+        } catch (\Throwable $exception) {
+            Log::warning('Order AI Pantheon item chunk progress callback failed.', [
+                'pantheon_order_key' => $progress['pantheon_order_key'] ?? null,
+                'current_chunk' => $progress['current_chunk'] ?? null,
+                'total_chunks' => $progress['total_chunks'] ?? null,
+                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+            ]);
+        }
     }
 
     private function fitString(string $column, string $value, array $stringLengths): string

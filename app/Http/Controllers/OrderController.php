@@ -482,7 +482,17 @@ class OrderController extends WorkOrderController
                 $scan->forceFill($scanAttributes)->save();
             }
 
-            $result = $transferService->createFromNormalizedPayload($normalizedPayload, $request->user());
+            $progressCallback = $scan !== null
+                ? function (array $progress) use ($scan): void {
+                    $this->persistScanTransferProgress((int) $scan->getKey(), $progress);
+                }
+                : null;
+
+            $result = $transferService->createFromNormalizedPayload(
+                $normalizedPayload,
+                $request->user(),
+                $progressCallback
+            );
         } catch (Throwable $exception) {
             $rawReason = trim($exception->getMessage());
             $reason = $this->humanizeTransferFailureReason($rawReason);
@@ -622,6 +632,61 @@ class OrderController extends WorkOrderController
         } catch (Throwable $exception) {
             Log::warning('Unable to persist failed transfer scan state.', [
                 'scan_id' => $scan->getKey(),
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function persistScanTransferProgress(int $scanId, array $progress): void
+    {
+        try {
+            $scan = OrderAiScan::query()->find($scanId);
+
+            if ($scan === null) {
+                return;
+            }
+
+            $transferPreview = is_array($scan->pantheon_transfer_payload)
+                ? $scan->pantheon_transfer_payload
+                : [];
+            $transferPreview['transfer_progress'] = $progress;
+            $totalChunks = max(0, (int) ($progress['total_chunks'] ?? 0));
+            $currentChunk = max(0, min($totalChunks, (int) ($progress['current_chunk'] ?? 0)));
+            $state = trim((string) ($progress['state'] ?? ''));
+            $itemCount = max(0, (int) ($progress['total_item_count'] ?? 0));
+            $progressCurrent = 83;
+
+            if ($totalChunks > 0 && $currentChunk > 0) {
+                $progressCurrent = min(98, 82 + (int) ceil(($currentChunk / $totalChunks) * 16));
+            }
+
+            if ($state === 'item_chunks_finished') {
+                $progressCurrent = 98;
+            }
+
+            $processingStep = match ($state) {
+                'prepared' => sprintf(
+                    'Narudžba sa %d artikala priprema se za upis u %d dijelova.',
+                    $itemCount,
+                    $totalChunks
+                ),
+                'inserting' => sprintf('Upisujem stavke u Pantheon: dio %d od %d.', $currentChunk, $totalChunks),
+                'chunk_inserted' => sprintf('Upisan je dio %d od %d. Nastavljam transfer.', $currentChunk, $totalChunks),
+                'item_chunks_finished' => 'Sve stavke su upisane. Potvrđujem cijeli transfer.',
+                default => 'Transfer u bazu je u toku.',
+            };
+
+            $scan->forceFill([
+                'status' => 'transferring',
+                'processing_step' => $processingStep,
+                'progress_current' => $progressCurrent,
+                'pantheon_transfer_payload' => $transferPreview,
+            ])->save();
+        } catch (Throwable $exception) {
+            Log::warning('Unable to persist Pantheon item chunk progress.', [
+                'scan_id' => $scanId,
+                'current_chunk' => $progress['current_chunk'] ?? null,
+                'total_chunks' => $progress['total_chunks'] ?? null,
                 'message' => $exception->getMessage(),
             ]);
         }

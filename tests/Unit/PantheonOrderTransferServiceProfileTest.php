@@ -604,12 +604,52 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
             ],
         ]);
 
-        $this->assertCount(2, $batches);
-        $this->assertCount(2, $batches[0]);
+        $this->assertCount(3, $batches);
+        $this->assertCount(1, $batches[0]);
         $this->assertCount(1, $batches[1]);
-        $this->assertSame(array_keys($batches[0][0]), array_keys($batches[0][1]));
         $this->assertArrayNotHasKey('acNote', $batches[0][0]);
         $this->assertArrayHasKey('acNote', $batches[1][0]);
+        $this->assertSame(1, $batches[0][0]['anNo']);
+        $this->assertSame(7, $batches[1][0]['anNo']);
+        $this->assertSame(2, $batches[2][0]['anNo']);
+    }
+
+    public function test_order_item_insert_batches_use_safe_parameter_aware_chunks(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('buildOrderItemInsertBatches');
+        $method->setAccessible(true);
+
+        $payloads = array_map(static fn (int $number) => [
+            'acKey' => '2601100001681',
+            'acIdent' => 'ITEM-' . $number,
+            'anNo' => $number,
+            'anQty' => 1,
+        ], range(1, 501));
+
+        $batches = $method->invoke($service, $payloads);
+
+        $this->assertCount(2, $batches);
+        $this->assertCount(500, $batches[0]);
+        $this->assertCount(1, $batches[1]);
+        $this->assertSame(1, $batches[0][0]['anNo']);
+        $this->assertSame(500, $batches[0][499]['anNo']);
+        $this->assertSame(501, $batches[1][0]['anNo']);
+        $this->assertLessThanOrEqual(2000, count($batches[0]) * count($batches[0][0]));
+    }
+
+    public function test_catalog_weight_update_chunks_stay_within_the_safe_parameter_limit(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('catalogWeightUpdateChunkSize');
+        $method->setAccessible(true);
+
+        $chunkSize = $method->invoke($service, 2, true);
+
+        $this->assertSame(666, $chunkSize);
+        $this->assertLessThanOrEqual(2000, ($chunkSize * 3) + 1);
     }
 
     public function test_pantheon_clerk_resolver_does_not_apply_admin_fallback(): void
