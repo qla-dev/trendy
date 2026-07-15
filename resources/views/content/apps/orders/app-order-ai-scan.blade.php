@@ -2964,6 +2964,31 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
   </div>
 </div>
 
+<div class="modal fade" id="order-ai-transfer-progress-modal" tabindex="-1" aria-labelledby="order-ai-transfer-progress-modal-label" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0" id="order-ai-transfer-progress-modal-label">Transfer narudžbe u bazu</h5>
+          <div class="small text-muted">Ne zatvarajte ovaj prozor dok se transfer ne završi.</div>
+        </div>
+      </div>
+      <div class="modal-body">
+        <p class="mb-3" id="order-ai-transfer-progress-modal-message">
+          Pripremam transfer. Narudžbe s većim brojem artikala upisuju se u više sigurnih dijelova, pa postupak može potrajati malo duže.
+        </p>
+        <div class="progress mb-2" role="progressbar" aria-label="Napredak transfera stavki" aria-valuemin="0" aria-valuemax="100">
+          <div class="progress-bar progress-bar-striped progress-bar-animated" id="order-ai-transfer-progress-modal-bar" style="width: 0%">0%</div>
+        </div>
+        <div class="d-flex justify-content-between gap-3 small text-muted">
+          <span id="order-ai-transfer-progress-modal-chunk">Priprema dijelova za upis...</span>
+          <span id="order-ai-transfer-progress-modal-rows"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="order-ai-line-total-modal" tabindex="-1" aria-labelledby="order-ai-line-total-modal-label" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -3087,6 +3112,11 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       const transferErrorModalElement = document.getElementById('order-ai-transfer-error-modal');
       const transferErrorModalBody = document.getElementById('order-ai-transfer-error-modal-body');
       const transferErrorRetryButton = document.getElementById('order-ai-transfer-error-retry-button');
+      const transferProgressModalElement = document.getElementById('order-ai-transfer-progress-modal');
+      const transferProgressModalMessage = document.getElementById('order-ai-transfer-progress-modal-message');
+      const transferProgressModalBar = document.getElementById('order-ai-transfer-progress-modal-bar');
+      const transferProgressModalChunk = document.getElementById('order-ai-transfer-progress-modal-chunk');
+      const transferProgressModalRows = document.getElementById('order-ai-transfer-progress-modal-rows');
       const lineTotalModalElement = document.getElementById('order-ai-line-total-modal');
       const lineTotalModalSubtitle = document.getElementById('order-ai-line-total-modal-subtitle');
       const lineTotalStatusBox = document.getElementById('order-ai-line-total-status-box');
@@ -3674,6 +3704,86 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           timer: 1000,
           timerProgressBar: true,
         });
+      }
+
+      function showTransferProgressModal() {
+        updateTransferProgressModal(null);
+
+        if (transferProgressModalElement && window.bootstrap && window.bootstrap.Modal) {
+          window.bootstrap.Modal.getOrCreateInstance(transferProgressModalElement).show();
+        }
+      }
+
+      function hideTransferProgressModal() {
+        if (!transferProgressModalElement || !window.bootstrap || !window.bootstrap.Modal) {
+          return;
+        }
+
+        const modalInstance = window.bootstrap.Modal.getInstance(transferProgressModalElement);
+
+        if (modalInstance) {
+          modalInstance.hide();
+        }
+      }
+
+      function updateTransferProgressModal(progress) {
+        const data = progress && typeof progress === 'object' ? progress : {};
+        const state = String(data.state || '').trim();
+        const itemCount = Math.max(0, Math.round(toFiniteNumber(data.total_item_count, 0)));
+        const totalChunks = Math.max(0, Math.round(toFiniteNumber(data.total_chunks, 0)));
+        const currentChunk = Math.max(0, Math.min(totalChunks, Math.round(toFiniteNumber(data.current_chunk, 0))));
+        const rowsInserted = Math.max(0, Math.min(itemCount || Number.MAX_SAFE_INTEGER, Math.round(toFiniteNumber(data.rows_inserted, 0))));
+        let percent = 0;
+        let message = 'Pripremam transfer. Narudžbe s većim brojem artikala upisuju se u više sigurnih dijelova, pa postupak može potrajati malo duže.';
+        let chunkLabel = 'Priprema dijelova za upis...';
+
+        if (totalChunks > 0) {
+          chunkLabel = currentChunk > 0
+            ? `Dio ${currentChunk} od ${totalChunks}`
+            : `Pripremljeno ${totalChunks} dijelova za upis`;
+        }
+
+        if (state === 'prepared') {
+          message = `Narudžba ima ${itemCount} artikala i upisuje se u ${totalChunks} dijelova. Ovo može potrajati malo duže, ali transfer ostaje jedna operacija.`;
+        } else if (state === 'inserting') {
+          message = `Upisujem ${chunkLabel.toLowerCase()} u Pantheon. Molimo sačekajte.`;
+        } else if (state === 'chunk_inserted') {
+          message = `${chunkLabel} je uspješno upisan. Nastavljam sa sljedećim dijelom.`;
+        } else if (state === 'item_chunks_finished') {
+          message = 'Sve stavke su upisane. Potvrđujem kompletan transfer prije prikaza uspjeha.';
+        }
+
+        if (itemCount > 0) {
+          percent = Math.min(99, Math.round((rowsInserted / itemCount) * 100));
+        }
+
+        if (state === 'inserting' && percent === 0) {
+          percent = 3;
+        }
+
+        if (state === 'item_chunks_finished') {
+          percent = 99;
+        }
+
+        if (transferProgressModalMessage) {
+          transferProgressModalMessage.textContent = message;
+        }
+
+        if (transferProgressModalChunk) {
+          transferProgressModalChunk.textContent = chunkLabel;
+        }
+
+        if (transferProgressModalRows) {
+          transferProgressModalRows.textContent = itemCount > 0
+            ? `Upisano ${rowsInserted} od ${itemCount} artikala`
+            : '';
+        }
+
+        if (transferProgressModalBar) {
+          transferProgressModalBar.style.width = `${percent}%`;
+          transferProgressModalBar.textContent = `${percent}%`;
+          transferProgressModalBar.setAttribute('aria-valuenow', String(percent));
+        }
       }
 
       function showDuplicateReferenceAlert(reason) {
@@ -5264,7 +5374,13 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         activeStatusRequestController = controller;
 
         try {
-          const response = await fetch(buildNoCacheUrl(statusTemplate.replace('__SCAN__', requestScanId)), {
+          const statusUrl = new URL(statusTemplate.replace('__SCAN__', requestScanId), window.location.origin);
+
+          if (isTransferBusy) {
+            statusUrl.searchParams.set('observe_transfer', '1');
+          }
+
+          const response = await fetch(buildNoCacheUrl(statusUrl.toString()), {
             headers: {
               'Accept': 'application/json',
               'X-Requested-With': 'XMLHttpRequest',
@@ -5295,9 +5411,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             : {};
 
           renderStatus(data);
+          updateTransferProgressModal(data.transfer_progress);
           setInitializingState(false);
 
-          if (['completed', 'transferred', 'failed'].includes(data.status)) {
+          if (['completed', 'transferred', 'failed'].includes(data.status) && !isTransferBusy) {
             stopPolling();
             return;
           }
@@ -5459,6 +5576,9 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           hint: 'Narudžba se upravo upisuje u bazu.'
         });
 
+        showTransferProgressModal();
+        startPolling(currentScanId);
+
         try {
           const transferPayload = buildTransferPayloadFromState();
           const response = await fetch(transferUrl, {
@@ -5554,6 +5674,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             };
             latestStatusPayload.transfer_meta = payload.data || {};
             isTransferBusy = false;
+            stopPolling();
+            hideTransferProgressModal();
             renderStatus(latestStatusPayload);
             showTransferSuccessAlert(latestStatusPayload.pantheon_order && latestStatusPayload.pantheon_order.view
               ? latestStatusPayload.pantheon_order.view
@@ -5563,6 +5685,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           }
         } catch (error) {
           isTransferBusy = false;
+          stopPolling();
+          hideTransferProgressModal();
           errorBox.textContent = error.message || 'Transfer u bazu nije uspio.';
           setVisible(errorBox, true);
           showTransferErrorModal(error.message || 'Transfer u bazu nije uspio.', error.technicalReason || '');

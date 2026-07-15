@@ -1468,7 +1468,7 @@ class OrderAiDigitalPdfRulesParser
         ]);
     }
 
-    private function buildTrendyDeLineSnapshot(array $lines, int $limit = 80): array
+    private function buildTrendyDeLineSnapshot(array $lines, int $limit = 24): array
     {
         $snapshot = [];
 
@@ -1492,7 +1492,7 @@ class OrderAiDigitalPdfRulesParser
         return $snapshot;
     }
 
-    private function buildTrendyDeTableRowSnapshot(array $preparedDocument, int $limit = 80): array
+    private function buildTrendyDeTableRowSnapshot(array $preparedDocument, int $limit = 24): array
     {
         $snapshot = [];
 

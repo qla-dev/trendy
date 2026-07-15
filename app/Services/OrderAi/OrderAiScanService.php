@@ -15,6 +15,7 @@ use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use App\Support\Utf8Sanitizer;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -27,6 +28,9 @@ class OrderAiScanService
     private const GROB_ATTENTION_MARKER = '*********************************** ACHTUNG * *************************************';
     private const MAX_AUTOMATIC_EXTRACTION_RETRIES = 1;
     private const TRANSFER_PREVIEW_VERSION = 3;
+    // The display lookup can bind up to five values per item (ident, code and
+    // numeric barcode variants), so 400 rows stays at the 2,000 safe limit.
+    private const CATALOG_DISPLAY_LOOKUP_CHUNK_SIZE = 400;
 
     private ?array $orderAiScanColumns = null;
     private array $effectivePageMetaCache = [];
@@ -865,13 +869,18 @@ class OrderAiScanService
             (int) ($preparedDocument['source_page_count'] ?? 0)
         );
         $billedTokens = $this->resolveExtractionBilledTokens($scan, $result, $pageCount);
-        $transferReady = $buildTransferPreview
-            ? app(PantheonOrderTransferService::class)->isTransferReady($normalizedPayload)
+        $transferService = $buildTransferPreview
+            ? app(PantheonOrderTransferService::class)
+            : null;
+        $transferReady = $transferService !== null
+            ? $transferService->isTransferReady($normalizedPayload)
             : false;
         $transferPreview = null;
 
         if ($buildTransferPreview && $transferReady) {
-            $transferPreview = $this->buildTransferPreview($scan, $normalizedPayload, $user);
+            // Reuse the catalog lookup cache from isTransferReady(). A large
+            // order must not repeat the same remote catalog lookup per item.
+            $transferPreview = $this->buildTransferPreview($scan, $normalizedPayload, $user, $transferService);
         }
 
         return [
@@ -900,6 +909,10 @@ class OrderAiScanService
 
     public function buildStatusPayload(OrderAiScan $scan): array
     {
+        $statusPayloadStartedAt = microtime(true);
+        $statusPayloadCompleted = false;
+        $this->registerStatusPayloadTimeoutDiagnostic($scan, $statusPayloadStartedAt, $statusPayloadCompleted);
+
         $payload = is_array($scan->normalized_payload) ? $scan->normalized_payload : [];
         $payload = $this->repairStoredTrendyDePayloadFromSourceText($scan, $payload);
         $transferPreview = $this->resolveDisplayTransferPreview($scan, $payload);
@@ -940,7 +953,7 @@ class OrderAiScanService
             $displayProcessingStep = 'AI obrada je završena. Narudžba sa ovom referencom već postoji u bazi.';
         }
 
-        return [
+        $statusPayload = [
             'id' => $scan->id,
             'status' => Utf8Sanitizer::clean((string) ($scan->status ?? ''), 40),
             'document_profile' => Utf8Sanitizer::clean((string) ($scan->document_profile ?? ''), 40),
@@ -979,6 +992,9 @@ class OrderAiScanService
             'transfer_preview_error' => is_array($transferPreview)
                 ? (string) ($transferPreview['preview_error'] ?? '')
                 : '',
+            'transfer_progress' => is_array($transferPreview) && is_array($transferPreview['transfer_progress'] ?? null)
+                ? $transferPreview['transfer_progress']
+                : null,
             'source_origin' => Utf8Sanitizer::clean((string) ($scan->source_origin ?? 'manual'), 40),
             'source_file_name' => Utf8Sanitizer::clean((string) ($scan->source_file_name ?? '')),
             'source_email_subject' => Utf8Sanitizer::clean((string) ($scan->source_email_subject ?? '')),
@@ -992,6 +1008,16 @@ class OrderAiScanService
             'result' => $payload,
             'error_message' => $displayErrorMessage,
         ];
+
+        $statusPayloadCompleted = true;
+
+        Log::debug('Order AI status payload prepared.', [
+            'scan_id' => $scan->id,
+            'item_count' => count(is_array($payload['items'] ?? null) ? $payload['items'] : []),
+            'duration_ms' => (int) round((microtime(true) - $statusPayloadStartedAt) * 1000),
+        ]);
+
+        return $statusPayload;
     }
 
     public function preparePayloadForTransfer(OrderAiScan $scan, array $payload): array
@@ -999,6 +1025,39 @@ class OrderAiScanService
         return Utf8Sanitizer::cleanRecursive(
             $this->repairStoredTrendyDePayloadFromSourceText($scan, $payload)
         );
+    }
+
+    private function registerStatusPayloadTimeoutDiagnostic(
+        OrderAiScan $scan,
+        float $startedAt,
+        bool &$completed
+    ): void {
+        $scanId = $scan->id;
+        $status = (string) ($scan->status ?? '');
+        $itemCount = count(is_array(data_get($scan->normalized_payload, 'items'))
+            ? data_get($scan->normalized_payload, 'items')
+            : []);
+
+        register_shutdown_function(static function () use (&$completed, $scanId, $status, $itemCount, $startedAt): void {
+            if ($completed) {
+                return;
+            }
+
+            $lastError = error_get_last();
+            $message = is_array($lastError) ? (string) ($lastError['message'] ?? '') : '';
+
+            if (!str_contains(strtolower($message), 'maximum execution time')) {
+                return;
+            }
+
+            Log::critical('Order AI scan status payload timed out.', [
+                'scan_id' => $scanId,
+                'scan_status' => $status,
+                'item_count' => $itemCount,
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                'php_error' => $message,
+            ]);
+        });
     }
 
     private function applyValidationReportToPayload(array $payload, array $validationReport): array
@@ -1115,11 +1174,13 @@ class OrderAiScanService
     {
         $transferPreview = Utf8Sanitizer::cleanRecursive($scan->pantheon_transfer_payload);
 
-        if (!$this->shouldRefreshTransferPreviewForDisplay($scan, $normalizedPayload, $transferPreview)) {
+        $transferService = app(PantheonOrderTransferService::class);
+
+        if (!$this->shouldRefreshTransferPreviewForDisplay($scan, $normalizedPayload, $transferPreview, $transferService)) {
             return $transferPreview;
         }
 
-        $refreshedPreview = $this->buildTransferPreview($scan, $normalizedPayload);
+        $refreshedPreview = $this->buildTransferPreview($scan, $normalizedPayload, null, $transferService);
 
         if (is_array($refreshedPreview)) {
             $this->persistDisplayTransferPreview($scan, $refreshedPreview);
@@ -1133,7 +1194,8 @@ class OrderAiScanService
     private function shouldRefreshTransferPreviewForDisplay(
         OrderAiScan $scan,
         array $normalizedPayload,
-        mixed $transferPreview
+        mixed $transferPreview,
+        PantheonOrderTransferService $transferService
     ): bool {
         $status = trim((string) ($scan->status ?? ''));
 
@@ -1145,7 +1207,7 @@ class OrderAiScanService
             return false;
         }
 
-        if (!app(PantheonOrderTransferService::class)->isTransferReady($normalizedPayload)) {
+        if (!$transferService->isTransferReady($normalizedPayload)) {
             return false;
         }
 
@@ -1853,10 +1915,18 @@ class OrderAiScanService
             && $scan->provider !== 'mock';
     }
 
-    private function buildTransferPreview(OrderAiScan $scan, array $normalizedPayload, mixed $user = null): ?array
+    private function buildTransferPreview(
+        OrderAiScan $scan,
+        array $normalizedPayload,
+        mixed $user = null,
+        ?PantheonOrderTransferService $transferService = null
+    ): ?array
     {
+        $startedAt = microtime(true);
+
         try {
-            $preview = app(PantheonOrderTransferService::class)->previewFromNormalizedPayload($normalizedPayload, $user);
+            $preview = ($transferService ?? app(PantheonOrderTransferService::class))
+                ->previewFromNormalizedPayload($normalizedPayload, $user);
             $preview = Utf8Sanitizer::cleanRecursive($preview);
             $preview['preview_version'] = self::TRANSFER_PREVIEW_VERSION;
 
@@ -1866,7 +1936,8 @@ class OrderAiScanService
                 'pantheon_order_key' => $preview['pantheon_order_key'] ?? null,
                 'pantheon_order_qid' => $preview['pantheon_order_qid'] ?? null,
                 'item_count' => $preview['item_count'] ?? 0,
-                'preview' => $preview,
+                'created_catalog_item_count' => $preview['created_catalog_item_count'] ?? 0,
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
             ]);
 
             return $preview;
@@ -1877,6 +1948,7 @@ class OrderAiScanService
                 'scan_id' => $scan->id,
                 'user_id' => $scan->user_id,
                 'message' => $sanitizedMessage,
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
             ]);
 
             return $this->buildTransferPreviewErrorPayload($sanitizedMessage);
@@ -2378,6 +2450,8 @@ class OrderAiScanService
             return $payload;
         }
 
+        $this->preloadCatalogWeightsForDisplay($payload['items']);
+
         $payload['items'] = array_map(function ($item) {
             if (!is_array($item)) {
                 return $item;
@@ -2407,6 +2481,149 @@ class OrderAiScanService
         }, array_values($payload['items']));
 
         return $payload;
+    }
+
+    /**
+     * Populate display weights in a few bounded queries instead of executing a
+     * joined catalog/stock lookup for every item in a scanned order.
+     */
+    private function preloadCatalogWeightsForDisplay(array $items): void
+    {
+        $codesByKey = [];
+        $numericLookupToCacheKeys = [];
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $productCode = trim((string) ($item['product_code'] ?? ''));
+            $cacheKey = $this->normalizeCatalogWeightLookupKey($productCode);
+
+            if ($cacheKey !== '') {
+                if (array_key_exists($cacheKey, $this->catalogWeightsByCodeCache)) {
+                    continue;
+                }
+
+                $codesByKey[$cacheKey] = $cacheKey;
+
+                if (ctype_digit($cacheKey)) {
+                    $numericLookupToCacheKeys[$this->numericCatalogWeightLookupKey($cacheKey)][] = $cacheKey;
+                }
+            }
+        }
+
+        if ($codesByKey === []) {
+            return;
+        }
+
+        $lookupKeys = array_values($codesByKey);
+        $startedAt = microtime(true);
+        $resolvedCount = 0;
+
+        try {
+            foreach (array_chunk($lookupKeys, self::CATALOG_DISPLAY_LOOKUP_CHUNK_SIZE) as $lookupKeyChunk) {
+                $numericLookupKeys = array_values(array_unique(array_map(
+                    fn (string $key) => $this->numericCatalogWeightLookupKey($key),
+                    array_filter($lookupKeyChunk, 'ctype_digit')
+                )));
+                $numericLookupKeys = array_values(array_filter($numericLookupKeys, fn (string $key) => $key !== ''));
+
+                $normalizedIdent = "REPLACE(REPLACE(REPLACE(UPPER(LTRIM(RTRIM(ISNULL(i.acIdent, '')))), '-', ''), ' ', ''), '/', '')";
+                $normalizedCode = "REPLACE(REPLACE(REPLACE(UPPER(LTRIM(RTRIM(ISNULL(i.acCode, '')))), '-', ''), ' ', ''), '/', '')";
+
+                $rows = DB::connection((string) config('services.ai_order.target_connection', 'sqlsrv'))
+                    ->table((string) config('workorders.schema', 'dbo') . '.' . (string) config('workorders.catalog_items_table', 'tHE_SetItem') . ' as i')
+                    ->selectRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) as material_code")
+                    ->selectRaw("LTRIM(RTRIM(ISNULL(i.acCode, ''))) as material_code_alt")
+                    ->selectRaw('CAST(ISNULL(i.anPLUCode, 0) as varchar(64)) as material_plu_code')
+                    ->selectRaw('CAST(ISNULL(i.anPLUCode2, 0) as varchar(64)) as material_plu_code_2')
+                    ->selectRaw('CAST(ISNULL(i.anQId, 0) as varchar(64)) as material_qid')
+                    ->selectRaw('CAST(ISNULL(i.anDimWeight, 0) as float) as material_weight_net')
+                    ->selectRaw('CAST(ISNULL(i.anDimWeightBrutto, 0) as float) as material_weight_gross')
+                    ->where(function ($query) use ($lookupKeyChunk, $numericLookupKeys, $normalizedIdent, $normalizedCode) {
+                        $query->whereIn(DB::raw($normalizedIdent), $lookupKeyChunk)
+                            ->orWhereIn(DB::raw($normalizedCode), $lookupKeyChunk);
+
+                        if ($numericLookupKeys !== []) {
+                            $query->orWhereIn(DB::raw('CAST(ISNULL(i.anPLUCode, 0) as varchar(64))'), $numericLookupKeys)
+                                ->orWhereIn(DB::raw('CAST(ISNULL(i.anPLUCode2, 0) as varchar(64))'), $numericLookupKeys)
+                                ->orWhereIn(DB::raw('CAST(ISNULL(i.anQId, 0) as varchar(64))'), $numericLookupKeys);
+                        }
+                    })
+                    ->get();
+
+                $bestMatches = [];
+
+                foreach ($rows as $row) {
+                    $weights = [
+                        'net' => $this->catalogWeightNumberOrNull($row->material_weight_net ?? null) ?? 0.0,
+                        'gross' => $this->catalogWeightNumberOrNull($row->material_weight_gross ?? null) ?? 0.0,
+                    ];
+
+                    $candidates = [
+                        [$this->normalizeCatalogWeightLookupKey((string) ($row->material_code ?? '')), 0],
+                        [$this->normalizeCatalogWeightLookupKey((string) ($row->material_code_alt ?? '')), 1],
+                        [$this->numericCatalogWeightLookupKey((string) ($row->material_plu_code ?? '')), 2],
+                        [$this->numericCatalogWeightLookupKey((string) ($row->material_plu_code_2 ?? '')), 2],
+                        [$this->numericCatalogWeightLookupKey((string) ($row->material_qid ?? '')), 2],
+                    ];
+
+                    foreach ($candidates as [$candidateKey, $priority]) {
+                        if ($candidateKey === '') {
+                            continue;
+                        }
+
+                        $matchingCacheKeys = $priority === 2
+                            ? ($numericLookupToCacheKeys[$candidateKey] ?? [])
+                            : (isset($codesByKey[$candidateKey]) ? [$candidateKey] : []);
+
+                        foreach ($matchingCacheKeys as $cacheKey) {
+                            if (isset($bestMatches[$cacheKey]) && $priority >= $bestMatches[$cacheKey]['priority']) {
+                                continue;
+                            }
+
+                            $bestMatches[$cacheKey] = [
+                                'priority' => $priority,
+                                'weights' => $weights,
+                            ];
+                        }
+                    }
+                }
+
+                foreach ($lookupKeyChunk as $cacheKey) {
+                    if (isset($bestMatches[$cacheKey])) {
+                        $this->catalogWeightsByCodeCache[$cacheKey] = $bestMatches[$cacheKey]['weights'];
+                        $resolvedCount++;
+
+                        continue;
+                    }
+
+                    // The bulk query searches every barcode form used by the
+                    // previous per-item lookup. Cache a miss to avoid N+1
+                    // fallback queries when an item is absent from Pantheon.
+                    $this->catalogWeightsByCodeCache[$cacheKey] = null;
+                }
+            }
+
+            Log::info('Order AI catalog display weights preloaded.', [
+                'requested_item_count' => count($lookupKeys),
+                'resolved_item_count' => $resolvedCount,
+                'missing_item_count' => count($lookupKeys) - $resolvedCount,
+                'query_chunk_count' => (int) ceil(count($lookupKeys) / self::CATALOG_DISPLAY_LOOKUP_CHUNK_SIZE),
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]);
+        } catch (\Throwable $exception) {
+            foreach ($lookupKeys as $cacheKey) {
+                $this->catalogWeightsByCodeCache[$cacheKey] = null;
+            }
+
+            Log::warning('Order AI catalog display weights preload failed.', [
+                'requested_item_count' => count($lookupKeys),
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+            ]);
+        }
     }
 
     private function resolveCatalogWeightsForDisplay(string $productCode): ?array
@@ -2455,7 +2672,22 @@ class OrderAiScanService
 
     private function normalizeCatalogWeightLookupKey(string $productCode): string
     {
-        return strtoupper(preg_replace('/\s+/', '', trim($productCode)) ?? '');
+        return strtoupper(str_replace(
+            ['-', ' ', '/'],
+            '',
+            preg_replace('/\s+/', '', trim($productCode)) ?? ''
+        ));
+    }
+
+    private function numericCatalogWeightLookupKey(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '' || !ctype_digit($value)) {
+            return '';
+        }
+
+        return ltrim($value, '0') ?: '0';
     }
 
     private function catalogWeightNumberOrNull(mixed $value): ?float

@@ -60,7 +60,12 @@ class OrderAiScanController extends Controller
         $this->authorizeModuleAccess($request);
         $this->authorizeScan($request, $scan);
 
-        if ((string) ($scan->source_origin ?? 'manual') === 'imap') {
+        if ($request->boolean('observe_transfer')) {
+            // A manual transfer request owns the Pantheon transaction.
+            // Progress polling must only observe it, including the tiny window
+            // before the scan row has been switched to "transferring".
+            $scan = $scan->fresh() ?? $scan;
+        } elseif ((string) ($scan->source_origin ?? 'manual') === 'imap') {
             $scan = $scan->fresh();
         } else {
             $scan = $scanService->advance($scan, $request->user());
