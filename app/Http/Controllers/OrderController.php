@@ -504,7 +504,9 @@ class OrderController extends WorkOrderController
                 'message' => $rawReason,
             ]);
 
-            if ($scan !== null) {
+            if ($scan !== null && $this->isDuplicateExternalDocumentReferenceFailure($rawReason)) {
+                $this->markScanTransferAsDuplicateReference($scan, $rawReason);
+            } elseif ($scan !== null) {
                 $this->markScanTransferAsFailed($scan, $reason);
             }
 
@@ -635,6 +637,67 @@ class OrderController extends WorkOrderController
                 'message' => $exception->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * A duplicate external document reference means Pantheon already has the
+     * order. It is not an AI-scan failure, so keep the scan completed and
+     * persist the same transfer-block metadata the UI uses to disable the
+     * manual transfer action.
+     */
+    private function markScanTransferAsDuplicateReference(OrderAiScan $scan, string $reason): void
+    {
+        try {
+            $duplicateScan = OrderAiScan::query()->find($scan->getKey());
+
+            if ($duplicateScan === null) {
+                return;
+            }
+
+            $transferPreview = is_array($duplicateScan->pantheon_transfer_payload)
+                ? $duplicateScan->pantheon_transfer_payload
+                : [];
+            $existingOrderView = $this->extractExistingOrderViewFromDuplicateReferenceMessage($reason);
+
+            $transferPreview['preview_error'] = $reason;
+            $transferPreview['preview_error_code'] = 'duplicate_reference';
+            $transferPreview['transfer_blocked'] = true;
+            $transferPreview['existing_order_view'] = $existingOrderView;
+            $transferPreview['transfer_hint'] = $existingOrderView !== ''
+                ? 'Narudžba sa ovom referencom već postoji u bazi kao ' . $existingOrderView . '.'
+                : 'Narudžba sa ovom referencom već postoji u bazi.';
+
+            $duplicateScan->forceFill([
+                'status' => 'completed',
+                'processing_step' => 'AI obrada je završena. Narudžba sa ovom referencom već postoji u bazi.',
+                'progress_current' => 100,
+                'pantheon_transfer_payload' => $transferPreview,
+                'error_message' => null,
+                'completed_at' => $duplicateScan->completed_at ?? now(),
+            ])->save();
+        } catch (Throwable $exception) {
+            Log::warning('Unable to persist duplicate-reference scan state.', [
+                'scan_id' => $scan->getKey(),
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function isDuplicateExternalDocumentReferenceFailure(string $message): bool
+    {
+        $normalized = strtolower(trim($message));
+
+        return str_contains($normalized, 'narudžba sa referencom')
+            && str_contains($normalized, 'već postoji u bazi');
+    }
+
+    private function extractExistingOrderViewFromDuplicateReferenceMessage(string $message): string
+    {
+        if (preg_match('/\bkao\s+([A-Z0-9][A-Z0-9\-\/.]*)/iu', trim($message), $matches) !== 1) {
+            return '';
+        }
+
+        return trim((string) ($matches[1] ?? ''), " \t\n\r\0\x0B.");
     }
 
     private function persistScanTransferProgress(int $scanId, array $progress): void
