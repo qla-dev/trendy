@@ -48,6 +48,8 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString('Kraj izrade', $this->view);
         $this->assertStringContainsString('Trajanje (min/jedinica)', $this->view);
         $this->assertStringContainsString('wo-close-copy-row-btn', $this->view);
+        $this->assertStringContainsString('wo-close-clear-row-btn', $this->view);
+        $this->assertStringContainsString('Očisti red', $this->view);
         $this->assertStringContainsString('class="wo-close-copy-row-btn"', $this->view);
         $this->assertStringNotContainsString('class="btn btn-outline-primary btn-sm wo-close-copy-row-btn"', $this->view);
         $this->assertStringNotContainsString('class="btn btn-sm wo-close-copy-row-btn"', $this->view);
@@ -73,6 +75,18 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringNotContainsString('setCopyButtonHoverState', $this->view);
         $this->assertStringNotContainsString('copyHoverSuppressed', $this->view);
         $this->assertStringContainsString('endMinutes >= startMinutes', $this->view);
+        $this->assertStringContainsString('normalizeClockFieldsOnBlur', $this->view);
+        $this->assertStringContainsString('Math.min(Number(rawValue), maximum)', $this->view);
+        $this->assertStringContainsString('Ovo je vrijeme tokom pauze.', $this->view);
+        $this->assertStringContainsString('operationTimeHasBreak', $this->view);
+        $this->assertStringContainsString('setClockBreakState', $this->view);
+        $this->assertStringContainsString('isBreakTime', $this->view);
+        $this->assertStringContainsString('wo-close-clock-break', $this->view);
+        $this->assertStringContainsString('wo-close-time-error', $this->view);
+        $this->assertStringContainsString('minutes > workBreak[0] && minutes < workBreak[1]', $this->view);
+        $this->assertStringContainsString('missingClosingFields', $this->view);
+        $this->assertStringContainsString('Nedostaju obavezna polja', $this->view);
+        $this->assertStringContainsString("operationCode === 'OP30' && isClosingOperationRowEmpty(row)", $this->view);
         $this->assertStringContainsString('modal-dialog-centered', $this->view);
     }
 
@@ -84,7 +98,12 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString("'acStatusMF' => 'Z'", $this->service);
         $this->assertStringContainsString("'acReceiveFinished' => 'Y'", $this->service);
         $this->assertStringContainsString("'acStatusMF' => 'R'", $this->service);
-        $this->assertStringContainsString('normalizeBreakMinute', $this->service);
+        $this->assertStringContainsString('isBreakMinute', $this->service);
+        $this->assertStringContainsString('Početno ili završno vrijeme je tokom pauze.', $this->service);
+        $this->assertStringContainsString('$minutes > $start && $minutes < $end', $this->service);
+        $this->assertStringContainsString("\$operationCode === 'OP30' && \$this->isEmptyOperationInput(\$input)", $this->service);
+        $this->assertStringContainsString('private function isEmptyOperationInput', $this->service);
+        $this->assertStringContainsString("'minutes' => \$minutes", $this->service);
         $receipt = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonFinishedGoodsReceiptService.php');
         $stock = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonFinishedGoodsStockService.php');
         $this->assertStringContainsString('$this->stock->receive(', $receipt);
@@ -110,11 +129,32 @@ class WorkOrderClosingFlowStructureTest extends TestCase
     {
         $this->assertStringContainsString("\$workOrder['adLnkDate']", $this->writer);
         $this->assertStringContainsString("\$workOrder['adDate']", $this->writer);
+        $this->assertStringContainsString("'adDate' => \$documentDate", $this->writer);
+        $this->assertStringContainsString("'adDateDoc1' => \$orderDate", $this->writer);
+        $this->assertStringContainsString("'adDateDoc2' => \$workOrderDate", $this->writer);
         $this->assertStringContainsString("(string) \$number['type'] === '6100'", $this->writer);
         $operation = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonOperationDocumentService.php');
         $receipt = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonFinishedGoodsReceiptService.php');
         $this->assertStringContainsString("\$workOrder['acKey'], 'P'", $operation);
         $this->assertStringContainsString("\$workOrder['acKey'], 'M'", $receipt);
         $this->assertStringContainsString("'acUMConverted' => 'MIN'", $operation);
+    }
+
+    public function test_material_quantity_editor_uses_the_existing_consumption_update_flow(): void
+    {
+        $controller = file_get_contents(__DIR__ . '/../../app/Http/Controllers/WorkOrderController.php');
+
+        $this->assertStringContainsString('wo-material-quantity-input', $this->view);
+        $this->assertStringContainsString('wo-material-save-quantity-btn', $this->view);
+        $this->assertStringContainsString('id="close-work-order-materials-table"', $this->view);
+        $this->assertStringContainsString('function saveMaterialQuantity', $this->view);
+        $this->assertStringContainsString('savePendingClosingMaterialQuantities', $this->view);
+        $this->assertStringContainsString('materialsSavedForClose', $this->view);
+        $this->assertStringContainsString('mutationConfig.plannedConsumptionUpdateUrl', $this->view);
+        $this->assertStringContainsString("'i.anQId as __item_qid'", $controller);
+        $this->assertStringContainsString("'item_qid' => \$this->value(\$row, ['__item_qid'", $controller);
+        $this->assertStringContainsString('public function updatePlannedConsumptionItem', $controller);
+        $this->assertStringContainsString("['anPlanQty']", $controller);
+        $this->assertStringContainsString("['anQty', 'anQty1']", $controller);
     }
 }

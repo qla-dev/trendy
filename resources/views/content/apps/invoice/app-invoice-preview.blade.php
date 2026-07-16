@@ -191,6 +191,7 @@
     gap: 0.45rem;
   }
   .wo-close-copy-row-btn,
+  .wo-close-clear-row-btn,
   .wo-close-delete-row-btn {
     display: inline-flex;
     width: 2.25rem;
@@ -211,6 +212,7 @@
     transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
   }
   .wo-close-copy-row-btn:focus,
+  .wo-close-clear-row-btn:focus,
   .wo-close-delete-row-btn:focus {
     box-shadow: none;
   }
@@ -234,6 +236,30 @@
   }
   .wo-close-operation-row.is-invalid .wo-close-operation-error {
     display: block;
+  }
+  .wo-close-break-error {
+    display: none;
+    font-size: 0.78rem;
+  }
+  .wo-close-break-error.is-visible {
+    display: block;
+  }
+  .wo-close-clock-break,
+  .wo-close-clock-break:focus,
+  .wo-close-time.wo-close-time-error,
+  .wo-close-time.wo-close-time-error:focus {
+    border-color: #ea5455 !important;
+    background-image: none !important;
+    box-shadow: 0 0 0 0.2rem rgba(234, 84, 85, 0.15) !important;
+  }
+  .wo-material-quantity-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 150px;
+  }
+  .wo-material-quantity-input {
+    min-width: 0;
   }
   .wo-meta-shell {
     border: 1px solid #ebe9f1;
@@ -2286,7 +2312,36 @@
                         <td class="py-1">{{ $displayValue($item['pozicija'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($item['materijal'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($item['naziv'] ?? null) }}</td>
-                        <td class="py-1">{{ $displayValue($item['kolicina'] ?? null) }}</td>
+                        @php
+                          $materialItemId = trim((string) ($item['item_qid'] ?? ''));
+                          $materialItemNo = trim((string) ($item['item_no'] ?? $item['pozicija'] ?? ''));
+                          $canEditMaterialQuantity = $materialItemId !== '' || $materialItemNo !== '';
+                        @endphp
+                        <td class="py-1">
+                          <div class="wo-material-quantity-controls">
+                            <input
+                              class="form-control form-control-sm wo-material-quantity-input"
+                              type="text"
+                              inputmode="decimal"
+                              autocomplete="off"
+                              value="{{ $displayValue($item['kolicina'] ?? null) === '-' ? '' : ($item['kolicina'] ?? '') }}"
+                              data-item-id="{{ $materialItemId }}"
+                              data-item-no="{{ $materialItemNo }}"
+                              data-saved-quantity="{{ $item['kolicina'] ?? '' }}"
+                              aria-label="Količina materijala {{ $displayValue($item['materijal'] ?? null) }}"
+                              @if(!$canEditMaterialQuantity) disabled title="Stavku nije moguće identifikovati za ažuriranje." @endif
+                            >
+                            <button
+                              type="button"
+                              class="btn btn-outline-primary btn-sm wo-material-save-quantity-btn"
+                              title="Sačuvaj količinu"
+                              aria-label="Sačuvaj količinu"
+                              @if(!$canEditMaterialQuantity) disabled @endif
+                            >
+                              <i class="fa fa-check" aria-hidden="true"></i>
+                            </button>
+                          </div>
+                        </td>
                         <td class="py-1">{{ $displayValue($item['napomena'] ?? null) }}</td>
                       </tr>
                     @empty
@@ -2615,6 +2670,7 @@
                           <input class="form-control wo-close-start-minute" type="text" inputmode="numeric" maxlength="2" placeholder="MM" autocomplete="off" aria-label="Minuta početka izrade">
                           <input class="wo-close-start-time" type="hidden" value="">
                         </div>
+                        <div class="text-danger wo-close-break-error wo-close-start-break-error">Ovo je vrijeme tokom pauze.</div>
                       </td>
                       <td>
                         <div class="wo-close-clock-fields" aria-label="Kraj izrade">
@@ -2623,6 +2679,7 @@
                           <input class="form-control wo-close-end-minute" type="text" inputmode="numeric" maxlength="2" placeholder="MM" autocomplete="off" aria-label="Minuta kraja izrade">
                           <input class="wo-close-end-time" type="hidden" value="">
                         </div>
+                        <div class="text-danger wo-close-break-error wo-close-end-break-error">Ovo je vrijeme tokom pauze.</div>
                       </td>
                       <td>
                         <input class="form-control wo-close-time" type="text" inputmode="decimal" placeholder="Minute" autocomplete="off" aria-label="Trajanje u minutama po jedinici">
@@ -2631,6 +2688,7 @@
                       <td class="text-center">
                         <div class="wo-close-action-buttons">
                           <button type="button" class="wo-close-copy-row-btn" title="Kopiraj red" aria-label="Kopiraj red"><i class="fa fa-copy" aria-hidden="true"></i></button>
+                          <button type="button" class="btn btn-outline-secondary btn-sm wo-close-clear-row-btn" title="Očisti red" aria-label="Očisti red"><i class="fa fa-eraser" aria-hidden="true"></i></button>
                           <button type="button" class="btn btn-outline-danger btn-sm wo-close-delete-row-btn" title="Izbriši red" aria-label="Izbriši red"><i class="fa fa-trash" aria-hidden="true"></i></button>
                         </div>
                       </td>
@@ -2644,7 +2702,7 @@
           </div>
           <div class="tab-pane fade" id="close-work-order-materials" role="tabpanel">
             <div class="table-responsive">
-              <table class="table align-middle">
+              <table class="table align-middle" id="close-work-order-materials-table">
                 <thead><tr><th>Pozicija</th><th>Materijal</th><th>Naziv</th><th>Količina</th><th>MJ</th></tr></thead>
                 <tbody>
                   @forelse(($workOrderItemResources ?? []) as $material)
@@ -2652,7 +2710,36 @@
                       <td>{{ $displayValue($material['pozicija'] ?? null) }}</td>
                       <td>{{ $displayValue($material['materijal'] ?? null) }}</td>
                       <td>{{ $displayValue($material['naziv'] ?? null) }}</td>
-                      <td>{{ $displayValue($material['kolicina'] ?? null) }}</td>
+                      @php
+                        $closeMaterialItemId = trim((string) ($material['item_qid'] ?? ''));
+                        $closeMaterialItemNo = trim((string) ($material['item_no'] ?? $material['pozicija'] ?? ''));
+                        $canEditCloseMaterialQuantity = $closeMaterialItemId !== '' || $closeMaterialItemNo !== '';
+                      @endphp
+                      <td>
+                        <div class="wo-material-quantity-controls">
+                          <input
+                            class="form-control form-control-sm wo-material-quantity-input"
+                            type="text"
+                            inputmode="decimal"
+                            autocomplete="off"
+                            value="{{ $displayValue($material['kolicina'] ?? null) === '-' ? '' : ($material['kolicina'] ?? '') }}"
+                            data-item-id="{{ $closeMaterialItemId }}"
+                            data-item-no="{{ $closeMaterialItemNo }}"
+                            data-saved-quantity="{{ $material['kolicina'] ?? '' }}"
+                            aria-label="Količina materijala {{ $displayValue($material['materijal'] ?? null) }}"
+                            @if(!$canEditCloseMaterialQuantity) disabled title="Stavku nije moguće identifikovati za ažuriranje." @endif
+                          >
+                          <button
+                            type="button"
+                            class="btn btn-outline-primary btn-sm wo-material-save-quantity-btn"
+                            title="Sačuvaj količinu"
+                            aria-label="Sačuvaj količinu"
+                            @if(!$canEditCloseMaterialQuantity) disabled @endif
+                          >
+                            <i class="fa fa-check" aria-hidden="true"></i>
+                          </button>
+                        </div>
+                      </td>
                       <td>{{ $displayValue($material['mj'] ?? null) }}</td>
                     </tr>
                   @empty
@@ -2848,6 +2935,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var editSastavnicaModalElement = document.getElementById('edit-sastavnica-item-modal');
     var sastavnicaTable = document.getElementById('sastavnica-table');
     var materijaliTable = document.getElementById('materijali-table');
+    var closeWorkOrderMaterialsTable = document.getElementById('close-work-order-materials-table');
     var operacijaTable = document.getElementById('operacija-table');
     var editSastavnicaError = document.getElementById('edit-sastavnica-item-error');
     var editSastavnicaCodeInput = document.getElementById('edit-sastavnica-item-code');
@@ -3077,20 +3165,22 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         var startValue = readClockFieldValue(row, 'start');
         var endValue = readClockFieldValue(row, 'end');
         var hasClockInput = startValue !== '' || endValue !== '';
+        var hasBreakTime = operationTimeHasBreak(row);
         var timeValid = !hasClockInput
           ? (timeValue === '' || numericPattern.test(timeValue))
           : (startValue !== null && endValue !== null && startValue !== '' && endValue !== '' && operationTimeRangeIsValid(row));
+        timeValid = timeValid && !hasBreakTime;
 
         allValid = allValid && timeValid;
         if (showErrors) {
-          row.classList.toggle('is-invalid', !timeValid);
+          row.classList.toggle('is-invalid', !timeValid && !hasBreakTime);
           if (time) {
-            time.classList.toggle('is-invalid', !timeValid);
+            time.classList.toggle('wo-close-time-error', !timeValid && !hasBreakTime);
           }
         } else if (timeValid) {
           row.classList.remove('is-invalid');
           if (time) {
-            time.classList.remove('is-invalid');
+            time.classList.remove('wo-close-time-error');
           }
         }
       });
@@ -3118,30 +3208,26 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       return String(hours).padStart(2, '0') + ':' + String(remainder).padStart(2, '0');
     }
 
-    function normalizeBreakTime(value, boundary) {
+    function isBreakTime(value) {
       var minutes = clockMinutes(value);
       if (minutes === null) {
-        return value;
+        return false;
       }
 
       for (var index = 0; index < workOrderBreaks.length; index++) {
         var workBreak = workOrderBreaks[index];
-        if (minutes >= workBreak[0] && minutes < workBreak[1]) {
-          return formatClockMinutes(boundary === 'start' ? workBreak[1] : workBreak[0]);
+        if (minutes > workBreak[0] && minutes < workBreak[1]) {
+          return true;
         }
       }
 
-      return formatClockMinutes(minutes);
+      return false;
     }
 
     function normalizeManualDuration(input) {
       var rawValue = String((input || {}).value || '').trim().replace(',', '.');
       if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(rawValue)) {
         return;
-      }
-
-      if (Number(rawValue) > 60) {
-        input.value = '60';
       }
     }
 
@@ -3166,7 +3252,9 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         return '';
       }
 
-      if (!/^\d{1,2}$/.test(hour) || !/^\d{1,2}$/.test(minute)) {
+      // Do not treat a first typed digit as a complete value. Formatting it
+      // while the user is still typing was resetting values such as 25.
+      if (!/^\d{2}$/.test(hour) || !/^\d{2}$/.test(minute)) {
         fields.hidden.value = '';
         return null;
       }
@@ -3204,6 +3292,50 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       fields.hidden.value = normalized;
     }
 
+    function normalizeClockFieldsOnBlur(row, boundary) {
+      var fields = clockFieldInputs(row, boundary);
+      if (!fields.hour || !fields.minute) {
+        return;
+      }
+
+      [
+        [fields.hour, 23],
+        [fields.minute, 59]
+      ].forEach(function (entry) {
+        var input = entry[0];
+        var maximum = entry[1];
+        var rawValue = String(input.value || '').trim();
+        if (/^\d{1,2}$/.test(rawValue)) {
+          input.value = String(Math.min(Number(rawValue), maximum)).padStart(2, '0');
+        }
+      });
+    }
+
+    function setClockBreakState(row, boundary, isBreak) {
+      var fields = clockFieldInputs(row, boundary);
+      var error = row && row.querySelector('.wo-close-' + boundary + '-break-error');
+      [fields.hour, fields.minute].forEach(function (input) {
+        if (input) {
+          input.classList.toggle('wo-close-clock-break', isBreak);
+        }
+      });
+      if (error) {
+        error.classList.toggle('is-visible', isBreak);
+      }
+    }
+
+    function operationTimeHasBreak(row) {
+      var startValue = readClockFieldValue(row, 'start');
+      var endValue = readClockFieldValue(row, 'end');
+      var startIsBreak = startValue !== null && startValue !== '' && isBreakTime(startValue);
+      var endIsBreak = endValue !== null && endValue !== '' && isBreakTime(endValue);
+
+      setClockBreakState(row, 'start', startIsBreak);
+      setClockBreakState(row, 'end', endIsBreak);
+
+      return startIsBreak || endIsBreak;
+    }
+
     function operationTimeRangeIsValid(row) {
       var startValue = readClockFieldValue(row, 'start');
       var endValue = readClockFieldValue(row, 'end');
@@ -3232,24 +3364,11 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       var startValue = readClockFieldValue(row, 'start');
       var endValue = readClockFieldValue(row, 'end');
 
-      if (startValue !== null && startValue !== '') {
-        setClockFieldValue(row, 'start', normalizeBreakTime(startValue, 'start'));
-        startValue = readClockFieldValue(row, 'start');
-      }
-      if (endValue !== null && endValue !== '') {
-        setClockFieldValue(row, 'end', normalizeBreakTime(endValue, 'end'));
-        endValue = readClockFieldValue(row, 'end');
-      }
-
       if (startValue !== null && endValue !== null && startValue !== '' && endValue !== '') {
         var startMinutes = clockMinutes(startValue);
         var endMinutes = clockMinutes(endValue);
-        if (startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes && (endMinutes - startMinutes) > 60) {
-          setClockFieldValue(row, 'end', normalizeBreakTime(formatClockMinutes(startMinutes + 60), 'end'));
-          endMinutes = clockMinutes(readClockFieldValue(row, 'end'));
-        }
         time.readOnly = true;
-        time.classList.toggle('is-invalid', startMinutes === null || endMinutes === null || endMinutes < startMinutes);
+        time.classList.toggle('wo-close-time-error', startMinutes === null || endMinutes === null || endMinutes < startMinutes);
         time.value = startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes
           ? String(endMinutes - startMinutes)
           : '';
@@ -3257,7 +3376,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       }
 
       time.readOnly = false;
-      time.classList.toggle('is-invalid', startValue !== '' || endValue !== '');
+      time.classList.toggle('wo-close-time-error', startValue !== '' || endValue !== '');
     }
 
     function hideWorkerSuggestions(row) {
@@ -3385,7 +3504,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       }
 
       return Array.prototype.slice.call(root.querySelectorAll(
-        '.wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-copy-row-btn, .wo-close-delete-row-btn'
+        '.wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn'
       )).filter(function (element) {
         return !element.disabled && element.offsetParent !== null;
       });
@@ -3456,7 +3575,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       row.querySelectorAll('.wo-close-copy-row-btn').forEach(function (button) {
         resetCopyButtonVisualState(button);
       });
-      row.querySelectorAll('.wo-close-delete-row-btn').forEach(function (button) {
+      row.querySelectorAll('.wo-close-clear-row-btn, .wo-close-delete-row-btn').forEach(function (button) {
         button.classList.remove('active');
         button.removeAttribute('aria-pressed');
         button.style.backgroundColor = '';
@@ -3559,6 +3678,50 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       };
     }
 
+    function isClosingOperationRowEmpty(row) {
+      return [
+        (row.querySelector('.wo-close-worker-search') || {}).value,
+        (row.querySelector('.wo-close-worker') || {}).value,
+        (row.querySelector('.wo-close-time') || {}).value,
+        (row.querySelector('.wo-close-start-hour') || {}).value,
+        (row.querySelector('.wo-close-start-minute') || {}).value,
+        (row.querySelector('.wo-close-end-hour') || {}).value,
+        (row.querySelector('.wo-close-end-minute') || {}).value
+      ].every(function (value) {
+        return String(value || '').trim() === '';
+      });
+    }
+
+    function missingClosingFields() {
+      return Array.prototype.slice.call(document.querySelectorAll('.wo-close-operation-row[data-item-qid]'))
+        .map(function (row) {
+          syncOperationTime(row);
+          var operationCode = String(row.getAttribute('data-operation-code') || '').trim().toUpperCase();
+          if (operationCode === 'OP30' && isClosingOperationRowEmpty(row)) {
+            return null;
+          }
+
+          var missing = [];
+          if (Number((row.querySelector('.wo-close-worker') || {}).value || 0) < 1) {
+            missing.push('radnik');
+          }
+          if (String((row.querySelector('.wo-close-time') || {}).value || '').trim() === '') {
+            missing.push('trajanje');
+          }
+
+          if (!missing.length) {
+            return null;
+          }
+
+          var position = String((row.children[0] || {}).textContent || '').trim();
+          return {
+            label: (operationCode || 'Operacija') + (position ? ' (pozicija ' + position + ')' : ''),
+            fields: missing
+          };
+        })
+        .filter(function (row) { return row !== null; });
+    }
+
     function escapeClosingHtml(value) {
       return String(value === null || typeof value === 'undefined' ? '' : value)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -3624,7 +3787,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         }
 
         var field = event.target;
-        if (!field || !field.matches('.wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-copy-row-btn, .wo-close-delete-row-btn')) {
+        if (!field || !field.matches('.wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn')) {
           return;
         }
 
@@ -3684,6 +3847,30 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           return;
         }
 
+        var clearButton = target && target.closest ? target.closest('.wo-close-clear-row-btn') : null;
+        if (clearButton) {
+          event.preventDefault();
+          var rowToClear = clearButton.closest('.wo-close-operation-row');
+          var clearedWorkerSearch = rowToClear.querySelector('.wo-close-worker-search');
+          var clearedWorker = rowToClear.querySelector('.wo-close-worker');
+          var clearedTime = rowToClear.querySelector('.wo-close-time');
+          if (clearedWorkerSearch) clearedWorkerSearch.value = '';
+          if (clearedWorker) clearedWorker.value = '';
+          if (clearedTime) {
+            clearedTime.value = '';
+            clearedTime.readOnly = false;
+            clearedTime.classList.remove('wo-close-time-error');
+          }
+          setClockFieldValue(rowToClear, 'start', '');
+          setClockFieldValue(rowToClear, 'end', '');
+          hideWorkerSuggestions(rowToClear);
+          rowToClear.classList.remove('is-invalid');
+          resetCloseOperationActionButtons(rowToClear);
+          validateWorkOrderClosing(false);
+          clearButton.blur();
+          return;
+        }
+
         var deleteButton = target && target.closest ? target.closest('.wo-close-delete-row-btn') : null;
         if (deleteButton) {
           event.preventDefault();
@@ -3711,7 +3898,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         }
 
         var actionButton = event.target && event.target.closest
-          ? event.target.closest('.wo-close-copy-row-btn, .wo-close-delete-row-btn')
+          ? event.target.closest('.wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn')
           : null;
         if (actionButton) {
           // Do not let Bootstrap keep an action button in a focused/active state.
@@ -3733,11 +3920,20 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
       closeWorkOrderModal.addEventListener('focusout', function (event) {
         var input = event.target;
-        if (!input || !input.classList.contains('wo-close-worker-search')) {
+        if (!input) {
           return;
         }
         var row = input.closest('.wo-close-operation-row');
-        window.setTimeout(function () { hideWorkerSuggestions(row); }, 150);
+        if (input.classList.contains('wo-close-worker-search')) {
+          window.setTimeout(function () { hideWorkerSuggestions(row); }, 150);
+          return;
+        }
+        if (input.matches('.wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute')) {
+          var boundary = input.matches('.wo-close-start-hour, .wo-close-start-minute') ? 'start' : 'end';
+          normalizeClockFieldsOnBlur(row, boundary);
+          syncOperationTime(row);
+          validateWorkOrderClosing(false);
+        }
       });
     }
 
@@ -3746,6 +3942,52 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         if (!validateWorkOrderClosing(true) || !mutationConfig.closeUrl) {
           return;
         }
+
+        if (!closeWorkOrderSubmit.dataset.confirmedIncompleteFields) {
+          var missing = missingClosingFields();
+          if (missing.length) {
+            var missingRowsHtml = missing.map(function (row) {
+              return '<li><strong>' + escapeClosingHtml(row.label) + '</strong>: ' + escapeClosingHtml(row.fields.join(', ')) + '</li>';
+            }).join('');
+            Swal.fire(swalWithTheme({
+              icon: 'warning',
+              title: 'Nedostaju obavezna polja',
+              html: '<p class="text-start mb-50">Sljedeće stavke nisu u potpunosti popunjene:</p><ul class="text-start">' + missingRowsHtml + '</ul><p class="text-start mb-0">Želite li ipak nastaviti zatvaranje radnog naloga?</p>',
+              showCancelButton: true,
+              confirmButtonText: 'Nastavi zatvaranje',
+              cancelButtonText: 'Vrati se',
+              customClass: { confirmButton: 'btn btn-warning me-1', cancelButton: 'btn btn-outline-secondary' },
+              buttonsStyling: false
+            })).then(function (result) {
+              if (result.isConfirmed) {
+                closeWorkOrderSubmit.dataset.confirmedIncompleteFields = '1';
+                closeWorkOrderSubmit.click();
+              }
+            });
+            return;
+          }
+        }
+        delete closeWorkOrderSubmit.dataset.confirmedIncompleteFields;
+
+        if (!closeWorkOrderSubmit.dataset.materialsSavedForClose) {
+          setActionButtonLoading(closeWorkOrderSubmit, true);
+          savePendingClosingMaterialQuantities()
+            .then(function () {
+              setActionButtonLoading(closeWorkOrderSubmit, false);
+              closeWorkOrderSubmit.dataset.materialsSavedForClose = '1';
+              closeWorkOrderSubmit.click();
+            })
+            .catch(function (error) {
+              setActionButtonLoading(closeWorkOrderSubmit, false);
+              Swal.fire(swalWithTheme({
+                icon: 'error',
+                title: 'Količina materijala nije sačuvana',
+                text: error && error.message ? error.message : 'Pokušajte ponovo.'
+              }));
+            });
+          return;
+        }
+        delete closeWorkOrderSubmit.dataset.materialsSavedForClose;
 
         closeWorkOrderSubmit.dataset.processing = '1';
         setActionButtonLoading(closeWorkOrderSubmit, true);
@@ -3973,6 +4215,116 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
       return normalizedValue.slice(0, 18) + '..';
     }
+
+    function materialQuantityValuesMatch(left, right) {
+      var leftValue = Number(String(left || '').trim().replace(',', '.'));
+      var rightValue = Number(String(right || '').trim().replace(',', '.'));
+
+      return Number.isFinite(leftValue) && Number.isFinite(rightValue) && Math.abs(leftValue - rightValue) < 0.000001;
+    }
+
+    function syncMaterialQuantityInputs(itemId, itemNo, savedQuantity) {
+      Array.prototype.slice.call(document.querySelectorAll('.wo-material-quantity-input')).forEach(function (candidate) {
+        var candidateItemId = String(candidate.getAttribute('data-item-id') || '').trim();
+        var candidateItemNo = String(candidate.getAttribute('data-item-no') || '').trim();
+        var sameItem = itemId !== '' ? candidateItemId === itemId : candidateItemNo === itemNo;
+
+        if (sameItem) {
+          candidate.value = formatSastavnicaQuantity(savedQuantity);
+          candidate.dataset.savedQuantity = String(savedQuantity);
+          candidate.classList.remove('is-invalid');
+        }
+      });
+    }
+
+    function saveMaterialQuantity(button, suppressError) {
+      var row = button && button.closest ? button.closest('tr') : null;
+      var input = row && row.querySelector('.wo-material-quantity-input');
+      if (!button || !input || !mutationConfig.plannedConsumptionUpdateUrl) {
+        return suppressError ? Promise.reject(new Error('Material quantity update is unavailable.')) : Promise.resolve(null);
+      }
+
+      var itemId = String(input.getAttribute('data-item-id') || '').trim();
+      var itemNo = String(input.getAttribute('data-item-no') || '').trim();
+      var quantity = Number(String(input.value || '').trim().replace(',', '.'));
+      if ((!itemId && !itemNo) || !Number.isFinite(quantity) || quantity < 0) {
+        input.classList.add('is-invalid');
+        return suppressError ? Promise.reject(new Error('Material quantity must be a non-negative number.')) : Promise.resolve(null);
+      }
+
+      input.classList.remove('is-invalid');
+      setActionButtonLoading(button, true);
+
+      return requestMutation(mutationConfig.plannedConsumptionUpdateUrl, {
+        item_id: itemId ? Number(itemId) : null,
+        item_no: itemNo ? Number(itemNo) : null,
+        kolicina: quantity
+      }, 'Ažuriranje količine materijala nije uspjelo.')
+        .then(function (response) {
+          var item = response && response.data && response.data.item ? response.data.item : {};
+          var savedQuantity = item.kolicina !== undefined && item.kolicina !== null
+            ? item.kolicina
+            : quantity;
+          syncMaterialQuantityInputs(itemId, itemNo, savedQuantity);
+          setActionButtonLoading(button, false);
+          return savedQuantity;
+        })
+        .catch(function (error) {
+          setActionButtonLoading(button, false);
+          input.classList.add('is-invalid');
+          if (suppressError) {
+            throw error;
+          }
+          Swal.fire(swalWithTheme({
+            icon: 'error',
+            title: 'Količina nije sačuvana',
+            text: error && error.message ? error.message : 'Pokušajte ponovo.'
+          }));
+        });
+    }
+
+    function savePendingClosingMaterialQuantities() {
+      if (!closeWorkOrderMaterialsTable) {
+        return Promise.resolve();
+      }
+
+      var buttons = Array.prototype.slice.call(closeWorkOrderMaterialsTable.querySelectorAll('.wo-material-save-quantity-btn'))
+        .filter(function (button) {
+          var input = button.closest('tr').querySelector('.wo-material-quantity-input');
+          return input && !input.disabled && !materialQuantityValuesMatch(input.value, input.dataset.savedQuantity);
+        });
+
+      return Promise.all(buttons.map(function (button) {
+        return saveMaterialQuantity(button, true);
+      }));
+    }
+
+    function bindMaterialQuantityTable(table) {
+      if (!table) {
+        return;
+      }
+
+      table.addEventListener('click', function (event) {
+        var button = event.target && event.target.closest
+          ? event.target.closest('.wo-material-save-quantity-btn')
+          : null;
+        if (button) {
+          saveMaterialQuantity(button);
+        }
+      });
+
+      table.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' || !event.target.classList.contains('wo-material-quantity-input')) {
+          return;
+        }
+        event.preventDefault();
+        var row = event.target.closest('tr');
+        saveMaterialQuantity(row && row.querySelector('.wo-material-save-quantity-btn'));
+      });
+    }
+
+    bindMaterialQuantityTable(materijaliTable);
+    bindMaterialQuantityTable(closeWorkOrderMaterialsTable);
 
     function openEditSastavnicaModal(button) {
       if (!button || !editSastavnicaModalElement) {

@@ -3368,9 +3368,16 @@ class WorkOrderController extends Controller
                             continue;
                         }
 
-                        if (($quantityColumn === 'anQty' || $quantityColumn === 'anQty1') && $usesUnitInputQuantity) {
+                        if ($quantityColumn === 'anQty' && $usesUnitInputQuantity) {
                             $fieldUpdates[$quantityColumn] = $requestedDisplayQuantity * $barcodeWorkOrderQuantity;
                             $requestedStockQuantity = $fieldUpdates[$quantityColumn];
+                            continue;
+                        }
+
+                        if ($quantityColumn === 'anQty1' && $usesUnitInputQuantity) {
+                            // Match barcode/weight entry: anQty1 is the entered per-unit
+                            // amount, while anQty is the total quantity issued from stock.
+                            $fieldUpdates[$quantityColumn] = $requestedDisplayQuantity;
                             continue;
                         }
 
@@ -5439,6 +5446,7 @@ class WorkOrderController extends Controller
             $query->whereIn($itemQIdField, $itemQIds)
                 ->leftJoin($this->qualifiedItemTableName() . ' as i', 'i.anQId', '=', $itemQIdField)
                 ->addSelect([
+                    'i.anQId as __item_qid',
                     'i.anNo as __item_no',
                     'i.acIdent as __item_ident',
                     'i.acDescr as __item_descr',
@@ -9236,7 +9244,8 @@ class WorkOrderController extends Controller
     {
         return [
             'id' => $this->value($row, ['anQId', 'anNo', 'anLineNo'], null),
-            'item_qid' => $this->value($row, ['anWOExItemQId'], null),
+            'item_qid' => $this->value($row, ['__item_qid', 'anWOExItemQId', 'anItemQId', 'anQIdItem'], null),
+            'item_no' => $this->value($row, ['__item_no', 'anNo', 'anLineNo'], null),
             'alternativa' => (string) $this->valueTrimmed($row, ['anVariant', 'anVariantSubLvl'], ''),
             'pozicija' => (string) $this->valueTrimmed($row, ['anNo', 'anLineNo', 'anResNo', '__item_no'], ''),
             'materijal' => (string) $this->valueTrimmed($row, ['acResursID', 'acIdent', 'acResIdent', 'acResource', 'acCode', '__item_ident'], ''),
@@ -9252,6 +9261,7 @@ class WorkOrderController extends Controller
         return [
             'id' => $this->value($row, ['anQId', 'anNo'], null),
             'item_qid' => $this->value($row, ['anQId'], null),
+            'item_no' => $this->value($row, ['anNo'], null),
             'pozicija' => (string) $this->valueTrimmed($row, ['anNo'], ''),
             'materijal' => (string) $this->valueTrimmed($row, ['acIdent'], ''),
             'naziv' => (string) $this->valueTrimmed($row, ['acDescr', 'acName', 'acIdent'], ''),
