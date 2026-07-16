@@ -203,9 +203,12 @@ class WorkOrderClosingService
         $complete = true;
         foreach ($rows as $row) {
             $itemQId = (int) $row->anQId;
+            $operationCode = strtoupper(trim((string) $row->acIdent));
             $inputs = $submittedByItem[$itemQId] ?? [];
             if ($inputs === []) {
-                $complete = false;
+                if ($operationCode !== 'OP30') {
+                    $complete = false;
+                }
                 continue;
             }
 
@@ -214,6 +217,13 @@ class WorkOrderClosingService
             $workerEntries = [];
 
             foreach ($inputs as $input) {
+                // OP30 is optional only when an individual row is completely
+                // empty. A partially entered OP30 row still needs both a
+                // worker and duration before final documents can be created.
+                if ($operationCode === 'OP30' && $this->isEmptyOperationInput($input)) {
+                    continue;
+                }
+
                 if (!$this->hasCompleteOperationInput($input)) {
                     $complete = false;
                     continue;
@@ -266,6 +276,14 @@ class WorkOrderClosingService
         return $workerId > 0 && ($time !== '' || ($start !== '' && $end !== ''));
     }
 
+    private function isEmptyOperationInput(array $input): bool
+    {
+        return (int) ($input['worker_id'] ?? 0) < 1
+            && trim((string) ($input['time'] ?? '')) === ''
+            && trim((string) ($input['start_time'] ?? '')) === ''
+            && trim((string) ($input['end_time'] ?? '')) === '';
+    }
+
     private function operationTiming(array $input): array
     {
         $start = trim((string) ($input['start_time'] ?? ''));
@@ -275,7 +293,7 @@ class WorkOrderClosingService
             $minutes = $this->calculator->normalizeNonNegative($input['time'] ?? null, 'Vrijeme operacije');
 
             return [
-                'minutes' => bccomp($minutes, '60', WorkOrderClosingCalculator::SCALE) > 0 ? '60.000000' : $minutes,
+                'minutes' => $minutes,
                 'start_time' => '',
                 'end_time' => '',
             ];
@@ -285,21 +303,17 @@ class WorkOrderClosingService
             throw new RuntimeException('Početno i završno vrijeme moraju biti uneseni zajedno.');
         }
 
-        $startMinutes = $this->normalizeBreakMinute($this->clockMinutes($start), true);
-        $endMinutes = $this->normalizeBreakMinute($this->clockMinutes($end), false);
+        $startMinutes = $this->clockMinutes($start);
+        $endMinutes = $this->clockMinutes($end);
         if ($startMinutes === null || $endMinutes === null) {
             throw new RuntimeException('Vrijeme operacije mora biti u formatu HH:MM.');
         }
 
+        if ($this->isBreakMinute($startMinutes) || $this->isBreakMinute($endMinutes)) {
+            throw new RuntimeException('Početno ili završno vrijeme je tokom pauze.');
+        }
+
         if ($endMinutes < $startMinutes) {
-            throw new RuntimeException('Završno vrijeme ne može biti prije početnog vremena.');
-        }
-
-        if (($endMinutes - $startMinutes) > 60) {
-            $endMinutes = $this->normalizeBreakMinute($startMinutes + 60, false);
-        }
-
-        if ($endMinutes === null || $endMinutes < $startMinutes) {
             throw new RuntimeException('Završno vrijeme ne može biti prije početnog vremena.');
         }
 
@@ -320,19 +334,15 @@ class WorkOrderClosingService
         return ((int) $matches[1] * 60) + (int) $matches[2];
     }
 
-    private function normalizeBreakMinute(?int $minutes, bool $isStart): ?int
+    private function isBreakMinute(int $minutes): bool
     {
-        if ($minutes === null) {
-            return null;
-        }
-
         foreach ([[600, 630], [720, 735], [885, 915], [1080, 1110], [1200, 1215], [1365, 1380]] as [$start, $end]) {
-            if ($minutes >= $start && $minutes < $end) {
-                return $isStart ? $end : $start;
+            if ($minutes > $start && $minutes < $end) {
+                return true;
             }
         }
 
-        return $minutes;
+        return false;
     }
 
     private function formatClockMinutes(int $minutes): string
