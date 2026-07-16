@@ -8,16 +8,18 @@
   };
   $normalizedCurrentStatus = $normalizeStatus($currentStatus);
   // Values are already normalized with Str::ascii above, so keep aliases in
-  // the same normalized form. Pantheon's Z close code is displayed as
-  // "Završen", the value available in the status dropdown.
+  // the same normalized form. Pantheon uses Z for full close and R for
+  // partial close; eNalog displays them as "Zaključen" labels.
   $statusAliases = [
-    'zatvoren' => 'zavrsen',
+    'zatvoren' => 'zakljucen',
     'novo' => 'planiran',
     'u toku' => 'u radu',
-    'djelimicno zavrseno' => 'djelimicno zavrsen',
-    'djelimicno zavrsen' => 'djelimicno zavrsen',
-    'zavrseno' => 'zavrsen',
-    'zavrsen' => 'zavrsen',
+    'djelimicno zavrseno' => 'djelomicno zakljucen',
+    'djelimicno zavrsen' => 'djelomicno zakljucen',
+    'djelomicno zakljucen' => 'djelomicno zakljucen',
+    'zavrseno' => 'zakljucen',
+    'zavrsen' => 'zakljucen',
+    'zakljucen' => 'zakljucen',
   ];
 
   if (array_key_exists($normalizedCurrentStatus, $statusAliases)) {
@@ -42,8 +44,8 @@
               'Rezerviran',
               'Raspisan',
               'U radu',
-              'Djelimično završen',
-              'Završen',
+              'Djelomično zaključen',
+              'Zaključen',
             ];
           @endphp
           @foreach($statusOptions as $statusOption)

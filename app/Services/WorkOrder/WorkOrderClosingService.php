@@ -48,7 +48,22 @@ class WorkOrderClosingService
                 throw new RuntimeException('Planirana količina mora biti veća od nule.');
             }
 
-            $operations = $this->prepareOperations((string) $workOrder['acKey'], $submittedOperations);
+            $preparedOperations = $this->prepareOperations((string) $workOrder['acKey'], $submittedOperations);
+            if (!$preparedOperations['complete']) {
+                $this->markPartiallyClosed($workOrder, $now, $userId);
+
+                return [
+                    'already_closed' => false,
+                    'partial' => true,
+                    'status' => 'djelomično zaključen',
+                    'work_order_key' => $workOrder['acKey'],
+                    'work_order_number' => $this->formatNumber((string) ($workOrder['acKeyView'] ?? $workOrder['acKey'])),
+                    'message' => 'radni nalog je djelomično zaključen',
+                    'documents' => [],
+                ];
+            }
+
+            $operations = $preparedOperations['operations'];
             $materialTotal = $this->materialCostTotal((string) $workOrder['acKey']);
             $operationTotal = '0';
 
@@ -123,7 +138,7 @@ class WorkOrderClosingService
 
             return [
                 'already_closed' => false,
-                'status' => 'završen',
+                'status' => 'zaključen',
                 'work_order_key' => $workOrder['acKey'],
                 'work_order_number' => $this->formatNumber((string) ($workOrder['acKeyView'] ?? $workOrder['acKey'])),
                 'message' => 'kreirani dokumenti ' . $operationResult['document_number'] . ' i ' . $receiptResult['document_number'],
@@ -179,32 +194,50 @@ class WorkOrderClosingService
             }
         }
 
+        $rowsByItemQId = $rows->keyBy(fn ($row) => (int) $row->anQId);
+        if (array_diff(array_keys($submittedByItem), array_keys($rowsByItemQId->all())) !== []) {
+            throw new RuntimeException('Zahtjev sadrži operaciju koja ne pripada radnom nalogu.');
+        }
+
         $prepared = [];
+        $complete = true;
         foreach ($rows as $row) {
             $itemQId = (int) $row->anQId;
             $inputs = $submittedByItem[$itemQId] ?? [];
             if ($inputs === []) {
-                throw new RuntimeException('Sve operacije moraju imati odabranog radnika i vrijeme.');
+                $complete = false;
+                continue;
             }
 
-            $price = $this->calculator->normalizeNonNegative($row->anPrStPrice ?? null, 'Cijena operacije');
+            $price = null;
             $minutesPerUnit = '0';
             $workerEntries = [];
 
             foreach ($inputs as $input) {
+                if (!$this->hasCompleteOperationInput($input)) {
+                    $complete = false;
+                    continue;
+                }
+
+                $price ??= $this->calculator->normalizeNonNegative($row->anPrStPrice ?? null, 'Cijena operacije');
+
                 $worker = $this->workers->findActive((int) ($input['worker_id'] ?? 0));
                 if ($worker === null) {
                     throw new RuntimeException('Odabrani radnik ne postoji ili nije aktivan u Pantheonu.');
                 }
 
-                $minutes = $this->operationMinutes($input);
-                $minutesPerUnit = $this->calculator->add($minutesPerUnit, $minutes);
+                $timing = $this->operationTiming($input);
+                $minutesPerUnit = $this->calculator->add($minutesPerUnit, $timing['minutes']);
                 $workerEntries[] = [
                     'worker' => $worker,
-                    'minutes_per_unit' => $minutes,
-                    'start_time' => trim((string) ($input['start_time'] ?? '')),
-                    'end_time' => trim((string) ($input['end_time'] ?? '')),
+                    'minutes_per_unit' => $timing['minutes'],
+                    'start_time' => $timing['start_time'],
+                    'end_time' => $timing['end_time'],
                 ];
+            }
+
+            if ($workerEntries === []) {
+                continue;
             }
 
             // Multiple copied rows are one Pantheon operation. Their entered
@@ -220,28 +253,40 @@ class WorkOrderClosingService
             ];
         }
 
-        if (count($submittedByItem) !== count($prepared)) {
-            throw new RuntimeException('Zahtjev sadrži operaciju koja ne pripada radnom nalogu.');
-        }
-
-        return $prepared;
+        return ['complete' => $complete, 'operations' => $prepared];
     }
 
-    private function operationMinutes(array $input): string
+    private function hasCompleteOperationInput(array $input): bool
+    {
+        $workerId = (int) ($input['worker_id'] ?? 0);
+        $time = trim((string) ($input['time'] ?? ''));
+        $start = trim((string) ($input['start_time'] ?? ''));
+        $end = trim((string) ($input['end_time'] ?? ''));
+
+        return $workerId > 0 && ($time !== '' || ($start !== '' && $end !== ''));
+    }
+
+    private function operationTiming(array $input): array
     {
         $start = trim((string) ($input['start_time'] ?? ''));
         $end = trim((string) ($input['end_time'] ?? ''));
 
         if ($start === '' && $end === '') {
-            return $this->calculator->normalizeNonNegative($input['time'] ?? null, 'Vrijeme operacije');
+            $minutes = $this->calculator->normalizeNonNegative($input['time'] ?? null, 'Vrijeme operacije');
+
+            return [
+                'minutes' => bccomp($minutes, '60', WorkOrderClosingCalculator::SCALE) > 0 ? '60.000000' : $minutes,
+                'start_time' => '',
+                'end_time' => '',
+            ];
         }
 
         if ($start === '' || $end === '') {
             throw new RuntimeException('Početno i završno vrijeme moraju biti uneseni zajedno.');
         }
 
-        $startMinutes = $this->clockMinutes($start);
-        $endMinutes = $this->clockMinutes($end);
+        $startMinutes = $this->normalizeBreakMinute($this->clockMinutes($start), true);
+        $endMinutes = $this->normalizeBreakMinute($this->clockMinutes($end), false);
         if ($startMinutes === null || $endMinutes === null) {
             throw new RuntimeException('Vrijeme operacije mora biti u formatu HH:MM.');
         }
@@ -250,8 +295,20 @@ class WorkOrderClosingService
             throw new RuntimeException('Završno vrijeme ne može biti prije početnog vremena.');
         }
 
+        if (($endMinutes - $startMinutes) > 60) {
+            $endMinutes = $this->normalizeBreakMinute($startMinutes + 60, false);
+        }
+
+        if ($endMinutes === null || $endMinutes < $startMinutes) {
+            throw new RuntimeException('Završno vrijeme ne može biti prije početnog vremena.');
+        }
+
         // Calculate server-side instead of trusting the browser's computed value.
-        return (string) ($endMinutes - $startMinutes);
+        return [
+            'minutes' => (string) ($endMinutes - $startMinutes),
+            'start_time' => $this->formatClockMinutes($startMinutes),
+            'end_time' => $this->formatClockMinutes($endMinutes),
+        ];
     }
 
     private function clockMinutes(string $value): ?int
@@ -261,6 +318,27 @@ class WorkOrderClosingService
         }
 
         return ((int) $matches[1] * 60) + (int) $matches[2];
+    }
+
+    private function normalizeBreakMinute(?int $minutes, bool $isStart): ?int
+    {
+        if ($minutes === null) {
+            return null;
+        }
+
+        foreach ([[600, 630], [720, 735], [885, 915], [1080, 1110], [1200, 1215], [1365, 1380]] as [$start, $end]) {
+            if ($minutes >= $start && $minutes < $end) {
+                return $isStart ? $end : $start;
+            }
+        }
+
+        return $minutes;
+    }
+
+    private function formatClockMinutes(int $minutes): string
+    {
+        return str_pad((string) intdiv($minutes, 60), 2, '0', STR_PAD_LEFT)
+            . ':' . str_pad((string) ($minutes % 60), 2, '0', STR_PAD_LEFT);
     }
 
     private function materialCostTotal(string $workOrderKey): string
@@ -304,7 +382,7 @@ class WorkOrderClosingService
 
         return [
             'already_closed' => true,
-            'status' => 'završen',
+            'status' => 'zaključen',
             'work_order_key' => $workOrder['acKey'],
             'work_order_number' => $this->formatNumber((string) ($workOrder['acKeyView'] ?? $workOrder['acKey'])),
             'message' => 'kreirani dokumenti ' . $operationNumber . ' i ' . $receiptNumber,
@@ -325,6 +403,23 @@ class WorkOrderClosingService
                 'anProducedQty' => $quantity,
                 'acReceiveFinished' => 'Y',
                 'adWOFinishDate' => $now,
+                'adTimeChg' => $now,
+                'anUserChg' => $userId,
+            ]);
+
+        if ($updated < 1) {
+            throw new RuntimeException('Status radnog naloga nije ažuriran.');
+        }
+    }
+
+    private function markPartiallyClosed(array $workOrder, Carbon $now, int $userId): void
+    {
+        $updated = $this->connection->table('dbo.tHF_WOEx')
+            ->where('acKey', $workOrder['acKey'])
+            ->update([
+                // Confirmed from Pantheon records: partial = N/R, full = I/Z.
+                'acStatus' => 'N',
+                'acStatusMF' => 'R',
                 'adTimeChg' => $now,
                 'anUserChg' => $userId,
             ]);

@@ -40,18 +40,38 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString('wo-close-time', $this->view);
         $this->assertStringContainsString('wo-close-start-time', $this->view);
         $this->assertStringContainsString('wo-close-end-time', $this->view);
+        $this->assertStringContainsString('wo-close-start-hour', $this->view);
+        $this->assertStringContainsString('wo-close-start-minute', $this->view);
+        $this->assertStringContainsString('wo-close-end-hour', $this->view);
+        $this->assertStringContainsString('wo-close-end-minute', $this->view);
         $this->assertStringContainsString('Početak izrade', $this->view);
         $this->assertStringContainsString('Kraj izrade', $this->view);
         $this->assertStringContainsString('Trajanje (min/jedinica)', $this->view);
         $this->assertStringContainsString('wo-close-copy-row-btn', $this->view);
+        $this->assertStringContainsString('class="wo-close-copy-row-btn"', $this->view);
+        $this->assertStringNotContainsString('class="btn btn-outline-primary btn-sm wo-close-copy-row-btn"', $this->view);
+        $this->assertStringNotContainsString('class="btn btn-sm wo-close-copy-row-btn"', $this->view);
         $this->assertStringContainsString('wo-close-delete-row-btn', $this->view);
         $this->assertStringContainsString('searchPantheonWorkers', $this->view);
         $this->assertStringContainsString('positionWorkerSuggestions', $this->view);
+        $this->assertStringContainsString('highlightWorkerSuggestion', $this->view);
+        $this->assertStringContainsString('moveToNextClosingFieldInRow', $this->view);
+        $this->assertStringContainsString('ensureOp30Rows', $this->view);
+        $this->assertStringContainsString('workOrderBreaks', $this->view);
+        $this->assertStringContainsString('readClockFieldValue', $this->view);
+        $this->assertStringContainsString('setClockFieldValue', $this->view);
+        $this->assertStringContainsString('type="text" inputmode="numeric" maxlength="2" placeholder="HH"', $this->view);
+        $this->assertStringContainsString('type="text" inputmode="numeric" maxlength="2" placeholder="MM"', $this->view);
+        $this->assertStringNotContainsString('wo-close-duration-icon', $this->view);
         $this->assertStringContainsString('copyButton.blur()', $this->view);
         $this->assertStringContainsString('closingFocusableFields', $this->view);
         $this->assertStringContainsString("['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']", $this->view);
         $this->assertStringContainsString('Up/down preserves the active column', $this->view);
-        $this->assertStringContainsString("copyButton.classList.remove('active')", $this->view);
+        $this->assertStringContainsString('resetCopyButtonVisualState', $this->view);
+        $this->assertStringContainsString('.wo-close-copy-row-btn:hover:not(:active)', $this->view);
+        $this->assertStringContainsString("button.style.removeProperty(property)", $this->view);
+        $this->assertStringNotContainsString('setCopyButtonHoverState', $this->view);
+        $this->assertStringNotContainsString('copyHoverSuppressed', $this->view);
         $this->assertStringContainsString('endMinutes >= startMinutes', $this->view);
         $this->assertStringContainsString('modal-dialog-centered', $this->view);
     }
@@ -63,6 +83,8 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString("whereIn('m.acDocType', ['6100', '6600'])", $this->service);
         $this->assertStringContainsString("'acStatusMF' => 'Z'", $this->service);
         $this->assertStringContainsString("'acReceiveFinished' => 'Y'", $this->service);
+        $this->assertStringContainsString("'acStatusMF' => 'R'", $this->service);
+        $this->assertStringContainsString('normalizeBreakMinute', $this->service);
         $receipt = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonFinishedGoodsReceiptService.php');
         $stock = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonFinishedGoodsStockService.php');
         $this->assertStringContainsString('$this->stock->receive(', $receipt);
@@ -78,9 +100,10 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $statusModal = file_get_contents(__DIR__ . '/../../resources/views/content/new-components/change-status-modal.blade.php');
 
         $this->assertStringContainsString("'acStatusMF' => 'Z'", $this->service);
-        $this->assertStringContainsString("'Z' => ['label' => \"Zavr\\u{0161}en\"", $controller);
-        $this->assertStringContainsString("'zatvoren' => 'zavrsen'", $statusModal);
-        $this->assertStringContainsString("'Završen'", $statusModal);
+        $this->assertStringContainsString("'Z' => ['label' => \"Zaklju\\u{010D}en\"", $controller);
+        $this->assertStringContainsString("'R' => ['label' => \"Djelomi\\u{010D}no zaklju\\u{010D}en\"", $controller);
+        $this->assertStringContainsString("'zatvoren' => 'zakljucen'", $statusModal);
+        $this->assertStringContainsString("'Zaključen'", $statusModal);
     }
 
     public function test_confirmed_date_sources_and_link_types_are_present(): void

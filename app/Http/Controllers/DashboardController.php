@@ -203,8 +203,8 @@ class DashboardController extends Controller
     return [
       'F' => 'Zaključen',
       'I' => 'Zaključen',
-      'Z' => 'Završen',
-      'R' => 'Djelimično zaključen',
+      'Z' => 'Zaključen',
+      'R' => 'Djelomično zaključen',
       'D' => 'U radu',
       'P' => 'Planiran',
       'S' => 'Rezerviran',
