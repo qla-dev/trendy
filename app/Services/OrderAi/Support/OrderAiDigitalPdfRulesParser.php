@@ -297,7 +297,20 @@ class OrderAiDigitalPdfRulesParser
     private function parseTrendyDeItems(array $lines, array $noteSourceLines = []): array
     {
         $lines = $this->expandTrendyDeEmbeddedItemLines($lines);
-        $positionNoteMap = $this->extractTrendyDePositionNoteMap(array_merge($lines, $noteSourceLines));
+        // Notes belong to the item whose row precedes them and end at the
+        // next item row. Read that sequence from one source at a time instead
+        // of merging sources, which duplicates note lines and loses text that
+        // is not on a hard-coded material/finishing list.
+        $positionNoteMap = $this->extractTrendyDePositionNoteMap($lines);
+        if ($noteSourceLines !== []) {
+            $fallbackPositionNoteMap = $this->extractTrendyDePositionNoteMap($noteSourceLines);
+
+            foreach ($fallbackPositionNoteMap as $lineNumber => $note) {
+                if (!array_key_exists($lineNumber, $positionNoteMap)) {
+                    $positionNoteMap[$lineNumber] = $note;
+                }
+            }
+        }
         $items = [];
         $openItem = null;
         $queuedItem = null;
@@ -730,8 +743,8 @@ class OrderAiDigitalPdfRulesParser
         $notesByLineNumber = [];
         $currentLineNumber = 0;
 
-        foreach (array_values($lines) as $sourceIndex => $line) {
-            $line = trim((string) (preg_replace('/\s+/u', ' ', (string) $line) ?? $line));
+        foreach (array_values($lines) as $line) {
+            $line = trim((string) $line);
 
             if ($line === '') {
                 continue;
@@ -744,7 +757,7 @@ class OrderAiDigitalPdfRulesParser
                 $note = trim((string) ($leadingPositionNote['note'] ?? ''));
 
                 if ($lineNumber > 0 && $note !== '') {
-                    $notesByLineNumber[$lineNumber] = $this->appendItemNote(
+                    $notesByLineNumber[$lineNumber] = $this->appendTrendyDeBoundaryNoteLine(
                         (string) ($notesByLineNumber[$lineNumber] ?? ''),
                         $note
                     );
@@ -768,16 +781,29 @@ class OrderAiDigitalPdfRulesParser
                 continue;
             }
 
-            if ($currentLineNumber > 0 && $this->isTrendyDeProcessOrFinishText($line)) {
-                $notesByLineNumber[$currentLineNumber] = $this->appendItemNote(
-                    (string) ($notesByLineNumber[$currentLineNumber] ?? ''),
-                    $line
-                );
+            if ($this->isTrendyDeSummaryLine($this->normalizeKeywordText($line))) {
+                $currentLineNumber = 0;
                 continue;
             }
 
-            if ($currentLineNumber > 0 && $this->isTrendyDeStandaloneNoteText($line)) {
-                $notesByLineNumber[$currentLineNumber] = $this->appendItemNote(
+            [$contentPart, $detectedNextItem] = $this->splitTrendyDeLineIntoContentAndNextItem($line);
+            if ($detectedNextItem !== null && (int) ($detectedNextItem['line_number'] ?? 0) > 0) {
+                if ($currentLineNumber > 0 && $contentPart !== '') {
+                    $notesByLineNumber[$currentLineNumber] = $this->appendTrendyDeBoundaryNoteLine(
+                        (string) ($notesByLineNumber[$currentLineNumber] ?? ''),
+                        $contentPart
+                    );
+                }
+
+                $currentLineNumber = (int) $detectedNextItem['line_number'];
+                continue;
+            }
+
+            if (
+                $currentLineNumber > 0
+                && !$this->isTrendyDeNoteBoundaryNoise($line)
+            ) {
+                $notesByLineNumber[$currentLineNumber] = $this->appendTrendyDeBoundaryNoteLine(
                     (string) ($notesByLineNumber[$currentLineNumber] ?? ''),
                     $line
                 );
@@ -785,6 +811,33 @@ class OrderAiDigitalPdfRulesParser
         }
 
         return $notesByLineNumber;
+    }
+
+    private function appendTrendyDeBoundaryNoteLine(string $existingNote, string $line): string
+    {
+        $line = trim((string) $line);
+
+        if ($line === '') {
+            return $existingNote;
+        }
+
+        foreach (preg_split('/\R/u', $existingNote) ?: [] as $existingLine) {
+            if (trim((string) $existingLine) === $line) {
+                return $existingNote;
+            }
+        }
+
+        return $existingNote === '' ? $line : $existingNote . "\n" . $line;
+    }
+
+    private function isTrendyDeNoteBoundaryNoise(string $line): bool
+    {
+        $normalized = $this->normalizeKeywordText($line);
+
+        return $this->isTrendyDeNoiseLine($normalized)
+            || $this->isTrendyDeTableHeaderLine($normalized)
+            || $this->containsTrendyDeDeliveryLabel($line)
+            || preg_match('/^page\s*\d+(?:\s*\/\s*\d+)?$/iu', trim($line)) === 1;
     }
 
     private function applyTrendyDePositionNoteMap(array $items, array $positionNoteMap): array
@@ -806,8 +859,11 @@ class OrderAiDigitalPdfRulesParser
                 return $item;
             }
 
-            $existingNote = (string) ($item['note'] ?? '');
-            $item['note'] = $this->appendTrendyDeNoteSegments($existingNote, $note);
+            // The boundary map is the authoritative source for the text
+            // between this item's row and the next item's row. Replacing the
+            // parser guess prevents duplicated process labels such as
+            // "- Graviranje".
+            $item['note'] = $note;
 
             return $item;
         }, $items));
@@ -3202,6 +3258,15 @@ class OrderAiDigitalPdfRulesParser
 
     private function resolveTrendyDeSupplierName(string $searchableText, string $fallback = ''): string
     {
+        // In Trendy DE orders the operative supplier is the value in the
+        // header block between the NOVI TRAVNIK address line and "Datum".
+        // Preserve the visible subject spelling: both "Trendy Germany-12"
+        // and "Trendy Germany GmbH-52" are valid, distinct values.
+        $positionedSupplierName = $this->extractTrendyDeHeaderSupplierName($searchableText);
+        if ($positionedSupplierName !== '') {
+            return $positionedSupplierName;
+        }
+
         $supplierNumber = $this->extractTrendyDeSupplierNumber($searchableText);
 
         if ($supplierNumber !== '') {
@@ -3211,6 +3276,35 @@ class OrderAiDigitalPdfRulesParser
         $fallbackName = $this->normalizeTrendyDeSupplierName($fallback);
 
         return $fallbackName !== '' ? $fallbackName : self::TRENDY_DE_PARTY_NAME;
+    }
+
+    private function extractTrendyDeHeaderSupplierName(string $searchableText): string
+    {
+        $insideHeaderSupplierBlock = false;
+
+        foreach ($this->splitVisibleTextLines($searchableText) as $line) {
+            if (!$insideHeaderSupplierBlock) {
+                if (preg_match('/\b72290\s+NOVI\s+TRAVNIK\b/iu', $line) === 1) {
+                    $insideHeaderSupplierBlock = true;
+                }
+
+                continue;
+            }
+
+            if (preg_match('/\bDatum\b/iu', $line) === 1) {
+                break;
+            }
+
+            if (preg_match('/\b(Trendy\s+Germany(?:\s+GmbH)?\s*-\s*\d{1,4})\b/iu', $line, $matches) !== 1) {
+                continue;
+            }
+
+            $supplierName = $this->normalizeProfileWhitespace((string) ($matches[1] ?? ''));
+
+            return preg_replace('/\s*-\s*/u', '-', $supplierName) ?? $supplierName;
+        }
+
+        return '';
     }
 
     private function extractTrendyDeSupplierNumber(string $searchableText): string
@@ -3236,7 +3330,13 @@ class OrderAiDigitalPdfRulesParser
             return '';
         }
 
-        if (preg_match('/\bTrendy\s+Germany(?:\s+GmbH)?\s*(?:-\s*|\s+)(\d{1,4})\b/iu', $value, $matches) === 1) {
+        if (preg_match('/\b(Trendy\s+Germany(?:\s+GmbH)?)\s*-\s*(\d{1,4})\b/iu', $value, $matches) === 1) {
+            $prefix = $this->normalizeProfileWhitespace((string) ($matches[1] ?? ''));
+
+            return $prefix . '-' . $this->normalizeTrendyDeSupplierNumber((string) ($matches[2] ?? ''));
+        }
+
+        if (preg_match('/\bTrendy\s+Germany(?:\s+GmbH)?\s+(\d{1,4})\b/iu', $value, $matches) === 1) {
             return self::TRENDY_DE_PARTY_NAME . '-' . $this->normalizeTrendyDeSupplierNumber((string) ($matches[1] ?? ''));
         }
 

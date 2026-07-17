@@ -223,6 +223,7 @@ $directLinks = phptest34_fetch_all($connection, '
     SELECT
         m.acKeyView AS document_number,
         m.acDocType AS document_type,
+        dt.acName AS document_type_name,
         m.acKey AS document_key,
         l.anNo AS link_no,
         l.anQId AS link_qid,
@@ -235,23 +236,17 @@ $directLinks = phptest34_fetch_all($connection, '
         m.adTimeIns AS document_created_at
     FROM dbo.tHF_LinkMoveWOEx AS l
     INNER JOIN dbo.tHE_Move AS m ON m.acKey = l.acKey
+    INNER JOIN dbo.tPA_SetDocType AS dt ON dt.acDocType = m.acDocType
     WHERE LTRIM(RTRIM(l.acLnkKey)) = ?
       AND m.acDocType IN (\'6400\', \'6100\', \'6600\')
     ORDER BY m.acDocType, m.acKeyView
 ', [$workOrderKey]);
 
-foreach ($directLinks as &$row) {
-    $row['pantheon_menu_result'] = phptest34_menu_path(
-        phptest34_value($row['document_type'] ?? ''),
-        phptest34_value($row['link_type'] ?? '')
-    );
-}
-unset($row);
-
 $headerReferences = phptest34_fetch_all($connection, '
     SELECT
         m.acKeyView AS document_number,
         m.acDocType AS document_type,
+        dt.acName AS document_type_name,
         m.acKey AS document_key,
         m.acDoc2 AS document_work_order_reference,
         m.anQId AS document_move_qid,
@@ -261,6 +256,7 @@ $headerReferences = phptest34_fetch_all($connection, '
         l.acLnkKey AS linked_work_order_key,
         l.anMoveQId AS link_move_qid
     FROM dbo.tHE_Move AS m
+    INNER JOIN dbo.tPA_SetDocType AS dt ON dt.acDocType = m.acDocType
     LEFT JOIN dbo.tHF_LinkMoveWOEx AS l
         ON l.acKey = m.acKey AND LTRIM(RTRIM(l.acLnkKey)) = ?
     WHERE LTRIM(RTRIM(m.acDoc2)) = ?
@@ -268,13 +264,51 @@ $headerReferences = phptest34_fetch_all($connection, '
     ORDER BY m.acDocType, m.acKeyView
 ', [$workOrderKey, $workOrderNumber]);
 
-foreach ($headerReferences as &$row) {
-    $row['pantheon_menu_result'] = phptest34_menu_path(
-        phptest34_value($row['document_type'] ?? ''),
-        phptest34_value($row['link_type'] ?? '')
-    );
-}
-unset($row);
+$pantheonRelatedDocuments = phptest34_fetch_all($connection, '
+    SELECT
+        m.acKeyView AS document_number,
+        m.acDocType AS document_type,
+        dt.acName AS document_type_name,
+        m.acKey AS document_key,
+        l.acType AS link_type,
+        r.acWhereKey AS pantheon_related_document_key,
+        CASE WHEN r.acWhereKey IS NULL THEN \'NO\' ELSE \'YES\' END AS present_in_pantheon_related_documents_view
+    FROM dbo.tHF_LinkMoveWOEx AS l
+    INNER JOIN dbo.tHE_Move AS m ON m.acKey = l.acKey
+    INNER JOIN dbo.tPA_SetDocType AS dt ON dt.acDocType = m.acDocType
+    LEFT JOIN dbo.vHE_ViewDocWOEx AS r
+        ON r.acKey = l.acLnkKey AND r.acWhereKey = m.acKey
+    WHERE LTRIM(RTRIM(l.acLnkKey)) = ?
+      AND m.acDocType IN (\'6400\', \'6100\', \'6600\')
+    ORDER BY m.acDocType, m.acKeyView
+', [$workOrderKey]);
+
+$workOrderItems = phptest34_fetch_all($connection, '
+    SELECT anQId AS work_order_item_qid, anNo AS position, acIdent AS code,
+           acOperationType AS operation_type, anQty AS quantity, acIssueFinished AS issue_finished
+    FROM dbo.tHF_WOExItem
+    WHERE acKey = ?
+    ORDER BY anNo
+', [$workOrderKey]);
+
+$documentItemLinks = phptest34_fetch_all($connection, '
+    SELECT
+        m.acKeyView AS document_number,
+        m.acDocType AS document_type,
+        mi.anNo AS document_line,
+        mi.acIdent AS item_code,
+        mi.anQId AS document_item_qid,
+        CASE WHEN il.anQId IS NULL THEN \'NO\' ELSE \'YES\' END AS has_wo_item_link,
+        il.anWOExItemQid AS linked_wo_item_qid,
+        CASE WHEN wi.anQId IS NULL THEN \'NO\' ELSE \'YES\' END AS has_worker_work_record
+    FROM dbo.tHF_LinkMoveWOEx AS hl
+    INNER JOIN dbo.tHE_Move AS m ON m.acKey = hl.acKey AND m.acDocType IN (\'6400\', \'6600\')
+    INNER JOIN dbo.tHE_MoveItem AS mi ON mi.anMoveQId = m.anQId
+    LEFT JOIN dbo.tHF_LinkMoveItemWOExItem AS il ON il.anMoveItemQId = mi.anQId
+    LEFT JOIN dbo.tHF_WOExItemWork AS wi ON wi.anMoveItemQId = mi.anQId
+    WHERE LTRIM(RTRIM(hl.acLnkKey)) = ?
+    ORDER BY m.acKeyView, mi.anNo
+', [$workOrderKey]);
 
 if (PHP_SAPI === 'cli') {
     echo 'Work order:' . PHP_EOL;
@@ -283,6 +317,12 @@ if (PHP_SAPI === 'cli') {
     phptest34_render_table($directLinks);
     echo PHP_EOL . 'Document header references (tHE_Move.acDoc2):' . PHP_EOL;
     phptest34_render_table($headerReferences);
+    echo PHP_EOL . 'Pantheon related-documents view (dbo.vHE_ViewDocWOEx):' . PHP_EOL;
+    phptest34_render_table($pantheonRelatedDocuments);
+    echo PHP_EOL . 'WO positions (dbo.tHF_WOExItem):' . PHP_EOL;
+    phptest34_render_table($workOrderItems);
+    echo PHP_EOL . '6400/6600 document item associations:' . PHP_EOL;
+    phptest34_render_table($documentItemLinks);
     exit;
 }
 ?>
@@ -318,7 +358,7 @@ if (PHP_SAPI === 'cli') {
   <div class="card"><h2>WO header</h2><?php phptest34_render_table([$workOrder]); ?></div>
   <div class="card">
     <h2>Direct Pantheon links: dbo.tHF_LinkMoveWOEx</h2>
-    <p class="muted">These rows control the related-documents menu. <code>link_type</code> is the raw <code>acType</code> value.</p>
+    <p class="muted">Raw work-order/document link rows. <code>link_type</code> is the raw <code>acType</code> value.</p>
     <?php phptest34_render_table($directLinks); ?>
   </div>
   <div class="card">
@@ -327,7 +367,22 @@ if (PHP_SAPI === 'cli') {
     <?php phptest34_render_table($headerReferences); ?>
   </div>
   <div class="card">
-    <h2>Confirmed menu mapping</h2>
+    <h2>Pantheon related-documents source: dbo.vHE_ViewDocWOEx</h2>
+    <p class="muted">This is Pantheon&rsquo;s database view for work-order related documents. <code>YES</code> confirms that the database-level related-documents source returns the document.</p>
+    <?php phptest34_render_table($pantheonRelatedDocuments); ?>
+  </div>
+  <div class="card">
+    <h2>WO positions: dbo.tHF_WOExItem</h2>
+    <p class="muted">For empty WOs closed with the current eNalog flow, manually entered operations and materials create positions here (1, 2, &hellip;) before 6400/6600 documents are made. Older closings created before this change can correctly show no rows.</p>
+    <?php phptest34_render_table($workOrderItems); ?>
+  </div>
+  <div class="card">
+    <h2>6400/6600 document item associations</h2>
+    <p class="muted">After closing an empty WO, each manually entered operation and material should show <code>YES</code> for the WO item link. A 6600 operation additionally has its worker-work record.</p>
+    <?php phptest34_render_table($documentItemLinks); ?>
+  </div>
+  <div class="card">
+    <h2>Previously requested menu mapping</h2>
     <ul>
       <li><code>6400 + P</code> → Izdavanja → Materijali</li>
       <li><code>6100 + M</code> → Izdavanja → Operacije</li>

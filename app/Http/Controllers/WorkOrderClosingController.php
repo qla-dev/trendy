@@ -48,6 +48,10 @@ class WorkOrderClosingController extends Controller
                 'failed_step' => $this->failedStep($exception->getMessage()),
                 'message' => $exception->getMessage(),
                 'exception' => get_class($exception),
+                'input' => [
+                    'operations' => $request->input('operations', []),
+                    'materials' => $request->input('materials', []),
+                ],
                 'trace' => $exception->getTraceAsString(),
             ]);
 
@@ -62,6 +66,7 @@ class WorkOrderClosingController extends Controller
     {
         $normalized = mb_strtolower($message);
         return match (true) {
+            str_contains($normalized, 'ne pripada radnom nalogu') => 'operation_item_link_validation',
             str_contains($normalized, 'radnik') => 'worker_validation',
             str_contains($normalized, 'operacij') => 'operation_document',
             str_contains($normalized, 'proizvod'), str_contains($normalized, 'prijem') => 'finished_goods_receipt',

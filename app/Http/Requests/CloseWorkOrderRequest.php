@@ -23,7 +23,12 @@ class CloseWorkOrderRequest extends FormRequest
 
                 return $operation;
             }, $operations), function (array $operation): bool {
-                foreach (['code', 'worker_id', 'time', 'start_time', 'end_time'] as $field) {
+                // A selected operation code by itself is only a placeholder
+                // row in the modal. It cannot create a document entry, so do
+                // not let it turn an otherwise complete close into a partial
+                // close. Keep rows that contain any actual work input; the
+                // closing service then validates the required combination.
+                foreach (['worker_id', 'time', 'start_time', 'end_time'] as $field) {
                     if (trim((string) ($operation[$field] ?? '')) !== '') {
                         return true;
                     }

@@ -74,6 +74,111 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('09.07.2026', $payload['order']['external_document_date']);
     }
 
+    public function test_normalization_preserves_trendy_de_item_note_line_breaks(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('normalizePayload');
+        $method->setAccessible(true);
+
+        $payload = $method->invoke($service, [
+            'order' => [
+                'customer_name' => 'Trendy Germany GmbH',
+                'supplier_name' => 'Trendy Germany GmbH-12',
+            ],
+            'items' => [[
+                'line_number' => 1,
+                'product_code' => '1090932',
+                'product_name' => 'Grundsäule',
+                'note' => "- Graviranje\nFarbe: Endlackiert nach 500101.8\nRAL7005 / feine Struktur / Seidenglanz\nRAL7005 Mausgrau\nMaterijal:S355JO",
+            ]],
+            'summary' => [],
+        ]);
+
+        $this->assertSame(
+            "- Graviranje\nFarbe: Endlackiert nach 500101.8\nRAL7005 / feine Struktur / Seidenglanz\nRAL7005 Mausgrau\nMaterijal:S355JO",
+            $payload['items'][0]['note']
+        );
+    }
+
+    public function test_trendy_de_position_notes_end_at_the_next_item_row(): void
+    {
+        $parser = app(OrderAiDigitalPdfRulesParser::class);
+        $reflection = new ReflectionClass($parser);
+        $method = $reflection->getMethod('extractTrendyDePositionNoteMap');
+        $method->setAccessible(true);
+
+        $notes = $method->invoke($parser, [
+            "2,00 293,10STU\t586,200,001090932 Grundsäule1",
+            '- Graviranje',
+            '',
+            'Farbe: Endlackiert nach 500101.8',
+            'RAL7005 / feine Struktur / Seidenglanz',
+            'RAL7005 Mausgrau',
+            '',
+            'Materijal:S355JO',
+            'Page1/2',
+            "2,00 356,90STU\t713,800,001090933 Säule Messständer2",
+            '- Graviranje',
+            '',
+            'Nitrocarburiert + Nachoxidiert.',
+            '',
+            'Materijal: S355JO',
+        ]);
+
+        $this->assertSame(
+            "- Graviranje\nFarbe: Endlackiert nach 500101.8\nRAL7005 / feine Struktur / Seidenglanz\nRAL7005 Mausgrau\nMaterijal:S355JO",
+            $notes[1]
+        );
+        $this->assertSame("- Graviranje\nNitrocarburiert + Nachoxidiert.\nMaterijal: S355JO", $notes[2]);
+    }
+
+    /** @dataProvider trendyDeHeaderSupplierNames */
+    public function test_trendy_de_supplier_name_uses_the_numbered_header_value_between_novi_travnik_and_datum(
+        string $visibleSupplierName
+    ): void {
+        $sourceText = implode("\n", [
+            'BIC: GENODED1WIL 72290 NOVI TRAVNIK',
+            'Trendy',
+            'Trendy doo',
+            $visibleSupplierName,
+            'Datum',
+        ]);
+
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $postProcess = $reflection->getMethod('postProcessTrendyDePayload');
+        $postProcess->setAccessible(true);
+        $normalize = $reflection->getMethod('normalizePayload');
+        $normalize->setAccessible(true);
+        $parser = app(\App\Services\OrderAi\Support\OrderAiDigitalPdfRulesParser::class);
+        $parserReflection = new ReflectionClass($parser);
+        $parserResolver = $parserReflection->getMethod('resolveTrendyDeSupplierName');
+        $parserResolver->setAccessible(true);
+
+        $payload = $postProcess->invoke($service, [
+            'order' => [
+                'customer_name' => 'Trendy Germany GmbH',
+                'supplier_name' => 'Trendy Germany GmbH',
+            ],
+            'items' => [],
+            'summary' => [],
+        ], ['searchable_text' => $sourceText]);
+        $normalizedPayload = $normalize->invoke($service, $payload);
+
+        $this->assertSame($visibleSupplierName, $payload['order']['supplier_name']);
+        $this->assertSame($visibleSupplierName, $normalizedPayload['order']['supplier_name']);
+        $this->assertSame($visibleSupplierName, $parserResolver->invoke($parser, $sourceText, ''));
+    }
+
+    public function trendyDeHeaderSupplierNames(): array
+    {
+        return [
+            'without GmbH' => ['Trendy Germany-12'],
+            'with GmbH' => ['Trendy Germany GmbH-52'],
+        ];
+    }
+
     public function test_trendy_de_document_date_uses_datum_date_before_liefertermin_on_same_line(): void
     {
         $lines = [
@@ -498,7 +603,7 @@ class OrderAiScanServiceTest extends TestCase
 
         $this->assertSame([10, 11, 12, 13], array_column($payload['items'], 'line_number'));
         $this->assertSame('DN731970', $payload['items'][0]['product_code']);
-        $this->assertSame('BRASS | Crtež N01814580', $payload['items'][0]['note']);
+        $this->assertSame("BRASS\nCrtež N01814580", $payload['items'][0]['note']);
         $this->assertSame('DN731973_A', $payload['items'][1]['product_code']);
         $this->assertSame('SIDE PLATE, RIGHT', $payload['items'][1]['product_name']);
         $this->assertSame('ANODIZED | Crtež N0181479A', $payload['items'][1]['note']);
@@ -3180,13 +3285,13 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame([10, 11, 12], array_column(data_get($result, 'normalized_payload.items'), 'line_number'));
         $this->assertSame('DN731970', data_get($result, 'normalized_payload.items.0.product_code'));
         $this->assertSame('STICK', data_get($result, 'normalized_payload.items.0.product_name'));
-        $this->assertSame('BRASS | Crtež N01814580', data_get($result, 'normalized_payload.items.0.note'));
+        $this->assertSame("BRASS\nCrtež N01814580", data_get($result, 'normalized_payload.items.0.note'));
         $this->assertSame('DN731973_A', data_get($result, 'normalized_payload.items.1.product_code'));
         $this->assertSame('SIDE PLATE, RIGHT', data_get($result, 'normalized_payload.items.1.product_name'));
-        $this->assertSame('ANODIZED | Crtež N0181479A', data_get($result, 'normalized_payload.items.1.note'));
+        $this->assertSame("ANODIZED\nCrtež N0181479A", data_get($result, 'normalized_payload.items.1.note'));
         $this->assertSame('DN731976_A', data_get($result, 'normalized_payload.items.2.product_code'));
         $this->assertSame('SIDE PLATE, LEFT', data_get($result, 'normalized_payload.items.2.product_name'));
-        $this->assertSame('ANODIZED | Crtež N0181491A', data_get($result, 'normalized_payload.items.2.note'));
+        $this->assertSame("ANODIZED\nCrtež N0181491A", data_get($result, 'normalized_payload.items.2.note'));
         $this->assertSame(266.7, data_get($result, 'normalized_payload.summary.subtotal'));
     }
 

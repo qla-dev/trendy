@@ -171,11 +171,20 @@ class PantheonDocumentWriter
         return (int) $qid;
     }
 
-    public function linkItem(ConnectionInterface $connection, array $number, int $lineNo, int $moveItemQId, int $workOrderItemQId, Carbon $now, int $userId): void
+    public function linkItem(
+        ConnectionInterface $connection,
+        array $number,
+        int $lineNo,
+        int $moveItemQId,
+        int $workOrderItemQId,
+        Carbon $now,
+        int $userId,
+        string $typeA = '  '
+    ): void
     {
         $connection->table('dbo.tHF_LinkMoveItemWOExItem')->insert([
             'acKey' => $number['key'], 'anNo' => $lineNo, 'acType' => 'PP',
-            'acTypeA' => '  ', 'acTypeB' => '   ', 'anFieldNA' => 0, 'anFieldNB' => 0,
+            'acTypeA' => $typeA, 'acTypeB' => '   ', 'anFieldNA' => 0, 'anFieldNB' => 0,
             'anUserId' => 0, 'anUserChg' => $userId, 'adTimeIns' => $now,
             'adTimeChg' => $now, 'anUserIns' => $userId, 'acResursID' => '',
             'acResursID2' => '', 'acExternalPositionKey' => '',

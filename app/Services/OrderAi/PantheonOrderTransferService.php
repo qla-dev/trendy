@@ -1222,7 +1222,9 @@ class PantheonOrderTransferService
             'product_name' => $resolvedProductName,
             'drawing_reference' => $this->normalizePantheonText($drawingReference),
             'material_hint' => $this->normalizePantheonText($materialHint),
-            'note' => $this->normalizePantheonText(implode(' | ', array_values(array_unique(array_filter($noteParts))))),
+            'note' => $this->isTrendyGermanyOrder($order)
+                ? $this->normalizePantheonMultilineText(implode("\n", array_values(array_unique(array_filter($noteParts)))))
+                : $this->normalizePantheonText(implode(' | ', array_values(array_unique(array_filter($noteParts))))),
         ];
     }
 
@@ -1232,7 +1234,11 @@ class PantheonOrderTransferService
             return '';
         }
 
-        return $this->normalizePantheonText((string) ($itemMeta['note'] ?? ''));
+        $note = (string) ($itemMeta['note'] ?? '');
+
+        return $this->isTrendyGermanyOrder($order)
+            ? $this->normalizePantheonMultilineText($note)
+            : $this->normalizePantheonText($note);
     }
 
     private function splitTransferTextLines(string $value): array
@@ -3083,13 +3089,28 @@ class PantheonOrderTransferService
         return trim((string) (preg_replace('/\s+/u', ' ', str_replace(["\r", "\n"], ' ', $value)) ?? $value));
     }
 
+    private function normalizePantheonMultilineText(string $value): string
+    {
+        $value = Utf8Sanitizer::repairGermanUmlautSpacing(Utf8Sanitizer::clean($value));
+        $lines = preg_split('/\R/u', $value) ?: [];
+
+        return implode("\n", array_values(array_filter(array_map(function ($line) {
+            return trim((string) (preg_replace('/[ \t]+/u', ' ', (string) $line) ?? $line));
+        }, $lines))));
+    }
+
     private function mergePantheonTextParts(array $parts): string
     {
         $merged = [];
         $seen = [];
+        $preserveLineBreaks = false;
 
         foreach ($parts as $part) {
-            $normalizedPart = $this->normalizePantheonText((string) $part);
+            $part = (string) $part;
+            $preserveLineBreaks = $preserveLineBreaks || preg_match('/\R/u', $part) === 1;
+            $normalizedPart = $preserveLineBreaks
+                ? $this->normalizePantheonMultilineText($part)
+                : $this->normalizePantheonText($part);
 
             if ($normalizedPart === '') {
                 continue;
@@ -3108,7 +3129,7 @@ class PantheonOrderTransferService
             }
         }
 
-        return implode(' | ', $merged);
+        return implode($preserveLineBreaks ? "\n" : ' | ', $merged);
     }
 
     private function trimPayloadToInsertableColumns(

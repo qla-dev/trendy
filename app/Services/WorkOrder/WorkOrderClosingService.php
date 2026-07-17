@@ -14,6 +14,8 @@ class WorkOrderClosingService
 
     public function __construct(
         private PantheonDocumentNumberGenerator $numbers,
+        private PantheonClosingWorkOrderItemService $closingWorkOrderItems,
+        private PantheonClosingMaterialDocumentService $materialDocuments,
         private PantheonOperationDocumentService $operationDocuments,
         private PantheonFinishedGoodsReceiptService $receiptDocuments,
         private PantheonWorkerSearchService $workers,
@@ -64,9 +66,22 @@ class WorkOrderClosingService
             }
 
             $operations = $preparedOperations['operations'];
-            // Closing-modal materials are document input only. They are never
-            // inserted into or updated on the work order BOM.
-            $materialTotal = $this->submittedMaterialCostTotal($submittedMaterials);
+            $materials = $this->prepareMaterials($submittedMaterials);
+
+            // An empty work order has no item QIds for Pantheon document-line
+            // links. Create closing positions first, then use their QIds for
+            // both material and operation document links.
+            $closingItems = $this->closingWorkOrderItems->createForEmptyWorkOrder(
+                $this->connection,
+                $workOrder,
+                $operations,
+                $materials,
+                $now,
+                $userId
+            );
+            $operations = $closingItems['operations'];
+            $materials = $closingItems['materials'];
+            $materialTotal = $this->preparedMaterialCostTotal($materials);
             $operationTotal = '0';
 
             foreach ($operations as $operation) {
@@ -81,6 +96,9 @@ class WorkOrderClosingService
             }
 
             $receiptCalculation = $this->calculator->receipt($materialTotal, $operationTotal, $producedQuantity);
+            $materialNumber = $materials === []
+                ? null
+                : $this->numbers->next($this->connection, '6400', $now);
             $operationNumber = $this->numbers->next($this->connection, (string) config('work_order_closing.operation_document_type', '6600'), $now);
             $receiptNumber = $this->numbers->next($this->connection, (string) config('work_order_closing.receipt_document_type', '6100'), $now);
             $department = $this->resolveDepartment($workOrder, $userName);
@@ -89,6 +107,25 @@ class WorkOrderClosingService
             if ($consignee === '') {
                 throw new RuntimeException('Pantheon primalac radnog naloga nije pronađen.');
             }
+
+            $materialResult = $materialNumber === null ? null : $this->materialDocuments->create(
+                $this->connection,
+                $materialNumber,
+                $receiptNumber,
+                $workOrder,
+                $materials,
+                $now,
+                $userId,
+                [
+                    'receiver' => $consignee,
+                    'issuer' => (string) config('work_order_closing.operation_warehouse', 'RN skladište'),
+                    'receiver_stock' => 'N',
+                    'issuer_stock' => 'Y',
+                    'person3' => $consignee,
+                    'way_of_sale' => 'I',
+                    'department' => $department,
+                ]
+            );
 
             $operationResult = $this->operationDocuments->create(
                 $this->connection,
@@ -133,8 +170,10 @@ class WorkOrderClosingService
 
             Log::info('Work order closed through eNalog.', [
                 'work_order_key' => $workOrder['acKey'],
+                'material_document' => $materialResult['document_number'] ?? null,
                 'operation_document' => $operationResult['document_number'],
                 'receipt_document' => $receiptResult['document_number'],
+                'created_work_order_items' => $closingItems['created_items'],
                 'user_id' => $userId,
             ]);
 
@@ -143,8 +182,12 @@ class WorkOrderClosingService
                 'status' => 'zaključen',
                 'work_order_key' => $workOrder['acKey'],
                 'work_order_number' => $this->formatNumber((string) ($workOrder['acKeyView'] ?? $workOrder['acKey'])),
-                'message' => 'kreirani dokumenti ' . $operationResult['document_number'] . ' i ' . $receiptResult['document_number'],
-                'documents' => [$operationResult, $receiptResult],
+                'message' => 'kreirani dokumenti ' . implode(' i ', array_filter([
+                    $materialResult['document_number'] ?? null,
+                    $operationResult['document_number'],
+                    $receiptResult['document_number'],
+                ])),
+                'documents' => array_values(array_filter([$materialResult, $operationResult, $receiptResult])),
                 'costs' => $receiptCalculation,
             ];
         }, 3);
@@ -184,11 +227,29 @@ class WorkOrderClosingService
                 'si.anQId as ident_qid', 'si.anPrStPrice',
             ]);
 
+        $workOrderHasItems = $this->connection->table('dbo.tHF_WOExItem')
+            ->where('acKey', $workOrderKey)
+            ->exists();
         $submittedByItem = [];
         $manualInputs = [];
         foreach ($submitted as $operation) {
             $qid = (int) ($operation['item_qid'] ?? 0);
             if ($qid > 0) {
+                // A closing modal can retain an old client-side item id. For
+                // an entirely empty WO there is no valid item to match, so a
+                // coded row is manual input and receives a fresh WO item QId
+                // later in the same close transaction.
+                if (!$workOrderHasItems && trim((string) ($operation['code'] ?? '')) !== '') {
+                    Log::warning('Ignoring stale operation item QId on empty work order closing.', [
+                        'work_order_key' => $workOrderKey,
+                        'submitted_item_qid' => $qid,
+                        'operation_code' => strtoupper(trim((string) $operation['code'])),
+                    ]);
+                    $operation['item_qid'] = null;
+                    $manualInputs[] = $operation;
+                    continue;
+                }
+
                 $submittedByItem[$qid][] = $operation;
             } elseif (!$this->isEmptyOperationInput($operation)) {
                 $manualInputs[] = $operation;
@@ -330,10 +391,11 @@ class WorkOrderClosingService
 
     private function isEmptyOperationInput(array $input): bool
     {
-        $hasWorkOrderItem = (int) ($input['item_qid'] ?? 0) > 0;
-
-        return ($hasWorkOrderItem || trim((string) ($input['code'] ?? '')) === '')
-            && (int) ($input['worker_id'] ?? 0) < 1
+        // The code is prefilled for existing WO positions and can be selected
+        // in a manual row. A code alone is not work performed, therefore it
+        // must be treated as an empty placeholder instead of an incomplete
+        // operation that blocks the rest of the closing request.
+        return (int) ($input['worker_id'] ?? 0) < 1
             && trim((string) ($input['time'] ?? '')) === ''
             && trim((string) ($input['start_time'] ?? '')) === ''
             && trim((string) ($input['end_time'] ?? '')) === '';
@@ -440,6 +502,63 @@ class WorkOrderClosingService
                 $this->calculator->normalizeNonNegative($catalog->anPrStPrice ?? null, 'Cijena materijala'),
                 '1'
             )['totalCost']);
+        }
+
+        return $total;
+    }
+
+    private function prepareMaterials(array $submitted): array
+    {
+        $prepared = [];
+
+        foreach ($submitted as $material) {
+            $code = strtoupper(trim((string) ($material['code'] ?? '')));
+            $quantity = trim((string) ($material['quantity'] ?? ''));
+            if ($code === '' && $quantity === '') {
+                continue;
+            }
+            if ($code === '' || $quantity === '') {
+                throw new RuntimeException('Material code and quantity must be entered together.');
+            }
+
+            $catalog = $this->connection->table('dbo.tHE_SetItem')
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$code])
+                ->first(['anQId', 'acIdent', 'acName', 'acUM', 'anPrStPrice']);
+            if ($catalog === null || (int) ($catalog->anQId ?? 0) < 1) {
+                throw new RuntimeException('Pantheon material was not found: ' . $code);
+            }
+
+            $normalizedQuantity = $this->calculator->normalizeNonNegative(
+                str_replace(',', '.', $quantity),
+                'Material quantity'
+            );
+            $price = $this->calculator->normalizeNonNegative($catalog->anPrStPrice ?? null, 'Material price');
+            $unit = strtoupper(substr(trim((string) ($catalog->acUM ?? 'KOM')), 0, 3));
+            if ($unit === '') {
+                $unit = 'KOM';
+            }
+
+            $prepared[] = [
+                'item_qid' => 0,
+                'position' => 0,
+                'code' => trim((string) $catalog->acIdent),
+                'name' => trim((string) ($catalog->acName ?? $catalog->acIdent)),
+                'unit' => $unit,
+                'quantity' => $normalizedQuantity,
+                'price' => $price,
+                'total' => $this->calculator->operation($normalizedQuantity, $price, '1')['totalCost'],
+                'ident_qid' => (int) $catalog->anQId,
+            ];
+        }
+
+        return $prepared;
+    }
+
+    private function preparedMaterialCostTotal(array $materials): string
+    {
+        $total = '0';
+        foreach ($materials as $material) {
+            $total = $this->calculator->add($total, (string) ($material['total'] ?? '0'));
         }
 
         return $total;

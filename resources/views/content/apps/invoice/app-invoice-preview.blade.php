@@ -3905,7 +3905,9 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
             end_time: String((row.querySelector('.wo-close-end-time') || {}).value || '').trim()
           };
         }).filter(function (operation) {
-          return [operation.code, operation.worker_id, operation.time, operation.start_time, operation.end_time]
+          // A selected code without worker, duration, or time range is just a
+          // placeholder. Do not submit it or let it block complete rows.
+          return [operation.worker_id, operation.time, operation.start_time, operation.end_time]
             .some(function (value) { return String(value || '').trim() !== ''; });
         }),
         materials: Array.prototype.slice.call(document.querySelectorAll('#close-work-order-materials-table tbody tr')).map(function (row) {
@@ -3921,7 +3923,6 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
     function isClosingOperationRowEmpty(row) {
       return [
-        (row.querySelector('.wo-close-operation-code') || {}).value,
         (row.querySelector('.wo-close-worker-search') || {}).value,
         (row.querySelector('.wo-close-worker') || {}).value,
         (row.querySelector('.wo-close-time') || {}).value,
@@ -3939,7 +3940,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         .map(function (row) {
           syncOperationTime(row);
           var operationCode = String(row.getAttribute('data-operation-code') || '').trim().toUpperCase();
-          if ((operationCode === '' || operationCode === 'OP30') && isClosingOperationRowEmpty(row)) {
+          if (isClosingOperationRowEmpty(row)) {
             return null;
           }
 
@@ -3972,7 +3973,11 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
     function closingResultHtml(data) {
       var documents = data && Array.isArray(data.documents) ? data.documents : [];
-      return documents.map(function (document) {
+      if (!documents.length) {
+        return '';
+      }
+
+      var rows = documents.map(function (document) {
         var lines = [
           '<strong>' + escapeClosingHtml(document.document_number || '') + '</strong> (' + escapeClosingHtml(document.document_type || '') + ')'
         ];
@@ -3983,8 +3988,13 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         if (document.total_price) lines.push('Ukupna cijena: ' + escapeClosingHtml(document.total_price));
         if (document.operation_cost) lines.push('Trošak operacija: ' + escapeClosingHtml(document.operation_cost));
         if (document.material_cost) lines.push('Trošak materijala: ' + escapeClosingHtml(document.material_cost));
-        return '<div class="text-start mb-1">' + lines.join('<br>') + '</div>';
+        return '<div class="text-start py-2 border-top">' + lines.join('<br>') + '</div>';
       }).join('');
+
+      return '<div class="text-start">'
+        + '<div class="fw-bold pb-2">Kreirani radni dokumenti</div>'
+        + rows
+        + '</div>';
     }
 
     if (closeWorkOrderModal) {
@@ -4284,7 +4294,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
             return Swal.fire(swalWithTheme({
               icon: 'success',
-              title: response.message || data.message || 'Dokumenti su kreirani',
+              title: partialClose ? (response.message || data.message || 'Radni nalog je djelomično zaključen') : 'Radni nalog zaključen',
               html: closingResultHtml(data),
               confirmButtonText: 'U redu',
               customClass: { confirmButton: 'btn btn-success' },

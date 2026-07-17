@@ -268,6 +268,25 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame('', $result);
     }
 
+    public function test_trendy_de_item_note_line_breaks_are_preserved_for_pantheon_transfer(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('resolvePreparedItemNote');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [
+            'note' => "- Graviranje\nFarbe: Endlackiert nach 500101.8\nRAL7005 / feine Struktur / Seidenglanz\nRAL7005 Mausgrau\nMaterijal:S355JO",
+        ], [
+            'supplier_name' => 'Trendy Germany GmbH-12',
+        ]);
+
+        $this->assertSame(
+            "- Graviranje\nFarbe: Endlackiert nach 500101.8\nRAL7005 / feine Struktur / Seidenglanz\nRAL7005 Mausgrau\nMaterijal:S355JO",
+            $result
+        );
+    }
+
     public function test_foreign_0110_order_items_use_export_vat_profile(): void
     {
         $service = new PantheonOrderTransferService();
