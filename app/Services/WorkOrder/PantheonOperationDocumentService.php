@@ -94,15 +94,18 @@ class PantheonOperationDocumentService
                 'anIdentQId' => $operation['ident_qid'],
             ]);
 
-            $this->writer->linkItem(
-                $connection,
-                $number,
-                $lineNo,
-                $moveItemQId,
-                (int) $operation['item_qid'],
-                $now,
-                $userId
-            );
+            // A manually entered closing operation has no BOM item to link.
+            if ((int) ($operation['item_qid'] ?? 0) > 0) {
+                $this->writer->linkItem(
+                    $connection,
+                    $number,
+                    $lineNo,
+                    $moveItemQId,
+                    (int) $operation['item_qid'],
+                    $now,
+                    $userId
+                );
+            }
 
             $workerEntries = $operation['worker_entries'] ?? [[
                 'worker' => $operation['worker'] ?? [],
@@ -112,6 +115,13 @@ class PantheonOperationDocumentService
             ]];
 
             foreach ($workerEntries as $workerEntry) {
+                // Worker-detail records require a real tHF_WOExItem foreign key.
+                // Manual closing rows intentionally have none, so their code,
+                // duration and cost live on the 6600 document line only.
+                if ((int) ($operation['item_qid'] ?? 0) < 1) {
+                    continue;
+                }
+
                 $workEntryNo++;
                 $workerMinutes = $this->calculator->operation(
                     (string) ($workerEntry['minutes_per_unit'] ?? '0'),
@@ -155,9 +165,11 @@ class PantheonOperationDocumentService
                 ]);
             }
 
-            $connection->table('dbo.tHF_WOExItem')
-                ->where('anQId', (int) $operation['item_qid'])
-                ->update(['acIssueFinished' => 'Y', 'adTimeChg' => $now, 'anUserChg' => $userId]);
+            if ((int) ($operation['item_qid'] ?? 0) > 0) {
+                $connection->table('dbo.tHF_WOExItem')
+                    ->where('anQId', (int) $operation['item_qid'])
+                    ->update(['acIssueFinished' => 'Y', 'adTimeChg' => $now, 'anUserChg' => $userId]);
+            }
         }
 
         return [

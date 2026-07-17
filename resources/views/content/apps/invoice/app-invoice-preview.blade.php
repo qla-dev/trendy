@@ -171,6 +171,16 @@
     border-radius: 0.375rem;
     box-shadow: 0 0.25rem 1rem rgba(34, 41, 47, 0.16);
   }
+  .wo-close-code-suggestions {
+    position: fixed;
+    z-index: 1085;
+    max-height: 210px;
+    overflow-y: auto;
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid #d8d6de;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.25rem 1rem rgba(34, 41, 47, 0.16);
+  }
   .wo-close-worker-suggestion {
     display: block;
     width: 100%;
@@ -185,6 +195,18 @@
   }
   .wo-close-worker-suggestion.is-active {
     background: rgba(115, 103, 240, 0.16);
+  }
+  .wo-close-code-suggestion {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 0;
+    background: transparent;
+    text-align: left;
+  }
+  .wo-close-code-suggestion:hover,
+  .wo-close-code-suggestion:focus {
+    background: rgba(115, 103, 240, 0.08);
   }
   .wo-close-action-buttons {
     display: inline-flex;
@@ -2652,11 +2674,16 @@
                   </tr>
                 </thead>
                 <tbody>
-                  @forelse(($closingWorkOrderOperations ?? $workOrderRegOperations ?? []) as $operation)
+                  @php
+                    $closeOperations = $closingWorkOrderOperations ?? $workOrderRegOperations ?? [];
+                    $closeWorkOrderHasNoOperations = count($closeOperations) === 0;
+                    if ($closeWorkOrderHasNoOperations) $closeOperations = array_fill(0, 6, []);
+                  @endphp
+                  @foreach($closeOperations as $operation)
                     <tr class="wo-close-operation-row" data-item-qid="{{ (int) ($operation['id'] ?? 0) }}" data-operation-code="{{ mb_strtoupper(trim((string) ($operation['operacija'] ?? ''))) }}">
-                      <td>{{ $displayValue($operation['pozicija'] ?? null) }}</td>
-                      <td>{{ $displayValue($operation['operacija'] ?? null) }}</td>
-                      <td>{{ $displayValue($operation['naziv'] ?? null) }}</td>
+                      <td>{{ $displayValue($operation['pozicija'] ?? $loop->iteration) }}</td>
+                      <td class="position-relative"><input class="form-control wo-close-operation-code text-uppercase" type="text" maxlength="64" autocomplete="off" value="{{ $operation['operacija'] ?? '' }}" placeholder="npr. OP30" aria-label="Šifra operacije" aria-autocomplete="list"><div class="wo-close-code-suggestions d-none" role="listbox"></div></td>
+                      <td><input class="form-control wo-close-operation-name" type="text" value="{{ $operation['naziv'] ?? '' }}" readonly aria-label="Naziv operacije"></td>
                       <td class="position-relative">
                         <input class="form-control wo-close-worker-search" type="text" autocomplete="off" placeholder="Upišite ime radnika" aria-label="Radnik" aria-autocomplete="list">
                         <input class="wo-close-worker" type="hidden" value="">
@@ -2693,9 +2720,7 @@
                         </div>
                       </td>
                     </tr>
-                  @empty
-                    <tr><td colspan="8" class="text-center text-muted py-2">Nema operacija za zatvaranje.</td></tr>
-                  @endforelse
+                  @endforeach
                 </tbody>
               </table>
             </div>
@@ -2705,11 +2730,19 @@
               <table class="table align-middle" id="close-work-order-materials-table">
                 <thead><tr><th>Pozicija</th><th>Materijal</th><th>Naziv</th><th>Količina</th><th>MJ</th></tr></thead>
                 <tbody>
-                  @forelse(($workOrderItemResources ?? []) as $material)
+                  @php
+                    $closeMaterials = $workOrderItemResources ?? [];
+                    if ($closeWorkOrderHasNoOperations) {
+                      $closeMaterials = array_merge($closeMaterials, array_fill(0, 6, []));
+                    } elseif (count($closeMaterials) === 0) {
+                      $closeMaterials = array_fill(0, 6, []);
+                    }
+                  @endphp
+                  @foreach($closeMaterials as $material)
                     <tr>
-                      <td>{{ $displayValue($material['pozicija'] ?? null) }}</td>
-                      <td>{{ $displayValue($material['materijal'] ?? null) }}</td>
-                      <td>{{ $displayValue($material['naziv'] ?? null) }}</td>
+                      <td>{{ $displayValue($material['pozicija'] ?? $loop->iteration) }}</td>
+                      <td class="position-relative"><input class="form-control form-control-sm wo-close-material-code text-uppercase" type="text" maxlength="64" autocomplete="off" value="{{ $material['materijal'] ?? '' }}" placeholder="Šifra materijala" aria-label="Šifra materijala" aria-autocomplete="list"><div class="wo-close-code-suggestions d-none" role="listbox"></div></td>
+                      <td><input class="form-control form-control-sm wo-close-material-name" type="text" value="{{ $material['naziv'] ?? '' }}" readonly aria-label="Naziv materijala"></td>
                       @php
                         $closeMaterialItemId = trim((string) ($material['item_qid'] ?? ''));
                         $closeMaterialItemNo = trim((string) ($material['item_no'] ?? $material['pozicija'] ?? ''));
@@ -2718,7 +2751,7 @@
                       <td>
                         <div class="wo-material-quantity-controls">
                           <input
-                            class="form-control form-control-sm wo-material-quantity-input"
+                            class="form-control form-control-sm wo-close-material-quantity"
                             type="text"
                             inputmode="decimal"
                             autocomplete="off"
@@ -2727,14 +2760,14 @@
                             data-item-no="{{ $closeMaterialItemNo }}"
                             data-saved-quantity="{{ $material['kolicina'] ?? '' }}"
                             aria-label="Količina materijala {{ $displayValue($material['materijal'] ?? null) }}"
-                            @if(!$canEditCloseMaterialQuantity) disabled title="Stavku nije moguće identifikovati za ažuriranje." @endif
+                            @if(false && !$canEditCloseMaterialQuantity) disabled title="Stavku nije moguće identifikovati za ažuriranje." @endif
                           >
                           <button
                             type="button"
                             class="btn btn-outline-primary btn-sm wo-material-save-quantity-btn"
                             title="Sačuvaj količinu"
                             aria-label="Sačuvaj količinu"
-                            @if(!$canEditCloseMaterialQuantity) disabled @endif
+                            disabled
                           >
                             <i class="fa fa-check" aria-hidden="true"></i>
                           </button>
@@ -2742,9 +2775,7 @@
                       </td>
                       <td>{{ $displayValue($material['mj'] ?? null) }}</td>
                     </tr>
-                  @empty
-                    <tr><td colspan="5" class="text-center text-muted py-2">Nema materijala za ovaj radni nalog.</td></tr>
-                  @endforelse
+                  @endforeach
                 </tbody>
               </table>
             </div>
@@ -2908,6 +2939,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       priorityUrl: @json($priorityUpdateUrl),
       closeUrl: @json($closeWorkOrderUrl),
       workersUrl: @json($pantheonWorkersUrl),
+      operationsUrl: @json($allOperationsFetchUrl),
+      materialsUrl: @json($allMaterialsFetchUrl),
       plannedConsumptionUpdateUrl: @json($plannedConsumptionUpdateUrl),
       plannedConsumptionRemoveUrl: @json($plannedConsumptionRemoveUrl),
       csrfToken: @json(csrf_token())
@@ -2925,6 +2958,10 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var closeWorkOrderSubmit = document.getElementById('wo-close-submit-btn');
     var closeWorkOrderModal = document.getElementById('close-work-order-modal');
     var pantheonWorkerSearchCache = Object.create(null);
+    var closingCatalogSearchCache = {
+      operations: Object.create(null),
+      materials: Object.create(null)
+    };
     var workOrderBreaks = [
       [600, 630], [720, 735], [885, 915],
       [1080, 1110], [1200, 1215], [1365, 1380]
@@ -3504,7 +3541,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       }
 
       return Array.prototype.slice.call(root.querySelectorAll(
-        '.wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn'
+        '.wo-close-operation-code, .wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn'
       )).filter(function (element) {
         return !element.disabled && element.offsetParent !== null;
       });
@@ -3662,24 +3699,229 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         });
     }
 
+    function closingCatalogKind(input) {
+      return input && input.classList.contains('wo-close-operation-code') ? 'operations' : 'materials';
+    }
+
+    function closingCatalogUrl(kind) {
+      return kind === 'operations' ? mutationConfig.operationsUrl : mutationConfig.materialsUrl;
+    }
+
+    function closingCatalogFields(input) {
+      var row = input && input.closest ? input.closest('tr') : null;
+      if (!row) {
+        return {};
+      }
+
+      var kind = closingCatalogKind(input);
+      return {
+        row: row,
+        kind: kind,
+        input: input,
+        name: row.querySelector(kind === 'operations' ? '.wo-close-operation-name' : '.wo-close-material-name'),
+        suggestions: row.querySelector('.wo-close-code-suggestions')
+      };
+    }
+
+    function closingCatalogValue(item, key) {
+      return String((item || {})[key] || '').trim();
+    }
+
+    function closingCatalogItemCode(item) {
+      return closingCatalogValue(item, 'acIdentChild');
+    }
+
+    function closingCatalogItemName(item) {
+      return closingCatalogValue(item, 'acDescr');
+    }
+
+    function hideClosingCatalogSuggestions(input) {
+      var fields = closingCatalogFields(input);
+      if (fields.suggestions) {
+        fields.suggestions.replaceChildren();
+        fields.suggestions.classList.add('d-none');
+      }
+    }
+
+    function positionClosingCatalogSuggestions(suggestions) {
+      if (!suggestions || suggestions.classList.contains('d-none') || !closeWorkOrderModal) {
+        return;
+      }
+
+      var input = suggestions.parentNode && suggestions.parentNode.querySelector('input');
+      if (!input) {
+        return;
+      }
+
+      var inputRect = input.getBoundingClientRect();
+      var modalRect = closeWorkOrderModal.getBoundingClientRect();
+      var height = Math.min(suggestions.offsetHeight || 210, 210);
+      var top = inputRect.bottom + 4;
+      if (top + height > modalRect.bottom - 8) {
+        top = Math.max(modalRect.top + 8, inputRect.top - height - 4);
+      }
+
+      suggestions.style.width = Math.round(Math.max(inputRect.width, 180)) + 'px';
+      suggestions.style.left = Math.round(inputRect.left) + 'px';
+      suggestions.style.top = Math.round(top) + 'px';
+    }
+
+    function applyClosingCatalogItem(input, item) {
+      var fields = closingCatalogFields(input);
+      var code = closingCatalogItemCode(item);
+      if (!fields.row || code === '') {
+        return;
+      }
+
+      input.value = code;
+      if (fields.name) {
+        fields.name.value = closingCatalogItemName(item);
+      }
+      if (fields.kind === 'operations') {
+        fields.row.setAttribute('data-operation-code', code.toUpperCase());
+      }
+      hideClosingCatalogSuggestions(input);
+      validateWorkOrderClosing(false);
+    }
+
+    function showClosingCatalogSuggestions(input, items) {
+      var fields = closingCatalogFields(input);
+      if (!fields.suggestions) {
+        return;
+      }
+
+      fields.suggestions.replaceChildren();
+      (items || []).forEach(function (item) {
+        var code = closingCatalogItemCode(item);
+        if (code === '') {
+          return;
+        }
+
+        var option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'wo-close-code-suggestion';
+        option.setAttribute('role', 'option');
+        option.dataset.catalogCode = code;
+        option.dataset.catalogName = closingCatalogItemName(item);
+        option.textContent = code + (option.dataset.catalogName ? ' — ' + option.dataset.catalogName : '');
+        fields.suggestions.appendChild(option);
+      });
+
+      if (!fields.suggestions.childElementCount || !closeWorkOrderModal || !closeWorkOrderModal.classList.contains('show')) {
+        fields.suggestions.classList.add('d-none');
+        return;
+      }
+
+      fields.suggestions.classList.remove('d-none');
+      positionClosingCatalogSuggestions(fields.suggestions);
+    }
+
+    function useClosingCatalogResults(input, items, query) {
+      if (String(input.value || '').trim() !== query) {
+        return;
+      }
+
+      var exact = (items || []).find(function (item) {
+        return closingCatalogItemCode(item).toUpperCase() === query.toUpperCase();
+      });
+      if (exact) {
+        applyClosingCatalogItem(input, exact);
+        return;
+      }
+
+      showClosingCatalogSuggestions(input, items);
+    }
+
+    function searchClosingCatalog(input) {
+      var fields = closingCatalogFields(input);
+      var query = String((input || {}).value || '').trim();
+      var endpoint = closingCatalogUrl(fields.kind);
+      if (!fields.row || query.length < 1 || !endpoint) {
+        hideClosingCatalogSuggestions(input);
+        return;
+      }
+
+      if (fields.name) {
+        fields.name.value = '';
+      }
+      if (fields.kind === 'operations') {
+        fields.row.setAttribute('data-operation-code', query.toUpperCase());
+      }
+
+      var cacheKey = query.toUpperCase();
+      input.dataset.catalogSearchToken = String(Number(input.dataset.catalogSearchToken || 0) + 1);
+      var searchToken = input.dataset.catalogSearchToken;
+      if (Object.prototype.hasOwnProperty.call(closingCatalogSearchCache[fields.kind], cacheKey)) {
+        useClosingCatalogResults(input, closingCatalogSearchCache[fields.kind][cacheKey], query);
+        return;
+      }
+
+      var separator = endpoint.indexOf('?') === -1 ? '?' : '&';
+      fetch(endpoint + separator + 'q=' + encodeURIComponent(query) + '&limit=15', {
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+      })
+        .then(function (response) {
+          return response.ok ? response.json() : { data: [] };
+        })
+        .then(function (payload) {
+          var items = payload && Array.isArray(payload.data) ? payload.data : [];
+          closingCatalogSearchCache[fields.kind][cacheKey] = items;
+          if (input.dataset.catalogSearchToken !== searchToken) {
+            return;
+          }
+          useClosingCatalogResults(input, items, query);
+        })
+        .catch(function () {
+          hideClosingCatalogSuggestions(input);
+        });
+    }
+
+    function selectClosingCatalogSuggestion(suggestion) {
+      var input = suggestion && suggestion.parentNode && suggestion.parentNode.parentNode
+        ? suggestion.parentNode.parentNode.querySelector('.wo-close-operation-code, .wo-close-material-code')
+        : null;
+      if (!input) {
+        return;
+      }
+
+      applyClosingCatalogItem(input, {
+        acIdentChild: suggestion.dataset.catalogCode || '',
+        acDescr: suggestion.dataset.catalogName || ''
+      });
+    }
+
     function closingPayload() {
       return {
         operations: Array.prototype.slice.call(document.querySelectorAll('.wo-close-operation-row[data-item-qid]')).map(function (row) {
           syncOperationTime(row);
           var workerId = Number((row.querySelector('.wo-close-worker') || {}).value || 0);
+          var itemQid = Number(row.getAttribute('data-item-qid') || 0);
           return {
-            item_qid: Number(row.getAttribute('data-item-qid') || 0),
+            item_qid: itemQid > 0 ? itemQid : null,
+            code: String((row.querySelector('.wo-close-operation-code') || {}).value || '').trim().toUpperCase(),
             worker_id: workerId > 0 ? workerId : null,
             time: String((row.querySelector('.wo-close-time') || {}).value || '').trim().replace(',', '.'),
             start_time: String((row.querySelector('.wo-close-start-time') || {}).value || '').trim(),
             end_time: String((row.querySelector('.wo-close-end-time') || {}).value || '').trim()
           };
+        }).filter(function (operation) {
+          return [operation.code, operation.worker_id, operation.time, operation.start_time, operation.end_time]
+            .some(function (value) { return String(value || '').trim() !== ''; });
+        }),
+        materials: Array.prototype.slice.call(document.querySelectorAll('#close-work-order-materials-table tbody tr')).map(function (row) {
+          return {
+            code: String((row.querySelector('.wo-close-material-code') || {}).value || '').trim().toUpperCase(),
+            quantity: String((row.querySelector('.wo-close-material-quantity') || {}).value || '').trim().replace(',', '.')
+          };
+        }).filter(function (material) {
+          return material.code !== '' || material.quantity !== '';
         })
       };
     }
 
     function isClosingOperationRowEmpty(row) {
       return [
+        (row.querySelector('.wo-close-operation-code') || {}).value,
         (row.querySelector('.wo-close-worker-search') || {}).value,
         (row.querySelector('.wo-close-worker') || {}).value,
         (row.querySelector('.wo-close-time') || {}).value,
@@ -3697,7 +3939,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         .map(function (row) {
           syncOperationTime(row);
           var operationCode = String(row.getAttribute('data-operation-code') || '').trim().toUpperCase();
-          if (operationCode === 'OP30' && isClosingOperationRowEmpty(row)) {
+          if ((operationCode === '' || operationCode === 'OP30') && isClosingOperationRowEmpty(row)) {
             return null;
           }
 
@@ -3757,6 +3999,9 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
       closeWorkOrderModal.addEventListener('input', function (event) {
         var target = event.target;
+        if (target && target.matches('.wo-close-operation-code, .wo-close-material-code')) {
+          searchClosingCatalog(target);
+        }
         var row = target && target.closest ? target.closest('.wo-close-operation-row') : null;
         if (!row) {
           return;
@@ -3787,7 +4032,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         }
 
         var field = event.target;
-        if (!field || !field.matches('.wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn')) {
+        if (!field || !field.matches('.wo-close-operation-code, .wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn')) {
           return;
         }
 
@@ -3825,6 +4070,12 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
       closeWorkOrderModal.addEventListener('click', function (event) {
         var target = event.target;
+        var catalogSuggestion = target && target.closest ? target.closest('.wo-close-code-suggestion') : null;
+        if (catalogSuggestion) {
+          event.preventDefault();
+          selectClosingCatalogSuggestion(catalogSuggestion);
+          return;
+        }
         var suggestion = target && target.closest ? target.closest('.wo-close-worker-suggestion') : null;
         if (suggestion) {
           selectWorkerSuggestion(suggestion);
@@ -3889,6 +4140,12 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       });
 
       closeWorkOrderModal.addEventListener('mousedown', function (event) {
+        var catalogSuggestion = event.target && event.target.closest ? event.target.closest('.wo-close-code-suggestion') : null;
+        if (catalogSuggestion) {
+          event.preventDefault();
+          selectClosingCatalogSuggestion(catalogSuggestion);
+          return;
+        }
         var suggestion = event.target && event.target.closest ? event.target.closest('.wo-close-worker-suggestion') : null;
         if (suggestion) {
           // Choose on pointer down, before the textbox blur can hide the popup.
@@ -3916,11 +4173,18 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         closeWorkOrderModal.querySelectorAll('.wo-close-worker-suggestions:not(.d-none)').forEach(function (suggestions) {
           positionWorkerSuggestions(suggestions.closest('.wo-close-operation-row'));
         });
+        closeWorkOrderModal.querySelectorAll('.wo-close-code-suggestions:not(.d-none)').forEach(function (suggestions) {
+          positionClosingCatalogSuggestions(suggestions);
+        });
       }, true);
 
       closeWorkOrderModal.addEventListener('focusout', function (event) {
         var input = event.target;
         if (!input) {
+          return;
+        }
+        if (input.matches('.wo-close-operation-code, .wo-close-material-code')) {
+          window.setTimeout(function () { hideClosingCatalogSuggestions(input); }, 150);
           return;
         }
         var row = input.closest('.wo-close-operation-row');
@@ -3969,7 +4233,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         }
         delete closeWorkOrderSubmit.dataset.confirmedIncompleteFields;
 
-        if (!closeWorkOrderSubmit.dataset.materialsSavedForClose) {
+        // Closing-modal material rows are document-only; never save them to the BOM.
+        if (false && !closeWorkOrderSubmit.dataset.materialsSavedForClose) {
           setActionButtonLoading(closeWorkOrderSubmit, true);
           savePendingClosingMaterialQuantities()
             .then(function () {

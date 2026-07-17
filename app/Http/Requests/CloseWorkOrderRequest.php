@@ -3,9 +3,54 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class CloseWorkOrderRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $operations = $this->input('operations');
+        $materials = $this->input('materials');
+
+        if (is_array($operations)) {
+            $operations = array_values(array_filter(array_map(function ($operation) {
+                $operation = is_array($operation) ? $operation : [];
+                $operation['code'] = trim((string) ($operation['code'] ?? ''));
+                $itemQid = (int) ($operation['item_qid'] ?? 0);
+                $operation['item_qid'] = $itemQid > 0 ? $itemQid : null;
+
+                return $operation;
+            }, $operations), function (array $operation): bool {
+                foreach (['code', 'worker_id', 'time', 'start_time', 'end_time'] as $field) {
+                    if (trim((string) ($operation[$field] ?? '')) !== '') {
+                        return true;
+                    }
+                }
+
+                return false;
+            }));
+        }
+
+        if (is_array($materials)) {
+            $materials = array_values(array_filter(array_map(function ($material) {
+                $material = is_array($material) ? $material : [];
+                $material['code'] = trim((string) ($material['code'] ?? ''));
+
+                return $material;
+            }, $materials), function (array $material): bool {
+                return trim((string) ($material['code'] ?? '')) !== ''
+                    || trim((string) ($material['quantity'] ?? '')) !== '';
+            }));
+        }
+
+        $this->merge([
+            'operations' => $operations,
+            'materials' => $materials,
+        ]);
+    }
+
     public function authorize(): bool
     {
         return $this->user() !== null;
@@ -17,13 +62,19 @@ class CloseWorkOrderRequest extends FormRequest
             'operations' => ['required', 'array', 'min:1'],
             // A copied row represents another worker/time entry for the same
             // Pantheon operation, so item_qid is intentionally not distinct.
-            'operations.*.item_qid' => ['required', 'integer', 'min:1'],
+            // Manual rows are document-only and deliberately have no WO item QId.
+            'operations.*.item_qid' => ['nullable', 'integer', 'min:1'],
+            'operations.*.code' => ['nullable', 'string', 'max:64'],
             // Empty worker/time rows are valid partial-close input. When every
             // row is complete, the closing service creates final documents.
             'operations.*.worker_id' => ['nullable', 'integer', 'min:1'],
             'operations.*.time' => ['nullable', 'regex:/^(?:0|[1-9]\d*)(?:[.,]\d+)?$/'],
             'operations.*.start_time' => ['nullable', 'regex:/^(?:[01]\d|2[0-3]):[0-5]\d$/'],
             'operations.*.end_time' => ['nullable', 'regex:/^(?:[01]\d|2[0-3]):[0-5]\d$/'],
+            'materials' => ['nullable', 'array'],
+            'materials.*.item_qid' => ['nullable', 'integer', 'min:1'],
+            'materials.*.code' => ['nullable', 'string', 'max:64'],
+            'materials.*.quantity' => ['nullable', 'regex:/^(?:0|[1-9]\d*)(?:[.,]\d+)?$/'],
         ];
     }
 
@@ -35,5 +86,17 @@ class CloseWorkOrderRequest extends FormRequest
             'operations.*.time.required' => 'Vrijeme je obavezno za svaku operaciju.',
             'operations.*.time.regex' => 'Vrijeme mora biti nenegativan broj.',
         ];
+    }
+
+    protected function failedValidation(Validator $validator): void
+    {
+        Log::warning('Work order closing validation failed.', [
+            'work_order' => (string) $this->route('id', ''),
+            'user_id' => (int) ($this->user()?->id ?? 0),
+            'errors' => $validator->errors()->toArray(),
+            'input' => $this->except(['_token']),
+        ]);
+
+        throw new ValidationException($validator);
     }
 }

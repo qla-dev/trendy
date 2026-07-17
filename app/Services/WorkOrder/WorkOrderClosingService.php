@@ -23,11 +23,11 @@ class WorkOrderClosingService
         $this->connection = DB::connection($name !== '' ? $name : 'work_order_target');
     }
 
-    public function close(string $locator, array $submittedOperations, int $userId, string $userName = ''): array
+    public function close(string $locator, array $submittedOperations, int $userId, string $userName = '', array $submittedMaterials = []): array
     {
         $now = Carbon::now();
 
-        return $this->connection->transaction(function () use ($locator, $submittedOperations, $userId, $userName, $now) {
+        return $this->connection->transaction(function () use ($locator, $submittedOperations, $submittedMaterials, $userId, $userName, $now) {
             $workOrder = $this->lockWorkOrder($locator);
             $existing = $this->existingClosingDocuments((string) $workOrder['acKey']);
 
@@ -64,7 +64,9 @@ class WorkOrderClosingService
             }
 
             $operations = $preparedOperations['operations'];
-            $materialTotal = $this->materialCostTotal((string) $workOrder['acKey']);
+            // Closing-modal materials are document input only. They are never
+            // inserted into or updated on the work order BOM.
+            $materialTotal = $this->submittedMaterialCostTotal($submittedMaterials);
             $operationTotal = '0';
 
             foreach ($operations as $operation) {
@@ -182,15 +184,14 @@ class WorkOrderClosingService
                 'si.anQId as ident_qid', 'si.anPrStPrice',
             ]);
 
-        if ($rows->isEmpty()) {
-            throw new RuntimeException('Radni nalog nema operacije za zatvaranje.');
-        }
-
         $submittedByItem = [];
+        $manualInputs = [];
         foreach ($submitted as $operation) {
             $qid = (int) ($operation['item_qid'] ?? 0);
             if ($qid > 0) {
                 $submittedByItem[$qid][] = $operation;
+            } elseif (!$this->isEmptyOperationInput($operation)) {
+                $manualInputs[] = $operation;
             }
         }
 
@@ -203,8 +204,8 @@ class WorkOrderClosingService
         $complete = true;
         foreach ($rows as $row) {
             $itemQId = (int) $row->anQId;
-            $operationCode = strtoupper(trim((string) $row->acIdent));
             $inputs = $submittedByItem[$itemQId] ?? [];
+            $operationCode = strtoupper(trim((string) ($inputs[0]['code'] ?? $row->acIdent)));
             if ($inputs === []) {
                 if ($operationCode !== 'OP30') {
                     $complete = false;
@@ -229,7 +230,15 @@ class WorkOrderClosingService
                     continue;
                 }
 
-                $price ??= $this->calculator->normalizeNonNegative($row->anPrStPrice ?? null, 'Cijena operacije');
+                if ($price === null) {
+                    $catalog = $this->connection->table('dbo.tHE_SetItem')
+                        ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$operationCode])
+                        ->first(['anPrStPrice']);
+                    if ($catalog === null) {
+                        throw new RuntimeException('Pantheon operacija nije pronađena: ' . $operationCode);
+                    }
+                    $price = $this->calculator->normalizeNonNegative($catalog->anPrStPrice ?? null, 'Cijena operacije');
+                }
 
                 $worker = $this->workers->findActive((int) ($input['worker_id'] ?? 0));
                 if ($worker === null) {
@@ -255,12 +264,55 @@ class WorkOrderClosingService
             $prepared[] = [
                 'item_qid' => $itemQId,
                 'position' => (int) $row->anNo,
-                'code' => trim((string) $row->acIdent),
-                'name' => trim((string) ($row->acDescr ?? $row->acIdent)),
+                'code' => $operationCode,
+                'name' => trim((string) ($row->acDescr ?? $operationCode)),
                 'minutes_per_unit' => $minutesPerUnit,
                 'price_per_minute' => $price,
                 'worker_entries' => $workerEntries,
             ];
+        }
+
+        foreach ($manualInputs as $input) {
+            if (!$this->hasCompleteOperationInput($input)) {
+                $complete = false;
+                continue;
+            }
+
+            $code = strtoupper(trim((string) ($input['code'] ?? '')));
+            if ($code === '') {
+                throw new RuntimeException('Šifra ručno unesene operacije je obavezna.');
+            }
+
+            $catalog = $this->connection->table('dbo.tHE_SetItem')
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$code])
+                ->first(['acIdent', 'acName', 'anPrStPrice']);
+            if ($catalog === null) {
+                throw new RuntimeException('Pantheon operacija nije pronađena: ' . $code);
+            }
+
+            $worker = $this->workers->findActive((int) ($input['worker_id'] ?? 0));
+            if ($worker === null) {
+                throw new RuntimeException('Odabrani radnik ne postoji ili nije aktivan u Pantheonu.');
+            }
+            $timing = $this->operationTiming($input);
+            $prepared[] = [
+                'item_qid' => 0,
+                'position' => 0,
+                'code' => trim((string) $catalog->acIdent),
+                'name' => trim((string) ($catalog->acName ?? $code)),
+                'minutes_per_unit' => $timing['minutes'],
+                'price_per_minute' => $this->calculator->normalizeNonNegative($catalog->anPrStPrice ?? null, 'Cijena operacije'),
+                'worker_entries' => [[
+                    'worker' => $worker,
+                    'minutes_per_unit' => $timing['minutes'],
+                    'start_time' => $timing['start_time'],
+                    'end_time' => $timing['end_time'],
+                ]],
+            ];
+        }
+
+        if ($rows->isEmpty() && $prepared === []) {
+            $complete = false;
         }
 
         return ['complete' => $complete, 'operations' => $prepared];
@@ -278,7 +330,10 @@ class WorkOrderClosingService
 
     private function isEmptyOperationInput(array $input): bool
     {
-        return (int) ($input['worker_id'] ?? 0) < 1
+        $hasWorkOrderItem = (int) ($input['item_qid'] ?? 0) > 0;
+
+        return ($hasWorkOrderItem || trim((string) ($input['code'] ?? '')) === '')
+            && (int) ($input['worker_id'] ?? 0) < 1
             && trim((string) ($input['time'] ?? '')) === ''
             && trim((string) ($input['start_time'] ?? '')) === ''
             && trim((string) ($input['end_time'] ?? '')) === '';
@@ -360,6 +415,34 @@ class WorkOrderClosingService
             ->sum('m.anValue');
 
         return $this->calculator->normalizeNonNegative($value ?? 0, 'Trošak materijala');
+    }
+
+    private function submittedMaterialCostTotal(array $submitted): string
+    {
+        $total = '0';
+        foreach ($submitted as $material) {
+            $code = strtoupper(trim((string) ($material['code'] ?? '')));
+            $quantity = trim((string) ($material['quantity'] ?? ''));
+            if ($code === '' && $quantity === '') {
+                continue;
+            }
+            if ($code === '' || $quantity === '') {
+                throw new RuntimeException('Šifra i količina materijala moraju biti unesene zajedno.');
+            }
+            $catalog = $this->connection->table('dbo.tHE_SetItem')
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$code])
+                ->first(['anPrStPrice']);
+            if ($catalog === null) {
+                throw new RuntimeException('Pantheon materijal nije pronađen: ' . $code);
+            }
+            $total = $this->calculator->add($total, $this->calculator->operation(
+                $this->calculator->normalizeNonNegative(str_replace(',', '.', $quantity), 'Količina materijala'),
+                $this->calculator->normalizeNonNegative($catalog->anPrStPrice ?? null, 'Cijena materijala'),
+                '1'
+            )['totalCost']);
+        }
+
+        return $total;
     }
 
     private function existingClosingDocuments(string $workOrderKey): array

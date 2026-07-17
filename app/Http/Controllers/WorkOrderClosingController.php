@@ -36,7 +36,8 @@ class WorkOrderClosingController extends Controller
                 $id,
                 $request->validated()['operations'],
                 (int) ($user->id ?? 0),
-                trim((string) ($user->name ?? ''))
+                trim((string) ($user->name ?? '')),
+                $request->validated()['materials'] ?? []
             );
 
             return response()->json(['message' => $result['message'], 'data' => $result]);
@@ -46,6 +47,8 @@ class WorkOrderClosingController extends Controller
                 'user_id' => (int) ($request->user()->id ?? 0),
                 'failed_step' => $this->failedStep($exception->getMessage()),
                 'message' => $exception->getMessage(),
+                'exception' => get_class($exception),
+                'trace' => $exception->getTraceAsString(),
             ]);
 
             $status = $exception instanceof \InvalidArgumentException || $exception instanceof \RuntimeException ? 422 : 500;

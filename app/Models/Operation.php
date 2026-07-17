@@ -52,12 +52,22 @@ class Operation extends Model
 
         self::applyLikeAny($query, ['i.acIdent', 'i.acName'], $search);
 
+        $operationCodeExpr = "LTRIM(RTRIM(ISNULL(i.acIdent, '')))";
+        $operationNameExpr = "LTRIM(RTRIM(ISNULL(i.acName, '')))";
+        $searchPrefix = mb_strtoupper(trim($search)) . '%';
+
         $rows = $query
-            ->selectRaw("LTRIM(RTRIM(i.acIdent)) as operation_code")
-            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acName, ''))) as operation_name")
+            ->selectRaw("$operationCodeExpr as operation_code")
+            ->selectRaw("$operationNameExpr as operation_name")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as operation_um")
             ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as operation_qty")
             ->groupBy('i.acIdent', 'i.acName', 'i.acUM')
+            ->when(trim($search) !== '', function (Builder $orderedQuery) use ($operationCodeExpr, $operationNameExpr, $searchPrefix) {
+                $orderedQuery->orderByRaw(
+                    "CASE WHEN UPPER($operationCodeExpr) LIKE ? THEN 0 WHEN UPPER($operationNameExpr) LIKE ? THEN 1 ELSE 2 END",
+                    [$searchPrefix, $searchPrefix]
+                );
+            })
             ->orderBy('i.acIdent')
             ->limit($resolvedLimit)
             ->get()
@@ -105,13 +115,14 @@ class Operation extends Model
         }
 
         $query->where(function (Builder $likeQuery) use ($columns, $value) {
+            $needle = '%' . mb_strtoupper($value) . '%';
             foreach ($columns as $index => $column) {
                 if ($index === 0) {
-                    $likeQuery->where($column, 'like', '%' . $value . '%');
+                    $likeQuery->whereRaw("UPPER($column) LIKE ?", [$needle]);
                     continue;
                 }
 
-                $likeQuery->orWhere($column, 'like', '%' . $value . '%');
+                $likeQuery->orWhereRaw("UPPER($column) LIKE ?", [$needle]);
             }
         });
     }
