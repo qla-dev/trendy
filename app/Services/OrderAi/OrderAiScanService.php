@@ -2452,10 +2452,17 @@ class OrderAiScanService
 
         foreach ($preparedItems as $index => $preparedItem) {
             $existingItem = is_array($items[$index] ?? null) ? $items[$index] : [];
+            $existingProductCode = trim((string) ($existingItem['product_code'] ?? ''));
+            $preparedProductCode = trim((string) ($preparedItem['product_code'] ?? $existingProductCode));
 
             $items[$index] = array_merge($existingItem, [
                 'line_number' => (int) ($preparedItem['line_number'] ?? ($existingItem['line_number'] ?? ($index + 1))),
-                'product_code' => trim((string) ($preparedItem['product_code'] ?? ($existingItem['product_code'] ?? ''))),
+                // Pantheon catalog lookup can canonicalize an article code by
+                // removing spaces. The scan display must retain the code as
+                // printed in the source PDF (for example "0555 70 01 011").
+                'product_code' => $isTrendyDeOrder && $existingProductCode !== ''
+                    ? $existingProductCode
+                    : $preparedProductCode,
                 'product_name' => $this->normalizeScannedProductName(
                     trim((string) ($preparedItem['product_name'] ?? ($existingItem['product_name'] ?? '')))
                 ),
@@ -2804,6 +2811,11 @@ class OrderAiScanService
         }
 
         return false;
+    }
+
+    private function isTrendyDeSpacedNumericArticleCode(string $productCode): bool
+    {
+        return preg_match('/^[A-Za-z]?\d{3,4}(?:\s+\d{2,4}){2,3}$/u', trim($productCode)) === 1;
     }
 
     private function orderAiScanColumnExists(string $column): bool
@@ -3420,6 +3432,7 @@ class OrderAiScanService
             $pendingDeliveryLabel = false;
             $lineNumber = (int) ($item['line_number'] ?? 0);
             $productCode = $this->normalizeScannedProductCode((string) ($item['product_code'] ?? ''));
+            $keepDeliveryLabelInNote = $this->isTrendyDeSpacedNumericArticleCode($productCode);
 
             foreach ($this->splitVisibleTextLines(
                 trim((string) ($item['product_name'] ?? '')) . "\n" . trim((string) ($item['note'] ?? ''))
@@ -3429,6 +3442,10 @@ class OrderAiScanService
                 if ($this->containsTrendyDeDeliveryLabel($line)) {
                     if ($deliveryDeadline === '' && $lineDeliveryDeadline !== '') {
                         $deliveryDeadline = $lineDeliveryDeadline;
+                    }
+
+                    if ($keepDeliveryLabelInNote) {
+                        $contentLines[] = $line;
                     }
 
                     $pendingDeliveryLabel = $lineDeliveryDeadline === '';
@@ -4618,7 +4635,7 @@ class OrderAiScanService
 
     private function trendyDeProductCodePattern(): string
     {
-        return '(?:[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24})';
+        return '(?:[A-Za-z]?\d{3,4}(?:\s+\d{2,4}){2,3}|[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24})';
     }
 
     private function trendyDeProcessOrFinishPattern(): string

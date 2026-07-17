@@ -101,6 +101,37 @@ class OrderAiScanServiceTest extends TestCase
         );
     }
 
+    public function test_trendy_de_display_keeps_article_code_spacing_when_transfer_preview_uses_catalog_code(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('overlayTransferPreview');
+        $method->setAccessible(true);
+
+        $payload = $method->invoke($service, [
+            'order' => [
+                'customer_name' => 'Trendy Germany GmbH',
+                'supplier_name' => 'Trendy Germany GmbH-47',
+            ],
+            'items' => [[
+                'line_number' => 5,
+                'product_code' => '0555 70 01 011',
+                'product_name' => 'CORPS DETECTEUR L60',
+            ]],
+            'summary' => [],
+        ], [
+            'payload' => [
+                'items' => [[
+                    'line_number' => 5,
+                    'product_code' => '05557001011',
+                    'product_name' => 'CORPS DETECTEUR L60',
+                ]],
+            ],
+        ]);
+
+        $this->assertSame('0555 70 01 011', $payload['items'][0]['product_code']);
+    }
+
     public function test_trendy_de_position_notes_end_at_the_next_item_row(): void
     {
         $parser = app(OrderAiDigitalPdfRulesParser::class);
@@ -131,6 +162,75 @@ class OrderAiScanServiceTest extends TestCase
             $notes[1]
         );
         $this->assertSame("- Graviranje\nNitrocarburiert + Nachoxidiert.\nMaterijal: S355JO", $notes[2]);
+    }
+
+    public function test_trendy_de_parser_reads_spaced_numeric_article_code_rows_with_delivery_note(): void
+    {
+        $lines = [
+            '16. 7. 2026.',
+            'Trendy Germany GmbH',
+            '72290 NOVI TRAVNIK',
+            'Trendy Germany GmbH-47',
+            'Datum',
+            'Bestellung 26-020-001050',
+            'Artikel Nr. Pos. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            "2,00 224,75STU\t449,500,000545 32 02 000 AXE PALIER COTE MOBILE1",
+            'Gravirati:',
+            '0545 32 02 000',
+            'Liefertermin: 28.09.2026',
+            "1,00 117,00STU\t117,000,000545 50 10 000 PALIER SUPERIEUR2",
+            'Gravirati:',
+            '0545 50 10 000',
+            'Liefertermin: 28.09.2026',
+            'Total 566,50',
+        ];
+        $page = [
+            'page' => 1,
+            'text' => implode("\n", $lines),
+            'lines' => $lines,
+            'items' => array_values(array_map(function (string $line, int $index): array {
+                return [
+                    'row_number' => $index + 1,
+                    'y' => (float) (($index + 1) * 12),
+                    'text' => $line,
+                    'cells' => [['x' => 18.0, 'text' => $line]],
+                ];
+            }, $lines, array_keys($lines))),
+        ];
+        $preparedDocument = [
+            'pdf_type' => 'digital',
+            'provider_input_mode' => 'text',
+            'effective_page_count' => 1,
+            'source_page_count' => 1,
+            'searchable_text' => implode("\n", $lines),
+            'digital_extraction' => [
+                'source' => 'smalot_pdfparser',
+                'text_character_count' => strlen(implode("\n", $lines)),
+            ],
+            'processed_pages' => [$page],
+        ];
+        $scan = new OrderAiScan([
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-001050.pdf',
+            'source_mime_type' => 'application/pdf',
+        ]);
+
+        $result = app(OrderAiDigitalPdfRulesParser::class)->parse($scan, $preparedDocument);
+        $finalized = app(OrderAiScanService::class)->finalizeExtractionResult($scan, $result, null, false);
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertSame(['0545 32 02 000', '0545 50 10 000'], array_column($finalized['normalized_payload']['items'], 'product_code'));
+        $this->assertSame('PALIER SUPERIEUR', data_get($finalized, 'normalized_payload.items.1.product_name'));
+        $this->assertSame(1.0, data_get($finalized, 'normalized_payload.items.1.quantity'));
+        $this->assertSame('KO', data_get($finalized, 'normalized_payload.items.1.unit'));
+        $this->assertSame(117.0, data_get($finalized, 'normalized_payload.items.1.unit_price'));
+        $this->assertSame(117.0, data_get($finalized, 'normalized_payload.items.1.line_total'));
+        $this->assertSame(0.0, data_get($finalized, 'normalized_payload.items.1.vat_rate'));
+        $this->assertSame('28.09.2026', data_get($finalized, 'normalized_payload.items.1.delivery_deadline'));
+        $this->assertSame(
+            "Gravirati:\n0545 50 10 000\nLiefertermin: 28.09.2026",
+            data_get($finalized, 'normalized_payload.items.1.note')
+        );
     }
 
     /** @dataProvider trendyDeHeaderSupplierNames */

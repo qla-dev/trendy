@@ -742,6 +742,7 @@ class OrderAiDigitalPdfRulesParser
     {
         $notesByLineNumber = [];
         $currentLineNumber = 0;
+        $currentItemKeepsDeliveryLabelInNote = false;
 
         foreach (array_values($lines) as $line) {
             $line = trim((string) $line);
@@ -771,6 +772,9 @@ class OrderAiDigitalPdfRulesParser
 
             if ($codeAmountItem !== null && (int) ($codeAmountItem['line_number'] ?? 0) > 0) {
                 $currentLineNumber = (int) ($codeAmountItem['line_number'] ?? 0);
+                $currentItemKeepsDeliveryLabelInNote = $this->isTrendyDeSpacedNumericArticleCode(
+                    (string) ($codeAmountItem['product_code'] ?? '')
+                );
                 continue;
             }
 
@@ -778,11 +782,15 @@ class OrderAiDigitalPdfRulesParser
 
             if ($detectedNextItem !== null && (int) ($detectedNextItem['line_number'] ?? 0) > 0) {
                 $currentLineNumber = (int) ($detectedNextItem['line_number'] ?? 0);
+                $currentItemKeepsDeliveryLabelInNote = $this->isTrendyDeSpacedNumericArticleCode(
+                    (string) ($detectedNextItem['product_code'] ?? '')
+                );
                 continue;
             }
 
             if ($this->isTrendyDeSummaryLine($this->normalizeKeywordText($line))) {
                 $currentLineNumber = 0;
+                $currentItemKeepsDeliveryLabelInNote = false;
                 continue;
             }
 
@@ -796,12 +804,15 @@ class OrderAiDigitalPdfRulesParser
                 }
 
                 $currentLineNumber = (int) $detectedNextItem['line_number'];
+                $currentItemKeepsDeliveryLabelInNote = $this->isTrendyDeSpacedNumericArticleCode(
+                    (string) ($detectedNextItem['product_code'] ?? '')
+                );
                 continue;
             }
 
             if (
                 $currentLineNumber > 0
-                && !$this->isTrendyDeNoteBoundaryNoise($line)
+                && !$this->isTrendyDeNoteBoundaryNoise($line, $currentItemKeepsDeliveryLabelInNote)
             ) {
                 $notesByLineNumber[$currentLineNumber] = $this->appendTrendyDeBoundaryNoteLine(
                     (string) ($notesByLineNumber[$currentLineNumber] ?? ''),
@@ -830,13 +841,13 @@ class OrderAiDigitalPdfRulesParser
         return $existingNote === '' ? $line : $existingNote . "\n" . $line;
     }
 
-    private function isTrendyDeNoteBoundaryNoise(string $line): bool
+    private function isTrendyDeNoteBoundaryNoise(string $line, bool $keepDeliveryLabelInNote = false): bool
     {
         $normalized = $this->normalizeKeywordText($line);
 
         return $this->isTrendyDeNoiseLine($normalized)
             || $this->isTrendyDeTableHeaderLine($normalized)
-            || $this->containsTrendyDeDeliveryLabel($line)
+            || (!$keepDeliveryLabelInNote && $this->containsTrendyDeDeliveryLabel($line))
             || preg_match('/^page\s*\d+(?:\s*\/\s*\d+)?$/iu', trim($line)) === 1;
     }
 
@@ -1051,7 +1062,12 @@ class OrderAiDigitalPdfRulesParser
 
     private function trendyDeProductCodePattern(): string
     {
-        return '(?:[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24})';
+        return '(?:[A-Za-z]?\d{3,4}(?:\s+\d{2,4}){2,3}|[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24})';
+    }
+
+    private function isTrendyDeSpacedNumericArticleCode(string $productCode): bool
+    {
+        return preg_match('/^[A-Za-z]?\d{3,4}(?:\s+\d{2,4}){2,3}$/u', trim($productCode)) === 1;
     }
 
     private function initializeTrendyDeParsedItem(int $lineNumber, string $productCode, string $initialDescription = ''): array
