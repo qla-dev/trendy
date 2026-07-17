@@ -86,7 +86,8 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString('minutes > workBreak[0] && minutes < workBreak[1]', $this->view);
         $this->assertStringContainsString('missingClosingFields', $this->view);
         $this->assertStringContainsString('Nedostaju obavezna polja', $this->view);
-        $this->assertStringContainsString("operationCode === 'OP30' && isClosingOperationRowEmpty(row)", $this->view);
+        $this->assertStringContainsString('if (isClosingOperationRowEmpty(row))', $this->view);
+        $this->assertStringContainsString('[operation.worker_id, operation.time, operation.start_time, operation.end_time]', $this->view);
         $this->assertStringContainsString('modal-dialog-centered', $this->view);
     }
 
@@ -108,6 +109,7 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $stock = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonFinishedGoodsStockService.php');
         $this->assertStringContainsString('$this->stock->receive(', $receipt);
         $this->assertStringContainsString('dbo.tHE_Stock WITH (UPDLOCK, HOLDLOCK)', $stock);
+        $this->assertStringContainsString('existingDecimal', $stock);
         $this->assertStringContainsString('$submittedByItem[$qid][] = $operation', $this->service);
         $this->assertStringContainsString("'worker_entries' => \$workerEntries", $this->service);
         $this->assertStringContainsString('Završno vrijeme ne može biti prije početnog vremena.', $this->service);

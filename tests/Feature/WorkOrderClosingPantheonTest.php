@@ -151,6 +151,13 @@ class WorkOrderClosingPantheonTest extends TestCase
             $this->assertSame('OP30', $this->pantheon->table('dbo.tHE_MoveItem')
                 ->where('acKey', $operationDocument['document_key'])
                 ->value('acIdent'));
+            $this->assertTrue(
+                $this->pantheon->table('dbo.vHE_ViewDocWOEx')
+                    ->where('acKey', self::WORK_ORDER_KEY)
+                    ->where('acWhereKey', $operationDocument['document_key'])
+                    ->exists(),
+                'The manual-operation document must be present in Pantheon\'s work-order related-documents view.'
+            );
             $this->assertSame(0, $this->pantheon->table('dbo.tHF_LinkMoveItemWOExItem')
                 ->where('acKey', $operationDocument['document_key'])
                 ->count());
@@ -164,6 +171,114 @@ class WorkOrderClosingPantheonTest extends TestCase
         }
 
         $this->assertSame(0, $this->closingDocumentCount());
+    }
+
+    public function test_empty_work_order_closing_creates_positions_and_links_all_manual_document_items(): void
+    {
+        $emptyWorkOrderKey = $this->emptyWorkOrderKey();
+        $this->assertNotNull($emptyWorkOrderKey, 'An open, document-free empty work order is required for this integration test.');
+        $itemsBefore = $this->pantheon->table('dbo.tHF_WOExItem')->where('acKey', $emptyWorkOrderKey)->count();
+
+        $this->pantheon->beginTransaction();
+
+        try {
+            $result = app(WorkOrderClosingService::class)->close($emptyWorkOrderKey, [[
+                // Simulates a stale browser item id. An empty WO must treat
+                // the coded operation as manual input and create its own QId.
+                'item_qid' => 987654321,
+                'code' => 'OP30',
+                'worker_id' => self::WORKER_QID,
+                'time' => '120',
+                'start_time' => '',
+                'end_time' => '',
+            ], [
+                // A manually selected code without any work data is a modal
+                // placeholder. It must not create a second WO position or
+                // make the completed OP30 row a partial close.
+                'item_qid' => null,
+                'code' => 'OP10',
+                'worker_id' => null,
+                'time' => '',
+                'start_time' => '',
+                'end_time' => '',
+            ]], 1, '', [[
+                'code' => 'PLOPLAZMA',
+                'quantity' => '2',
+            ]]);
+
+            $documents = collect($result['documents'])->keyBy('document_type');
+            $this->assertSame(['6400', '6600', '6100'], array_column($result['documents'], 'document_type'));
+
+            $workOrderItems = $this->pantheon->table('dbo.tHF_WOExItem')
+                ->where('acKey', $emptyWorkOrderKey)
+                ->orderBy('anNo')
+                ->get(['anQId', 'anNo', 'acIdent', 'acOperationType', 'acIssueFinished'])
+                ->keyBy('acIdent');
+            $operationItem = $workOrderItems->get('OP30');
+            $materialItem = $workOrderItems->get('PLOPLAZMA');
+
+            $this->assertCount(2, $workOrderItems);
+            $this->assertSame(1, (int) $operationItem->anNo);
+            $this->assertSame('D', trim((string) $operationItem->acOperationType));
+            $this->assertSame(2, (int) $materialItem->anNo);
+            $this->assertSame('', trim((string) $materialItem->acOperationType));
+            $this->assertSame('Y', trim((string) $operationItem->acIssueFinished));
+            $this->assertSame('Y', trim((string) $materialItem->acIssueFinished));
+
+            $operationMoveItem = $this->pantheon->table('dbo.tHE_MoveItem')
+                ->where('acKey', $documents['6600']['document_key'])
+                ->where('acIdent', 'OP30')
+                ->first(['anQId', 'acLnkKey']);
+            $materialMoveItem = $this->pantheon->table('dbo.tHE_MoveItem')
+                ->where('acKey', $documents['6400']['document_key'])
+                ->where('acIdent', 'PLOPLAZMA')
+                ->first(['anQId', 'acLnkKey']);
+
+            $this->assertNotNull($operationMoveItem);
+            $this->assertNotNull($materialMoveItem);
+            $this->assertSame($documents['6100']['document_key'], trim((string) $operationMoveItem->acLnkKey));
+            $this->assertSame($documents['6100']['document_key'], trim((string) $materialMoveItem->acLnkKey));
+
+            $operationLink = $this->pantheon->table('dbo.tHF_LinkMoveItemWOExItem')
+                ->where('anMoveItemQId', (int) $operationMoveItem->anQId)
+                ->first(['acType', 'acTypeA', 'anWOExItemQid']);
+            $materialLink = $this->pantheon->table('dbo.tHF_LinkMoveItemWOExItem')
+                ->where('anMoveItemQId', (int) $materialMoveItem->anQId)
+                ->first(['acType', 'acTypeA', 'anWOExItemQid']);
+
+            $this->assertSame('PP', trim((string) $operationLink->acType));
+            $this->assertSame((int) $operationItem->anQId, (int) $operationLink->anWOExItemQid);
+            $this->assertSame('PP', trim((string) $materialLink->acType));
+            $this->assertSame('A', trim((string) $materialLink->acTypeA));
+            $this->assertSame((int) $materialItem->anQId, (int) $materialLink->anWOExItemQid);
+
+            $workerRecord = $this->pantheon->table('dbo.tHF_WOExItemWork')
+                ->where('anWOExItemQid', (int) $operationItem->anQId)
+                ->where('anMoveItemQId', (int) $operationMoveItem->anQId)
+                ->first(['acIdent', 'anTime']);
+            $this->assertNotNull($workerRecord);
+            $this->assertSame('OP30', trim((string) $workerRecord->acIdent));
+            $this->assertSame('240.000000', number_format((float) $workerRecord->anTime, 6, '.', ''));
+
+            foreach (['6400' => 'P', '6600' => 'P', '6100' => 'M'] as $documentType => $linkType) {
+                $document = $documents[$documentType];
+                $this->assertTrue($this->pantheon->table('dbo.tHF_LinkMoveWOEx')
+                    ->where('acKey', $document['document_key'])
+                    ->where('acLnkKey', $emptyWorkOrderKey)
+                    ->where('acType', $linkType)
+                    ->exists());
+                $this->assertTrue($this->pantheon->table('dbo.vHE_ViewDocWOEx')
+                    ->where('acKey', $emptyWorkOrderKey)
+                    ->where('acWhereKey', $document['document_key'])
+                    ->exists());
+            }
+        } finally {
+            while ($this->pantheon->transactionLevel() > 0) {
+                $this->pantheon->rollBack();
+            }
+        }
+
+        $this->assertSame($itemsBefore, $this->pantheon->table('dbo.tHF_WOExItem')->where('acKey', $emptyWorkOrderKey)->count());
     }
 
     public function test_receipt_failure_rolls_back_operation_document_and_status(): void
@@ -293,6 +408,30 @@ class WorkOrderClosingPantheonTest extends TestCase
                 $this->pantheon->rollBack();
             }
         }
+    }
+
+    private function emptyWorkOrderKey(): ?string
+    {
+        $row = $this->pantheon->table('dbo.tHF_WOEx as wo')
+            ->join('dbo.tHE_SetItem as product', 'product.acIdent', '=', 'wo.acIdent')
+            ->where('wo.acStatusMF', 'O')
+            ->where('wo.anPlanQty', '>', 0)
+            ->whereNotExists(function ($query) {
+                $query->selectRaw('1')
+                    ->from('dbo.tHF_WOExItem as wi')
+                    ->whereColumn('wi.acKey', 'wo.acKey');
+            })
+            ->whereNotExists(function ($query) {
+                $query->selectRaw('1')
+                    ->from('dbo.tHF_LinkMoveWOEx as l')
+                    ->join('dbo.tHE_Move as m', 'm.acKey', '=', 'l.acKey')
+                    ->whereColumn('l.acLnkKey', 'wo.acKey')
+                    ->whereIn('m.acDocType', ['6100', '6600']);
+            })
+            ->orderByDesc('wo.acKey')
+            ->value('wo.acKey');
+
+        return is_string($row) && trim($row) !== '' ? trim($row) : null;
     }
 
     private function payload(): array

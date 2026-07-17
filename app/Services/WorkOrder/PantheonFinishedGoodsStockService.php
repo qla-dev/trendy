@@ -71,8 +71,12 @@ class PantheonFinishedGoodsStockService
             return;
         }
 
-        $stock = bcadd((string) ($row->anStock ?? '0'), $quantity, WorkOrderClosingCalculator::SCALE);
-        $value = bcadd((string) ($row->anValue ?? '0'), $totalValue, WorkOrderClosingCalculator::SCALE);
+        // SQL Server FLOAT values can be hydrated by PHP in exponential form,
+        // for example 2.8421709430404007E-14. BCMath accepts only ordinary
+        // decimal strings, so normalise existing stock values before adding
+        // the newly received quantity/value.
+        $stock = bcadd($this->existingDecimal($row->anStock ?? null, 'anStock'), $quantity, WorkOrderClosingCalculator::SCALE);
+        $value = bcadd($this->existingDecimal($row->anValue ?? null, 'anValue'), $totalValue, WorkOrderClosingCalculator::SCALE);
 
         $connection->table('dbo.tHE_Stock')
             ->where('anQId', (int) $row->anQId)
@@ -83,5 +87,23 @@ class PantheonFinishedGoodsStockService
                 'adTimeChg' => $now,
                 'anUserChg' => $userId,
             ]);
+    }
+
+    private function existingDecimal(mixed $value, string $column): string
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return '0.000000';
+        }
+
+        $decimal = trim((string) $value);
+        if (preg_match('/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/', $decimal) === 1) {
+            return bcadd($decimal, '0', WorkOrderClosingCalculator::SCALE);
+        }
+
+        if (is_numeric($decimal)) {
+            return number_format((float) $decimal, WorkOrderClosingCalculator::SCALE, '.', '');
+        }
+
+        throw new RuntimeException("PostojeÄ‡a vrijednost zalihe {$column} nije broj.");
     }
 }

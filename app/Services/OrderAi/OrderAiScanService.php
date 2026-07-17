@@ -2079,7 +2079,8 @@ class OrderAiScanService
         $supplierName = $this->normalizeSupplierName((string) ($order['supplier_name'] ?? ''));
         $isGrobOrder = stripos((string) ($order['supplier_name'] ?? ''), 'grob') !== false
             || stripos($supplierName, 'grob') !== false;
-        $normalizedItems = array_values(array_filter(array_map(function ($item, int $index) use ($isGrobOrder) {
+        $isTrendyDeOrder = $this->isTrendyGermanyOrder($order);
+        $normalizedItems = array_values(array_filter(array_map(function ($item, int $index) use ($isGrobOrder, $isTrendyDeOrder) {
             if (!is_array($item)) {
                 return null;
             }
@@ -2089,7 +2090,8 @@ class OrderAiScanService
                 (string) ($item['product_name'] ?? ''),
                 (string) ($item['note'] ?? ''),
                 (string) ($item['drawing_reference'] ?? ''),
-                (string) ($item['material_hint'] ?? '')
+                (string) ($item['material_hint'] ?? ''),
+                $isTrendyDeOrder
             );
             $productCode = $this->normalizeScannedProductCode((string) ($item['product_code'] ?? ''));
             $productName = $this->normalizeScannedProductName($itemMeta['product_name']);
@@ -2212,7 +2214,8 @@ class OrderAiScanService
         string $productName,
         string $note = '',
         string $drawingReference = '',
-        string $materialHint = ''
+        string $materialHint = '',
+        bool $preserveNoteLineBreaks = false
     ): array {
         $nameLines = [];
         $drawingParts = [];
@@ -2273,7 +2276,9 @@ class OrderAiScanService
             'product_name' => $resolvedProductName,
             'drawing_reference' => $drawingReference,
             'material_hint' => $this->normalizeScannedText($materialHint),
-            'note' => $this->normalizeScannedText(implode(' | ', array_values(array_unique(array_filter($noteParts))))),
+            'note' => $preserveNoteLineBreaks
+                ? $this->normalizeScannedMultilineText(implode("\n", array_values(array_unique(array_filter($noteParts)))))
+                : $this->normalizeScannedText(implode(' | ', array_values(array_unique(array_filter($noteParts))))),
         ];
     }
 
@@ -2291,6 +2296,15 @@ class OrderAiScanService
 
     private function resolveTrendyDeSupplierName(string $searchableText, string $fallback = ''): string
     {
+        // The supplier subject is located between the NOVI TRAVNIK address
+        // line and "Datum". Keep the spelling printed in that header block:
+        // "Trendy Germany-12" and "Trendy Germany GmbH-52" are separate
+        // Pantheon subject names.
+        $positionedSupplierName = $this->extractTrendyDeHeaderSupplierName($searchableText);
+        if ($positionedSupplierName !== '') {
+            return $positionedSupplierName;
+        }
+
         $supplierNumber = $this->extractTrendyDeSupplierNumber($searchableText);
 
         if ($supplierNumber !== '') {
@@ -2300,6 +2314,35 @@ class OrderAiScanService
         $fallbackName = $this->normalizeTrendyDeSupplierName($fallback);
 
         return $fallbackName !== '' ? $fallbackName : self::TRENDY_DE_PARTY_NAME;
+    }
+
+    private function extractTrendyDeHeaderSupplierName(string $searchableText): string
+    {
+        $insideHeaderSupplierBlock = false;
+
+        foreach ($this->splitVisibleTextLines($searchableText) as $line) {
+            if (!$insideHeaderSupplierBlock) {
+                if (preg_match('/\b72290\s+NOVI\s+TRAVNIK\b/iu', $line) === 1) {
+                    $insideHeaderSupplierBlock = true;
+                }
+
+                continue;
+            }
+
+            if (preg_match('/\bDatum\b/iu', $line) === 1) {
+                break;
+            }
+
+            if (preg_match('/\b(Trendy\s+Germany(?:\s+GmbH)?\s*-\s*\d{1,4})\b/iu', $line, $matches) !== 1) {
+                continue;
+            }
+
+            $supplierName = $this->normalizeScannedText((string) ($matches[1] ?? ''));
+
+            return preg_replace('/\s*-\s*/u', '-', $supplierName) ?? $supplierName;
+        }
+
+        return '';
     }
 
     private function extractTrendyDeSupplierNumber(string $searchableText): string
@@ -2325,7 +2368,13 @@ class OrderAiScanService
             return '';
         }
 
-        if (preg_match('/\bTrendy\s+Germany(?:\s+GmbH)?\s*(?:-\s*|\s+)(\d{1,4})\b/iu', $value, $matches) === 1) {
+        if (preg_match('/\b(Trendy\s+Germany(?:\s+GmbH)?)\s*-\s*(\d{1,4})\b/iu', $value, $matches) === 1) {
+            $prefix = $this->normalizeScannedText((string) ($matches[1] ?? ''));
+
+            return $prefix . '-' . $this->normalizeTrendyDeSupplierNumber((string) ($matches[2] ?? ''));
+        }
+
+        if (preg_match('/\bTrendy\s+Germany(?:\s+GmbH)?\s+(\d{1,4})\b/iu', $value, $matches) === 1) {
             return self::TRENDY_DE_PARTY_NAME . '-' . $this->normalizeTrendyDeSupplierNumber((string) ($matches[1] ?? ''));
         }
 
@@ -2376,6 +2425,10 @@ class OrderAiScanService
         $summary = is_array($payload['summary'] ?? null) ? $payload['summary'] : [];
         $items = is_array($payload['items'] ?? null) ? array_values($payload['items']) : [];
         $preparedItems = is_array($prepared['items'] ?? null) ? array_values($prepared['items']) : [];
+        $isTrendyDeOrder = $this->isTrendyGermanyOrder(array_merge($order, [
+            'customer_name' => $prepared['customer_name'] ?? ($order['customer_name'] ?? ''),
+            'supplier_name' => $prepared['supplier_name'] ?? ($order['supplier_name'] ?? ''),
+        ]));
 
         $payload['order'] = array_merge($order, [
             'customer_name' => $this->normalizeScannedText((string) ($prepared['customer_name'] ?? ($order['customer_name'] ?? ''))),
@@ -2399,10 +2452,17 @@ class OrderAiScanService
 
         foreach ($preparedItems as $index => $preparedItem) {
             $existingItem = is_array($items[$index] ?? null) ? $items[$index] : [];
+            $existingProductCode = trim((string) ($existingItem['product_code'] ?? ''));
+            $preparedProductCode = trim((string) ($preparedItem['product_code'] ?? $existingProductCode));
 
             $items[$index] = array_merge($existingItem, [
                 'line_number' => (int) ($preparedItem['line_number'] ?? ($existingItem['line_number'] ?? ($index + 1))),
-                'product_code' => trim((string) ($preparedItem['product_code'] ?? ($existingItem['product_code'] ?? ''))),
+                // Pantheon catalog lookup can canonicalize an article code by
+                // removing spaces. The scan display must retain the code as
+                // printed in the source PDF (for example "0555 70 01 011").
+                'product_code' => $isTrendyDeOrder && $existingProductCode !== ''
+                    ? $existingProductCode
+                    : $preparedProductCode,
                 'product_name' => $this->normalizeScannedProductName(
                     trim((string) ($preparedItem['product_name'] ?? ($existingItem['product_name'] ?? '')))
                 ),
@@ -2417,7 +2477,9 @@ class OrderAiScanService
                 'vat_code' => trim((string) ($preparedItem['vat_code'] ?? ($existingItem['vat_code'] ?? ''))),
                 'discount_percent' => (float) ($preparedItem['discount_percent'] ?? ($existingItem['discount_percent'] ?? 0)),
                 'priority' => trim((string) ($preparedItem['priority'] ?? ($existingItem['priority'] ?? ''))),
-                'note' => $this->normalizeScannedText((string) ($preparedItem['note'] ?? ($existingItem['note'] ?? ''))),
+                'note' => $isTrendyDeOrder
+                    ? $this->normalizeScannedMultilineText((string) ($preparedItem['note'] ?? ($existingItem['note'] ?? '')))
+                    : $this->normalizeScannedText((string) ($preparedItem['note'] ?? ($existingItem['note'] ?? ''))),
                 'primary_classification' => trim((string) ($preparedItem['primary_classification'] ?? ($existingItem['primary_classification'] ?? ''))),
                 'catalog_item_exists' => (bool) ($preparedItem['catalog_item_exists'] ?? ($existingItem['catalog_item_exists'] ?? false)),
                 'catalog_item_missing' => (bool) ($preparedItem['catalog_item_missing'] ?? ($existingItem['catalog_item_missing'] ?? false)),
@@ -2726,6 +2788,34 @@ class OrderAiScanService
         $value = Utf8Sanitizer::repairGermanUmlautSpacing(Utf8Sanitizer::clean($value));
 
         return trim((string) (preg_replace('/\s+/u', ' ', str_replace(["\r", "\n"], ' ', $value)) ?? $value));
+    }
+
+    private function normalizeScannedMultilineText(string $value): string
+    {
+        $value = Utf8Sanitizer::repairGermanUmlautSpacing(Utf8Sanitizer::clean($value));
+        $lines = preg_split('/\R/u', $value) ?: [];
+
+        return implode("\n", array_values(array_filter(array_map(function ($line) {
+            return trim((string) (preg_replace('/[ \t]+/u', ' ', (string) $line) ?? $line));
+        }, $lines))));
+    }
+
+    private function isTrendyGermanyOrder(array $order): bool
+    {
+        foreach (['customer_name', 'supplier_name'] as $field) {
+            $value = trim((string) ($order[$field] ?? ''));
+
+            if ($value !== '' && stripos($value, 'trendy germany') !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isTrendyDeSpacedNumericArticleCode(string $productCode): bool
+    {
+        return preg_match('/^[A-Za-z]?\d{3,4}(?:\s+\d{2,4}){2,3}$/u', trim($productCode)) === 1;
     }
 
     private function orderAiScanColumnExists(string $column): bool
@@ -3342,6 +3432,7 @@ class OrderAiScanService
             $pendingDeliveryLabel = false;
             $lineNumber = (int) ($item['line_number'] ?? 0);
             $productCode = $this->normalizeScannedProductCode((string) ($item['product_code'] ?? ''));
+            $keepDeliveryLabelInNote = $this->isTrendyDeSpacedNumericArticleCode($productCode);
 
             foreach ($this->splitVisibleTextLines(
                 trim((string) ($item['product_name'] ?? '')) . "\n" . trim((string) ($item['note'] ?? ''))
@@ -3351,6 +3442,10 @@ class OrderAiScanService
                 if ($this->containsTrendyDeDeliveryLabel($line)) {
                     if ($deliveryDeadline === '' && $lineDeliveryDeadline !== '') {
                         $deliveryDeadline = $lineDeliveryDeadline;
+                    }
+
+                    if ($keepDeliveryLabelInNote) {
+                        $contentLines[] = $line;
                     }
 
                     $pendingDeliveryLabel = $lineDeliveryDeadline === '';
@@ -3376,7 +3471,7 @@ class OrderAiScanService
 
             $item['product_name'] = $productName;
             $item['note'] = $this->sanitizeTrendyDeItemNote(
-                implode(' | ', array_values(array_unique(array_filter($noteLines)))),
+                implode("\n", array_values(array_filter($noteLines))),
                 $lineNumber
             );
 
@@ -3472,7 +3567,7 @@ class OrderAiScanService
                 );
             }
 
-            $item['note'] = implode(' | ', array_values(array_unique(array_filter($currentNoteParts))));
+            $item['note'] = implode("\n", array_values(array_unique(array_filter($currentNoteParts))));
             $expanded[] = $item;
 
             foreach ($embeddedItems as $embeddedItem) {
@@ -3504,7 +3599,7 @@ class OrderAiScanService
             }, $parts)));
         }
 
-        return implode(' | ', array_values(array_filter($parts)));
+        return implode("\n", array_values(array_filter($parts)));
     }
 
     private function resolveTrendyDeItemDeliveryDeadline(
@@ -4365,16 +4460,25 @@ class OrderAiScanService
     private function appendItemNote(string $existingNote, string $extraNote): string
     {
         $notes = [];
+        $preserveLineBreaks = false;
 
         foreach ([trim($existingNote), trim($extraNote)] as $note) {
             if ($note === '') {
                 continue;
             }
 
-            $notes[$note] = $note;
+            $preserveLineBreaks = $preserveLineBreaks || preg_match('/\R/u', $note) === 1;
+
+            foreach (preg_split('/\R/u', $note) ?: [] as $noteLine) {
+                $noteLine = trim((string) $noteLine);
+
+                if ($noteLine !== '') {
+                    $notes[$noteLine] = $noteLine;
+                }
+            }
         }
 
-        return implode(' | ', array_values($notes));
+        return implode($preserveLineBreaks ? "\n" : ' | ', array_values($notes));
     }
 
     private function extractGermanAmounts(string $value): array
@@ -4531,7 +4635,7 @@ class OrderAiScanService
 
     private function trendyDeProductCodePattern(): string
     {
-        return '(?:[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24})';
+        return '(?:[A-Za-z]?\d{3,4}(?:\s+\d{2,4}){2,3}|[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24})';
     }
 
     private function trendyDeProcessOrFinishPattern(): string
