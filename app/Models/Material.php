@@ -69,15 +69,23 @@ class Material extends Model
         self::applyLikeAny($query, ['i.acIdent', 'i.acName'], $search);
 
         $codeExpr = "LTRIM(RTRIM(ISNULL(i.acIdent, '')))";
+        $nameExpr = "LTRIM(RTRIM(ISNULL(i.acName, '')))";
+        $searchPrefix = mb_strtoupper(trim($search)) . '%';
         $rows = $query
             ->selectRaw("$codeExpr as material_code")
-            ->selectRaw("LTRIM(RTRIM(ISNULL(i.acName, ''))) as material_name")
+            ->selectRaw("$nameExpr as material_name")
             ->selectRaw("LTRIM(RTRIM(ISNULL(i.acUM, ''))) as material_um")
             ->selectRaw("CAST(ISNULL(i.anDimWeight, 0) as float) as material_weight_net")
             ->selectRaw("CAST(ISNULL(i.anDimWeightBrutto, 0) as float) as material_weight_gross")
             ->selectRaw("MIN(LTRIM(RTRIM(ISNULL(s.acWarehouse, '')))) as material_warehouse")
             ->selectRaw("COALESCE(SUM(CAST(ISNULL(s.anStock, 0) as float)), 0) as material_qty")
             ->groupBy('i.acIdent', 'i.acName', 'i.acUM', 'i.anDimWeight', 'i.anDimWeightBrutto')
+            ->when(trim($search) !== '', function (Builder $orderedQuery) use ($codeExpr, $nameExpr, $searchPrefix) {
+                $orderedQuery->orderByRaw(
+                    "CASE WHEN UPPER($codeExpr) LIKE ? THEN 0 WHEN UPPER($nameExpr) LIKE ? THEN 1 ELSE 2 END",
+                    [$searchPrefix, $searchPrefix]
+                );
+            })
             ->orderByRaw("CASE WHEN LEFT($codeExpr, 1) LIKE '[A-Za-z]' THEN 0 WHEN LEFT($codeExpr, 1) LIKE '[0-9]' THEN 2 ELSE 1 END ASC")
             ->orderByRaw("UPPER($codeExpr) ASC")
             ->offset($resolvedOffset)
@@ -914,13 +922,14 @@ class Material extends Model
         }
 
         $query->where(function (Builder $likeQuery) use ($columns, $value) {
+            $needle = '%' . mb_strtoupper($value) . '%';
             foreach ($columns as $index => $column) {
                 if ($index === 0) {
-                    $likeQuery->where($column, 'like', '%' . $value . '%');
+                    $likeQuery->whereRaw("UPPER($column) LIKE ?", [$needle]);
                     continue;
                 }
 
-                $likeQuery->orWhere($column, 'like', '%' . $value . '%');
+                $likeQuery->orWhereRaw("UPPER($column) LIKE ?", [$needle]);
             }
         });
     }

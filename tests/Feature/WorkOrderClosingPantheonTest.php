@@ -93,6 +93,79 @@ class WorkOrderClosingPantheonTest extends TestCase
         $this->assertSame('O', trim((string) $this->pantheon->table('dbo.tHF_WOEx')->where('acKey', self::WORK_ORDER_KEY)->value('acStatusMF')));
     }
 
+    public function test_closing_creates_the_expected_pantheon_work_order_link_values(): void
+    {
+        $this->pantheon->beginTransaction();
+
+        try {
+            $result = app(WorkOrderClosingService::class)->close(self::WORK_ORDER_KEY, $this->payload(), 1);
+            $documentKeys = array_column($result['documents'], 'document_key');
+            $links = $this->pantheon->table('dbo.tHF_LinkMoveWOEx as l')
+                ->join('dbo.tHE_Move as m', 'm.acKey', '=', 'l.acKey')
+                ->where('l.acLnkKey', self::WORK_ORDER_KEY)
+                ->whereIn('l.acKey', $documentKeys)
+                ->orderBy('m.acDocType')
+                ->get(['m.acDocType', 'l.acKey', 'l.acLnkKey', 'l.acType', 'l.anMoveQId'])
+                ->keyBy('acDocType');
+
+            $expected = [
+                '6100' => 'M',
+                '6600' => 'P',
+            ];
+
+            foreach ($expected as $documentType => $linkType) {
+                $link = $links->get($documentType);
+                $this->assertNotNull($link, "Missing {$documentType} header link for the newly closed WO.");
+                $this->assertSame(self::WORK_ORDER_KEY, trim((string) $link->acLnkKey));
+                $this->assertSame($linkType, trim((string) $link->acType));
+                $this->assertGreaterThan(0, (int) $link->anMoveQId);
+            }
+        } finally {
+            while ($this->pantheon->transactionLevel() > 0) {
+                $this->pantheon->rollBack();
+            }
+        }
+
+        $this->assertSame(0, $this->closingDocumentCount());
+    }
+
+    public function test_manual_document_only_operation_creates_closing_documents_without_a_bom_item_link(): void
+    {
+        $this->pantheon->beginTransaction();
+
+        try {
+            $result = app(WorkOrderClosingService::class)->close(self::WORK_ORDER_KEY, [[
+                'item_qid' => null,
+                'code' => 'OP30',
+                'worker_id' => self::WORKER_QID,
+                'time' => '120',
+                'start_time' => '',
+                'end_time' => '',
+            ]], 1, '', [[
+                'code' => 'PLOPLAZMA',
+                'quantity' => '2',
+            ]]);
+
+            $operationDocument = collect($result['documents'])->firstWhere('document_type', '6600');
+            $this->assertNotNull($operationDocument);
+            $this->assertSame('OP30', $this->pantheon->table('dbo.tHE_MoveItem')
+                ->where('acKey', $operationDocument['document_key'])
+                ->value('acIdent'));
+            $this->assertSame(0, $this->pantheon->table('dbo.tHF_LinkMoveItemWOExItem')
+                ->where('acKey', $operationDocument['document_key'])
+                ->count());
+            $this->assertSame(0, $this->pantheon->table('dbo.tHF_WOExItemWork')
+                ->where('acLnkKey', $operationDocument['document_key'])
+                ->count());
+        } finally {
+            while ($this->pantheon->transactionLevel() > 0) {
+                $this->pantheon->rollBack();
+            }
+        }
+
+        $this->assertSame(0, $this->closingDocumentCount());
+    }
+
     public function test_receipt_failure_rolls_back_operation_document_and_status(): void
     {
         $originalWarehouse = config('work_order_closing.receipt_warehouse');
