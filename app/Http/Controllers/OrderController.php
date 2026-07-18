@@ -364,6 +364,7 @@ class OrderController extends WorkOrderController
                         'pantheon_order_view' => null,
                         'pantheon_order_qid' => null,
                         'transferred_at' => null,
+                        'billed_tokens' => 0,
                         'completed_at' => now(),
                     ])->save();
                 }
@@ -527,6 +528,7 @@ class OrderController extends WorkOrderController
                 'pantheon_order_view' => $result['pantheon_order_view'] ?? null,
                 'pantheon_order_qid' => $result['pantheon_order_qid'] ?? null,
                 'transferred_at' => now(),
+                'billed_tokens' => $orderAiScanService->calculateBilledTokensForTransferredScan($scan),
                 'completed_at' => now(),
                 'error_message' => null,
             ])->save();
@@ -629,6 +631,7 @@ class OrderController extends WorkOrderController
                 'status' => 'failed',
                 'processing_step' => 'Transfer u bazu nije uspio.',
                 'error_message' => $reason,
+                'billed_tokens' => 0,
                 'completed_at' => now(),
             ])->save();
         } catch (Throwable $exception) {
@@ -673,6 +676,7 @@ class OrderController extends WorkOrderController
                 'progress_current' => 100,
                 'pantheon_transfer_payload' => $transferPreview,
                 'error_message' => null,
+                'billed_tokens' => 0,
                 'completed_at' => $duplicateScan->completed_at ?? now(),
             ])->save();
         } catch (Throwable $exception) {

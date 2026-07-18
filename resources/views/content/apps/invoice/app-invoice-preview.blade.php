@@ -2656,6 +2656,9 @@
           <li class="nav-item">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#close-work-order-materials" type="button" role="tab">Materijali</button>
           </li>
+          <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#close-work-order-receipts" type="button" role="tab">Prijem</button>
+          </li>
         </ul>
         <div class="tab-content pt-1">
           <div class="tab-pane fade show active" id="close-work-order-operations" role="tabpanel">
@@ -2779,6 +2782,30 @@
                 </tbody>
               </table>
             </div>
+          </div>
+          <div class="tab-pane fade" id="close-work-order-receipts" role="tabpanel">
+            @php
+              $closingReceiptCode = $workOrder['sifra'] ?? $workOrder['sifra_proizvoda'] ?? $workOrder['product_code'] ?? $workOrder['acIdent'] ?? '';
+              $closingReceiptName = $workOrder['naziv'] ?? $workOrder['naziv_proizvoda'] ?? $workOrder['product_name'] ?? '';
+              $closingReceiptQuantity = $workOrder['kolicina'] ?? '';
+            @endphp
+            <p class="text-muted mb-1">Rasporedite proizvedenu količinu između veleprodajnog skladišta i skladišta škarta. Ukupan prijem mora biti jednak količini radnog naloga.</p>
+            <div class="table-responsive">
+              <table class="table align-middle" id="close-work-order-receipts-table">
+                <thead><tr><th>Odredište</th><th>Artikal</th><th>Naziv</th><th>Količina</th><th>MJ</th><th></th></tr></thead>
+                <tbody>
+                  <tr data-receipt-target="vp">
+                    <td>Veleprodajno skladište</td>
+                    <td>{{ $displayValue($closingReceiptCode) }}</td>
+                    <td>{{ $displayValue($closingReceiptName) }}</td>
+                    <td><input class="form-control form-control-sm wo-close-receipt-quantity" type="text" inputmode="decimal" value="{{ $closingReceiptQuantity }}" autocomplete="off"></td>
+                    <td>{{ $displayValue($workOrder['mj'] ?? null) }}</td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="wo-close-add-scrap-receipt-btn"><i class="fa fa-plus me-50"></i>Dodaj prijem škarta</button>
           </div>
         </div>
       </div>
@@ -3917,8 +3944,30 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           };
         }).filter(function (material) {
           return material.code !== '' || material.quantity !== '';
+        }),
+        receipts: Array.prototype.slice.call(document.querySelectorAll('#close-work-order-receipts-table tbody tr')).map(function (row) {
+          return {
+            target: String(row.getAttribute('data-receipt-target') || '').trim(),
+            quantity: String((row.querySelector('.wo-close-receipt-quantity') || {}).value || '').trim().replace(',', '.')
+          };
         })
       };
+    }
+
+    function addScrapReceiptRow() {
+      var table = document.getElementById('close-work-order-receipts-table');
+      var addButton = document.getElementById('wo-close-add-scrap-receipt-btn');
+      if (!table || table.querySelector('tr[data-receipt-target="scrap"]')) return;
+      var vpRow = table.querySelector('tr[data-receipt-target="vp"]');
+      if (!vpRow) return;
+      var row = vpRow.cloneNode(true);
+      row.setAttribute('data-receipt-target', 'scrap');
+      row.children[0].textContent = 'Skladište škarta';
+      var quantity = row.querySelector('.wo-close-receipt-quantity');
+      if (quantity) quantity.value = '';
+      row.children[row.children.length - 1].innerHTML = '<button type="button" class="btn btn-outline-danger btn-sm wo-close-remove-scrap-receipt-btn" title="Ukloni"><i class="fa fa-trash"></i></button>';
+      table.querySelector('tbody').appendChild(row);
+      if (addButton) addButton.disabled = true;
     }
 
     function isClosingOperationRowEmpty(row) {
@@ -4033,6 +4082,19 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
         if (target.classList.contains('wo-close-time') || target.matches('.wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute') || target.classList.contains('wo-close-worker-search')) {
           validateWorkOrderClosing(false);
+        }
+      });
+
+      closeWorkOrderModal.addEventListener('click', function (event) {
+        if (event.target.closest('#wo-close-add-scrap-receipt-btn')) {
+          addScrapReceiptRow();
+          return;
+        }
+        if (event.target.closest('.wo-close-remove-scrap-receipt-btn')) {
+          var row = event.target.closest('tr[data-receipt-target="scrap"]');
+          if (row) row.remove();
+          var addButton = document.getElementById('wo-close-add-scrap-receipt-btn');
+          if (addButton) addButton.disabled = false;
         }
       });
 

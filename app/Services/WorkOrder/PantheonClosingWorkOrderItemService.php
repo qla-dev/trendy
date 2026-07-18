@@ -57,6 +57,7 @@ class PantheonClosingWorkOrderItemService
 
             $operations[$index]['item_qid'] = $qid;
             $operations[$index]['position'] = $position;
+            $this->ensureOperationResourceRow($connection, $qid, $workOrderKey, $position, $now, $userId);
             $createdItems[] = [
                 'qid' => $qid,
                 'position' => $position,
@@ -197,5 +198,50 @@ class PantheonClosingWorkOrderItemService
         }
 
         return (int) $qid;
+    }
+
+    /**
+     * Pantheon treats an operation position as schedulable only when it also
+     * has a resource row. Without it the 6600 line and its links exist, but
+     * the related-documents UI can omit the Operacije branch.
+     */
+    public function ensureOperationResourceRow(
+        ConnectionInterface $connection,
+        int $itemQid,
+        string $workOrderKey,
+        int $position,
+        Carbon $now,
+        int $userId
+    ): void {
+        if ($itemQid < 1 || $connection->table('dbo.tHF_WOExItemResources')->where('anWOExItemQId', $itemQid)->exists()) {
+            return;
+        }
+
+        $connection->table('dbo.tHF_WOExItemResources')->insert([
+            'acResursID' => '',
+            'anQty' => 0,
+            'acNote' => '',
+            'anUserIns' => $userId,
+            'adTimeIns' => $now,
+            'anUserChg' => $userId,
+            'adTimeChg' => $now,
+            'acResType' => '',
+            'anPlanQty' => 0,
+            'anShift' => 0,
+            'anPlanArea' => 0,
+            'anArea' => 0,
+            'anQty1' => 0,
+            'anQty2' => 0,
+            'anBatch' => 1,
+            'anNoOfWorkers' => 1,
+            'anPriority' => 0,
+            'anWOExItemQId' => $itemQid,
+            'acETAdditive' => '',
+            'acIncomeGrp' => '',
+            'acQtyFormula' => '',
+            'acIssueFinished' => 'N',
+            'anExecutionPerc' => 0,
+            'acSubContractor' => '',
+        ]);
     }
 }

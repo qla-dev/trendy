@@ -12,6 +12,7 @@
   $documentItemLabel = match ($releasedMaterialsConfig['documentType']) {
       '6600' => 'operacije',
       '6100' => 'gotovog proizvoda',
+      '7100' => 'škarta',
       default => 'materijala',
   };
 @endphp

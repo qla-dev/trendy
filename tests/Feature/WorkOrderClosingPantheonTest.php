@@ -129,6 +129,46 @@ class WorkOrderClosingPantheonTest extends TestCase
         $this->assertSame(0, $this->closingDocumentCount());
     }
 
+    public function test_closing_splits_finished_goods_receipts_between_vp_and_scrap_warehouses(): void
+    {
+        $this->pantheon->beginTransaction();
+
+        try {
+            $plannedQuantity = (string) $this->pantheon->table('dbo.tHF_WOEx')
+                ->where('acKey', self::WORK_ORDER_KEY)
+                ->value('anPlanQty');
+            $vpQuantity = bcdiv($plannedQuantity, '2', 6);
+            $scrapQuantity = bcsub($plannedQuantity, $vpQuantity, 6);
+
+            $result = app(WorkOrderClosingService::class)->close(
+                self::WORK_ORDER_KEY,
+                $this->payload(),
+                1,
+                '',
+                [],
+                [
+                    ['target' => 'vp', 'quantity' => $vpQuantity],
+                    ['target' => 'scrap', 'quantity' => $scrapQuantity],
+                ]
+            );
+
+            $documents = collect($result['documents'])->keyBy('document_type');
+            $this->assertArrayHasKey('6100', $documents);
+            $this->assertArrayHasKey('7100', $documents);
+            $this->assertSame($vpQuantity, $documents['6100']['quantity']);
+            $this->assertSame($scrapQuantity, $documents['7100']['quantity']);
+            $this->assertTrue($this->pantheon->table('dbo.tHF_LinkMoveWOEx')
+                ->where('acKey', $documents['7100']['document_key'])
+                ->where('acLnkKey', self::WORK_ORDER_KEY)
+                ->where('acType', 'M')
+                ->exists());
+        } finally {
+            while ($this->pantheon->transactionLevel() > 0) {
+                $this->pantheon->rollBack();
+            }
+        }
+    }
+
     public function test_manual_document_only_operation_creates_closing_documents_without_a_bom_item_link(): void
     {
         $this->pantheon->beginTransaction();
@@ -224,6 +264,12 @@ class WorkOrderClosingPantheonTest extends TestCase
             $this->assertSame('', trim((string) $materialItem->acOperationType));
             $this->assertSame('Y', trim((string) $operationItem->acIssueFinished));
             $this->assertSame('Y', trim((string) $materialItem->acIssueFinished));
+            $this->assertTrue($this->pantheon->table('dbo.tHF_WOExItemResources')
+                ->where('anWOExItemQId', (int) $operationItem->anQId)
+                ->exists(), 'A manually created operation WO item must have its Pantheon resource row.');
+            $this->assertSame('Y', trim((string) $this->pantheon->table('dbo.tHF_WOExItemResources')
+                ->where('anWOExItemQId', (int) $operationItem->anQId)
+                ->value('acIssueFinished')));
 
             $operationMoveItem = $this->pantheon->table('dbo.tHE_MoveItem')
                 ->where('acKey', $documents['6600']['document_key'])

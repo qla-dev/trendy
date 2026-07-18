@@ -1463,7 +1463,6 @@ class OrderAiScanService
                 $finalized = $this->finalizeExtractionResult($scan, $result, $user, true);
                 $normalizedPayload = $finalized['normalized_payload'];
                 $pageCount = (int) ($finalized['page_count'] ?? 0);
-                $billedTokens = (int) ($finalized['billed_tokens'] ?? 0);
                 $transferReady = (bool) ($finalized['transfer_ready'] ?? false);
                 $transferPreview = $finalized['transfer_preview'] ?? null;
 
@@ -1501,7 +1500,9 @@ class OrderAiScanService
                 }
 
                 if ($this->orderAiScanColumnExists('billed_tokens')) {
-                    $attributes['billed_tokens'] = max(0, $billedTokens);
+                    // Extraction alone is not chargeable. The page-based amount is
+                    // recorded only after Pantheon confirms that the order exists.
+                    $attributes['billed_tokens'] = 0;
                 }
 
                 if ($this->orderAiScanColumnExists('extraction_method')) {
@@ -1795,7 +1796,7 @@ class OrderAiScanService
                     ->createFromNormalizedPayload($normalizedPayload, $user)
             );
 
-            $scan->forceFill([
+            $attributes = [
                 'status' => 'transferred',
                 'processing_step' => 'Narudžba je prebačena u bazu.',
                 'progress_current' => 100,
@@ -1806,14 +1807,26 @@ class OrderAiScanService
                 'transferred_at' => now(),
                 'completed_at' => now(),
                 'error_message' => null,
-            ])->save();
+            ];
+
+            if ($this->orderAiScanColumnExists('billed_tokens')) {
+                $attributes['billed_tokens'] = $this->calculateBilledTokensForTransferredScan($scan);
+            }
+
+            $scan->forceFill($attributes)->save();
         } catch (\Throwable $exception) {
-            $scan->forceFill([
+            $attributes = [
                 'status' => 'failed',
                 'processing_step' => 'Transfer u bazu nije uspio.',
                 'error_message' => $this->humanizeTransferFailureReason($exception),
                 'completed_at' => now(),
-            ])->save();
+            ];
+
+            if ($this->orderAiScanColumnExists('billed_tokens')) {
+                $attributes['billed_tokens'] = 0;
+            }
+
+            $scan->forceFill($attributes)->save();
         }
 
         return $scan->fresh();
@@ -2899,15 +2912,9 @@ class OrderAiScanService
             $displayPageCount = $effectivePageCount;
         }
 
-        $billedTokens = max(0, (int) ($scan->billed_tokens ?? 0));
-
-        if (!$this->hasSuccessfulExtraction($scan)) {
-            $billedTokens = 0;
-        } elseif ($displayPageCount > 0) {
-            $billedTokens = app(OrderAiDocumentMetrics::class)->calculateBilledTokens($displayPageCount);
-        } else {
-            $billedTokens = 0;
-        }
+        $billedTokens = ($this->hasPersistedPantheonOrder($scan) || trim((string) ($scan->status ?? '')) === 'transferred')
+            ? $this->calculateBilledTokensForTransferredScan($scan, $resolvedPayload, $resolvedPageMeta)
+            : 0;
 
         return [
             'page_count' => max(0, $displayPageCount),
@@ -2916,6 +2923,38 @@ class OrderAiScanService
             'billed_tokens' => max(0, $billedTokens),
             'page_processing_limit_reason' => trim((string) ($resolvedPageMeta['page_processing_limit_reason'] ?? '')),
         ];
+    }
+
+    /**
+     * Calculates the existing page-based charge after a successful database transfer.
+     * This deliberately does not inspect the scan status so callers can calculate the
+     * value immediately before persisting the successful-transfer state.
+     */
+    public function calculateBilledTokensForTransferredScan(
+        OrderAiScan $scan,
+        ?array $payload = null,
+        ?array $processingPageMeta = null
+    ): int {
+        if (!$this->hasSuccessfulExtraction($scan)) {
+            return 0;
+        }
+
+        $resolvedPayload = is_array($payload)
+            ? $payload
+            : (is_array($scan->normalized_payload) ? $scan->normalized_payload : []);
+        $resolvedPageMeta = is_array($processingPageMeta)
+            ? $processingPageMeta
+            : $this->resolveProcessingPageMeta($scan, $resolvedPayload);
+        $pageCount = max(0, (int) ($scan->page_count ?? data_get($resolvedPayload, 'order.page_count', 0)));
+        $effectivePageCount = max(0, (int) ($resolvedPageMeta['effective_page_count'] ?? 0));
+
+        if ($this->resolveDocumentProfileKey($scan) === 'grob' && $effectivePageCount > 0) {
+            $pageCount = $effectivePageCount;
+        }
+
+        return $pageCount > 0
+            ? app(OrderAiDocumentMetrics::class)->calculateBilledTokens($pageCount)
+            : 0;
     }
 
     private function resolveTransferReadyForDisplay(OrderAiScan $scan, array $payload, mixed $transferPreview): bool

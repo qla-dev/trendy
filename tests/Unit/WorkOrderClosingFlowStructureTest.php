@@ -47,6 +47,9 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString('Početak izrade', $this->view);
         $this->assertStringContainsString('Kraj izrade', $this->view);
         $this->assertStringContainsString('Trajanje (min/jedinica)', $this->view);
+        $this->assertStringContainsString('>Prijem</button>', $this->view);
+        $this->assertStringContainsString('close-work-order-receipts-table', $this->view);
+        $this->assertStringContainsString('wo-close-add-scrap-receipt-btn', $this->view);
         $this->assertStringContainsString('wo-close-copy-row-btn', $this->view);
         $this->assertStringContainsString('wo-close-clear-row-btn', $this->view);
         $this->assertStringContainsString('Očisti red', $this->view);
@@ -95,7 +98,7 @@ class WorkOrderClosingFlowStructureTest extends TestCase
     {
         $this->assertStringContainsString('$this->connection->transaction(', $this->service);
         $this->assertStringContainsString('existingClosingDocuments', $this->service);
-        $this->assertStringContainsString("whereIn('m.acDocType', ['6100', '6600'])", $this->service);
+        $this->assertStringContainsString("whereIn('m.acDocType', ['6100', '6600', '7100'])", $this->service);
         $this->assertStringContainsString("'acStatusMF' => 'Z'", $this->service);
         $this->assertStringContainsString("'acReceiveFinished' => 'Y'", $this->service);
         $this->assertStringContainsString("'acStatusMF' => 'R'", $this->service);

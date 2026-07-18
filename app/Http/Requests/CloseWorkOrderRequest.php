@@ -13,6 +13,7 @@ class CloseWorkOrderRequest extends FormRequest
     {
         $operations = $this->input('operations');
         $materials = $this->input('materials');
+        $receipts = $this->input('receipts');
 
         if (is_array($operations)) {
             $operations = array_values(array_filter(array_map(function ($operation) {
@@ -50,9 +51,19 @@ class CloseWorkOrderRequest extends FormRequest
             }));
         }
 
+        if (is_array($receipts)) {
+            $receipts = array_values(array_filter(array_map(function ($receipt) {
+                $receipt = is_array($receipt) ? $receipt : [];
+                $receipt['target'] = trim((string) ($receipt['target'] ?? ''));
+                $receipt['quantity'] = trim((string) ($receipt['quantity'] ?? ''));
+                return $receipt;
+            }, $receipts), fn (array $receipt): bool => $receipt['target'] !== '' || $receipt['quantity'] !== ''));
+        }
+
         $this->merge([
             'operations' => $operations,
             'materials' => $materials,
+            'receipts' => $receipts,
         ]);
     }
 
@@ -80,6 +91,9 @@ class CloseWorkOrderRequest extends FormRequest
             'materials.*.item_qid' => ['nullable', 'integer', 'min:1'],
             'materials.*.code' => ['nullable', 'string', 'max:64'],
             'materials.*.quantity' => ['nullable', 'regex:/^(?:0|[1-9]\d*)(?:[.,]\d+)?$/'],
+            'receipts' => ['required', 'array', 'min:1'],
+            'receipts.*.target' => ['required', 'in:vp,scrap'],
+            'receipts.*.quantity' => ['required', 'regex:/^(?:0|[1-9]\d*)(?:[.,]\d+)?$/'],
         ];
     }
 

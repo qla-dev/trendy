@@ -422,7 +422,8 @@ class AiTokenHistoryController extends Controller
             return $this->documentMetricsCache[$cacheKey];
         }
         $pageCount = max(0, (int) ($scan->page_count ?? 0));
-        $billedTokens = $scan->processed_at !== null
+        $status = trim((string) ($scan->status ?? ''));
+        $billedTokens = $this->hasTransferResult($scan, $status)
             ? app(OrderAiDocumentMetrics::class)->calculateBilledTokens($pageCount)
             : 0;
 
