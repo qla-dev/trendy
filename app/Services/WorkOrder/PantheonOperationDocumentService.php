@@ -169,6 +169,21 @@ class PantheonOperationDocumentService
                 $connection->table('dbo.tHF_WOExItem')
                     ->where('anQId', (int) $operation['item_qid'])
                     ->update(['acIssueFinished' => 'Y', 'adTimeChg' => $now, 'anUserChg' => $userId]);
+
+                // Pantheon exposes the related Operacije branch through the
+                // operation resource as well as through the document links.
+                // Keep that resource in the same completed state as the WO item.
+                $connection->table('dbo.tHF_WOExItemResources')
+                    ->where('anWOExItemQId', (int) $operation['item_qid'])
+                    ->update([
+                        'anQty' => $operation['consumedMinutes'],
+                        'anPlanQty' => $operation['consumedMinutes'],
+                        'anQty1' => $operation['consumedMinutes'],
+                        'acIssueFinished' => 'Y',
+                        'anExecutionPerc' => 100,
+                        'adTimeChg' => $now,
+                        'anUserChg' => $userId,
+                    ]);
             }
         }
 

@@ -310,6 +310,36 @@ $documentItemLinks = phptest34_fetch_all($connection, '
     ORDER BY m.acKeyView, mi.anNo
 ', [$workOrderKey]);
 
+$operationResourceChecks = phptest34_fetch_all($connection, '
+    SELECT
+        m.acKeyView AS operation_document_number,
+        mi.anNo AS document_line,
+        mi.acIdent AS operation_code,
+        il.anWOExItemQid AS linked_wo_item_qid,
+        wi.anNo AS wo_position,
+        wi.acOperationType AS wo_operation_type,
+        CASE WHEN res.anQId IS NULL THEN \'NO\' ELSE \'YES\' END AS has_operation_resource_row,
+        res.anQId AS operation_resource_qid,
+        res.acIssueFinished AS resource_issue_finished,
+        res.anExecutionPerc AS resource_execution_percent,
+        res.anQty AS resource_actual_time,
+        res.anPlanQty AS resource_planned_time,
+        CASE
+            WHEN res.anQId IS NULL THEN \'NO\'
+            WHEN LTRIM(RTRIM(ISNULL(res.acIssueFinished, \'\'))) = \'Y\'
+             AND ISNULL(res.anExecutionPerc, 0) >= 100 THEN \'YES\'
+            ELSE \'NO\'
+        END AS operation_resource_completed
+    FROM dbo.tHF_LinkMoveWOEx AS hl
+    INNER JOIN dbo.tHE_Move AS m ON m.acKey = hl.acKey AND m.acDocType = \'6600\'
+    INNER JOIN dbo.tHE_MoveItem AS mi ON mi.anMoveQId = m.anQId
+    LEFT JOIN dbo.tHF_LinkMoveItemWOExItem AS il ON il.anMoveItemQId = mi.anQId
+    LEFT JOIN dbo.tHF_WOExItem AS wi ON wi.anQId = il.anWOExItemQid
+    LEFT JOIN dbo.tHF_WOExItemResources AS res ON res.anWOExItemQId = wi.anQId
+    WHERE LTRIM(RTRIM(hl.acLnkKey)) = ?
+    ORDER BY m.acKeyView, mi.anNo
+', [$workOrderKey]);
+
 if (PHP_SAPI === 'cli') {
     echo 'Work order:' . PHP_EOL;
     phptest34_render_table([$workOrder]);
@@ -323,6 +353,8 @@ if (PHP_SAPI === 'cli') {
     phptest34_render_table($workOrderItems);
     echo PHP_EOL . '6400/6600 document item associations:' . PHP_EOL;
     phptest34_render_table($documentItemLinks);
+    echo PHP_EOL . '6600 operation-resource checks (dbo.tHF_WOExItemResources):' . PHP_EOL;
+    phptest34_render_table($operationResourceChecks);
     exit;
 }
 ?>
@@ -380,6 +412,11 @@ if (PHP_SAPI === 'cli') {
     <h2>6400/6600 document item associations</h2>
     <p class="muted">After closing an empty WO, each manually entered operation and material should show <code>YES</code> for the WO item link. A 6600 operation additionally has its worker-work record.</p>
     <?php phptest34_render_table($documentItemLinks); ?>
+  </div>
+  <div class="card">
+    <h2>6600 operation-resource check: dbo.tHF_WOExItemResources</h2>
+    <p class="muted">Pantheon needs a resource row for each linked operation WO position to expose the <strong>Operacije</strong> branch. For an operation that was closed, <code>has_operation_resource_row</code> and <code>operation_resource_completed</code> should both be <code>YES</code>.</p>
+    <?php phptest34_render_table($operationResourceChecks); ?>
   </div>
   <div class="card">
     <h2>Previously requested menu mapping</h2>

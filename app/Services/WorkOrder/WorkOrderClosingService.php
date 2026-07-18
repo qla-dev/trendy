@@ -25,15 +25,15 @@ class WorkOrderClosingService
         $this->connection = DB::connection($name !== '' ? $name : 'work_order_target');
     }
 
-    public function close(string $locator, array $submittedOperations, int $userId, string $userName = '', array $submittedMaterials = []): array
+    public function close(string $locator, array $submittedOperations, int $userId, string $userName = '', array $submittedMaterials = [], ?array $submittedReceipts = null): array
     {
         $now = Carbon::now();
 
-        return $this->connection->transaction(function () use ($locator, $submittedOperations, $submittedMaterials, $userId, $userName, $now) {
+        return $this->connection->transaction(function () use ($locator, $submittedOperations, $submittedMaterials, $submittedReceipts, $userId, $userName, $now) {
             $workOrder = $this->lockWorkOrder($locator);
             $existing = $this->existingClosingDocuments((string) $workOrder['acKey']);
 
-            if (isset($existing['6100'], $existing['6600'])) {
+            if (isset($existing['6600']) && (isset($existing['6100']) || isset($existing['7100']))) {
                 return $this->alreadyClosedResult($workOrder, $existing);
             }
 
@@ -96,11 +96,19 @@ class WorkOrderClosingService
             }
 
             $receiptCalculation = $this->calculator->receipt($materialTotal, $operationTotal, $producedQuantity);
+            $receipts = $this->prepareReceipts($submittedReceipts, $producedQuantity);
             $materialNumber = $materials === []
                 ? null
                 : $this->numbers->next($this->connection, '6400', $now);
             $operationNumber = $this->numbers->next($this->connection, (string) config('work_order_closing.operation_document_type', '6600'), $now);
-            $receiptNumber = $this->numbers->next($this->connection, (string) config('work_order_closing.receipt_document_type', '6100'), $now);
+            $receiptNumbers = array_map(function (array $receipt) use ($now) {
+                $type = $receipt['target'] === 'scrap'
+                    ? (string) config('work_order_closing.scrap_receipt_document_type', '7100')
+                    : (string) config('work_order_closing.receipt_document_type', '6100');
+
+                return $this->numbers->next($this->connection, $type, $now);
+            }, $receipts);
+            $primaryReceiptNumber = $receiptNumbers[0];
             $department = $this->resolveDepartment($workOrder, $userName);
             $consignee = trim((string) ($workOrder['acReceiver'] ?: $workOrder['acConsignee'] ?? ''));
 
@@ -111,7 +119,7 @@ class WorkOrderClosingService
             $materialResult = $materialNumber === null ? null : $this->materialDocuments->create(
                 $this->connection,
                 $materialNumber,
-                $receiptNumber,
+                $primaryReceiptNumber,
                 $workOrder,
                 $materials,
                 $now,
@@ -130,7 +138,7 @@ class WorkOrderClosingService
             $operationResult = $this->operationDocuments->create(
                 $this->connection,
                 $operationNumber,
-                $receiptNumber,
+                $primaryReceiptNumber,
                 $workOrder,
                 $operations,
                 $now,
@@ -147,24 +155,30 @@ class WorkOrderClosingService
                 ]
             );
 
-            $receiptResult = $this->receiptDocuments->create(
-                $this->connection,
-                $receiptNumber,
-                $workOrder,
-                $receiptCalculation,
-                $now,
-                $userId,
-                $producedQuantity,
-                [
-                    'receiver' => (string) config('work_order_closing.receipt_warehouse', 'Veleprodajno skladište'),
-                    'issuer' => $consignee,
-                    'receiver_stock' => 'Y',
-                    'issuer_stock' => 'N',
-                    'person3' => $consignee,
-                    'way_of_sale' => 'U',
-                    'department' => $department,
-                ]
-            );
+            $receiptResults = [];
+            foreach ($receipts as $index => $receipt) {
+                $quantity = $receipt['quantity'];
+                $receiptResults[] = $this->receiptDocuments->create(
+                    $this->connection,
+                    $receiptNumbers[$index],
+                    $workOrder,
+                    $this->receiptCalculationForQuantity($receiptCalculation, $quantity),
+                    $now,
+                    $userId,
+                    $quantity,
+                    [
+                        'receiver' => $receipt['target'] === 'scrap'
+                            ? (string) config('work_order_closing.scrap_receipt_warehouse', 'Skladište škarta')
+                            : (string) config('work_order_closing.receipt_warehouse', 'Veleprodajno skladište'),
+                        'issuer' => $consignee,
+                        'receiver_stock' => 'Y',
+                        'issuer_stock' => 'N',
+                        'person3' => $consignee,
+                        'way_of_sale' => 'U',
+                        'department' => $department,
+                    ]
+                );
+            }
 
             $this->markClosed($workOrder, $producedQuantity, $now, $userId);
 
@@ -172,7 +186,7 @@ class WorkOrderClosingService
                 'work_order_key' => $workOrder['acKey'],
                 'material_document' => $materialResult['document_number'] ?? null,
                 'operation_document' => $operationResult['document_number'],
-                'receipt_document' => $receiptResult['document_number'],
+                'receipt_documents' => array_column($receiptResults, 'document_number'),
                 'created_work_order_items' => $closingItems['created_items'],
                 'user_id' => $userId,
             ]);
@@ -185,9 +199,9 @@ class WorkOrderClosingService
                 'message' => 'kreirani dokumenti ' . implode(' i ', array_filter([
                     $materialResult['document_number'] ?? null,
                     $operationResult['document_number'],
-                    $receiptResult['document_number'],
+                    ...array_column($receiptResults, 'document_number'),
                 ])),
-                'documents' => array_values(array_filter([$materialResult, $operationResult, $receiptResult])),
+                'documents' => array_values(array_filter([$materialResult, $operationResult, ...$receiptResults])),
                 'costs' => $receiptCalculation,
             ];
         }, 3);
@@ -507,6 +521,61 @@ class WorkOrderClosingService
         return $total;
     }
 
+    private function prepareReceipts(?array $submitted, string $producedQuantity): array
+    {
+        // The modal always supplies this. Keeping a default here preserves older
+        // internal callers while the HTTP request requires an explicit tab value.
+        $submitted ??= [['target' => 'vp', 'quantity' => $producedQuantity]];
+        $prepared = [];
+        $total = '0';
+
+        foreach ($submitted as $receipt) {
+            $target = trim((string) ($receipt['target'] ?? ''));
+            $quantity = trim((string) ($receipt['quantity'] ?? ''));
+            if ($target === '' && $quantity === '') {
+                continue;
+            }
+            if (!in_array($target, ['vp', 'scrap'], true) || $quantity === '') {
+                throw new RuntimeException('Prijem mora imati odredište i količinu.');
+            }
+
+            $normalizedQuantity = $this->calculator->normalizeNonNegative($quantity, 'Količina prijema');
+            if (bccomp($normalizedQuantity, '0', WorkOrderClosingCalculator::SCALE) <= 0) {
+                throw new RuntimeException('Količina prijema mora biti veća od nule.');
+            }
+            if (isset($prepared[$target])) {
+                throw new RuntimeException('Za svako skladište može se unijeti samo jedan prijem.');
+            }
+
+            $prepared[$target] = ['target' => $target, 'quantity' => $normalizedQuantity];
+            $total = $this->calculator->add($total, $normalizedQuantity);
+        }
+
+        if ($prepared === [] || bccomp($total, $producedQuantity, WorkOrderClosingCalculator::SCALE) !== 0) {
+            throw new RuntimeException('Ukupna količina prijema mora biti jednaka planiranoj količini radnog naloga.');
+        }
+
+        // Keep VP first so the 6400 and 6600 cross-reference uses it whenever
+        // both receipts are present.
+        $ordered = [];
+        foreach (['vp', 'scrap'] as $target) {
+            if (isset($prepared[$target])) {
+                $ordered[] = $prepared[$target];
+            }
+        }
+
+        return $ordered;
+    }
+
+    private function receiptCalculationForQuantity(array $calculation, string $quantity): array
+    {
+        $calculation['totalPrice'] = $this->calculator->multiply((string) $calculation['pricePerUnit'], $quantity);
+        $calculation['materialTotal'] = $this->calculator->multiply((string) $calculation['materialCostPerUnit'], $quantity);
+        $calculation['operationTotal'] = $this->calculator->multiply((string) $calculation['operationCostPerUnit'], $quantity);
+
+        return $calculation;
+    }
+
     private function prepareMaterials(array $submitted): array
     {
         $prepared = [];
@@ -569,7 +638,7 @@ class WorkOrderClosingService
         return $this->connection->table('dbo.tHE_Move as m')
             ->join('dbo.tHF_LinkMoveWOEx as l', 'l.acKey', '=', 'm.acKey')
             ->where('l.acLnkKey', $workOrderKey)
-            ->whereIn('m.acDocType', ['6100', '6600'])
+            ->whereIn('m.acDocType', ['6100', '6600', '7100'])
             ->orderByDesc('m.acKey')
             ->get(['m.acKey', 'm.acKeyView', 'm.acDocType', 'm.anValue'])
             ->mapWithKeys(fn ($row) => [trim((string) $row->acDocType) => (array) $row])
@@ -579,7 +648,7 @@ class WorkOrderClosingService
     private function alreadyClosedResult(array $workOrder, array $existing): array
     {
         $operations = $existing['6600'];
-        $receipt = $existing['6100'];
+        $receipt = $existing['6100'] ?? $existing['7100'];
         $operationNumber = $this->formatNumber((string) ($operations['acKeyView'] ?? $operations['acKey']));
         $receiptNumber = $this->formatNumber((string) ($receipt['acKeyView'] ?? $receipt['acKey']));
         $quantity = $this->calculator->normalizeNonNegative($workOrder['anPlanQty'] ?? 0, 'Planirana količina');
@@ -600,7 +669,7 @@ class WorkOrderClosingService
             'message' => 'kreirani dokumenti ' . $operationNumber . ' i ' . $receiptNumber,
             'documents' => [
                 ['document_key' => $operations['acKey'], 'document_number' => $operationNumber, 'document_type' => '6600', 'work_order_code' => $workOrder['acKeyView'] ?? $workOrder['acKey'], 'quantity' => $quantity, 'operation_cost' => $operationCost],
-                ['document_key' => $receipt['acKey'], 'document_number' => $receiptNumber, 'document_type' => '6100', 'work_order_code' => $workOrder['acKeyView'] ?? $workOrder['acKey'], 'item_code' => $workOrder['acIdent'] ?? '', 'quantity' => $quantity, 'price_per_unit' => $pricePerUnit, 'total_price' => $receiptTotal, 'operation_cost' => $operationCost, 'material_cost' => $materialCost],
+                ['document_key' => $receipt['acKey'], 'document_number' => $receiptNumber, 'document_type' => $receipt['acDocType'] ?? '6100', 'work_order_code' => $workOrder['acKeyView'] ?? $workOrder['acKey'], 'item_code' => $workOrder['acIdent'] ?? '', 'quantity' => $quantity, 'price_per_unit' => $pricePerUnit, 'total_price' => $receiptTotal, 'operation_cost' => $operationCost, 'material_cost' => $materialCost],
             ],
         ];
     }

@@ -51,6 +51,11 @@ $configData = Helper::applClasses();
                 target="{{ isset($menu->newTab) ? '_blank' : '_self' }}">
                 @if ($isFontAwesomeIcon)
                   <i class="{{ trim($menuIconClass) }} fa-fw" aria-hidden="true"></i>
+                @elseif (($menu->slug ?? '') === 'app-scrap-receipt-documents')
+                  <span class="position-relative d-inline-flex align-items-center" aria-hidden="true">
+                    <i data-feather="package"></i>
+                    <i data-feather="alert-triangle" style="position:absolute;right:-5px;bottom:-5px;width:11px;height:11px"></i>
+                  </span>
                 @else
                   <i data-feather="{{ $menu->icon }}"></i>
                 @endif

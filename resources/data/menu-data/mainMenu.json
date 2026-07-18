@@ -77,6 +77,12 @@
       "slug": "app-finished-goods-receipt-documents"
     },
     {
+      "name": "Prijem škarta",
+      "icon": "package",
+      "url": "app/documents/scrap-receipts",
+      "slug": "app-scrap-receipt-documents"
+    },
+    {
       "navheader": "Administracija",
       "slug": ""
     },

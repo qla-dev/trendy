@@ -37,7 +37,8 @@ class WorkOrderClosingController extends Controller
                 $request->validated()['operations'],
                 (int) ($user->id ?? 0),
                 trim((string) ($user->name ?? '')),
-                $request->validated()['materials'] ?? []
+                $request->validated()['materials'] ?? [],
+                $request->validated()['receipts'] ?? []
             );
 
             return response()->json(['message' => $result['message'], 'data' => $result]);
@@ -51,6 +52,7 @@ class WorkOrderClosingController extends Controller
                 'input' => [
                     'operations' => $request->input('operations', []),
                     'materials' => $request->input('materials', []),
+                    'receipts' => $request->input('receipts', []),
                 ],
                 'trace' => $exception->getTraceAsString(),
             ]);

@@ -18,6 +18,7 @@ use App\Http\Controllers\ReleasedOperationDocumentController;
 use App\Http\Controllers\FinishedGoodsReceiptDocumentController;
 use App\Http\Controllers\WorkOrderController;
 use App\Http\Controllers\WorkOrderClosingController;
+use App\Http\Controllers\ScrapReceiptDocumentController;
 use App\Http\Controllers\WorkOrderOrderItemLinkController;
 use App\Http\Controllers\UserInterfaceController;
 use App\Http\Controllers\CardsController;
@@ -125,6 +126,9 @@ Route::middleware('auth:web')->group(function () {
         Route::get('documents/finished-goods-receipts', [FinishedGoodsReceiptDocumentController::class, 'index'])->name('app-finished-goods-receipt-documents');
         Route::get('documents/finished-goods-receipts/data', [FinishedGoodsReceiptDocumentController::class, 'data'])->name('app-finished-goods-receipt-documents-data');
         Route::delete('documents/finished-goods-receipts', [FinishedGoodsReceiptDocumentController::class, 'destroy'])->name('app-finished-goods-receipt-documents-destroy');
+        Route::get('documents/scrap-receipts', [ScrapReceiptDocumentController::class, 'index'])->name('app-scrap-receipt-documents');
+        Route::get('documents/scrap-receipts/data', [ScrapReceiptDocumentController::class, 'data'])->name('app-scrap-receipt-documents-data');
+        Route::delete('documents/scrap-receipts', [ScrapReceiptDocumentController::class, 'destroy'])->name('app-scrap-receipt-documents-destroy');
         Route::get('stock', [MaterialsController::class, 'stockIndex'])->name('app-stock');
         Route::get('stock/data', [MaterialsController::class, 'stockData'])->name('app-stock-data');
         Route::post('materials', [MaterialsController::class, 'storeMaterial'])->name('app-materials-store');
