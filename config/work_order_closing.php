@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'raw_material_warehouse' => env('WORK_ORDER_RAW_MATERIAL_WAREHOUSE', 'Skladište sirovina'),
+    // Pantheon warehouse subject name, configurable rather than a volatile QId.
+    'work_in_progress_warehouse' => env('WORK_ORDER_WIP_WAREHOUSE', 'Proizvodnja u toku - skladište'),
     'operation_document_type' => '6600',
     'receipt_document_type' => '6100',
     'scrap_receipt_document_type' => '7100',

@@ -6,6 +6,7 @@ use App\Exceptions\InsufficientRawMaterialStockException;
 use App\Models\Material;
 use App\Models\Product;
 use App\Services\WorkOrder\ProjectedProductionDateCalculator;
+use App\Services\WorkOrder\PantheonMaterialPreparationService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,7 +28,7 @@ class WorkOrderController extends Controller
     private const RELEASED_MATERIAL_SEQUENCE_LENGTH = 7;
     private const RELEASED_MATERIAL_CURRENCY = 'KM';
     private const MATERIAL_ISSUED_PRIORITY_CODE = 7;
-    private const MATERIAL_ISSUED_PRIORITY_NAME = 'Materijal razdužen';
+    private const MATERIAL_ISSUED_PRIORITY_NAME = 'materijal pripremljen';
     private const RELEASED_MATERIAL_DEFAULT_ISSUER = 'Skladište sirovina';
     private const ADDITIONAL_RAW_MATERIAL_WAREHOUSE = 'Skladište dodatnih sirovina';
     private const RAW_MATERIAL_SHORTAGE_ALERT_EMAIL = 'skladiste.trendy@gmail.com';
@@ -2142,7 +2143,7 @@ class WorkOrderController extends Controller
         }
     }
 
-    public function storePlannedConsumption(Request $request, string $id): JsonResponse
+    public function storePlannedConsumption(Request $request, string $id, PantheonMaterialPreparationService $materialPreparation): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'product_id' => ['required', 'string', 'max:64'],
@@ -2484,7 +2485,8 @@ class WorkOrderController extends Controller
                 $manualNoInsert,
                 $manualQIdInsert,
                 $suppressStatusTransition,
-                $shouldTransitionStatus
+                $shouldTransitionStatus,
+                $materialPreparation
             ) {
                 $nextNo = null;
                 $nextQId = null;
@@ -2810,31 +2812,20 @@ class WorkOrderController extends Controller
                     );
                 }
 
-                if ($saveMode === 'barcode' && !empty($stockAdjustments)) {
-                    $stockAdjustments = $this->applyRawMaterialsWarehouseToStockAdjustments($stockAdjustments);
-                    $this->assertRawMaterialsWarehouseStockAvailable(
-                        $stockAdjustments,
-                        $workOrderRow,
-                        $this->buildStockAdjustmentMaterialMeta($saved)
-                    );
-                    $stockAdjustmentResults = Material::bulkAdjustStock(
-                        $stockAdjustments,
-                        $userId,
-                        '',
-                        ['strict_warehouse_match' => true]
-                    );
-                }
-
                 $releasedMaterialDocument = null;
                 if ($saveMode === 'barcode' && $this->savedRowsContainMaterialConsumption($saved)) {
-                    $releasedMaterialDocument = $this->createReleasedMaterialDocumentForBarcodeConsumption(
-                        $saved,
-                        $workOrderRow,
-                        $releasedMaterialCatalogRows,
-                        $stockAdjustmentResults,
-                        $userId,
-                        $now
-                    );
+                    $prepared = [];
+                    foreach ($saved as $row) {
+                        if (($row['item_kind'] ?? '') !== 'materials') continue;
+                        $code = trim((string) ($row['acIdent'] ?? ''));
+                        $catalog = $releasedMaterialCatalogRows[strtolower($code)] ?? [];
+                        if ($code === '' || empty($catalog['anQId'])) throw new RuntimeException('Materijal nije pronađen u Pantheon šifrarniku: ' . $code);
+                        $quantity = (string) $this->resolveReleasedMaterialQuantity($row);
+                        if ((float) $quantity <= 0) continue;
+                        $price = (string) ($catalog['avg_price'] ?? $catalog['anBuyPrice'] ?? 0);
+                        $prepared[] = ['code'=>$code,'name'=>(string) ($catalog['acName'] ?? $row['acDescr'] ?? $code),'unit'=>(string) ($catalog['acUM'] ?? $row['acUM'] ?? 'KOM'),'quantity'=>$quantity,'price'=>$price,'total'=>bcmul($quantity,$price,6),'ident_qid'=>(int) $catalog['anQId'],'item_qid'=>(int) ($row['anQId'] ?? 0)];
+                    }
+                    $releasedMaterialDocument = $materialPreparation->prepare(DB::connection(), $workOrderRow, $prepared, $now, $userId);
                 }
 
                 $statusTransition = [
@@ -2996,10 +2987,11 @@ class WorkOrderController extends Controller
 
             $errorDetail = $this->clientFacingExceptionDetail($exception);
 
+            $status = $exception instanceof RuntimeException ? 422 : 500;
             return response()->json([
-                'message' => 'Greška pri snimanju planirane potrošnje.',
+                'message' => $status === 422 ? $exception->getMessage() : 'Greška pri snimanju planirane potrošnje.',
                 'detail' => $errorDetail !== '' ? $errorDetail : null,
-            ], 500);
+            ], $status);
         }
     }
 
@@ -10457,7 +10449,7 @@ class WorkOrderController extends Controller
 
     private function materialIssuedPriorityLabel(): string
     {
-        return self::MATERIAL_ISSUED_PRIORITY_CODE . ' - ' . self::MATERIAL_ISSUED_PRIORITY_NAME;
+        return self::MATERIAL_ISSUED_PRIORITY_CODE . '-' . self::MATERIAL_ISSUED_PRIORITY_NAME;
     }
 
     private function ensureMaterialIssuedPriorityLookup(int $userId, Carbon $now): void
