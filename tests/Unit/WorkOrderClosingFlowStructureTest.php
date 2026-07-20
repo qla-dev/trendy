@@ -81,12 +81,9 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString('normalizeClockFieldsOnBlur', $this->view);
         $this->assertStringContainsString('Math.min(Number(rawValue), maximum)', $this->view);
         $this->assertStringContainsString('Ovo je vrijeme tokom pauze.', $this->view);
-        $this->assertStringContainsString('operationTimeHasBreak', $this->view);
-        $this->assertStringContainsString('setClockBreakState', $this->view);
-        $this->assertStringContainsString('isBreakTime', $this->view);
-        $this->assertStringContainsString('wo-close-clock-break', $this->view);
+        $this->assertStringContainsString('breakOverlapMinutes', $this->view);
         $this->assertStringContainsString('wo-close-time-error', $this->view);
-        $this->assertStringContainsString('minutes > workBreak[0] && minutes < workBreak[1]', $this->view);
+        $this->assertStringContainsString('Math.min(operationEnd, workBreak[1]) - Math.max(operationStart, workBreak[0])', $this->view);
         $this->assertStringContainsString('missingClosingFields', $this->view);
         $this->assertStringContainsString('Nedostaju obavezna polja', $this->view);
         $this->assertStringContainsString('if (isClosingOperationRowEmpty(row))', $this->view);
@@ -104,9 +101,8 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString("'acStatusMF' => 'Z'", $this->service);
         $this->assertStringContainsString("'acReceiveFinished' => 'Y'", $this->service);
         $this->assertStringContainsString("'acStatusMF' => 'R'", $this->service);
-        $this->assertStringContainsString('isBreakMinute', $this->service);
-        $this->assertStringContainsString('Početno ili završno vrijeme je tokom pauze.', $this->service);
-        $this->assertStringContainsString('$minutes > $start && $minutes < $end', $this->service);
+        $this->assertStringContainsString('breakOverlapMinutes', $this->service);
+        $this->assertStringContainsString('min($operationEnd, $end) - max($operationStart, $start)', $this->service);
         $this->assertStringContainsString("\$operationCode === 'OP30' && \$this->isEmptyOperationInput(\$input)", $this->service);
         $this->assertStringContainsString('private function isEmptyOperationInput', $this->service);
         $this->assertStringContainsString("'minutes' => \$minutes", $this->service);

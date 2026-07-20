@@ -34,11 +34,11 @@ class WorkOrderClosingController extends Controller
             $user = $request->user();
             $result = $closing->close(
                 $id,
-                $request->validated()['operations'],
+                $request->validated()['operations'] ?? [],
                 (int) ($user->id ?? 0),
                 trim((string) ($user->name ?? '')),
                 $request->validated()['materials'] ?? [],
-                $request->validated()['receipts'] ?? []
+                $request->validated()['receipts'] ?? null
             );
 
             return response()->json(['message' => $result['message'], 'data' => $result]);

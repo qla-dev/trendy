@@ -28,4 +28,24 @@ class PantheonMaterialPreparationService
         $this->stock->transfer($db,$raw,$wip,$items,$now,$userId);
         return ['document_key'=>$number['key'],'document_number'=>$number['number'],'document_type'=>'2005','items'=>$items];
     }
+
+    /** Adds close-time materials to the original 2005 and moves them to WIP. */
+    public function append(ConnectionInterface $db, array $workOrder, array $items, Carbon $now, int $userId): array
+    {
+        if ($items === []) return [];
+        $raw = trim((string) config('work_order_closing.raw_material_warehouse', 'Skladište sirovina'));
+        $wip = trim((string) config('work_order_closing.work_in_progress_warehouse', ''));
+        if ($raw === '' || $wip === '') throw new RuntimeException('Konfiguracija skladišta sirovina ili međuskladišta nije postavljena.');
+        $header = $db->table('dbo.tHE_Move as m')->join('dbo.tHF_LinkMoveWOEx as l','l.acKey','=','m.acKey')->where('l.acLnkKey',$workOrder['acKey'])->where('m.acDocType','2005')->first(['m.acKey','m.anQId']);
+        if ($header === null) throw new RuntimeException('Dokument 2005 za pripremu materijala nije pronađen.');
+        $line = (int) ($db->table('dbo.tHE_MoveItem')->where('acKey',$header->acKey)->max('anNo') ?? 0);
+        $number = ['key'=>(string) $header->acKey, 'type'=>'2005'];
+        foreach ($items as $item) {
+            $line++;
+            $moveItemQid=$this->writer->insertItem($db,['acKey'=>$header->acKey,'anNo'=>$line,'acIdent'=>$item['code'],'acName'=>$item['name'],'anQty'=>$item['quantity'],'anQtyTemp'=>$item['quantity'],'acUM'=>$item['unit'],'anPrice'=>$item['price'],'anStockPrice'=>$item['price'],'anPriceCurrency'=>$item['price'],'anRebate'=>0,'acVATCode'=>'I0','anVAT'=>0,'anMoveQId'=>(int)$header->anQId,'anIdentQId'=>$item['ident_qid'],'adTimeIns'=>$now,'anUserIns'=>$userId,'adTimeChg'=>$now,'anUserChg'=>$userId]);
+            if ((int)($item['item_qid'] ?? 0)>0) $this->writer->linkItem($db,$number,$line,$moveItemQid,(int)$item['item_qid'],$now,$userId,'A ');
+        }
+        $this->stock->transfer($db,$raw,$wip,$items,$now,$userId);
+        return $items;
+    }
 }
