@@ -75,7 +75,7 @@ class CloseWorkOrderRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'operations' => ['required', 'array', 'min:1'],
+            'operations' => ['nullable', 'array'],
             // A copied row represents another worker/time entry for the same
             // Pantheon operation, so item_qid is intentionally not distinct.
             // Manual rows are document-only and deliberately have no WO item QId.
@@ -91,7 +91,8 @@ class CloseWorkOrderRequest extends FormRequest
             'materials.*.item_qid' => ['nullable', 'integer', 'min:1'],
             'materials.*.code' => ['nullable', 'string', 'max:64'],
             'materials.*.quantity' => ['nullable', 'regex:/^(?:0|[1-9]\d*)(?:[.,]\d+)?$/'],
-            'receipts' => ['required', 'array', 'min:1'],
+            'materials.*.is_new' => ['nullable', 'boolean'],
+            'receipts' => ['nullable', 'array'],
             'receipts.*.target' => ['required', 'in:vp,scrap'],
             'receipts.*.quantity' => ['required', 'regex:/^(?:0|[1-9]\d*)(?:[.,]\d+)?$/'],
         ];

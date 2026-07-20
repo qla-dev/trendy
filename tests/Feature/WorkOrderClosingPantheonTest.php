@@ -422,7 +422,7 @@ class WorkOrderClosingPantheonTest extends TestCase
         $this->assertSame(0, $this->closingDocumentCount());
     }
 
-    public function test_break_time_is_normalized_before_operation_document_creation(): void
+    public function test_break_time_overlap_is_excluded_from_operation_duration(): void
     {
         $this->pantheon->beginTransaction();
 
@@ -434,8 +434,8 @@ class WorkOrderClosingPantheonTest extends TestCase
                 'item_qid' => self::OPERATION_ITEM_QID,
                 'worker_id' => self::WORKER_QID,
                 'time' => '999',
-                'start_time' => '09:00',
-                'end_time' => '10:15',
+                'start_time' => '10:14',
+                'end_time' => '11:00',
             ]], 1);
 
             $operationDocument = $result['documents'][0];
@@ -446,9 +446,10 @@ class WorkOrderClosingPantheonTest extends TestCase
                 ->where('acLnkKey', $operationDocument['document_key'])
                 ->first(['anTn', 'adBeginTime', 'adEndTime']);
 
-            $this->assertSame(bcmul('60', $producedQuantity, 6), number_format((float) $item->anQty, 6, '.', ''));
-            $this->assertSame('60.000000', (string) $workerEntry->anTn);
-            $this->assertStringContainsString('10:00:00', (string) $workerEntry->adEndTime);
+            $this->assertSame(bcmul('30', $producedQuantity, 6), number_format((float) $item->anQty, 6, '.', ''));
+            $this->assertSame('30.000000', (string) $workerEntry->anTn);
+            $this->assertStringContainsString('10:14:00', (string) $workerEntry->adBeginTime);
+            $this->assertStringContainsString('11:00:00', (string) $workerEntry->adEndTime);
         } finally {
             while ($this->pantheon->transactionLevel() > 0) {
                 $this->pantheon->rollBack();

@@ -199,6 +199,16 @@
   .wo-close-code-suggestion.is-active {
     background: rgba(115, 103, 240, 0.16);
   }
+  .wo-close-add-material-row-btn,
+  .wo-close-add-material-row-btn:disabled,
+  .wo-close-add-material-row-btn:hover,
+  .wo-close-add-material-row-btn:focus,
+  .wo-close-add-material-row-btn:active,
+  .wo-close-add-material-row-btn.active {
+    background-color: #fff !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
   .wo-close-code-suggestion {
     display: block;
     width: 100%;
@@ -217,7 +227,10 @@
   }
   .wo-close-copy-row-btn,
   .wo-close-clear-row-btn,
-  .wo-close-delete-row-btn {
+  .wo-close-delete-row-btn,
+  .wo-close-add-material-row-btn,
+  .wo-close-material-clear-row-btn,
+  .wo-close-material-delete-row-btn {
     display: inline-flex;
     width: 2.25rem;
     height: 2.25rem;
@@ -2734,7 +2747,7 @@
           <div class="tab-pane fade" id="close-work-order-materials" role="tabpanel">
             <div class="table-responsive">
               <table class="table align-middle" id="close-work-order-materials-table">
-                <thead><tr><th class="text-nowrap" style="width:1%">Pozicija</th><th style="width:26%">Materijal</th><th style="width:36%">Naziv</th><th style="width:22%">Količina</th><th class="text-nowrap" style="width:1%">MJ</th><th class="text-end text-nowrap" style="width:1%">Akcije</th></tr></thead>
+                <thead><tr><th class="text-nowrap" style="width:1%">Pozicija</th><th style="width:26%">Materijal</th><th style="width:36%">Naziv</th><th style="width:22%">Količina</th><th class="text-nowrap" style="width:1%">MJ</th><th class="text-center text-nowrap" style="width:1%">Akcije</th></tr></thead>
                 <tbody>
                   @php
                     $closeMaterials = $workOrderItemResources ?? [];
@@ -2745,7 +2758,7 @@
                     }
                   @endphp
                   @foreach($closeMaterials as $material)
-                    <tr>
+                    <tr data-existing-material="{{ trim((string) ($material['materijal'] ?? '')) !== '' ? '1' : '0' }}">
                       <td class="text-nowrap">{{ $displayValue($material['pozicija'] ?? $loop->iteration) }}</td>
                       <td class="position-relative"><input class="form-control wo-close-material-code text-uppercase" type="text" maxlength="64" autocomplete="off" value="{{ $material['materijal'] ?? '' }}" placeholder="Šifra materijala" aria-label="Šifra materijala" aria-autocomplete="list"><div class="wo-close-code-suggestions d-none" role="listbox"></div></td>
                       <td><input class="form-control wo-close-material-name" type="text" value="{{ $material['naziv'] ?? '' }}" readonly aria-label="Naziv materijala"></td>
@@ -2768,20 +2781,11 @@
                             aria-label="Količina materijala {{ $displayValue($material['materijal'] ?? null) }}"
                             @if(false && !$canEditCloseMaterialQuantity) disabled title="Stavku nije moguće identifikovati za ažuriranje." @endif
                           >
-                          <button
-                            type="button"
-                            class="btn btn-outline-primary btn-sm wo-material-save-quantity-btn"
-                            title="Sačuvaj količinu"
-                            aria-label="Sačuvaj količinu"
-                            disabled
-                          >
-                            <i class="fa fa-check" aria-hidden="true"></i>
-                          </button>
                         </div>
                       </td>
                       <td class="text-nowrap">{{ $displayValue($material['mj'] ?? null) }}</td>
-                      <td class="text-end text-nowrap">
-                        <a class="btn btn-outline-primary btn-sm" href="{{ route('app-stock', ['open' => 'create-material']) }}" target="_blank" rel="noopener" title="Dodaj novi materijal" aria-label="Dodaj novi materijal"><i class="fa fa-plus"></i></a>
+                      <td class="text-center text-nowrap">
+                        <button type="button" class="btn btn-outline-primary btn-sm wo-close-add-material-row-btn" style="background:#fff !important;background-color:#fff !important" title="Novi materijal" aria-label="Novi materijal"><i class="fa fa-plus"></i></button>
                         <button type="button" class="btn btn-outline-secondary btn-sm wo-close-material-clear-row-btn" title="Očisti red" aria-label="Očisti red"><i class="fa fa-eraser"></i></button>
                         <button type="button" class="btn btn-outline-danger btn-sm wo-close-material-delete-row-btn" title="Izbriši red" aria-label="Izbriši red"><i class="fa fa-trash"></i></button>
                       </td>
@@ -3237,17 +3241,15 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         var startValue = readClockFieldValue(row, 'start');
         var endValue = readClockFieldValue(row, 'end');
         var hasClockInput = startValue !== '' || endValue !== '';
-        var hasBreakTime = operationTimeHasBreak(row);
         var timeValid = !hasClockInput
           ? (timeValue === '' || numericPattern.test(timeValue))
           : (startValue !== null && endValue !== null && startValue !== '' && endValue !== '' && operationTimeRangeIsValid(row));
-        timeValid = timeValid && !hasBreakTime;
 
         allValid = allValid && timeValid;
         if (showErrors) {
-          row.classList.toggle('is-invalid', !timeValid && !hasBreakTime);
+          row.classList.toggle('is-invalid', !timeValid);
           if (time) {
-            time.classList.toggle('wo-close-time-error', !timeValid && !hasBreakTime);
+            time.classList.toggle('wo-close-time-error', !timeValid);
           }
         } else if (timeValid) {
           row.classList.remove('is-invalid');
@@ -3280,20 +3282,15 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       return String(hours).padStart(2, '0') + ':' + String(remainder).padStart(2, '0');
     }
 
-    function isBreakTime(value) {
-      var minutes = clockMinutes(value);
-      if (minutes === null) {
-        return false;
-      }
+    function breakOverlapMinutes(operationStart, operationEnd) {
+      var overlap = 0;
 
       for (var index = 0; index < workOrderBreaks.length; index++) {
         var workBreak = workOrderBreaks[index];
-        if (minutes > workBreak[0] && minutes < workBreak[1]) {
-          return true;
-        }
+        overlap += Math.max(0, Math.min(operationEnd, workBreak[1]) - Math.max(operationStart, workBreak[0]));
       }
 
-      return false;
+      return overlap;
     }
 
     function normalizeManualDuration(input) {
@@ -3383,31 +3380,6 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       });
     }
 
-    function setClockBreakState(row, boundary, isBreak) {
-      var fields = clockFieldInputs(row, boundary);
-      var error = row && row.querySelector('.wo-close-' + boundary + '-break-error');
-      [fields.hour, fields.minute].forEach(function (input) {
-        if (input) {
-          input.classList.toggle('wo-close-clock-break', isBreak);
-        }
-      });
-      if (error) {
-        error.classList.toggle('is-visible', isBreak);
-      }
-    }
-
-    function operationTimeHasBreak(row) {
-      var startValue = readClockFieldValue(row, 'start');
-      var endValue = readClockFieldValue(row, 'end');
-      var startIsBreak = startValue !== null && startValue !== '' && isBreakTime(startValue);
-      var endIsBreak = endValue !== null && endValue !== '' && isBreakTime(endValue);
-
-      setClockBreakState(row, 'start', startIsBreak);
-      setClockBreakState(row, 'end', endIsBreak);
-
-      return startIsBreak || endIsBreak;
-    }
-
     function operationTimeRangeIsValid(row) {
       var startValue = readClockFieldValue(row, 'start');
       var endValue = readClockFieldValue(row, 'end');
@@ -3442,7 +3414,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         time.readOnly = true;
         time.classList.toggle('wo-close-time-error', startMinutes === null || endMinutes === null || endMinutes < startMinutes);
         time.value = startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes
-          ? String(endMinutes - startMinutes)
+          ? String((endMinutes - startMinutes) - breakOverlapMinutes(startMinutes, endMinutes))
           : '';
         return;
       }
@@ -3678,6 +3650,62 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       return copiedRow;
     }
 
+    function nextClosingRowPosition(table) {
+      if (!table) return 1;
+      var positions = Array.prototype.slice.call(table.querySelectorAll('tbody tr > td:first-child'))
+        .map(function (cell) { return Number(String(cell.textContent || '').trim()); })
+        .filter(function (position) { return Number.isFinite(position) && position > 0; });
+      return (positions.length ? Math.max.apply(null, positions) : 0) + 1;
+    }
+
+    function refreshCloseMaterialAddButtons() {
+      if (!closeWorkOrderMaterialsTable) return;
+      var rows = Array.prototype.slice.call(closeWorkOrderMaterialsTable.querySelectorAll('tbody tr'));
+      rows.forEach(function (row) {
+        var button = row.querySelector('.wo-close-add-material-row-btn');
+        if (!button) return;
+        button.disabled = false;
+        button.removeAttribute('disabled');
+        button.classList.remove('active');
+        button.removeAttribute('aria-pressed');
+        button.style.setProperty('background', '#fff', 'important');
+        button.style.setProperty('background-color', '#fff', 'important');
+        button.style.setProperty('color', '#7367f0', 'important');
+        button.style.setProperty('opacity', '1', 'important');
+      });
+    }
+
+    function createCloseMaterialRow(sourceRow) {
+      var copiedRow = sourceRow.cloneNode(true);
+      copiedRow.classList.remove('is-invalid');
+      copiedRow.setAttribute('data-existing-material', '0');
+      copiedRow.querySelectorAll('.wo-close-code-suggestions').forEach(function (suggestions) {
+        suggestions.replaceChildren();
+        suggestions.classList.add('d-none');
+      });
+      copiedRow.querySelectorAll('input').forEach(function (input) {
+        input.classList.remove('is-invalid');
+        input.removeAttribute('data-item-id');
+        input.removeAttribute('data-item-no');
+        input.removeAttribute('data-saved-quantity');
+      });
+      copiedRow.querySelectorAll('.wo-close-add-material-row-btn, .wo-close-material-clear-row-btn, .wo-close-material-delete-row-btn').forEach(function (button) {
+        button.disabled = false;
+        button.removeAttribute('disabled');
+        button.classList.remove('active');
+        button.removeAttribute('aria-pressed');
+        if (button.classList.contains('wo-close-add-material-row-btn')) {
+          button.style.setProperty('background', '#fff', 'important');
+          button.style.setProperty('background-color', '#fff', 'important');
+          button.style.setProperty('color', '#7367f0', 'important');
+          button.style.setProperty('opacity', '1', 'important');
+        }
+      });
+      if (copiedRow.children[0]) copiedRow.children[0].textContent = String(nextClosingRowPosition(closeWorkOrderMaterialsTable));
+      if (copiedRow.children[4]) copiedRow.children[4].textContent = '';
+      return copiedRow;
+    }
+
     function ensureOp30Rows() {
       if (!closeWorkOrderModal) {
         return;
@@ -3813,6 +3841,9 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       if (fields.name) {
         fields.name.value = closingCatalogItemName(item);
       }
+      if (fields.kind === 'materials' && fields.row.children[4]) {
+        fields.row.children[4].textContent = closingCatalogValue(item, 'acUM').toUpperCase();
+      }
       if (fields.kind === 'operations') {
         fields.row.setAttribute('data-operation-code', code.toUpperCase());
       }
@@ -3839,6 +3870,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         option.setAttribute('role', 'option');
         option.dataset.catalogCode = code;
         option.dataset.catalogName = closingCatalogItemName(item);
+        option.dataset.catalogUnit = closingCatalogValue(item, 'acUM');
         option.textContent = code + (option.dataset.catalogName ? ' — ' + option.dataset.catalogName : '');
         fields.suggestions.appendChild(option);
       });
@@ -3923,7 +3955,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
       applyClosingCatalogItem(input, {
         acIdentChild: suggestion.dataset.catalogCode || '',
-        acDescr: suggestion.dataset.catalogName || ''
+        acDescr: suggestion.dataset.catalogName || '',
+        acUM: suggestion.dataset.catalogUnit || ''
       });
     }
 
@@ -3970,7 +4003,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         materials: Array.prototype.slice.call(document.querySelectorAll('#close-work-order-materials-table tbody tr')).map(function (row) {
           return {
             code: String((row.querySelector('.wo-close-material-code') || {}).value || '').trim().toUpperCase(),
-            quantity: String((row.querySelector('.wo-close-material-quantity') || {}).value || '').trim().replace(',', '.')
+            quantity: String((row.querySelector('.wo-close-material-quantity') || {}).value || '').trim().replace(',', '.'),
+            is_new: row.getAttribute('data-existing-material') === '0'
           };
         }).filter(function (material) {
           return material.code !== '' || material.quantity !== '';
@@ -4083,6 +4117,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           resetCloseOperationActionButtons(row);
           syncOperationTime(row);
         });
+        refreshCloseMaterialAddButtons();
         validateWorkOrderClosing(false);
       });
 
@@ -4126,6 +4161,16 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           var addButton = document.getElementById('wo-close-add-scrap-receipt-btn');
           if (addButton) addButton.disabled = false;
         }
+        var addMaterial = event.target.closest('.wo-close-add-material-row-btn');
+        if (addMaterial && closeWorkOrderMaterialsTable) {
+          var sourceMaterialRow = addMaterial.closest('tr');
+          var newMaterialRow = createCloseMaterialRow(sourceMaterialRow);
+          sourceMaterialRow.parentNode.insertBefore(newMaterialRow, sourceMaterialRow.nextSibling);
+          refreshCloseMaterialAddButtons();
+          var codeInput = newMaterialRow.querySelector('.wo-close-material-code');
+          if (codeInput) codeInput.focus();
+          return;
+        }
         var clearMaterial = event.target.closest('.wo-close-material-clear-row-btn');
         if (clearMaterial) {
           var materialRow = clearMaterial.closest('tr');
@@ -4137,6 +4182,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           var deleteRow = deleteMaterial.closest('tr');
           var rows = closeWorkOrderMaterialsTable ? closeWorkOrderMaterialsTable.querySelectorAll('tbody tr') : [];
           if (rows.length > 1) deleteRow.remove(); else deleteRow.querySelector('.wo-close-material-code').value = '';
+          refreshCloseMaterialAddButtons();
           validateWorkOrderClosing(false);
         }
       });
@@ -4212,6 +4258,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           var sourceRow = copyButton.closest('.wo-close-operation-row');
           resetCopyButtonVisualState(copyButton);
           var copiedRow = cloneCloseOperationRow(sourceRow, false);
+          if (copiedRow.children[0]) copiedRow.children[0].textContent = String(nextClosingRowPosition(sourceRow.closest('table')));
           sourceRow.parentNode.insertBefore(copiedRow, sourceRow.nextSibling);
           syncOperationTime(copiedRow);
           validateWorkOrderClosing(false);
@@ -4279,7 +4326,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         }
 
         var actionButton = event.target && event.target.closest
-          ? event.target.closest('.wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn')
+          ? event.target.closest('.wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn, .wo-close-add-material-row-btn, .wo-close-material-clear-row-btn, .wo-close-material-delete-row-btn')
           : null;
         if (actionButton) {
           // Do not let Bootstrap keep an action button in a focused/active state.

@@ -19,6 +19,7 @@ class WorkOrderClosingService
         private PantheonOperationDocumentService $operationDocuments,
         private PantheonFinishedGoodsReceiptService $receiptDocuments,
         private PantheonMaterialStockService $materialStock,
+        private PantheonMaterialPreparationService $materialPreparation,
         private PantheonWorkerSearchService $workers,
         private WorkOrderClosingCalculator $calculator
     ) {
@@ -56,7 +57,7 @@ class WorkOrderClosingService
             }
 
             $preparedOperations = $this->prepareOperations((string) $workOrder['acKey'], $submittedOperations);
-            if (!$preparedOperations['complete']) {
+            /* if (!$preparedOperations['complete']) {
                 $this->markPartiallyClosed($workOrder, $now, $userId);
 
                 return [
@@ -68,10 +69,17 @@ class WorkOrderClosingService
                     'message' => 'radni nalog je djelomično zaključen',
                     'documents' => [],
                 ];
-            }
+            } */
 
             $operations = $preparedOperations['operations'];
             $materials = $this->preparedMaterialsFromTransfer((string) $workOrder['acKey']);
+            $submittedCloseMaterials = $this->prepareMaterials(array_values(array_filter($submittedMaterials, fn ($material) => (bool) ($material['is_new'] ?? false))));
+            $transferredCodes = array_fill_keys(array_map(fn ($material) => strtolower((string) $material['code']), $materials), true);
+            $newCloseMaterials = array_values(array_filter($submittedCloseMaterials, fn ($material) => !isset($transferredCodes[strtolower((string) $material['code'])])));
+            if ($newCloseMaterials !== []) {
+                $this->materialPreparation->append($this->connection, $workOrder, $newCloseMaterials, $now, $userId);
+                $materials = array_merge($materials, $newCloseMaterials);
+            }
 
             // An empty work order has no item QIds for Pantheon document-line
             // links. Create closing positions first, then use their QIds for
@@ -452,17 +460,13 @@ class WorkOrderClosingService
             throw new RuntimeException('Vrijeme operacije mora biti u formatu HH:MM.');
         }
 
-        if ($this->isBreakMinute($startMinutes) || $this->isBreakMinute($endMinutes)) {
-            throw new RuntimeException('Početno ili završno vrijeme je tokom pauze.');
-        }
-
         if ($endMinutes < $startMinutes) {
             throw new RuntimeException('Završno vrijeme ne može biti prije početnog vremena.');
         }
 
         // Calculate server-side instead of trusting the browser's computed value.
         return [
-            'minutes' => (string) ($endMinutes - $startMinutes),
+            'minutes' => (string) (($endMinutes - $startMinutes) - $this->breakOverlapMinutes($startMinutes, $endMinutes)),
             'start_time' => $this->formatClockMinutes($startMinutes),
             'end_time' => $this->formatClockMinutes($endMinutes),
         ];
@@ -477,15 +481,15 @@ class WorkOrderClosingService
         return ((int) $matches[1] * 60) + (int) $matches[2];
     }
 
-    private function isBreakMinute(int $minutes): bool
+    private function breakOverlapMinutes(int $operationStart, int $operationEnd): int
     {
+        $overlap = 0;
+
         foreach ([[600, 630], [720, 735], [885, 915], [1080, 1110], [1200, 1215], [1365, 1380]] as [$start, $end]) {
-            if ($minutes > $start && $minutes < $end) {
-                return true;
-            }
+            $overlap += max(0, min($operationEnd, $end) - max($operationStart, $start));
         }
 
-        return false;
+        return $overlap;
     }
 
     private function formatClockMinutes(int $minutes): string
