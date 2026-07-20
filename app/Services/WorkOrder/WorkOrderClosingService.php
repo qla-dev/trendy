@@ -18,6 +18,7 @@ class WorkOrderClosingService
         private PantheonClosingMaterialDocumentService $materialDocuments,
         private PantheonOperationDocumentService $operationDocuments,
         private PantheonFinishedGoodsReceiptService $receiptDocuments,
+        private PantheonMaterialStockService $materialStock,
         private PantheonWorkerSearchService $workers,
         private WorkOrderClosingCalculator $calculator
     ) {
@@ -32,6 +33,10 @@ class WorkOrderClosingService
         return $this->connection->transaction(function () use ($locator, $submittedOperations, $submittedMaterials, $submittedReceipts, $userId, $userName, $now) {
             $workOrder = $this->lockWorkOrder($locator);
             $existing = $this->existingClosingDocuments((string) $workOrder['acKey']);
+
+            if (isset($existing['6400'])) {
+                throw new RuntimeException('Dokument 6400 za radni nalog već postoji. Materijal nije ponovo razdužen.');
+            }
 
             if (isset($existing['6600']) && (isset($existing['6100']) || isset($existing['7100']))) {
                 return $this->alreadyClosedResult($workOrder, $existing);
@@ -66,7 +71,7 @@ class WorkOrderClosingService
             }
 
             $operations = $preparedOperations['operations'];
-            $materials = $this->prepareMaterials($submittedMaterials);
+            $materials = $this->preparedMaterialsFromTransfer((string) $workOrder['acKey']);
 
             // An empty work order has no item QIds for Pantheon document-line
             // links. Create closing positions first, then use their QIds for
@@ -126,7 +131,7 @@ class WorkOrderClosingService
                 $userId,
                 [
                     'receiver' => $consignee,
-                    'issuer' => (string) config('work_order_closing.operation_warehouse', 'RN skladište'),
+                    'issuer' => (string) config('work_order_closing.work_in_progress_warehouse', config('work_order_closing.operation_warehouse', 'RN skladište')),
                     'receiver_stock' => 'N',
                     'issuer_stock' => 'Y',
                     'person3' => $consignee,
@@ -134,6 +139,13 @@ class WorkOrderClosingService
                     'department' => $department,
                 ]
             );
+            if ($materialResult !== null) {
+                $warehouse = trim((string) config('work_order_closing.work_in_progress_warehouse', config('work_order_closing.operation_warehouse', '')));
+                if ($warehouse === '') {
+                    throw new RuntimeException('Konfiguracija međuskladišta nije postavljena.');
+                }
+                $this->materialStock->issue($this->connection, $warehouse, $materials, $now, $userId);
+            }
 
             $operationResult = $this->operationDocuments->create(
                 $this->connection,
@@ -633,12 +645,40 @@ class WorkOrderClosingService
         return $total;
     }
 
+    /** 6400 is always based on the quantities actually moved by 2005. */
+    private function preparedMaterialsFromTransfer(string $workOrderKey): array
+    {
+        $transfer = $this->connection->table('dbo.tHE_Move as m')
+            ->join('dbo.tHF_LinkMoveWOEx as l', 'l.acKey', '=', 'm.acKey')
+            ->where('l.acLnkKey', $workOrderKey)->where('m.acDocType', '2005')
+            ->orderByDesc('m.acKey')->first(['m.acKey']);
+        if ($transfer === null) throw new RuntimeException('Dokument 2005 za pripremu materijala nije pronađen.');
+        $items = $this->connection->table('dbo.tHE_MoveItem')->where('acKey', $transfer->acKey)->orderBy('anNo')->get();
+        if ($items->isEmpty()) throw new RuntimeException('Dokument 2005 nema materijalne stavke.');
+        return $items->map(function ($row) use ($workOrderKey) {
+            $itemQid = (int) ($this->connection->table('dbo.tHF_LinkMoveItemWOExItem')
+                ->where('acKey', $row->acKey)->where('anNo', $row->anNo)->value('anWOExItemQid') ?? 0);
+            if ($itemQid < 1) {
+                $itemQid = (int) ($this->connection->table('dbo.tHF_WOExItem')
+                    ->where('acKey', $workOrderKey)->whereRaw("LTRIM(RTRIM(acIdent)) = ?", [trim((string) $row->acIdent)])
+                    ->orderBy('anNo')->value('anQId') ?? 0);
+            }
+            return [
+            'item_qid'=>$itemQid, 'position'=>(int) $row->anNo, 'code'=>trim((string) $row->acIdent),
+            'name'=>trim((string) ($row->acName ?? $row->acIdent)), 'unit'=>trim((string) ($row->acUM ?? 'KOM')),
+            'quantity'=>(string) $row->anQty, 'price'=>(string) ($row->anPrice ?? 0),
+            'total'=>bcmul((string) $row->anQty, (string) ($row->anPrice ?? 0), WorkOrderClosingCalculator::SCALE),
+            'ident_qid'=>(int) ($row->anIdentQId ?? 0),
+        ];
+        })->all();
+    }
+
     private function existingClosingDocuments(string $workOrderKey): array
     {
         return $this->connection->table('dbo.tHE_Move as m')
             ->join('dbo.tHF_LinkMoveWOEx as l', 'l.acKey', '=', 'm.acKey')
             ->where('l.acLnkKey', $workOrderKey)
-            ->whereIn('m.acDocType', ['6100', '6600', '7100'])
+            ->whereIn('m.acDocType', ['6100', '6400', '6600', '7100'])
             ->orderByDesc('m.acKey')
             ->get(['m.acKey', 'm.acKeyView', 'm.acDocType', 'm.anValue'])
             ->mapWithKeys(fn ($row) => [trim((string) $row->acDocType) => (array) $row])

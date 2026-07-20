@@ -196,6 +196,9 @@
   .wo-close-worker-suggestion.is-active {
     background: rgba(115, 103, 240, 0.16);
   }
+  .wo-close-code-suggestion.is-active {
+    background: rgba(115, 103, 240, 0.16);
+  }
   .wo-close-code-suggestion {
     display: block;
     width: 100%;
@@ -2731,7 +2734,7 @@
           <div class="tab-pane fade" id="close-work-order-materials" role="tabpanel">
             <div class="table-responsive">
               <table class="table align-middle" id="close-work-order-materials-table">
-                <thead><tr><th>Pozicija</th><th>Materijal</th><th>Naziv</th><th>Količina</th><th>MJ</th></tr></thead>
+                <thead><tr><th class="text-nowrap" style="width:1%">Pozicija</th><th style="width:26%">Materijal</th><th style="width:36%">Naziv</th><th style="width:22%">Količina</th><th class="text-nowrap" style="width:1%">MJ</th><th class="text-end text-nowrap" style="width:1%">Akcije</th></tr></thead>
                 <tbody>
                   @php
                     $closeMaterials = $workOrderItemResources ?? [];
@@ -2743,9 +2746,9 @@
                   @endphp
                   @foreach($closeMaterials as $material)
                     <tr>
-                      <td>{{ $displayValue($material['pozicija'] ?? $loop->iteration) }}</td>
-                      <td class="position-relative"><input class="form-control form-control-sm wo-close-material-code text-uppercase" type="text" maxlength="64" autocomplete="off" value="{{ $material['materijal'] ?? '' }}" placeholder="Šifra materijala" aria-label="Šifra materijala" aria-autocomplete="list"><div class="wo-close-code-suggestions d-none" role="listbox"></div></td>
-                      <td><input class="form-control form-control-sm wo-close-material-name" type="text" value="{{ $material['naziv'] ?? '' }}" readonly aria-label="Naziv materijala"></td>
+                      <td class="text-nowrap">{{ $displayValue($material['pozicija'] ?? $loop->iteration) }}</td>
+                      <td class="position-relative"><input class="form-control wo-close-material-code text-uppercase" type="text" maxlength="64" autocomplete="off" value="{{ $material['materijal'] ?? '' }}" placeholder="Šifra materijala" aria-label="Šifra materijala" aria-autocomplete="list"><div class="wo-close-code-suggestions d-none" role="listbox"></div></td>
+                      <td><input class="form-control wo-close-material-name" type="text" value="{{ $material['naziv'] ?? '' }}" readonly aria-label="Naziv materijala"></td>
                       @php
                         $closeMaterialItemId = trim((string) ($material['item_qid'] ?? ''));
                         $closeMaterialItemNo = trim((string) ($material['item_no'] ?? $material['pozicija'] ?? ''));
@@ -2754,7 +2757,7 @@
                       <td>
                         <div class="wo-material-quantity-controls">
                           <input
-                            class="form-control form-control-sm wo-close-material-quantity"
+                            class="form-control wo-close-material-quantity"
                             type="text"
                             inputmode="decimal"
                             autocomplete="off"
@@ -2776,7 +2779,12 @@
                           </button>
                         </div>
                       </td>
-                      <td>{{ $displayValue($material['mj'] ?? null) }}</td>
+                      <td class="text-nowrap">{{ $displayValue($material['mj'] ?? null) }}</td>
+                      <td class="text-end text-nowrap">
+                        <a class="btn btn-outline-primary btn-sm" href="{{ route('app-stock', ['open' => 'create-material']) }}" target="_blank" rel="noopener" title="Dodaj novi materijal" aria-label="Dodaj novi materijal"><i class="fa fa-plus"></i></a>
+                        <button type="button" class="btn btn-outline-secondary btn-sm wo-close-material-clear-row-btn" title="Očisti red" aria-label="Očisti red"><i class="fa fa-eraser"></i></button>
+                        <button type="button" class="btn btn-outline-danger btn-sm wo-close-material-delete-row-btn" title="Izbriši red" aria-label="Izbriši red"><i class="fa fa-trash"></i></button>
+                      </td>
                     </tr>
                   @endforeach
                 </tbody>
@@ -3768,6 +3776,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         fields.suggestions.replaceChildren();
         fields.suggestions.classList.add('d-none');
       }
+      if (input) input.dataset.catalogSuggestionIndex = '-1';
     }
 
     function positionClosingCatalogSuggestions(suggestions) {
@@ -3840,6 +3849,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       }
 
       fields.suggestions.classList.remove('d-none');
+      input.dataset.catalogSuggestionIndex = '-1';
       positionClosingCatalogSuggestions(fields.suggestions);
     }
 
@@ -3915,6 +3925,26 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         acIdentChild: suggestion.dataset.catalogCode || '',
         acDescr: suggestion.dataset.catalogName || ''
       });
+    }
+
+    function highlightClosingCatalogSuggestion(input, direction) {
+      var fields = closingCatalogFields(input);
+      var options = fields.suggestions && !fields.suggestions.classList.contains('d-none')
+        ? Array.prototype.slice.call(fields.suggestions.querySelectorAll('.wo-close-code-suggestion')) : [];
+      if (!options.length) return false;
+      var current = Number(input.dataset.catalogSuggestionIndex || -1);
+      var next = direction > 0 ? Math.min(options.length - 1, current + 1) : Math.max(0, current < 0 ? options.length - 1 : current - 1);
+      input.dataset.catalogSuggestionIndex = String(next);
+      options.forEach(function (option, index) { option.classList.toggle('is-active', index === next); });
+      options[next].scrollIntoView({ block: 'nearest' });
+      return true;
+    }
+
+    function selectedClosingCatalogSuggestion(input) {
+      var fields = closingCatalogFields(input);
+      var index = Number(input.dataset.catalogSuggestionIndex || -1);
+      var options = fields.suggestions ? fields.suggestions.querySelectorAll('.wo-close-code-suggestion') : [];
+      return index >= 0 && options[index] ? options[index] : null;
     }
 
     function closingPayload() {
@@ -4096,6 +4126,19 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           var addButton = document.getElementById('wo-close-add-scrap-receipt-btn');
           if (addButton) addButton.disabled = false;
         }
+        var clearMaterial = event.target.closest('.wo-close-material-clear-row-btn');
+        if (clearMaterial) {
+          var materialRow = clearMaterial.closest('tr');
+          materialRow.querySelectorAll('.wo-close-material-code, .wo-close-material-name, .wo-close-material-quantity').forEach(function (input) { input.value = ''; });
+          return;
+        }
+        var deleteMaterial = event.target.closest('.wo-close-material-delete-row-btn');
+        if (deleteMaterial) {
+          var deleteRow = deleteMaterial.closest('tr');
+          var rows = closeWorkOrderMaterialsTable ? closeWorkOrderMaterialsTable.querySelectorAll('tbody tr') : [];
+          if (rows.length > 1) deleteRow.remove(); else deleteRow.querySelector('.wo-close-material-code').value = '';
+          validateWorkOrderClosing(false);
+        }
       });
 
       closeWorkOrderModal.addEventListener('keydown', function (event) {
@@ -4104,8 +4147,17 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         }
 
         var field = event.target;
-        if (!field || !field.matches('.wo-close-operation-code, .wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn')) {
+        if (!field || !field.matches('.wo-close-operation-code, .wo-close-material-code, .wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn')) {
           return;
+        }
+
+        if (field.matches('.wo-close-operation-code, .wo-close-material-code')) {
+          if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && highlightClosingCatalogSuggestion(field, event.key === 'ArrowDown' ? 1 : -1)) { event.preventDefault(); return; }
+          if (event.key === 'Enter') {
+            var catalogOption = selectedClosingCatalogSuggestion(field);
+            if (catalogOption) { event.preventDefault(); selectClosingCatalogSuggestion(catalogOption); }
+            return;
+          }
         }
 
         if (field.classList.contains('wo-close-worker-search')) {

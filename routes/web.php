@@ -14,6 +14,7 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OrderAiScanController;
 use App\Http\Controllers\OrderItemController;
 use App\Http\Controllers\ReleasedMaterialDocumentController;
+use App\Http\Controllers\WipReleaseDocumentController;
 use App\Http\Controllers\ReleasedOperationDocumentController;
 use App\Http\Controllers\FinishedGoodsReceiptDocumentController;
 use App\Http\Controllers\WorkOrderController;
@@ -120,6 +121,9 @@ Route::middleware('auth:web')->group(function () {
         Route::get('documents/released-materials', [ReleasedMaterialDocumentController::class, 'index'])->name('app-released-material-documents');
         Route::get('documents/released-materials/data', [ReleasedMaterialDocumentController::class, 'data'])->name('app-released-material-documents-data');
         Route::delete('documents/released-materials', [ReleasedMaterialDocumentController::class, 'destroy'])->name('app-released-material-documents-destroy');
+        Route::get('documents/wip-releases', [WipReleaseDocumentController::class, 'index'])->name('app-wip-release-documents');
+        Route::get('documents/wip-releases/data', [WipReleaseDocumentController::class, 'data'])->name('app-wip-release-documents-data');
+        Route::delete('documents/wip-releases', [WipReleaseDocumentController::class, 'destroy'])->name('app-wip-release-documents-destroy');
         Route::get('documents/released-operations', [ReleasedOperationDocumentController::class, 'index'])->name('app-released-operation-documents');
         Route::get('documents/released-operations/data', [ReleasedOperationDocumentController::class, 'data'])->name('app-released-operation-documents-data');
         Route::delete('documents/released-operations', [ReleasedOperationDocumentController::class, 'destroy'])->name('app-released-operation-documents-destroy');

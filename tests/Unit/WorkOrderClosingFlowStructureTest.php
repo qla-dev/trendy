@@ -98,7 +98,9 @@ class WorkOrderClosingFlowStructureTest extends TestCase
     {
         $this->assertStringContainsString('$this->connection->transaction(', $this->service);
         $this->assertStringContainsString('existingClosingDocuments', $this->service);
-        $this->assertStringContainsString("whereIn('m.acDocType', ['6100', '6600', '7100'])", $this->service);
+        $this->assertStringContainsString("whereIn('m.acDocType', ['6100', '6400', '6600', '7100'])", $this->service);
+        $this->assertStringContainsString('preparedMaterialsFromTransfer', $this->service);
+        $this->assertStringContainsString('materialStock->issue', $this->service);
         $this->assertStringContainsString("'acStatusMF' => 'Z'", $this->service);
         $this->assertStringContainsString("'acReceiveFinished' => 'Y'", $this->service);
         $this->assertStringContainsString("'acStatusMF' => 'R'", $this->service);

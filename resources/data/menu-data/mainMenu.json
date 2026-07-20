@@ -65,6 +65,12 @@
       "slug": "app-released-material-documents"
     },
     {
+      "name": "Razduživanje WIP",
+      "icon": "archive",
+      "url": "app/documents/wip-releases",
+      "slug": "app-wip-release-documents"
+    },
+    {
       "name": "Razdužene operacije",
       "icon": "tool",
       "url": "app/documents/released-operations",
