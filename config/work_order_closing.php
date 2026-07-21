@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'work_order_2005_flow_start_date' => env('WORK_ORDER_2005_FLOW_START_DATE', '2026-07-21 00:00:00'),
     'raw_material_warehouse' => env('WORK_ORDER_RAW_MATERIAL_WAREHOUSE', 'Skladište sirovina'),
     // Pantheon warehouse subject name, configurable rather than a volatile QId.
     'work_in_progress_warehouse' => env('WORK_ORDER_WIP_WAREHOUSE', 'Proizvodnja u toku - skladište'),

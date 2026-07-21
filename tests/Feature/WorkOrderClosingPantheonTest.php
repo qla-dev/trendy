@@ -129,6 +129,24 @@ class WorkOrderClosingPantheonTest extends TestCase
         $this->assertSame(0, $this->closingDocumentCount());
     }
 
+    public function test_post_cutoff_work_order_without_2005_transfer_can_be_closed(): void
+    {
+        $originalCutoff = config('work_order_closing.work_order_2005_flow_start_date');
+        config(['work_order_closing.work_order_2005_flow_start_date' => '2000-01-01 00:00:00']);
+        $this->pantheon->beginTransaction();
+
+        try {
+            $result = app(WorkOrderClosingService::class)->close(self::WORK_ORDER_KEY, $this->payload(), 1);
+            $this->assertFalse($result['already_closed']);
+            $this->assertSame(['6600', '6100'], array_column($result['documents'], 'document_type'));
+        } finally {
+            config(['work_order_closing.work_order_2005_flow_start_date' => $originalCutoff]);
+            while ($this->pantheon->transactionLevel() > 0) {
+                $this->pantheon->rollBack();
+            }
+        }
+    }
+
     public function test_closing_splits_finished_goods_receipts_between_vp_and_scrap_warehouses(): void
     {
         $this->pantheon->beginTransaction();
@@ -247,7 +265,7 @@ class WorkOrderClosingPantheonTest extends TestCase
             ]]);
 
             $documents = collect($result['documents'])->keyBy('document_type');
-            $this->assertSame(['6400', '6600', '6100'], array_column($result['documents'], 'document_type'));
+            $this->assertSame(['2005', '6400', '6600', '6100'], array_column($result['documents'], 'document_type'));
 
             $workOrderItems = $this->pantheon->table('dbo.tHF_WOExItem')
                 ->where('acKey', $emptyWorkOrderKey)
@@ -279,9 +297,14 @@ class WorkOrderClosingPantheonTest extends TestCase
                 ->where('acKey', $documents['6400']['document_key'])
                 ->where('acIdent', 'PLOPLAZMA')
                 ->first(['anQId', 'acLnkKey']);
+            $preparationMoveItem = $this->pantheon->table('dbo.tHE_MoveItem')
+                ->where('acKey', $documents['2005']['document_key'])
+                ->where('acIdent', 'PLOPLAZMA')
+                ->first(['anQId']);
 
             $this->assertNotNull($operationMoveItem);
             $this->assertNotNull($materialMoveItem);
+            $this->assertNotNull($preparationMoveItem);
             $this->assertSame($documents['6100']['document_key'], trim((string) $operationMoveItem->acLnkKey));
             $this->assertSame($documents['6100']['document_key'], trim((string) $materialMoveItem->acLnkKey));
 
@@ -291,12 +314,18 @@ class WorkOrderClosingPantheonTest extends TestCase
             $materialLink = $this->pantheon->table('dbo.tHF_LinkMoveItemWOExItem')
                 ->where('anMoveItemQId', (int) $materialMoveItem->anQId)
                 ->first(['acType', 'acTypeA', 'anWOExItemQid']);
+            $preparationLink = $this->pantheon->table('dbo.tHF_LinkMoveItemWOExItem')
+                ->where('anMoveItemQId', (int) $preparationMoveItem->anQId)
+                ->first(['acType', 'acTypeA', 'anWOExItemQid']);
 
             $this->assertSame('PP', trim((string) $operationLink->acType));
             $this->assertSame((int) $operationItem->anQId, (int) $operationLink->anWOExItemQid);
             $this->assertSame('PP', trim((string) $materialLink->acType));
             $this->assertSame('A', trim((string) $materialLink->acTypeA));
             $this->assertSame((int) $materialItem->anQId, (int) $materialLink->anWOExItemQid);
+            $this->assertSame('PP', trim((string) $preparationLink->acType));
+            $this->assertSame('A', trim((string) $preparationLink->acTypeA));
+            $this->assertSame((int) $materialItem->anQId, (int) $preparationLink->anWOExItemQid);
 
             $workerRecord = $this->pantheon->table('dbo.tHF_WOExItemWork')
                 ->where('anWOExItemQid', (int) $operationItem->anQId)
@@ -306,7 +335,7 @@ class WorkOrderClosingPantheonTest extends TestCase
             $this->assertSame('OP30', trim((string) $workerRecord->acIdent));
             $this->assertSame('240.000000', number_format((float) $workerRecord->anTime, 6, '.', ''));
 
-            foreach (['6400' => 'P', '6600' => 'P', '6100' => 'M'] as $documentType => $linkType) {
+            foreach (['2005' => 'P', '6400' => 'P', '6600' => 'P', '6100' => 'M'] as $documentType => $linkType) {
                 $document = $documents[$documentType];
                 $this->assertTrue($this->pantheon->table('dbo.tHF_LinkMoveWOEx')
                     ->where('acKey', $document['document_key'])

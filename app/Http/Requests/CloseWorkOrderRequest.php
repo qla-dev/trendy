@@ -43,6 +43,11 @@ class CloseWorkOrderRequest extends FormRequest
             $materials = array_values(array_filter(array_map(function ($material) {
                 $material = is_array($material) ? $material : [];
                 $material['code'] = trim((string) ($material['code'] ?? ''));
+                // Newly added rows in the closing modal do not have a
+                // Pantheon WO-item QId yet. Treat the browser's 0 value as
+                // null so the closing service can create and link it.
+                $itemQid = (int) ($material['item_qid'] ?? 0);
+                $material['item_qid'] = $itemQid > 0 ? $itemQid : null;
 
                 return $material;
             }, $materials), function (array $material): bool {

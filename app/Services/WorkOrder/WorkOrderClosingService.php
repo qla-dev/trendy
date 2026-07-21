@@ -18,8 +18,8 @@ class WorkOrderClosingService
         private PantheonClosingMaterialDocumentService $materialDocuments,
         private PantheonOperationDocumentService $operationDocuments,
         private PantheonFinishedGoodsReceiptService $receiptDocuments,
-        private PantheonMaterialStockService $materialStock,
         private PantheonMaterialPreparationService $materialPreparation,
+        private PantheonMaterialStockService $materialStock,
         private PantheonWorkerSearchService $workers,
         private WorkOrderClosingCalculator $calculator
     ) {
@@ -35,15 +35,13 @@ class WorkOrderClosingService
             $workOrder = $this->lockWorkOrder($locator);
             $existing = $this->existingClosingDocuments((string) $workOrder['acKey']);
 
-            if (isset($existing['6400'])) {
-                throw new RuntimeException('Dokument 6400 za radni nalog već postoji. Materijal nije ponovo razdužen.');
-            }
-
             if (isset($existing['6600']) && (isset($existing['6100']) || isset($existing['7100']))) {
                 return $this->alreadyClosedResult($workOrder, $existing);
             }
 
-            if ($existing !== []) {
+            $blockingExisting = $existing;
+            unset($blockingExisting['6400']);
+            if ($blockingExisting !== []) {
                 throw new RuntimeException('Radni nalog ima nepotpun postojeći skup završnih dokumenata. Nije kreiran novi dokument.');
             }
 
@@ -72,14 +70,10 @@ class WorkOrderClosingService
             } */
 
             $operations = $preparedOperations['operations'];
-            $materials = $this->preparedMaterialsFromTransfer((string) $workOrder['acKey']);
-            $submittedCloseMaterials = $this->prepareMaterials(array_values(array_filter($submittedMaterials, fn ($material) => (bool) ($material['is_new'] ?? false))));
-            $transferredCodes = array_fill_keys(array_map(fn ($material) => strtolower((string) $material['code']), $materials), true);
-            $newCloseMaterials = array_values(array_filter($submittedCloseMaterials, fn ($material) => !isset($transferredCodes[strtolower((string) $material['code'])])));
-            if ($newCloseMaterials !== []) {
-                $this->materialPreparation->append($this->connection, $workOrder, $newCloseMaterials, $now, $userId);
-                $materials = array_merge($materials, $newCloseMaterials);
-            }
+            $materialFlow = $this->resolveMaterialFlow($workOrder, $submittedMaterials);
+            $materials = $materialFlow['materials'];
+            $sourceWarehouse = $materialFlow['source_warehouse'];
+            $destinationWarehouse = (string) config('work_order_closing.receipt_warehouse', 'Veleprodajno skladište');
 
             // An empty work order has no item QIds for Pantheon document-line
             // links. Create closing positions first, then use their QIds for
@@ -94,7 +88,51 @@ class WorkOrderClosingService
             );
             $operations = $closingItems['operations'];
             $materials = $closingItems['materials'];
-            $materialTotal = $this->preparedMaterialCostTotal($materials);
+            $preparationResult = $this->prepareCloseTimeMaterials(
+                $workOrder,
+                $materials,
+                $now,
+                $userId
+            );
+            $related2005 = $preparationResult ?? $this->materialPreparationDocument((string) $workOrder['acKey']);
+            $materialFallbackNotice = null;
+
+            if ($materials !== [] && !$this->materialStock->canIssue($this->connection, $sourceWarehouse, $materials)) {
+                // A WO with neither 2005 nor 6400 was never moved into WIP.
+                // Preserve the legacy direct issue only for that unprocessed
+                // case; never use it after an existing 6400 release.
+                if ($related2005 === null && !isset($existing['6400'])) {
+                    $sourceWarehouse = trim((string) config('work_order_closing.raw_material_warehouse', 'SkladiĹˇte sirovina'));
+                    if ($sourceWarehouse === '') {
+                        throw new RuntimeException('Konfiguracija skladiĹˇta sirovina nije postavljena.');
+                    }
+                    $materialFlow['name'] = 'legacy_skladiste_sirovina_to_veleprodajno_without_2005_fallback';
+                    $materialFallbackNotice = 'Dokument 2005 nije pronađen. Materijal je razdužen direktno iz skladišta sirovina u veleprodajno skladište.';
+
+                    Log::warning('Work order closing is using the raw-material fallback because no 2005 exists.', [
+                        'work_order_id' => $workOrder['acKey'],
+                        'source_warehouse' => $sourceWarehouse,
+                        'destination_warehouse' => $destinationWarehouse,
+                        'document_2005_id' => null,
+                        'existing_document_6400' => false,
+                    ]);
+                }
+            }
+
+            Log::info('Work order material flow selected.', [
+                'work_order_id' => $workOrder['acKey'],
+                'work_order_created_at' => $materialFlow['created_at']->toDateTimeString(),
+                'work_order_priority' => $materialFlow['priority'],
+                'configured_cutoff_date' => $materialFlow['cutoff']->toDateTimeString(),
+                'selected_flow' => $materialFlow['name'],
+                'source_warehouse' => $sourceWarehouse,
+                'destination_warehouse' => $destinationWarehouse,
+                'document_2005_id' => $preparationResult['document_key'] ?? $related2005->acKey ?? $materialFlow['document_2005_id'],
+            ]);
+            $materialTotal = $this->calculator->add(
+                $this->materialCostTotal((string) $workOrder['acKey']),
+                $this->preparedMaterialCostTotal($materials)
+            );
             $operationTotal = '0';
 
             foreach ($operations as $operation) {
@@ -139,7 +177,7 @@ class WorkOrderClosingService
                 $userId,
                 [
                     'receiver' => $consignee,
-                    'issuer' => (string) config('work_order_closing.work_in_progress_warehouse', config('work_order_closing.operation_warehouse', 'RN skladište')),
+                    'issuer' => $sourceWarehouse,
                     'receiver_stock' => 'N',
                     'issuer_stock' => 'Y',
                     'person3' => $consignee,
@@ -148,11 +186,10 @@ class WorkOrderClosingService
                 ]
             );
             if ($materialResult !== null) {
-                $warehouse = trim((string) config('work_order_closing.work_in_progress_warehouse', config('work_order_closing.operation_warehouse', '')));
-                if ($warehouse === '') {
+                if ($sourceWarehouse === '') {
                     throw new RuntimeException('Konfiguracija međuskladišta nije postavljena.');
                 }
-                $this->materialStock->issue($this->connection, $warehouse, $materials, $now, $userId);
+                $this->materialStock->issue($this->connection, $sourceWarehouse, $materials, $now, $userId);
             }
 
             $operationResult = $this->operationDocuments->create(
@@ -211,17 +248,26 @@ class WorkOrderClosingService
                 'user_id' => $userId,
             ]);
 
+            $createdDocumentsMessage = 'kreirani dokumenti ' . implode(' i ', array_filter([
+                ($preparationResult['created'] ?? false) ? $preparationResult['document_number'] : null,
+                $materialResult['document_number'] ?? null,
+                $operationResult['document_number'],
+                ...array_column($receiptResults, 'document_number'),
+            ]));
+
             return [
                 'already_closed' => false,
                 'status' => 'zaključen',
                 'work_order_key' => $workOrder['acKey'],
                 'work_order_number' => $this->formatNumber((string) ($workOrder['acKeyView'] ?? $workOrder['acKey'])),
-                'message' => 'kreirani dokumenti ' . implode(' i ', array_filter([
-                    $materialResult['document_number'] ?? null,
-                    $operationResult['document_number'],
-                    ...array_column($receiptResults, 'document_number'),
+                'message' => implode(' ', array_filter([$materialFallbackNotice, $createdDocumentsMessage])),
+                'notices' => $materialFallbackNotice === null ? [] : [$materialFallbackNotice],
+                'documents' => array_values(array_filter([
+                    ($preparationResult['created'] ?? false) ? $preparationResult : null,
+                    $materialResult,
+                    $operationResult,
+                    ...$receiptResults,
                 ])),
-                'documents' => array_values(array_filter([$materialResult, $operationResult, ...$receiptResults])),
                 'costs' => $receiptCalculation,
             ];
         }, 3);
@@ -617,6 +663,11 @@ class WorkOrderClosingService
                 str_replace(',', '.', $quantity),
                 'Material quantity'
             );
+            // A material row with zero consumption must not create a 6400
+            // line or touch WIP/raw stock.
+            if (bccomp($normalizedQuantity, '0', WorkOrderClosingCalculator::SCALE) <= 0) {
+                continue;
+            }
             $price = $this->calculator->normalizeNonNegative($catalog->anPrStPrice ?? null, 'Material price');
             $unit = strtoupper(substr(trim((string) ($catalog->acUM ?? 'KOM')), 0, 3));
             if ($unit === '') {
@@ -624,7 +675,8 @@ class WorkOrderClosingService
             }
 
             $prepared[] = [
-                'item_qid' => 0,
+                'item_qid' => (int) ($material['item_qid'] ?? 0),
+                'requires_close_time_preparation' => (int) ($material['item_qid'] ?? 0) < 1,
                 'position' => 0,
                 'code' => trim((string) $catalog->acIdent),
                 'name' => trim((string) ($catalog->acName ?? $catalog->acIdent)),
@@ -639,6 +691,37 @@ class WorkOrderClosingService
         return $prepared;
     }
 
+    /**
+     * Materials entered only on the closing tab have not yet left the raw
+     * material warehouse. Create (or extend) their 2005 transfer before the
+     * closing 6400 releases the same linked WO material from WIP.
+     */
+    private function prepareCloseTimeMaterials(array $workOrder, array $materials, Carbon $now, int $userId): ?array
+    {
+        $items = array_values(array_filter($materials, fn (array $material) => (bool) ($material['requires_close_time_preparation'] ?? false)));
+        if ($items === []) {
+            return null;
+        }
+
+        $existing = $this->materialPreparationDocument((string) $workOrder['acKey']);
+
+        if ($existing === null) {
+            return $this->materialPreparation->prepare($this->connection, $workOrder, $items, $now, $userId) + ['created' => true];
+        }
+
+        return $this->materialPreparation->append($this->connection, $workOrder, $items, $now, $userId) + ['created' => false];
+    }
+
+    private function materialPreparationDocument(string $workOrderKey): ?object
+    {
+        return $this->connection->table('dbo.tHE_Move as m')
+            ->join('dbo.tHF_LinkMoveWOEx as l', 'l.acKey', '=', 'm.acKey')
+            ->where('l.acLnkKey', $workOrderKey)
+            ->where('m.acDocType', '2005')
+            ->orderByDesc('m.acKey')
+            ->first(['m.acKey', 'm.acKeyView']);
+    }
+
     private function preparedMaterialCostTotal(array $materials): string
     {
         $total = '0';
@@ -649,33 +732,75 @@ class WorkOrderClosingService
         return $total;
     }
 
-    /** 6400 is always based on the quantities actually moved by 2005. */
-    private function preparedMaterialsFromTransfer(string $workOrderKey): array
+    private function resolveMaterialFlow(array $workOrder, array $submittedMaterials): array
     {
-        $transfer = $this->connection->table('dbo.tHE_Move as m')
-            ->join('dbo.tHF_LinkMoveWOEx as l', 'l.acKey', '=', 'm.acKey')
-            ->where('l.acLnkKey', $workOrderKey)->where('m.acDocType', '2005')
-            ->orderByDesc('m.acKey')->first(['m.acKey']);
-        if ($transfer === null) throw new RuntimeException('Dokument 2005 za pripremu materijala nije pronađen.');
-        $items = $this->connection->table('dbo.tHE_MoveItem')->where('acKey', $transfer->acKey)->orderBy('anNo')->get();
-        if ($items->isEmpty()) throw new RuntimeException('Dokument 2005 nema materijalne stavke.');
-        return $items->map(function ($row) use ($workOrderKey) {
-            $itemQid = (int) ($this->connection->table('dbo.tHF_LinkMoveItemWOExItem')
-                ->where('acKey', $row->acKey)->where('anNo', $row->anNo)->value('anWOExItemQid') ?? 0);
-            if ($itemQid < 1) {
-                $itemQid = (int) ($this->connection->table('dbo.tHF_WOExItem')
-                    ->where('acKey', $workOrderKey)->whereRaw("LTRIM(RTRIM(acIdent)) = ?", [trim((string) $row->acIdent)])
-                    ->orderBy('anNo')->value('anQId') ?? 0);
-            }
-            return [
-            'item_qid'=>$itemQid, 'position'=>(int) $row->anNo, 'code'=>trim((string) $row->acIdent),
-            'name'=>trim((string) ($row->acName ?? $row->acIdent)), 'unit'=>trim((string) ($row->acUM ?? 'KOM')),
-            'quantity'=>(string) $row->anQty, 'price'=>(string) ($row->anPrice ?? 0),
-            'total'=>bcmul((string) $row->anQty, (string) ($row->anPrice ?? 0), WorkOrderClosingCalculator::SCALE),
-            'ident_qid'=>(int) ($row->anIdentQId ?? 0),
+        $createdAt = $this->workOrderCreatedAt($workOrder);
+        $cutoff = Carbon::parse((string) config('work_order_closing.work_order_2005_flow_start_date', '2026-07-21 00:00:00'));
+        $priority = $this->workOrderPriority($workOrder);
+        $submitted = $this->prepareMaterials($submittedMaterials);
+        $legacyItemQids = $createdAt->lt($cutoff)
+            ? $this->legacyMaterialItemQids((string) $workOrder['acKey'])
+            : [];
+        $materials = array_values(array_filter($submitted, function (array $material) use ($legacyItemQids) {
+            return !isset($legacyItemQids[(int) ($material['item_qid'] ?? 0)]);
+        }));
+        $hasLegacyRows = $legacyItemQids !== [];
+
+        return [
+            'materials' => $materials,
+            'source_warehouse' => trim((string) config('work_order_closing.work_in_progress_warehouse', config('work_order_closing.operation_warehouse', ''))),
+            'name' => $hasLegacyRows
+                ? 'mixed_legacy_6400_and_current_proizvodnja_u_toku_to_veleprodajno'
+                : 'current_proizvodnja_u_toku_to_veleprodajno',
+            'created_at' => $createdAt,
+            'cutoff' => $cutoff,
+            'document_2005_id' => null,
+            'priority' => $priority,
         ];
-        })->all();
     }
+
+    private function legacyMaterialItemQids(string $workOrderKey): array
+    {
+        $rows = $this->connection->table('dbo.tHF_WOExItem as wi')
+            ->leftJoin('dbo.tHE_SetItem as si', 'si.acIdent', '=', 'wi.acIdent')
+            ->join('dbo.tHF_LinkMoveItemWOExItem as li', 'li.anWOExItemQid', '=', 'wi.anQId')
+            ->join('dbo.tHE_Move as m', 'm.acKey', '=', 'li.acKey')
+            ->where('wi.acKey', $workOrderKey)
+            ->where('m.acDocType', '6400')
+            ->where(function ($query) {
+                $query->whereNull('wi.acOperationType')
+                    ->orWhereNotIn('wi.acOperationType', ['D', 'O']);
+            })
+            ->whereRaw("LTRIM(RTRIM(ISNULL(si.acSetOfItem, ''))) <> 'OPR'")
+            ->pluck('wi.anQId');
+
+        return array_fill_keys(array_map(fn ($qid) => (int) $qid, $rows->all()), true);
+    }
+
+    private function workOrderCreatedAt(array $workOrder): Carbon
+    {
+        foreach (['created_at', 'adDateIns', 'adTimeIns', 'adDate'] as $field) {
+            $value = $workOrder[$field] ?? null;
+            if (trim((string) $value) !== '') {
+                return Carbon::parse((string) $value);
+            }
+        }
+
+        throw new RuntimeException('Radni nalog nema datum kreiranja potreban za odabir toka materijala.');
+    }
+
+    private function workOrderPriority(array $workOrder): int
+    {
+        foreach (['anPriority', 'acPriority', 'priority'] as $field) {
+            $value = trim((string) ($workOrder[$field] ?? ''));
+            if (preg_match('/^\d+/', $value, $matches) === 1) {
+                return (int) $matches[0];
+            }
+        }
+
+        return 0;
+    }
+
 
     private function existingClosingDocuments(string $workOrderKey): array
     {

@@ -4001,9 +4001,11 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
             .some(function (value) { return String(value || '').trim() !== ''; });
         }),
         materials: Array.prototype.slice.call(document.querySelectorAll('#close-work-order-materials-table tbody tr')).map(function (row) {
+          var quantityInput = row.querySelector('.wo-close-material-quantity') || {};
           return {
             code: String((row.querySelector('.wo-close-material-code') || {}).value || '').trim().toUpperCase(),
-            quantity: String((row.querySelector('.wo-close-material-quantity') || {}).value || '').trim().replace(',', '.'),
+            quantity: String(quantityInput.value || '').trim().replace(',', '.'),
+            item_qid: Number(quantityInput.dataset.itemId || 0),
             is_new: row.getAttribute('data-existing-material') === '0'
           };
         }).filter(function (material) {
@@ -4086,7 +4088,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
     function closingResultHtml(data) {
       var documents = data && Array.isArray(data.documents) ? data.documents : [];
-      if (!documents.length) {
+      var notices = data && Array.isArray(data.notices) ? data.notices : [];
+      if (!documents.length && !notices.length) {
         return '';
       }
 
@@ -4104,7 +4107,12 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         return '<div class="text-start py-2 border-top">' + lines.join('<br>') + '</div>';
       }).join('');
 
+      var noticesHtml = notices.length
+        ? '<div class="alert alert-warning text-start mb-2" role="alert">' + notices.map(escapeClosingHtml).join('<br>') + '</div>'
+        : '';
+
       return '<div class="text-start">'
+        + noticesHtml
         + '<div class="fw-bold pb-2">Kreirani radni dokumenti</div>'
         + rows
         + '</div>';

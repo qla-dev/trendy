@@ -36,16 +36,20 @@ class PantheonMaterialPreparationService
         $raw = trim((string) config('work_order_closing.raw_material_warehouse', 'Skladište sirovina'));
         $wip = trim((string) config('work_order_closing.work_in_progress_warehouse', ''));
         if ($raw === '' || $wip === '') throw new RuntimeException('Konfiguracija skladišta sirovina ili međuskladišta nije postavljena.');
-        $header = $db->table('dbo.tHE_Move as m')->join('dbo.tHF_LinkMoveWOEx as l','l.acKey','=','m.acKey')->where('l.acLnkKey',$workOrder['acKey'])->where('m.acDocType','2005')->first(['m.acKey','m.anQId']);
+        $header = $db->table('dbo.tHE_Move as m')->join('dbo.tHF_LinkMoveWOEx as l','l.acKey','=','m.acKey')->where('l.acLnkKey',$workOrder['acKey'])->where('m.acDocType','2005')->first(['m.acKey','m.acKeyView','m.anQId','m.anValue']);
         if ($header === null) throw new RuntimeException('Dokument 2005 za pripremu materijala nije pronađen.');
         $line = (int) ($db->table('dbo.tHE_MoveItem')->where('acKey',$header->acKey)->max('anNo') ?? 0);
         $number = ['key'=>(string) $header->acKey, 'type'=>'2005'];
+        $addedTotal = '0';
         foreach ($items as $item) {
             $line++;
             $moveItemQid=$this->writer->insertItem($db,['acKey'=>$header->acKey,'anNo'=>$line,'acIdent'=>$item['code'],'acName'=>$item['name'],'anQty'=>$item['quantity'],'anQtyTemp'=>$item['quantity'],'acUM'=>$item['unit'],'anPrice'=>$item['price'],'anStockPrice'=>$item['price'],'anPriceCurrency'=>$item['price'],'anRebate'=>0,'acVATCode'=>'I0','anVAT'=>0,'anMoveQId'=>(int)$header->anQId,'anIdentQId'=>$item['ident_qid'],'adTimeIns'=>$now,'anUserIns'=>$userId,'adTimeChg'=>$now,'anUserChg'=>$userId]);
             if ((int)($item['item_qid'] ?? 0)>0) $this->writer->linkItem($db,$number,$line,$moveItemQid,(int)$item['item_qid'],$now,$userId,'A ');
+            $addedTotal = bcadd($addedTotal, (string) ($item['total'] ?? '0'), WorkOrderClosingCalculator::SCALE);
         }
+        $total = bcadd((string) ($header->anValue ?? '0'), $addedTotal, WorkOrderClosingCalculator::SCALE);
+        $db->table('dbo.tHE_Move')->where('acKey', $header->acKey)->update(['anValue'=>$total,'anForPay'=>$total,'anCurrValue'=>$total,'adTimeChg'=>$now,'anUserChg'=>$userId]);
         $this->stock->transfer($db,$raw,$wip,$items,$now,$userId);
-        return $items;
+        return ['document_key'=>(string) $header->acKey,'document_number'=>(string) ($header->acKeyView ?? $header->acKey),'document_type'=>'2005','items'=>$items];
     }
 }
