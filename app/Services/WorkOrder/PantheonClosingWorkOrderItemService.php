@@ -29,44 +29,49 @@ class PantheonClosingWorkOrderItemService
             throw new RuntimeException('KljuÄ radnog naloga nije pronaÄ‘en za kreiranje pozicija.');
         }
 
-        // Preserve existing BOM positions. This behavior is specifically for
-        // manual closing data on an empty work order.
-        if ($connection->table('dbo.tHF_WOExItem')->where('acKey', $workOrderKey)->exists()) {
-            return compact('operations', 'materials') + ['created_items' => []];
-        }
-
-        $position = 1;
+        $workOrderHasItems = $connection->table('dbo.tHF_WOExItem')
+            ->where('acKey', $workOrderKey)
+            ->exists();
+        $position = $workOrderHasItems
+            ? (int) ($connection->table('dbo.tHF_WOExItem')->where('acKey', $workOrderKey)->max('anNo') ?? 0) + 1
+            : 1;
         $createdItems = [];
-        foreach ($operations as $index => $operation) {
-            if ((int) ($operation['item_qid'] ?? 0) > 0) {
-                continue;
+        if (!$workOrderHasItems) {
+            foreach ($operations as $index => $operation) {
+                if ((int) ($operation['item_qid'] ?? 0) > 0) {
+                    continue;
+                }
+
+                $qid = $this->insertItem(
+                    $connection,
+                    $workOrderKey,
+                    $position,
+                    (string) ($operation['code'] ?? ''),
+                    (string) ($operation['name'] ?? ''),
+                    'RDS',
+                    'D',
+                    '0',
+                    $now,
+                    $userId
+                );
+
+                $operations[$index]['item_qid'] = $qid;
+                $operations[$index]['position'] = $position;
+                $this->ensureOperationResourceRow($connection, $qid, $workOrderKey, $position, $now, $userId);
+                $createdItems[] = [
+                    'qid' => $qid,
+                    'position' => $position,
+                    'code' => $operations[$index]['code'],
+                    'kind' => 'operation',
+                ];
+                $position++;
             }
-
-            $qid = $this->insertItem(
-                $connection,
-                $workOrderKey,
-                $position,
-                (string) ($operation['code'] ?? ''),
-                (string) ($operation['name'] ?? ''),
-                'RDS',
-                'D',
-                '0',
-                $now,
-                $userId
-            );
-
-            $operations[$index]['item_qid'] = $qid;
-            $operations[$index]['position'] = $position;
-            $this->ensureOperationResourceRow($connection, $qid, $workOrderKey, $position, $now, $userId);
-            $createdItems[] = [
-                'qid' => $qid,
-                'position' => $position,
-                'code' => $operations[$index]['code'],
-                'kind' => 'operation',
-            ];
-            $position++;
         }
 
+        // A material added on the closing tab has no WO-item link. Add only
+        // that missing material position, even when the WO already has other
+        // (for example operation) positions, so both 2005 and 6400 can link
+        // to the same Pantheon row.
         foreach ($materials as $index => $material) {
             if ((int) ($material['item_qid'] ?? 0) > 0) {
                 continue;
