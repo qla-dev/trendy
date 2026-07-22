@@ -11,6 +11,7 @@ class WorkOrderMaterialFlowCompatibilityTest extends TestCase
     private string $writer;
     private string $preparation;
     private string $request;
+    private string $controller;
 
     protected function setUp(): void
     {
@@ -21,6 +22,7 @@ class WorkOrderMaterialFlowCompatibilityTest extends TestCase
         $this->writer = file_get_contents($base . 'app/Services/WorkOrder/PantheonDocumentWriter.php');
         $this->preparation = file_get_contents($base . 'app/Services/WorkOrder/PantheonMaterialPreparationService.php');
         $this->request = file_get_contents($base . 'app/Http/Requests/CloseWorkOrderRequest.php');
+        $this->controller = file_get_contents($base . 'app/Http/Controllers/WorkOrderController.php');
     }
 
     public function test_cutoff_and_existing_6400_links_select_legacy_material_rows(): void
@@ -28,7 +30,8 @@ class WorkOrderMaterialFlowCompatibilityTest extends TestCase
         $this->assertStringContainsString("'work_order_2005_flow_start_date'", $this->config);
         $this->assertStringContainsString("'2026-07-21 00:00:00'", $this->config);
         $this->assertStringContainsString("['created_at', 'adDateIns', 'adTimeIns', 'adDate']", $this->service);
-        $this->assertStringContainsString('$createdAt->lt($cutoff)', $this->service);
+        $this->assertStringContainsString('$createdAt->gte($cutoff)', $this->service);
+        $this->assertStringContainsString("'uses_2005_flow' => \$uses2005Flow", $this->service);
         $this->assertStringContainsString('private function legacyMaterialItemQids', $this->service);
         $this->assertStringContainsString("->where('m.acDocType', '6400')", $this->service);
         $this->assertStringContainsString("->join('dbo.tHF_LinkMoveItemWOExItem as li'", $this->service);
@@ -41,6 +44,19 @@ class WorkOrderMaterialFlowCompatibilityTest extends TestCase
         $this->assertStringNotContainsString('preparedMaterialsFromTransfer', $this->service);
         $this->assertStringNotContainsString('prijenos dokumentom 2005 nije uspješno završen', $this->service);
         $this->assertStringContainsString('$this->prepareMaterials($submittedMaterials)', $this->service);
+    }
+
+    public function test_the_configured_date_selects_direct_scan_6400_before_the_cutoff_and_2005_after_it(): void
+    {
+        $this->assertStringContainsString('private function usesWorkOrder2005Flow', $this->controller);
+        $this->assertStringContainsString("config('work_order_closing.work_order_2005_flow_start_date'", $this->controller);
+        $this->assertStringContainsString('return Carbon::parse((string) $value)->gte($cutoff);', $this->controller);
+        $this->assertStringContainsString('private function workOrderHas2005Document', $this->controller);
+        $this->assertStringContainsString('$hasExisting2005 || $this->usesWorkOrder2005Flow($workOrderRow)', $this->controller);
+        $this->assertStringContainsString('&& $uses2005Flow)', $this->controller);
+        $this->assertStringContainsString('&& !$uses2005Flow)', $this->controller);
+        $this->assertStringContainsString('createReleasedMaterialDocumentForBarcodeConsumption(', $this->controller);
+        $this->assertStringContainsString('materialPreparation->prepare(', $this->controller);
     }
 
     public function test_existing_6400_links_are_preserved_and_do_not_block_remaining_rows(): void

@@ -834,5 +834,5 @@
 <script>
   window.orderLinkageConfig = @json($orderLinkageConfig);
 </script>
-<script src="{{ asset('js/scripts/pages/app-orders.js?v=10') }}"></script>
+<script src="{{ asset('js/scripts/pages/app-orders.js?v=11') }}"></script>
 @endsection

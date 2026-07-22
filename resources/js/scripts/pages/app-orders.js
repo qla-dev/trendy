@@ -490,11 +490,11 @@ $(function () {
     }
 
     Swal.fire({
-      title: 'Obrisati narudzbu?',
+      title: 'Obrisati narudžbu?',
       html: '<div class="small">Ova akcija je trajna.<br><strong>' + escapeHtml(displayNumber) + '</strong></div>',
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonText: 'Obrisi',
+      confirmButtonText: 'Obriši',
       cancelButtonText: 'Odustani',
       customClass: {
         confirmButton: 'btn btn-danger',

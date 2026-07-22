@@ -117,6 +117,7 @@ $trendyDePromptRules = <<<'PROMPT'
 - Betrag -> line_total
 - Do not copy Liefertermin/Lieferdatum or its date into product_name or note.
 - If Einheit is STU for a Trendy Germany item, return unit as KO.
+- Trendy Germany orders use VAT code "I0" and VAT rate 0. Return those values for every item, including zero-value cancellation positions.
 - Prefer the visible Betrag value as line_total for each row.
 - Trendy Germany product codes may be numeric or alphanumeric and may contain dots, underscores, or intentional internal spaces, for example 241265.4, BYPR05C120030, DN731973_A, or PP 05 456.
 - For Trendy Germany codes such as PP 05 456, keep the spaces inside product_code; do not compact them to PP05456.

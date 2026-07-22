@@ -110,6 +110,7 @@ class PantheonOperationDocumentService
             $workerEntries = $operation['worker_entries'] ?? [[
                 'worker' => $operation['worker'] ?? [],
                 'minutes_per_unit' => $operation['minutes_per_unit'],
+                'downtime' => $operation['downtime'] ?? '0.000000',
                 'start_time' => $operation['start_time'] ?? '',
                 'end_time' => $operation['end_time'] ?? '',
             ]];
@@ -142,7 +143,10 @@ class PantheonOperationDocumentService
                     'anUserIns' => $userId,
                     'anVariant' => 0,
                     'anScrapPcs' => 0,
-                    'anHoldUp' => 0,
+                    // Pantheon's dedicated downtime column. Keep the gross
+                    // interval in begin/end and persist the entered hold-up
+                    // separately while document quantities use net minutes.
+                    'anHoldUp' => (string) ($workerEntry['downtime'] ?? '0.000000'),
                     'acHoldUpType' => '0',
                     'adBeginTime' => $this->workTimeDate($now, $workerEntry['start_time'] ?? null),
                     'adEndTime' => $this->workTimeDate($now, $workerEntry['end_time'] ?? null),

@@ -3016,6 +3016,65 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(751.45, data_get($result, 'normalized_payload.summary.subtotal'));
     }
 
+    public function test_trendy_de_parser_keeps_explicit_zero_value_position_and_uses_i0_vat_code(): void
+    {
+        $searchableLines = [
+            '22. 7. 2026.',
+            '7. 9. 2026.',
+            'Trendy Germany GmbH',
+            'Trendy doo',
+            'Trendy Germany GmbH-13',
+            'Bestellung26-020-001061',
+            'Edina Duzan',
+            "Artikel Nr.Pos.\tBeschreibung\tMengeEinheit EK-Preis\tBetragVAT %",
+            "2,00\t28,90STU\t57,800,00203671 Abstützung1",
+            '46-085-04-05-01',
+            "0,00\t0,00STU\t0,000,00206726 Hebel2",
+            '21-021-02-00-01',
+            "4,00\t30,85STU\t123,400,00212958 Spannklotz3",
+            '46-082-05-00-04-Z',
+            'Total\t181,20',
+            '0,00Steuer',
+            '181,20GesamtpreisEUR',
+        ];
+        $preparedDocument = [
+            'pdf_type' => 'digital',
+            'provider_input_mode' => 'text',
+            'effective_page_count' => 1,
+            'source_page_count' => 1,
+            'searchable_text' => implode("\n", $searchableLines),
+            'digital_extraction' => [
+                'source' => 'smalot_pdfparser',
+                'text_character_count' => strlen(implode("\n", $searchableLines)),
+            ],
+        ];
+        $scan = new OrderAiScan([
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-001061.pdf',
+            'source_mime_type' => 'application/pdf',
+        ]);
+
+        $result = app(OrderAiDigitalPdfRulesParser::class)->parse($scan, $preparedDocument);
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $postProcessMethod = $reflection->getMethod('postProcessProfilePayload');
+        $postProcessMethod->setAccessible(true);
+        $payload = $postProcessMethod->invoke($service, $scan, data_get($result, 'normalized_payload'));
+        $items = data_get($payload, 'items');
+
+        $this->assertSame('prepared_lines', data_get($result, 'raw_response.item_source'));
+        $this->assertSame(3, data_get($result, 'raw_response.matched_item_count'));
+        $this->assertCount(3, $items);
+        $this->assertSame([1, 2, 3], array_column($items, 'line_number'));
+        $this->assertSame(['203671', '206726', '212958'], array_column($items, 'product_code'));
+        $this->assertSame(0.0, data_get($items, '1.quantity'));
+        $this->assertSame(0.0, data_get($items, '1.unit_price'));
+        $this->assertSame(0.0, data_get($items, '1.line_total'));
+        $this->assertSame('I0', data_get($items, '1.vat_code'));
+        $this->assertSame(['I0', 'I0', 'I0'], array_column($items, 'vat_code'));
+        $this->assertSame(181.2, data_get($result, 'normalized_payload.summary.subtotal'));
+    }
+
     public function test_trendy_de_parser_preserves_spaced_product_codes_from_amount_rows(): void
     {
         $structuredLines = [

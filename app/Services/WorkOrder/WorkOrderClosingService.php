@@ -88,16 +88,15 @@ class WorkOrderClosingService
             );
             $operations = $closingItems['operations'];
             $materials = $closingItems['materials'];
-            $preparationResult = $this->prepareCloseTimeMaterials(
-                $workOrder,
-                $materials,
-                $now,
-                $userId
-            );
-            $related2005 = $preparationResult ?? $this->materialPreparationDocument((string) $workOrder['acKey']);
+            $preparationResult = $materialFlow['uses_2005_flow']
+                ? $this->prepareCloseTimeMaterials($workOrder, $materials, $now, $userId)
+                : null;
+            $related2005 = $materialFlow['uses_2005_flow']
+                ? ($preparationResult ?? $this->materialPreparationDocument((string) $workOrder['acKey']))
+                : null;
             $materialFallbackNotice = null;
 
-            if ($materials !== [] && !$this->materialStock->canIssue($this->connection, $sourceWarehouse, $materials)) {
+            if ($materialFlow['uses_2005_flow'] && $materials !== [] && !$this->materialStock->canIssue($this->connection, $sourceWarehouse, $materials)) {
                 // A WO with neither 2005 nor 6400 was never moved into WIP.
                 // Preserve the legacy direct issue only for that unprocessed
                 // case; never use it after an existing 6400 release.
@@ -391,6 +390,7 @@ class WorkOrderClosingService
                 $workerEntries[] = [
                     'worker' => $worker,
                     'minutes_per_unit' => $timing['minutes'],
+                    'downtime' => $timing['downtime'],
                     'start_time' => $timing['start_time'],
                     'end_time' => $timing['end_time'],
                 ];
@@ -446,6 +446,7 @@ class WorkOrderClosingService
                 'worker_entries' => [[
                     'worker' => $worker,
                     'minutes_per_unit' => $timing['minutes'],
+                    'downtime' => $timing['downtime'],
                     'start_time' => $timing['start_time'],
                     'end_time' => $timing['end_time'],
                 ]],
@@ -485,12 +486,16 @@ class WorkOrderClosingService
     {
         $start = trim((string) ($input['start_time'] ?? ''));
         $end = trim((string) ($input['end_time'] ?? ''));
+        $downtime = trim((string) ($input['downtime'] ?? '')) === ''
+            ? '0.000000'
+            : $this->calculator->normalizeNonNegative($input['downtime'], 'Zastoj');
 
         if ($start === '' && $end === '') {
             $minutes = $this->calculator->normalizeNonNegative($input['time'] ?? null, 'Vrijeme operacije');
 
             return [
                 'minutes' => $minutes,
+                'downtime' => $downtime,
                 'start_time' => '',
                 'end_time' => '',
             ];
@@ -512,10 +517,25 @@ class WorkOrderClosingService
 
         // Calculate server-side instead of trusting the browser's computed value.
         return [
-            'minutes' => (string) (($endMinutes - $startMinutes) - $this->breakOverlapMinutes($startMinutes, $endMinutes)),
+            'minutes' => $this->netOperationMinutes(
+                (string) (($endMinutes - $startMinutes) - $this->breakOverlapMinutes($startMinutes, $endMinutes)),
+                $downtime
+            ),
+            'downtime' => $downtime,
             'start_time' => $this->formatClockMinutes($startMinutes),
             'end_time' => $this->formatClockMinutes($endMinutes),
         ];
+    }
+
+    private function netOperationMinutes(string $grossMinutes, string $downtime): string
+    {
+        $netMinutes = bcsub($grossMinutes, $downtime, WorkOrderClosingCalculator::SCALE);
+
+        if (bccomp($netMinutes, '0', WorkOrderClosingCalculator::SCALE) < 0) {
+            throw new RuntimeException('Zastoj ne može biti veći od trajanja operacije.');
+        }
+
+        return $netMinutes;
     }
 
     private function clockMinutes(string $value): ?int
@@ -738,7 +758,11 @@ class WorkOrderClosingService
         $cutoff = Carbon::parse((string) config('work_order_closing.work_order_2005_flow_start_date', '2026-07-21 00:00:00'));
         $priority = $this->workOrderPriority($workOrder);
         $submitted = $this->prepareMaterials($submittedMaterials);
-        $legacyItemQids = $createdAt->lt($cutoff)
+        // A date change must not reissue raw stock for a WO that was already
+        // prepared by 2005 under an earlier configuration.
+        $uses2005Flow = $createdAt->gte($cutoff)
+            || $this->materialPreparationDocument((string) $workOrder['acKey']) !== null;
+        $legacyItemQids = !$uses2005Flow
             ? $this->legacyMaterialItemQids((string) $workOrder['acKey'])
             : [];
         $materials = array_values(array_filter($submitted, function (array $material) use ($legacyItemQids) {
@@ -748,13 +772,18 @@ class WorkOrderClosingService
 
         return [
             'materials' => $materials,
-            'source_warehouse' => trim((string) config('work_order_closing.work_in_progress_warehouse', config('work_order_closing.operation_warehouse', ''))),
-            'name' => $hasLegacyRows
-                ? 'mixed_legacy_6400_and_current_proizvodnja_u_toku_to_veleprodajno'
-                : 'current_proizvodnja_u_toku_to_veleprodajno',
+            'source_warehouse' => $uses2005Flow
+                ? trim((string) config('work_order_closing.work_in_progress_warehouse', config('work_order_closing.operation_warehouse', '')))
+                : trim((string) config('work_order_closing.raw_material_warehouse', 'SkladiĹˇte sirovina')),
+            'name' => $uses2005Flow
+                ? 'current_proizvodnja_u_toku_to_veleprodajno'
+                : ($hasLegacyRows
+                    ? 'legacy_6400_scan_and_skladiste_sirovina_to_veleprodajno'
+                    : 'legacy_skladiste_sirovina_to_veleprodajno'),
             'created_at' => $createdAt,
             'cutoff' => $cutoff,
             'document_2005_id' => null,
+            'uses_2005_flow' => $uses2005Flow,
             'priority' => $priority,
         ];
     }

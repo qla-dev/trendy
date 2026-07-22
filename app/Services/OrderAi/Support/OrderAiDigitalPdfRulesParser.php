@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 class OrderAiDigitalPdfRulesParser
 {
     private const TRENDY_DE_PARTY_NAME = 'Trendy Germany GmbH';
+    private const TRENDY_DE_VAT_CODE = 'I0';
     private const LOCAL_PROVIDER = 'digital_pdf_rules';
     private const LOCAL_MODEL = 'local-digital-pdf-rules-v1';
 
@@ -648,6 +649,7 @@ class OrderAiDigitalPdfRulesParser
         }
 
         $item['unit'] = $unit;
+        $item['has_explicit_amounts'] = true;
 
         return $item;
     }
@@ -683,6 +685,7 @@ class OrderAiDigitalPdfRulesParser
         $item['unit'] = trim((string) ($matches[3] ?? ''));
         $item['line_total'] = $this->parseGermanNumber((string) ($matches[4] ?? '0'));
         $item['vat_rate'] = $this->parseGermanNumber((string) ($matches[5] ?? '0'));
+        $item['has_explicit_amounts'] = true;
 
         return $item;
     }
@@ -1082,6 +1085,7 @@ class OrderAiDigitalPdfRulesParser
             'unit_price' => 0.0,
             'vat_rate' => 0.0,
             'line_total' => 0.0,
+            'has_explicit_amounts' => false,
             'delivery_deadline' => '',
         ];
 
@@ -1161,6 +1165,8 @@ class OrderAiDigitalPdfRulesParser
             return;
         }
 
+        $item['has_explicit_amounts'] = true;
+
         if (count($amounts) >= 4) {
             $item['quantity'] = (float) ($amounts[0] ?? $item['quantity']);
             $item['unit_price'] = (float) ($amounts[1] ?? $item['unit_price']);
@@ -1218,9 +1224,8 @@ class OrderAiDigitalPdfRulesParser
 
         return trim((string) ($item['product_code'] ?? '')) !== ''
             && !empty($item['description_lines'])
-            && (float) ($item['quantity'] ?? 0) > 0
             && trim((string) ($item['unit'] ?? '')) !== ''
-            && (float) ($item['line_total'] ?? 0) > 0;
+            && (bool) ($item['has_explicit_amounts'] ?? false);
     }
 
     private function extractTrendyDeUnitToken(string $line): string
@@ -1367,10 +1372,14 @@ class OrderAiDigitalPdfRulesParser
             'unit_price' => (float) ($item['unit_price'] ?? 0),
             'line_total' => (float) ($item['line_total'] ?? 0),
             'vat_rate' => (float) ($item['vat_rate'] ?? 0),
-            'vat_code' => (string) config('ai-order-scan.default_vat_code', 'P1'),
+            'vat_code' => self::TRENDY_DE_VAT_CODE,
             'discount_percent' => 0.0,
             'priority' => '',
             'note' => $note,
+            // Used only while the payload is being post-processed. It keeps
+            // a genuine zero-value PDF position from being mistaken for a
+            // continuation note; normalisation removes it before persistence.
+            'has_explicit_amounts' => (bool) ($item['has_explicit_amounts'] ?? false),
         ];
     }
 

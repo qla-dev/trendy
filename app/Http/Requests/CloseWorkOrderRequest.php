@@ -29,7 +29,7 @@ class CloseWorkOrderRequest extends FormRequest
                 // not let it turn an otherwise complete close into a partial
                 // close. Keep rows that contain any actual work input; the
                 // closing service then validates the required combination.
-                foreach (['worker_id', 'time', 'start_time', 'end_time'] as $field) {
+                foreach (['worker_id', 'time', 'start_time', 'end_time', 'downtime'] as $field) {
                     if (trim((string) ($operation[$field] ?? '')) !== '') {
                         return true;
                     }
@@ -90,6 +90,7 @@ class CloseWorkOrderRequest extends FormRequest
             // row is complete, the closing service creates final documents.
             'operations.*.worker_id' => ['nullable', 'integer', 'min:1'],
             'operations.*.time' => ['nullable', 'regex:/^(?:0|[1-9]\d*)(?:[.,]\d+)?$/'],
+            'operations.*.downtime' => ['nullable', 'regex:/^(?:0|[1-9]\d*)(?:[.,]\d+)?$/'],
             'operations.*.start_time' => ['nullable', 'regex:/^(?:[01]\d|2[0-3]):[0-5]\d$/'],
             'operations.*.end_time' => ['nullable', 'regex:/^(?:[01]\d|2[0-3]):[0-5]\d$/'],
             'materials' => ['nullable', 'array'],

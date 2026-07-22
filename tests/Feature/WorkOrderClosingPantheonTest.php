@@ -236,6 +236,8 @@ class WorkOrderClosingPantheonTest extends TestCase
         $emptyWorkOrderKey = $this->emptyWorkOrderKey();
         $this->assertNotNull($emptyWorkOrderKey, 'An open, document-free empty work order is required for this integration test.');
         $itemsBefore = $this->pantheon->table('dbo.tHF_WOExItem')->where('acKey', $emptyWorkOrderKey)->count();
+        $originalCutoff = config('work_order_closing.work_order_2005_flow_start_date');
+        config(['work_order_closing.work_order_2005_flow_start_date' => '2000-01-01 00:00:00']);
 
         $this->pantheon->beginTransaction();
 
@@ -348,6 +350,7 @@ class WorkOrderClosingPantheonTest extends TestCase
                     ->exists());
             }
         } finally {
+            config(['work_order_closing.work_order_2005_flow_start_date' => $originalCutoff]);
             while ($this->pantheon->transactionLevel() > 0) {
                 $this->pantheon->rollBack();
             }
