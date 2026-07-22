@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\OrderAiScanService;
-use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
+use App\Support\AiTokenNavbarCounter;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -218,13 +218,7 @@ class AiTokenHistoryController extends Controller
 
     private function baseHistoryQuery(): Builder
     {
-        return OrderAiScan::query()
-            ->where(function (Builder $query) {
-                $query
-                    ->where('credits_spent', '>', 0)
-                    ->orWhereNotNull('processed_at')
-                    ->orWhere('status', 'failed');
-            });
+        return app(AiTokenNavbarCounter::class)->historyBaseQuery();
     }
 
     private function resolveFilters(Request $request): array
@@ -423,9 +417,7 @@ class AiTokenHistoryController extends Controller
         }
         $pageCount = max(0, (int) ($scan->page_count ?? 0));
         $status = trim((string) ($scan->status ?? ''));
-        $billedTokens = $this->hasTransferResult($scan, $status)
-            ? app(OrderAiDocumentMetrics::class)->calculateBilledTokens($pageCount)
-            : 0;
+        $billedTokens = app(AiTokenNavbarCounter::class)->billedTokensFor($scan);
 
         return $this->documentMetricsCache[$cacheKey] = [
             'page_count' => $pageCount,
@@ -473,7 +465,7 @@ class AiTokenHistoryController extends Controller
 
     private function eventTimestampExpression(): string
     {
-        return 'COALESCE(processed_at, completed_at, created_at)';
+        return app(AiTokenNavbarCounter::class)->historyEventTimestampExpression();
     }
 
     private function resolveStatusMeta(OrderAiScan $scan): array
@@ -515,11 +507,7 @@ class AiTokenHistoryController extends Controller
 
     private function hasTransferResult(OrderAiScan $scan, string $status): bool
     {
-        return $scan->transferred_at !== null
-            || trim((string) ($scan->pantheon_order_key ?? '')) !== ''
-            || trim((string) ($scan->pantheon_order_view ?? '')) !== ''
-            || (int) ($scan->pantheon_order_qid ?? 0) > 0
-            || $status === 'transferred';
+        return app(AiTokenNavbarCounter::class)->hasTransferResult($scan, $status);
     }
 
     private function resolveSourceDownloadUrl(OrderAiScan $scan): ?string

@@ -275,7 +275,7 @@ class PantheonOrderTransferService
                     $headerPayload,
                     $headerQid,
                     $itemQid !== null ? ($itemQid + $index) : null,
-                    $index + 1,
+                    $this->resolvePantheonOrderItemLineNumber($item, $index + 1),
                     $user
                 );
             }
@@ -700,7 +700,7 @@ class PantheonOrderTransferService
                 $headerPayload,
                 $headerQid,
                 $itemQid !== null ? ($itemQid + $index) : null,
-                $index + 1,
+                $this->resolvePantheonOrderItemLineNumber($item, $index + 1),
                 $user
             );
         }
@@ -787,7 +787,7 @@ class PantheonOrderTransferService
             $requestedProductWeightNet = $requestedProductWeight ?? $this->numericValueOrNull($rawItem['catalog_weight_net'] ?? null);
             $requestedProductWeightGross = $requestedProductWeight ?? $this->numericValueOrNull($rawItem['catalog_weight_gross'] ?? null);
 
-            if ($quantity <= 0) {
+            if (!$this->shouldPrepareOrderItem($rawItem, $order, $quantity)) {
                 continue;
             }
 
@@ -1486,6 +1486,36 @@ class PantheonOrderTransferService
                 : (string) config('ai-order-scan.default_vat_code', 'P1'),
             'rate' => $normalizedVatRate,
         ];
+    }
+
+    private function shouldPrepareOrderItem(array $item, array $order, float $quantity): bool
+    {
+        if ($quantity > 0) {
+            return true;
+        }
+
+        // Trendy DE cancellation positions are valid PDF rows. Keep them
+        // only when all money/quantity fields are explicitly zero and the
+        // row still identifies an item, rather than transferring a partial
+        // or malformed extraction.
+        if (!$this->isTrendyGermanyOrder($order)) {
+            return false;
+        }
+
+        $unitPrice = round(max(0, (float) ($item['unit_price'] ?? 0)), 4);
+        $lineTotal = round(max(0, (float) ($item['line_total'] ?? 0)), 4);
+
+        return $unitPrice === 0.0
+            && $lineTotal === 0.0
+            && trim((string) ($item['product_code'] ?? '')) !== ''
+            && trim((string) ($item['product_name'] ?? '')) !== '';
+    }
+
+    private function resolvePantheonOrderItemLineNumber(array $item, int $fallback): int
+    {
+        $lineNumber = (int) ($item['line_number'] ?? 0);
+
+        return $lineNumber > 0 ? $lineNumber : max(1, $fallback);
     }
 
     private function generateNextOrderNumber(string $docType): array

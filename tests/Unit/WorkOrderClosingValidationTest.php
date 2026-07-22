@@ -22,6 +22,32 @@ class WorkOrderClosingValidationTest extends TestCase
         }
     }
 
+    public function test_optional_downtime_accepts_non_negative_minutes(): void
+    {
+        $validator = Validator::make(['operations' => [[
+            'item_qid' => 10,
+            'worker_id' => 20,
+            'time' => '60',
+            'downtime' => '30,5',
+        ]]], (new CloseWorkOrderRequest())->rules());
+
+        $this->assertFalse($validator->fails());
+    }
+
+    public function test_negative_or_invalid_downtime_is_rejected(): void
+    {
+        foreach (['-1', 'abc'] as $downtime) {
+            $validator = Validator::make(['operations' => [[
+                'item_qid' => 10,
+                'worker_id' => 20,
+                'time' => '60',
+                'downtime' => $downtime,
+            ]]], (new CloseWorkOrderRequest())->rules());
+
+            $this->assertTrue($validator->fails(), $downtime);
+        }
+    }
+
     /** @dataProvider invalidTimes */
     public function test_invalid_nonempty_time_is_rejected(mixed $time): void
     {

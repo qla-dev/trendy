@@ -2220,6 +2220,9 @@ class WorkOrderController extends Controller
                 ], 422);
             }
 
+            $hasExisting2005 = $this->workOrderHas2005Document($workOrderKey);
+            $uses2005Flow = $hasExisting2005 || $this->usesWorkOrder2005Flow($workOrderRow);
+
             $bomRows = $this->fetchBomComponentsByProduct($productId, $this->bomLimit());
             $normalizedComponents = [];
             $normalizedSeen = [];
@@ -2440,6 +2443,8 @@ class WorkOrderController extends Controller
                 'quantity_factor' => $quantityFactor,
                 'quantity_unit' => $quantityUnit,
                 'save_mode' => $saveMode,
+                'uses_2005_flow' => $uses2005Flow,
+                'has_existing_2005' => $hasExisting2005,
                 'trigger_status_transition' => $triggerStatusTransition,
                 'effective_status_transition' => $shouldTransitionStatus,
                 'suppressed_status_transition' => $suppressStatusTransition,
@@ -2486,7 +2491,9 @@ class WorkOrderController extends Controller
                 $manualQIdInsert,
                 $suppressStatusTransition,
                 $shouldTransitionStatus,
-                $materialPreparation
+                $materialPreparation,
+                $uses2005Flow,
+                $hasExisting2005
             ) {
                 $nextNo = null;
                 $nextQId = null;
@@ -2813,7 +2820,7 @@ class WorkOrderController extends Controller
                 }
 
                 $releasedMaterialDocument = null;
-                if ($saveMode === 'barcode' && $this->savedRowsContainMaterialConsumption($saved)) {
+                if ($saveMode === 'barcode' && $this->savedRowsContainMaterialConsumption($saved) && $uses2005Flow) {
                     $prepared = [];
                     foreach ($saved as $row) {
                         if (($row['item_kind'] ?? '') !== 'materials') continue;
@@ -2825,7 +2832,35 @@ class WorkOrderController extends Controller
                         $price = (string) ($catalog['avg_price'] ?? $catalog['anBuyPrice'] ?? 0);
                         $prepared[] = ['code'=>$code,'name'=>(string) ($catalog['acName'] ?? $row['acDescr'] ?? $code),'unit'=>(string) ($catalog['acUM'] ?? $row['acUM'] ?? 'KOM'),'quantity'=>$quantity,'price'=>$price,'total'=>bcmul($quantity,$price,6),'ident_qid'=>(int) $catalog['anQId'],'item_qid'=>(int) ($row['anQId'] ?? 0)];
                     }
-                    $releasedMaterialDocument = $materialPreparation->prepare(DB::connection(), $workOrderRow, $prepared, $now, $userId);
+                    $releasedMaterialDocument = $hasExisting2005
+                        ? $materialPreparation->append(DB::connection(), $workOrderRow, $prepared, $now, $userId)
+                        : $materialPreparation->prepare(DB::connection(), $workOrderRow, $prepared, $now, $userId);
+                }
+
+                if ($saveMode === 'barcode' && $this->savedRowsContainMaterialConsumption($saved) && !$uses2005Flow) {
+                    if (!empty($stockAdjustments)) {
+                        $stockAdjustments = $this->applyRawMaterialsWarehouseToStockAdjustments($stockAdjustments);
+                        $this->assertRawMaterialsWarehouseStockAvailable(
+                            $stockAdjustments,
+                            $workOrderRow,
+                            $this->buildStockAdjustmentMaterialMeta($saved)
+                        );
+                        $stockAdjustmentResults = Material::bulkAdjustStock(
+                            $stockAdjustments,
+                            $userId,
+                            '',
+                            ['strict_warehouse_match' => true]
+                        );
+                    }
+
+                    $releasedMaterialDocument = $this->createReleasedMaterialDocumentForBarcodeConsumption(
+                        $saved,
+                        $workOrderRow,
+                        $releasedMaterialCatalogRows,
+                        $stockAdjustmentResults,
+                        $userId,
+                        $now
+                    );
                 }
 
                 $statusTransition = [
@@ -6076,6 +6111,30 @@ class WorkOrderController extends Controller
             ['acWarehouse', 'linked_document', 'acWarehouseFrom'],
             ''
         ));
+    }
+
+    /** Work orders created before the configured date keep the direct 6400 flow. */
+    private function usesWorkOrder2005Flow(array $workOrderRow): bool
+    {
+        $cutoff = Carbon::parse((string) config('work_order_closing.work_order_2005_flow_start_date', '2026-07-21 00:00:00'));
+
+        foreach (['created_at', 'adDateIns', 'adTimeIns', 'adDate'] as $field) {
+            $value = $workOrderRow[$field] ?? null;
+            if (trim((string) $value) !== '') {
+                return Carbon::parse((string) $value)->gte($cutoff);
+            }
+        }
+
+        throw new RuntimeException('Radni nalog nema datum kreiranja potreban za odabir toka materijala.');
+    }
+
+    private function workOrderHas2005Document(string $workOrderKey): bool
+    {
+        return DB::table('dbo.tHE_Move as m')
+            ->join('dbo.tHF_LinkMoveWOEx as l', 'l.acKey', '=', 'm.acKey')
+            ->where('l.acLnkKey', $workOrderKey)
+            ->where('m.acDocType', '2005')
+            ->exists();
     }
 
     private function applyRawMaterialsWarehouseToStockAdjustments(array $stockAdjustments): array

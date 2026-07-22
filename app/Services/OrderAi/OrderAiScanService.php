@@ -3741,6 +3741,10 @@ class OrderAiScanService
 
     private function isTrendyDeContinuationOnlyItem(array $item): bool
     {
+        if ((bool) ($item['has_explicit_amounts'] ?? false)) {
+            return false;
+        }
+
         if (
             (float) ($item['quantity'] ?? 0) > 0
             || (float) ($item['unit_price'] ?? 0) > 0

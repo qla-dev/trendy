@@ -38,6 +38,7 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString('wo-close-worker', $this->view);
         $this->assertStringContainsString('wo-close-worker-search', $this->view);
         $this->assertStringContainsString('wo-close-time', $this->view);
+        $this->assertStringContainsString('wo-close-downtime', $this->view);
         $this->assertStringContainsString('wo-close-start-time', $this->view);
         $this->assertStringContainsString('wo-close-end-time', $this->view);
         $this->assertStringContainsString('wo-close-start-hour', $this->view);
@@ -47,6 +48,7 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString('Početak izrade', $this->view);
         $this->assertStringContainsString('Kraj izrade', $this->view);
         $this->assertStringContainsString('Trajanje (min/jedinica)', $this->view);
+        $this->assertStringContainsString('Zastoj (min)', $this->view);
         $this->assertStringContainsString('>Prijem</button>', $this->view);
         $this->assertStringContainsString('close-work-order-receipts-table', $this->view);
         $this->assertStringContainsString('wo-close-add-scrap-receipt-btn', $this->view);
@@ -87,7 +89,7 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString('missingClosingFields', $this->view);
         $this->assertStringContainsString('Nedostaju obavezna polja', $this->view);
         $this->assertStringContainsString('if (isClosingOperationRowEmpty(row))', $this->view);
-        $this->assertStringContainsString('[operation.worker_id, operation.time, operation.start_time, operation.end_time]', $this->view);
+        $this->assertStringContainsString('[operation.worker_id, operation.time, operation.downtime, operation.start_time, operation.end_time]', $this->view);
         $this->assertStringContainsString('modal-dialog-centered', $this->view);
     }
 
@@ -102,6 +104,8 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString("'acReceiveFinished' => 'Y'", $this->service);
         $this->assertStringContainsString("'acStatusMF' => 'R'", $this->service);
         $this->assertStringContainsString('breakOverlapMinutes', $this->service);
+        $this->assertStringContainsString('netOperationMinutes', $this->service);
+        $this->assertStringContainsString("'downtime' => \$timing['downtime']", $this->service);
         $this->assertStringContainsString('min($operationEnd, $end) - max($operationStart, $start)', $this->service);
         $this->assertStringContainsString("\$operationCode === 'OP30' && \$this->isEmptyOperationInput(\$input)", $this->service);
         $this->assertStringContainsString('private function isEmptyOperationInput', $this->service);

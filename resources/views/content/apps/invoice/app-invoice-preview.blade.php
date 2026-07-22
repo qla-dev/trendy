@@ -2689,6 +2689,7 @@
                     <th>Početak izrade</th>
                     <th>Kraj izrade</th>
                     <th>Trajanje (min/jedinica)</th>
+                    <th>Zastoj (min)</th>
                     <th class="text-center">Akcije</th>
                   </tr>
                 </thead>
@@ -2731,6 +2732,7 @@
                         <input class="form-control wo-close-time" type="text" inputmode="decimal" placeholder="Minute" autocomplete="off" aria-label="Trajanje u minutama po jedinici">
                         <div class="text-danger wo-close-operation-error">Unesite oba vremena ili nenegativan broj minuta. Završno vrijeme ne može biti prije početnog.</div>
                       </td>
+                      <td><input class="form-control wo-close-downtime" type="text" inputmode="decimal" placeholder="Opcionalno" autocomplete="off" aria-label="Zastoj u minutama"></td>
                       <td class="text-center">
                         <div class="wo-close-action-buttons">
                           <button type="button" class="wo-close-copy-row-btn" title="Kopiraj red" aria-label="Kopiraj red"><i class="fa fa-copy" aria-hidden="true"></i></button>
@@ -3237,21 +3239,28 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       rows.forEach(function (row) {
         var worker = row.querySelector('.wo-close-worker');
         var time = row.querySelector('.wo-close-time');
+        var downtime = row.querySelector('.wo-close-downtime');
         var timeValue = time ? String(time.value || '').trim() : '';
+        var downtimeValue = downtime ? String(downtime.value || '').trim() : '';
         var startValue = readClockFieldValue(row, 'start');
         var endValue = readClockFieldValue(row, 'end');
         var hasClockInput = startValue !== '' || endValue !== '';
         var timeValid = !hasClockInput
           ? (timeValue === '' || numericPattern.test(timeValue))
           : (startValue !== null && endValue !== null && startValue !== '' && endValue !== '' && operationTimeRangeIsValid(row));
+        var downtimeValid = downtimeValue === '' || numericPattern.test(downtimeValue);
+        if (timeValid && downtimeValid && hasClockInput) {
+          var grossMinutes = (clockMinutes(endValue) - clockMinutes(startValue)) - breakOverlapMinutes(clockMinutes(startValue), clockMinutes(endValue));
+          downtimeValid = Number(downtimeValue.replace(',', '.') || 0) <= grossMinutes;
+        }
 
-        allValid = allValid && timeValid;
+        allValid = allValid && timeValid && downtimeValid;
         if (showErrors) {
-          row.classList.toggle('is-invalid', !timeValid);
+          row.classList.toggle('is-invalid', !timeValid || !downtimeValid);
           if (time) {
             time.classList.toggle('wo-close-time-error', !timeValid);
           }
-        } else if (timeValid) {
+        } else if (timeValid && downtimeValid) {
           row.classList.remove('is-invalid');
           if (time) {
             time.classList.remove('wo-close-time-error');
@@ -3400,6 +3409,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
     function syncOperationTime(row) {
       var time = row.querySelector('.wo-close-time');
+      var downtime = row.querySelector('.wo-close-downtime');
 
       if (!time) {
         return;
@@ -3413,8 +3423,12 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         var endMinutes = clockMinutes(endValue);
         time.readOnly = true;
         time.classList.toggle('wo-close-time-error', startMinutes === null || endMinutes === null || endMinutes < startMinutes);
-        time.value = startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes
-          ? String((endMinutes - startMinutes) - breakOverlapMinutes(startMinutes, endMinutes))
+        var grossMinutes = (endMinutes - startMinutes) - breakOverlapMinutes(startMinutes, endMinutes);
+        var downtimeMinutes = Number(String((downtime || {}).value || '').trim().replace(',', '.') || 0);
+        var netMinutes = grossMinutes - downtimeMinutes;
+        time.classList.toggle('wo-close-time-error', startMinutes === null || endMinutes === null || endMinutes < startMinutes || !Number.isFinite(downtimeMinutes) || netMinutes < 0);
+        time.value = startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes && Number.isFinite(downtimeMinutes) && netMinutes >= 0
+          ? String(netMinutes)
           : '';
         return;
       }
@@ -3548,7 +3562,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       }
 
       return Array.prototype.slice.call(root.querySelectorAll(
-        '.wo-close-operation-code, .wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn'
+        '.wo-close-operation-code, .wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-downtime, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn'
       )).filter(function (element) {
         return !element.disabled && element.offsetParent !== null;
       });
@@ -3637,6 +3651,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         var workerSearch = copiedRow.querySelector('.wo-close-worker-search');
         var worker = copiedRow.querySelector('.wo-close-worker');
         var time = copiedRow.querySelector('.wo-close-time');
+        var downtime = copiedRow.querySelector('.wo-close-downtime');
         if (workerSearch) workerSearch.value = '';
         if (worker) worker.value = '';
         setClockFieldValue(copiedRow, 'start', '');
@@ -3645,6 +3660,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           time.value = '';
           time.readOnly = false;
         }
+        if (downtime) downtime.value = '';
       }
 
       return copiedRow;
@@ -3991,13 +4007,14 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
             code: String((row.querySelector('.wo-close-operation-code') || {}).value || '').trim().toUpperCase(),
             worker_id: workerId > 0 ? workerId : null,
             time: String((row.querySelector('.wo-close-time') || {}).value || '').trim().replace(',', '.'),
+            downtime: String((row.querySelector('.wo-close-downtime') || {}).value || '').trim().replace(',', '.'),
             start_time: String((row.querySelector('.wo-close-start-time') || {}).value || '').trim(),
             end_time: String((row.querySelector('.wo-close-end-time') || {}).value || '').trim()
           };
         }).filter(function (operation) {
           // A selected code without worker, duration, or time range is just a
           // placeholder. Do not submit it or let it block complete rows.
-          return [operation.worker_id, operation.time, operation.start_time, operation.end_time]
+          return [operation.worker_id, operation.time, operation.downtime, operation.start_time, operation.end_time]
             .some(function (value) { return String(value || '').trim() !== ''; });
         }),
         materials: Array.prototype.slice.call(document.querySelectorAll('#close-work-order-materials-table tbody tr')).map(function (row) {
@@ -4041,6 +4058,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         (row.querySelector('.wo-close-worker-search') || {}).value,
         (row.querySelector('.wo-close-worker') || {}).value,
         (row.querySelector('.wo-close-time') || {}).value,
+        (row.querySelector('.wo-close-downtime') || {}).value,
         (row.querySelector('.wo-close-start-hour') || {}).value,
         (row.querySelector('.wo-close-start-minute') || {}).value,
         (row.querySelector('.wo-close-end-hour') || {}).value,
@@ -4145,7 +4163,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           searchPantheonWorkers(target);
         }
 
-        if (target.matches('.wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute')) {
+        if (target.matches('.wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-downtime')) {
           syncOperationTime(row);
         }
 
@@ -4153,7 +4171,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           normalizeManualDuration(target);
         }
 
-        if (target.classList.contains('wo-close-time') || target.matches('.wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute') || target.classList.contains('wo-close-worker-search')) {
+        if (target.classList.contains('wo-close-time') || target.classList.contains('wo-close-downtime') || target.matches('.wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute') || target.classList.contains('wo-close-worker-search')) {
           validateWorkOrderClosing(false);
         }
       });
@@ -4201,7 +4219,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         }
 
         var field = event.target;
-        if (!field || !field.matches('.wo-close-operation-code, .wo-close-material-code, .wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn')) {
+        if (!field || !field.matches('.wo-close-operation-code, .wo-close-material-code, .wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-downtime, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn')) {
           return;
         }
 
@@ -4232,7 +4250,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           }
         }
 
-        if (event.key === 'Enter' && field.matches('.wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time')) {
+        if (event.key === 'Enter' && field.matches('.wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-downtime')) {
           event.preventDefault();
           moveToNextClosingFieldInRow(field);
           return;
@@ -4284,6 +4302,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           var clearedWorkerSearch = rowToClear.querySelector('.wo-close-worker-search');
           var clearedWorker = rowToClear.querySelector('.wo-close-worker');
           var clearedTime = rowToClear.querySelector('.wo-close-time');
+          var clearedDowntime = rowToClear.querySelector('.wo-close-downtime');
           if (clearedWorkerSearch) clearedWorkerSearch.value = '';
           if (clearedWorker) clearedWorker.value = '';
           if (clearedTime) {
@@ -4291,6 +4310,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
             clearedTime.readOnly = false;
             clearedTime.classList.remove('wo-close-time-error');
           }
+          if (clearedDowntime) clearedDowntime.value = '';
           setClockFieldValue(rowToClear, 'start', '');
           setClockFieldValue(rowToClear, 'end', '');
           hideWorkerSuggestions(rowToClear);

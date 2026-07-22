@@ -300,6 +300,39 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame(0.0, $result['rate']);
     }
 
+    public function test_trendy_de_zero_value_position_is_retained_for_transfer(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('shouldPrepareOrderItem');
+        $method->setAccessible(true);
+        $zeroValuePosition = [
+            'product_code' => '206726',
+            'product_name' => 'Hebel',
+            'quantity' => 0,
+            'unit_price' => 0,
+            'line_total' => 0,
+        ];
+
+        $this->assertTrue($method->invoke($service, $zeroValuePosition, [
+            'supplier_name' => 'Trendy Germany GmbH-13',
+        ], 0.0));
+        $this->assertFalse($method->invoke($service, $zeroValuePosition, [
+            'supplier_name' => 'GROB-WERKE GmbH & Co. KG',
+        ], 0.0));
+    }
+
+    public function test_pantheon_order_item_uses_source_position_number_when_available(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('resolvePantheonOrderItemLineNumber');
+        $method->setAccessible(true);
+
+        $this->assertSame(2, $method->invoke($service, ['line_number' => 2], 1));
+        $this->assertSame(7, $method->invoke($service, ['line_number' => 0], 7));
+    }
+
     public function test_domestic_0200_order_items_use_p1_and_keep_their_rate(): void
     {
         $service = new PantheonOrderTransferService();
