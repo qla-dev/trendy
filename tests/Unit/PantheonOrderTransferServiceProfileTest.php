@@ -333,6 +333,19 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame(7, $method->invoke($service, ['line_number' => 0], 7));
     }
 
+    public function test_grob_pantheon_order_items_use_consecutive_positions(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('resolvePantheonOrderItemLineNumber');
+        $method->setAccessible(true);
+        $grobOrder = ['supplier_name' => 'GROB-WERKE GmbH & Co. KG'];
+
+        $this->assertSame(1, $method->invoke($service, ['line_number' => 10], 1, $grobOrder));
+        $this->assertSame(2, $method->invoke($service, ['line_number' => 20], 2, $grobOrder));
+        $this->assertSame(3, $method->invoke($service, ['line_number' => 30], 3, $grobOrder));
+    }
+
     public function test_domestic_0200_order_items_use_p1_and_keep_their_rate(): void
     {
         $service = new PantheonOrderTransferService();
