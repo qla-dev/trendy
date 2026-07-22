@@ -275,7 +275,7 @@ class PantheonOrderTransferService
                     $headerPayload,
                     $headerQid,
                     $itemQid !== null ? ($itemQid + $index) : null,
-                    $this->resolvePantheonOrderItemLineNumber($item, $index + 1),
+                    $this->resolvePantheonOrderItemLineNumber($item, $index + 1, $prepared),
                     $user
                 );
             }
@@ -700,7 +700,7 @@ class PantheonOrderTransferService
                 $headerPayload,
                 $headerQid,
                 $itemQid !== null ? ($itemQid + $index) : null,
-                $this->resolvePantheonOrderItemLineNumber($item, $index + 1),
+                $this->resolvePantheonOrderItemLineNumber($item, $index + 1, $prepared),
                 $user
             );
         }
@@ -1511,8 +1511,14 @@ class PantheonOrderTransferService
             && trim((string) ($item['product_name'] ?? '')) !== '';
     }
 
-    private function resolvePantheonOrderItemLineNumber(array $item, int $fallback): int
+    private function resolvePantheonOrderItemLineNumber(array $item, int $fallback, array $order = []): int
     {
+        // GROB PDF positions are source labels (typically 10, 20, 30, ...),
+        // while Pantheon order items must be numbered consecutively.
+        if ($this->isGrobOrder($order)) {
+            return max(1, $fallback);
+        }
+
         $lineNumber = (int) ($item['line_number'] ?? 0);
 
         return $lineNumber > 0 ? $lineNumber : max(1, $fallback);
