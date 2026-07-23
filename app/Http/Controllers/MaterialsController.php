@@ -37,6 +37,7 @@ class MaterialsController extends Controller
     ];
 
     private const DEFAULT_MATERIAL_SET = '011';
+    private const RAW_MATERIAL_WAREHOUSE = 'Skladište sirovina';
 
     public function scannerIndex(Request $request, string $id): JsonResponse
     {
@@ -51,6 +52,27 @@ class MaterialsController extends Controller
                     self::MATERIALS_SETS,
                     $offset
                 );
+                $rawStockByCode = Material::stockSummaryByCodes(array_map(
+                    static fn (array $material): string => trim((string) ($material['acIdentChild'] ?? '')),
+                    $materials
+                ));
+                $materials = array_map(function (array $material) use ($rawStockByCode): array {
+                    $code = strtolower(trim((string) ($material['acIdentChild'] ?? '')));
+                    $warehouses = (array) ($rawStockByCode[$code]['warehouses'] ?? []);
+                    $rawStockQty = 0.0;
+
+                    foreach ($warehouses as $warehouseName => $stockQty) {
+                        if (mb_strtolower(trim((string) $warehouseName)) !== mb_strtolower(self::RAW_MATERIAL_WAREHOUSE)) {
+                            continue;
+                        }
+
+                        $rawStockQty += is_numeric((string) $stockQty) ? (float) $stockQty : 0.0;
+                    }
+
+                    $material['raw_material_stock_qty'] = $rawStockQty;
+
+                    return $material;
+                }, $materials);
                 $totalAll = Material::scannerTotalCount(self::MATERIALS_SETS);
 
                 return response()->json([
