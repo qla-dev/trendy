@@ -3,7 +3,11 @@
 namespace Tests\Unit;
 
 use App\Http\Requests\CloseWorkOrderRequest;
+use App\Services\WorkOrder\WorkOrderClosingCalculator;
+use App\Services\WorkOrder\WorkOrderClosingService;
 use Illuminate\Support\Facades\Validator;
+use ReflectionClass;
+use RuntimeException;
 use Tests\TestCase;
 
 class WorkOrderClosingValidationTest extends TestCase
@@ -80,5 +84,53 @@ class WorkOrderClosingValidationTest extends TestCase
         ]], (new CloseWorkOrderRequest())->rules());
 
         $this->assertFalse($copiedRows->fails());
+    }
+
+    public function test_zero_material_quantity_blocks_closing_instead_of_being_silently_skipped(): void
+    {
+        $service = $this->closingServiceWithoutDependencies();
+        $method = (new ReflectionClass($service))->getMethod('prepareMaterials');
+        $method->setAccessible(true);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Količina materijala mora biti veća od nule.');
+        $method->invoke($service, [['code' => 'ANY-MATERIAL', 'quantity' => '0']]);
+    }
+
+    public function test_scrap_can_make_total_receipt_quantity_higher_than_the_work_order_plan(): void
+    {
+        $service = $this->closingServiceWithoutDependencies();
+        $method = (new ReflectionClass($service))->getMethod('prepareReceipts');
+        $method->setAccessible(true);
+
+        $receipts = $method->invoke($service, [
+            ['target' => 'vp', 'quantity' => '2'],
+            ['target' => 'scrap', 'quantity' => '1'],
+        ], '2');
+
+        $this->assertSame('2.000000', $receipts[0]['quantity']);
+        $this->assertSame('1.000000', $receipts[1]['quantity']);
+    }
+
+    public function test_completion_percentage_is_partial_capped_and_defaults_to_complete_without_a_bom_baseline(): void
+    {
+        $service = $this->closingServiceWithoutDependencies();
+        $method = (new ReflectionClass($service))->getMethod('completionPercent');
+        $method->setAccessible(true);
+
+        $this->assertSame(50.0, $method->invoke($service, 1, 2, true));
+        $this->assertSame(100.0, $method->invoke($service, 3, 2, true));
+        $this->assertSame(100.0, $method->invoke($service, 0, 0, true));
+    }
+
+    private function closingServiceWithoutDependencies(): WorkOrderClosingService
+    {
+        $reflection = new ReflectionClass(WorkOrderClosingService::class);
+        $service = $reflection->newInstanceWithoutConstructor();
+        $calculator = $reflection->getProperty('calculator');
+        $calculator->setAccessible(true);
+        $calculator->setValue($service, new WorkOrderClosingCalculator());
+
+        return $service;
     }
 }

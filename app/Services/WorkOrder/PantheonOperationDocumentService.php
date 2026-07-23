@@ -176,15 +176,27 @@ class PantheonOperationDocumentService
 
                 // Pantheon exposes the related Operacije branch through the
                 // operation resource as well as through the document links.
-                // Keep that resource in the same completed state as the WO item.
+                // Retain a BOM-planned duration when it exists, so Pantheon
+                // can show a genuine partial-completion percentage.
+                $resource = $connection->table('dbo.tHF_WOExItemResources')
+                    ->where('anWOExItemQId', (int) $operation['item_qid'])
+                    ->first(['anPlanQty']);
+                $plannedMinutes = is_numeric((string) ($resource->anPlanQty ?? null))
+                    ? (float) $resource->anPlanQty
+                    : 0.0;
+                $completedMinutes = (float) $operation['consumedMinutes'];
+                $executionPercent = $plannedMinutes > 0
+                    ? min(100.0, ($completedMinutes / $plannedMinutes) * 100)
+                    : 100.0;
+
                 $connection->table('dbo.tHF_WOExItemResources')
                     ->where('anWOExItemQId', (int) $operation['item_qid'])
                     ->update([
                         'anQty' => $operation['consumedMinutes'],
-                        'anPlanQty' => $operation['consumedMinutes'],
+                        'anPlanQty' => $plannedMinutes > 0 ? $plannedMinutes : $operation['consumedMinutes'],
                         'anQty1' => $operation['consumedMinutes'],
-                        'acIssueFinished' => 'Y',
-                        'anExecutionPerc' => 100,
+                        'acIssueFinished' => $executionPercent >= 100 ? 'Y' : 'N',
+                        'anExecutionPerc' => $executionPercent,
                         'adTimeChg' => $now,
                         'anUserChg' => $userId,
                     ]);

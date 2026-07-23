@@ -187,7 +187,7 @@ class WorkOrderClosingPantheonTest extends TestCase
         }
     }
 
-    public function test_manual_document_only_operation_creates_closing_documents_without_a_bom_item_link(): void
+    public function test_manual_operation_creates_a_work_order_position_and_links_its_document_line(): void
     {
         $this->pantheon->beginTransaction();
 
@@ -216,10 +216,10 @@ class WorkOrderClosingPantheonTest extends TestCase
                     ->exists(),
                 'The manual-operation document must be present in Pantheon\'s work-order related-documents view.'
             );
-            $this->assertSame(0, $this->pantheon->table('dbo.tHF_LinkMoveItemWOExItem')
+            $this->assertSame(1, $this->pantheon->table('dbo.tHF_LinkMoveItemWOExItem')
                 ->where('acKey', $operationDocument['document_key'])
                 ->count());
-            $this->assertSame(0, $this->pantheon->table('dbo.tHF_WOExItemWork')
+            $this->assertSame(1, $this->pantheon->table('dbo.tHF_WOExItemWork')
                 ->where('acLnkKey', $operationDocument['document_key'])
                 ->count());
         } finally {
