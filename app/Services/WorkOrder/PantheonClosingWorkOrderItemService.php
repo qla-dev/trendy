@@ -7,9 +7,9 @@ use Illuminate\Support\Carbon;
 use RuntimeException;
 
 /**
- * Creates the minimum Pantheon WO positions required for a closing entered
- * against an otherwise empty work order.  The positions provide the foreign
- * keys that Pantheon uses to connect 6400/6600 document lines back to the WO.
+ * Creates the Pantheon WO positions required for closing entries that have no
+ * existing position. The positions provide the foreign keys that Pantheon
+ * uses to connect 6400/6600 document lines back to the WO.
  */
 class PantheonClosingWorkOrderItemService
 {
@@ -29,19 +29,14 @@ class PantheonClosingWorkOrderItemService
             throw new RuntimeException('KljuÄ radnog naloga nije pronaÄ‘en za kreiranje pozicija.');
         }
 
-        $workOrderHasItems = $connection->table('dbo.tHF_WOExItem')
+        $position = (int) ($connection->table('dbo.tHF_WOExItem')
             ->where('acKey', $workOrderKey)
-            ->exists();
-        $position = $workOrderHasItems
-            ? (int) ($connection->table('dbo.tHF_WOExItem')->where('acKey', $workOrderKey)->max('anNo') ?? 0) + 1
-            : 1;
+            ->max('anNo') ?? 0) + 1;
         $createdItems = [];
-        if (!$workOrderHasItems) {
-            foreach ($operations as $index => $operation) {
-                if ((int) ($operation['item_qid'] ?? 0) > 0) {
-                    continue;
-                }
+        foreach ($operations as $index => $operation) {
+            $qid = (int) ($operation['item_qid'] ?? 0);
 
+            if ($qid < 1) {
                 $qid = $this->insertItem(
                     $connection,
                     $workOrderKey,
@@ -57,7 +52,6 @@ class PantheonClosingWorkOrderItemService
 
                 $operations[$index]['item_qid'] = $qid;
                 $operations[$index]['position'] = $position;
-                $this->ensureOperationResourceRow($connection, $qid, $workOrderKey, $position, $now, $userId);
                 $createdItems[] = [
                     'qid' => $qid,
                     'position' => $position,
@@ -66,6 +60,17 @@ class PantheonClosingWorkOrderItemService
                 ];
                 $position++;
             }
+
+            // Existing WO operation items created outside eNalog can lack a
+            // resource row. Pantheon then hides the 6600 operation relation.
+            $this->ensureOperationResourceRow(
+                $connection,
+                $qid,
+                $workOrderKey,
+                (int) ($operations[$index]['position'] ?? 0),
+                $now,
+                $userId
+            );
         }
 
         // A material added on the closing tab has no WO-item link. Add only

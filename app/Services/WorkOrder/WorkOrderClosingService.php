@@ -237,6 +237,7 @@ class WorkOrderClosingService
             }
 
             $this->markClosed($workOrder, $producedQuantity, $now, $userId);
+            $this->syncClosedWorkOrderCompletion($workOrder, $now, $userId);
 
             Log::info('Work order closed through eNalog.', [
                 'work_order_key' => $workOrder['acKey'],
@@ -633,8 +634,15 @@ class WorkOrderClosingService
             $total = $this->calculator->add($total, $normalizedQuantity);
         }
 
-        if ($prepared === [] || bccomp($total, $producedQuantity, WorkOrderClosingCalculator::SCALE) !== 0) {
-            throw new RuntimeException('Ukupna količina prijema mora biti jednaka planiranoj količini radnog naloga.');
+        if (
+            $prepared === []
+            || bccomp($total, $producedQuantity, WorkOrderClosingCalculator::SCALE) < 0
+            || (
+                !isset($prepared['scrap'])
+                && bccomp($total, $producedQuantity, WorkOrderClosingCalculator::SCALE) > 0
+            )
+        ) {
+            throw new RuntimeException('Ukupna količina prijema mora biti jednaka planiranoj količini, osim kada je dodat škart.');
         }
 
         // Keep VP first so the 6400 and 6600 cross-reference uses it whenever
@@ -672,21 +680,19 @@ class WorkOrderClosingService
                 throw new RuntimeException('Material code and quantity must be entered together.');
             }
 
+            $normalizedQuantity = $this->calculator->normalizeNonNegative(
+                str_replace(',', '.', $quantity),
+                'Material quantity'
+            );
+            if (bccomp($normalizedQuantity, '0', WorkOrderClosingCalculator::SCALE) <= 0) {
+                throw new RuntimeException('Količina materijala mora biti veća od nule.');
+            }
+
             $catalog = $this->connection->table('dbo.tHE_SetItem')
                 ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$code])
                 ->first(['anQId', 'acIdent', 'acName', 'acUM', 'anPrStPrice']);
             if ($catalog === null || (int) ($catalog->anQId ?? 0) < 1) {
                 throw new RuntimeException('Pantheon material was not found: ' . $code);
-            }
-
-            $normalizedQuantity = $this->calculator->normalizeNonNegative(
-                str_replace(',', '.', $quantity),
-                'Material quantity'
-            );
-            // A material row with zero consumption must not create a 6400
-            // line or touch WIP/raw stock.
-            if (bccomp($normalizedQuantity, '0', WorkOrderClosingCalculator::SCALE) <= 0) {
-                continue;
             }
             $price = $this->calculator->normalizeNonNegative($catalog->anPrStPrice ?? null, 'Material price');
             $unit = strtoupper(substr(trim((string) ($catalog->acUM ?? 'KOM')), 0, 3));
@@ -889,6 +895,100 @@ class WorkOrderClosingService
         if ($updated < 1) {
             throw new RuntimeException('Status radnog naloga nije ažuriran.');
         }
+    }
+
+    /**
+     * Synchronize the fields used by Pantheon's Realizacija vs. Plan display.
+     * Linked 6400/6600 lines are measured against their planned WO item
+     * quantity. If Pantheon has no BOM baseline, a closed WO with final
+     * documents is treated as fully completed.
+     */
+    private function syncClosedWorkOrderCompletion(array $workOrder, Carbon $now, int $userId): void
+    {
+        $workOrderKey = (string) $workOrder['acKey'];
+        $materialDoneByItem = $this->connection->table('dbo.tHF_LinkMoveItemWOExItem as li')
+            ->join('dbo.tHE_MoveItem as mi', function ($join) {
+                $join->on('mi.acKey', '=', 'li.acKey')
+                    ->on('mi.anNo', '=', 'li.anNo');
+            })
+            ->join('dbo.tHE_Move as m', 'm.acKey', '=', 'mi.acKey')
+            ->join('dbo.tHF_LinkMoveWOEx as l', 'l.acKey', '=', 'm.acKey')
+            ->where('l.acLnkKey', $workOrderKey)
+            ->where('m.acDocType', '6400')
+            ->groupBy('li.anWOExItemQid')
+            ->selectRaw('li.anWOExItemQid, SUM(mi.anQty) as material_quantity')
+            ->pluck('material_quantity', 'li.anWOExItemQid')
+            ->all();
+
+        $items = $this->connection->table('dbo.tHF_WOExItem as wi')
+            ->leftJoin('dbo.tHE_SetItem as si', 'si.acIdent', '=', 'wi.acIdent')
+            ->where('wi.acKey', $workOrderKey)
+            ->orderBy('wi.anNo')
+            ->get(['wi.anQId', 'wi.anNo', 'wi.acOperationType', 'wi.anPlanQty', 'si.acSetOfItem']);
+
+        foreach ($items as $item) {
+            $itemQid = (int) $item->anQId;
+            $isOperation = in_array(strtoupper(trim((string) $item->acOperationType)), ['D', 'O'], true)
+                || strtoupper(trim((string) $item->acSetOfItem)) === 'OPR';
+
+            if ($isOperation) {
+                $this->closingWorkOrderItems->ensureOperationResourceRow(
+                    $this->connection,
+                    $itemQid,
+                    $workOrderKey,
+                    (int) $item->anNo,
+                    $now,
+                    $userId
+                );
+                $resource = $this->connection->table('dbo.tHF_WOExItemResources')
+                    ->where('anWOExItemQId', $itemQid)
+                    ->first(['anQty', 'anPlanQty']);
+                $percent = $this->completionPercent($resource->anQty ?? 0, $resource->anPlanQty ?? 0, true);
+
+                $this->connection->table('dbo.tHF_WOExItemResources')
+                    ->where('anWOExItemQId', $itemQid)
+                    ->update([
+                        'anExecutionPerc' => $percent,
+                        'acIssueFinished' => $percent >= 100 ? 'Y' : 'N',
+                        'adTimeChg' => $now,
+                        'anUserChg' => $userId,
+                    ]);
+                $this->connection->table('dbo.tHF_WOExItem')
+                    ->where('anQId', $itemQid)
+                    ->update([
+                        'acIssueFinished' => $percent >= 100 ? 'Y' : 'N',
+                        'adTimeChg' => $now,
+                        'anUserChg' => $userId,
+                    ]);
+
+                continue;
+            }
+
+            $actual = $materialDoneByItem[$itemQid] ?? 0;
+            $percent = $this->completionPercent($actual, $item->anPlanQty ?? 0, true);
+            $this->connection->table('dbo.tHF_WOExItem')
+                ->where('anQId', $itemQid)
+                ->update([
+                    'anQty' => $actual,
+                    'anQty1' => $actual,
+                    'anIssuePerc' => $percent,
+                    'acIssueFinished' => $percent >= 100 ? 'Y' : 'N',
+                    'adTimeChg' => $now,
+                    'anUserChg' => $userId,
+                ]);
+        }
+    }
+
+    private function completionPercent(mixed $actual, mixed $planned, bool $closedWithDocuments): float
+    {
+        $actual = is_numeric((string) $actual) ? max(0.0, (float) $actual) : 0.0;
+        $planned = is_numeric((string) $planned) ? max(0.0, (float) $planned) : 0.0;
+
+        if ($planned <= 0) {
+            return $closedWithDocuments ? 100.0 : 0.0;
+        }
+
+        return min(100.0, ($actual / $planned) * 100);
     }
 
     private function markPartiallyClosed(array $workOrder, Carbon $now, int $userId): void
