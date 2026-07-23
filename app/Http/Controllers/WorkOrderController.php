@@ -5524,7 +5524,7 @@ class WorkOrderController extends Controller
             }));
 
             if (!empty($filteredResources)) {
-                return $filteredResources;
+                return $this->attachRawMaterialStockQuantities($filteredResources);
             }
         }
 
@@ -5644,7 +5644,29 @@ class WorkOrderController extends Controller
             $materials[] = $this->mapMaterialFromItemRow($row);
         }
 
-        return array_values($materials);
+        return $this->attachRawMaterialStockQuantities(array_values($materials));
+    }
+
+    private function attachRawMaterialStockQuantities(array $materials): array
+    {
+        if (empty($materials)) {
+            return [];
+        }
+
+        $stockSummary = Material::stockSummaryByCodes(array_map(function (array $material): string {
+            return trim((string) ($material['materijal'] ?? ''));
+        }, $materials));
+
+        return array_map(function (array $material) use ($stockSummary): array {
+            $materialCode = strtolower(trim((string) ($material['materijal'] ?? '')));
+            $warehouseStocks = (array) ($stockSummary[$materialCode]['warehouses'] ?? []);
+            $material['raw_material_stock_qty'] = $this->resolveNamedWarehouseStockQty(
+                $warehouseStocks,
+                self::RELEASED_MATERIAL_DEFAULT_ISSUER
+            );
+
+            return $material;
+        }, $materials);
     }
 
     private function findExistingMaterialItemForWorkOrder(

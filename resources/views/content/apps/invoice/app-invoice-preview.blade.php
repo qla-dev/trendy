@@ -2749,7 +2749,7 @@
           <div class="tab-pane fade" id="close-work-order-materials" role="tabpanel">
             <div class="table-responsive">
               <table class="table align-middle" id="close-work-order-materials-table">
-                <thead><tr><th class="text-nowrap" style="width:1%">Pozicija</th><th style="width:26%">Materijal</th><th style="width:36%">Naziv</th><th style="width:22%">Količina</th><th class="text-nowrap" style="width:1%">MJ</th><th class="text-center text-nowrap" style="width:1%">Akcije</th></tr></thead>
+                <thead><tr><th class="text-nowrap" style="width:1%">Pozicija</th><th style="width:23%">Materijal</th><th style="width:30%">Naziv</th><th style="width:19%">Količina</th><th class="text-nowrap" style="width:1%">MJ</th><th class="text-nowrap">Skladište sirovina</th><th class="text-center text-nowrap" style="width:1%">Akcije</th></tr></thead>
                 <tbody>
                   @php
                     $closeMaterials = $workOrderItemResources ?? [];
@@ -2785,7 +2785,8 @@
                           >
                         </div>
                       </td>
-                      <td class="text-nowrap">{{ $displayValue($material['mj'] ?? null) }}</td>
+                      <td class="text-nowrap wo-close-material-unit">{{ $displayValue($material['mj'] ?? null) }}</td>
+                      <td class="text-nowrap wo-close-material-raw-stock">{{ $displayValue($material['raw_material_stock_qty'] ?? null) }}</td>
                       <td class="text-center text-nowrap">
                         <button type="button" class="btn btn-outline-primary btn-sm wo-close-add-material-row-btn" style="background:#fff !important;background-color:#fff !important" title="Novi materijal" aria-label="Novi materijal"><i class="fa fa-plus"></i></button>
                         <button type="button" class="btn btn-outline-secondary btn-sm wo-close-material-clear-row-btn" title="Očisti red" aria-label="Očisti red"><i class="fa fa-eraser"></i></button>
@@ -3718,7 +3719,10 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         }
       });
       if (copiedRow.children[0]) copiedRow.children[0].textContent = String(nextClosingRowPosition(closeWorkOrderMaterialsTable));
-      if (copiedRow.children[4]) copiedRow.children[4].textContent = '';
+      var copiedUnitCell = copiedRow.querySelector('.wo-close-material-unit');
+      var copiedRawStockCell = copiedRow.querySelector('.wo-close-material-raw-stock');
+      if (copiedUnitCell) copiedUnitCell.textContent = '';
+      if (copiedRawStockCell) copiedRawStockCell.textContent = '';
       return copiedRow;
     }
 
@@ -3803,7 +3807,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     }
 
     function closingCatalogValue(item, key) {
-      return String((item || {})[key] || '').trim();
+      var value = (item || {})[key];
+      return value === undefined || value === null ? '' : String(value).trim();
     }
 
     function closingCatalogItemCode(item) {
@@ -3857,8 +3862,15 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       if (fields.name) {
         fields.name.value = closingCatalogItemName(item);
       }
-      if (fields.kind === 'materials' && fields.row.children[4]) {
-        fields.row.children[4].textContent = closingCatalogValue(item, 'acUM').toUpperCase();
+      if (fields.kind === 'materials') {
+        var unitCell = fields.row.querySelector('.wo-close-material-unit');
+        var rawStockCell = fields.row.querySelector('.wo-close-material-raw-stock');
+        if (unitCell) {
+          unitCell.textContent = closingCatalogValue(item, 'acUM').toUpperCase();
+        }
+        if (rawStockCell) {
+          rawStockCell.textContent = closingCatalogValue(item, 'raw_material_stock_qty');
+        }
       }
       if (fields.kind === 'operations') {
         fields.row.setAttribute('data-operation-code', code.toUpperCase());
@@ -3887,6 +3899,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         option.dataset.catalogCode = code;
         option.dataset.catalogName = closingCatalogItemName(item);
         option.dataset.catalogUnit = closingCatalogValue(item, 'acUM');
+        option.dataset.catalogRawStock = closingCatalogValue(item, 'raw_material_stock_qty');
         option.textContent = code + (option.dataset.catalogName ? ' — ' + option.dataset.catalogName : '');
         fields.suggestions.appendChild(option);
       });
@@ -3972,7 +3985,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       applyClosingCatalogItem(input, {
         acIdentChild: suggestion.dataset.catalogCode || '',
         acDescr: suggestion.dataset.catalogName || '',
-        acUM: suggestion.dataset.catalogUnit || ''
+        acUM: suggestion.dataset.catalogUnit || '',
+        raw_material_stock_qty: suggestion.dataset.catalogRawStock || ''
       });
     }
 
@@ -4201,6 +4215,10 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         if (clearMaterial) {
           var materialRow = clearMaterial.closest('tr');
           materialRow.querySelectorAll('.wo-close-material-code, .wo-close-material-name, .wo-close-material-quantity').forEach(function (input) { input.value = ''; });
+          var materialUnitCell = materialRow.querySelector('.wo-close-material-unit');
+          var materialRawStockCell = materialRow.querySelector('.wo-close-material-raw-stock');
+          if (materialUnitCell) materialUnitCell.textContent = '';
+          if (materialRawStockCell) materialRawStockCell.textContent = '';
           return;
         }
         var deleteMaterial = event.target.closest('.wo-close-material-delete-row-btn');
