@@ -94,7 +94,16 @@ class WorkOrderClosingValidationTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Količina materijala mora biti veća od nule.');
-        $method->invoke($service, [['code' => 'ANY-MATERIAL', 'quantity' => '0']]);
+        $method->invoke($service, [['code' => 'ANY-MATERIAL', 'quantity' => '0']], '2');
+    }
+
+    public function test_closing_material_quantity_is_scaled_by_the_work_order_piece_count(): void
+    {
+        $service = $this->closingServiceWithoutDependencies();
+        $method = (new ReflectionClass($service))->getMethod('materialTotalQuantity');
+        $method->setAccessible(true);
+
+        $this->assertSame('10.000000', $method->invoke($service, '5.000000', '2.000000'));
     }
 
     public function test_scrap_can_make_total_receipt_quantity_higher_than_the_work_order_plan(): void
