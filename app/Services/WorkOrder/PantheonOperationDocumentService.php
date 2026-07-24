@@ -124,18 +124,18 @@ class PantheonOperationDocumentService
                 }
 
                 $workEntryNo++;
-                $workerMinutes = $this->calculator->operation(
-                    (string) ($workerEntry['minutes_per_unit'] ?? '0'),
-                    $operation['pricePerMinute'],
-                    $producedQuantity
-                )['consumedMinutes'];
+                // The 6600 line carries total operation minutes and remains
+                // quantity-scaled. Pantheon's individual worker-time rows
+                // must instead carry the per-piece duration entered for that
+                // worker, the same value as anTn.
+                $workerMinutesPerPiece = (string) ($workerEntry['minutes_per_unit'] ?? '0');
 
                 $connection->table('dbo.tHF_WOExItemWork')->insert([
                     'acWorker' => (string) ($workerEntry['worker']['worker'] ?? ''),
                     'acIdent' => $operation['code'],
                     'anQty' => 0,
                     'anPlanQty' => 0,
-                    'anTime' => $workerMinutes,
+                    'anTime' => $workerMinutesPerPiece,
                     'adDate' => $now->copy()->startOfDay(),
                     'adTimeChg' => $now,
                     'anUserChg' => $userId,
@@ -157,7 +157,7 @@ class PantheonOperationDocumentService
                     'anSubNo' => $workEntryNo,
                     'acNote' => '',
                     'acParentWorker' => '',
-                    'anTn' => (string) ($workerEntry['minutes_per_unit'] ?? '0'),
+                    'anTn' => $workerMinutesPerPiece,
                     'anTpf' => 0,
                     'anPrice' => 0,
                     'acLnkKey' => $number['key'],

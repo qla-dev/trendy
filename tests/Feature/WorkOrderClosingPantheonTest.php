@@ -444,6 +444,7 @@ class WorkOrderClosingPantheonTest extends TestCase
                 number_format((float) $documentItems->first()->anQty, 6, '.', '')
             );
             $this->assertCount(2, $workerEntries);
+            $this->assertSame(['15.000000', '20.000000'], $workerEntries->pluck('anTime')->sort()->values()->all());
             $this->assertSame(['15.000000', '20.000000'], $workerEntries->pluck('anTn')->sort()->values()->all());
         } finally {
             while ($this->pantheon->transactionLevel() > 0) {
