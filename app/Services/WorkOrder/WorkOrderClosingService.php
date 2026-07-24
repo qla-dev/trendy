@@ -70,7 +70,7 @@ class WorkOrderClosingService
             } */
 
             $operations = $preparedOperations['operations'];
-            $materialFlow = $this->resolveMaterialFlow($workOrder, $submittedMaterials);
+            $materialFlow = $this->resolveMaterialFlow($workOrder, $submittedMaterials, $producedQuantity);
             $materials = $materialFlow['materials'];
             $sourceWarehouse = $materialFlow['source_warehouse'];
             $destinationWarehouse = (string) config('work_order_closing.receipt_warehouse', 'Veleprodajno skladište');
@@ -666,7 +666,12 @@ class WorkOrderClosingService
         return $calculation;
     }
 
-    private function prepareMaterials(array $submitted): array
+    /**
+     * Closing-material quantities are entered per finished piece. Convert them
+     * to the total quantity required by this work order before creating any
+     * material documents or changing warehouse stock.
+     */
+    private function prepareMaterials(array $submitted, string $producedQuantity): array
     {
         $prepared = [];
 
@@ -700,6 +705,8 @@ class WorkOrderClosingService
                 $unit = 'KOM';
             }
 
+            $totalQuantity = $this->materialTotalQuantity($normalizedQuantity, $producedQuantity);
+
             $prepared[] = [
                 'item_qid' => (int) ($material['item_qid'] ?? 0),
                 'requires_close_time_preparation' => (int) ($material['item_qid'] ?? 0) < 1,
@@ -707,14 +714,19 @@ class WorkOrderClosingService
                 'code' => trim((string) $catalog->acIdent),
                 'name' => trim((string) ($catalog->acName ?? $catalog->acIdent)),
                 'unit' => $unit,
-                'quantity' => $normalizedQuantity,
+                'quantity' => $totalQuantity,
                 'price' => $price,
-                'total' => $this->calculator->operation($normalizedQuantity, $price, '1')['totalCost'],
+                'total' => $this->calculator->operation($totalQuantity, $price, '1')['totalCost'],
                 'ident_qid' => (int) $catalog->anQId,
             ];
         }
 
         return $prepared;
+    }
+
+    private function materialTotalQuantity(string $perPieceQuantity, string $producedQuantity): string
+    {
+        return $this->calculator->multiply($perPieceQuantity, $producedQuantity);
     }
 
     /**
@@ -758,12 +770,12 @@ class WorkOrderClosingService
         return $total;
     }
 
-    private function resolveMaterialFlow(array $workOrder, array $submittedMaterials): array
+    private function resolveMaterialFlow(array $workOrder, array $submittedMaterials, string $producedQuantity): array
     {
         $createdAt = $this->workOrderCreatedAt($workOrder);
         $cutoff = Carbon::parse((string) config('work_order_closing.work_order_2005_flow_start_date', '2026-07-21 00:00:00'));
         $priority = $this->workOrderPriority($workOrder);
-        $submitted = $this->prepareMaterials($submittedMaterials);
+        $submitted = $this->prepareMaterials($submittedMaterials, $producedQuantity);
         // A date change must not reissue raw stock for a WO that was already
         // prepared by 2005 under an earlier configuration.
         $uses2005Flow = $createdAt->gte($cutoff)
