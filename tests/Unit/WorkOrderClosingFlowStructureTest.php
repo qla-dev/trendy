@@ -117,6 +117,10 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString('existingDecimal', $stock);
         $this->assertStringContainsString('$submittedByItem[$qid][] = $operation', $this->service);
         $this->assertStringContainsString("'worker_entries' => \$workerEntries", $this->service);
+        $operation = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonOperationDocumentService.php');
+        $this->assertStringContainsString('$workerMinutesPerPiece', $operation);
+        $this->assertStringContainsString("'anTime' => \$workerMinutesPerPiece", $operation);
+        $this->assertStringContainsString("'anTn' => \$workerMinutesPerPiece", $operation);
         $this->assertStringContainsString('Završno vrijeme ne može biti prije početnog vremena.', $this->service);
     }
 

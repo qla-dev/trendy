@@ -45,6 +45,9 @@ class WorkOrderMaterialFlowCompatibilityTest extends TestCase
         $this->assertStringNotContainsString('prijenos dokumentom 2005 nije uspješno završen', $this->service);
         $this->assertStringContainsString('$this->prepareMaterials($submittedMaterials, $producedQuantity)', $this->service);
         $this->assertStringContainsString('materialTotalQuantity', $this->service);
+        $this->assertStringContainsString("config('work_order_closing.raw_material_warehouse'", $this->service);
+        $this->assertStringContainsString("s.anLastPrice as warehouse_last_price", $this->service);
+        $this->assertStringContainsString("\$catalog->warehouse_last_price ?? 0", $this->service);
     }
 
     public function test_the_configured_date_selects_direct_scan_6400_before_the_cutoff_and_2005_after_it(): void
