@@ -693,13 +693,24 @@ class WorkOrderClosingService
                 throw new RuntimeException('Količina materijala mora biti veća od nule.');
             }
 
-            $catalog = $this->connection->table('dbo.tHE_SetItem')
-                ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$code])
-                ->first(['anQId', 'acIdent', 'acName', 'acUM', 'anPrStPrice']);
+            // Match established 6400 material-consumption documents: use the
+            // issuing raw-material warehouse's last price, which Pantheon
+            // stores on tHE_Stock.anLastPrice and uses as the RN unit price.
+            $rawMaterialWarehouse = trim((string) config('work_order_closing.raw_material_warehouse', 'Skladište sirovina'));
+            $catalog = $this->connection->table('dbo.tHE_SetItem as i')
+                ->leftJoin('dbo.tHE_Stock as s', function ($join) use ($rawMaterialWarehouse) {
+                    $join->whereRaw("LTRIM(RTRIM(ISNULL(s.acIdent, ''))) = LTRIM(RTRIM(ISNULL(i.acIdent, ''))) ")
+                        ->whereRaw("LTRIM(RTRIM(ISNULL(s.acWarehouse, ''))) = ?", [$rawMaterialWarehouse]);
+                })
+                ->whereRaw("LTRIM(RTRIM(ISNULL(i.acIdent, ''))) = ?", [$code])
+                ->first([
+                    'i.anQId', 'i.acIdent', 'i.acName', 'i.acUM',
+                    's.anLastPrice as warehouse_last_price',
+                ]);
             if ($catalog === null || (int) ($catalog->anQId ?? 0) < 1) {
                 throw new RuntimeException('Pantheon material was not found: ' . $code);
             }
-            $price = $this->calculator->normalizeNonNegative($catalog->anPrStPrice ?? null, 'Material price');
+            $price = $this->calculator->normalizeNonNegative($catalog->warehouse_last_price ?? 0, 'Material price');
             $unit = strtoupper(substr(trim((string) ($catalog->acUM ?? 'KOM')), 0, 3));
             if ($unit === '') {
                 $unit = 'KOM';
