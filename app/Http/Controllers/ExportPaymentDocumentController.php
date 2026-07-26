@@ -11,7 +11,7 @@ use Illuminate\Support\Carbon;
 
 class ExportPaymentDocumentController extends Controller
 {
-    private const TOKEN_PRICE_BAM = 0.15;
+    private const TOKEN_PRICE_BAM = 0.25;
     private const SELLER_INFO = [
         'name' => 'OD "qla.dev"',
         'address' => 'Bra&#263;e Muli&#263; 81, 71000 Sarajevo, BiH',
