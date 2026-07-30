@@ -3682,6 +3682,187 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(231.0, data_get($result, 'normalized_payload.summary.grand_total'));
     }
 
+    public function test_execute_extraction_attaches_detached_amount_row_to_following_trendy_de_position(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-001114.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            'Trendy Germany GmbH',
+            '26-020-001114 Edina Duzan',
+            'Trendy Germany-2 30. 7. 2026. Liefertermin',
+            'Datum 21. 9. 2026. Deliver via Bestellung',
+            'Anlieferadresse: Lieferant: Artikel Nr. Pos. Beschreibung Menge EK-Preis Einheit',
+            '7062895$ 399,60 0,00 Betrag 2,00 VAT % STU 199,80',
+            'KLEMMRING',
+            '1 033-0086.0002',
+            '399,60 Total',
+        ]]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new RuntimeException('AI provider should not be called after the detached row is repaired.');
+            }
+        });
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-001114.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertSame('30. 7. 2026.', data_get($result, 'normalized_payload.order.delivery_deadline'));
+        $this->assertCount(1, data_get($result, 'normalized_payload.items'));
+        $this->assertSame(1, data_get($result, 'normalized_payload.items.0.line_number'));
+        $this->assertSame('033-0086.0002', data_get($result, 'normalized_payload.items.0.product_code'));
+        $this->assertSame('KLEMMRING', data_get($result, 'normalized_payload.items.0.product_name'));
+        $this->assertSame(2.0, data_get($result, 'normalized_payload.items.0.quantity'));
+        $this->assertSame('KO', data_get($result, 'normalized_payload.items.0.unit'));
+        $this->assertSame(199.8, data_get($result, 'normalized_payload.items.0.unit_price'));
+        $this->assertSame(399.6, data_get($result, 'normalized_payload.items.0.line_total'));
+        $this->assertSame(399.6, data_get($result, 'normalized_payload.summary.grand_total'));
+    }
+
+    public function test_execute_extraction_falls_back_to_ai_when_parser_total_difference_exceeds_five_euros(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.max_parser_total_difference_eur' => 5,
+        ]);
+
+        $sourcePath = 'order-ai-scans/parser-total-mismatch.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            'Trendy Germany GmbH',
+            'Bestellung 26-020-009999',
+            'Anlieferadresse: Lieferant: Artikel Nr. Pos. Beschreibung Menge EK-Preis Einheit',
+            '503600720 94,00 0,00 Betrag 1,00 VAT % STU 94,00',
+            'Hülse 1',
+            '100,00 Total',
+        ]]));
+
+        $provider = new class implements OrderAiScanProvider {
+            public int $calls = 0;
+
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                $this->calls++;
+
+                return [
+                    'provider' => 'openrouter',
+                    'model' => 'total-safeguard-test',
+                    'credits_spent' => 1.0,
+                    'raw_response' => ['ok' => true],
+                    'normalized_payload' => [
+                        'order' => ['currency' => 'EUR'],
+                        'items' => [[
+                            'line_number' => 1,
+                            'product_code' => '503600720',
+                            'product_name' => 'AI corrected item',
+                            'quantity' => 1.0,
+                            'unit' => 'KO',
+                            'unit_price' => 100.0,
+                            'line_total' => 100.0,
+                        ]],
+                        'summary' => ['subtotal' => 100.0, 'vat_total' => 0.0, 'grand_total' => 100.0],
+                    ],
+                    'prepared_document' => [],
+                    'extraction_duration_ms' => 1,
+                    'ai_duration_ms' => 1,
+                ];
+            }
+        };
+        app()->instance(OpenRouterOrderAiScanProvider::class, $provider);
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'parser-total-mismatch.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+
+        $this->assertSame(1, $provider->calls);
+        $this->assertSame('openrouter', $result['provider']);
+        $this->assertSame('AI corrected item', data_get($result, 'normalized_payload.items.0.product_name'));
+        $this->assertSame('matched_total_difference_exceeded', data_get($result, 'parser_payload.status'));
+        $this->assertSame(6.0, data_get($result, 'parser_payload.total_check.difference'));
+        $this->assertSame(5.0, data_get($result, 'parser_payload.total_check.threshold'));
+    }
+
+    public function test_execute_extraction_keeps_parser_result_when_total_difference_is_exactly_five_euros(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.max_parser_total_difference_eur' => 5,
+        ]);
+
+        $sourcePath = 'order-ai-scans/parser-total-boundary.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            'Trendy Germany GmbH',
+            'Bestellung 26-020-009998',
+            'Anlieferadresse: Lieferant: Artikel Nr. Pos. Beschreibung Menge EK-Preis Einheit',
+            '503600720 94,00 0,00 Betrag 1,00 VAT % STU 94,00',
+            'Hülse 1',
+            '99,00 Total',
+        ]]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new RuntimeException('A €5 difference must not trigger the greater-than-€5 safeguard.');
+            }
+        });
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'parser-total-boundary.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertSame(94.0, data_get($result, 'normalized_payload.items.0.line_total'));
+        $this->assertSame(99.0, data_get($result, 'normalized_payload.summary.grand_total'));
+    }
+
     public function test_execute_extraction_detects_trendy_de_profile_when_stored_profile_is_missing(): void
     {
         Storage::fake('local');

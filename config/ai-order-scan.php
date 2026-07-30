@@ -152,6 +152,7 @@ return [
         'provider_input_mode' => env('AI_ORDER_SCAN_DIGITAL_PDF_PROVIDER_INPUT_MODE', 'auto'),
         'rules_first' => filter_var(env('AI_ORDER_SCAN_DIGITAL_PDF_RULES_FIRST', true), FILTER_VALIDATE_BOOL),
         'fallback_to_ai' => filter_var(env('AI_ORDER_SCAN_DIGITAL_PDF_FALLBACK_TO_AI', true), FILTER_VALIDATE_BOOL),
+        'max_parser_total_difference_eur' => (float) env('AI_ORDER_SCAN_MAX_PARSER_TOTAL_DIFFERENCE_EUR', 5),
         'min_meaningful_page_chars' => (int) env('AI_ORDER_SCAN_DIGITAL_PDF_MIN_PAGE_CHARS', 30),
         'min_meaningful_document_chars' => (int) env('AI_ORDER_SCAN_DIGITAL_PDF_MIN_DOCUMENT_CHARS', 80),
         'digital_page_ratio' => (float) env('AI_ORDER_SCAN_DIGITAL_PDF_DIGITAL_RATIO', 0.8),

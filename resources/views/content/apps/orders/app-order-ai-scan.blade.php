@@ -2856,6 +2856,9 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                   <a href="{{ route('app-ai-token-history') }}" class="btn order-ai-secondary-action">Historija AI skeniranja</a>
                   <a href="{{ route('app-orders') }}" class="btn order-ai-secondary-action">Moje narudžbe</a>
                   <button type="button" class="btn order-ai-secondary-action" id="order-ai-retry-scan-button" disabled>Ponovi scan</button>
+                  @if(!empty($showForceAiRescan))
+                    <button type="button" class="btn order-ai-secondary-action" id="order-ai-retry-ai-scan-button" disabled>Ponovo scan sa AI</button>
+                  @endif
                   <button type="button" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-order-button">Vidi narudžbu</button>
                   <button type="button" class="btn order-ai-secondary-action order-ai-hidden" id="order-ai-view-positions-button">Pozicije</button>
                 </div>
@@ -3096,6 +3099,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       const viewPdfButton = document.getElementById('order-ai-view-pdf-button');
       const ordersPageUrl = @json(route('app-orders'));
       const retryScanButton = document.getElementById('order-ai-retry-scan-button');
+      const retryAiScanButton = document.getElementById('order-ai-retry-ai-scan-button');
       const viewPositionsButton = document.getElementById('order-ai-view-positions-button');
       const viewOrderButton = document.getElementById('order-ai-view-order-button');
       const newOrderButton = document.getElementById('order-ai-new-order-button');
@@ -7112,16 +7116,32 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         } else {
           retryScanButton.textContent = label;
         }
+
+        if (retryAiScanButton) {
+          retryAiScanButton.disabled = !available || busy;
+          retryAiScanButton.classList.toggle('is-busy', busy);
+          retryAiScanButton.setAttribute('aria-disabled', !available || busy ? 'true' : 'false');
+
+          if (busy) {
+            retryAiScanButton.innerHTML = '<span class="spinner-border spinner-border-sm me-50" role="status" aria-hidden="true"></span> Ponovo scan sa AI';
+          } else {
+            retryAiScanButton.textContent = 'Ponovo scan sa AI';
+          }
+        }
       }
 
-      async function confirmRetryScan() {
+      async function confirmRetryScan(forceAi) {
+        const usesAiDirectly = Boolean(forceAi);
+
         if (window.Swal && typeof window.Swal.fire === 'function') {
           const result = await window.Swal.fire({
             icon: 'warning',
-            title: 'Ponoviti AI scan?',
-            text: 'Isti dokument će biti ponovo obrađen za isti zapis skena.',
+            title: usesAiDirectly ? 'Ponovo skenirati sa AI?' : 'Ponoviti parser scan?',
+            text: usesAiDirectly
+              ? 'Isti dokument će preskočiti parser i biti obrađen direktno sa AI.'
+              : 'Isti dokument će biti ponovo obrađen lokalnim parserom.',
             showCancelButton: true,
-            confirmButtonText: 'Ponovi scan',
+            confirmButtonText: usesAiDirectly ? 'Ponovo scan sa AI' : 'Ponovi scan',
             cancelButtonText: 'Odustani',
             reverseButtons: true,
           });
@@ -7129,7 +7149,11 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           return Boolean(result && result.isConfirmed);
         }
 
-        return window.confirm('Ponoviti AI scan za ovaj dokument?');
+        return window.confirm(
+          usesAiDirectly
+            ? 'Ponovo skenirati ovaj dokument direktno sa AI?'
+            : 'Ponoviti parser scan za ovaj dokument?'
+        );
       }
 
       function prepareActiveScanRun(fileName) {
@@ -7491,10 +7515,12 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         xhr.send(formData);
       }
 
-      async function retryCurrentScan() {
+      async function retryCurrentScan(forceAi) {
         if (!retryScanButton || isRetryBusy) {
           return;
         }
+
+        const usesAiDirectly = Boolean(forceAi);
 
         const resolvedScanId = Math.max(
           0,
@@ -7507,7 +7533,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
 
         const retryUrl = resolveRetryScanUrl(resolvedScanId);
 
-        if (!retryUrl || !(await confirmRetryScan())) {
+        if (!retryUrl || !(await confirmRetryScan(usesAiDirectly))) {
           return;
         }
 
@@ -7539,7 +7565,9 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             },
             credentials: 'same-origin',
             cache: 'no-store',
-            body: '{}',
+            body: JSON.stringify({
+              force_ai: usesAiDirectly
+            }),
           });
           const payload = await response.json().catch(function () {
             return {};
@@ -8031,7 +8059,14 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       }
       viewPositionsButton.addEventListener('click', openPositionsModal);
       viewOrderButton.addEventListener('click', openSavedOrderModal);
-      retryScanButton.addEventListener('click', retryCurrentScan);
+      retryScanButton.addEventListener('click', function () {
+        retryCurrentScan(false);
+      });
+      if (retryAiScanButton) {
+        retryAiScanButton.addEventListener('click', function () {
+          retryCurrentScan(true);
+        });
+      }
       newOrderButton.addEventListener('click', startNewOrder);
       orderModalNewOrderButton.addEventListener('click', startNewOrder);
       positionsModalRefreshButton.addEventListener('click', function () {
