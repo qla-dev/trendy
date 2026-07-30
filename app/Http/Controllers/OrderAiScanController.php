@@ -36,6 +36,7 @@ class OrderAiScanController extends Controller
             'initialScanId' => $initialScan?->id,
             'initialScanState' => $initialScanState,
             'openedFromHistory' => $openedFromHistory && $initialScan !== null,
+            'showForceAiRescan' => $this->userCanForceAiRescan($request->user()),
         ]);
     }
 
@@ -81,6 +82,11 @@ class OrderAiScanController extends Controller
     {
         $this->authorizeModuleAccess($request);
         $this->authorizeScan($request, $scan);
+        $forceAi = $request->boolean('force_ai');
+
+        if ($forceAi && !$this->userCanForceAiRescan($request->user())) {
+            abort(403);
+        }
 
         if (!$scanService->canRescan($scan)) {
             return $this->jsonNoStore(
@@ -96,8 +102,9 @@ class OrderAiScanController extends Controller
         $retriedScan = $scanService->rescan(
             $scan,
             $request->user(),
-            (string) ($scan->source_origin ?? 'manual') === 'imap',
-            false
+            $forceAi ? false : (string) ($scan->source_origin ?? 'manual') === 'imap',
+            $forceAi,
+            $forceAi
         );
         $retriedScan = $retriedScan->fresh() ?? $retriedScan;
 
@@ -118,9 +125,11 @@ class OrderAiScanController extends Controller
             $this->buildScanResponsePayload(
                 $scanService,
                 $retriedScan,
-                (string) ($retriedScan->source_origin ?? 'manual') === 'imap'
-                    ? 'AI skeniranje je ponovo pokrenuto. Status će biti osvježen automatski.'
-                    : 'AI skeniranje je uspješno ponovo pokrenuto.'
+                $forceAi
+                    ? 'Dokument je ponovo skeniran direktno sa AI.'
+                    : ((string) ($retriedScan->source_origin ?? 'manual') === 'imap'
+                        ? 'AI skeniranje je ponovo pokrenuto. Status će biti osvježen automatski.'
+                        : 'Parser skeniranje je uspješno ponovo pokrenuto.')
             )
         );
     }
@@ -176,6 +185,12 @@ class OrderAiScanController extends Controller
         return method_exists($user, 'canAccessAiOrderModule')
             ? (bool) $user->canAccessAiOrderModule()
             : false;
+    }
+
+    private function userCanForceAiRescan($user): bool
+    {
+        return $user !== null
+            && strtolower(trim((string) ($user->username ?? ''))) === 'admin';
     }
 
     private function buildScanStatusPayload(OrderAiScanService $scanService, OrderAiScan $scan): array

@@ -176,7 +176,8 @@ class OrderAiScanService
         OrderAiScan $scan,
         mixed $user = null,
         ?bool $background = null,
-        bool $processSynchronously = true
+        bool $processSynchronously = true,
+        bool $forceProviderScan = false
     ): OrderAiScan {
         $scan->refresh();
 
@@ -272,6 +273,7 @@ class OrderAiScanService
             'source_origin' => (string) ($scan->source_origin ?? 'manual'),
             'background' => $background,
             'process_synchronously' => $processSynchronously,
+            'force_provider_scan' => $forceProviderScan,
         ]);
 
         $scan = $scan->fresh();
@@ -286,23 +288,31 @@ class OrderAiScanService
             return $scan->fresh();
         }
 
-        return $this->processUntilReviewed($scan, $user);
+        return $this->processUntilReviewed($scan, $user, $forceProviderScan);
     }
 
-    public function processUntilReviewed(OrderAiScan $scan, mixed $user = null): OrderAiScan
+    public function processUntilReviewed(
+        OrderAiScan $scan,
+        mixed $user = null,
+        bool $forceProviderScan = false
+    ): OrderAiScan
     {
         $current = $scan->fresh();
         $safety = 0;
 
         while ($current instanceof OrderAiScan && !$current->isTerminal() && $safety < 5) {
-            $current = $this->advance($current, $user);
+            $current = $this->advance($current, $user, $forceProviderScan);
             $safety++;
         }
 
         return $current instanceof OrderAiScan ? $current->fresh() : $scan->fresh();
     }
 
-    public function advance(OrderAiScan $scan, mixed $user = null): OrderAiScan
+    public function advance(
+        OrderAiScan $scan,
+        mixed $user = null,
+        bool $forceProviderScan = false
+    ): OrderAiScan
     {
         $scan->refresh();
 
@@ -321,7 +331,7 @@ class OrderAiScanService
         }
 
         if ($scan->status === 'extracting') {
-            return $this->runExtraction($scan, $user);
+            return $this->runExtraction($scan, $user, $forceProviderScan);
         }
 
         if ($scan->status === 'ready_for_transfer') {
@@ -427,6 +437,40 @@ class OrderAiScanService
 
             if (is_array($parsedResult)) {
                 $parsedResult['document_profile'] = $documentProfile;
+                $parserTotalCheck = $this->resolveMatchedParserTotalCheck($parsedResult);
+
+                if (
+                    is_array($parserTotalCheck)
+                    && (float) ($parserTotalCheck['difference'] ?? 0)
+                        > (float) ($parserTotalCheck['threshold'] ?? 5)
+                ) {
+                    $parserPayload = $this->buildParserPayloadSnapshot(
+                        $scan,
+                        $preparedDocument,
+                        $documentProfile,
+                        'matched_total_difference_exceeded',
+                        $parsedResult,
+                        'parser_total_difference_exceeded'
+                    );
+                    $parserPayload['total_check'] = $parserTotalCheck;
+
+                    Log::warning('Order AI matched parser total difference exceeded threshold; falling back to AI.', [
+                        'scan_id' => $scan->id,
+                        'document_profile' => $documentProfile,
+                        'currency' => (string) ($parserTotalCheck['currency'] ?? ''),
+                        'expected_total' => (float) ($parserTotalCheck['expected_total'] ?? 0),
+                        'line_total_sum' => (float) ($parserTotalCheck['line_total_sum'] ?? 0),
+                        'difference' => (float) ($parserTotalCheck['difference'] ?? 0),
+                        'threshold' => (float) ($parserTotalCheck['threshold'] ?? 5),
+                    ]);
+
+                    $providerResult = $this->executeProviderScan($scan);
+                    $providerResult['document_profile'] = $documentProfile;
+                    $providerResult['parser_payload'] = $parserPayload;
+
+                    return $providerResult;
+                }
+
                 $parsedResult = $this->applyTrendyDeMatchedParserNoteFallback(
                     $scan,
                     $parsedResult,
@@ -494,6 +538,53 @@ class OrderAiScanService
         }
 
         return $providerResult;
+    }
+
+    private function resolveMatchedParserTotalCheck(array $parsedResult): ?array
+    {
+        $currency = strtoupper(trim((string) data_get(
+            $parsedResult,
+            'normalized_payload.order.currency',
+            ''
+        )));
+
+        if ($currency !== 'EUR') {
+            return null;
+        }
+
+        $expectedTotal = (float) data_get(
+            $parsedResult,
+            'raw_response.expected_total',
+            data_get($parsedResult, 'normalized_payload.summary.grand_total', 0)
+        );
+        $lineTotalSum = (float) data_get(
+            $parsedResult,
+            'raw_response.line_total_sum',
+            array_reduce(
+                (array) data_get($parsedResult, 'normalized_payload.items', []),
+                static fn (float $sum, mixed $item): float => $sum + (
+                    is_array($item) ? (float) ($item['line_total'] ?? 0) : 0
+                ),
+                0.0
+            )
+        );
+
+        if ($expectedTotal <= 0) {
+            return null;
+        }
+
+        $threshold = max(
+            0.0,
+            (float) config('ai-order-scan.digital_pdf.max_parser_total_difference_eur', 5)
+        );
+
+        return [
+            'currency' => 'EUR',
+            'expected_total' => round($expectedTotal, 4),
+            'line_total_sum' => round($lineTotalSum, 4),
+            'difference' => round(abs($expectedTotal - $lineTotalSum), 4),
+            'threshold' => round($threshold, 4),
+        ];
     }
 
     private function applyTrendyDeMatchedParserNoteFallback(
@@ -1442,7 +1533,11 @@ class OrderAiScanService
         return $transferPreview;
     }
 
-    private function runExtraction(OrderAiScan $scan, mixed $user = null): OrderAiScan
+    private function runExtraction(
+        OrderAiScan $scan,
+        mixed $user = null,
+        bool $forceProviderScan = false
+    ): OrderAiScan
     {
         $providerName = Utf8Sanitizer::clean((string) ($scan->provider ?? ''), 40);
         $modelName = trim(Utf8Sanitizer::clean((string) ($scan->model ?? ''), 120)) ?: null;
@@ -1451,7 +1546,7 @@ class OrderAiScanService
 
         for ($automaticRetryAttempt = 0; $automaticRetryAttempt <= self::MAX_AUTOMATIC_EXTRACTION_RETRIES; $automaticRetryAttempt++) {
             try {
-                $result = $this->executeExtraction($scan);
+                $result = $this->executeExtraction($scan, $forceProviderScan);
                 $providerName = Utf8Sanitizer::clean((string) ($result['provider'] ?? $scan->provider), 40);
                 $modelName = trim(Utf8Sanitizer::clean((string) ($result['model'] ?? $scan->model), 120)) ?: null;
                 $providerTaskId = trim(Utf8Sanitizer::clean((string) ($result['provider_task_id'] ?? ''))) ?: null;
