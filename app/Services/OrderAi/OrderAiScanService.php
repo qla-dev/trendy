@@ -464,6 +464,12 @@ class OrderAiScanService
                         'threshold' => (float) ($parserTotalCheck['threshold'] ?? 5),
                     ]);
 
+                    if (!filter_var(config('ai-order-scan.digital_pdf.fallback_to_ai', true), FILTER_VALIDATE_BOOL)) {
+                        throw new RuntimeException(
+                            'Lokalni parser je izdvojio stavke, ali se zbir stavki ne podudara sa ukupnim iznosom dokumenta, a AI fallback je iskljucen.'
+                        );
+                    }
+
                     $providerResult = $this->executeProviderScan($scan);
                     $providerResult['document_profile'] = $documentProfile;
                     $providerResult['parser_payload'] = $parserPayload;
