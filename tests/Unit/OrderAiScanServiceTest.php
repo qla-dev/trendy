@@ -3162,6 +3162,82 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame(615.65, data_get($result, 'normalized_payload.summary.subtotal'));
     }
 
+    public function test_trendy_de_parser_extracts_all_twenty_five_positions_from_order_001135_shape(): void
+    {
+        $definitions = [
+            ['PP 05 403', 'PLAQUE ADAPTATION BROCHE', 24, 50.40],
+            ['PP 05 863', 'ANTI-ROTATION Z032', 1, 113.70],
+            ['PP 05 862', 'CALE MOTEUR BROCHE', 1, 123.00],
+            ['PP 04 925', 'BRIDE SUPERIEURE GUIDAGE ACS', 3, 79.20],
+            ['TC06 30 05 011', 'CAPOT DE SCIE SAUTEUSE', 6, 135.60],
+            ['PP 04 927', 'BRIDE INFERIEUR ACS', 3, 51.05],
+            ['TC06 30 05 017', 'BLOC PORTE LAME', 6, 31.60],
+            ['PP 03 515', 'PLAQUE SUPT MOTEUR', 10, 77.70],
+            ['PP 03 554', 'PLAQUE INTERMEDIAIRE COULANT', 1, 568.70],
+            ['PP 04 171', 'AXE O50 L103t', 6, 63.90],
+            ['PP 00 064', 'VENTOUSE L900', 3, 303.25],
+            ['PP 00 073', 'BUTEE ARRET', 6, 26.35],
+            ['PP 02 605', 'SUPT DETROMPEUR', 1, 102.70],
+            ['PP 00 067', 'MOYEU VENTOUSE', 3, 103.30],
+            ['PP 00 224', 'BOITIER DE ROULEMENT VIS A', 5, 133.40],
+            ['PP 00 231', 'PALIER ECROU VIS A BILLE AC DETECTION', 3, 184.70],
+            ['PP 00 290', 'COUPELLE ANTI-ROTATION', 30, 37.40],
+            ['PP 00 808', 'PIVOT BIELLE L155', 12, 39.80],
+            ['PP 00 523', 'PLAQUE INTERMEDIAIRE COULANT', 3, 388.00],
+            ['PP 00 809', 'PIVOT BIELLE L144', 12, 38.90],
+            ['PP 03 862', 'SUPPORT UNITE DETOURAGE', 6, 85.55],
+            ['PP 03 860', 'PLAQUE LIAISON BROCHE UNITE', 6, 121.40],
+            ['PP 02 632', 'PLAT FIXATION TIGE VERIN', 6, 27.50],
+            ['PP 00 811', 'PIVOT BIELLE', 12, 31.70],
+            ['PP 03 867', 'PLAQUE LIAISON FOURCHE', 6, 180.85],
+        ];
+        $lines = [
+            'Trendy Germany GmbH',
+            'Trendy Germany GmbH-47',
+            'Bestellung26-020-001135',
+            'Artikel Nr. Pos. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+        ];
+
+        foreach ($definitions as $index => [$code, $description, $quantity, $unitPrice]) {
+            $position = $index + 1;
+            $lineTotal = $quantity * $unitPrice;
+            $lines[] = number_format($quantity, 2, ',', '.')
+                . ' ' . number_format($unitPrice, 2, ',', '.') . 'STU '
+                . number_format($lineTotal, 2, ',', '.') . '0,00'
+                . $code . ' ' . $description . $position;
+        }
+
+        $lines[] = 'Total 13.373,50';
+        $preparedDocument = [
+            'pdf_type' => 'digital',
+            'provider_input_mode' => 'text',
+            'effective_page_count' => 2,
+            'source_page_count' => 2,
+            'searchable_text' => implode("\n", $lines),
+            'digital_extraction' => [
+                'source' => 'smalot_pdfparser',
+                'text_character_count' => strlen(implode("\n", $lines)),
+            ],
+        ];
+        $scan = new OrderAiScan([
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-001135.pdf',
+            'source_mime_type' => 'application/pdf',
+        ]);
+
+        $result = app(OrderAiDigitalPdfRulesParser::class)->parse($scan, $preparedDocument);
+        $items = data_get($result, 'normalized_payload.items');
+
+        $this->assertCount(25, $items);
+        $this->assertSame(range(1, 25), array_column($items, 'line_number'));
+        $this->assertSame('TC06 30 05 011', data_get($items, '4.product_code'));
+        $this->assertSame('TC06 30 05 017', data_get($items, '6.product_code'));
+        $this->assertSame('ANTI-ROTATION Z032', data_get($items, '1.product_name'));
+        $this->assertSame('PIVOT BIELLE L155', data_get($items, '17.product_name'));
+        $this->assertSame(13373.5, data_get($result, 'raw_response.line_total_sum'));
+        $this->assertSame(13373.5, data_get($result, 'normalized_payload.summary.grand_total'));
+    }
+
     public function test_trendy_de_parser_recovers_position_prefixed_notes_from_extracted_table_rows(): void
     {
         $itemLines = [
@@ -3747,6 +3823,7 @@ class OrderAiScanServiceTest extends TestCase
             'ai-order-scan.provider' => 'openrouter',
             'ai-order-scan.storage_disk' => 'local',
             'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
             'ai-order-scan.digital_pdf.max_parser_total_difference_eur' => 5,
         ]);
 
@@ -3814,6 +3891,61 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('matched_total_difference_exceeded', data_get($result, 'parser_payload.status'));
         $this->assertSame(6.0, data_get($result, 'parser_payload.total_check.difference'));
         $this->assertSame(5.0, data_get($result, 'parser_payload.total_check.threshold'));
+    }
+
+    public function test_execute_extraction_does_not_use_ai_for_parser_total_mismatch_when_fallback_is_disabled(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => false,
+            'ai-order-scan.digital_pdf.max_parser_total_difference_eur' => 5,
+        ]);
+
+        $sourcePath = 'order-ai-scans/parser-total-mismatch-no-fallback.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            'Trendy Germany GmbH',
+            'Bestellung 26-020-009997',
+            'Anlieferadresse: Lieferant: Artikel Nr. Pos. Beschreibung Menge EK-Preis Einheit',
+            '503600720 94,00 0,00 Betrag 1,00 VAT % STU 94,00',
+            'HĂĽlse 1',
+            '100,00 Total',
+        ]]));
+
+        $provider = new class implements OrderAiScanProvider {
+            public int $calls = 0;
+
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                $this->calls++;
+                throw new RuntimeException('AI provider must not be called when fallback is disabled.');
+            }
+        };
+        app()->instance(OpenRouterOrderAiScanProvider::class, $provider);
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'parser-total-mismatch-no-fallback.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        try {
+            app(OrderAiScanService::class)->executeExtraction($scan);
+            $this->fail('Expected the disabled AI fallback to stop after the parser mismatch.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('AI fallback je iskljucen', $exception->getMessage());
+        }
+
+        $this->assertSame(0, $provider->calls);
     }
 
     public function test_execute_extraction_keeps_parser_result_when_total_difference_is_exactly_five_euros(): void

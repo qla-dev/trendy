@@ -797,8 +797,31 @@ class OrderAiDigitalPdfRulesParser
                 return $item;
             }
 
-            if ((int) ($item['line_number'] ?? 0) <= 0) {
-                $item['line_number'] = $index + 1;
+            $lineNumber = (int) ($item['line_number'] ?? 0);
+            $expectedLineNumber = $index + 1;
+
+            if ($lineNumber <= 0) {
+                $item['line_number'] = $expectedLineNumber;
+            } elseif ($lineNumber !== $expectedLineNumber) {
+                $lineNumberText = (string) $lineNumber;
+                $expectedText = (string) $expectedLineNumber;
+
+                // Amount-first PDF text has no separator between descriptions
+                // ending in digits and the position number ("Z032" + "2"
+                // becomes "Z0322"). Restore digits consumed by the generic
+                // longest-suffix splitter when the expected sequence is clear.
+                if (
+                    strlen($lineNumberText) > strlen($expectedText)
+                    && str_ends_with($lineNumberText, $expectedText)
+                ) {
+                    $descriptionSuffix = substr($lineNumberText, 0, -strlen($expectedText));
+
+                    if ($descriptionSuffix !== '') {
+                        $item['product_name'] = trim((string) ($item['product_name'] ?? '') . $descriptionSuffix);
+                    }
+
+                    $item['line_number'] = $expectedLineNumber;
+                }
             }
 
             return $item;
@@ -1071,7 +1094,10 @@ class OrderAiDigitalPdfRulesParser
             return [''];
         }
 
-        if ($this->parseTrendyDeAmountFirstRow($line) !== null) {
+        if (
+            $this->parseTrendyDeAmountFirstRow($line) !== null
+            || $this->parseTrendyDeCodeAmountRow($line) !== null
+        ) {
             return [$line];
         }
 
@@ -1129,7 +1155,7 @@ class OrderAiDigitalPdfRulesParser
 
     private function trendyDeProductCodePattern(): string
     {
-        return '(?:[A-Za-z]?\d{3,4}(?:\s+\d{2,4}){2,3}|[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24})';
+        return '(?:(?:[A-Za-z]{1,6}\d{1,4}|[A-Za-z]?\d{3,4})(?:\s+\d{2,4}){2,3}|[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24})';
     }
 
     private function isTrendyDeSpacedNumericArticleCode(string $productCode): bool

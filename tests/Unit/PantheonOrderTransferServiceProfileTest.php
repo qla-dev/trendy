@@ -528,8 +528,11 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame('', $result['acPayMethod']);
         $this->assertSame('Trendy Germany GmbH-45', $result['acConsignee']);
         $this->assertSame('Trendy Germany GmbH-45', $result['acReceiver']);
-        $this->assertSame(1776, $result['anConsigneeQId']);
-        $this->assertSame(1776, $result['anReceiverQId']);
+        // A template QId is not copied unless it can be verified against
+        // tHE_SetSubj; this isolated unit test intentionally has no subject
+        // table connection.
+        $this->assertArrayNotHasKey('anConsigneeQId', $result);
+        $this->assertArrayNotHasKey('anReceiverQId', $result);
         $this->assertSame(46, $result['anClerk']);
         $this->assertSame(46, $result['anNoteClerk']);
         $this->assertSame(46, $result['anUserIns']);

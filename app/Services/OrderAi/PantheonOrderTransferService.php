@@ -2453,9 +2453,74 @@ class PantheonOrderTransferService
                     return $resolvedQId;
                 }
             }
+
+            foreach ($this->subjectLookupCandidates($subject) as $candidate) {
+                $resolvedQId = $this->lookupExistingOrderSubjectQId($candidate);
+
+                if ($resolvedQId !== null && $this->subjectQIdExists($resolvedQId)) {
+                    return $resolvedQId;
+                }
+            }
         }
 
-        return $fallbackQId;
+        return $fallbackQId !== null && $this->subjectQIdExists($fallbackQId)
+            ? $fallbackQId
+            : null;
+    }
+
+    private function lookupExistingOrderSubjectQId(string $subject): ?int
+    {
+        $subject = trim($subject);
+
+        if ($subject === '') {
+            return null;
+        }
+
+        try {
+            $row = $this->orderSourceQuery()
+                ->select(['anConsigneeQId', 'anReceiverQId'])
+                ->where(function ($query) use ($subject) {
+                    $query->whereRaw("LTRIM(RTRIM(ISNULL(acConsignee, ''))) = ?", [$subject])
+                        ->orWhereRaw("LTRIM(RTRIM(ISNULL(acReceiver, ''))) = ?", [$subject]);
+                })
+                ->orderByDesc('adDate')
+                ->first();
+
+            if ($row === null) {
+                return null;
+            }
+
+            return $this->positiveIntegerOrNull($row->anConsigneeQId ?? null)
+                ?? $this->positiveIntegerOrNull($row->anReceiverQId ?? null);
+        } catch (\Throwable $exception) {
+            Log::warning('Order AI existing order subject lookup failed.', [
+                'subject' => $subject,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function subjectQIdExists(int $subjectQId): bool
+    {
+        if ($subjectQId <= 0) {
+            return false;
+        }
+
+        try {
+            return $this->targetConnection()
+                ->table(Order::sourceSchema() . '.tHE_SetSubj')
+                ->where('anQId', $subjectQId)
+                ->exists();
+        } catch (\Throwable $exception) {
+            Log::warning('Order AI subject QId validation failed.', [
+                'subject_qid' => $subjectQId,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return false;
+        }
     }
 
     private function subjectLookupCandidates(string $subject): array
