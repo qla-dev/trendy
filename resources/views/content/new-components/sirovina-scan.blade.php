@@ -20,10 +20,6 @@
   $scannerCompactRoleLayout = $currentUser
     ? strtolower((string) ($currentUser->role ?? '')) === 'user'
     : false;
-  // Starting the camera must not depend on the user's role. In particular,
-  // Safari only reliably presents the permission prompt when the scanner is
-  // started as part of opening this modal.
-  $scannerRequiresManualCameraStart = false;
 @endphp
 
 <div
@@ -47,7 +43,6 @@
   data-default-product-label="{{ $defaultProductLabel }}"
   data-work-order-quantity="{{ $defaultWorkOrderQuantity }}"
   data-csrf-token="{{ csrf_token() }}"
-  data-require-manual-camera-start="{{ $scannerRequiresManualCameraStart ? '1' : '0' }}"
   data-allow-manual-stock-adjust="{{ $allowManualStockAdjust ? '1' : '0' }}"
   data-compact-layout="{{ $scannerCompactRoleLayout ? '1' : '0' }}"
 >
@@ -1614,15 +1609,19 @@
     var csrfToken = modalEl.getAttribute('data-csrf-token') || '';
     var defaultProduct = modalEl.getAttribute('data-default-product') || '';
     var defaultProductLabel = modalEl.getAttribute('data-default-product-label') || '';
-    var requireManualCameraStart = modalEl.getAttribute('data-require-manual-camera-start') === '1';
     var allowManualStockAdjust = modalEl.getAttribute('data-allow-manual-stock-adjust') === '1';
 
-    function isTabletViewport() {
-      return window.matchMedia('(min-width: 768px) and (max-width: 1180px)').matches;
+    function shouldAutoStartCamera() {
+      var userAgent = navigator.userAgent || '';
+      var isIPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+      var isIOS = /iPad|iPhone|iPod/.test(userAgent) || isIPadOS;
+      var isMobile = /Android|webOS|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(userAgent);
+
+      return isIOS || isMobile;
     }
 
     function requiresManualCameraStartForCurrentView() {
-      return requireManualCameraStart && !isTabletViewport();
+      return !shouldAutoStartCamera();
     }
 
     var rnNumberEl = document.getElementById('sirovina-rn-number');
@@ -2690,7 +2689,7 @@
 
       if (requiresManualCameraStartForCurrentView() && !barcodeManualStartUnlocked) {
         clearScannerError();
-        setScannerStatus('Admin mora kliknuti Primijenite da pokrene kameru.', 'warning');
+        setScannerStatus('Kliknite Primijenite da pokrenete kameru.', 'warning');
         return refreshScannerCameras().then(function () {
           return null;
         });
@@ -2722,7 +2721,7 @@
 
       if (requiresManualCameraStartForCurrentView() && !barcodeManualStartUnlocked) {
         clearScannerError();
-        setScannerStatus('Admin mora kliknuti Primijenite da pokrene kameru.', 'warning');
+        setScannerStatus('Kliknite Primijenite da pokrenete kameru.', 'warning');
         return refreshScannerCameras().then(function () {
           return null;
         });
@@ -7311,7 +7310,7 @@
       clearScannerError();
       setScannerStatus(
         requiresManualCameraStartForCurrentView()
-          ? 'Još uvijek nije dostupno.'
+          ? 'Kamera je spremna. Kliknite Primijenite da je pokrenete.'
           : 'Dozvoli pristup kameri i pokreni skeniranje barcode ili QR kodova.' ,
       );
       applyScannerMirrorState();
@@ -7356,7 +7355,7 @@
 
       if (requiresManualCameraStartForCurrentView()) {
         refreshScannerCameras();
-        setScannerStatus('Još uvijek nije dostupno', 'warning');
+        setScannerStatus('Kamera je spremna. Kliknite Primijenite da je pokrenete.', 'warning');
       } else {
         requestBarcodeScannerStart(false);
       }
