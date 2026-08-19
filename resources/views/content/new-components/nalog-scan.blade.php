@@ -585,7 +585,11 @@
     margin-top: 0;
     margin-bottom: 0.5rem;
     padding: 0.35rem;
+    overflow-x: hidden;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    overscroll-behavior: contain;
     border: 1px solid rgba(148, 163, 184, 0.26);
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.97);
