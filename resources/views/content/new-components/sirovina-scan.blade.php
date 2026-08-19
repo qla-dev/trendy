@@ -20,11 +20,10 @@
   $scannerCompactRoleLayout = $currentUser
     ? strtolower((string) ($currentUser->role ?? '')) === 'user'
     : false;
-  $scannerRequiresManualCameraStart = $currentUser
-    ? (method_exists($currentUser, 'isAdmin')
-        ? (bool) $currentUser->isAdmin()
-        : strtolower((string) ($currentUser->role ?? '')) === 'admin')
-    : false;
+  // Starting the camera must not depend on the user's role. In particular,
+  // Safari only reliably presents the permission prompt when the scanner is
+  // started as part of opening this modal.
+  $scannerRequiresManualCameraStart = false;
 @endphp
 
 <div
@@ -610,6 +609,13 @@
   #sirovina-scanner-modal #sirovina-qr-scanner-frame.qr-mirror-on video,
   #sirovina-scanner-modal #sirovina-qr-scanner-frame.qr-mirror-on canvas {
     transform: scaleX(-1);
+  }
+
+  /* iOS Safari requires inline, muted video playback for a camera preview. */
+  #sirovina-scanner-modal #sirovina-qr-scanner-region video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
   }
 
   #sirovina-scanner-modal #sirovina-qr-scanner-frame .qr-barcode-window {
@@ -2106,6 +2112,28 @@
       scannerFrameEl.classList.toggle('qr-mirror-on', !!scannerMirrorToggle.checked);
     }
 
+    function prepareScannerVideoForSafari() {
+      if (!scannerFrameEl) {
+        return;
+      }
+
+      var video = scannerFrameEl.querySelector('video');
+      if (!video) {
+        return;
+      }
+
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
+      video.setAttribute('autoplay', '');
+      video.muted = true;
+      video.playsInline = true;
+
+      var playback = video.play();
+      if (playback && typeof playback.catch === 'function') {
+        playback.catch(function () {});
+      }
+    }
+
     function clampScannerNumber(value, min, max) {
       var numericValue = Number(value);
       if (!Number.isFinite(numericValue)) {
@@ -2636,6 +2664,7 @@
 
           return startChain.then(function () {
             barcodeScannerRunning = true;
+            prepareScannerVideoForSafari();
             applyScannerMirrorState();
             captureScannerTrackState();
             return applyScannerAutoEnhancements().then(function () {
