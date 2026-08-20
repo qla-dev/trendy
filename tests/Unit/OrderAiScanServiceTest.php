@@ -74,6 +74,17 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('09.07.2026', $payload['order']['external_document_date']);
     }
 
+    public function test_trendy_de_supplier_number_is_extracted_from_legacy_hyphenated_subjects(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('extractTrendyDeSupplierNumber');
+        $method->setAccessible(true);
+
+        $this->assertSame('1', $method->invoke($service, "Trendy Germany-1\nDatum 20. 8. 2026."));
+        $this->assertSame('10', $method->invoke($service, "Trendy Germany-10\nDatum 20. 8. 2026."));
+    }
+
     public function test_normalization_preserves_trendy_de_item_note_line_breaks(): void
     {
         $service = app(OrderAiScanService::class);
