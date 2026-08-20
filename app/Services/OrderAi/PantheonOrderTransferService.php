@@ -1328,7 +1328,7 @@ class PantheonOrderTransferService
             return '';
         }
 
-        if (preg_match('/\bTrendy\s+Germany(?:\s+GmbH)?\s*(?:-\s*|\s+)(\d{1,4})\b/iu', $value, $matches) === 1) {
+        if (preg_match('/\bTrendy\s+Germany(?:\s+GmbH)?\s*(?:-\s*|\s+)(\d+)\b/iu', $value, $matches) === 1) {
             $number = preg_replace('/\D+/', '', (string) ($matches[1] ?? '')) ?? '';
             $number = ltrim($number, '0') !== '' ? ltrim($number, '0') : '0';
 
@@ -1668,6 +1668,14 @@ class PantheonOrderTransferService
         $trendyGermanySubjectName = $isTrendyGermany
             ? $this->resolveTrendyGermanyBusinessSubjectName($prepared, $transferPartyName)
             : '';
+        if ($trendyGermanySubjectName !== '') {
+            // Pantheon validates the name and QId as one pair. Use the exact
+            // acSubject spelling from its master data (for example, the
+            // historic "Trendy Germany-1"), rather than only our normalized
+            // scan value.
+            $trendyGermanySubjectName = $this->resolveStoredSubjectName($trendyGermanySubjectName)
+                ?: $trendyGermanySubjectName;
+        }
         $consigneeName = $trendyGermanySubjectName !== ''
             ? $trendyGermanySubjectName
             : (
@@ -2446,11 +2454,16 @@ class PantheonOrderTransferService
                 }
             }
 
-            foreach ($this->subjectLookupCandidates($subject) as $candidate) {
-                $resolvedQId = $this->lookupSubjectQId($candidate, true);
+            // A numbered Trendy Germany subject must be an exact match. In
+            // particular, a prefix lookup for "...-1" also matches
+            // "...-10", which assigns the wrong Pantheon subject QId.
+            if (!$this->isNumberedTrendyGermanySubject($subject)) {
+                foreach ($this->subjectLookupCandidates($subject) as $candidate) {
+                    $resolvedQId = $this->lookupSubjectQId($candidate, true);
 
-                if ($resolvedQId !== null) {
-                    return $resolvedQId;
+                    if ($resolvedQId !== null) {
+                        return $resolvedQId;
+                    }
                 }
             }
 
@@ -2534,6 +2547,20 @@ class PantheonOrderTransferService
 
         $candidates = [$subject];
 
+        if (preg_match('/^Trendy\s+Germany(?:\s+GmbH)?\s*-?\s*(\d+)$/iu', $subject, $matches) === 1) {
+            $number = (string) ($matches[1] ?? '');
+
+            // Keep the displayed value canonical, but resolve its QId against
+            // the exact historic and current spellings that may be in the
+            // Pantheon subject master.
+            $candidates = array_merge($candidates, [
+                self::TRENDY_GERMANY_SUBJECT_BASE . '-' . $number,
+                'Trendy Germany-' . $number,
+                'Trendy Germany ' . $number,
+                self::TRENDY_GERMANY_SUBJECT_BASE . ' ' . $number,
+            ]);
+        }
+
         foreach ((array) config('ai-order-scan.profiles', []) as $profileConfig) {
             $aliases = is_array($profileConfig['subject_aliases'] ?? null)
                 ? $profileConfig['subject_aliases']
@@ -2560,6 +2587,11 @@ class PantheonOrderTransferService
         }
 
         return array_values(array_unique(array_filter(array_map('trim', $candidates))));
+    }
+
+    private function isNumberedTrendyGermanySubject(string $subject): bool
+    {
+        return preg_match('/^Trendy\s+Germany(?:\s+GmbH)?\s*-?\s*\d+$/iu', trim($subject)) === 1;
     }
 
     private function lookupSubjectQId(string $subject, bool $prefixMatch = false): ?int
@@ -2594,6 +2626,34 @@ class PantheonOrderTransferService
 
             return null;
         }
+    }
+
+    private function resolveStoredSubjectName(string $subject): string
+    {
+        foreach ($this->subjectLookupCandidates($subject) as $candidate) {
+            try {
+                $value = $this->targetConnection()
+                    ->table(Order::sourceSchema() . '.tHE_SetSubj')
+                    ->whereRaw("LTRIM(RTRIM(ISNULL(acSubject, ''))) = ?", [$candidate])
+                    ->orderBy('anQId')
+                    ->value('acSubject');
+
+                $value = $this->normalizePantheonText((string) $value);
+
+                if ($value !== '') {
+                    return $value;
+                }
+            } catch (\Throwable $exception) {
+                Log::warning('Order AI subject name lookup failed.', [
+                    'subject' => $candidate,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                return '';
+            }
+        }
+
+        return '';
     }
 
     private function positiveIntegerOrNull(mixed $value): ?int

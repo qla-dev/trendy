@@ -2447,7 +2447,7 @@ class OrderAiScanService
                 break;
             }
 
-            if (preg_match('/\b(Trendy\s+Germany(?:\s+GmbH)?\s*-\s*\d{1,4})\b/iu', $line, $matches) !== 1) {
+            if (preg_match('/\b(Trendy\s+Germany(?:\s+GmbH)?\s*-\s*\d+)\b/iu', $line, $matches) !== 1) {
                 continue;
             }
 
@@ -2462,11 +2462,15 @@ class OrderAiScanService
     private function extractTrendyDeSupplierNumber(string $searchableText): string
     {
         foreach ($this->splitVisibleTextLines($searchableText) as $line) {
-            if (preg_match('/\bTrendy\s+Germany\s+GmbH\s*-\s*(\d{1,4})\b/iu', $line, $matches) === 1) {
+            if (preg_match('/\bTrendy\s+Germany\s+GmbH\s*-\s*(\d+)\b/iu', $line, $matches) === 1) {
                 return $this->normalizeTrendyDeSupplierNumber((string) ($matches[1] ?? ''));
             }
 
-            if (preg_match('/\bTrendy\s+Germany\s+(?!GmbH\b)(\d{1,4})\b/iu', $line, $matches) === 1) {
+            if (preg_match('/\bTrendy\s+Germany\s*-\s*(\d+)\b/iu', $line, $matches) === 1) {
+                return $this->normalizeTrendyDeSupplierNumber((string) ($matches[1] ?? ''));
+            }
+
+            if (preg_match('/\bTrendy\s+Germany\s+(?!GmbH\b)(\d+)\b/iu', $line, $matches) === 1) {
                 return $this->normalizeTrendyDeSupplierNumber((string) ($matches[1] ?? ''));
             }
         }
@@ -2482,13 +2486,13 @@ class OrderAiScanService
             return '';
         }
 
-        if (preg_match('/\b(Trendy\s+Germany(?:\s+GmbH)?)\s*-\s*(\d{1,4})\b/iu', $value, $matches) === 1) {
+        if (preg_match('/\b(Trendy\s+Germany(?:\s+GmbH)?)\s*-\s*(\d+)\b/iu', $value, $matches) === 1) {
             $prefix = $this->normalizeScannedText((string) ($matches[1] ?? ''));
 
             return $prefix . '-' . $this->normalizeTrendyDeSupplierNumber((string) ($matches[2] ?? ''));
         }
 
-        if (preg_match('/\bTrendy\s+Germany(?:\s+GmbH)?\s+(\d{1,4})\b/iu', $value, $matches) === 1) {
+        if (preg_match('/\bTrendy\s+Germany(?:\s+GmbH)?\s+(\d+)\b/iu', $value, $matches) === 1) {
             return self::TRENDY_DE_PARTY_NAME . '-' . $this->normalizeTrendyDeSupplierNumber((string) ($matches[1] ?? ''));
         }
 

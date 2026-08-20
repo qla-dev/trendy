@@ -80,6 +80,34 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertContains('Trendy Germany GmbH', $numberedResult);
     }
 
+    public function test_numbered_trendy_germany_subject_candidates_include_legacy_pantheon_spellings(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('subjectLookupCandidates');
+        $method->setAccessible(true);
+
+        foreach (['1', '10'] as $number) {
+            $result = $method->invoke($service, 'Trendy Germany GmbH-' . $number);
+
+            $this->assertContains('Trendy Germany GmbH-' . $number, $result);
+            $this->assertContains('Trendy Germany-' . $number, $result);
+            $this->assertContains('Trendy Germany ' . $number, $result);
+        }
+    }
+
+    public function test_numbered_trendy_germany_subjects_do_not_use_prefix_matching(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('isNumberedTrendyGermanySubject');
+        $method->setAccessible(true);
+
+        $this->assertTrue($method->invoke($service, 'Trendy Germany GmbH-1'));
+        $this->assertTrue($method->invoke($service, 'Trendy Germany 10'));
+        $this->assertFalse($method->invoke($service, 'Trendy Germany GmbH'));
+    }
+
     public function test_subject_lookup_candidates_preserve_grob_aliases(): void
     {
         $service = new PantheonOrderTransferService();
