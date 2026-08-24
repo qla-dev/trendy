@@ -121,6 +121,12 @@
       "slug": "app-stock"
     },
     {
+      "name": "Zaštite",
+      "icon": "shield",
+      "url": "app/protections",
+      "slug": "app-protections"
+    },
+    {
       "name": "Kreiranje rezervi",
       "icon": "shield",
       "url": "app/stock?open=create-material",

@@ -1878,6 +1878,9 @@
   }
   $statusUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-update-status', ['id' => $workOrderRouteId]) : '';
   $priorityUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-update-priority', ['id' => $workOrderRouteId]) : '';
+  $protectionOptionsUrl = $hasLoadedWorkOrder ? route('app-invoice-protection-options', ['id' => $workOrderRouteId]) : '';
+  $protectionUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-protection-update', ['id' => $workOrderRouteId]) : '';
+  $protectionOptionStoreUrl = $isAdminUser ? route('app-invoice-protection-options-store') : '';
   $closeWorkOrderUrl = $hasLoadedWorkOrder ? route('app-invoice-close', ['id' => $workOrderRouteId]) : '';
   $pantheonWorkersUrl = $hasLoadedWorkOrder ? route('app-invoice-pantheon-workers', ['id' => $workOrderRouteId]) : '';
   $normalizedClosingStatus = mb_strtolower(trim((string) ($workOrder['status'] ?? '')));
@@ -2209,6 +2212,7 @@
                 <i class="fa fa-list me-50"></i> Sastavnica
               </button>
             </li>
+            <li class="nav-item"><button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#tab-zastita" aria-controls="tab-zastita" aria-selected="false"><i class="fa fa-shield me-50"></i> Zaštita</button></li>
             <li class="nav-item">
               <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#tab-materijali" aria-controls="tab-materijali" aria-selected="false">
                 <i class="fa fa-cube me-50"></i> Materijali
@@ -2332,6 +2336,7 @@
               </div>
             </div>
             <!-- Materijali Tab -->
+            <div class="tab-pane fade" id="tab-zastita" role="tabpanel"><div class="table-responsive wo-sastavnica-table-wrap"><table class="table" id="wo-protection-table"><thead><tr><th class="py-1 text-center">Kod</th><th class="py-1 text-center">Naziv</th><th class="py-1 text-center">Rok (sedmice)</th><th class="py-1 text-center">Promijeni zaštitu</th><th class="py-1 text-center">Akcije</th></tr></thead><tbody><tr><td class="py-1 wo-protection-code">{{ $displayValue($workOrder['povrsinska_zastita'] ?? null) }}</td><td class="py-1 wo-protection-name">-</td><td class="py-1 wo-protection-weeks">-</td><td class="py-1"><select class="form-select form-select-sm wo-protection-tab-select"><option value="">Učitavanje…</option></select></td><td class="py-1 text-center"><button type="button" class="btn btn-icon btn-flat-danger wo-protection-remove" title="Ukloni zaštitu"><i class="fa fa-trash"></i></button></td></tr></tbody></table></div></div>
             <div class="tab-pane fade" id="tab-materijali" role="tabpanel">
               <div class="table-responsive wo-sastavnica-table-wrap">
                 <table class="table" id="materijali-table">
@@ -2624,10 +2629,21 @@
             </button>
           @endif
           @if($isAdminUser)
+            <button
+              id="wo-protection-trigger-btn"
+              class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center"
+              type="button"
+              @if (!$hasLoadedWorkOrder || $protectionOptionsUrl === '') disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif
+            >
+              <i class="fa fa-shield me-50" style="margin-top: 1px;"></i> Dodaj zaštitu
+            </button>
             <a class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center" href="{{ route('app-stock', ['open' => 'create-material']) }}">
               <i class="fa fa-cube me-50" style="margin-top: 2px;"></i> Dodaj materijal
             </a>
           @else
+            <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" @if (!$hasLoadedWorkOrder) disabled @endif id="wo-protection-trigger-btn">
+              <i class="fa fa-shield me-50" style="margin-top: 1px;"></i> Dodaj zaštitu
+            </button>
             <button class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" onclick="alert('Uskoro')">
               <i class="fa fa-cube me-50" style="margin-top: 2px;"></i> Dodaj materijal
             </button>
@@ -2979,6 +2995,9 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var mutationConfig = {
       statusUrl: @json($statusUpdateUrl),
       priorityUrl: @json($priorityUpdateUrl),
+      protectionOptionsUrl: @json($protectionOptionsUrl),
+      protectionUpdateUrl: @json($protectionUpdateUrl),
+      protectionOptionStoreUrl: @json($protectionOptionStoreUrl),
       closeUrl: @json($closeWorkOrderUrl),
       workersUrl: @json($pantheonWorkersUrl),
       operationsUrl: @json($allOperationsFetchUrl),
@@ -2996,6 +3015,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var priorityLabel = document.getElementById('wo-priority-label');
     var statusTriggerButton = document.getElementById('wo-status-trigger-btn');
     var priorityTriggerButton = document.getElementById('wo-priority-trigger-btn');
+    var protectionTriggerButton = document.getElementById('wo-protection-trigger-btn');
     var closeWorkOrderButton = document.getElementById('wo-close-order-btn');
     var closeWorkOrderSubmit = document.getElementById('wo-close-submit-btn');
     var closeWorkOrderModal = document.getElementById('close-work-order-modal');
@@ -3229,6 +3249,88 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
           return body;
         });
+      });
+    }
+
+    function escapeProtectionHtml(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character];
+      });
+    }
+
+    function loadProtectionOptions() {
+      return fetch(mutationConfig.protectionOptionsUrl, {
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+      }).then(function (response) {
+        return response.json().then(function (body) {
+          if (!response.ok) throw new Error(extractErrorMessage(body, 'Učitavanje zaštite nije uspjelo.'));
+          return body.data || {};
+        });
+      });
+    }
+
+    function openNewProtectionDialog() {
+      return Swal.fire(swalWithTheme({
+        title: 'Dodaj novu zaštitu',
+        html: '<input id="wo-new-protection-code" class="swal2-input" placeholder="Kod, npr. Lakiranje RAL 9005">'
+          + '<input id="wo-new-protection-name" class="swal2-input" placeholder="Naziv">'
+          + '<input id="wo-new-protection-weeks" class="swal2-input" type="number" min="1" max="52" step="1" value="3" placeholder="Broj sedmica">',
+        showCancelButton: true,
+        confirmButtonText: 'Dodaj',
+        cancelButtonText: 'Otkaži',
+        showLoaderOnConfirm: true,
+        preConfirm: function () {
+          var popup = Swal.getPopup();
+          var code = popup.querySelector('#wo-new-protection-code').value.trim();
+          var name = popup.querySelector('#wo-new-protection-name').value.trim();
+          var weeks = Number(popup.querySelector('#wo-new-protection-weeks').value);
+          if (!code || !name || !Number.isInteger(weeks) || weeks < 1 || weeks > 52) {
+            Swal.showValidationMessage('Unesite kod, naziv i cijeli broj sedmica od 1 do 52.');
+            return false;
+          }
+          return requestMutation(mutationConfig.protectionOptionStoreUrl, { code: code, name: name, weeks: weeks }, 'Dodavanje zaštite nije uspjelo.')
+            .catch(function (error) { Swal.showValidationMessage(error.message); });
+        }
+      }));
+    }
+
+    function openProtectionDialog() {
+      if (!mutationConfig.protectionOptionsUrl || !mutationConfig.protectionUpdateUrl) return;
+      loadProtectionOptions().then(function (data) {
+        var selected = String(data.selected || '');
+        var options = Array.isArray(data.options) ? data.options : [];
+        var optionsHtml = '<option value="">Bez zaštite / nije odabrano</option>' + options.map(function (option) {
+          var value = String(option.value == null ? option.code || '' : option.value);
+          var label = String(option.label || option.code || '');
+          var description = String(option.description || '');
+          return '<option value="' + escapeProtectionHtml(value) + '"' + (String(option.code || '') === selected || value === selected ? ' selected' : '') + '>'
+            + escapeProtectionHtml(label + (description ? ' — ' + description : '') + ' (' + String(option.weeks || 3) + ' sedm.)') + '</option>';
+        }).join('');
+        return Swal.fire(swalWithTheme({
+          title: 'Dodaj zaštitu',
+          html: '<select id="wo-protection-select" class="swal2-select" style="width:80%">' + optionsHtml + '</select>',
+          showCancelButton: true,
+          showDenyButton: Boolean(mutationConfig.protectionOptionStoreUrl),
+          confirmButtonText: 'Sačuvaj',
+          denyButtonText: 'Dodaj novu',
+          cancelButtonText: 'Otkaži',
+          showLoaderOnConfirm: true,
+          preConfirm: function () {
+            return requestMutation(mutationConfig.protectionUpdateUrl, {
+              protection_type: Swal.getPopup().querySelector('#wo-protection-select').value
+            }, 'Ažuriranje zaštite nije uspjelo.').catch(function (error) { Swal.showValidationMessage(error.message); });
+          }
+        }));
+      }).then(function (result) {
+        if (result && result.isDenied) return openNewProtectionDialog().then(function (createResult) {
+          if (createResult && createResult.isConfirmed) return openProtectionDialog();
+        });
+        if (result && result.isConfirmed) {
+          Swal.fire(swalWithTheme({ icon: 'success', title: 'Sačuvano', timer: 1100, showConfirmButton: false }))
+            .then(function () { window.location.reload(); });
+        }
+      }).catch(function (error) {
+        Swal.fire(swalWithTheme({ icon: 'error', title: 'Greška', text: error.message || 'Učitavanje zaštite nije uspjelo.' }));
       });
     }
 
@@ -5203,6 +5305,24 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       });
     }
 
+    function openCompactProtectionModal() {
+      var modalElement = document.getElementById('work-order-protection-modal');
+      if (!modalElement) return openProtectionDialog();
+      var results = modalElement.querySelector('#wo-protection-modal-results'), search = modalElement.querySelector('#wo-protection-modal-search'), selectedLabel = modalElement.querySelector('#wo-protection-modal-selected');
+      var picker = modalElement.querySelector('#wo-protection-picker'), createForm = modalElement.querySelector('#wo-protection-create-form');
+      if (picker) picker.classList.remove('d-none'); if (createForm) createForm.classList.add('d-none'); modalElement.querySelector('.modal-title').textContent = 'Dodaj zaštitu';
+      var selected = '', options = [], modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+      function render() { var q = (search.value || '').toLowerCase().trim(), shown = options.filter(function(o){return ((o.code||'')+' '+(o.label||'')+' '+(o.description||'')).toLowerCase().indexOf(q) !== -1;}).sort(function(a,b){return String(a.label||a.code||'').localeCompare(String(b.label||b.code||''));}); results.innerHTML = shown.map(function(o){var active=String(o.value||o.code)===selected;return '<button type="button" class="list-group-item wo-protection-choice '+(active?'is-selected':'')+'" data-value="'+escapeProtectionHtml(o.value||o.code)+'"><strong>'+escapeProtectionHtml(o.label||o.code)+'</strong><small>'+(o.description?escapeProtectionHtml(o.description)+' · ':'')+escapeProtectionHtml(o.weeks)+' sedm.</small></button>';}).join(''); modalElement.querySelector('#wo-protection-modal-empty').classList.toggle('d-none', shown.length>0); results.querySelectorAll('.wo-protection-choice').forEach(function(button){button.onclick=function(){selected=button.dataset.value;var item=options.find(function(o){return String(o.value||o.code)===selected;});selectedLabel.textContent=item?(item.label||item.code)+' · '+item.weeks+' sedm.':'Bez zaštite';render();};}); }
+      loadProtectionOptions().then(function(data){ selected=String(data.selected||''); options=[{value:'',code:'',label:'Bez zaštite',weeks:2}].concat(data.options||[]); search.value=''; render(); modal.show(); });
+      search.oninput=render;
+      modalElement.querySelector('#wo-protection-modal-save').onclick=function(){var form=modalElement.querySelector('#wo-protection-create-form');if(form&&!form.classList.contains('d-none')){var payload={code:modalElement.querySelector('#wo-protection-new-code').value.trim(),name:modalElement.querySelector('#wo-protection-new-name').value.trim(),weeks:Number(modalElement.querySelector('#wo-protection-new-weeks').value),note:modalElement.querySelector('#wo-protection-new-note').value.trim()},err=modalElement.querySelector('#wo-protection-new-error');requestMutation(mutationConfig.protectionOptionStoreUrl,payload,'Dodavanje zaštite nije uspjelo.').then(function(){modal.hide();Swal.fire(swalWithTheme({icon:'success',title:'Zaštita je dodana',timer:1200,showConfirmButton:false})).then(openCompactProtectionModal);}).catch(function(e){err.textContent=e.message;err.classList.remove('d-none');Swal.fire(swalWithTheme({icon:'error',title:'Dodavanje nije uspjelo',text:e.message}));});return;}requestMutation(mutationConfig.protectionUpdateUrl,{protection_type:selected},'Ažuriranje zaštite nije uspjelo.').then(function(response){modal.hide();return Swal.fire(swalWithTheme({icon:'success',title:'Zaštita je sačuvana',text:response&&response.message?response.message:'Početak radnog naloga je ažuriran.',timer:1500,showConfirmButton:false}));}).then(function(){window.location.reload();}).catch(function(e){Swal.fire(swalWithTheme({icon:'error',title:'Spremanje nije uspjelo',text:e.message||'Pokušajte ponovo.'}));});};
+      var add=modalElement.querySelector('#wo-protection-modal-add'); if(add) add.onclick=function(){modalElement.querySelector('#wo-protection-picker').classList.add('d-none');modalElement.querySelector('#wo-protection-create-form').classList.remove('d-none');modalElement.querySelector('.modal-title').textContent='Dodaj novu zaštitu';};
+    }
+    var protectionTab = document.getElementById('tab-zastita');
+    function loadProtectionTab() { if (!protectionTab || !mutationConfig.protectionOptionsUrl) return; loadProtectionOptions().then(function(data){var select=protectionTab.querySelector('.wo-protection-tab-select'), code=protectionTab.querySelector('.wo-protection-code'), name=protectionTab.querySelector('.wo-protection-name'), weeks=protectionTab.querySelector('.wo-protection-weeks'), selected=String(data.selected||''), options=data.options||[];select.innerHTML='<option value="">Bez zaštite</option>'+options.map(function(o){var value=String(o.value||o.code), isSelected=String(o.code||'')===selected||value===selected;return '<option value="'+escapeProtectionHtml(value)+'" '+(isSelected?'selected':'')+'>'+escapeProtectionHtml(o.label||o.code)+'</option>';}).join('');var current=options.find(function(o){return String(o.code||'')===selected||String(o.value||o.code)===selected;});code.textContent=current?(current.label||current.code):'-';name.textContent=current?(current.description||'-'):'-';weeks.textContent=current?(current.weeks+' sedm.'):'-';select.onchange=function(){requestMutation(mutationConfig.protectionUpdateUrl,{protection_type:select.value},'Ažuriranje zaštite nije uspjelo.').then(function(r){return Swal.fire(swalWithTheme({icon:'success',title:'Zaštita je sačuvana',text:r.message||'',timer:1300,showConfirmButton:false}));}).then(function(){window.location.reload();}).catch(function(e){Swal.fire(swalWithTheme({icon:'error',title:'Spremanje nije uspjelo',text:e.message}));});};var remove=protectionTab.querySelector('.wo-protection-remove');remove.disabled=!current;remove.onclick=function(){requestMutation(mutationConfig.protectionUpdateUrl,{protection_type:''},'Uklanjanje zaštite nije uspjelo.').then(function(r){return Swal.fire(swalWithTheme({icon:'success',title:'Zaštita je uklonjena',text:r.message||'',timer:1300,showConfirmButton:false}));}).then(function(){window.location.reload();}).catch(function(e){Swal.fire(swalWithTheme({icon:'error',title:'Uklanjanje nije uspjelo',text:e.message}));});};}); }
+    document.querySelector('[data-bs-target="#tab-zastita"]')?.addEventListener('shown.bs.tab', loadProtectionTab);
+    if (protectionTriggerButton) protectionTriggerButton.addEventListener('click', openCompactProtectionModal);
+
     if (editSastavnicaModalElement) {
       editSastavnicaModalElement.addEventListener('hidden.bs.modal', function () {
         clearEditSastavnicaError();
@@ -5335,6 +5455,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 @include('content.new-components.change-status-modal', ['currentStatus' => $statusDisplayLabel])
 @include('content.new-components.change-priority-modal', ['currentPriority' => $priorityDisplayLabel])
 @include('content.new-components.edit-sastavnica-item-modal')
+@include('content.new-components.work-order-protection-modal')
 @include('content.new-components.nalog-scan')
 @include('content.new-components.sirovina-scan', [
   'productsFetchUrl' => $productsFetchUrl,
