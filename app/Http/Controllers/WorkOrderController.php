@@ -1246,6 +1246,165 @@ class WorkOrderController extends Controller
         }
     }
 
+    public function workOrderProtectionOptions(string $id): JsonResponse
+    {
+        try {
+            $row = $this->findWorkOrderRow($id);
+
+            if ($row === null) {
+                return response()->json(['message' => 'Radni nalog nije pronađen.'], 404);
+            }
+
+            return response()->json([
+                'data' => [
+                    'selected' => (string) $this->valueTrimmed($row, ['acCostDrv'], ''),
+                    'options' => $this->scanCreateProtectionOptions(),
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order protection options query failed.', ['id' => $id, 'message' => $exception->getMessage()]);
+
+            return response()->json(['message' => 'Greška pri učitavanju površinske zaštite.'], 500);
+        }
+    }
+
+    public function protectionsIndex(Request $request)
+    {
+        return view('content.apps.protections.index', [
+            'pageConfigs' => ['pageHeader' => false],
+            'catalogueUrl' => route('app-protections-data'),
+            'storeUrl' => route('app-invoice-protection-options-store'),
+            'updateUrlTemplate' => route('app-protections-update', ['code' => '__CODE__']),
+            'destroyUrlTemplate' => route('app-protections-destroy', ['code' => '__CODE__']),
+            'canManageProtections' => $this->canDeleteWorkOrders($request->user()),
+        ]);
+    }
+
+    public function protectionsData(): JsonResponse
+    {
+        return response()->json(['data' => $this->scanCreateProtectionOptions()]);
+    }
+
+    public function updateProtectionOption(Request $request, string $code): JsonResponse
+    {
+        if (!$this->canDeleteWorkOrders($request->user())) return response()->json(['message' => 'Nemate dozvolu.'], 403);
+        $data = Validator::make($request->all(), ['name' => ['required', 'string', 'max:100'], 'weeks' => ['required', 'integer', 'min:1', 'max:52'], 'note' => ['nullable', 'string', 'max:4000']])->validate();
+        $updated = DB::table($this->qualifiedProtectionCatalogueTableName())->where('acCostDrv', $code)->update(['acName' => trim($data['name']), 'anFieldNA' => $data['weeks'], 'acNote' => trim((string) ($data['note'] ?? '')), 'adTimeChg' => Carbon::now(), 'anUserChg' => (int) auth()->id()]);
+        return $updated ? response()->json(['message' => 'Zaštita je ažurirana.']) : response()->json(['message' => 'Zaštita nije pronađena.'], 404);
+    }
+
+    public function destroyProtectionOption(Request $request, string $code): JsonResponse
+    {
+        if (!$this->canDeleteWorkOrders($request->user())) return response()->json(['message' => 'Nemate dozvolu.'], 403);
+        if ($this->newTableQuery()->where('acCostDrv', $code)->exists()) return response()->json(['message' => 'Zaštita se koristi na radnom nalogu i ne može se obrisati.'], 422);
+        return DB::table($this->qualifiedProtectionCatalogueTableName())->where('acCostDrv', $code)->delete() ? response()->json(['message' => 'Zaštita je obrisana.']) : response()->json(['message' => 'Zaštita nije pronađena.'], 404);
+    }
+
+    public function updateWorkOrderProtection(Request $request, string $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), ['protection_type' => ['nullable', 'string', 'max:100']]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Neispravna površinska zaštita.', 'errors' => $validator->errors()], 422);
+        }
+
+        $selection = trim((string) ($validator->validated()['protection_type'] ?? ''));
+        $option = $this->resolveScanCreateProtectionOption($selection);
+
+        if ($selection !== '' && $option === null) {
+            return response()->json(['message' => 'Odaberite važeću vrijednost iz kataloga.'], 422);
+        }
+
+        try {
+            $row = $this->findWorkOrderRow($id);
+            if ($row === null) {
+                return response()->json(['message' => 'Radni nalog nije pronađen.'], 404);
+            }
+
+            $updates = ['acCostDrv' => (string) ($option['code'] ?? '')];
+            $columns = $this->tableColumns();
+            $deadline = $this->projectedProductionDateCalculator()->dateOnly(
+                $this->value($row, ['adDeliveryDeadline', 'adDateOut', 'adSchedEndTime'], null)
+            );
+            if ($deadline === null || !in_array('adSchedStartTime', $columns, true)) {
+                return response()->json(['message' => 'Nije pronađen datum završetka RN za izračun početka izrade.'], 422);
+            }
+            if ($deadline !== null && in_array('adSchedStartTime', $columns, true)) {
+                $updates['adSchedStartTime'] = Carbon::instance($deadline)
+                    ->subWeeks((int) ($option['weeks'] ?? 2))
+                    ->setTime(14, 0, 0);
+            }
+
+            if ($this->rowAlreadyHasUpdates($row, $updates)) {
+                return response()->json(['message' => 'Zaštita je već postavljena.', 'data' => ['changed' => false]]);
+            }
+
+            if (!$this->updateWorkOrderRow($row, $updates)) {
+                return response()->json(['message' => 'Površinska zaštita nije ažurirana.'], 500);
+            }
+
+            return response()->json([
+                'message' => 'Površinska zaštita je uspješno ažurirana.',
+                'data' => ['code' => (string) ($option['code'] ?? ''), 'weeks' => (int) ($option['weeks'] ?? 2)],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Work order protection update failed.', ['id' => $id, 'message' => $exception->getMessage()]);
+
+            return response()->json(['message' => 'Greška pri ažuriranju površinske zaštite.'], 500);
+        }
+    }
+
+    public function storeWorkOrderProtectionOption(Request $request): JsonResponse
+    {
+        if (!$this->canDeleteWorkOrders($request->user())) {
+            return response()->json(['message' => 'Nemate dozvolu za dodavanje nove zaštite.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'code' => ['required', 'string', 'max:100'],
+            'name' => ['required', 'string', 'max:255'],
+            'weeks' => ['required', 'integer', 'min:1', 'max:52'],
+            'note' => ['nullable', 'string', 'max:4000'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Neispravni podaci za novu zaštitu.', 'errors' => $validator->errors()], 422);
+        }
+
+        $data = $validator->validated();
+        $code = trim((string) $data['code']);
+        $name = trim((string) $data['name']);
+
+        try {
+            if (DB::table($this->qualifiedProtectionCatalogueTableName())->where('acCostDrv', $code)->exists()) {
+                return response()->json(['message' => 'Zaštita s ovim kodom već postoji.'], 422);
+            }
+
+            $columns = $this->protectionCatalogueColumns();
+            $payload = ['acCostDrv' => $code, 'acName' => $name, 'anFieldNA' => (int) $data['weeks'], 'acNote' => trim((string) ($data['note'] ?? ''))];
+            foreach (['acClassif', 'acStatus', 'acConsignee', 'acDept', 'acSuprCostDrv', 'acResponsiblePerson'] as $requiredTextColumn) {
+                if (in_array($requiredTextColumn, $columns, true)) $payload[$requiredTextColumn] = $requiredTextColumn === 'acStatus' ? 'N' : '';
+            }
+            if (in_array('anUserIns', $columns, true) && auth()->id()) $payload['anUserIns'] = (int) auth()->id();
+            if (in_array('anUserChg', $columns, true) && auth()->id()) $payload['anUserChg'] = (int) auth()->id();
+            if (in_array('adTimeIns', $columns, true)) $payload['adTimeIns'] = Carbon::now();
+            if (in_array('adTimeChg', $columns, true)) $payload['adTimeChg'] = Carbon::now();
+
+            DB::transaction(function () use ($payload) {
+                DB::table($this->qualifiedProtectionCatalogueTableName())->insert($payload);
+            });
+
+            $this->scanCreateProtectionOptionsCache = null;
+            $option = $this->resolveScanCreateProtectionOption($code);
+
+            return response()->json(['message' => 'Nova zaštita je uspješno dodana.', 'data' => $option], 201);
+        } catch (Throwable $exception) {
+            Log::error('Work order protection catalogue create failed.', ['code' => $code, 'message' => $exception->getMessage()]);
+
+            return response()->json(['message' => 'Greška pri dodavanju nove zaštite.'], 500);
+        }
+    }
+
     public function destroyInvoice(Request $request, string $id): JsonResponse
     {
         if (!$this->canDeleteWorkOrders($request->user())) {
@@ -7646,13 +7805,9 @@ class WorkOrderController extends Controller
         $protection = is_array($orderContext['protection'] ?? null)
             ? $orderContext['protection']
             : $this->emptyScanCreateProtectionOption();
-        $projectedDate = $this->projectedProductionDateCalculator()->calculate(
-            $deliveryDay?->format('Y-m-d'),
-            trim((string) ($protection['code'] ?? '')),
-            isset($protection['id']) && is_numeric((string) $protection['id'])
-                ? (int) $protection['id']
-                : null
-        );
+        $projectedDate = $deliveryDay !== null
+            ? $deliveryDay->copy()->subWeeks((int) ($protection['weeks'] ?? 2))->format('Y-m-d')
+            : null;
         $projectedIssueDate = $projectedDate !== null
             ? Carbon::createFromFormat('!Y-m-d', $projectedDate)->startOfDay()
             : $now->copy()->startOfDay();
@@ -7862,7 +8017,7 @@ class WorkOrderController extends Controller
 
         try {
             $rows = DB::table($this->qualifiedProtectionCatalogueTableName())
-                ->select(['acCostDrv', 'acName', 'anQId'])
+                ->select(['acCostDrv', 'acName', 'acNote', 'anQId', 'anFieldNA'])
                 ->whereRaw("LTRIM(RTRIM(ISNULL(acCostDrv, ''))) <> ''")
                 ->orderBy('acCostDrv')
                 ->get();
@@ -7871,9 +8026,12 @@ class WorkOrderController extends Controller
             $options = [];
 
             foreach ($rows as $row) {
-                $code = trim((string) ($row->acCostDrv ?? ''));
+                // Keep Pantheon's exact value for writes: some legacy keys include
+                // leading whitespace and the foreign key compares that value exactly.
+                $code = (string) ($row->acCostDrv ?? '');
+                $displayCode = trim($code);
 
-                if ($code === '') {
+                if ($displayCode === '') {
                     continue;
                 }
 
@@ -7885,9 +8043,12 @@ class WorkOrderController extends Controller
                     'value' => $id !== null ? (string) $id : $code,
                     'id' => $id,
                     'code' => $code,
-                    'label' => $code,
+                    'label' => $displayCode,
                     'description' => trim((string) ($row->acName ?? '')),
-                    'weeks' => $calculator->weeksForProtection($code, $id),
+                    'note' => trim((string) ($row->acNote ?? '')),
+                    'weeks' => is_numeric((string) ($row->anFieldNA ?? null)) && (int) $row->anFieldNA > 0
+                        ? (int) $row->anFieldNA
+                        : $calculator->weeksForProtection($displayCode, $id),
                 ];
             }
 
@@ -7928,6 +8089,17 @@ class WorkOrderController extends Controller
         }
 
         return null;
+    }
+
+    private function protectionCatalogueColumns(): array
+    {
+        return DB::table('INFORMATION_SCHEMA.COLUMNS')
+            ->where('TABLE_SCHEMA', $this->tableSchema())
+            ->where('TABLE_NAME', $this->protectionCatalogueTableName())
+            ->orderBy('ORDINAL_POSITION')
+            ->pluck('COLUMN_NAME')
+            ->map(static fn ($column) => (string) $column)
+            ->all();
     }
 
     private function findCatalogItemByProductCode(string $productCode): array
@@ -8764,10 +8936,12 @@ class WorkOrderController extends Controller
 
         if ($deliveryDateOnly !== null) {
             try {
-                $projectedStartDate = $this->projectedProductionDateCalculator()->calculate(
-                    $deliveryDateOnly,
+                $protectionOption = $this->resolveScanCreateProtectionOption(
                     (string) $this->valueTrimmed($raw, ['acCostDrv'], '')
                 );
+                $projectedStartDate = Carbon::createFromFormat('!Y-m-d', $deliveryDateOnly)
+                    ->subWeeks((int) ($protectionOption['weeks'] ?? 2))
+                    ->format('Y-m-d');
                 $plannedStartDate = $projectedStartDate !== null
                     ? Carbon::createFromFormat('!Y-m-d', $projectedStartDate)->startOfDay()
                     : null;

@@ -82,6 +82,13 @@ Route::middleware('auth:web')->group(function () {
         Route::get('invoice/preview/{id?}', [WorkOrderController::class, 'invoicePreview'])->name('app-invoice-preview');
         Route::post('invoice/preview/{id}/status', [WorkOrderController::class, 'updateInvoiceStatus'])->name('app-invoice-update-status');
         Route::post('invoice/preview/{id}/priority', [WorkOrderController::class, 'updateInvoicePriority'])->name('app-invoice-update-priority');
+        Route::get('invoice/preview/{id}/protection-options', [WorkOrderController::class, 'workOrderProtectionOptions'])->name('app-invoice-protection-options');
+        Route::post('invoice/preview/{id}/protection', [WorkOrderController::class, 'updateWorkOrderProtection'])->name('app-invoice-protection-update');
+        Route::post('invoice/protection-options', [WorkOrderController::class, 'storeWorkOrderProtectionOption'])->name('app-invoice-protection-options-store');
+        Route::get('protections', [WorkOrderController::class, 'protectionsIndex'])->name('app-protections');
+        Route::get('protections/data', [WorkOrderController::class, 'protectionsData'])->name('app-protections-data');
+        Route::put('protections/{code}', [WorkOrderController::class, 'updateProtectionOption'])->name('app-protections-update');
+        Route::delete('protections/{code}', [WorkOrderController::class, 'destroyProtectionOption'])->name('app-protections-destroy');
         Route::get('invoice/preview/{id}/pantheon-workers', [WorkOrderClosingController::class, 'workers'])->name('app-invoice-pantheon-workers');
         Route::post('invoice/preview/{id}/close', [WorkOrderClosingController::class, 'close'])->name('app-invoice-close');
         Route::get('invoice/preview/{id}/products', [ProductsController::class, 'scannerIndex'])->name('app-invoice-products');

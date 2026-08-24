@@ -1456,7 +1456,7 @@
           code: code,
           label: String(option.label || code),
           description: String(option.description || ''),
-          weeks: Number(option.weeks) === 4 ? 4 : (Number(option.weeks) === 3 ? 3 : 2)
+          weeks: Number.isInteger(Number(option.weeks)) && Number(option.weeks) > 0 ? Number(option.weeks) : 2
         });
       });
 
@@ -1568,7 +1568,7 @@
         ? (order.datum_isporuke || order.delivery_date)
         : '';
       var weeks = Number(selectedOption.weeks);
-      var projectedDate = subtractCalendarDays(deliveryDate, (weeks === 4 ? 4 : (weeks === 3 ? 3 : 2)) * 7);
+      var projectedDate = subtractCalendarDays(deliveryDate, (Number.isInteger(weeks) && weeks > 0 ? weeks : 2) * 7);
 
       if (projectedDateEl) {
         var nextDateText = formatDateOnly(projectedDate) || '-';
