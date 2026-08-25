@@ -60,6 +60,12 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
         ],
 
+        'ai-scan' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/ai-scan.log'),
+            'level' => env('AI_SCAN_LOG_LEVEL', env('LOG_LEVEL', 'debug')),
+        ],
+
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),

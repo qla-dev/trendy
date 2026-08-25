@@ -6,10 +6,12 @@ use App\Models\OrderAiScan;
 use App\Models\Order;
 use App\Services\OrderAi\OrderAiScanService;
 use App\Services\OrderAi\PantheonOrderTransferService;
+use App\Support\AiScanLog;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
@@ -499,7 +501,7 @@ class OrderController extends WorkOrderController
             $reason = $this->humanizeTransferFailureReason($rawReason);
             $errorType = $this->detectTransferFailureType($rawReason);
 
-            Log::error('Manual order transfer failed.', [
+            AiScanLog::error('Manual order transfer failed.', [
                 'scan_id' => $scan?->id,
                 'error_type' => $errorType,
                 'message' => $rawReason,
@@ -509,6 +511,7 @@ class OrderController extends WorkOrderController
                 $this->markScanTransferAsDuplicateReference($scan, $rawReason);
             } elseif ($scan !== null) {
                 $this->markScanTransferAsFailed($scan, $reason);
+                $this->notifyAiScanTransferFailure($scan, $reason, $rawReason);
             }
 
             return response()->json([
@@ -616,6 +619,40 @@ class OrderController extends WorkOrderController
         }
 
         return 'transfer_error';
+    }
+
+    private function notifyAiScanTransferFailure(OrderAiScan $scan, string $reason, string $technicalReason): void
+    {
+        $recipient = trim((string) config('ai-order-scan.transfer_failure_recipient', ''));
+
+        if ($recipient === '') {
+            return;
+        }
+
+        try {
+            Mail::raw(implode("\n", [
+                'AI scan transfer to Pantheon failed.',
+                'Scan ID: ' . (int) $scan->getKey(),
+                'Source file: ' . trim((string) ($scan->source_file_name ?? '')),
+                'Failure: ' . $reason,
+                'Technical message: ' . mb_substr($technicalReason, 0, 2000),
+                'Time: ' . now()->toDateTimeString(),
+            ]), function ($message) use ($recipient, $scan): void {
+                $message->to($recipient)
+                    ->subject('AI scan transfer failed (scan #' . (int) $scan->getKey() . ')');
+            });
+
+            AiScanLog::info('Manual AI scan transfer failure notification sent.', [
+                'scan_id' => $scan->getKey(),
+                'recipient' => $recipient,
+            ]);
+        } catch (Throwable $mailException) {
+            AiScanLog::error('Manual AI scan transfer failure notification could not be sent.', [
+                'scan_id' => $scan->getKey(),
+                'recipient' => $recipient,
+                'message' => $mailException->getMessage(),
+            ]);
+        }
     }
 
     private function markScanTransferAsFailed(OrderAiScan $scan, string $reason): void

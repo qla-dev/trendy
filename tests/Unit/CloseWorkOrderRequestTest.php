@@ -40,6 +40,6 @@ class CloseWorkOrderRequestTest extends TestCase
             'start_time' => '09:30',
             'end_time' => '11:30',
         ]], $request->input('operations'));
-        $this->assertSame([['code' => 'ploplazma', 'quantity' => '2']], $request->input('materials'));
+        $this->assertSame([['code' => 'ploplazma', 'quantity' => '2', 'item_qid' => null]], $request->input('materials'));
     }
 }

@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Services\OrderAi\AiInboxImportService;
+use App\Support\AiScanLog as Log;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class PollAiInboxCommand extends Command

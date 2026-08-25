@@ -47,7 +47,8 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString('wo-close-end-minute', $this->view);
         $this->assertStringContainsString('Početak izrade', $this->view);
         $this->assertStringContainsString('Kraj izrade', $this->view);
-        $this->assertStringContainsString('Trajanje (min/jedinica)', $this->view);
+        $this->assertStringContainsString('Trajanje (min)', $this->view);
+        $this->assertStringContainsString('Trajanje (min/jed)', $this->view);
         $this->assertStringContainsString('Zastoj (min)', $this->view);
         $this->assertStringContainsString('>Prijem</button>', $this->view);
         $this->assertStringContainsString('close-work-order-receipts-table', $this->view);
@@ -89,7 +90,9 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString('missingClosingFields', $this->view);
         $this->assertStringContainsString('Nedostaju obavezna polja', $this->view);
         $this->assertStringContainsString('if (isClosingOperationRowEmpty(row))', $this->view);
-        $this->assertStringContainsString('[operation.worker_id, operation.time, operation.downtime, operation.start_time, operation.end_time]', $this->view);
+        $this->assertStringContainsString('[operation.worker_id, operation.duration, operation.time, operation.downtime, operation.start_time, operation.end_time]', $this->view);
+        $this->assertStringContainsString('function syncPerUnitDuration(row)', $this->view);
+        $this->assertStringContainsString('function syncTotalDuration(row)', $this->view);
         $this->assertStringContainsString('modal-dialog-centered', $this->view);
     }
 
@@ -105,6 +108,7 @@ class WorkOrderClosingFlowStructureTest extends TestCase
         $this->assertStringContainsString("'acStatusMF' => 'R'", $this->service);
         $this->assertStringContainsString('breakOverlapMinutes', $this->service);
         $this->assertStringContainsString('netOperationMinutes', $this->service);
+        $this->assertStringContainsString("\$this->calculator->divide(\$this->netOperationMinutes(", $this->service);
         $this->assertStringContainsString("'downtime' => \$timing['downtime']", $this->service);
         $this->assertStringContainsString('min($operationEnd, $end) - max($operationStart, $start)', $this->service);
         $this->assertStringContainsString("\$operationCode === 'OP30' && \$this->isEmptyOperationInput(\$input)", $this->service);

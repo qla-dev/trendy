@@ -12,11 +12,12 @@ use App\Services\OrderAi\Support\OrderAiDigitalPdfRulesParser;
 use App\Services\OrderAi\Support\OrderAiExtractionValidationService;
 use App\Services\OrderAi\Support\OrderAiDocumentPreparationService;
 use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
+use App\Support\AiScanLog as Log;
 use App\Support\Utf8Sanitizer;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -1015,6 +1016,10 @@ class OrderAiScanService
         $transferPreview = $this->resolveDisplayTransferPreview($scan, $payload);
         $payload = $this->overlayTransferPreview($payload, $transferPreview);
         $payload = $this->repairStoredTrendyDePayloadFromSourceText($scan, $payload, false);
+        $payload['items'] = $this->normalizeTrendyDeItemLineNumbers(
+            is_array($payload['items'] ?? null) ? $payload['items'] : [],
+            is_array($payload['order'] ?? null) ? $payload['order'] : []
+        );
         $payload = $this->overlayCatalogWeightsForDisplay($payload);
         $processingPageMeta = $this->resolveProcessingPageMeta($scan, $payload);
         $documentMetrics = $this->resolveDisplayDocumentMetrics($scan, $payload, $processingPageMeta);
@@ -1916,10 +1921,11 @@ class OrderAiScanService
 
             $scan->forceFill($attributes)->save();
         } catch (\Throwable $exception) {
+            $failureReason = $this->humanizeTransferFailureReason($exception);
             $attributes = [
                 'status' => 'failed',
                 'processing_step' => 'Transfer u bazu nije uspio.',
-                'error_message' => $this->humanizeTransferFailureReason($exception),
+                'error_message' => $failureReason,
                 'completed_at' => now(),
             ];
 
@@ -1928,9 +1934,44 @@ class OrderAiScanService
             }
 
             $scan->forceFill($attributes)->save();
+            $this->notifyTransferFailure($scan, $failureReason, $exception);
         }
 
         return $scan->fresh();
+    }
+
+    private function notifyTransferFailure(OrderAiScan $scan, string $failureReason, \Throwable $exception): void
+    {
+        $recipient = trim((string) config('ai-order-scan.transfer_failure_recipient', ''));
+
+        if ($recipient === '') {
+            return;
+        }
+
+        try {
+            Mail::raw(implode("\n", [
+                'AI scan transfer to Pantheon failed.',
+                'Scan ID: ' . (int) $scan->id,
+                'Source file: ' . trim((string) ($scan->source_file_name ?? '')),
+                'Failure: ' . $failureReason,
+                'Technical message: ' . Utf8Sanitizer::cleanExceptionMessage($exception),
+                'Time: ' . now()->toDateTimeString(),
+            ]), function ($message) use ($recipient, $scan): void {
+                $message->to($recipient)
+                    ->subject('AI scan transfer failed (scan #' . (int) $scan->id . ')');
+            });
+
+            Log::info('Order AI transfer failure notification sent.', [
+                'scan_id' => $scan->id,
+                'recipient' => $recipient,
+            ]);
+        } catch (\Throwable $mailException) {
+            Log::error('Order AI transfer failure notification could not be sent.', [
+                'scan_id' => $scan->id,
+                'recipient' => $recipient,
+                'message' => Utf8Sanitizer::cleanExceptionMessage($mailException),
+            ]);
+        }
     }
 
     private function humanizeExtractionFailureReason(\Throwable $exception): string
@@ -2237,6 +2278,7 @@ class OrderAiScanService
                 'note' => $isGrobOrder ? '' : $itemMeta['note'],
             ];
         }, $items, array_keys($items))));
+        $normalizedItems = $this->normalizeTrendyDeItemLineNumbers($normalizedItems, $order);
         $warnings = array_values(array_filter(array_map(function ($warning) {
             return trim((string) $warning);
         }, is_array($order['warnings'] ?? null) ? $order['warnings'] : [])));
@@ -2916,6 +2958,25 @@ class OrderAiScanService
         return implode("\n", array_values(array_filter(array_map(function ($line) {
             return trim((string) (preg_replace('/[ \t]+/u', ' ', (string) $line) ?? $line));
         }, $lines))));
+    }
+
+    /**
+     * Pantheon positions for Trendy Germany orders are consecutive item rows.
+     * Some PDF layouts make the parser read the final digit of a product name
+     * (for example "Grundplatte 01") as every item's source position.
+     */
+    private function normalizeTrendyDeItemLineNumbers(array $items, array $order): array
+    {
+        if (!$this->isTrendyGermanyOrder($order)) {
+            return $items;
+        }
+
+        return array_values(array_map(function ($item, int $index): array {
+            $item = is_array($item) ? $item : [];
+            $item['line_number'] = $index + 1;
+
+            return $item;
+        }, $items, array_keys($items)));
     }
 
     private function isTrendyGermanyOrder(array $order): bool

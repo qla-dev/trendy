@@ -54,7 +54,7 @@ class WorkOrderClosingService
                 throw new RuntimeException('Planirana količina mora biti veća od nule.');
             }
 
-            $preparedOperations = $this->prepareOperations((string) $workOrder['acKey'], $submittedOperations);
+            $preparedOperations = $this->prepareOperations((string) $workOrder['acKey'], $submittedOperations, $producedQuantity);
             /* if (!$preparedOperations['complete']) {
                 $this->markPartiallyClosed($workOrder, $now, $userId);
 
@@ -292,7 +292,7 @@ class WorkOrderClosingService
         return (array) $row;
     }
 
-    private function prepareOperations(string $workOrderKey, array $submitted): array
+    private function prepareOperations(string $workOrderKey, array $submitted, string $producedQuantity): array
     {
         $rows = $this->connection->table('dbo.tHF_WOExItem as wi')
             ->leftJoin('dbo.tHE_SetItem as si', 'si.acIdent', '=', 'wi.acIdent')
@@ -386,7 +386,7 @@ class WorkOrderClosingService
                     throw new RuntimeException('Odabrani radnik ne postoji ili nije aktivan u Pantheonu.');
                 }
 
-                $timing = $this->operationTiming($input);
+                $timing = $this->operationTiming($input, $producedQuantity);
                 $minutesPerUnit = $this->calculator->add($minutesPerUnit, $timing['minutes']);
                 $workerEntries[] = [
                     'worker' => $worker,
@@ -436,7 +436,7 @@ class WorkOrderClosingService
             if ($worker === null) {
                 throw new RuntimeException('Odabrani radnik ne postoji ili nije aktivan u Pantheonu.');
             }
-            $timing = $this->operationTiming($input);
+            $timing = $this->operationTiming($input, $producedQuantity);
             $prepared[] = [
                 'item_qid' => 0,
                 'position' => 0,
@@ -464,11 +464,12 @@ class WorkOrderClosingService
     private function hasCompleteOperationInput(array $input): bool
     {
         $workerId = (int) ($input['worker_id'] ?? 0);
+        $duration = trim((string) ($input['duration'] ?? ''));
         $time = trim((string) ($input['time'] ?? ''));
         $start = trim((string) ($input['start_time'] ?? ''));
         $end = trim((string) ($input['end_time'] ?? ''));
 
-        return $workerId > 0 && ($time !== '' || ($start !== '' && $end !== ''));
+        return $workerId > 0 && ($duration !== '' || $time !== '' || ($start !== '' && $end !== ''));
     }
 
     private function isEmptyOperationInput(array $input): bool
@@ -478,12 +479,13 @@ class WorkOrderClosingService
         // must be treated as an empty placeholder instead of an incomplete
         // operation that blocks the rest of the closing request.
         return (int) ($input['worker_id'] ?? 0) < 1
+            && trim((string) ($input['duration'] ?? '')) === ''
             && trim((string) ($input['time'] ?? '')) === ''
             && trim((string) ($input['start_time'] ?? '')) === ''
             && trim((string) ($input['end_time'] ?? '')) === '';
     }
 
-    private function operationTiming(array $input): array
+    private function operationTiming(array $input, string $producedQuantity): array
     {
         $start = trim((string) ($input['start_time'] ?? ''));
         $end = trim((string) ($input['end_time'] ?? ''));
@@ -492,7 +494,13 @@ class WorkOrderClosingService
             : $this->calculator->normalizeNonNegative($input['downtime'], 'Zastoj');
 
         if ($start === '' && $end === '') {
-            $minutes = $this->calculator->normalizeNonNegative($input['time'] ?? null, 'Vrijeme operacije');
+            $totalDuration = trim((string) ($input['duration'] ?? ''));
+            $minutes = $totalDuration !== ''
+                ? $this->calculator->divide(
+                    $this->calculator->normalizeNonNegative($totalDuration, 'Trajanje'),
+                    $producedQuantity
+                )
+                : $this->calculator->normalizeNonNegative($input['time'] ?? null, 'Trajanje (min/jedinici)');
 
             return [
                 'minutes' => $minutes,
@@ -516,12 +524,13 @@ class WorkOrderClosingService
             throw new RuntimeException('Završno vrijeme ne može biti prije početnog vremena.');
         }
 
-        // Calculate server-side instead of trusting the browser's computed value.
+        // Start/end is the row's total elapsed labour time. Convert it to the
+        // per-piece duration required by Pantheon's quantity-scaled 6600 line.
         return [
-            'minutes' => $this->netOperationMinutes(
+            'minutes' => $this->calculator->divide($this->netOperationMinutes(
                 (string) (($endMinutes - $startMinutes) - $this->breakOverlapMinutes($startMinutes, $endMinutes)),
                 $downtime
-            ),
+            ), $producedQuantity),
             'downtime' => $downtime,
             'start_time' => $this->formatClockMinutes($startMinutes),
             'end_time' => $this->formatClockMinutes($endMinutes),
