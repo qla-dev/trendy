@@ -26,6 +26,26 @@ class WorkOrderClosingValidationTest extends TestCase
         }
     }
 
+    public function test_duration_and_per_unit_duration_allow_up_to_four_decimals(): void
+    {
+        $rules = (new CloseWorkOrderRequest())->rules();
+        $valid = Validator::make(['operations' => [[
+            'item_qid' => 10,
+            'worker_id' => 20,
+            'duration' => '80.1234',
+            'time' => '40.0617',
+        ]]], $rules);
+        $invalid = Validator::make(['operations' => [[
+            'item_qid' => 10,
+            'worker_id' => 20,
+            'duration' => '80.12345',
+            'time' => '40.0617',
+        ]]], $rules);
+
+        $this->assertFalse($valid->fails());
+        $this->assertTrue($invalid->fails());
+    }
+
     public function test_optional_downtime_accepts_non_negative_minutes(): void
     {
         $validator = Validator::make(['operations' => [[
@@ -104,6 +124,17 @@ class WorkOrderClosingValidationTest extends TestCase
         $method->setAccessible(true);
 
         $this->assertSame('10.000000', $method->invoke($service, '5.000000', '2.000000'));
+    }
+
+    public function test_total_duration_is_converted_to_minutes_per_unit_server_side(): void
+    {
+        $service = $this->closingServiceWithoutDependencies();
+        $method = (new ReflectionClass($service))->getMethod('operationTiming');
+        $method->setAccessible(true);
+
+        $timing = $method->invoke($service, ['duration' => '80', 'time' => ''], '2');
+
+        $this->assertSame('40.000000', $timing['minutes']);
     }
 
     public function test_scrap_can_make_total_receipt_quantity_higher_than_the_work_order_plan(): void

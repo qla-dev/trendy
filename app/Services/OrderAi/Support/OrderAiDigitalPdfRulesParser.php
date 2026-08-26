@@ -4,7 +4,7 @@ namespace App\Services\OrderAi\Support;
 
 use App\Models\OrderAiScan;
 use App\Support\Utf8Sanitizer;
-use Illuminate\Support\Facades\Log;
+use App\Support\AiScanLog as Log;
 use Illuminate\Support\Str;
 
 class OrderAiDigitalPdfRulesParser

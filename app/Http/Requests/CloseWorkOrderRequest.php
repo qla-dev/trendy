@@ -29,7 +29,7 @@ class CloseWorkOrderRequest extends FormRequest
                 // not let it turn an otherwise complete close into a partial
                 // close. Keep rows that contain any actual work input; the
                 // closing service then validates the required combination.
-                foreach (['worker_id', 'time', 'start_time', 'end_time', 'downtime'] as $field) {
+                foreach (['worker_id', 'duration', 'time', 'start_time', 'end_time', 'downtime'] as $field) {
                     if (trim((string) ($operation[$field] ?? '')) !== '') {
                         return true;
                     }
@@ -89,7 +89,8 @@ class CloseWorkOrderRequest extends FormRequest
             // Empty worker/time rows are valid partial-close input. When every
             // row is complete, the closing service creates final documents.
             'operations.*.worker_id' => ['nullable', 'integer', 'min:1'],
-            'operations.*.time' => ['nullable', 'regex:/^(?:0|[1-9]\d*)(?:[.,]\d+)?$/'],
+            'operations.*.duration' => ['nullable', 'regex:/^(?:0|[1-9]\d*)(?:[.,]\d{1,4})?$/'],
+            'operations.*.time' => ['nullable', 'regex:/^(?:0|[1-9]\d*)(?:[.,]\d{1,4})?$/'],
             'operations.*.downtime' => ['nullable', 'regex:/^(?:0|[1-9]\d*)(?:[.,]\d+)?$/'],
             'operations.*.start_time' => ['nullable', 'regex:/^(?:[01]\d|2[0-3]):[0-5]\d$/'],
             'operations.*.end_time' => ['nullable', 'regex:/^(?:[01]\d|2[0-3]):[0-5]\d$/'],
@@ -111,6 +112,7 @@ class CloseWorkOrderRequest extends FormRequest
             'operations.*.worker_id.required' => 'Radnik je obavezan za svaku operaciju.',
             'operations.*.time.required' => 'Vrijeme je obavezno za svaku operaciju.',
             'operations.*.time.regex' => 'Vrijeme mora biti nenegativan broj.',
+            'operations.*.duration.regex' => 'Trajanje mora imati najviše četiri decimale.',
         ];
     }
 

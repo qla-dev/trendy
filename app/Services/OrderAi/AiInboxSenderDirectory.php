@@ -3,7 +3,7 @@
 namespace App\Services\OrderAi;
 
 use App\Models\AiInboxWhitelistEntry;
-use Illuminate\Support\Facades\Log;
+use App\Support\AiScanLog as Log;
 use Illuminate\Support\Facades\Schema;
 
 class AiInboxSenderDirectory

@@ -5,7 +5,7 @@ namespace App\Services\OrderAi;
 use App\Models\OrderAiScan;
 use App\Support\Utf8Sanitizer;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Log;
+use App\Support\AiScanLog as Log;
 use RuntimeException;
 use Throwable;
 use Webklex\PHPIMAP\Attachment;

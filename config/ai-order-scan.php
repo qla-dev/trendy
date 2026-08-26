@@ -129,6 +129,7 @@ $trendyDePromptRules = <<<'PROMPT'
 PROMPT;
 
 return [
+    'transfer_failure_recipient' => env('AI_ORDER_SCAN_TRANSFER_FAILURE_RECIPIENT', 'colakovicvedad1607@gmail.com'),
     'provider' => env('AI_ORDER_SCAN_PROVIDER', 'mock'),
     'model' => env('AI_ORDER_SCAN_MODEL', 'gpt-5'),
     'timeout' => (int) env('AI_ORDER_SCAN_TIMEOUT', 120),

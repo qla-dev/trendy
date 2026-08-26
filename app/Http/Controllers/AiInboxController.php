@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\OrderAiScan;
 use App\Services\OrderAi\AiInboxImportService;
 use App\Services\OrderAi\AiInboxSenderDirectory;
+use App\Support\AiScanLog as Log;
 use App\Support\Utf8Sanitizer;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\JsonResponse;
@@ -12,7 +13,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class AiInboxController extends Controller

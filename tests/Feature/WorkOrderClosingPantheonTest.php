@@ -440,12 +440,12 @@ class WorkOrderClosingPantheonTest extends TestCase
 
             $this->assertCount(1, $documentItems);
             $this->assertSame(
-                bcmul('35', $producedQuantity, 6),
+                '35.000000',
                 number_format((float) $documentItems->first()->anQty, 6, '.', '')
             );
             $this->assertCount(2, $workerEntries);
-            $this->assertSame(['15.000000', '20.000000'], $workerEntries->pluck('anTime')->sort()->values()->all());
-            $this->assertSame(['15.000000', '20.000000'], $workerEntries->pluck('anTn')->sort()->values()->all());
+            $this->assertSame([bcdiv('15', $producedQuantity, 6), bcdiv('20', $producedQuantity, 6)], $workerEntries->pluck('anTime')->sort()->values()->all());
+            $this->assertSame([bcdiv('15', $producedQuantity, 6), bcdiv('20', $producedQuantity, 6)], $workerEntries->pluck('anTn')->sort()->values()->all());
         } finally {
             while ($this->pantheon->transactionLevel() > 0) {
                 $this->pantheon->rollBack();
@@ -479,8 +479,8 @@ class WorkOrderClosingPantheonTest extends TestCase
                 ->where('acLnkKey', $operationDocument['document_key'])
                 ->first(['anTn', 'adBeginTime', 'adEndTime']);
 
-            $this->assertSame(bcmul('30', $producedQuantity, 6), number_format((float) $item->anQty, 6, '.', ''));
-            $this->assertSame('30.000000', (string) $workerEntry->anTn);
+            $this->assertSame('30.000000', number_format((float) $item->anQty, 6, '.', ''));
+            $this->assertSame(bcdiv('30', $producedQuantity, 6), (string) $workerEntry->anTn);
             $this->assertStringContainsString('10:14:00', (string) $workerEntry->adBeginTime);
             $this->assertStringContainsString('11:00:00', (string) $workerEntry->adEndTime);
         } finally {

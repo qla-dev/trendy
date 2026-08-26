@@ -3,7 +3,7 @@
 namespace App\Services\OrderAi\Support;
 
 use App\Support\Utf8Sanitizer;
-use Illuminate\Support\Facades\Log;
+use App\Support\AiScanLog as Log;
 use Illuminate\Support\Str;
 use Smalot\PdfParser\Config as PdfParserConfig;
 use Smalot\PdfParser\Page;

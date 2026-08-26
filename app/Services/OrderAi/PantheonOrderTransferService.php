@@ -9,7 +9,7 @@ use App\Models\Product;
 use App\Support\Utf8Sanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
+use App\Support\AiScanLog as Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -1515,7 +1515,11 @@ class PantheonOrderTransferService
     {
         // GROB PDF positions are source labels (typically 10, 20, 30, ...),
         // while Pantheon order items must be numbered consecutively.
-        if ($this->isGrobOrder($order)) {
+        // Trendy Germany PDFs frequently contain a visual Pos. column but no
+        // usable value for each row. The PDF rules parser then reports every
+        // item as position 1, which violates Pantheon's unique (acKey, anNo)
+        // index. The scan item order is the reliable position for both formats.
+        if ($this->isGrobOrder($order) || $this->isTrendyGermanyOrder($order)) {
             return max(1, $fallback);
         }
 

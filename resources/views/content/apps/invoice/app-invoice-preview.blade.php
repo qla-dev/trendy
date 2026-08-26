@@ -150,6 +150,23 @@
   .wo-close-table .form-control {
     min-width: 180px;
   }
+  .wo-close-table .wo-close-duration,
+  .wo-close-table .wo-close-time,
+  .wo-close-table .wo-close-downtime {
+    min-width: 148px;
+    width: 148px;
+  }
+  .wo-close-table .wo-close-actions-column {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    min-width: 112px;
+    background: var(--bs-body-bg, #fff);
+    box-shadow: -8px 0 10px -10px rgba(0, 0, 0, 0.55);
+  }
+  .wo-close-table thead .wo-close-actions-column {
+    z-index: 3;
+  }
   .wo-close-clock-fields {
     display: inline-flex;
     align-items: center;
@@ -285,7 +302,9 @@
   .wo-close-clock-break,
   .wo-close-clock-break:focus,
   .wo-close-time.wo-close-time-error,
-  .wo-close-time.wo-close-time-error:focus {
+  .wo-close-time.wo-close-time-error:focus,
+  .wo-close-duration.wo-close-time-error,
+  .wo-close-duration.wo-close-time-error:focus {
     border-color: #ea5455 !important;
     background-image: none !important;
     box-shadow: 0 0 0 0.2rem rgba(234, 84, 85, 0.15) !important;
@@ -2704,9 +2723,10 @@
                     <th>Radnik</th>
                     <th>Početak izrade</th>
                     <th>Kraj izrade</th>
-                    <th>Trajanje (min/jedinica)</th>
+                    <th>Trajanje (min)</th>
+                    <th>Trajanje (min/jed)</th>
                     <th>Zastoj (min)</th>
-                    <th class="text-center">Akcije</th>
+                    <th class="text-center wo-close-actions-column">Akcije</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2745,11 +2765,14 @@
                         <div class="text-danger wo-close-break-error wo-close-end-break-error">Ovo je vrijeme tokom pauze.</div>
                       </td>
                       <td>
-                        <input class="form-control wo-close-time" type="text" inputmode="decimal" placeholder="Minute" autocomplete="off" aria-label="Trajanje u minutama po jedinici">
-                        <div class="text-danger wo-close-operation-error">Unesite oba vremena ili nenegativan broj minuta. Završno vrijeme ne može biti prije početnog.</div>
+                        <input class="form-control wo-close-duration" type="text" inputmode="decimal" placeholder="Ukupno min." autocomplete="off" aria-label="Ukupno trajanje u minutama">
+                        <div class="text-danger wo-close-operation-error">Unesite oba vremena ili nenegativno trajanje. Završno vrijeme ne može biti prije početnog.</div>
+                      </td>
+                      <td>
+                        <input class="form-control wo-close-time" type="text" inputmode="decimal" placeholder="Min./jed." autocomplete="off" aria-label="Trajanje u minutama po jedinici">
                       </td>
                       <td><input class="form-control wo-close-downtime" type="text" inputmode="decimal" placeholder="Opcionalno" autocomplete="off" aria-label="Zastoj u minutama"></td>
-                      <td class="text-center">
+                      <td class="text-center wo-close-actions-column">
                         <div class="wo-close-action-buttons">
                           <button type="button" class="wo-close-copy-row-btn" title="Kopiraj red" aria-label="Kopiraj red"><i class="fa fa-copy" aria-hidden="true"></i></button>
                           <button type="button" class="btn btn-outline-secondary btn-sm wo-close-clear-row-btn" title="Očisti red" aria-label="Očisti red"><i class="fa fa-eraser" aria-hidden="true"></i></button>
@@ -3334,22 +3357,69 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       });
     }
 
+    var closeWorkOrderQuantity = Number(@json($workOrder['kolicina'] ?? 0));
+
+    function operationQuantity() {
+      return Number.isFinite(closeWorkOrderQuantity) && closeWorkOrderQuantity > 0 ? closeWorkOrderQuantity : 0;
+    }
+
+    function parseOperationDuration(value) {
+      var normalized = String(value || '').trim().replace(',', '.');
+      if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(normalized)) {
+        return null;
+      }
+      var parsed = Number(normalized);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+    }
+
+    function formatOperationDuration(value) {
+      if (!Number.isFinite(value) || value < 0) {
+        return '';
+      }
+      return String(Math.round(value * 10000) / 10000).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+    }
+
+    function syncPerUnitDuration(row) {
+      var duration = row.querySelector('.wo-close-duration');
+      var time = row.querySelector('.wo-close-time');
+      var quantity = operationQuantity();
+      var totalMinutes = parseOperationDuration(duration && duration.value);
+      if (!duration || !time || quantity <= 0 || totalMinutes === null) {
+        if (time && totalMinutes === null) time.value = '';
+        return;
+      }
+      time.value = formatOperationDuration(totalMinutes / quantity);
+    }
+
+    function syncTotalDuration(row) {
+      var duration = row.querySelector('.wo-close-duration');
+      var time = row.querySelector('.wo-close-time');
+      var quantity = operationQuantity();
+      var minutesPerUnit = parseOperationDuration(time && time.value);
+      if (!duration || !time || quantity <= 0 || minutesPerUnit === null) {
+        if (duration && minutesPerUnit === null) duration.value = '';
+        return;
+      }
+      duration.value = formatOperationDuration(minutesPerUnit * quantity);
+    }
+
     function validateWorkOrderClosing(showErrors) {
       var rows = Array.prototype.slice.call(document.querySelectorAll('.wo-close-operation-row[data-item-qid]'));
       var allValid = rows.length > 0;
       var numericPattern = /^(?:0|[1-9]\d*)(?:[.,]\d+)?$/;
 
       rows.forEach(function (row) {
-        var worker = row.querySelector('.wo-close-worker');
+        var duration = row.querySelector('.wo-close-duration');
         var time = row.querySelector('.wo-close-time');
         var downtime = row.querySelector('.wo-close-downtime');
+        var durationValue = duration ? String(duration.value || '').trim() : '';
         var timeValue = time ? String(time.value || '').trim() : '';
         var downtimeValue = downtime ? String(downtime.value || '').trim() : '';
         var startValue = readClockFieldValue(row, 'start');
         var endValue = readClockFieldValue(row, 'end');
         var hasClockInput = startValue !== '' || endValue !== '';
         var timeValid = !hasClockInput
-          ? (timeValue === '' || numericPattern.test(timeValue))
+          ? (timeValue === '' || (numericPattern.test(timeValue) && numericPattern.test(durationValue)))
           : (startValue !== null && endValue !== null && startValue !== '' && endValue !== '' && operationTimeRangeIsValid(row));
         var downtimeValid = downtimeValue === '' || numericPattern.test(downtimeValue);
         if (timeValid && downtimeValid && hasClockInput) {
@@ -3363,10 +3433,16 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           if (time) {
             time.classList.toggle('wo-close-time-error', !timeValid);
           }
+          if (duration) {
+            duration.classList.toggle('wo-close-time-error', !timeValid);
+          }
         } else if (timeValid && downtimeValid) {
           row.classList.remove('is-invalid');
           if (time) {
             time.classList.remove('wo-close-time-error');
+          }
+          if (duration) {
+            duration.classList.remove('wo-close-time-error');
           }
         }
       });
@@ -3511,10 +3587,11 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     }
 
     function syncOperationTime(row) {
+      var duration = row.querySelector('.wo-close-duration');
       var time = row.querySelector('.wo-close-time');
       var downtime = row.querySelector('.wo-close-downtime');
 
-      if (!time) {
+      if (!duration || !time) {
         return;
       }
 
@@ -3524,18 +3601,21 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       if (startValue !== null && endValue !== null && startValue !== '' && endValue !== '') {
         var startMinutes = clockMinutes(startValue);
         var endMinutes = clockMinutes(endValue);
+        duration.readOnly = true;
         time.readOnly = true;
         time.classList.toggle('wo-close-time-error', startMinutes === null || endMinutes === null || endMinutes < startMinutes);
         var grossMinutes = (endMinutes - startMinutes) - breakOverlapMinutes(startMinutes, endMinutes);
         var downtimeMinutes = Number(String((downtime || {}).value || '').trim().replace(',', '.') || 0);
         var netMinutes = grossMinutes - downtimeMinutes;
         time.classList.toggle('wo-close-time-error', startMinutes === null || endMinutes === null || endMinutes < startMinutes || !Number.isFinite(downtimeMinutes) || netMinutes < 0);
-        time.value = startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes && Number.isFinite(downtimeMinutes) && netMinutes >= 0
-          ? String(netMinutes)
+        duration.value = startMinutes !== null && endMinutes !== null && endMinutes >= startMinutes && Number.isFinite(downtimeMinutes) && netMinutes >= 0
+          ? formatOperationDuration(netMinutes)
           : '';
+        syncPerUnitDuration(row);
         return;
       }
 
+      duration.readOnly = false;
       time.readOnly = false;
       time.classList.toggle('wo-close-time-error', startValue !== '' || endValue !== '');
     }
@@ -3665,7 +3745,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       }
 
       return Array.prototype.slice.call(root.querySelectorAll(
-        '.wo-close-operation-code, .wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-downtime, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn'
+        '.wo-close-operation-code, .wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-duration, .wo-close-time, .wo-close-downtime, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn'
       )).filter(function (element) {
         return !element.disabled && element.offsetParent !== null;
       });
@@ -3753,12 +3833,17 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       if (clearValues) {
         var workerSearch = copiedRow.querySelector('.wo-close-worker-search');
         var worker = copiedRow.querySelector('.wo-close-worker');
+        var duration = copiedRow.querySelector('.wo-close-duration');
         var time = copiedRow.querySelector('.wo-close-time');
         var downtime = copiedRow.querySelector('.wo-close-downtime');
         if (workerSearch) workerSearch.value = '';
         if (worker) worker.value = '';
         setClockFieldValue(copiedRow, 'start', '');
         setClockFieldValue(copiedRow, 'end', '');
+        if (duration) {
+          duration.value = '';
+          duration.readOnly = false;
+        }
         if (time) {
           time.value = '';
           time.readOnly = false;
@@ -4122,6 +4207,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
             item_qid: itemQid > 0 ? itemQid : null,
             code: String((row.querySelector('.wo-close-operation-code') || {}).value || '').trim().toUpperCase(),
             worker_id: workerId > 0 ? workerId : null,
+            duration: String((row.querySelector('.wo-close-duration') || {}).value || '').trim().replace(',', '.'),
             time: String((row.querySelector('.wo-close-time') || {}).value || '').trim().replace(',', '.'),
             downtime: String((row.querySelector('.wo-close-downtime') || {}).value || '').trim().replace(',', '.'),
             start_time: String((row.querySelector('.wo-close-start-time') || {}).value || '').trim(),
@@ -4130,7 +4216,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         }).filter(function (operation) {
           // A selected code without worker, duration, or time range is just a
           // placeholder. Do not submit it or let it block complete rows.
-          return [operation.worker_id, operation.time, operation.downtime, operation.start_time, operation.end_time]
+          return [operation.worker_id, operation.duration, operation.time, operation.downtime, operation.start_time, operation.end_time]
             .some(function (value) { return String(value || '').trim() !== ''; });
         }),
         materials: Array.prototype.slice.call(document.querySelectorAll('#close-work-order-materials-table tbody tr')).map(function (row) {
@@ -4173,6 +4259,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       return [
         (row.querySelector('.wo-close-worker-search') || {}).value,
         (row.querySelector('.wo-close-worker') || {}).value,
+        (row.querySelector('.wo-close-duration') || {}).value,
         (row.querySelector('.wo-close-time') || {}).value,
         (row.querySelector('.wo-close-downtime') || {}).value,
         (row.querySelector('.wo-close-start-hour') || {}).value,
@@ -4283,11 +4370,17 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           syncOperationTime(row);
         }
 
-        if (target.classList.contains('wo-close-time')) {
+        if (target.classList.contains('wo-close-duration')) {
           normalizeManualDuration(target);
+          syncPerUnitDuration(row);
         }
 
-        if (target.classList.contains('wo-close-time') || target.classList.contains('wo-close-downtime') || target.matches('.wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute') || target.classList.contains('wo-close-worker-search')) {
+        if (target.classList.contains('wo-close-time')) {
+          normalizeManualDuration(target);
+          syncTotalDuration(row);
+        }
+
+        if (target.classList.contains('wo-close-duration') || target.classList.contains('wo-close-time') || target.classList.contains('wo-close-downtime') || target.matches('.wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute') || target.classList.contains('wo-close-worker-search')) {
           validateWorkOrderClosing(false);
         }
       });
@@ -4339,7 +4432,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         }
 
         var field = event.target;
-        if (!field || !field.matches('.wo-close-operation-code, .wo-close-material-code, .wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-downtime, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn')) {
+        if (!field || !field.matches('.wo-close-operation-code, .wo-close-material-code, .wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-duration, .wo-close-time, .wo-close-downtime, .wo-close-copy-row-btn, .wo-close-clear-row-btn, .wo-close-delete-row-btn')) {
           return;
         }
 
@@ -4370,7 +4463,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           }
         }
 
-        if (event.key === 'Enter' && field.matches('.wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-time, .wo-close-downtime')) {
+        if (event.key === 'Enter' && field.matches('.wo-close-worker-search, .wo-close-start-hour, .wo-close-start-minute, .wo-close-end-hour, .wo-close-end-minute, .wo-close-duration, .wo-close-time, .wo-close-downtime')) {
           event.preventDefault();
           moveToNextClosingFieldInRow(field);
           return;
@@ -4421,10 +4514,16 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           var rowToClear = clearButton.closest('.wo-close-operation-row');
           var clearedWorkerSearch = rowToClear.querySelector('.wo-close-worker-search');
           var clearedWorker = rowToClear.querySelector('.wo-close-worker');
+          var clearedDuration = rowToClear.querySelector('.wo-close-duration');
           var clearedTime = rowToClear.querySelector('.wo-close-time');
           var clearedDowntime = rowToClear.querySelector('.wo-close-downtime');
           if (clearedWorkerSearch) clearedWorkerSearch.value = '';
           if (clearedWorker) clearedWorker.value = '';
+          if (clearedDuration) {
+            clearedDuration.value = '';
+            clearedDuration.readOnly = false;
+            clearedDuration.classList.remove('wo-close-time-error');
+          }
           if (clearedTime) {
             clearedTime.value = '';
             clearedTime.readOnly = false;
