@@ -4816,18 +4816,23 @@ class OrderAiScanService
         $normalized = $this->normalizeKeywordText($value);
 
         return str_contains($normalized, 'liefertermin')
+            // Some Trendy Germany digital PDFs lose the second "e" while
+            // their positioned text rows are assembled.
+            || str_contains($normalized, 'liferetermin')
             || str_contains($normalized, 'lieferdatum');
     }
 
     private function extractDateForTrendyDeDeliveryLabel(string $value): string
     {
         return $this->extractDateForProfileLabel($value, 'Liefertermin')
+            ?: $this->extractDateForProfileLabel($value, 'Liferetermin')
             ?: $this->extractDateForProfileLabel($value, 'Lieferdatum');
     }
 
     private function extractDateAfterTrendyDeDeliveryLabel(string $value): string
     {
         return $this->extractDateAfterProfileLabel($value, 'Liefertermin')
+            ?: $this->extractDateAfterProfileLabel($value, 'Liferetermin')
             ?: $this->extractDateAfterProfileLabel($value, 'Lieferdatum');
     }
 
@@ -5587,17 +5592,19 @@ class OrderAiScanService
     private function extractTrendyDeItemDeliveryDeadlines(array $processedPages, string $searchableText): array
     {
         $searchableLines = $this->splitVisibleTextLines($searchableText);
+        $structuredDeadlines = $this->extractTrendyDeItemDeliveryDeadlinesFromLines(
+            $this->flattenTrendyDeContextLines($processedPages, $searchableText)
+        );
 
-        if ($searchableLines !== []) {
-            $deadlines = $this->extractTrendyDeItemDeliveryDeadlinesFromLines($searchableLines);
-
-            if ($deadlines !== []) {
-                return $deadlines;
-            }
+        if ($searchableLines === []) {
+            return $structuredDeadlines;
         }
 
-        return $this->extractTrendyDeItemDeliveryDeadlinesFromLines(
-            $this->flattenTrendyDeContextLines($processedPages, $searchableText)
+        // Prefer the raw searchable text when both sources identify the same
+        // item, but retain deadlines recovered only from positioned rows.
+        return array_replace(
+            $structuredDeadlines,
+            $this->extractTrendyDeItemDeliveryDeadlinesFromLines($searchableLines)
         );
     }
 
@@ -5607,6 +5614,7 @@ class OrderAiScanService
         $currentLineNumber = 0;
         $currentProductCode = '';
         $pendingDeliveryLabel = false;
+        $codeFirstItemCount = 0;
 
         foreach ($lines as $line) {
             $line = trim((string) $line);
@@ -5615,11 +5623,41 @@ class OrderAiScanService
                 continue;
             }
 
+            $codeFirstItemStart = $this->parseTrendyDeCodeFirstItemStartText($line);
+
+            if ($codeFirstItemStart !== null) {
+                $shiftedDeliveryDeadline = $this->extractDateForTrendyDeDeliveryLabel($line);
+
+                // Smalot's positioned-row output can place an item's
+                // Liefertermin in the next product's amount row. Record that
+                // date against the item that was open before advancing.
+                if (
+                    $shiftedDeliveryDeadline !== ''
+                    && ($currentLineNumber > 0 || $currentProductCode !== '')
+                ) {
+                    $this->recordTrendyDeItemDeliveryDeadline(
+                        $deadlines,
+                        $currentLineNumber,
+                        $currentProductCode,
+                        $shiftedDeliveryDeadline
+                    );
+                }
+
+                $codeFirstItemCount++;
+                $currentLineNumber = $codeFirstItemCount;
+                $currentProductCode = $this->normalizeScannedProductCode(
+                    (string) ($codeFirstItemStart['product_code'] ?? '')
+                );
+                $pendingDeliveryLabel = false;
+                continue;
+            }
+
             $itemStart = $this->parseTrendyDeItemStartText($line);
 
             if ($itemStart !== null) {
                 $currentLineNumber = (int) ($itemStart['line_number'] ?? 0);
                 $currentProductCode = $this->normalizeScannedProductCode((string) ($itemStart['product_code'] ?? ''));
+                $codeFirstItemCount = max($codeFirstItemCount, $currentLineNumber);
                 $pendingDeliveryLabel = false;
                 continue;
             }
@@ -5665,6 +5703,33 @@ class OrderAiScanService
         }
 
         return $deadlines;
+    }
+
+    private function parseTrendyDeCodeFirstItemStartText(string $line): ?array
+    {
+        $line = trim($line);
+
+        if (
+            preg_match('/^(' . $this->trendyDeProductCodePattern() . ')\s+(.+)$/u', $line, $matches) !== 1
+        ) {
+            return null;
+        }
+
+        $normalized = $this->normalizeKeywordText($line);
+        $remainder = trim((string) ($matches[2] ?? ''));
+
+        if (
+            !str_contains($normalized, 'betrag')
+            || !str_contains($normalized, 'vat %')
+            || preg_match('/\b(?:STU|ST|PCS|PIECE|KO)\b/u', $remainder) !== 1
+            || preg_match_all('/' . $this->compactGermanAmountPattern() . '/u', $remainder) < 3
+        ) {
+            return null;
+        }
+
+        return [
+            'product_code' => trim((string) ($matches[1] ?? '')),
+        ];
     }
 
     private function recordTrendyDeItemDeliveryDeadline(

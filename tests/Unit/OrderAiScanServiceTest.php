@@ -872,6 +872,77 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('27.07.2026', $deadlines['code:EVE280A675030']);
     }
 
+    public function test_trendy_de_item_deadline_map_recovers_dates_when_all_sources_use_shifted_code_first_rows(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('extractTrendyDeItemDeliveryDeadlines');
+        $method->setAccessible(true);
+
+        $lines = [
+            'Anlieferadresse: Lieferant: Artikel Nr. Pos. Beschreibung Menge EK-Preis Einheit',
+            '16.22031-2304 44,00 0,00 Betrag 1,00 VAT % STU 44,00',
+            'HALTER',
+            '1',
+            'RAL: 7015 (SCHIEFERGRAU)',
+            '16.22031-2305 90,00 0,00 Betrag 2,00 Liferetermin: 14.09.2026 VAT % STU 45,00',
+            'HALTER LINKS',
+            '2',
+            'RAL: 7015 (SCHIEFERGRAU)',
+            '16.22031-2306 48,00 0,00 Betrag 1,00 Liferetermin: 21.09.2026 VAT % STU 48,00',
+            'HALTER RECHTS',
+            '3',
+            'Liferetermin: 28.09.2026',
+        ];
+
+        $deadlines = $method->invoke($service, [[
+            'lines' => $lines,
+            'text' => implode("\n", $lines),
+            'items' => [],
+        ]], implode("\n", $lines));
+
+        $this->assertSame('14.09.2026', $deadlines['line:1']);
+        $this->assertSame('14.09.2026', $deadlines['code:16.22031-2304']);
+        $this->assertSame('21.09.2026', $deadlines['line:2']);
+        $this->assertSame('21.09.2026', $deadlines['code:16.22031-2305']);
+        $this->assertSame('28.09.2026', $deadlines['line:3']);
+        $this->assertSame('28.09.2026', $deadlines['code:16.22031-2306']);
+
+        $postProcessMethod = $reflection->getMethod('postProcessTrendyDeItems');
+        $postProcessMethod->setAccessible(true);
+        $items = $postProcessMethod->invoke($service, [
+            [
+                'line_number' => 1,
+                'product_code' => '16.22031-2304',
+                'product_name' => 'HALTER',
+                'quantity' => 1,
+                'unit_price' => 44,
+                'line_total' => 44,
+            ],
+            [
+                'line_number' => 2,
+                'product_code' => '16.22031-2305',
+                'product_name' => 'HALTER LINKS',
+                'quantity' => 2,
+                'unit_price' => 45,
+                'line_total' => 90,
+            ],
+            [
+                'line_number' => 3,
+                'product_code' => '16.22031-2306',
+                'product_name' => 'HALTER RECHTS',
+                'quantity' => 1,
+                'unit_price' => 48,
+                'line_total' => 48,
+            ],
+        ], '', $deadlines, false, []);
+
+        $this->assertSame(
+            ['14.09.2026', '21.09.2026', '28.09.2026'],
+            array_column($items, 'delivery_deadline')
+        );
+    }
+
     public function test_trendy_de_items_do_not_keep_ai_datum_deadline_when_source_context_is_available(): void
     {
         $service = app(OrderAiScanService::class);
