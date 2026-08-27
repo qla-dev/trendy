@@ -2841,6 +2841,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
                       <th>Količina</th>
                       <th>JM</th>
                       <th>Jed. cijena</th>
+                      <th>Rok isporuke</th>
                       <th class="order-ai-wrap">Total provjera</th>
                       <th class="order-ai-weight-cell">Težina</th>
                     </tr>
@@ -4744,6 +4745,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
               <td>${escapeHtml(formatAmount(item.quantity || 0))}</td>
               <td>${escapeHtml(item.unit || '-')}</td>
               <td>${escapeHtml(formatAmount(item.unit_price || 0))}</td>
+              <td>${escapeHtml(item.delivery_deadline || '-')}</td>
               <td class="order-ai-wrap">
                 <button
                   type="button"
@@ -5844,6 +5846,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
               <td>${escapeHtml(formatAmount(item.quantity || 0))}</td>
               <td>${escapeHtml(item.unit || '-')}</td>
               <td>${escapeHtml(formatAmount(item.unit_price || 0))}</td>
+              <td>${escapeHtml(item.delivery_deadline || '-')}</td>
               <td class="order-ai-wrap">
                 <button
                   type="button"
@@ -7037,6 +7040,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
               <td>${quantityMarkup}</td>
               <td>${unitMarkup}</td>
               <td>${unitPriceMarkup}</td>
+              <td>${escapeHtml(item.delivery_deadline || '-')}</td>
               <td class="order-ai-wrap">
                 <button
                   type="button"

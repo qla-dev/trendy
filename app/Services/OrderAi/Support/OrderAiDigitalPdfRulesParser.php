@@ -2978,18 +2978,23 @@ class OrderAiDigitalPdfRulesParser
         $normalized = $this->normalizeKeywordText($value);
 
         return str_contains($normalized, 'liefertermin')
+            // Some Trendy Germany digital PDFs lose the second "e" while
+            // their positioned text rows are assembled.
+            || str_contains($normalized, 'liferetermin')
             || str_contains($normalized, 'lieferdatum');
     }
 
     private function extractDateForTrendyDeDeliveryLabel(string $value): string
     {
         return $this->extractDateForProfileLabel($value, 'Liefertermin')
+            ?: $this->extractDateForProfileLabel($value, 'Liferetermin')
             ?: $this->extractDateForProfileLabel($value, 'Lieferdatum');
     }
 
     private function extractDateAfterTrendyDeDeliveryLabel(string $value): string
     {
         return $this->extractDateAfterProfileLabel($value, 'Liefertermin')
+            ?: $this->extractDateAfterProfileLabel($value, 'Liferetermin')
             ?: $this->extractDateAfterProfileLabel($value, 'Lieferdatum');
     }
 
