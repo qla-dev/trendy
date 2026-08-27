@@ -125,17 +125,18 @@ class PantheonOperationDocumentService
 
                 $workEntryNo++;
                 // The 6600 line carries total operation minutes and remains
-                // quantity-scaled. Pantheon's individual worker-time rows
-                // must instead carry the per-piece duration entered for that
-                // worker, the same value as anTn.
+                // quantity-scaled. On Pantheon's individual worker-time row,
+                // anTn is the per-piece duration, while anTime is the
+                // corresponding total duration for the closed quantity.
                 $workerMinutesPerPiece = (string) ($workerEntry['minutes_per_unit'] ?? '0');
+                $workerTotalMinutes = $this->calculator->multiply($workerMinutesPerPiece, $producedQuantity);
 
                 $connection->table('dbo.tHF_WOExItemWork')->insert([
                     'acWorker' => (string) ($workerEntry['worker']['worker'] ?? ''),
                     'acIdent' => $operation['code'],
                     'anQty' => 0,
                     'anPlanQty' => 0,
-                    'anTime' => $workerMinutesPerPiece,
+                    'anTime' => $workerTotalMinutes,
                     'adDate' => $now->copy()->startOfDay(),
                     'adTimeChg' => $now,
                     'anUserChg' => $userId,
@@ -181,20 +182,25 @@ class PantheonOperationDocumentService
                 $resource = $connection->table('dbo.tHF_WOExItemResources')
                     ->where('anWOExItemQId', (int) $operation['item_qid'])
                     ->first(['anPlanQty']);
-                $plannedMinutes = is_numeric((string) ($resource->anPlanQty ?? null))
+                $plannedMinutesPerUnit = is_numeric((string) ($resource->anPlanQty ?? null))
                     ? (float) $resource->anPlanQty
                     : 0.0;
-                $completedMinutes = (float) $operation['consumedMinutes'];
-                $executionPercent = $plannedMinutes > 0
-                    ? min(100.0, ($completedMinutes / $plannedMinutes) * 100)
+                // Resource Tn belongs to this operation only. It is the
+                // operation's combined worker minutes per produced piece,
+                // not a sum of the other operations on the work order.
+                $completedMinutesPerUnit = (float) $operation['minutesPerUnit'];
+                $executionPercent = $plannedMinutesPerUnit > 0
+                    ? min(100.0, ($completedMinutesPerUnit / $plannedMinutesPerUnit) * 100)
                     : 100.0;
 
                 $connection->table('dbo.tHF_WOExItemResources')
                     ->where('anWOExItemQId', (int) $operation['item_qid'])
                     ->update([
-                        'anQty' => $operation['consumedMinutes'],
-                        'anPlanQty' => $plannedMinutes > 0 ? $plannedMinutes : $operation['consumedMinutes'],
-                        'anQty1' => $operation['consumedMinutes'],
+                        'anQty' => $operation['minutesPerUnit'],
+                        'anPlanQty' => $plannedMinutesPerUnit > 0
+                            ? $plannedMinutesPerUnit
+                            : $operation['minutesPerUnit'],
+                        'anQty1' => $operation['minutesPerUnit'],
                         'acIssueFinished' => $executionPercent >= 100 ? 'Y' : 'N',
                         'anExecutionPerc' => $executionPercent,
                         'adTimeChg' => $now,
