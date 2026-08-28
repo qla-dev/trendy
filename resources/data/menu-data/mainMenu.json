@@ -39,6 +39,16 @@
       "slug": "app-order-ai-inbox"
     },
     {
+      "navheader": "Proizvodnja",
+      "slug": "app-production-navheader"
+    },
+    {
+      "name": "Plan proizvodnje",
+      "icon": "clipboard",
+      "url": "app/production/plan",
+      "slug": "app-production-plan"
+    },
+    {
       "navheader": "AI asistent",
       "slug": "app-ai-tokens-navheader"
     },

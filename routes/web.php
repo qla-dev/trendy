@@ -34,6 +34,7 @@ use App\Http\Controllers\MiscellaneousController;
 use App\Http\Controllers\AuthenticationController;
 use App\Http\Controllers\ChartsController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ProductionPlanController;
 
 /*
 |--------------------------------------------------------------------------
@@ -101,6 +102,9 @@ Route::middleware('auth:web')->group(function () {
         Route::post('invoice/preview/{id}/planned-consumption/update', [WorkOrderController::class, 'updatePlannedConsumptionItem'])->name('app-invoice-planned-consumption-update');
         Route::post('invoice/preview/{id}/planned-consumption/remove', [WorkOrderController::class, 'removePlannedConsumptionItem'])->name('app-invoice-planned-consumption-remove');
         Route::get('orders', [OrderController::class, 'ordersLinkageIndex'])->name('app-orders');
+        Route::get('production/plan', [ProductionPlanController::class, 'index'])->name('app-production-plan');
+        Route::get('production/plan/data', [ProductionPlanController::class, 'data'])->name('app-production-plan-data');
+        Route::get('production/plan/export', [ProductionPlanController::class, 'export'])->name('app-production-plan-export');
         Route::post('orders', [OrderController::class, 'store'])->name('app-orders-store');
         Route::get('orders/data', [OrderController::class, 'ordersLinkageData'])->name('app-orders-data');
         Route::get('orders/positions', [OrderItemController::class, 'ordersLinkagePositions'])->name('app-orders-positions');
