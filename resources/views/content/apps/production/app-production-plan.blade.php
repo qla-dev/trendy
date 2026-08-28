@@ -12,11 +12,27 @@
 <style>
   .production-plan-table th { white-space: nowrap; font-size: .78rem; }
   .production-plan-table td { vertical-align: middle; }
+  .production-plan-table tr.production-plan-row--red > td { background-color: #fff6f7 !important; color: #8f1d2c; }
+  .production-plan-table tr.production-plan-row--blue > td { background-color: #e0f1ff !important; color: #145486; }
+  .production-plan-table tr.production-plan-row--yellow > td { background-color: #fff9e3 !important; color: #735c00; }
+  .production-plan-table tr.production-plan-row--orange > td { background-color: #fff5ed !important; color: #9a4210; }
+  .production-plan-table tr.production-plan-row--purple > td { background-color: #f0e6ff !important; color: #6540a0; }
+  .production-plan-table tr.production-plan-row--teal > td { background-color: #eef9f6 !important; color: #0e6b5b; }
+  .production-plan-table tr.production-plan-row--green > td { background-color: #eef8f0 !important; color: #1d6e3b; }
+  .production-plan-table tr.production-plan-row--grey > td { background-color: #f5f6f8 !important; color: #69707a; }
+  .production-plan-table tr.production-plan-row--red > td:first-child { box-shadow: inset 4px 0 0 #d96274; }
+  .production-plan-table tr.production-plan-row--blue > td:first-child { box-shadow: inset 4px 0 0 #2b81c5; }
+  .production-plan-table tr.production-plan-row--yellow > td:first-child { box-shadow: inset 4px 0 0 #d9ad27; }
+  .production-plan-table tr.production-plan-row--orange > td:first-child { box-shadow: inset 4px 0 0 #df8a4e; }
+  .production-plan-table tr.production-plan-row--purple > td:first-child { box-shadow: inset 4px 0 0 #8b5bc8; }
+  .production-plan-table tr.production-plan-row--teal > td:first-child { box-shadow: inset 4px 0 0 #4faaa0; }
+  .production-plan-table tr.production-plan-row--green > td:first-child { box-shadow: inset 4px 0 0 #65aa7a; }
+  .production-plan-table tr.production-plan-row--grey > td:first-child { box-shadow: inset 4px 0 0 #9aa2ad; }
   .production-plan-table .number-cell { text-align: end; }
   .production-plan-table .document-cell { min-width: 145px; }
   .plan-filter-label { font-size: .78rem; font-weight: 600; }
   #plan-filteri > [class*="col-md-2"] { flex: 0 0 auto; width: 25%; }
-  #plan-filteri .form-control, #plan-filteri .input-group-text { min-height: 36px; }
+  #plan-filteri .form-control, #plan-filteri .form-select, #plan-filteri .input-group-text { min-height: 36px; }
   #plan-proizvodnje-tabela_wrapper > .row:first-child {
     margin-right: 0;
     margin-left: 0;
@@ -80,7 +96,8 @@
     <div class="card-body d-none" id="tijelo-filtera">
       <div class="row g-2 mb-2" id="plan-filteri">
         <div class="col-md-3"><label class="plan-filter-label">Pretraga</label><div class="input-group input-group-merge"><span class="input-group-text"><i data-feather="search"></i></span><input class="form-control" data-filter="pretraga" placeholder="Pretraži sve kolone"></div></div>
-        <div class="col-md-3"><label class="plan-filter-label">Broj narudžbenice</label><input class="form-control" data-filter="broj_narudzbenice"></div>
+        <div class="col-md-3"><label class="plan-filter-label" for="plan-boja-redova">Boja redova</label><select class="form-select" id="plan-boja-redova"><option value="none">Bez boje</option><option value="basic">Osnovne</option><option value="all" selected>Sve</option></select></div>
+        <div class="col-md-3"><label class="plan-filter-label">Broj narudžbenice</label><input class="form-control" data-filter="broj_narudzbenice" value="0110"></div>
         <div class="col-md-3"><label class="plan-filter-label">Kupac</label><input class="form-control" data-filter="kupac"></div>
         <div class="col-md-3"><label class="plan-filter-label">Narudžbenica kupca</label><input class="form-control" data-filter="narudzbenica_kupca"></div>
         <div class="col-md-2"><label class="plan-filter-label">Br. poz.</label><input class="form-control" data-filter="broj_pozicije"></div>
@@ -92,7 +109,7 @@
         <div class="col-md-3"><label class="plan-filter-label">Status dobavljača</label><input class="form-control" data-filter="status_dobavljaca" placeholder="Ulazni dokument"></div>
         <div class="col-md-2"><label class="plan-filter-label">Status RN</label><input class="form-control" data-filter="status_rn"></div>
         <div class="col-md-2"><label class="plan-filter-label">Faza izrade</label><input class="form-control" data-filter="faza_izrade"></div>
-        <div class="col-md-3"><label class="plan-filter-label">Datum isporuke od</label><input class="form-control plan-date" data-filter="datum_isporuke_od" placeholder="dd.mm.gggg" autocomplete="off"></div>
+        <div class="col-md-3"><label class="plan-filter-label">Datum isporuke od</label><input class="form-control plan-date" data-filter="datum_isporuke_od" value="2026-07-01" placeholder="dd.mm.gggg" autocomplete="off"></div>
         <div class="col-md-3"><label class="plan-filter-label">Datum isporuke do</label><input class="form-control plan-date" data-filter="datum_isporuke_do" placeholder="dd.mm.gggg" autocomplete="off"></div>
         <div class="col-md-3"><label class="plan-filter-label">Datum narudžbe od</label><input class="form-control plan-date" data-filter="datum_narudzbe_od" placeholder="dd.mm.gggg" autocomplete="off"></div>
         <div class="col-md-3"><label class="plan-filter-label">Datum narudžbe do</label><input class="form-control plan-date" data-filter="datum_narudzbe_do" placeholder="dd.mm.gggg" autocomplete="off"></div>
@@ -121,4 +138,4 @@
 <script src="{{ asset('vendors/js/tables/datatable/dataTables.bootstrap5.min.js') }}"></script>
 <script src="{{ asset('vendors/js/pickers/flatpickr/flatpickr.min.js') }}"></script>
 @endsection
-@section('page-script')<script src="{{ asset('js/scripts/pages/app-production-plan.js?v=3') }}"></script>@endsection
+@section('page-script')<script src="{{ asset('js/scripts/pages/app-production-plan.js?v=7') }}"></script>@endsection

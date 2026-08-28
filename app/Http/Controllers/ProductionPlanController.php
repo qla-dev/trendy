@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\Log;
 
 class ProductionPlanController extends Controller
 {
+    /** Production plan intentionally starts with deliveries from 1 July 2026. */
+    private const PRODUCTION_PLAN_START_DATE = '2026-07-01';
+
     private const COLUMNS = [
         'broj_narudzbenice' => 'Broj narudžbenice', 'kupac' => 'Kupac',
         'narudzbenica_kupca' => 'Narudžbenica kupca', 'broj_pozicije' => 'Br. poz.',
@@ -101,7 +104,35 @@ class ProductionPlanController extends Controller
             ->selectRaw("LTRIM(RTRIM(COALESCE(NULLIF(oi.acDept, ''), NULLIF(ord.acDept, ''), ''))) as dobavljac")
             ->selectRaw("ISNULL(ulazni.broj_dokumenta, '') as status_dobavljaca")
             ->selectRaw("ISNULL(wo.status_rn, '') as status_rn")
-            ->selectRaw("ISNULL(wo.faza_izrade, '') as faza_izrade");
+            ->selectRaw("ISNULL(wo.faza_izrade, '') as faza_izrade")
+            ->selectRaw("CASE
+                WHEN UPPER(LTRIM(RTRIM(ISNULL(wo.status_rn_kod, '')))) IN ('F', 'I', 'Z') THEN 'green'
+                WHEN UPPER(LTRIM(RTRIM(ISNULL(wo.status_rn_kod, '')))) = 'E' THEN 'yellow'
+                WHEN UPPER(LTRIM(RTRIM(ISNULL(wo.status_rn_kod, '')))) IN ('P', 'D', 'S') THEN 'orange'
+                WHEN UPPER(LTRIM(RTRIM(ISNULL(wo.status_rn_kod, '')))) IN ('O', 'N') THEN 'purple'
+                WHEN UPPER(LTRIM(RTRIM(ISNULL(wo.status_rn_kod, '')))) = 'R' THEN 'teal'
+                WHEN UPPER(LTRIM(RTRIM(ISNULL(wo.status_rn_kod, '')))) = 'C' THEN 'grey'
+                WHEN NULLIF(LTRIM(RTRIM(COALESCE(NULLIF(oi.acDept, ''), NULLIF(ord.acDept, ''), ''))), '') IS NOT NULL THEN 'blue'
+                ELSE 'red'
+            END as plan_row_color")
+            ->selectRaw("CASE
+                WHEN NULLIF(LTRIM(RTRIM(COALESCE(NULLIF(oi.acDept, ''), NULLIF(ord.acDept, ''), ''))), '') IS NOT NULL THEN 'blue'
+                WHEN UPPER(LTRIM(RTRIM(ISNULL(wo.status_rn_kod, '')))) = 'O' THEN ''
+                ELSE 'red'
+            END as plan_base_row_color")
+            // This is a permanent list boundary, independent of the optional date filters below.
+            ->whereRaw('CAST(COALESCE(oi.adDeliveryDeadline, oi.adDeliveryDate, ord.adDeliveryDeadline) AS date) >= ?', [self::PRODUCTION_PLAN_START_DATE])
+            // A 3500 document is linked to the exact sales-order item through anOrderItemQId.
+            // Once such a link exists, that position must no longer appear in the production plan.
+            ->whereNotExists(function (Builder $excluded3500) use ($schema) {
+                $excluded3500
+                    ->selectRaw('1')
+                    ->from($schema . '.tHE_LinkMoveItemOrderItem as link3500')
+                    ->join($schema . '.tHE_MoveItem as move_item_3500', 'move_item_3500.anQId', '=', 'link3500.anMoveItemQId')
+                    ->join($schema . '.tHE_Move as move3500', 'move3500.acKey', '=', 'move_item_3500.acKey')
+                    ->whereColumn('link3500.anOrderItemQId', 'oi.anQId')
+                    ->where('move3500.acDocType', '3500');
+            });
 
         $filterExpressions = $this->filterExpressions();
         $exactNumberColumns = [
@@ -125,7 +156,9 @@ class ProductionPlanController extends Controller
             }
 
             if ($value !== '' && isset($filterExpressions[$key])) {
-                $query->whereRaw($filterExpressions[$key] . ' like ?', ['%' . $value . '%']);
+                // Svaki pojedinačni filter se primjenjuje isključivo na svoj izraz/kolonu.
+                // Escape sprečava da %, _ i [ iz unosa postanu LIKE zamjenski znakovi.
+                $this->whereContains($query, $filterExpressions[$key], $value);
             }
         }
         $this->dateFilter($query, 'COALESCE(oi.adDeliveryDeadline, oi.adDeliveryDate, ord.adDeliveryDeadline)', $filters['datum_isporuke_od'] ?? '', $filters['datum_isporuke_do'] ?? '');
@@ -135,12 +168,12 @@ class ProductionPlanController extends Controller
 
             $query->where(function ($q) use ($search, $digitsOnlySearch, $filterExpressions) {
                 foreach ($filterExpressions as $expression) {
-                    $q->orWhereRaw($expression . ' like ?', ['%' . $search . '%']);
+                    $this->whereContains($q, $expression, $search, 'or');
                 }
 
                 if ($digitsOnlySearch !== '') {
-                    $q->orWhereRaw("REPLACE(REPLACE(ISNULL(ord.acKeyView, ''), '-', ''), ' ', '') like ?", ['%' . $digitsOnlySearch . '%'])
-                        ->orWhereRaw("REPLACE(REPLACE(ISNULL(ord.acKey, ''), '-', ''), ' ', '') like ?", ['%' . $digitsOnlySearch . '%']);
+                    $this->whereContains($q, "REPLACE(REPLACE(ISNULL(ord.acKeyView, ''), '-', ''), ' ', '')", $digitsOnlySearch, 'or');
+                    $this->whereContains($q, "REPLACE(REPLACE(ISNULL(ord.acKey, ''), '-', ''), ' ', '')", $digitsOnlySearch, 'or');
                 }
             });
         }
@@ -219,6 +252,14 @@ class ProductionPlanController extends Controller
 
         return $filters;
     }
+
+    /** Add a literal, case-insensitive-under-the-database-collation substring condition. */
+    private function whereContains(Builder $query, string $expression, string $value, string $boolean = 'and'): void
+    {
+        $escapedValue = str_replace(['\\', '%', '_', '['], ['\\\\', '\\%', '\\_', '\\['], $value);
+        $query->whereRaw($expression . " LIKE ? ESCAPE '\\'", ['%' . $escapedValue . '%'], $boolean);
+    }
+
     private function dateFilter(Builder $query, string $column, string $from, string $to): void
     {
         if ($from !== '') $query->whereRaw('CAST(' . $column . ' AS date) >= ?', [$from]);
