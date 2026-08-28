@@ -167,6 +167,17 @@
   .wo-close-table thead .wo-close-actions-column {
     z-index: 3;
   }
+  .wo-close-table .wo-close-total-row > * {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: var(--bs-body-bg, #fff);
+    border-top: 2px solid #7367f0;
+    font-weight: 700;
+  }
+  .wo-close-table .wo-close-total-row .wo-close-actions-column {
+    z-index: 3;
+  }
   .wo-close-clock-fields {
     display: inline-flex;
     align-items: center;
@@ -2782,6 +2793,15 @@
                     </tr>
                   @endforeach
                 </tbody>
+                <tfoot>
+                  <tr class="wo-close-total-row">
+                    <th colspan="6" class="text-end">Ukupno</th>
+                    <th><output id="wo-close-total-duration">0</output></th>
+                    <th><output id="wo-close-total-time">0</output></th>
+                    <th><output id="wo-close-total-downtime">0</output></th>
+                    <th class="wo-close-actions-column"></th>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
@@ -3403,6 +3423,39 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       duration.value = formatOperationDuration(minutesPerUnit * quantity);
     }
 
+    function updateCloseOperationTotals() {
+      var scope = closeWorkOrderModal || document;
+      var totals = {
+        duration: 0,
+        time: 0,
+        downtime: 0
+      };
+
+      scope.querySelectorAll('.wo-close-operation-row[data-item-qid]').forEach(function (row) {
+        [
+          ['duration', '.wo-close-duration'],
+          ['time', '.wo-close-time'],
+          ['downtime', '.wo-close-downtime']
+        ].forEach(function (definition) {
+          var value = parseOperationDuration((row.querySelector(definition[1]) || {}).value);
+          if (value !== null) {
+            totals[definition[0]] += value;
+          }
+        });
+      });
+
+      var outputs = {
+        duration: document.getElementById('wo-close-total-duration'),
+        time: document.getElementById('wo-close-total-time'),
+        downtime: document.getElementById('wo-close-total-downtime')
+      };
+      Object.keys(outputs).forEach(function (key) {
+        if (outputs[key]) {
+          outputs[key].textContent = formatOperationDuration(totals[key]);
+        }
+      });
+    }
+
     function validateWorkOrderClosing(showErrors) {
       var rows = Array.prototype.slice.call(document.querySelectorAll('.wo-close-operation-row[data-item-qid]'));
       var allValid = rows.length > 0;
@@ -3450,6 +3503,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       if (closeWorkOrderSubmit && !closeWorkOrderSubmit.dataset.processing) {
         closeWorkOrderSubmit.disabled = !allValid;
       }
+
+      updateCloseOperationTotals();
 
       return allValid;
     }

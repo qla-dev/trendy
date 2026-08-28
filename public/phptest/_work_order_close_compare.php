@@ -3,8 +3,9 @@
 /*
  * Shared read-only comparison engine for test32.php and test33.php.
  *
- * The database name is intentionally hard-locked. This file contains no
- * INSERT, UPDATE, DELETE, MERGE, EXEC or DDL statement.
+ * The database is resolved from WORK_ORDER_TARGET_DB_DATABASE (falling back
+ * to DB_DATABASE). This file contains no INSERT, UPDATE, DELETE, MERGE,
+ * EXEC or DDL statement.
  */
 
 declare(strict_types=1);
@@ -17,7 +18,6 @@ if (PHP_SAPI === 'cli') {
     parse_str((string) ($argv[1] ?? ''), $_GET);
 }
 
-const PHPTEST_CLOSE_DATABASE = 'BA_TRENDY_TESTNA';
 const PHPTEST_CLOSE_DEFAULT_PANTHEON_RN = '26-6000-003429';
 const PHPTEST_CLOSE_DEFAULT_ENALOG_RN = '26-6000-003059';
 
@@ -75,6 +75,14 @@ function phptest_close_env(string $key, ?string $default = null): ?string
     return $resolved[$key] = $resolve($values[$key], [$key]);
 }
 
+function phptest_close_database(): string
+{
+    return trim((string) phptest_close_env(
+        'WORK_ORDER_TARGET_DB_DATABASE',
+        phptest_close_env('DB_DATABASE', '')
+    ));
+}
+
 function phptest_close_option(string $key, string $default = ''): string
 {
     $value = $_GET[$key] ?? $default;
@@ -107,13 +115,14 @@ function phptest_close_connect()
     $port = (string) phptest_close_env('WORK_ORDER_TARGET_DB_PORT', phptest_close_env('DB_PORT', '1433'));
     $username = (string) phptest_close_env('WORK_ORDER_TARGET_DB_USERNAME', phptest_close_env('DB_USERNAME', ''));
     $password = (string) phptest_close_env('WORK_ORDER_TARGET_DB_PASSWORD', phptest_close_env('DB_PASSWORD', ''));
+    $database = phptest_close_database();
 
-    if ($host === '' || $username === '') {
-        phptest_close_fail('Missing test-database connection settings.');
+    if ($host === '' || $username === '' || $database === '') {
+        phptest_close_fail('Missing work-order target database connection settings.');
     }
 
     $connection = sqlsrv_connect($host . ($port !== '' ? ',' . $port : ''), [
-        'Database' => PHPTEST_CLOSE_DATABASE,
+        'Database' => $database,
         'UID' => $username,
         'PWD' => $password,
         'CharacterSet' => 'UTF-8',
@@ -123,7 +132,7 @@ function phptest_close_connect()
     ]);
 
     if (!$connection) {
-        phptest_close_fail('Could not connect to ' . PHPTEST_CLOSE_DATABASE . ': ' . print_r(sqlsrv_errors(), true));
+        phptest_close_fail('Could not connect to ' . $database . ': ' . print_r(sqlsrv_errors(), true));
     }
 
     return $connection;
@@ -198,7 +207,7 @@ function phptest_close_find_work_order($connection, string $rn): array
     );
 
     if ($row === null) {
-        phptest_close_fail('RN not found in ' . PHPTEST_CLOSE_DATABASE . ': ' . $rn);
+        phptest_close_fail('RN not found in ' . phptest_close_database() . ': ' . $rn);
     }
 
     return $row;
@@ -606,6 +615,66 @@ function phptest_close_render_table(array $rows): void
     echo '</tbody></table></div>';
 }
 
+/**
+ * Makes the worker-time relationship visible without requiring users to find
+ * anTn/anTime among the full raw-record comparison. eNalog writes anTn as
+ * minutes per piece and anTime as the total for the completed quantity.
+ * Native Pantheon rows are reference data only: their anTn can be a shared
+ * operation norm while anTime is each worker's actual duration.
+ */
+function phptest_close_timing_audit_rows(array $records, array $workOrder, string $source): array
+{
+    $quantity = (float) ($workOrder['anPlanQty'] ?? 0);
+    $moveItems = [];
+
+    foreach ($records as $record) {
+        if (($record['table'] ?? '') !== 'tHE_MoveItem' || !is_array($record['row'] ?? null)) {
+            continue;
+        }
+
+        $row = $record['row'];
+        $qid = (string) ($row['anQId'] ?? '');
+        if ($qid !== '') {
+            $moveItems[$qid] = [
+                'identifier' => (string) ($record['record_id'] ?? ''),
+                'total_minutes' => $row['anQty'] ?? null,
+            ];
+        }
+    }
+
+    $rows = [];
+    foreach ($records as $record) {
+        if (($record['table'] ?? '') !== 'tHF_WOExItemWork' || !is_array($record['row'] ?? null)) {
+            continue;
+        }
+
+        $row = $record['row'];
+        $perPiece = (float) ($row['anTn'] ?? 0);
+        $storedTotal = (float) ($row['anTime'] ?? 0);
+        $expectedTotal = $perPiece * $quantity;
+        $moveItem = $moveItems[(string) ($row['anMoveItemQId'] ?? '')] ?? [];
+        $usesEnalogRule = $source === 'eNalog';
+        $matches = abs($storedTotal - $expectedTotal) <= 0.000001;
+
+        $rows[] = [
+            'source' => $source,
+            'worker' => phptest_close_value($row['acWorker'] ?? null),
+            'operation line' => (string) ($moveItem['identifier'] ?? '[unlinked]'),
+            'anTn (min/piece)' => number_format($perPiece, 6, '.', ''),
+            'produced quantity' => number_format($quantity, 6, '.', ''),
+            'expected anTime (min)' => $usesEnalogRule ? number_format($expectedTotal, 6, '.', '') : 'reference only',
+            'stored anTime (min)' => number_format($storedTotal, 6, '.', ''),
+            'anTime check' => $usesEnalogRule ? ($matches ? 'PASS' : 'FAIL') : 'REFERENCE',
+            '6600 line total (min)' => phptest_close_value($moveItem['total_minutes'] ?? null),
+            'downtime (min)' => phptest_close_value($row['anHoldUp'] ?? null),
+            'start' => phptest_close_value($row['adBeginTime'] ?? null),
+            'end' => phptest_close_value($row['adEndTime'] ?? null),
+        ];
+    }
+
+    return $rows;
+}
+
 $pantheonRnInput = phptest_close_option('pantheon_rn', PHPTEST_CLOSE_DEFAULT_PANTHEON_RN);
 $enalogRnInput = phptest_close_option('enalog_rn', PHPTEST_CLOSE_DEFAULT_ENALOG_RN);
 $showAll = phptest_close_option('all', '0') === '1';
@@ -622,9 +691,15 @@ try {
     )));
     $metadata = phptest_close_metadata($connection, $tables);
     $comparisonRows = phptest_close_comparison_rows($pantheonRecords, $enalogRecords, $metadata, $showAll);
+    $timingAuditRows = PHPTEST_CLOSE_KIND === 'operations'
+        ? [
+            ...phptest_close_timing_audit_rows($pantheonRecords, $pantheonWorkOrder, 'Pantheon'),
+            ...phptest_close_timing_audit_rows($enalogRecords, $enalogWorkOrder, 'eNalog'),
+        ]
+        : [];
 
     $summary = [[
-        'database' => PHPTEST_CLOSE_DATABASE,
+        'database' => phptest_close_database(),
         'comparison' => (string) PHPTEST_CLOSE_TITLE,
         'document type' => (string) PHPTEST_CLOSE_DOC_TYPE,
         'Pantheon RN' => phptest_close_value($pantheonWorkOrder['acKeyView'] ?? $pantheonWorkOrder['acKey'] ?? null),
@@ -640,12 +715,22 @@ try {
         echo '<!doctype html><html><head><meta charset="utf-8"><title>' . phptest_close_h((string) PHPTEST_CLOSE_TITLE) . '</title>';
         echo '<style>body{font:14px/1.45 Arial,sans-serif;margin:24px;color:#1f2937;background:#f7f8fb}h1{margin:0 0 8px}.note{padding:10px 12px;background:#fff7dd;border:1px solid #edcf70;border-radius:6px;margin:10px 0}.form{display:flex;flex-wrap:wrap;align-items:end;gap:12px;padding:16px;background:#fff;border:1px solid #d9e1eb;border-radius:8px;margin:16px 0}.form label{display:grid;gap:5px;font-weight:600}.form input{height:36px;width:230px;padding:0 10px;border:1px solid #cbd5e1;border-radius:6px}.form button{height:36px;padding:0 14px;border:0;border-radius:6px;background:#2563eb;color:#fff;font-weight:600}.table-wrap{overflow:auto;background:#fff;border:1px solid #d9e1eb;border-radius:6px;margin:8px 0 24px;max-height:68vh}table{border-collapse:collapse;min-width:100%;font-size:12px}th,td{padding:7px 9px;border-right:1px solid #e6ebf1;border-bottom:1px solid #e0e6ee;text-align:left;white-space:nowrap}th{position:sticky;top:0;background:#edf2f8;z-index:1}.relevant{background:#fff3cd}.muted{color:#64748b}</style></head><body>';
         echo '<h1>' . phptest_close_h((string) PHPTEST_CLOSE_TITLE) . '</h1>';
-        echo '<div class="note">Read-only and hard-locked to BA_TRENDY_TESTNA. Yellow rows are potentially relevant differences. Use <code>all=1</code> to include non-relevant/equal fields.</div>';
+        echo '<div class="note">Read-only. Uses the configured <code>WORK_ORDER_TARGET_DB_DATABASE</code> (or <code>DB_DATABASE</code> fallback). Yellow rows are potentially relevant differences. Use <code>all=1</code> to include non-relevant/equal fields.</div>';
         echo '<form class="form" method="get"><label>Pantheon-closed RN<input name="pantheon_rn" value="' . phptest_close_h($pantheonRnInput) . '"></label><label>eNalog-prepared/closed RN<input name="enalog_rn" value="' . phptest_close_h($enalogRnInput) . '"></label><label>Show all fields<input name="all" value="' . ($showAll ? '1' : '0') . '" inputmode="numeric"></label><button type="submit">Compare</button></form>';
         echo '<h2>Comparison context</h2>';
     }
 
     phptest_close_render_table($summary);
+
+    if ($timingAuditRows !== []) {
+        if (PHP_SAPI !== 'cli') {
+            echo '<h2>Worker timing audit</h2>';
+            echo '<p>For eNalog rows, expected worker <code>anTime</code> is <code>anTn × produced quantity</code>. A PASS confirms the stored total matches that rule. Native Pantheon rows are reference-only because their <code>anTn</code> may be a shared operation norm.</p>';
+        } else {
+            echo PHP_EOL . 'Worker timing audit (eNalog: anTime = anTn × produced quantity)' . PHP_EOL;
+        }
+        phptest_close_render_table($timingAuditRows);
+    }
 
     if (PHP_SAPI !== 'cli') {
         echo '<h2>Field comparison</h2>';
