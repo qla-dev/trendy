@@ -2706,13 +2706,13 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body p-2 p-md-3">
               <div class="order-ai-dropzone" id="order-ai-dropzone" tabindex="0" role="button" aria-label="Učitaj dokument za AI skeniranje">
-                <input type="file" class="d-none" id="order-ai-file-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.json,.txt,.csv,.xls,.xlsx,.doc,.docx">
+                <input type="file" class="d-none" id="order-ai-file-input" accept=".pdf,.doc,.docx">
                 <div class="order-ai-dropzone-icon">
                   <i data-feather="upload-cloud"></i>
                 </div>
                 <h3 class="mb-75">Prevuci dokument ovdje</h3>
                 <p class="order-ai-subtle mb-1">ili se klikom odabire fajl za AI obradu narudžbe</p>
-                <small class="text-muted">PDF, slike i izvozi do 50 MB</small>
+                <small class="text-muted">PDF i Word dokumenti (.doc, .docx) do 50 MB</small>
               </div>
             </div>
           </div>
@@ -7452,6 +7452,12 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
 
       function handleUpload(file) {
         if (!file) {
+          return;
+        }
+
+        if (!/\.(pdf|doc|docx)$/i.test(String(file.name || '').trim())) {
+          setProgressWarningMessage('Za AI skeniranje su dozvoljeni samo PDF i Word dokumenti (.pdf, .doc, .docx).');
+          updateActivityState(null);
           return;
         }
 

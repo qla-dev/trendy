@@ -17,6 +17,12 @@
 
       return rtrim(rtrim($formatted, '0'), '.') ?: '0';
   };
+  $itemQuantityTotal = array_reduce($items, static function (float $sum, array $item): float {
+      return $sum + (float) ($item['hoursOrQty'] ?? 0);
+  }, 0.0);
+  $itemTotal = array_reduce($items, static function (float $sum, array $item): float {
+      return $sum + (float) ($item['total'] ?? 0);
+  }, 0.0);
   $formatDateForDisplay = static function ($value): string {
       if ($value instanceof \Illuminate\Support\Carbon) {
           return $value->format('d.m.Y');
@@ -440,6 +446,23 @@
       border-bottom: 1px solid var(--invoice-gray-100);
     }
 
+    .invoice-items-table tfoot tr {
+      border-top: 2px solid var(--invoice-gray-700);
+      color: var(--invoice-gray-900);
+      font-weight: 800;
+    }
+
+    .invoice-items-table tfoot td {
+      padding-top: 0.82rem;
+      padding-bottom: 0.82rem;
+    }
+
+    .invoice-items-total-label {
+      padding-right: 1rem;
+      text-align: right;
+      text-transform: uppercase;
+    }
+
     .item-description {
       padding-left: 1rem;
       padding-right: 1rem;
@@ -780,6 +803,10 @@
         display: table-header-group;
       }
 
+      .invoice-item-print-page .invoice-items-table tfoot {
+        display: table-row-group;
+      }
+
       .invoice-item-print-page .invoice-items-table {
         width: 100% !important;
         table-layout: fixed !important;
@@ -983,6 +1010,16 @@
                     </tr>
                   @endforelse
                 </tbody>
+                @if (count($items) > 0)
+                  <tfoot>
+                    <tr>
+                      <td colspan="2" class="invoice-items-total-label">Ukupno ({{ count($items) }} {{ count($items) === 1 ? 'stavka' : 'stavki' }})</td>
+                      <td class="item-center">{{ $formatQuantity($itemQuantityTotal) }}</td>
+                      <td class="item-right">-</td>
+                      <td class="item-total">{{ $formatMoney($itemTotal) }}</td>
+                    </tr>
+                  </tfoot>
+                @endif
               </table>
             </div>
 
@@ -1014,6 +1051,16 @@
                         </tr>
                       @endforelse
                     </tbody>
+                    @if ($loop->last && count($pageItems) > 0)
+                      <tfoot>
+                        <tr>
+                          <td colspan="2" class="invoice-items-total-label">Ukupno ({{ count($items) }} {{ count($items) === 1 ? 'stavka' : 'stavki' }})</td>
+                          <td class="item-center">{{ $formatQuantity($itemQuantityTotal) }}</td>
+                          <td class="item-right">-</td>
+                          <td class="item-total">{{ $formatMoney($itemTotal) }}</td>
+                        </tr>
+                      </tfoot>
+                    @endif
                   </table>
                 </div>
               @endforeach
