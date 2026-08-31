@@ -45,7 +45,9 @@ class OrderAiScanController extends Controller
         $this->authorizeModuleAccess($request);
 
         $validated = $request->validate([
-            'file' => ['required', 'file', 'max:51200'],
+            'file' => ['required', 'file', 'mimes:pdf,doc,docx', 'max:51200'],
+        ], [
+            'file.mimes' => 'Za AI skeniranje su dozvoljeni samo PDF i Word dokumenti (.pdf, .doc, .docx).',
         ]);
 
         $scan = $scanService->createScan($validated['file'], $request->user());

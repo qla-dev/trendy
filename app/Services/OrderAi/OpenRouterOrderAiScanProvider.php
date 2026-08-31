@@ -39,6 +39,8 @@ class OpenRouterOrderAiScanProvider implements OrderAiScanProvider
             );
         }
 
+        $this->assertSupportedDocument($scan, $model);
+
         $bytes = Storage::disk($disk)->get($scan->source_file_path);
         $mime = $this->normalizeDocumentMime(
             (string) ($scan->source_mime_type ?: 'application/octet-stream'),
@@ -193,6 +195,20 @@ class OpenRouterOrderAiScanProvider implements OrderAiScanProvider
         }
 
         return $context;
+    }
+
+    private function assertSupportedDocument(OrderAiScan $scan, string $model): void
+    {
+        $extension = strtolower(pathinfo((string) ($scan->source_file_name ?? ''), PATHINFO_EXTENSION));
+
+        if (in_array($extension, ['pdf', 'doc', 'docx'], true)) {
+            return;
+        }
+
+        throw $this->newProviderException(
+            'OpenRouter AI skeniranje podrzava samo PDF i Word dokumente (.pdf, .doc, .docx).',
+            $this->buildFailureContext($model)
+        );
     }
 
     private function newProviderException(string $message, array $context = [], ?\Throwable $previous = null): RuntimeException
