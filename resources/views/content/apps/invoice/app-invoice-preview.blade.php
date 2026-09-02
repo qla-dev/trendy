@@ -2743,6 +2743,17 @@
                 <tbody>
                   @php
                     $closeOperations = $closingWorkOrderOperations ?? $workOrderRegOperations ?? [];
+                    $closeOperationPositionMap = [];
+                    foreach ($closeOperations as $closeOperation) {
+                      $closeOperationCode = mb_strtoupper(trim((string) ($closeOperation['operacija'] ?? '')));
+                      $closeOperationItemId = (int) ($closeOperation['id'] ?? 0);
+                      if ($closeOperationCode !== '' && $closeOperationItemId > 0 && !isset($closeOperationPositionMap[$closeOperationCode])) {
+                        $closeOperationPositionMap[$closeOperationCode] = [
+                          'item_qid' => $closeOperationItemId,
+                          'position' => (string) ($closeOperation['pozicija'] ?? ''),
+                        ];
+                      }
+                    }
                     $closeWorkOrderHasNoOperations = count($closeOperations) === 0;
                     if ($closeWorkOrderHasNoOperations) $closeOperations = array_fill(0, 6, []);
                   @endphp
@@ -3378,6 +3389,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     }
 
     var closeWorkOrderQuantity = Number(@json($workOrder['kolicina'] ?? 0));
+    var closeOperationPositionMap = @json($closeOperationPositionMap ?? []);
 
     function operationQuantity() {
       return Number.isFinite(closeWorkOrderQuantity) && closeWorkOrderQuantity > 0 ? closeWorkOrderQuantity : 0;
@@ -4116,9 +4128,51 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       }
       if (fields.kind === 'operations') {
         fields.row.setAttribute('data-operation-code', code.toUpperCase());
+        remapCloseOperationPosition(fields.row, code);
       }
       hideClosingCatalogSuggestions(input);
       validateWorkOrderClosing(false);
+    }
+
+    function remapCloseOperationPosition(row, code) {
+      var normalizedCode = String(code || '').trim().toUpperCase();
+      var match = closeOperationPositionMap[normalizedCode];
+      if (!row) {
+        return;
+      }
+
+      var positionCell = row.querySelector('td:first-child');
+      if (!match) {
+        // An operation absent from the BOM is a new RN position. Keep its
+        // item id empty so the server creates that position during closing.
+        row.setAttribute('data-item-qid', '0');
+        row.setAttribute('data-manual-operation', '1');
+        if (positionCell) {
+          positionCell.textContent = String(nextManualOperationPosition());
+        }
+        return;
+      }
+
+      // The editable code and the RN item must always travel together. This
+      // also makes cloned worker rows point back to the selected RN operation.
+      row.setAttribute('data-item-qid', String(match.item_qid));
+      row.removeAttribute('data-manual-operation');
+      if (positionCell) {
+        positionCell.textContent = String(match.position || '');
+      }
+    }
+
+    function nextManualOperationPosition() {
+      var rows = closeWorkOrderModal
+        ? closeWorkOrderModal.querySelectorAll('.wo-close-operation-row, #close-work-order-materials-table tbody tr')
+        : [];
+      var highestPosition = Array.prototype.reduce.call(rows, function (highest, row) {
+        var cell = row.querySelector('td:first-child');
+        var position = Number(String((cell || {}).textContent || '').trim());
+        return Number.isInteger(position) && position > highest ? position : highest;
+      }, 0);
+
+      return highestPosition + 1;
     }
 
     function showClosingCatalogSuggestions(input, items) {
