@@ -1100,6 +1100,8 @@ class WorkOrderController extends Controller
                     $updates['acStatusMF'] = 'R';
                 }
             } elseif ($normalizedSelectedStatus === 'zakljucen') {
+                $this->assertWorkOrderCanBeManuallyMarkedClosed($row);
+
                 if (in_array('acStatus', $columns, true)) {
                     $updates['acStatus'] = 'I';
                 }
@@ -1144,9 +1146,57 @@ class WorkOrderController extends Controller
                 'message' => $exception->getMessage(),
             ]);
 
+            if ($exception instanceof RuntimeException) {
+                return response()->json(['message' => $exception->getMessage()], 422);
+            }
+
             return response()->json([
                 'message' => 'Greška pri ažuriranju statusa.',
             ], 500);
+        }
+    }
+
+    /**
+     * The status modal must not bypass the transactional closing endpoint.
+     * A material WO uses 6400 as its closing material issue; 2005 only moves
+     * stock into WIP and is not evidence that the WO has been completed.
+     */
+    private function assertWorkOrderCanBeManuallyMarkedClosed(array $workOrder): void
+    {
+        $workOrderKey = trim((string) $this->valueTrimmed($workOrder, ['acKey'], ''));
+        if ($workOrderKey === '') {
+            throw new RuntimeException('Radni nalog nema ključ za provjeru završnih dokumenata.');
+        }
+
+        $types = DB::table('dbo.tHE_Move as m')
+            ->join('dbo.tHF_LinkMoveWOEx as l', 'l.acKey', '=', 'm.acKey')
+            ->where('l.acLnkKey', $workOrderKey)
+            ->whereIn('m.acDocType', ['6100', '6400', '6600', '7100'])
+            ->pluck('m.acDocType')
+            ->map(fn ($type) => trim((string) $type))
+            ->flip()
+            ->all();
+
+        if (!isset($types['6600']) || (!isset($types['6100']) && !isset($types['7100']))) {
+            throw new RuntimeException('Radni nalog se ne može označiti zaključenim bez završnih dokumenata 6600 i 6100/7100. Zatvorite ga kroz postupak zaključivanja.');
+        }
+
+        $hasMaterial = DB::table('dbo.tHF_WOExItem as wi')
+            ->leftJoin('dbo.tHE_SetItem as si', 'si.acIdent', '=', 'wi.acIdent')
+            ->where('wi.acKey', $workOrderKey)
+            ->where(function ($query) {
+                $query->whereNull('wi.acOperationType')
+                    ->orWhereNotIn('wi.acOperationType', ['D', 'O']);
+            })
+            ->whereRaw("LTRIM(RTRIM(ISNULL(si.acSetOfItem, ''))) <> 'OPR'")
+            ->where(function ($query) {
+                $query->whereRaw('ISNULL(wi.anPlanQty, 0) <> 0')
+                    ->orWhereRaw('ISNULL(wi.anQty, 0) <> 0');
+            })
+            ->exists();
+
+        if ($hasMaterial && !isset($types['6400'])) {
+            throw new RuntimeException('Radni nalog s materijalom se ne može označiti zaključenim bez dokumenta 6400. Dokument 2005 je samo prijenos u proizvodnju u toku.');
         }
     }
 
@@ -5683,7 +5733,35 @@ class WorkOrderController extends Controller
             }));
 
             if (!empty($filteredResources)) {
-                return $this->attachRawMaterialStockQuantities($filteredResources);
+                // Resource rows do not necessarily exist for every material
+                // item copied from the BOM. The closing modal submits this
+                // list verbatim, so returning resources alone can omit a
+                // legitimate BOM material and consequently skip its 6400
+                // line. Preserve resource details, then add any material
+                // work-order items that have no corresponding resource row.
+                $resourceItemQids = array_fill_keys(array_filter(array_map(
+                    fn (array $resource): int => (int) ($resource['item_qid'] ?? 0),
+                    $filteredResources
+                )), true);
+                $resourceCodes = array_fill_keys(array_filter(array_map(
+                    fn (array $resource): string => strtolower(trim((string) ($resource['materijal'] ?? ''))),
+                    $filteredResources
+                )), true);
+                $missingItemMaterials = array_values(array_filter(
+                    $this->fetchMappedMaterialsFromItems($workOrderKey),
+                    static function (array $material) use ($resourceItemQids, $resourceCodes): bool {
+                        $itemQid = (int) ($material['item_qid'] ?? 0);
+                        $code = strtolower(trim((string) ($material['materijal'] ?? '')));
+
+                        return ($itemQid < 1 || !isset($resourceItemQids[$itemQid]))
+                            && ($code === '' || !isset($resourceCodes[$code]));
+                    }
+                ));
+
+                return $this->attachRawMaterialStockQuantities([
+                    ...$filteredResources,
+                    ...$missingItemMaterials,
+                ]);
             }
         }
 

@@ -36,7 +36,16 @@ class WorkOrderClosingService
             $existing = $this->existingClosingDocuments((string) $workOrder['acKey']);
 
             if (isset($existing['6600']) && (isset($existing['6100']) || isset($existing['7100']))) {
-                return $this->alreadyClosedResult($workOrder, $existing);
+                $statusWasRestored = strtoupper(trim((string) ($workOrder['acStatusMF'] ?? ''))) !== 'Z';
+                if ($statusWasRestored) {
+                    // A user can reopen a WO after its final documents were
+                    // already created. Retrying close must restore the final
+                    // status, not claim to create duplicate documents.
+                    $this->markClosed($workOrder, $this->calculator->normalizeNonNegative($workOrder['anPlanQty'] ?? 0, 'Planirana količina'), $now, $userId);
+                    $this->syncClosedWorkOrderCompletion($workOrder, $now, $userId);
+                }
+
+                return $this->alreadyClosedResult($workOrder, $existing, $statusWasRestored);
             }
 
             $blockingExisting = $existing;
@@ -74,6 +83,31 @@ class WorkOrderClosingService
             $materials = $materialFlow['materials'];
             $sourceWarehouse = $materialFlow['source_warehouse'];
             $destinationWarehouse = (string) config('work_order_closing.receipt_warehouse', 'Veleprodajno skladište');
+
+            // A final close requires a material issue. Do not create 6600/
+            // 6100 and mark the WO fully closed when the close modal contains
+            // no materials; retain only the partial-close state instead. An
+            // existing 6400 is the one valid retry case because its material
+            // issue was already completed in an earlier transaction.
+            if ($materials === [] && !isset($existing['6400'])) {
+                $this->markPartiallyClosed($workOrder, $now, $userId);
+
+                Log::info('Work order partially closed because no materials were submitted.', [
+                    'work_order_key' => $workOrder['acKey'],
+                    'work_order_number' => $workOrder['acKeyView'] ?? $workOrder['acKey'],
+                    'user_id' => $userId,
+                ]);
+
+                return [
+                    'already_closed' => false,
+                    'partial' => true,
+                    'status' => 'djelomično zaključen',
+                    'work_order_key' => $workOrder['acKey'],
+                    'work_order_number' => $this->formatNumber((string) ($workOrder['acKeyView'] ?? $workOrder['acKey'])),
+                    'message' => 'radni nalog je djelomično zaključen jer materijali nisu uneseni',
+                    'documents' => [],
+                ];
+            }
 
             // An empty work order has no item QIds for Pantheon document-line
             // links. Create closing positions first, then use their QIds for
@@ -881,7 +915,7 @@ class WorkOrderClosingService
             ->all();
     }
 
-    private function alreadyClosedResult(array $workOrder, array $existing): array
+    private function alreadyClosedResult(array $workOrder, array $existing, bool $statusWasRestored = false): array
     {
         $operations = $existing['6600'];
         $receipt = $existing['6100'] ?? $existing['7100'];
@@ -902,7 +936,9 @@ class WorkOrderClosingService
             'status' => 'zaključen',
             'work_order_key' => $workOrder['acKey'],
             'work_order_number' => $this->formatNumber((string) ($workOrder['acKeyView'] ?? $workOrder['acKey'])),
-            'message' => 'kreirani dokumenti ' . $operationNumber . ' i ' . $receiptNumber,
+            'message' => $statusWasRestored
+                ? 'radni nalog je ponovo zaključen korištenjem postojećih dokumenata ' . $operationNumber . ' i ' . $receiptNumber
+                : 'već postoje dokumenti ' . $operationNumber . ' i ' . $receiptNumber,
             'documents' => [
                 ['document_key' => $operations['acKey'], 'document_number' => $operationNumber, 'document_type' => '6600', 'work_order_code' => $workOrder['acKeyView'] ?? $workOrder['acKey'], 'quantity' => $quantity, 'operation_cost' => $operationCost],
                 ['document_key' => $receipt['acKey'], 'document_number' => $receiptNumber, 'document_type' => $receipt['acDocType'] ?? '6100', 'work_order_code' => $workOrder['acKeyView'] ?? $workOrder['acKey'], 'item_code' => $workOrder['acIdent'] ?? '', 'quantity' => $quantity, 'price_per_unit' => $pricePerUnit, 'total_price' => $receiptTotal, 'operation_cost' => $operationCost, 'material_cost' => $materialCost],

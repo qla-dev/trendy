@@ -44,14 +44,14 @@ class PantheonDocumentWriter
         $receiverQId = $this->subjectQId($connection, $receiver, $context['receiver_qid'] ?? null);
         $issuerQId = $this->subjectQId($connection, $issuer, $context['issuer_qid'] ?? null);
         $compatibility = $this->compatibilityFields($connection, (string) $number['type'], $receiver, $documentDate);
-        if ($dept === '') {
-            $dept = trim((string) ($compatibility['acDept'] ?? ''));
-        }
+        // Department is not a receiver/warehouse compatibility field. In
+        // particular, a 2005 receiver is a warehouse subject; copying a prior
+        // header's acDept/anDeptQId can make Pantheon resolve a warehouse (for
+        // example "Skladište sirovina") as "Prijemni odjel".
         $deptQId = $this->resolveDepartmentQId(
             $connection,
             $dept,
-            $context['department_qid'] ?? ($compatibility['anDeptQId'] ?? null),
-            $issuerQId
+            $context['department_qid'] ?? null
         );
         $person3 = trim((string) ($context['person3'] ?? $receiver));
         $person3QId = $this->subjectQId($connection, $person3, $context['person3_qid'] ?? null);
@@ -192,7 +192,7 @@ class PantheonDocumentWriter
         ]);
     }
 
-    private function resolveDepartmentQId(ConnectionInterface $connection, string &$department, mixed $candidate, int $fallback): int
+    private function resolveDepartmentQId(ConnectionInterface $connection, string $department, mixed $candidate): int
     {
         if (is_numeric((string) $candidate) && (int) $candidate > 0) {
             return (int) $candidate;
@@ -207,7 +207,9 @@ class PantheonDocumentWriter
             }
         }
 
-        return $fallback;
+        // Pantheon's neutral/default department. It must never be inferred
+        // from an issuer or receiver warehouse QId.
+        return 1;
     }
 
     private function compatibilityFields(ConnectionInterface $connection, string $type, string $receiver, Carbon $date): array
