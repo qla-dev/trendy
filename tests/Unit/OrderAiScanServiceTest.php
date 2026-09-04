@@ -3889,13 +3889,75 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('30. 7. 2026.', data_get($result, 'normalized_payload.order.delivery_deadline'));
         $this->assertCount(1, data_get($result, 'normalized_payload.items'));
         $this->assertSame(1, data_get($result, 'normalized_payload.items.0.line_number'));
-        $this->assertSame('033-0086.0002', data_get($result, 'normalized_payload.items.0.product_code'));
+        // The token before the "$" marker is the Artikel Nr. column; the code
+        // on the position line is the drawing number under Beschreibung.
+        $this->assertSame('7062895', data_get($result, 'normalized_payload.items.0.product_code'));
         $this->assertSame('KLEMMRING', data_get($result, 'normalized_payload.items.0.product_name'));
+        $this->assertSame('033-0086.0002', data_get($result, 'normalized_payload.items.0.drawing_reference'));
         $this->assertSame(2.0, data_get($result, 'normalized_payload.items.0.quantity'));
         $this->assertSame('KO', data_get($result, 'normalized_payload.items.0.unit'));
         $this->assertSame(199.8, data_get($result, 'normalized_payload.items.0.unit_price'));
         $this->assertSame(399.6, data_get($result, 'normalized_payload.items.0.line_total'));
         $this->assertSame(399.6, data_get($result, 'normalized_payload.summary.grand_total'));
+    }
+
+    public function test_execute_extraction_keeps_trendy_de_article_number_when_description_carries_a_drawing_number(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'openrouter',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+            'ai-order-scan.digital_pdf.fallback_to_ai' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-001271.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            'Trendy Germany GmbH',
+            '26-020-001271 Edina Duzan',
+            'Trendy Germany-2 4. 9. 2026. Liefertermin',
+            'Datum 12. 10. 2026. Deliver via Bestellung',
+            'Anlieferadresse: Lieferant: Artikel Nr. Pos. Beschreibung Menge EK-Preis Einheit',
+            '7039742$ 111,90 0,00 Betrag 2,00 VAT % STU 55,95',
+            'TRAPEZGEWINDESPINDEL TR 20X4 LI',
+            '1 3.022-3030-015-30',
+            '111,90 Total',
+        ]]));
+
+        app()->instance(OpenRouterOrderAiScanProvider::class, new class implements OrderAiScanProvider {
+            public function supportsLiveTransfer(): bool
+            {
+                return true;
+            }
+
+            public function scan(OrderAiScan $scan): array
+            {
+                throw new RuntimeException('AI provider should not be called for a digital Trendy DE order.');
+            }
+        });
+
+        $scan = new OrderAiScan([
+            'provider' => 'openrouter',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-001271.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertCount(1, data_get($result, 'normalized_payload.items'));
+        $this->assertSame(1, data_get($result, 'normalized_payload.items.0.line_number'));
+        // The drawing number is 17 characters and would not fit Pantheon's
+        // acIdent column, so reading it as the article code broke the transfer.
+        $this->assertSame('7039742', data_get($result, 'normalized_payload.items.0.product_code'));
+        $this->assertSame('TRAPEZGEWINDESPINDEL TR 20X4 LI', data_get($result, 'normalized_payload.items.0.product_name'));
+        $this->assertSame('3.022-3030-015-30', data_get($result, 'normalized_payload.items.0.drawing_reference'));
+        $this->assertSame(2.0, data_get($result, 'normalized_payload.items.0.quantity'));
+        $this->assertSame(55.95, data_get($result, 'normalized_payload.items.0.unit_price'));
+        $this->assertSame(111.9, data_get($result, 'normalized_payload.items.0.line_total'));
+        $this->assertSame(111.9, data_get($result, 'normalized_payload.summary.grand_total'));
     }
 
     public function test_execute_extraction_falls_back_to_ai_when_parser_total_difference_exceeds_five_euros(): void

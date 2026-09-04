@@ -1408,6 +1408,23 @@ class PantheonOrderTransferService
             return [];
         }
 
+        $identMaxLength = Product::catalogIdentMaxLength($this->targetConnectionName());
+
+        if ($identMaxLength > 0 && mb_strlen($productCode) > $identMaxLength) {
+            Log::error('Order AI Pantheon catalog item code does not fit the acIdent column.', [
+                'product_code' => $productCode,
+                'product_code_length' => mb_strlen($productCode),
+                'ident_max_length' => $identMaxLength,
+            ]);
+
+            throw new RuntimeException(sprintf(
+                'Šifra artikla %s ima %d znakova, a Pantheon katalog dozvoljava najviše %d, pa artikal nije moguće kreirati.',
+                $productCode,
+                mb_strlen($productCode),
+                $identMaxLength
+            ));
+        }
+
         try {
             $ensureResult = Product::ensureCatalogProduct([
                 'product_code' => $productCode,

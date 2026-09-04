@@ -394,7 +394,15 @@ class OrderAiDigitalPdfRulesParser
                 && $this->isTrendyDeDetachedAmountItem($openItem)
             ) {
                 $openItem['line_number'] = (int) ($detectedNextItem['line_number'] ?? 0);
-                $openItem['product_code'] = trim((string) ($detectedNextItem['product_code'] ?? ''));
+                $detectedProductCode = trim((string) ($detectedNextItem['product_code'] ?? ''));
+
+                if (trim((string) ($openItem['product_code'] ?? '')) === '') {
+                    $openItem['product_code'] = $detectedProductCode;
+                } elseif ($detectedProductCode !== '') {
+                    // The Artikel Nr. column already supplied the code, so this
+                    // token is the drawing number from the Beschreibung column.
+                    $openItem['drawing_reference'] = $detectedProductCode;
+                }
 
                 foreach ((array) ($detectedNextItem['description_lines'] ?? []) as $descriptionLine) {
                     $this->appendTrendyDeDescriptionText($openItem, (string) $descriptionLine);
@@ -404,6 +412,9 @@ class OrderAiDigitalPdfRulesParser
                     $this->applyTrendyDeLineToItem($openItem, $contentPart);
                 }
 
+                // The row has been claimed; a later position line must be able
+                // to start a genuinely new item.
+                $openItem['detached_amount_row'] = false;
                 $detectedNextItem = null;
                 $contentPart = '';
                 $startsNewItem = false;
@@ -684,14 +695,14 @@ class OrderAiDigitalPdfRulesParser
     private function parseTrendyDeDetachedAmountRow(string $line): ?array
     {
         if (
-            preg_match('/^\S+\$\s+(.+)$/u', trim($line), $matches) !== 1
+            preg_match('/^(\S+)\$\s+(.+)$/u', trim($line), $matches) !== 1
             || !str_contains($this->normalizeKeywordText($line), 'betrag')
             || !str_contains($this->normalizeKeywordText($line), 'vat %')
         ) {
             return null;
         }
 
-        $remainder = trim((string) ($matches[1] ?? ''));
+        $remainder = trim((string) ($matches[2] ?? ''));
         $unit = $this->extractTrendyDeUnitToken($remainder);
         $amounts = $this->extractGermanAmounts($remainder, true);
 
@@ -699,7 +710,14 @@ class OrderAiDigitalPdfRulesParser
             return null;
         }
 
-        $item = $this->initializeTrendyDeParsedItem(0, '', '');
+        // The token before the "$" marker sits in the Artikel Nr. column. The
+        // code-shaped token that follows on the position line belongs to the
+        // second Beschreibung line and is the drawing number, not the article.
+        $item = $this->initializeTrendyDeParsedItem(
+            0,
+            $this->extractTrendyDeDetachedAmountProductCode((string) ($matches[1] ?? '')),
+            ''
+        );
         $item['line_total'] = (float) ($amounts[0] ?? 0);
         $item['vat_rate'] = (float) ($amounts[1] ?? 0);
         $item['quantity'] = (float) ($amounts[2] ?? 0);
@@ -711,11 +729,20 @@ class OrderAiDigitalPdfRulesParser
         return $item;
     }
 
+    private function extractTrendyDeDetachedAmountProductCode(string $token): string
+    {
+        $token = trim($token);
+
+        if (preg_match('/^(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{2,}$/u', $token) !== 1) {
+            return '';
+        }
+
+        return $token;
+    }
+
     private function isTrendyDeDetachedAmountItem(mixed $item): bool
     {
-        return is_array($item)
-            && (bool) ($item['detached_amount_row'] ?? false)
-            && trim((string) ($item['product_code'] ?? '')) === '';
+        return is_array($item) && (bool) ($item['detached_amount_row'] ?? false);
     }
 
     private function parseTrendyDeAmountFirstRow(string $line): ?array
@@ -1168,6 +1195,7 @@ class OrderAiDigitalPdfRulesParser
         $item = [
             'line_number' => $lineNumber,
             'product_code' => trim($productCode),
+            'drawing_reference' => '',
             'description_lines' => [],
             'note_lines' => [],
             'quantity' => 0.0,
@@ -1454,7 +1482,7 @@ class OrderAiDigitalPdfRulesParser
             'line_number' => (int) ($item['line_number'] ?? 0),
             'product_code' => $this->normalizeScannedProductCode((string) ($item['product_code'] ?? '')),
             'product_name' => $this->normalizeScannedProductName($productName),
-            'drawing_reference' => '',
+            'drawing_reference' => trim((string) ($item['drawing_reference'] ?? '')),
             'material_hint' => '',
             'quantity' => (float) ($item['quantity'] ?? 0),
             'unit' => $this->normalizeScannedUnit((string) ($item['unit'] ?? '')),
