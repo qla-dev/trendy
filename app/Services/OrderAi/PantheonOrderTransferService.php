@@ -2,6 +2,7 @@
 
 namespace App\Services\OrderAi;
 
+use App\Exceptions\PantheonProductCodeTooLongException;
 use App\Models\Material;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -1417,12 +1418,7 @@ class PantheonOrderTransferService
                 'ident_max_length' => $identMaxLength,
             ]);
 
-            throw new RuntimeException(sprintf(
-                'Šifra artikla %s ima %d znakova, a Pantheon katalog dozvoljava najviše %d, pa artikal nije moguće kreirati.',
-                $productCode,
-                mb_strlen($productCode),
-                $identMaxLength
-            ));
+            throw new PantheonProductCodeTooLongException($productCode, $identMaxLength);
         }
 
         try {
