@@ -864,9 +864,23 @@ class PantheonOrderTransferService
             $catalogItemMissing = $resolvedProductQid === null;
 
             if ($strict && $catalogItemMissing) {
+                $reportedProductCode = $productCode !== ''
+                    ? $productCode
+                    : ($sourceProductCode !== '' ? $sourceProductCode : '[bez sifre]');
+
+                Log::error('Order AI Pantheon transfer stopped because a catalog item has no anQId.', [
+                    'product_code' => $reportedProductCode,
+                    'source_product_code' => $sourceProductCode,
+                    'source_product_name' => $sourceProductName,
+                    'catalog_item_found' => !empty($resolvedCatalogMaterial),
+                    'catalog_item_created' => $catalogItemCreated,
+                ]);
+
                 throw new RuntimeException(sprintf(
-                    'Pantheon nije pronašao katalog artikal za šifru %s.',
-                    $productCode !== '' ? $productCode : ($sourceProductCode !== '' ? $sourceProductCode : '[bez sifre]')
+                    empty($resolvedCatalogMaterial)
+                        ? 'Pantheon nije pronašao katalog artikal za šifru %s.'
+                        : 'Katalog artikal %s postoji u Pantheonu, ali nema dodijeljen anQId pa se ne može prenijeti.',
+                    $reportedProductCode
                 ));
             }
 
@@ -1394,18 +1408,43 @@ class PantheonOrderTransferService
             return [];
         }
 
-        $ensureResult = Product::ensureCatalogProduct([
-            'product_code' => $productCode,
-            'product_name' => $productName !== '' ? $productName : $productCode,
-            'product_um' => (string) config('ai-order-scan.default_unit', 'KO'),
-            'product_set' => '120',
-            'product_classification' => $primaryClassification,
-        ], $user, $this->targetConnectionName());
+        try {
+            $ensureResult = Product::ensureCatalogProduct([
+                'product_code' => $productCode,
+                'product_name' => $productName !== '' ? $productName : $productCode,
+                'product_um' => (string) config('ai-order-scan.default_unit', 'KO'),
+                'product_set' => '120',
+                'product_classification' => $primaryClassification,
+            ], $user, $this->targetConnectionName());
+        } catch (\Throwable $exception) {
+            Log::error('Order AI Pantheon catalog item could not be created.', [
+                'product_code' => $productCode,
+                'product_name' => $productName,
+                'primary_classification' => $primaryClassification,
+                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+            ]);
+
+            throw new RuntimeException(sprintf(
+                'Pantheon nije mogao kreirati katalog artikal %s: %s',
+                $productCode,
+                Utf8Sanitizer::cleanExceptionMessage($exception)
+            ), 0, $exception);
+        }
 
         $catalogRow = is_array($ensureResult['row'] ?? null)
-            ? (array) ($ensureResult['row'] ?? [])
+            ? $this->normalizeCatalogRowKeys((array) ($ensureResult['row'] ?? []))
             : [];
         $candidate = $this->normalizeCatalogMaterialCandidate($catalogRow);
+
+        if ($this->positiveIntegerOrNull($candidate['material_qid'] ?? null) === null) {
+            Log::warning('Order AI Pantheon catalog item has no usable anQId after ensure.', [
+                'product_code' => $productCode,
+                'product_name' => $productName,
+                'catalog_item_created' => (bool) ($ensureResult['created'] ?? false),
+                'catalog_item_repaired' => (bool) ($ensureResult['repaired'] ?? false),
+                'catalog_row_keys' => array_keys($catalogRow),
+            ]);
+        }
 
         if (!empty($candidate)) {
             $this->catalogMaterialByCodeCache[$this->normalizeCatalogLookupValue($productCode)] = $candidate;
@@ -2946,6 +2985,40 @@ class PantheonOrderTransferService
         $this->catalogMaterialByNameCache[$cacheKey] = $bestCandidate;
 
         return $bestCandidate;
+    }
+
+    /**
+     * Raw Pantheon rows keep the column casing of the target database, while the
+     * candidate normalizer looks up fixed keys such as acIdent or anQId. Re-map
+     * the known catalog columns so a differently cased column still resolves.
+     */
+    private function normalizeCatalogRowKeys(array $row): array
+    {
+        $knownColumns = [
+            'acident' => 'acIdent',
+            'acidentchild' => 'acIdentChild',
+            'acname' => 'acName',
+            'acdescr' => 'acDescr',
+            'acum' => 'acUM',
+            'accode' => 'acCode',
+            'acsetofitem' => 'acSetOfItem',
+            'acsupplier' => 'acSupplier',
+            'acclassif' => 'acClassif',
+            'anqid' => 'anQId',
+            'andimweight' => 'anDimWeight',
+            'andimweightbrutto' => 'anDimWeightBrutto',
+        ];
+        $normalized = $row;
+
+        foreach ($row as $key => $value) {
+            $canonicalKey = $knownColumns[strtolower((string) $key)] ?? null;
+
+            if ($canonicalKey !== null && !array_key_exists($canonicalKey, $normalized)) {
+                $normalized[$canonicalKey] = $value;
+            }
+        }
+
+        return $normalized;
     }
 
     private function normalizeCatalogMaterialCandidate(array $candidate): array

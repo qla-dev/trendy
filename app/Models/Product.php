@@ -120,9 +120,12 @@ class Product extends Model
             ->first();
 
         if ($existingRow !== null) {
+            $repairedRow = self::repairCatalogProductQuickId((array) $existingRow, $productCode, $connectionName);
+
             return [
                 'created' => false,
-                'row' => (array) $existingRow,
+                'repaired' => $repairedRow !== null,
+                'row' => $repairedRow ?? (array) $existingRow,
             ];
         }
 
@@ -179,10 +182,81 @@ class Product extends Model
             ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
             ->first();
 
+        if ($createdRow === null) {
+            return [
+                'created' => true,
+                'repaired' => false,
+                'row' => $insertPayload,
+            ];
+        }
+
+        $repairedRow = self::repairCatalogProductQuickId((array) $createdRow, $productCode, $connectionName);
+
         return [
             'created' => true,
-            'row' => $createdRow !== null ? (array) $createdRow : $insertPayload,
+            'repaired' => $repairedRow !== null,
+            'row' => $repairedRow ?? (array) $createdRow,
         ];
+    }
+
+    /**
+     * Pantheon order items reference the catalog through anQId. Rows that were
+     * imported or created outside Pantheon can keep anQId = 0 / NULL, which
+     * makes the article unusable for a transfer even though acIdent exists.
+     * Assign the next free quick id in that case and return the refreshed row.
+     */
+    private static function repairCatalogProductQuickId(
+        array $row,
+        string $productCode,
+        ?string $connectionName = null
+    ): ?array {
+        if (!array_key_exists('anQId', self::catalogItemColumns($connectionName))) {
+            return null;
+        }
+
+        // Identity and computed columns are maintained by SQL Server itself.
+        if (isset(self::catalogItemNonInsertableColumns($connectionName)['anQId'])) {
+            return null;
+        }
+
+        if ((int) (self::toIntOrNull(self::catalogRowValue($row, 'anQId')) ?? 0) > 0) {
+            return null;
+        }
+
+        $connection = self::db($connectionName);
+        $itemsTable = self::sourceSchema() . '.' . self::itemsTable();
+        $nextQId = ((int) ($connection->table($itemsTable)->max('anQId') ?? 0)) + 1;
+
+        $connection->table($itemsTable)
+            ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
+            ->update(['anQId' => $nextQId]);
+
+        $refreshedRow = $connection->table($itemsTable)
+            ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
+            ->first();
+
+        return $refreshedRow !== null ? (array) $refreshedRow : null;
+    }
+
+    /**
+     * Raw Pantheon rows keep the column casing of the target database, so read
+     * catalog values case-insensitively before comparing them.
+     */
+    private static function catalogRowValue(array $row, string $column): mixed
+    {
+        if (array_key_exists($column, $row)) {
+            return $row[$column];
+        }
+
+        $normalizedColumn = strtolower($column);
+
+        foreach ($row as $key => $value) {
+            if (strtolower((string) $key) === $normalizedColumn) {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     public static function ensureCatalogProductStructure(
