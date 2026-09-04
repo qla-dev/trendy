@@ -136,6 +136,20 @@ class Product extends Model
             throw new \RuntimeException('Catalog item columns could not be resolved.');
         }
 
+        // acIdent is the catalog identifier every later lookup uses. Storing a
+        // truncated ident would silently create a different article than the
+        // one that was requested, so refuse instead of shortening it.
+        $identMaxLength = self::catalogIdentMaxLength($connectionName);
+
+        if ($identMaxLength > 0 && mb_strlen($productCode) > $identMaxLength) {
+            throw new \RuntimeException(sprintf(
+                'Product code "%s" is %d characters long, but the Pantheon catalog column acIdent accepts at most %d.',
+                $productCode,
+                mb_strlen($productCode),
+                $identMaxLength
+            ));
+        }
+
         $nextQId = array_key_exists('anQId', $catalogColumns)
             ? ((int) ($connection->table($itemsTable)->max('anQId') ?? 0)) + 1
             : null;
@@ -178,8 +192,12 @@ class Product extends Model
 
         $connection->table($itemsTable)->insert($insertPayload);
 
+        // Read the row back through the ident that was actually written, so a
+        // column-level adjustment can never make the fresh article look missing.
+        $insertedProductCode = trim((string) ($insertPayload['acIdent'] ?? $productCode));
+
         $createdRow = $connection->table($itemsTable)
-            ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$productCode])
+            ->whereRaw("LTRIM(RTRIM(ISNULL(acIdent, ''))) = ?", [$insertedProductCode])
             ->first();
 
         if ($createdRow === null) {
@@ -190,13 +208,23 @@ class Product extends Model
             ];
         }
 
-        $repairedRow = self::repairCatalogProductQuickId((array) $createdRow, $productCode, $connectionName);
+        $repairedRow = self::repairCatalogProductQuickId((array) $createdRow, $insertedProductCode, $connectionName);
 
         return [
             'created' => true,
             'repaired' => $repairedRow !== null,
             'row' => $repairedRow ?? (array) $createdRow,
         ];
+    }
+
+    /**
+     * Maximum acIdent length the Pantheon catalog accepts, or 0 when unknown.
+     */
+    public static function catalogIdentMaxLength(?string $connectionName = null): int
+    {
+        $identColumn = self::catalogItemColumns($connectionName)['acIdent'] ?? null;
+
+        return is_array($identColumn) ? max(0, (int) ($identColumn['max_length'] ?? 0)) : 0;
     }
 
     /**
