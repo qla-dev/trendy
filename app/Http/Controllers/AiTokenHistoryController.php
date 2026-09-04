@@ -129,17 +129,7 @@ class AiTokenHistoryController extends Controller
 
         $rows = OrderAiScan::query()
             ->whereIn('id', $ids)
-            ->get([
-                'id',
-                'status',
-                'processing_step',
-                'error_message',
-                'processed_at',
-                'transferred_at',
-                'pantheon_order_key',
-                'pantheon_order_view',
-                'pantheon_order_qid',
-            ]);
+            ->get($this->historyStatusColumns());
 
         $payload = [
             'rows' => $rows->mapWithKeys(function (OrderAiScan $scan) {
@@ -794,6 +784,30 @@ class AiTokenHistoryController extends Controller
         }
 
         return $perPage;
+    }
+
+    /**
+     * Columns every status and action resolver reads. Polling re-renders the
+     * badge and the row buttons from these, so a column missing here makes a
+     * polled row disagree with the freshly rendered page.
+     *
+     * @return list<string>
+     */
+    private function historyStatusColumns(): array
+    {
+        return [
+            'id',
+            'status',
+            'processing_step',
+            'error_message',
+            'processed_at',
+            'transferred_at',
+            'pantheon_order_key',
+            'pantheon_order_view',
+            'pantheon_order_qid',
+            'pantheon_transfer_payload',
+            'normalized_payload',
+        ];
     }
 
     private function historyListColumns(bool $includeUsdSpend = false): array
