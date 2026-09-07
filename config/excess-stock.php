@@ -9,9 +9,10 @@ return [
     'warehouse' => env('EXCESS_STOCK_WAREHOUSE', 'Skladište dodatnih sirovina'),
     'target_date' => env('EXCESS_STOCK_TARGET_DATE', '2026-12-15'),
     'max_materials_per_work_order' => (int) env('EXCESS_STOCK_MAX_MATERIALS_PER_WORK_ORDER', 5),
-    'assignment_mode' => env('EXCESS_STOCK_ASSIGNMENT_MODE', 'target_date'),
-    'fixed_assignment_quantity' => env('EXCESS_STOCK_FIXED_ASSIGNMENT_QUANTITY', '0.05'),
-    'reservation_marker' => 'REZERVACIJA_DODATNIH_SIROVINA',
+    // Extra materials are capped by the finished article's sales price.
+    'assignment_mode' => env('EXCESS_STOCK_ASSIGNMENT_MODE', 'sales_price_percent'),
+    'sales_price_percent' => env('EXCESS_STOCK_SALES_PRICE_PERCENT', '0.07'),
+    'reservation_marker' => 'Rezervacija dodatnih sirovina',
     'document_marker' => 'RAZDUZENJE_DODATNIH_SIROVINA_6400',
     'notification_lookback_days' => (int) env('EXCESS_STOCK_NOTIFICATION_LOOKBACK_DAYS', 2),
     // Kept separate from the AI scanner so this workflow can be routed to

@@ -8,13 +8,22 @@ class WorkOrderClosingCalculator
 {
     public const SCALE = 6;
 
+    /** SQLSRV may expose small decimal values as scientific notation, which BCMath rejects. */
+    public static function decimal(mixed $value): string
+    {
+        $raw = trim(str_replace(',', '.', (string) ($value ?? '0')));
+        if ($raw === '') return '0';
+        if (preg_match('/[eE]/', $raw)) return number_format((float) $raw, self::SCALE, '.', '');
+        return $raw;
+    }
+
     public function normalizeNonNegative(mixed $value, string $field = 'vrijednost'): string
     {
         if ($value === null || (is_string($value) && trim($value) === '')) {
             throw new InvalidArgumentException($field . ' je obavezna.');
         }
 
-        $normalized = str_replace(',', '.', trim((string) $value));
+        $normalized = self::decimal($value);
 
         if (!preg_match('/^(?:0|[1-9]\d*)(?:\.\d+)?$/', $normalized)) {
             throw new InvalidArgumentException($field . ' mora biti nenegativan broj.');

@@ -2832,7 +2832,10 @@
                   @foreach($closeMaterials as $material)
                     @php
                       $excessCloseNote = strtoupper(trim((string) ($material['napomena'] ?? '')));
-                      $isExcessCloseMaterial = str_starts_with($excessCloseNote, 'REZERVACIJA_DODATNIH_SIROVINA|') || str_starts_with($excessCloseNote, 'EXCESS_STOCK_RESERVATION|');
+                      $isExcessCloseMaterial = str_starts_with($excessCloseNote, strtoupper((string) config('excess-stock.reservation_marker')))
+                        || str_starts_with($excessCloseNote, 'AUTOMATSKI POPUNJENO SA SKLADIŠTA DODATNIH SIROVINA')
+                        || str_starts_with($excessCloseNote, 'REZERVACIJA_DODATNIH_SIROVINA')
+                        || str_starts_with($excessCloseNote, 'EXCESS_STOCK_RESERVATION');
                     @endphp
                     <tr data-existing-material="{{ trim((string) ($material['materijal'] ?? '')) !== '' ? '1' : '0' }}" data-excess-stock-material="{{ $isExcessCloseMaterial ? '1' : '0' }}">
                       <td class="text-nowrap">{{ $displayValue($material['pozicija'] ?? $loop->iteration) }}</td>
@@ -4343,6 +4346,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           var quantityInput = row.querySelector('.wo-close-material-quantity') || {};
           return {
             code: String((row.querySelector('.wo-close-material-code') || {}).value || '').trim().toUpperCase(),
+            name: String((row.querySelector('.wo-close-material-name') || {}).value || '').trim(),
             quantity: String(quantityInput.value || '').trim().replace(',', '.'),
             item_qid: Number(quantityInput.dataset.itemId || 0),
             is_new: row.getAttribute('data-existing-material') === '0'
@@ -4824,7 +4828,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
             return Swal.fire(swalWithTheme({
               icon: 'success',
-              title: partialClose ? (response.message || data.message || 'Radni nalog je djelomično zaključen') : 'Radni nalog zaključen',
+              title: partialClose ? 'Radni nalog je djelomično zaključen' : 'Radni nalog zaključen',
               html: closingResultHtml(data),
               confirmButtonText: 'U redu',
               customClass: { confirmButton: 'btn btn-success' },

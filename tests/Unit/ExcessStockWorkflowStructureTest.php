@@ -10,15 +10,17 @@ class ExcessStockWorkflowStructureTest extends TestCase
     {
         $service = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/ExcessStockService.php');
 
-        $this->assertStringContainsString("'reservation_marker' => 'REZERVACIJA_DODATNIH_SIROVINA'", file_get_contents(__DIR__ . '/../../config/excess-stock.php'));
+        $this->assertStringContainsString("'reservation_marker' => 'Rezervacija dodatnih sirovina'", file_get_contents(__DIR__ . '/../../config/excess-stock.php'));
         $this->assertStringContainsString('bcsub($physical, $held', $service);
         $this->assertStringContainsString("\$quantity = bccomp(\$planned, '0'", $service);
         $this->assertStringContainsString('WITH (UPDLOCK, HOLDLOCK)', $service);
         $this->assertStringContainsString('reservedByMaterial($db)', $service);
-        $this->assertStringContainsString("'acNote' => \$this->marker()", $service);
+        $this->assertStringContainsString("'acNote' => 'Automatski popunjeno sa '", $service);
         $this->assertStringContainsString('physical stock changes only', $service);
         $this->assertStringContainsString('assignToNewWorkOrder', $service);
-        $this->assertStringContainsString("bcmul(\$preview['fixed_quantity'], \$plannedPieces", $service);
+        $this->assertStringContainsString('salesPriceForWorkOrder', $service);
+        $this->assertStringContainsString("bcmul(\$salesPrice, \$preview['sales_price_percent']", $service);
+        $this->assertStringContainsString('assignment_per_piece', $service);
     }
 
     public function test_special_6400_is_separate_from_normal_consumption_and_is_retry_safe(): void

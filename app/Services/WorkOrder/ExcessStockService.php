@@ -27,8 +27,8 @@ class ExcessStockService
     public function marker(): string { return (string) config('excess-stock.reservation_marker'); }
     public function documentMarker(): string { return (string) config('excess-stock.document_marker'); }
 
-    /** Older Testna rows remain readable after the Bosnian labels were introduced. */
-    public function markers(): array { return array_values(array_unique([$this->marker(), 'EXCESS_STOCK_RESERVATION'])); }
+    /** Older rows retain their machine-readable markers after the note became a sentence. */
+    public function markers(): array { return array_values(array_unique([$this->marker(), 'Automatski popunjeno sa skladišta dodatnih sirovina', 'REZERVACIJA_DODATNIH_SIROVINA', 'EXCESS_STOCK_RESERVATION'])); }
     public function documentMarkers(): array { return array_values(array_unique([$this->documentMarker(), 'EXCESS_STOCK_CLEANUP_6400'])); }
 
     public function isExcessItem(array|object $item): bool
@@ -36,7 +36,7 @@ class ExcessStockService
         $value = is_array($item) ? ($item['acNote'] ?? '') : ($item->acNote ?? '');
         $value = strtoupper(trim((string) $value));
         foreach ($this->markers() as $marker) {
-            if (str_starts_with($value, strtoupper($marker) . '|')) return true;
+            if (str_starts_with($value, strtoupper($marker))) return true;
         }
         return false;
     }
@@ -47,7 +47,7 @@ class ExcessStockService
             ->join('dbo.tHF_WOEx as wo', 'wo.acKey', '=', 'wi.acKey')
             ->where(function ($query) {
                 foreach ($this->markers() as $marker) {
-                    $query->orWhereRaw("UPPER(LTRIM(RTRIM(ISNULL(wi.acNote, '')))) LIKE ?", [strtoupper($marker) . '|%']);
+                    $query->orWhereRaw("UPPER(LTRIM(RTRIM(ISNULL(wi.acNote, '')))) LIKE ?", [strtoupper($marker) . '%']);
                 }
             })
             ->whereRaw("UPPER(LTRIM(RTRIM(ISNULL(wo.acStatusMF, '')))) <> 'Z'")
@@ -102,8 +102,15 @@ class ExcessStockService
         if ($limit !== null) $orders = array_slice($orders, 0, max(0, $limit));
         $materials = $this->availableMaterials($db);
         $slots = count($orders) * max(1, (int) config('excess-stock.max_materials_per_work_order', 5));
-        $mode = (string) config('excess-stock.assignment_mode', 'target_date');
-        $fixed = (string) config('excess-stock.fixed_assignment_quantity', '0.05');
+        $mode = (string) config('excess-stock.assignment_mode', 'sales_price_percent');
+        $percentage = (string) config('excess-stock.sales_price_percent', '0.07');
+        if ($mode !== 'sales_price_percent'
+            || bccomp($percentage, '0', WorkOrderClosingCalculator::SCALE) <= 0
+            || bccomp($percentage, '1', WorkOrderClosingCalculator::SCALE) > 0) {
+            throw new RuntimeException('Neispravno je podeĹˇen limit dodatnih sirovina po prodajnoj cijeni.');
+        }
+        return ['orders' => $orders, 'materials' => $materials, 'slots' => $slots, 'mode' => $mode, 'sales_price_percent' => $percentage];
+        /* Legacy target-date/fixed allocation retained below temporarily for historical reference.
         if ($mode === 'fixed' && bccomp($fixed, '0', WorkOrderClosingCalculator::SCALE) <= 0) {
             throw new RuntimeException('Fiksna količina dodatnih sirovina mora biti veća od nule.');
         }
@@ -120,12 +127,14 @@ class ExcessStockService
             if (bccomp($qty, $material['available_qty'], WorkOrderClosingCalculator::SCALE) > 0) $qty = $material['available_qty'];
             $plan[] = $material + ['assignment_qty' => $qty, 'assignment_opportunities' => $opportunities];
         }
-        return ['orders' => $orders, 'materials' => $plan, 'slots' => $slots, 'target_date' => (string) config('excess-stock.target_date'), 'mode' => $mode, 'fixed_quantity' => $fixed];
+        return ['orders' => $orders, 'materials' => $plan, 'slots' => $slots, 'target_date' => (string) config('excess-stock.target_date'), 'mode' => $mode, 'fixed_quantity' => $fixed]; */
     }
 
     public function assignPreview(ConnectionInterface $db, ?int $limit = null): array
     {
         $preview = $this->preview($db, $limit);
+        return $this->salesPriceAssignments($db, $preview);
+        /* Legacy target-date/fixed allocator retained below temporarily for historical reference.
         $max = max(1, (int) config('excess-stock.max_materials_per_work_order', 5));
         $remaining = array_map(fn (array $material) => (int) $material['assignment_opportunities'], $preview['materials']);
         $remainingQuantity = array_map(fn (array $material) => (string) $material['available_qty'], $preview['materials']);
@@ -169,7 +178,7 @@ class ExcessStockService
             if ($lines === []) break;
             $assignments[] = ['work_order' => $order, 'materials' => $lines];
         }
-        return $preview + ['assignments' => $assignments];
+        return $preview + ['assignments' => $assignments]; */
     }
 
     private function fixedAssignmentCount(string $available, string $fixed): int
@@ -178,6 +187,140 @@ class ExcessStockService
         return bccomp(bcmul((string) $whole, $fixed, WorkOrderClosingCalculator::SCALE), $available, WorkOrderClosingCalculator::SCALE) < 0
             ? $whole + 1
             : max(1, $whole);
+    }
+
+    /** Selects up to five distinct materials whose combined value cannot exceed the RN cap. */
+    private function salesPriceAssignments(ConnectionInterface $db, array $preview): array
+    {
+        $max = max(1, (int) config('excess-stock.max_materials_per_work_order', 5));
+        $remainingQuantity = array_map(fn (array $material) => (string) $material['available_qty'], $preview['materials']);
+        $assignments = [];
+        $skipped = [];
+
+        foreach ($preview['orders'] as $order) {
+            $plannedPieces = (string) ($order['anPlanQty'] ?? '0');
+            $price = $this->salesPriceForWorkOrder($db, (string) ($order['acKey'] ?? ''));
+            if ($price === null || bccomp($plannedPieces, '0', WorkOrderClosingCalculator::SCALE) <= 0) {
+                $skipped[] = $order + ['skip_reason' => $price === null ? 'Nije pronaÄ‘ena pozitivna prodajna cijena za RN ili artikl.' : 'Planirana koliÄŤina mora biti veÄ‡a od nule.'];
+                continue;
+            }
+
+            $salesPrice = $price['price'];
+            $budgetPerPiece = bcmul($salesPrice, $preview['sales_price_percent'], WorkOrderClosingCalculator::SCALE);
+            $budgetTotal = bcmul($budgetPerPiece, $plannedPieces, WorkOrderClosingCalculator::SCALE);
+            $eligible = [];
+            foreach ($preview['materials'] as $index => $material) {
+                if (bccomp($remainingQuantity[$index], '0', WorkOrderClosingCalculator::SCALE) > 0
+                    && bccomp((string) $material['price'], '0', WorkOrderClosingCalculator::SCALE) > 0) {
+                    $eligible[] = $index;
+                }
+            }
+            shuffle($eligible);
+            $eligible = $this->selectMaterialsWithCapacity($preview['materials'], $remainingQuantity, $eligible, $max, $budgetTotal);
+            $remainingBudget = $budgetTotal;
+            $lines = [];
+
+            foreach ($eligible as $position => $index) {
+                $material = $preview['materials'][$index];
+                $lineBudget = bcdiv($remainingBudget, (string) (count($eligible) - $position), WorkOrderClosingCalculator::SCALE);
+                $quantity = bcdiv($lineBudget, (string) $material['price'], WorkOrderClosingCalculator::SCALE);
+                if (bccomp($quantity, $remainingQuantity[$index], WorkOrderClosingCalculator::SCALE) > 0) {
+                    $quantity = $remainingQuantity[$index];
+                }
+                if (bccomp($quantity, '0', WorkOrderClosingCalculator::SCALE) <= 0) continue;
+                $lineTotal = bcmul($quantity, (string) $material['price'], WorkOrderClosingCalculator::SCALE);
+                $remainingQuantity[$index] = bcsub($remainingQuantity[$index], $quantity, WorkOrderClosingCalculator::SCALE);
+                $remainingBudget = bcsub($remainingBudget, $lineTotal, WorkOrderClosingCalculator::SCALE);
+                $lines[] = $material + [
+                    'source_index' => $index,
+                    'assignment_qty' => $quantity,
+                    'assignment_total' => $lineTotal,
+                    'assignment_per_piece' => bcdiv($lineTotal, $plannedPieces, WorkOrderClosingCalculator::SCALE),
+                ];
+            }
+            // A material with low stock may not use its equal initial share.
+            // Reallocate that remainder across the same five selected lines,
+            // so an avoidable gap below the sales-price cap is never left.
+            foreach ($eligible as $index) {
+                if (bccomp($remainingBudget, '0', WorkOrderClosingCalculator::SCALE) <= 0) break;
+                if (bccomp($remainingQuantity[$index], '0', WorkOrderClosingCalculator::SCALE) <= 0) continue;
+                $material = $preview['materials'][$index];
+                $quantity = bcdiv($remainingBudget, (string) $material['price'], WorkOrderClosingCalculator::SCALE);
+                if (bccomp($quantity, $remainingQuantity[$index], WorkOrderClosingCalculator::SCALE) > 0) $quantity = $remainingQuantity[$index];
+                if (bccomp($quantity, '0', WorkOrderClosingCalculator::SCALE) <= 0) continue;
+                $total = bcmul($quantity, (string) $material['price'], WorkOrderClosingCalculator::SCALE);
+                foreach ($lines as &$line) {
+                    if (($line['source_index'] ?? null) !== $index) continue;
+                    $line['assignment_qty'] = bcadd($line['assignment_qty'], $quantity, WorkOrderClosingCalculator::SCALE);
+                    $line['assignment_total'] = bcadd($line['assignment_total'], $total, WorkOrderClosingCalculator::SCALE);
+                    $line['assignment_per_piece'] = bcdiv($line['assignment_total'], $plannedPieces, WorkOrderClosingCalculator::SCALE);
+                    break;
+                }
+                unset($line);
+                $remainingQuantity[$index] = bcsub($remainingQuantity[$index], $quantity, WorkOrderClosingCalculator::SCALE);
+                $remainingBudget = bcsub($remainingBudget, $total, WorkOrderClosingCalculator::SCALE);
+            }
+            if ($lines === []) continue;
+            $assignedTotal = bcsub($budgetTotal, $remainingBudget, WorkOrderClosingCalculator::SCALE);
+            $assignments[] = ['work_order' => $order + [
+                'sales_price' => $salesPrice,
+                'sales_price_source' => $price['source'],
+                'budget_per_piece' => $budgetPerPiece,
+                'budget_total' => $budgetTotal,
+                'assigned_total' => $assignedTotal,
+                'assigned_per_piece' => bcdiv($assignedTotal, $plannedPieces, WorkOrderClosingCalculator::SCALE),
+            ], 'materials' => $lines];
+        }
+
+        return $preview + ['assignments' => $assignments, 'skipped_orders' => $skipped];
+    }
+
+    /** Keeps the random selection but replaces low-capacity choices when needed to fund the cap. */
+    private function selectMaterialsWithCapacity(array $materials, array $remainingQuantity, array $candidates, int $max, string $budget): array
+    {
+        $selected = array_slice($candidates, 0, $max);
+        $unused = array_slice($candidates, count($selected));
+        $capacity = static fn (int $index): string => bcmul($remainingQuantity[$index], (string) $materials[$index]['price'], WorkOrderClosingCalculator::SCALE);
+        $total = '0';
+        foreach ($selected as $index) $total = bcadd($total, $capacity($index), WorkOrderClosingCalculator::SCALE);
+        foreach ($unused as $candidate) {
+            if (bccomp($total, $budget, WorkOrderClosingCalculator::SCALE) >= 0 || $selected === []) break;
+            $weakestPosition = 0;
+            foreach ($selected as $position => $index) {
+                if (bccomp($capacity($index), $capacity($selected[$weakestPosition]), WorkOrderClosingCalculator::SCALE) < 0) $weakestPosition = $position;
+            }
+            if (bccomp($capacity($candidate), $capacity($selected[$weakestPosition]), WorkOrderClosingCalculator::SCALE) <= 0) continue;
+            $total = bcsub($total, $capacity($selected[$weakestPosition]), WorkOrderClosingCalculator::SCALE);
+            $selected[$weakestPosition] = $candidate;
+            $total = bcadd($total, $capacity($candidate), WorkOrderClosingCalculator::SCALE);
+        }
+        return $selected;
+    }
+
+    /** Linked sales-order price wins; an unlinked manual RN uses the article catalog price. */
+    private function salesPriceForWorkOrder(ConnectionInterface $db, string $workOrderKey): ?array
+    {
+        $linked = $db->table('dbo.tHF_LinkWOExOrderItem as link')
+            ->leftJoin('dbo.tHE_OrderItem as by_qid', 'by_qid.anQId', '=', 'link.anOrderItemQId')
+            ->leftJoin('dbo.tHE_OrderItem as by_number', function ($join) {
+                $join->on('by_number.acKey', '=', 'link.acLnkKey')->on('by_number.anNo', '=', 'link.anLnkNo');
+            })
+            ->where('link.acKey', $workOrderKey)
+            ->orderBy('link.anQId')
+            ->selectRaw('COALESCE(NULLIF(by_qid.anPrice, 0), NULLIF(by_number.anPrice, 0)) as price')
+            ->value('price');
+        if ($linked !== null && bccomp((string) $linked, '0', WorkOrderClosingCalculator::SCALE) > 0) {
+            return ['price' => (string) $linked, 'source' => 'povezana stavka narudĹľbe'];
+        }
+
+        $catalog = $db->table('dbo.tHF_WOEx as wo')
+            ->join('dbo.tHE_SetItem as item', 'item.acIdent', '=', 'wo.acIdent')
+            ->where('wo.acKey', $workOrderKey)
+            ->value('item.anPrice');
+        if ($catalog !== null && bccomp((string) $catalog, '0', WorkOrderClosingCalculator::SCALE) > 0) {
+            return ['price' => (string) $catalog, 'source' => 'katalog artikla'];
+        }
+        return null;
     }
 
     /**
@@ -224,7 +367,7 @@ class ExcessStockService
                 if ($code === '' || bccomp($quantity, '0', WorkOrderClosingCalculator::SCALE) <= 0) continue;
                 $alreadyExists = $db->table('dbo.tHF_WOExItem')->where('acKey', $key)->where('acIdent', $code)
                     ->where(function ($query) {
-                        foreach ($this->markers() as $marker) $query->orWhere('acNote', 'like', $marker . '|%');
+                        foreach ($this->markers() as $marker) $query->orWhere('acNote', 'like', $marker . '%');
                     })->exists();
                 if ($alreadyExists) continue;
 
@@ -246,7 +389,7 @@ class ExcessStockService
                     'acUM' => substr((string) ($material['unit'] ?? ''), 0, 3), 'anPlanQty' => $quantity,
                     'anQty' => $quantity, 'anQty1' => $quantity, 'anQtyBase' => 0,
                     'acOperationType' => null,
-                    'acNote' => $this->marker() . '|skladiste=' . $this->warehouse() . '|nacin=automatski',
+                    'acNote' => 'Automatski popunjeno sa ' . mb_strtolower($this->warehouse()),
                     'adTimeIns' => now(), 'anUserIns' => $userId, 'adTimeChg' => now(), 'anUserChg' => $userId,
                 ];
                 if ($nextQid !== null) $payload['anQId'] = $nextQid++;
@@ -267,7 +410,7 @@ class ExcessStockService
             ->where('wi.acKey', $workOrderKey)
             ->where(function ($query) {
                 foreach ($this->markers() as $marker) {
-                    $query->orWhereRaw("UPPER(LTRIM(RTRIM(ISNULL(wi.acNote, '')))) LIKE ?", [strtoupper($marker) . '|%']);
+                    $query->orWhereRaw("UPPER(LTRIM(RTRIM(ISNULL(wi.acNote, '')))) LIKE ?", [strtoupper($marker) . '%']);
                 }
             })
             ->orderBy('wi.anNo')->get(['wi.anQId as item_qid','wi.anPlanQty','wi.anQty','i.acIdent','i.acName','i.acUM','i.anQId as ident_qid','s.anLastPrice'])
@@ -275,10 +418,10 @@ class ExcessStockService
                 // Normal UI editing can reset anQty after a backfill. The
                 // flagged reservation's planned quantity is its immutable
                 // source of truth for the dedicated 6400 issue.
-                $planned = (string) ($row->anPlanQty ?? '0');
-                $actual = (string) ($row->anQty ?? '0');
+                $planned = WorkOrderClosingCalculator::decimal($row->anPlanQty ?? '0');
+                $actual = WorkOrderClosingCalculator::decimal($row->anQty ?? '0');
                 $quantity = bccomp($planned, '0', WorkOrderClosingCalculator::SCALE) > 0 ? $planned : $actual;
-                $price = (string) ($row->anLastPrice ?? 0);
+                $price = WorkOrderClosingCalculator::decimal($row->anLastPrice ?? 0);
                 return [
                     'item_qid' => (int) $row->item_qid,
                     'requires_close_time_preparation' => false,

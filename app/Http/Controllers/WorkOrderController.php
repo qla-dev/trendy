@@ -9292,9 +9292,7 @@ class WorkOrderController extends Controller
         $taskState = strtoupper(trim((string) $this->value($row, ['acTaskState'], '')));
         $isFinished = in_array($taskState, ['F', 'Z', 'C', 'D'], true);
         $displayNote = $this->workOrderItemDisplayNote($row);
-        $normalizedDisplayNote = Str::upper(trim((string) $displayNote));
-        $isExcessStockMaterial = Str::startsWith($normalizedDisplayNote, 'REZERVACIJA_DODATNIH_SIROVINA|')
-            || Str::startsWith($normalizedDisplayNote, 'EXCESS_STOCK_RESERVATION|');
+        $isExcessStockMaterial = $this->isExcessStockReservationNote($displayNote);
         $itemId = $this->value($row, ['anQId', 'anNo'], null);
         $itemQid = $this->value($row, ['anQId'], null);
         $itemNo = $this->value($row, ['anNo'], null);
@@ -9636,8 +9634,18 @@ class WorkOrderController extends Controller
     private function isExcessStockReservationNote(string $note): bool
     {
         $note = Str::upper(trim($note));
-        return Str::startsWith($note, 'REZERVACIJA_DODATNIH_SIROVINA|')
-            || Str::startsWith($note, 'EXCESS_STOCK_RESERVATION|');
+        foreach (array_unique([
+            (string) config('excess-stock.reservation_marker'),
+            'Automatski popunjeno sa skladišta dodatnih sirovina',
+            'REZERVACIJA_DODATNIH_SIROVINA',
+            'EXCESS_STOCK_RESERVATION',
+        ]) as $marker) {
+            if (Str::startsWith($note, Str::upper($marker))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function mapRegOperationRow(array $row): array

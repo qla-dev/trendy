@@ -106,15 +106,20 @@ class WorkOrderClosingValidationTest extends TestCase
         $this->assertFalse($copiedRows->fails());
     }
 
-    public function test_zero_material_quantity_blocks_closing_instead_of_being_silently_skipped(): void
+    public function test_zero_material_quantity_is_skipped_and_a_named_row_marks_the_order_partial(): void
     {
         $service = $this->closingServiceWithoutDependencies();
-        $method = (new ReflectionClass($service))->getMethod('prepareMaterials');
-        $method->setAccessible(true);
+        $reflection = new ReflectionClass($service);
+        $prepareMaterials = $reflection->getMethod('prepareMaterials');
+        $prepareMaterials->setAccessible(true);
+        $pendingMaterials = $reflection->getMethod('zeroQuantityNamedMaterials');
+        $pendingMaterials->setAccessible(true);
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Količina materijala mora biti veća od nule.');
-        $method->invoke($service, [['code' => 'ANY-MATERIAL', 'quantity' => '0']], '2');
+        $this->assertSame([], $prepareMaterials->invoke($service, [['code' => 'ANY-MATERIAL', 'quantity' => '0']], '2'));
+        $this->assertSame(
+            [['code' => 'ANY-MATERIAL', 'name' => 'Testni materijal']],
+            $pendingMaterials->invoke($service, [['code' => 'ANY-MATERIAL', 'name' => 'Testni materijal', 'quantity' => '0']])
+        );
     }
 
     public function test_closing_material_quantity_is_scaled_by_the_work_order_piece_count(): void
