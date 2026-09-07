@@ -6,6 +6,7 @@ use App\Exceptions\InsufficientRawMaterialStockException;
 use App\Models\Material;
 use App\Models\Product;
 use App\Services\WorkOrder\ProjectedProductionDateCalculator;
+use App\Services\WorkOrder\ExcessStockService;
 use App\Services\WorkOrder\PantheonMaterialPreparationService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
@@ -445,7 +446,7 @@ class WorkOrderController extends Controller
         }
     }
 
-    public function createFromScan(Request $request): JsonResponse
+    public function createFromScan(Request $request, ExcessStockService $excessStock): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'identifier' => ['required', 'string', 'max:255'],
@@ -622,6 +623,7 @@ class WorkOrderController extends Controller
             $workOrderKey = trim((string) ($result['row']['acKey'] ?? $routeId));
             $workOrderNumber = $this->formatWorkOrderNumberForCalendar((string) ($mapped['broj_naloga'] ?? $routeId));
             $created = (string) ($result['status'] ?? '') === 'created';
+            $excessStockReservations = 0;
 
             if ($created) {
                 $this->attachSastavnicaToWorkOrder(
@@ -635,6 +637,22 @@ class WorkOrderController extends Controller
                     $workOrderKey,
                     is_array($result['schedule'] ?? null) ? $result['schedule'] : []
                 );
+
+                // This runs after the RN and its standard BOM are complete.
+                // A reservation failure must never roll back normal RN
+                // creation; it is recorded for retry/diagnosis instead.
+                try {
+                    $excessStockReservations = $excessStock->assignToNewWorkOrder(
+                        DB::connection(),
+                        $workOrderKey,
+                        (int) ($request->user()->id ?? 0)
+                    );
+                } catch (Throwable $exception) {
+                    Log::warning('Automatic excess-stock assignment after RN creation failed.', [
+                        'work_order_key' => $workOrderKey,
+                        'message' => $exception->getMessage(),
+                    ]);
+                }
             }
 
             return response()->json([
@@ -644,6 +662,7 @@ class WorkOrderController extends Controller
                 'data' => [
                     'status' => $created ? 'created' : 'existing',
                     'created' => $created,
+                    'excess_stock_reservations' => $excessStockReservations,
                     'catalog_item_created' => (bool) ($debugContext['catalog_item_created'] ?? false),
                     'work_order' => [
                         'id' => $routeId,
@@ -5690,6 +5709,7 @@ class WorkOrderController extends Controller
                     'i.anQty as __item_qty',
                     'i.anQty1 as __item_qty1',
                     'i.anPlanQty as __item_plan_qty',
+                    'i.acNote as __item_note',
                 ]);
         } else {
             $linkColumn = $this->firstExistingColumn($columns, ['acKey', 'acWOKey', 'acDocKey', 'acLnkKey']);
@@ -5897,6 +5917,12 @@ class WorkOrderController extends Controller
         return array_map(function (array $material) use ($stockSummary): array {
             $materialCode = strtolower(trim((string) ($material['materijal'] ?? '')));
             $warehouseStocks = (array) ($stockSummary[$materialCode]['warehouses'] ?? []);
+            $sourceWarehouse = trim((string) ($material['source_warehouse'] ?? ''));
+            if ($sourceWarehouse === '') {
+                $sourceWarehouse = self::RELEASED_MATERIAL_DEFAULT_ISSUER;
+            }
+            $material['source_warehouse'] = $sourceWarehouse;
+            $material['source_stock_qty'] = $this->resolveNamedWarehouseStockQty($warehouseStocks, $sourceWarehouse);
             $material['raw_material_stock_qty'] = $this->resolveNamedWarehouseStockQty(
                 $warehouseStocks,
                 self::RELEASED_MATERIAL_DEFAULT_ISSUER
@@ -9266,6 +9292,9 @@ class WorkOrderController extends Controller
         $taskState = strtoupper(trim((string) $this->value($row, ['acTaskState'], '')));
         $isFinished = in_array($taskState, ['F', 'Z', 'C', 'D'], true);
         $displayNote = $this->workOrderItemDisplayNote($row);
+        $normalizedDisplayNote = Str::upper(trim((string) $displayNote));
+        $isExcessStockMaterial = Str::startsWith($normalizedDisplayNote, 'REZERVACIJA_DODATNIH_SIROVINA|')
+            || Str::startsWith($normalizedDisplayNote, 'EXCESS_STOCK_RESERVATION|');
         $itemId = $this->value($row, ['anQId', 'anNo'], null);
         $itemQid = $this->value($row, ['anQId'], null);
         $itemNo = $this->value($row, ['anNo'], null);
@@ -9281,6 +9310,8 @@ class WorkOrderController extends Controller
             'artikal' => (string) $this->value($row, ['acIdent'], ''),
             'opis' => (string) $this->value($row, ['acDescr'], ''),
             'napomena' => $displayNote,
+            'is_excess_stock_material' => $isExcessStockMaterial,
+            'source_warehouse' => $isExcessStockMaterial ? 'Skladište dodatnih sirovina' : null,
             'kolicina' => $this->normalizeNumber($this->workOrderItemQuantityValue($row, 0)),
             'mj' => (string) $this->value($row, ['acUM'], ''),
             'serija' => $this->normalizeNumber($this->value($row, ['anQtySE', 'anBatch'], 0)),
@@ -9567,6 +9598,8 @@ class WorkOrderController extends Controller
 
     private function mapItemResourceRow(array $row): array
     {
+        $note = $this->plannedConsumptionDisplayNote((string) $this->valueTrimmed($row, ['__item_note', 'acNote'], ''));
+        $isExcess = $this->isExcessStockReservationNote($note);
         return [
             'id' => $this->value($row, ['anQId', 'anNo', 'anLineNo'], null),
             'item_qid' => $this->value($row, ['__item_qid', 'anWOExItemQId', 'anItemQId', 'anQIdItem'], null),
@@ -9577,12 +9610,15 @@ class WorkOrderController extends Controller
             'naziv' => (string) $this->valueTrimmed($row, ['acResType', 'acDescr', 'acName', 'acResDescr', '__item_descr', '__item_ident'], ''),
             'kolicina' => $this->normalizeNumber($this->workOrderItemQuantityValue($row, 0)),
             'mj' => (string) $this->valueTrimmed($row, ['acUM', 'acUMRes', '__item_um'], ''),
-            'napomena' => $this->plannedConsumptionDisplayNote((string) $this->valueTrimmed($row, ['acNote'], '')),
+            'napomena' => $note,
+            'source_warehouse' => $isExcess ? self::ADDITIONAL_RAW_MATERIAL_WAREHOUSE : null,
         ];
     }
 
     private function mapMaterialFromItemRow(array $row): array
     {
+        $note = $this->workOrderItemDisplayNote($row);
+        $isExcess = $this->isExcessStockReservationNote($note);
         return [
             'id' => $this->value($row, ['anQId', 'anNo'], null),
             'item_qid' => $this->value($row, ['anQId'], null),
@@ -9592,8 +9628,16 @@ class WorkOrderController extends Controller
             'naziv' => (string) $this->valueTrimmed($row, ['acDescr', 'acName', 'acIdent'], ''),
             'kolicina' => $this->normalizeNumber($this->workOrderItemQuantityValue($row, 0)),
             'mj' => (string) $this->valueTrimmed($row, ['acUM'], ''),
-            'napomena' => $this->workOrderItemDisplayNote($row),
+            'napomena' => $note,
+            'source_warehouse' => $isExcess ? self::ADDITIONAL_RAW_MATERIAL_WAREHOUSE : null,
         ];
+    }
+
+    private function isExcessStockReservationNote(string $note): bool
+    {
+        $note = Str::upper(trim($note));
+        return Str::startsWith($note, 'REZERVACIJA_DODATNIH_SIROVINA|')
+            || Str::startsWith($note, 'EXCESS_STOCK_RESERVATION|');
     }
 
     private function mapRegOperationRow(array $row): array

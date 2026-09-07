@@ -104,6 +104,8 @@ Route::middleware('auth:web')->group(function () {
         Route::get('orders', [OrderController::class, 'ordersLinkageIndex'])->name('app-orders');
         Route::get('production/plan', [ProductionPlanController::class, 'index'])->name('app-production-plan');
         Route::get('production/plan/data', [ProductionPlanController::class, 'data'])->name('app-production-plan-data');
+        Route::get('production/plan/{id}/operations', [ProductionPlanController::class, 'operations'])->name('app-production-plan-operations');
+        Route::post('production/plan/{id}/field', [ProductionPlanController::class, 'updateField'])->name('app-production-plan-field');
         Route::get('production/plan/export', [ProductionPlanController::class, 'export'])->name('app-production-plan-export');
         Route::post('orders', [OrderController::class, 'store'])->name('app-orders-store');
         Route::get('orders/data', [OrderController::class, 'ordersLinkageData'])->name('app-orders-data');

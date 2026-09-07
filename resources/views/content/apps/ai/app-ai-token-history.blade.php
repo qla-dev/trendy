@@ -1080,7 +1080,13 @@
       document.querySelectorAll('.ai-token-history-filter-date').forEach(function (element) {
         flatpickr(element, {
           dateFormat: 'd.m.Y',
-          allowInput: true
+          allowInput: true,
+          locale: {
+            firstDayOfWeek: 1,
+            weekdays: { shorthand: ['Ned', 'Pon', 'Uto', 'Sri', 'Čet', 'Pet', 'Sub'], longhand: ['Nedjelja', 'Ponedjeljak', 'Utorak', 'Srijeda', 'Četvrtak', 'Petak', 'Subota'] },
+            months: { shorthand: ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec'], longhand: ['Januar', 'Februar', 'Mart', 'April', 'Maj', 'Juni', 'Juli', 'August', 'Septembar', 'Oktobar', 'Novembar', 'Decembar'] },
+            today: 'Danas', clear: 'Obriši'
+          }
         });
       });
     }
