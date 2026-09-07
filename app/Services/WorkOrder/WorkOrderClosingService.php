@@ -82,6 +82,11 @@ class WorkOrderClosingService
             } */
 
             $operations = $preparedOperations['operations'];
+            $missingNamedMaterials = $this->zeroQuantityNamedMaterials($submittedMaterials);
+            // A named material with a zero quantity is deliberately omitted
+            // from the 6400. It makes this a partial close, but must not stop
+            // the remaining closing documents from being created.
+            $hasPendingMaterials = $missingNamedMaterials !== [];
             $materialFlow = $this->resolveMaterialFlow($workOrder, $submittedMaterials, $producedQuantity);
             $materials = $materialFlow['materials'];
             $excessMaterials = $materialFlow['excess_materials'];
@@ -93,7 +98,7 @@ class WorkOrderClosingService
             // no materials; retain only the partial-close state instead. An
             // existing 6400 is the one valid retry case because its material
             // issue was already completed in an earlier transaction.
-            if ($materials === [] && $excessMaterials === [] && !isset($existing['6400'])) {
+            if ($materials === [] && $excessMaterials === [] && !isset($existing['6400']) && !$hasPendingMaterials) {
                 $this->markPartiallyClosed($workOrder, $now, $userId);
 
                 Log::info('Work order partially closed because no materials were submitted.', [
@@ -313,8 +318,12 @@ class WorkOrderClosingService
                 );
             }
 
-            $this->markClosed($workOrder, $producedQuantity, $now, $userId);
-            $this->syncClosedWorkOrderCompletion($workOrder, $now, $userId);
+            if ($hasPendingMaterials) {
+                $this->markPartiallyClosed($workOrder, $now, $userId);
+            } else {
+                $this->markClosed($workOrder, $producedQuantity, $now, $userId);
+                $this->syncClosedWorkOrderCompletion($workOrder, $now, $userId);
+            }
 
             Log::info('Work order closed through eNalog.', [
                 'work_order_key' => $workOrder['acKey'],
@@ -336,10 +345,15 @@ class WorkOrderClosingService
 
             return [
                 'already_closed' => false,
-                'status' => 'zaključen',
+                'partial' => $hasPendingMaterials,
+                'status' => $hasPendingMaterials ? 'djelomično zaključen' : 'zaključen',
                 'work_order_key' => $workOrder['acKey'],
                 'work_order_number' => $this->formatNumber((string) ($workOrder['acKeyView'] ?? $workOrder['acKey'])),
-                'message' => implode(' ', array_filter([$materialFallbackNotice, $createdDocumentsMessage])),
+                'message' => implode(' ', array_filter([
+                    $hasPendingMaterials ? 'Radni nalog je djelomično zaključen jer materijal nema unesenu količinu.' : null,
+                    $materialFallbackNotice,
+                    $createdDocumentsMessage,
+                ])),
                 'notices' => $materialFallbackNotice === null ? [] : [$materialFallbackNotice],
                 'documents' => array_values(array_filter([
                     ($preparationResult['created'] ?? false) ? $preparationResult : null,
@@ -349,6 +363,7 @@ class WorkOrderClosingService
                     ...$receiptResults,
                 ])),
                 'costs' => $receiptCalculation,
+                'pending_materials' => $missingNamedMaterials,
             ];
         }, 3);
     }
@@ -846,9 +861,9 @@ class WorkOrderClosingService
                 str_replace(',', '.', $quantity),
                 'Material quantity'
             );
-            if (bccomp($normalizedQuantity, '0', WorkOrderClosingCalculator::SCALE) <= 0) {
-                throw new RuntimeException('Količina materijala mora biti veća od nule.');
-            }
+            // A zero line is intentionally not released. The close action
+            // detects a named zero line first and leaves the RN partial.
+            if (bccomp($normalizedQuantity, '0', WorkOrderClosingCalculator::SCALE) <= 0) continue;
 
             // Match established 6400 material-consumption documents: use the
             // issuing raw-material warehouse's last price, which Pantheon
@@ -890,6 +905,22 @@ class WorkOrderClosingService
         }
 
         return $prepared;
+    }
+
+    /** A named material at zero is an unfinished requirement, not an error. */
+    private function zeroQuantityNamedMaterials(array $submittedMaterials): array
+    {
+        $pending = [];
+        foreach ($submittedMaterials as $material) {
+            $name = trim((string) ($material['name'] ?? ''));
+            $quantity = trim((string) ($material['quantity'] ?? ''));
+            if ($name === '' || $quantity === '') continue;
+            $normalized = $this->calculator->normalizeNonNegative(str_replace(',', '.', $quantity), 'Material quantity');
+            if (bccomp($normalized, '0', WorkOrderClosingCalculator::SCALE) <= 0) {
+                $pending[] = ['code' => strtoupper(trim((string) ($material['code'] ?? ''))), 'name' => $name];
+            }
+        }
+        return $pending;
     }
 
     private function materialTotalQuantity(string $perPieceQuantity, string $producedQuantity): string

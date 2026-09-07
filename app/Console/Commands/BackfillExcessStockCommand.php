@@ -38,8 +38,18 @@ class BackfillExcessStockCommand extends Command
         }
         $this->info('Konekcija: ' . $db->getDatabaseName());
         $this->line('Skladište: ' . $service->warehouse());
-        $this->line('Mjesta na otvorenim RN-ovima: ' . $plan['slots'] . '; ciljni datum: ' . $plan['target_date']);
-        $this->table(['WO', 'Materials'], array_map(fn ($a) => [trim((string)($a['work_order']['acKeyView'] ?? $a['work_order']['acKey'])), implode(', ', array_map(fn ($m) => $m['code'].'='.$m['assignment_qty'].' '.$m['unit'], $a['materials']))], $plan['assignments']));
+        $this->line('NajviĹˇe stavki po RN-u: ' . config('excess-stock.max_materials_per_work_order', 5) . '; limit: ' . bcmul((string) $plan['sales_price_percent'], '100', 2) . '% prodajne cijene po komadu.');
+        $this->table(
+            ['WO', 'Prodajna cijena/kom', 'Limit/kom', 'Dodijeljeno/kom', 'Ukupno', 'Materials'],
+            array_map(fn ($a) => [
+                trim((string)($a['work_order']['acKeyView'] ?? $a['work_order']['acKey'])),
+                $a['work_order']['sales_price'],
+                $a['work_order']['budget_per_piece'],
+                $a['work_order']['assigned_per_piece'],
+                $a['work_order']['assigned_total'],
+                implode(', ', array_map(fn ($m) => $m['code'].'='.$m['assignment_qty'].' '.$m['unit'].' @ '.$m['price'].' = '.$m['assignment_total'].' KM', $a['materials'])),
+            ], $plan['assignments'])
+        );
         if (!$this->option('apply')) {
             $this->warn('Ovo je samo probno pokretanje. Rezervacije i stanje zalihe nisu mijenjani. Pokrenite s --apply tek nakon Testna provjere.');
             return self::SUCCESS;

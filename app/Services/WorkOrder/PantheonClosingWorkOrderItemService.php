@@ -179,7 +179,7 @@ class PantheonClosingWorkOrderItemService
             'anFieldNA' => 0,
             'anFieldNB' => 0,
             'anFieldNC' => 0,
-            'acNote' => 'eNalog.app closing entry',
+            'acNote' => 'Stavka zatvaranja radnog naloga putem eNalog.app',
             'adTimeIns' => $now,
             'adTimeChg' => $now,
             'anUserChg' => $userId,

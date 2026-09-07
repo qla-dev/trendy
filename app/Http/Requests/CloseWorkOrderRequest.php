@@ -43,6 +43,7 @@ class CloseWorkOrderRequest extends FormRequest
             $materials = array_values(array_filter(array_map(function ($material) {
                 $material = is_array($material) ? $material : [];
                 $material['code'] = trim((string) ($material['code'] ?? ''));
+                $material['name'] = trim((string) ($material['name'] ?? ''));
                 // Newly added rows in the closing modal do not have a
                 // Pantheon WO-item QId yet. Treat the browser's 0 value as
                 // null so the closing service can create and link it.
@@ -52,6 +53,7 @@ class CloseWorkOrderRequest extends FormRequest
                 return $material;
             }, $materials), function (array $material): bool {
                 return trim((string) ($material['code'] ?? '')) !== ''
+                    || trim((string) ($material['name'] ?? '')) !== ''
                     || trim((string) ($material['quantity'] ?? '')) !== '';
             }));
         }
@@ -97,6 +99,7 @@ class CloseWorkOrderRequest extends FormRequest
             'materials' => ['nullable', 'array'],
             'materials.*.item_qid' => ['nullable', 'integer', 'min:1'],
             'materials.*.code' => ['nullable', 'string', 'max:64'],
+            'materials.*.name' => ['nullable', 'string', 'max:255'],
             'materials.*.quantity' => ['nullable', 'regex:/^(?:0|[1-9]\d*)(?:[.,]\d+)?$/'],
             'materials.*.is_new' => ['nullable', 'boolean'],
             'receipts' => ['nullable', 'array'],

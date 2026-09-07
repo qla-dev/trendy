@@ -93,7 +93,7 @@ class PantheonDocumentWriter
             'anCurrValue' => $value,
             'acDept' => $this->limit($dept, 30),
             'acPosted' => 'F',
-            'acInternalNote' => $this->limit((string) ($context['internal_note'] ?? 'eNalog.app work order closing'), 255),
+            'acInternalNote' => $this->limit((string) ($context['internal_note'] ?? 'Zatvaranje radnog naloga putem eNalog.app'), 255),
             'anVATIn' => '0',
             'adDateVAT' => $documentDate,
             'anVATBase' => '0',

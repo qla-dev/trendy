@@ -530,7 +530,7 @@ class ReleasedMaterialDocumentController extends Controller
 
         if (in_array(static::DOCUMENT_TYPE, ['6100', '6600', '7100'], true)) {
             $closingMarkerExpr = $this->trimExpr('m.acInternalNote');
-            return "CASE WHEN {$closingMarkerExpr} = 'eNalog.app work order closing' AND {$insertedFromExpr} = 'D' THEN 1 ELSE 0 END";
+            return "CASE WHEN {$closingMarkerExpr} IN ('Zatvaranje radnog naloga putem eNalog.app', 'eNalog.app work order closing') AND {$insertedFromExpr} = 'D' THEN 1 ELSE 0 END";
         }
 
         return "CASE WHEN EXISTS (
