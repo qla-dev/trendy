@@ -113,7 +113,8 @@ try {
         ", [$order['acKey']]);
         $pieces = (float) $order['anPlanQty'];
         if ((float) $price <= 0 || $pieces <= 0) throw new RuntimeException("WO {$order['acKeyView']} has no positive linked sales price or planned quantity.");
-        $perPieceCap = (float) $price * 0.07;
+        // Sales prices are in EUR; material prices and issued values are in KM.
+        $perPieceCap = (float) $price * 0.07 * 1.958;
         $remainingBudget = $perPieceCap * $pieces;
         $eligible = array_keys(array_filter($available, fn ($material) => $material['available_qty'] > 0));
         shuffle($eligible);

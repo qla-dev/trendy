@@ -9,9 +9,11 @@ return [
     'warehouse' => env('EXCESS_STOCK_WAREHOUSE', 'Skladište dodatnih sirovina'),
     'target_date' => env('EXCESS_STOCK_TARGET_DATE', '2026-12-15'),
     'max_materials_per_work_order' => (int) env('EXCESS_STOCK_MAX_MATERIALS_PER_WORK_ORDER', 5),
-    // Extra materials are capped by the finished article's sales price.
+    // Article sales prices are in EUR while issued material prices are in KM.
+    // Convert the sales-price cap to KM before comparing it to material value.
     'assignment_mode' => env('EXCESS_STOCK_ASSIGNMENT_MODE', 'sales_price_percent'),
     'sales_price_percent' => env('EXCESS_STOCK_SALES_PRICE_PERCENT', '0.07'),
+    'sales_price_eur_to_km_rate' => env('EXCESS_STOCK_SALES_PRICE_EUR_TO_KM_RATE', '1.958'),
     'reservation_marker' => 'Rezervacija dodatnih sirovina',
     'document_marker' => 'RAZDUZENJE_DODATNIH_SIROVINA_6400',
     'notification_lookback_days' => (int) env('EXCESS_STOCK_NOTIFICATION_LOOKBACK_DAYS', 2),

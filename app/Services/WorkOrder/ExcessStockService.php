@@ -100,16 +100,28 @@ class ExcessStockService
     {
         $orders = $this->openWorkOrders($db);
         if ($limit !== null) $orders = array_slice($orders, 0, max(0, $limit));
+
+        return $this->previewForOrders($db, $orders);
+    }
+
+    /**
+     * Build a plan for the supplied RN set.  Backfills deliberately provide
+     * all open RNs; an interactive RN creation must provide only its new RN.
+     */
+    private function previewForOrders(ConnectionInterface $db, array $orders): array
+    {
         $materials = $this->availableMaterials($db);
         $slots = count($orders) * max(1, (int) config('excess-stock.max_materials_per_work_order', 5));
         $mode = (string) config('excess-stock.assignment_mode', 'sales_price_percent');
         $percentage = (string) config('excess-stock.sales_price_percent', '0.07');
+        $eurToKmRate = (string) config('excess-stock.sales_price_eur_to_km_rate', '1.958');
         if ($mode !== 'sales_price_percent'
             || bccomp($percentage, '0', WorkOrderClosingCalculator::SCALE) <= 0
-            || bccomp($percentage, '1', WorkOrderClosingCalculator::SCALE) > 0) {
+            || bccomp($percentage, '1', WorkOrderClosingCalculator::SCALE) > 0
+            || bccomp($eurToKmRate, '0', WorkOrderClosingCalculator::SCALE) <= 0) {
             throw new RuntimeException('Neispravno je podeĹˇen limit dodatnih sirovina po prodajnoj cijeni.');
         }
-        return ['orders' => $orders, 'materials' => $materials, 'slots' => $slots, 'mode' => $mode, 'sales_price_percent' => $percentage];
+        return ['orders' => $orders, 'materials' => $materials, 'slots' => $slots, 'mode' => $mode, 'sales_price_percent' => $percentage, 'sales_price_eur_to_km_rate' => $eurToKmRate];
         /* Legacy target-date/fixed allocation retained below temporarily for historical reference.
         if ($mode === 'fixed' && bccomp($fixed, '0', WorkOrderClosingCalculator::SCALE) <= 0) {
             throw new RuntimeException('Fiksna količina dodatnih sirovina mora biti veća od nule.');
@@ -206,7 +218,9 @@ class ExcessStockService
             }
 
             $salesPrice = $price['price'];
-            $budgetPerPiece = bcmul($salesPrice, $preview['sales_price_percent'], WorkOrderClosingCalculator::SCALE);
+            // Sales prices are EUR; material issue values are KM.
+            $budgetPerPieceEur = bcmul($salesPrice, $preview['sales_price_percent'], WorkOrderClosingCalculator::SCALE);
+            $budgetPerPiece = bcmul($budgetPerPieceEur, $preview['sales_price_eur_to_km_rate'], WorkOrderClosingCalculator::SCALE);
             $budgetTotal = bcmul($budgetPerPiece, $plannedPieces, WorkOrderClosingCalculator::SCALE);
             $eligible = [];
             foreach ($preview['materials'] as $index => $material) {
@@ -265,6 +279,8 @@ class ExcessStockService
             $assignments[] = ['work_order' => $order + [
                 'sales_price' => $salesPrice,
                 'sales_price_source' => $price['source'],
+                'budget_per_piece_eur' => $budgetPerPieceEur,
+                'eur_to_km_rate' => $preview['sales_price_eur_to_km_rate'],
                 'budget_per_piece' => $budgetPerPiece,
                 'budget_total' => $budgetTotal,
                 'assigned_total' => $assignedTotal,
@@ -307,7 +323,9 @@ class ExcessStockService
             })
             ->where('link.acKey', $workOrderKey)
             ->orderBy('link.anQId')
-            ->selectRaw('COALESCE(NULLIF(by_qid.anPrice, 0), NULLIF(by_number.anPrice, 0)) as price')
+            // Pantheon order lines commonly keep the customer selling price
+            // in anRetailPrice while anPrice remains zero.
+            ->selectRaw('COALESCE(NULLIF(by_qid.anPrice, 0), NULLIF(by_qid.anRetailPrice, 0), NULLIF(by_number.anPrice, 0), NULLIF(by_number.anRetailPrice, 0)) as price')
             ->value('price');
         if ($linked !== null && bccomp((string) $linked, '0', WorkOrderClosingCalculator::SCALE) > 0) {
             return ['price' => (string) $linked, 'source' => 'povezana stavka narudĹľbe'];
@@ -340,7 +358,22 @@ class ExcessStockService
             return 0;
         }
 
-        $plan = $this->assignPreview($db);
+        // Do not reuse assignPreview() here: that is the batch/backfill
+        // planner and evaluates every open RN.  Creation needs a plan for
+        // this RN alone, while availableMaterials() still subtracts all
+        // existing open-RN reservations from the warehouse balance.
+        $order = $db->table('dbo.tHF_WOEx')
+            ->where('acKey', $workOrderKey)
+            ->whereIn('acStatusMF', ['O', 'R'])
+            ->first(['acKey', 'acKeyView', 'adDate', 'anPlanQty']);
+        if ($order === null) {
+            return 0;
+        }
+
+        $plan = $this->salesPriceAssignments(
+            $db,
+            $this->previewForOrders($db, [(array) $order])
+        );
         foreach ($plan['assignments'] as $assignment) {
             if (strcasecmp(trim((string) ($assignment['work_order']['acKey'] ?? '')), $workOrderKey) === 0) {
                 return $this->assign($db, $assignment, $userId);
