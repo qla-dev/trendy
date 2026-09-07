@@ -2959,8 +2959,15 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       </div>
       <div class="modal-body">
         <div class="order-ai-transfer-error-copy" id="order-ai-transfer-error-modal-body"></div>
+        <div class="mt-2" id="order-ai-transfer-code-fix" hidden>
+          <label class="form-label fw-bolder" for="order-ai-transfer-code-input">Skraćena šifra artikla</label>
+          <input type="text" class="form-control" id="order-ai-transfer-code-input" autocomplete="off" spellcheck="false">
+          <div class="form-text" id="order-ai-transfer-code-hint"></div>
+          <div class="text-danger small mt-50" id="order-ai-transfer-code-error" hidden></div>
+        </div>
       </div>
       <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="order-ai-transfer-code-save-button" hidden>Sačuvaj šifru i prebaci</button>
         <button type="button" class="btn btn-outline-primary" id="order-ai-transfer-error-retry-button">Pokušaj ponovo</button>
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zatvori</button>
       </div>
@@ -3117,6 +3124,15 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
       const transferErrorModalElement = document.getElementById('order-ai-transfer-error-modal');
       const transferErrorModalBody = document.getElementById('order-ai-transfer-error-modal-body');
       const transferErrorRetryButton = document.getElementById('order-ai-transfer-error-retry-button');
+      const transferCodeFixBox = document.getElementById('order-ai-transfer-code-fix');
+      const transferCodeFixInput = document.getElementById('order-ai-transfer-code-input');
+      const transferCodeFixHint = document.getElementById('order-ai-transfer-code-hint');
+      const transferCodeFixError = document.getElementById('order-ai-transfer-code-error');
+      const transferCodeFixSaveButton = document.getElementById('order-ai-transfer-code-save-button');
+      // Article codes the user shortened so they fit the Pantheon catalog,
+      // keyed by the code the scan produced. Sent with every transfer retry.
+      const productCodeOverrides = {};
+      let activeProductCodeFix = null;
       const transferProgressModalElement = document.getElementById('order-ai-transfer-progress-modal');
       const transferProgressModalMessage = document.getElementById('order-ai-transfer-progress-modal-message');
       const transferProgressModalBar = document.getElementById('order-ai-transfer-progress-modal-bar');
@@ -4928,7 +4944,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         }
       }
 
-      function showTransferErrorModal(reason, technicalReason) {
+      function showTransferErrorModal(reason, technicalReason, productCodeFix) {
         if (!transferErrorModalBody) {
           return;
         }
@@ -4941,9 +4957,80 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           </div>
         `;
 
+        renderTransferProductCodeFix(productCodeFix);
+
         if (transferErrorModalElement && window.bootstrap && window.bootstrap.Modal) {
           window.bootstrap.Modal.getOrCreateInstance(transferErrorModalElement).show();
         }
+      }
+
+      function renderTransferProductCodeFix(productCodeFix) {
+        activeProductCodeFix = null;
+
+        if (!transferCodeFixBox || !transferCodeFixInput || !transferCodeFixSaveButton) {
+          return;
+        }
+
+        const productCode = productCodeFix ? String(productCodeFix.product_code || '').trim() : '';
+        const maxLength = productCodeFix ? Number(productCodeFix.max_length || 0) : 0;
+
+        if (!productCode || !(maxLength > 0)) {
+          transferCodeFixBox.hidden = true;
+          transferCodeFixSaveButton.hidden = true;
+
+          return;
+        }
+
+        activeProductCodeFix = { productCode: productCode, maxLength: maxLength };
+
+        transferCodeFixInput.value = String(productCodeFix.suggested_code || '').trim();
+        transferCodeFixInput.setAttribute('maxlength', String(maxLength));
+
+        if (transferCodeFixHint) {
+          transferCodeFixHint.textContent = `Originalna šifra ${productCode} ima ${productCode.length} znakova. Unesi verziju od najviše ${maxLength} znakova pod kojom će artikal biti kreiran u Pantheonu.`;
+        }
+
+        if (transferCodeFixError) {
+          transferCodeFixError.textContent = '';
+          transferCodeFixError.hidden = true;
+        }
+
+        transferCodeFixBox.hidden = false;
+        transferCodeFixSaveButton.hidden = false;
+      }
+
+      function saveTransferProductCodeFix() {
+        if (!activeProductCodeFix || !transferCodeFixInput) {
+          return;
+        }
+
+        const shortenedCode = String(transferCodeFixInput.value || '').trim();
+
+        if (!shortenedCode) {
+          showTransferProductCodeFixError('Unesi skraćenu šifru artikla.');
+
+          return;
+        }
+
+        if (shortenedCode.length > activeProductCodeFix.maxLength) {
+          showTransferProductCodeFixError(`Šifra može imati najviše ${activeProductCodeFix.maxLength} znakova.`);
+
+          return;
+        }
+
+        productCodeOverrides[activeProductCodeFix.productCode] = shortenedCode;
+        activeProductCodeFix = null;
+        closeTransferErrorModal();
+        transferToPantheon();
+      }
+
+      function showTransferProductCodeFixError(message) {
+        if (!transferCodeFixError) {
+          return;
+        }
+
+        transferCodeFixError.textContent = message;
+        transferCodeFixError.hidden = false;
       }
 
       function closeTransferErrorModal() {
@@ -5599,6 +5686,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             body: JSON.stringify({
               scan_id: currentScanId,
               payload: transferPayload,
+              product_code_overrides: productCodeOverrides,
             }),
           });
           const rawText = await response.text();
@@ -5619,6 +5707,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             failure.technicalReason = payload && payload.technical_reason
               ? payload.technical_reason
               : (rawText || '');
+            failure.productCodeFix = payload && payload.product_code_fix ? payload.product_code_fix : null;
             throw failure;
           }
 
@@ -5695,7 +5784,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
           hideTransferProgressModal();
           errorBox.textContent = error.message || 'Transfer u bazu nije uspio.';
           setVisible(errorBox, true);
-          showTransferErrorModal(error.message || 'Transfer u bazu nije uspio.', error.technicalReason || '');
+          showTransferErrorModal(error.message || 'Transfer u bazu nije uspio.', error.technicalReason || '', error.productCodeFix || null);
           updateActivityState(latestStatusPayload);
           updateStageFills(latestStatusPayload);
           setTransferButtonState({
@@ -5908,7 +5997,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         setVisible(savedPreview, true);
       }
 
-      function showTransferErrorModal(reason, technicalReason) {
+      function showTransferErrorModal(reason, technicalReason, productCodeFix) {
         if (!transferErrorModalBody) {
           return;
         }
@@ -5920,6 +6009,8 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             <strong>Razlog:</strong> ${escapeHtml(friendlyReason)}
           </div>
         `;
+
+        renderTransferProductCodeFix(productCodeFix);
 
         if (transferErrorModalElement && window.bootstrap && window.bootstrap.Modal) {
           window.bootstrap.Modal.getOrCreateInstance(transferErrorModalElement).show();
@@ -8093,6 +8184,17 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
         closeTransferErrorModal();
         transferToPantheon();
       });
+      if (transferCodeFixSaveButton) {
+        transferCodeFixSaveButton.addEventListener('click', saveTransferProductCodeFix);
+      }
+      if (transferCodeFixInput) {
+        transferCodeFixInput.addEventListener('keydown', function (event) {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            saveTransferProductCodeFix();
+          }
+        });
+      }
       lineTotalSaveButton.addEventListener('click', saveLineTotalEdit);
       lineTotalInput.addEventListener('keydown', function (event) {
         if (event.key === 'Enter') {

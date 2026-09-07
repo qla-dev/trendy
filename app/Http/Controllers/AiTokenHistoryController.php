@@ -129,17 +129,7 @@ class AiTokenHistoryController extends Controller
 
         $rows = OrderAiScan::query()
             ->whereIn('id', $ids)
-            ->get([
-                'id',
-                'status',
-                'processing_step',
-                'error_message',
-                'processed_at',
-                'transferred_at',
-                'pantheon_order_key',
-                'pantheon_order_view',
-                'pantheon_order_qid',
-            ]);
+            ->get($this->historyStatusColumns());
 
         $payload = [
             'rows' => $rows->mapWithKeys(function (OrderAiScan $scan) {
@@ -482,11 +472,43 @@ class AiTokenHistoryController extends Controller
             return ['label' => 'Uspješan transfer', 'tone' => 'success'];
         }
 
+        // A blocked scan can never move on to a transfer, so showing it as
+        // waiting for one misreports the row.
+        if ($this->isTransferBlockedScan($scan)) {
+            return [
+                'label' => $this->resolveTransferBlockedStatusLabel($scan),
+                'tone' => 'warning',
+            ];
+        }
+
         if ($outcome === 'success') {
             return ['label' => 'Čeka na transfer u bazu', 'tone' => 'info'];
         }
 
         return ['label' => 'Obrada', 'tone' => 'secondary'];
+    }
+
+    private function isTransferBlockedScan(OrderAiScan $scan): bool
+    {
+        $transferPreview = $scan->pantheon_transfer_payload;
+
+        return is_array($transferPreview) && !empty($transferPreview['transfer_blocked']);
+    }
+
+    private function resolveTransferBlockedStatusLabel(OrderAiScan $scan): string
+    {
+        $transferPreview = is_array($scan->pantheon_transfer_payload) ? $scan->pantheon_transfer_payload : [];
+        $errorCode = trim((string) ($transferPreview['preview_error_code'] ?? ''));
+
+        if ($errorCode !== 'duplicate_reference') {
+            return 'Transfer blokiran';
+        }
+
+        $existingOrderView = trim((string) ($transferPreview['existing_order_view'] ?? ''));
+
+        return $existingOrderView !== ''
+            ? 'Već u bazi kao ' . $existingOrderView
+            : 'Već postoji u bazi';
     }
 
     private function resolveStatusOutcome(OrderAiScan $scan): string
@@ -762,6 +784,30 @@ class AiTokenHistoryController extends Controller
         }
 
         return $perPage;
+    }
+
+    /**
+     * Columns every status and action resolver reads. Polling re-renders the
+     * badge and the row buttons from these, so a column missing here makes a
+     * polled row disagree with the freshly rendered page.
+     *
+     * @return list<string>
+     */
+    private function historyStatusColumns(): array
+    {
+        return [
+            'id',
+            'status',
+            'processing_step',
+            'error_message',
+            'processed_at',
+            'transferred_at',
+            'pantheon_order_key',
+            'pantheon_order_view',
+            'pantheon_order_qid',
+            'pantheon_transfer_payload',
+            'normalized_payload',
+        ];
     }
 
     private function historyListColumns(bool $includeUsdSpend = false): array

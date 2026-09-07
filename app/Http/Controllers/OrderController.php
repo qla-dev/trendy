@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\PantheonProductCodeTooLongException;
 use App\Models\OrderAiScan;
 use App\Models\Order;
 use App\Services\OrderAi\OrderAiScanService;
@@ -418,6 +419,8 @@ class OrderController extends WorkOrderController
         $validator = Validator::make($request->all(), [
             'scan_id' => ['nullable', 'integer', 'min:1'],
             'payload' => ['nullable', 'array'],
+            'product_code_overrides' => ['nullable', 'array'],
+            'product_code_overrides.*' => ['nullable', 'string', 'max:64'],
         ]);
 
         if ($validator->fails()) {
@@ -469,6 +472,11 @@ class OrderController extends WorkOrderController
             $normalizedPayload = $orderAiScanService->preparePayloadForTransfer($scan, $normalizedPayload);
         }
 
+        $normalizedPayload = $this->applyProductCodeOverrides(
+            $normalizedPayload,
+            is_array($validated['product_code_overrides'] ?? null) ? $validated['product_code_overrides'] : []
+        );
+
         try {
             if ($scan !== null) {
                 $scanAttributes = [
@@ -499,7 +507,9 @@ class OrderController extends WorkOrderController
         } catch (Throwable $exception) {
             $rawReason = trim($exception->getMessage());
             $reason = $this->humanizeTransferFailureReason($rawReason);
-            $errorType = $this->detectTransferFailureType($rawReason);
+            $errorType = $exception instanceof PantheonProductCodeTooLongException
+                ? 'product_code_too_long'
+                : $this->detectTransferFailureType($rawReason);
 
             AiScanLog::error('Manual order transfer failed.', [
                 'scan_id' => $scan?->id,
@@ -514,11 +524,21 @@ class OrderController extends WorkOrderController
                 $this->notifyAiScanTransferFailure($scan, $reason, $rawReason);
             }
 
-            return response()->json([
+            $response = [
                 'message' => 'Transfer u bazu nije uspio.',
                 'reason' => $reason,
                 'error_type' => $errorType,
-            ], 422);
+            ];
+
+            if ($exception instanceof PantheonProductCodeTooLongException) {
+                $response['product_code_fix'] = [
+                    'product_code' => $exception->productCode(),
+                    'max_length' => $exception->maxLength(),
+                    'suggested_code' => $exception->suggestedProductCode(),
+                ];
+            }
+
+            return response()->json($response, 422);
         }
 
         if ($scan !== null) {
@@ -571,6 +591,58 @@ class OrderController extends WorkOrderController
     protected function orderItemTableName(): string
     {
         return Order::sourceItemTableName();
+    }
+
+    /**
+     * Replace article codes the user shortened in the transfer dialog. Codes are
+     * matched loosely, because the payload can carry the scanned spelling while
+     * the failure reported the normalized one.
+     *
+     * @param  array<string, string>  $overrides
+     */
+    private function applyProductCodeOverrides(array $normalizedPayload, array $overrides): array
+    {
+        if ($overrides === [] || !is_array($normalizedPayload['items'] ?? null)) {
+            return $normalizedPayload;
+        }
+
+        $normalizedOverrides = [];
+
+        foreach ($overrides as $sourceCode => $replacementCode) {
+            $sourceKey = $this->normalizeProductCodeOverrideKey((string) $sourceCode);
+            $replacementCode = trim((string) $replacementCode);
+
+            if ($sourceKey === '' || $replacementCode === '') {
+                continue;
+            }
+
+            $normalizedOverrides[$sourceKey] = $replacementCode;
+        }
+
+        if ($normalizedOverrides === []) {
+            return $normalizedPayload;
+        }
+
+        foreach ($normalizedPayload['items'] as $index => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $itemKey = $this->normalizeProductCodeOverrideKey((string) ($item['product_code'] ?? ''));
+
+            if ($itemKey === '' || !array_key_exists($itemKey, $normalizedOverrides)) {
+                continue;
+            }
+
+            $normalizedPayload['items'][$index]['product_code'] = $normalizedOverrides[$itemKey];
+        }
+
+        return $normalizedPayload;
+    }
+
+    private function normalizeProductCodeOverrideKey(string $value): string
+    {
+        return (string) (preg_replace('/[^A-Z0-9]+/', '', strtoupper(trim($value))) ?? '');
     }
 
     private function humanizeTransferFailureReason(string $message): string
