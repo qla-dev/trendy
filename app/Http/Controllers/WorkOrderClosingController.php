@@ -59,9 +59,27 @@ class WorkOrderClosingController extends Controller
 
             $status = $exception instanceof \InvalidArgumentException || $exception instanceof \RuntimeException ? 422 : 500;
             return response()->json([
-                'message' => $status === 422 ? $exception->getMessage() : 'Zatvaranje radnog naloga nije uspjelo. Sve promjene su poništene.',
+                'message' => $this->userFacingCloseError($exception, $status),
             ], $status);
         }
+    }
+
+    private function userFacingCloseError(Throwable $exception, int $status): string
+    {
+        $message = $exception->getMessage();
+        $normalized = mb_strtolower($message);
+
+        if (str_contains($normalized, 'duplicate key') || str_contains($normalized, 'unique index')) {
+            return 'Nije moguće kreirati dokument jer je njegov broj u međuvremenu već zauzet. '
+                . 'Nijedna promjena nije sačuvana. Pokušajte ponovo zatvoriti radni nalog.';
+        }
+
+        // Očekivana poslovna validacija je sigurna za prikaz korisniku.
+        if ($status === 422) {
+            return $message;
+        }
+
+        return 'Zatvaranje radnog naloga nije uspjelo. Nijedna promjena nije sačuvana. Pokušajte ponovo ili kontaktirajte podršku.';
     }
 
     private function failedStep(string $message): string

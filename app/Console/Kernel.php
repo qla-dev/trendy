@@ -24,11 +24,14 @@ class Kernel extends ConsoleKernel
 
         if ($pollInterval === 1) {
             $event->everyMinute();
-
-            return;
+        } else {
+            $event->cron(sprintf('*/%d * * * *', $pollInterval));
         }
 
-        $event->cron(sprintf('*/%d * * * *', $pollInterval));
+        $schedule->command('work-orders:monitor-excess-stock-incoming')
+            ->hourly()
+            ->withoutOverlapping(55)
+            ->appendOutputTo(storage_path('logs/excess-stock-incoming.log'));
     }
 
     /**

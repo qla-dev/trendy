@@ -20,6 +20,7 @@ class WorkOrderClosingService
         private PantheonFinishedGoodsReceiptService $receiptDocuments,
         private PantheonMaterialPreparationService $materialPreparation,
         private PantheonMaterialStockService $materialStock,
+        private ExcessStockService $excessStock,
         private PantheonWorkerSearchService $workers,
         private WorkOrderClosingCalculator $calculator
     ) {
@@ -49,7 +50,9 @@ class WorkOrderClosingService
             }
 
             $blockingExisting = $existing;
-            unset($blockingExisting['6400']);
+            // The dedicated stock-cleanup 6400 has a separate idempotency
+            // identity; it must not be confused with a regular 6400.
+            unset($blockingExisting['6400'], $blockingExisting['6400_excess']);
             if ($blockingExisting !== []) {
                 throw new RuntimeException('Radni nalog ima nepotpun postojeći skup završnih dokumenata. Nije kreiran novi dokument.');
             }
@@ -81,6 +84,7 @@ class WorkOrderClosingService
             $operations = $preparedOperations['operations'];
             $materialFlow = $this->resolveMaterialFlow($workOrder, $submittedMaterials, $producedQuantity);
             $materials = $materialFlow['materials'];
+            $excessMaterials = $materialFlow['excess_materials'];
             $sourceWarehouse = $materialFlow['source_warehouse'];
             $destinationWarehouse = (string) config('work_order_closing.receipt_warehouse', 'Veleprodajno skladište');
 
@@ -89,7 +93,7 @@ class WorkOrderClosingService
             // no materials; retain only the partial-close state instead. An
             // existing 6400 is the one valid retry case because its material
             // issue was already completed in an earlier transaction.
-            if ($materials === [] && !isset($existing['6400'])) {
+            if ($materials === [] && $excessMaterials === [] && !isset($existing['6400'])) {
                 $this->markPartiallyClosed($workOrder, $now, $userId);
 
                 Log::info('Work order partially closed because no materials were submitted.', [
@@ -164,7 +168,10 @@ class WorkOrderClosingService
             ]);
             $materialTotal = $this->calculator->add(
                 $this->materialCostTotal((string) $workOrder['acKey']),
-                $this->preparedMaterialCostTotal($materials)
+                $this->calculator->add(
+                    $this->preparedMaterialCostTotal($materials),
+                    $this->preparedMaterialCostTotal($excessMaterials)
+                )
             );
             $operationTotal = '0';
 
@@ -200,6 +207,10 @@ class WorkOrderClosingService
                 throw new RuntimeException('Pantheon primalac radnog naloga nije pronađen.');
             }
 
+            if ($excessMaterials !== [] && !$this->materialStock->canIssue($this->connection, $this->excessStock->warehouse(), $excessMaterials)) {
+                throw new RuntimeException('Nema dovoljno zalihe u skladištu dodatnih sirovina za zatvaranje radnog naloga.');
+            }
+
             $materialResult = $materialNumber === null ? null : $this->materialDocuments->create(
                 $this->connection,
                 $materialNumber,
@@ -223,6 +234,38 @@ class WorkOrderClosingService
                     throw new RuntimeException('Konfiguracija međuskladišta nije postavljena.');
                 }
                 $this->materialStock->issue($this->connection, $sourceWarehouse, $materials, $now, $userId);
+            }
+
+            // A dedicated 6400 for this temporary cleanup workflow. Normal
+            // material documents remain unchanged and use their old issuer.
+            // Generate this number only after the regular 6400 (if any) has
+            // been inserted. A single closing transaction can legitimately
+            // create two 6400 documents, so pre-generating both would give
+            // them the same sequence value.
+            $excessMaterialNumber = $excessMaterials === []
+                ? null
+                : $this->numbers->next($this->connection, '6400', $now);
+            $excessMaterialResult = $excessMaterialNumber === null ? null : $this->materialDocuments->create(
+                $this->connection,
+                $excessMaterialNumber,
+                $primaryReceiptNumber,
+                $workOrder,
+                $excessMaterials,
+                $now,
+                $userId,
+                [
+                    'receiver' => $consignee,
+                    'issuer' => $this->excessStock->warehouse(),
+                    'receiver_stock' => 'N',
+                    'issuer_stock' => 'Y',
+                    'person3' => $consignee,
+                    'way_of_sale' => 'I',
+                    'department' => $department,
+                    'internal_note' => $this->excessStock->documentMarker(),
+                ]
+            );
+            if ($excessMaterialResult !== null) {
+                $this->materialStock->issue($this->connection, $this->excessStock->warehouse(), $excessMaterials, $now, $userId);
             }
 
             $operationResult = $this->operationDocuments->create(
@@ -276,6 +319,7 @@ class WorkOrderClosingService
             Log::info('Work order closed through eNalog.', [
                 'work_order_key' => $workOrder['acKey'],
                 'material_document' => $materialResult['document_number'] ?? null,
+                'excess_material_document' => $excessMaterialResult['document_number'] ?? null,
                 'operation_document' => $operationResult['document_number'],
                 'receipt_documents' => array_column($receiptResults, 'document_number'),
                 'created_work_order_items' => $closingItems['created_items'],
@@ -285,6 +329,7 @@ class WorkOrderClosingService
             $createdDocumentsMessage = 'kreirani dokumenti ' . implode(' i ', array_filter([
                 ($preparationResult['created'] ?? false) ? $preparationResult['document_number'] : null,
                 $materialResult['document_number'] ?? null,
+                $excessMaterialResult['document_number'] ?? null,
                 $operationResult['document_number'],
                 ...array_column($receiptResults, 'document_number'),
             ]));
@@ -299,11 +344,80 @@ class WorkOrderClosingService
                 'documents' => array_values(array_filter([
                     ($preparationResult['created'] ?? false) ? $preparationResult : null,
                     $materialResult,
+                    $excessMaterialResult,
                     $operationResult,
                     ...$receiptResults,
                 ])),
                 'costs' => $receiptCalculation,
             ];
+        }, 3);
+    }
+
+    /**
+     * Repairs only a missing dedicated excess-stock 6400 on an otherwise
+     * closed RN. This is intentionally separate from regular closing logic.
+     */
+    public function recoverMissingExcessStock6400(string $locator, int $userId, string $userName = ''): ?array
+    {
+        $now = Carbon::now();
+
+        return $this->connection->transaction(function () use ($locator, $userId, $userName, $now) {
+            $workOrder = $this->lockWorkOrder($locator);
+            $existing = $this->existingClosingDocuments((string) $workOrder['acKey']);
+            $receipt = $existing['6100'] ?? $existing['7100'] ?? null;
+            if (!isset($existing['6600']) || $receipt === null) {
+                throw new RuntimeException('RN nema kompletne završne dokumente potrebne za recovery posebnog 6400.');
+            }
+            if (isset($existing['6400_excess'])) {
+                return null;
+            }
+
+            $materials = $this->excessStock->closeMaterials($this->connection, (string) $workOrder['acKey']);
+            if ($materials === []) {
+                return null;
+            }
+            if (!$this->materialStock->canIssue($this->connection, $this->excessStock->warehouse(), $materials)) {
+                throw new RuntimeException('Nema dovoljno zalihe u skladištu dodatnih sirovina za recovery posebnog 6400.');
+            }
+
+            $consignee = trim((string) ($workOrder['acReceiver'] ?: $workOrder['acConsignee'] ?? ''));
+            if ($consignee === '') {
+                throw new RuntimeException('Pantheon primalac radnog naloga nije pronađen.');
+            }
+            $number = $this->numbers->next($this->connection, '6400', $now);
+            $receiptNumber = [
+                'key' => (string) $receipt['acKey'],
+                'number' => (string) ($receipt['acKeyView'] ?? $receipt['acKey']),
+                'type' => (string) ($receipt['acDocType'] ?? '6100'),
+            ];
+            $result = $this->materialDocuments->create(
+                $this->connection,
+                $number,
+                $receiptNumber,
+                $workOrder,
+                $materials,
+                $now,
+                $userId,
+                [
+                    'receiver' => $consignee,
+                    'issuer' => $this->excessStock->warehouse(),
+                    'receiver_stock' => 'N',
+                    'issuer_stock' => 'Y',
+                    'person3' => $consignee,
+                    'way_of_sale' => 'I',
+                    'department' => $this->resolveDepartment($workOrder, $userName),
+                    'internal_note' => $this->excessStock->documentMarker(),
+                ]
+            );
+            $this->materialStock->issue($this->connection, $this->excessStock->warehouse(), $materials, $now, $userId);
+
+            Log::warning('Recovered missing excess-stock 6400 for a closed work order.', [
+                'work_order_key' => $workOrder['acKey'],
+                'document_number' => $result['document_number'],
+                'user_id' => $userId,
+            ]);
+
+            return $result;
         }, 3);
     }
 
@@ -829,6 +943,12 @@ class WorkOrderClosingService
         $createdAt = $this->workOrderCreatedAt($workOrder);
         $cutoff = Carbon::parse((string) config('work_order_closing.work_order_2005_flow_start_date', '2026-07-21 00:00:00'));
         $priority = $this->workOrderPriority($workOrder);
+        // Backfilled rows are resolved independently and issued only by the
+        // dedicated excess 6400. Do not let a closing form submit them again
+        // through the regular WIP/raw-material flow.
+        $excessMaterials = $this->excessStock->closeMaterials($this->connection, (string) $workOrder['acKey']);
+        $excessItemQids = array_fill_keys(array_map(fn (array $item) => (int) $item['item_qid'], $excessMaterials), true);
+        $submittedMaterials = array_values(array_filter($submittedMaterials, fn (array $item) => !isset($excessItemQids[(int) ($item['item_qid'] ?? 0)])));
         $submitted = $this->prepareMaterials($submittedMaterials, $producedQuantity);
         // A date change must not reissue raw stock for a WO that was already
         // prepared by 2005 under an earlier configuration.
@@ -844,6 +964,7 @@ class WorkOrderClosingService
 
         return [
             'materials' => $materials,
+            'excess_materials' => $excessMaterials,
             'source_warehouse' => $uses2005Flow
                 ? trim((string) config('work_order_closing.work_in_progress_warehouse', config('work_order_closing.operation_warehouse', '')))
                 : trim((string) config('work_order_closing.raw_material_warehouse', 'SkladiĹˇte sirovina')),
@@ -910,8 +1031,23 @@ class WorkOrderClosingService
             ->where('l.acLnkKey', $workOrderKey)
             ->whereIn('m.acDocType', ['6100', '6400', '6600', '7100'])
             ->orderByDesc('m.acKey')
-            ->get(['m.acKey', 'm.acKeyView', 'm.acDocType', 'm.anValue'])
-            ->mapWithKeys(fn ($row) => [trim((string) $row->acDocType) => (array) $row])
+            ->get(['m.acKey', 'm.acKeyView', 'm.acDocType', 'm.anValue', 'm.acInternalNote'])
+            ->mapWithKeys(function ($row): array {
+                $type = trim((string) $row->acDocType);
+                $internalNote = strtoupper((string) $row->acInternalNote);
+                $isExcess6400 = $type === '6400';
+                if ($isExcess6400) {
+                    $isExcess6400 = false;
+                    foreach ($this->excessStock->documentMarkers() as $marker) {
+                        if (str_contains($internalNote, strtoupper($marker))) {
+                            $isExcess6400 = true;
+                            break;
+                        }
+                    }
+                }
+
+                return [$isExcess6400 ? '6400_excess' : $type => (array) $row];
+            })
             ->all();
     }
 

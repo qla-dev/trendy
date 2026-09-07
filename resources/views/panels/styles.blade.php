@@ -32,6 +32,32 @@
 <!-- laravel style -->
 <link rel="stylesheet" href="{{ asset(mix('css/overrides.css')) }}" />
 <style>
+  .shared-filter-field .input-group-text,
+  .input-group.input-group-merge:has(.filter-input) > .input-group-text,
+  .input-group.input-group-merge:has(.order-linkage-filter-input) > .input-group-text,
+  .input-group.input-group-merge:has(.released-doc-filter-input) > .input-group-text,
+  .input-group.input-group-merge:has(.ai-token-history-filter-input) > .input-group-text,
+  .input-group.input-group-merge:has(input[id^="filter-"]) > .input-group-text,
+  .input-group.input-group-merge:has(select[id^="filter-"]) > .input-group-text {
+    background:#f2f2f4 !important;
+    color:#6e6b7b;
+    border-right:1px solid #ebe9f1 !important;
+    min-width:2.75rem;
+    justify-content:center;
+    padding-left:.75rem;
+    padding-right:.75rem;
+  }
+  .shared-filter-field .form-control { border-left:0; padding-left:.9rem; }
+  .shared-filter-field .input-group:focus-within .input-group-text,
+  .input-group.input-group-merge:has(.filter-input):focus-within > .input-group-text,
+  .input-group.input-group-merge:has(.order-linkage-filter-input):focus-within > .input-group-text,
+  .input-group.input-group-merge:has(.released-doc-filter-input):focus-within > .input-group-text,
+  .input-group.input-group-merge:has(.ai-token-history-filter-input):focus-within > .input-group-text,
+  .input-group.input-group-merge:has(input[id^="filter-"]):focus-within > .input-group-text,
+  .input-group.input-group-merge:has(select[id^="filter-"]):focus-within > .input-group-text { border-color:#7367f0 !important; color:#5e50ee; }
+  .shared-filter-date, .shared-filter-date + .flatpickr-input { cursor:pointer; }
+</style>
+<style>
   html .content .content-wrapper .content-header-title {
     border-right: 0 !important;
     padding-right: 0 !important;

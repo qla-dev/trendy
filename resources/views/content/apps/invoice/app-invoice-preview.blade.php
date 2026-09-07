@@ -2819,7 +2819,7 @@
           <div class="tab-pane fade" id="close-work-order-materials" role="tabpanel">
             <div class="table-responsive">
               <table class="table align-middle" id="close-work-order-materials-table">
-                <thead><tr><th class="text-nowrap" style="width:1%">Pozicija</th><th style="width:23%">Materijal</th><th style="width:30%">Naziv</th><th style="width:19%">Količina</th><th class="text-nowrap" style="width:1%">MJ</th><th class="text-nowrap">Skladište sirovina</th><th class="text-center text-nowrap" style="width:1%">Akcije</th></tr></thead>
+                <thead><tr><th class="text-nowrap" style="width:1%">Pozicija</th><th style="width:23%">Materijal</th><th style="width:30%">Naziv</th><th style="width:19%">Količina</th><th class="text-nowrap" style="width:1%">MJ</th><th class="text-nowrap">Skladište</th><th class="text-nowrap">Zaliha</th><th class="text-center text-nowrap" style="width:1%">Akcije</th></tr></thead>
                 <tbody>
                   @php
                     $closeMaterials = $workOrderItemResources ?? [];
@@ -2830,7 +2830,11 @@
                     }
                   @endphp
                   @foreach($closeMaterials as $material)
-                    <tr data-existing-material="{{ trim((string) ($material['materijal'] ?? '')) !== '' ? '1' : '0' }}">
+                    @php
+                      $excessCloseNote = strtoupper(trim((string) ($material['napomena'] ?? '')));
+                      $isExcessCloseMaterial = str_starts_with($excessCloseNote, 'REZERVACIJA_DODATNIH_SIROVINA|') || str_starts_with($excessCloseNote, 'EXCESS_STOCK_RESERVATION|');
+                    @endphp
+                    <tr data-existing-material="{{ trim((string) ($material['materijal'] ?? '')) !== '' ? '1' : '0' }}" data-excess-stock-material="{{ $isExcessCloseMaterial ? '1' : '0' }}">
                       <td class="text-nowrap">{{ $displayValue($material['pozicija'] ?? $loop->iteration) }}</td>
                       <td class="position-relative"><input class="form-control wo-close-material-code text-uppercase" type="text" maxlength="64" autocomplete="off" value="{{ $material['materijal'] ?? '' }}" placeholder="Šifra materijala" aria-label="Šifra materijala" aria-autocomplete="list"><div class="wo-close-code-suggestions d-none" role="listbox"></div></td>
                       <td><input class="form-control wo-close-material-name" type="text" value="{{ $material['naziv'] ?? '' }}" readonly aria-label="Naziv materijala"></td>
@@ -2856,7 +2860,8 @@
                         </div>
                       </td>
                       <td class="text-nowrap wo-close-material-unit">{{ $displayValue($material['mj'] ?? null) }}</td>
-                      <td class="text-nowrap wo-close-material-raw-stock">{{ $displayValue($material['raw_material_stock_qty'] ?? null) }}</td>
+                      <td class="text-nowrap wo-close-material-source-warehouse">{{ $displayValue($material['source_warehouse'] ?? 'Skladište sirovina') }}</td>
+                      <td class="text-nowrap wo-close-material-source-stock">{{ $displayValue($material['source_stock_qty'] ?? $material['raw_material_stock_qty'] ?? null) }}</td>
                       <td class="text-center text-nowrap">
                         <button type="button" class="btn btn-outline-primary btn-sm wo-close-add-material-row-btn" style="background:#fff !important;background-color:#fff !important" title="Novi materijal" aria-label="Novi materijal"><i class="fa fa-plus"></i></button>
                         <button type="button" class="btn btn-outline-secondary btn-sm wo-close-material-clear-row-btn" title="Očisti red" aria-label="Očisti red"><i class="fa fa-eraser"></i></button>
@@ -3974,9 +3979,11 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       });
       if (copiedRow.children[0]) copiedRow.children[0].textContent = String(nextClosingRowPosition(closeWorkOrderMaterialsTable));
       var copiedUnitCell = copiedRow.querySelector('.wo-close-material-unit');
-      var copiedRawStockCell = copiedRow.querySelector('.wo-close-material-raw-stock');
+      var copiedSourceWarehouseCell = copiedRow.querySelector('.wo-close-material-source-warehouse');
+      var copiedSourceStockCell = copiedRow.querySelector('.wo-close-material-source-stock');
       if (copiedUnitCell) copiedUnitCell.textContent = '';
-      if (copiedRawStockCell) copiedRawStockCell.textContent = '';
+      if (copiedSourceWarehouseCell) copiedSourceWarehouseCell.textContent = '';
+      if (copiedSourceStockCell) copiedSourceStockCell.textContent = '';
       return copiedRow;
     }
 
@@ -4118,12 +4125,16 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       }
       if (fields.kind === 'materials') {
         var unitCell = fields.row.querySelector('.wo-close-material-unit');
-        var rawStockCell = fields.row.querySelector('.wo-close-material-raw-stock');
+        var sourceWarehouseCell = fields.row.querySelector('.wo-close-material-source-warehouse');
+        var sourceStockCell = fields.row.querySelector('.wo-close-material-source-stock');
         if (unitCell) {
           unitCell.textContent = closingCatalogValue(item, 'acUM').toUpperCase();
         }
-        if (rawStockCell) {
-          rawStockCell.textContent = closingCatalogValue(item, 'raw_material_stock_qty');
+        if (sourceWarehouseCell) {
+          sourceWarehouseCell.textContent = 'Skladište sirovina';
+        }
+        if (sourceStockCell) {
+          sourceStockCell.textContent = closingCatalogValue(item, 'raw_material_stock_qty');
         }
       }
       if (fields.kind === 'operations') {
@@ -4520,9 +4531,11 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
           var materialRow = clearMaterial.closest('tr');
           materialRow.querySelectorAll('.wo-close-material-code, .wo-close-material-name, .wo-close-material-quantity').forEach(function (input) { input.value = ''; });
           var materialUnitCell = materialRow.querySelector('.wo-close-material-unit');
-          var materialRawStockCell = materialRow.querySelector('.wo-close-material-raw-stock');
+          var materialSourceWarehouseCell = materialRow.querySelector('.wo-close-material-source-warehouse');
+          var materialSourceStockCell = materialRow.querySelector('.wo-close-material-source-stock');
           if (materialUnitCell) materialUnitCell.textContent = '';
-          if (materialRawStockCell) materialRawStockCell.textContent = '';
+          if (materialSourceWarehouseCell) materialSourceWarehouseCell.textContent = '';
+          if (materialSourceStockCell) materialSourceStockCell.textContent = '';
           return;
         }
         var deleteMaterial = event.target.closest('.wo-close-material-delete-row-btn');
