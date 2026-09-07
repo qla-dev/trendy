@@ -18,8 +18,13 @@ class ExcessStockWorkflowStructureTest extends TestCase
         $this->assertStringContainsString("'acNote' => 'Automatski popunjeno sa '", $service);
         $this->assertStringContainsString('physical stock changes only', $service);
         $this->assertStringContainsString('assignToNewWorkOrder', $service);
+        $assignOnCreate = substr($service, strpos($service, 'public function assignToNewWorkOrder'));
+        $this->assertStringContainsString('previewForOrders($db, [(array) $order])', $assignOnCreate);
+        $this->assertStringNotContainsString('$this->assignPreview($db)', $assignOnCreate);
         $this->assertStringContainsString('salesPriceForWorkOrder', $service);
-        $this->assertStringContainsString("bcmul(\$salesPrice, \$preview['sales_price_percent']", $service);
+        $this->assertStringContainsString('NULLIF(by_qid.anRetailPrice, 0)', $service);
+        $this->assertStringContainsString("'sales_price_eur_to_km_rate' => env('EXCESS_STOCK_SALES_PRICE_EUR_TO_KM_RATE', '1.958')", file_get_contents(__DIR__ . '/../../config/excess-stock.php'));
+        $this->assertStringContainsString("bcmul(\$budgetPerPieceEur, \$preview['sales_price_eur_to_km_rate']", $service);
         $this->assertStringContainsString('assignment_per_piece', $service);
     }
 
