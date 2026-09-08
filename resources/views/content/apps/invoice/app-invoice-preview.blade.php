@@ -2832,7 +2832,10 @@
                   @foreach($closeMaterials as $material)
                     @php
                       $excessCloseNote = strtoupper(trim((string) ($material['napomena'] ?? '')));
-                      $isExcessCloseMaterial = str_starts_with($excessCloseNote, strtoupper((string) config('excess-stock.reservation_marker')))
+                      $currentExcessNotePrefix = 'Automatski popunjeno sa ' . mb_strtolower(trim((string) config('excess-stock.warehouse')));
+                      $isExcessCloseMaterial = (bool) ($material['is_excess_stock_material'] ?? false)
+                        || str_starts_with($excessCloseNote, strtoupper((string) config('excess-stock.reservation_marker')))
+                        || str_starts_with(trim((string) ($material['napomena'] ?? '')), $currentExcessNotePrefix)
                         || str_starts_with($excessCloseNote, 'AUTOMATSKI POPUNJENO SA SKLADIŠTA DODATNIH SIROVINA')
                         || str_starts_with($excessCloseNote, 'REZERVACIJA_DODATNIH_SIROVINA')
                         || str_starts_with($excessCloseNote, 'EXCESS_STOCK_RESERVATION');
@@ -4133,11 +4136,18 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         if (unitCell) {
           unitCell.textContent = closingCatalogValue(item, 'acUM').toUpperCase();
         }
+        var isExcessStockMaterial = fields.row.getAttribute('data-excess-stock-material') === '1';
         if (sourceWarehouseCell) {
-          sourceWarehouseCell.textContent = 'Skladište sirovina';
+          // Reserved excess-stock rows must never fall back to the regular
+          // raw-material warehouse when refreshed from the catalogue.
+          sourceWarehouseCell.textContent = isExcessStockMaterial
+            ? 'Skladište dodatnih sirovina'
+            : 'Skladište sirovina';
         }
         if (sourceStockCell) {
-          sourceStockCell.textContent = closingCatalogValue(item, 'raw_material_stock_qty');
+          sourceStockCell.textContent = isExcessStockMaterial
+            ? closingCatalogValue(item, 'source_stock_qty')
+            : closingCatalogValue(item, 'raw_material_stock_qty');
         }
       }
       if (fields.kind === 'operations') {

@@ -9609,6 +9609,7 @@ class WorkOrderController extends Controller
             'kolicina' => $this->normalizeNumber($this->workOrderItemQuantityValue($row, 0)),
             'mj' => (string) $this->valueTrimmed($row, ['acUM', 'acUMRes', '__item_um'], ''),
             'napomena' => $note,
+            'is_excess_stock_material' => $isExcess,
             'source_warehouse' => $isExcess ? self::ADDITIONAL_RAW_MATERIAL_WAREHOUSE : null,
         ];
     }
@@ -9627,6 +9628,7 @@ class WorkOrderController extends Controller
             'kolicina' => $this->normalizeNumber($this->workOrderItemQuantityValue($row, 0)),
             'mj' => (string) $this->valueTrimmed($row, ['acUM'], ''),
             'napomena' => $note,
+            'is_excess_stock_material' => $isExcess,
             'source_warehouse' => $isExcess ? self::ADDITIONAL_RAW_MATERIAL_WAREHOUSE : null,
         ];
     }
@@ -9636,6 +9638,7 @@ class WorkOrderController extends Controller
         $note = Str::upper(trim($note));
         foreach (array_unique([
             (string) config('excess-stock.reservation_marker'),
+            'Automatski popunjeno sa ' . mb_strtolower(trim((string) config('excess-stock.warehouse'))),
             'Automatski popunjeno sa skladišta dodatnih sirovina',
             'REZERVACIJA_DODATNIH_SIROVINA',
             'EXCESS_STOCK_RESERVATION',
