@@ -29,7 +29,15 @@ class ExcessStockService
     public function documentMarker(): string { return (string) config('excess-stock.document_marker'); }
 
     /** Older rows retain their machine-readable markers after the note became a sentence. */
-    public function markers(): array { return array_values(array_unique([$this->marker(), 'Automatski popunjeno sa skladišta dodatnih sirovina', 'REZERVACIJA_DODATNIH_SIROVINA', 'EXCESS_STOCK_RESERVATION'])); }
+    public function markers(): array {
+        return array_values(array_unique([
+            $this->marker(),
+            'Automatski popunjeno sa ' . mb_strtolower($this->warehouse()),
+            'Automatski popunjeno sa skladišta dodatnih sirovina',
+            'REZERVACIJA_DODATNIH_SIROVINA',
+            'EXCESS_STOCK_RESERVATION',
+        ]));
+    }
     public function documentMarkers(): array { return array_values(array_unique([$this->documentMarker(), 'EXCESS_STOCK_CLEANUP_6400'])); }
 
     public function isExcessItem(array|object $item): bool
