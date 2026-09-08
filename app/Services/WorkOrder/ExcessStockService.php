@@ -6,6 +6,7 @@ use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
 
@@ -358,11 +359,17 @@ class ExcessStockService
     {
         if (!(bool) config('excess-stock.enabled', false)
             || !(bool) config('excess-stock.assign_on_work_order_create', false)) {
+            Log::info('Automatic excess-stock assignment skipped because it is disabled.', [
+                'work_order_key' => trim($workOrderKey),
+                'enabled' => (bool) config('excess-stock.enabled', false),
+                'assign_on_work_order_create' => (bool) config('excess-stock.assign_on_work_order_create', false),
+            ]);
             return 0;
         }
 
         $workOrderKey = trim($workOrderKey);
         if ($workOrderKey === '') {
+            Log::warning('Automatic excess-stock assignment skipped because the work-order key is empty.');
             return 0;
         }
 
@@ -375,19 +382,49 @@ class ExcessStockService
             ->whereIn('acStatusMF', ['O', 'R'])
             ->first(['acKey', 'acKeyView', 'adDate', 'anPlanQty']);
         if ($order === null) {
+            Log::info('Automatic excess-stock assignment skipped because the work order is missing or not open.', [
+                'work_order_key' => $workOrderKey,
+            ]);
             return 0;
         }
 
-        $plan = $this->salesPriceAssignments(
-            $db,
-            $this->previewForOrders($db, [(array) $order])
-        );
+        try {
+            $plan = $this->salesPriceAssignments(
+                $db,
+                $this->previewForOrders($db, [(array) $order])
+            );
+        } catch (\Throwable $exception) {
+            Log::warning('Automatic excess-stock planning failed before materials could be created.', [
+                'work_order_key' => $workOrderKey,
+                'message' => $exception->getMessage(),
+            ]);
+            throw $exception;
+        }
         foreach ($plan['assignments'] as $assignment) {
             if (strcasecmp(trim((string) ($assignment['work_order']['acKey'] ?? '')), $workOrderKey) === 0) {
                 return $this->assign($db, $assignment, $userId);
             }
         }
 
+        foreach ((array) ($plan['skipped_orders'] ?? []) as $skippedOrder) {
+            if (strcasecmp(trim((string) ($skippedOrder['acKey'] ?? '')), $workOrderKey) !== 0) continue;
+            Log::warning('Automatic excess-stock assignment skipped because a work-order creation condition was not met.', [
+                'work_order_key' => $workOrderKey,
+                'work_order_number' => trim((string) ($skippedOrder['acKeyView'] ?? '')),
+                'reason' => (string) ($skippedOrder['skip_reason'] ?? 'Unknown planning condition.'),
+                'planned_quantity' => (string) ($skippedOrder['anPlanQty'] ?? '0'),
+            ]);
+        }
+        Log::info('Automatic excess-stock assignment found no eligible materials for the new work order.', [
+            'work_order_key' => $workOrderKey,
+            'work_order_number' => trim((string) ($order->acKeyView ?? '')),
+            'reason' => 'No material passed the availability, positive material price, and reservation-budget conditions.',
+            'material_candidates' => array_map(fn (array $material) => [
+                'material_code' => $material['code'] ?? null,
+                'available_quantity' => $material['available_qty'] ?? null,
+                'material_price' => $material['price'] ?? null,
+            ], (array) ($plan['materials'] ?? [])),
+        ]);
         return 0;
     }
 
@@ -395,9 +432,16 @@ class ExcessStockService
     {
         $key = (string) ($assignment['work_order']['acKey'] ?? '');
         if ($key === '') throw new RuntimeException('Radni nalog za excess-stock dodjelu nije pronađen.');
-        return $db->transaction(function () use ($db, $key, $assignment, $userId) {
+        $reservedMaterials = [];
+        $added = $db->transaction(function () use ($db, $key, $assignment, $userId, &$reservedMaterials) {
             $order = $db->table('dbo.tHF_WOEx')->where('acKey', $key)->lockForUpdate()->first(['acStatusMF']);
-            if ($order === null || strtoupper(trim((string) $order->acStatusMF)) === 'Z') return 0;
+            if ($order === null || strtoupper(trim((string) $order->acStatusMF)) === 'Z') {
+                Log::info('Automatic excess-stock assignment skipped because the work order is unavailable or closed.', [
+                    'work_order_key' => $key,
+                    'status' => $order->acStatusMF ?? null,
+                ]);
+                return 0;
+            }
             $nextNo = ((int) $db->table('dbo.tHF_WOExItem')->where('acKey', $key)->max('anNo')) + 1;
             $qidIsIdentity = $db->selectOne("SELECT 1 AS present FROM sys.identity_columns WHERE object_id = OBJECT_ID('dbo.tHF_WOExItem') AND name = 'anQId'") !== null;
             $nextQid = $qidIsIdentity ? null : ((int) $db->table('dbo.tHF_WOExItem')->max('anQId')) + 1;
@@ -405,12 +449,26 @@ class ExcessStockService
             foreach ((array) ($assignment['materials'] ?? []) as $material) {
                 $code = trim((string) ($material['code'] ?? ''));
                 $quantity = (string) ($material['assignment_qty'] ?? '0');
-                if ($code === '' || bccomp($quantity, '0', WorkOrderClosingCalculator::SCALE) <= 0) continue;
+                if ($code === '' || bccomp($quantity, '0', WorkOrderClosingCalculator::SCALE) <= 0) {
+                    Log::info('Excess-stock material skipped because its code or calculated reservation quantity is invalid.', [
+                        'work_order_key' => $key,
+                        'material_code' => $code ?: null,
+                        'assignment_quantity' => $quantity,
+                    ]);
+                    continue;
+                }
                 $alreadyExists = $db->table('dbo.tHF_WOExItem')->where('acKey', $key)->where('acIdent', $code)
                     ->where(function ($query) {
                         foreach ($this->markers() as $marker) $query->orWhere('acNote', 'like', $marker . '%');
                     })->exists();
-                if ($alreadyExists) continue;
+                if ($alreadyExists) {
+                    Log::info('Excess-stock material skipped because it is already reserved on this work order.', [
+                        'work_order_key' => $key,
+                        'material_code' => $code,
+                        'assignment_quantity' => $quantity,
+                    ]);
+                    continue;
+                }
 
                 // Preview data can be stale when jobs overlap. Locking the
                 // source row and rechecking reservations prevents a future
@@ -422,7 +480,17 @@ class ExcessStockService
                     ->sum($db->raw('CAST(ISNULL(anStock, 0) AS decimal(18,6))'));
                 $reserved = $this->reservedByMaterial($db);
                 $alreadyReserved = (string) ($reserved[strtoupper($code)] ?? '0');
-                if (bccomp(bcsub((string) $physical, $alreadyReserved, WorkOrderClosingCalculator::SCALE), $quantity, WorkOrderClosingCalculator::SCALE) < 0) {
+                $available = bcsub((string) $physical, $alreadyReserved, WorkOrderClosingCalculator::SCALE);
+                if (bccomp($available, $quantity, WorkOrderClosingCalculator::SCALE) < 0) {
+                    Log::warning('Excess-stock material could not be reserved because free warehouse stock is insufficient.', [
+                        'work_order_key' => $key,
+                        'material_code' => $code,
+                        'requested_quantity' => $quantity,
+                        'physical_quantity' => (string) $physical,
+                        'already_reserved_quantity' => $alreadyReserved,
+                        'available_quantity' => $available,
+                        'warehouse' => $this->warehouse(),
+                    ]);
                     throw new RuntimeException("Nedovoljno slobodne zalihe dodatnih sirovina za materijal {$code}.");
                 }
                 $payload = [
@@ -436,9 +504,22 @@ class ExcessStockService
                 if ($nextQid !== null) $payload['anQId'] = $nextQid++;
                 $db->table('dbo.tHF_WOExItem')->insert($payload);
                 $added++;
+                $reservedMaterials[] = [
+                    'material_code' => $code,
+                    'material_name' => trim((string) ($material['name'] ?? '')) ?: null,
+                    'quantity' => $quantity,
+                    'unit' => $payload['acUM'] ?: null,
+                ];
             }
             return $added;
         }, 3);
+        Log::info('Automatic excess-stock assignment completed.', [
+            'work_order_key' => $key,
+            'materials_added' => $added,
+            'materials' => $reservedMaterials,
+            'warehouse' => $this->warehouse(),
+        ]);
+        return $added;
     }
 
     public function closeMaterials(ConnectionInterface $db, string $workOrderKey): array
