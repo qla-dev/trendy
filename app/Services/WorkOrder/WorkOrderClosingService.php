@@ -131,8 +131,11 @@ class WorkOrderClosingService
             );
             $operations = $closingItems['operations'];
             $materials = $closingItems['materials'];
+            $maker = $this->resolveMaker($userName);
+            $department = $this->workOrderDepartment($workOrder);
+            $departmentQId = $workOrder['anDeptQId'] ?? null;
             $preparationResult = $materialFlow['uses_2005_flow']
-                ? $this->prepareCloseTimeMaterials($workOrder, $materials, $now, $userId)
+                ? $this->prepareCloseTimeMaterials($workOrder, $materials, $now, $userId, $maker)
                 : null;
             $related2005 = $materialFlow['uses_2005_flow']
                 ? ($preparationResult ?? $this->materialPreparationDocument((string) $workOrder['acKey']))
@@ -205,7 +208,6 @@ class WorkOrderClosingService
                 return $this->numbers->next($this->connection, $type, $now);
             }, $receipts);
             $primaryReceiptNumber = $receiptNumbers[0];
-            $department = $this->resolveDepartment($workOrder, $userName);
             $consignee = trim((string) ($workOrder['acReceiver'] ?: $workOrder['acConsignee'] ?? ''));
 
             if ($consignee === '') {
@@ -229,9 +231,10 @@ class WorkOrderClosingService
                     'issuer' => $sourceWarehouse,
                     'receiver_stock' => 'N',
                     'issuer_stock' => 'Y',
-                    'person3' => $consignee,
-                    'way_of_sale' => 'I',
+                    'maker' => $maker,
                     'department' => $department,
+                    'department_qid' => $departmentQId,
+                    'way_of_sale' => 'I',
                 ]
             );
             if ($materialResult !== null) {
@@ -263,9 +266,10 @@ class WorkOrderClosingService
                     'issuer' => $this->excessStock->warehouse(),
                     'receiver_stock' => 'N',
                     'issuer_stock' => 'Y',
-                    'person3' => $consignee,
-                    'way_of_sale' => 'I',
+                    'maker' => $maker,
                     'department' => $department,
+                    'department_qid' => $departmentQId,
+                    'way_of_sale' => 'I',
                     'internal_note' => $this->excessStock->documentMarker(),
                 ]
             );
@@ -287,9 +291,10 @@ class WorkOrderClosingService
                     'issuer' => (string) config('work_order_closing.operation_warehouse', 'RN skladište'),
                     'receiver_stock' => 'N',
                     'issuer_stock' => 'Y',
-                    'person3' => $consignee,
-                    'way_of_sale' => 'I',
+                    'maker' => $maker,
                     'department' => $department,
+                    'department_qid' => $departmentQId,
+                    'way_of_sale' => 'I',
                 ]
             );
 
@@ -311,9 +316,10 @@ class WorkOrderClosingService
                         'issuer' => $consignee,
                         'receiver_stock' => 'Y',
                         'issuer_stock' => 'N',
-                        'person3' => $consignee,
-                        'way_of_sale' => 'U',
+                        'maker' => $maker,
                         'department' => $department,
+                        'department_qid' => $departmentQId,
+                        'way_of_sale' => 'U',
                     ]
                 );
             }
@@ -418,9 +424,10 @@ class WorkOrderClosingService
                     'issuer' => $this->excessStock->warehouse(),
                     'receiver_stock' => 'N',
                     'issuer_stock' => 'Y',
-                    'person3' => $consignee,
+                    'maker' => $this->resolveMaker($userName),
+                    'department' => $this->workOrderDepartment($workOrder),
+                    'department_qid' => $workOrder['anDeptQId'] ?? null,
                     'way_of_sale' => 'I',
-                    'department' => $this->resolveDepartment($workOrder, $userName),
                     'internal_note' => $this->excessStock->documentMarker(),
                 ]
             );
@@ -933,7 +940,7 @@ class WorkOrderClosingService
      * material warehouse. Create (or extend) their 2005 transfer before the
      * closing 6400 releases the same linked WO material from WIP.
      */
-    private function prepareCloseTimeMaterials(array $workOrder, array $materials, Carbon $now, int $userId): ?array
+    private function prepareCloseTimeMaterials(array $workOrder, array $materials, Carbon $now, int $userId, string $maker): ?array
     {
         $items = array_values(array_filter($materials, fn (array $material) => (bool) ($material['requires_close_time_preparation'] ?? false)));
         if ($items === []) {
@@ -943,7 +950,7 @@ class WorkOrderClosingService
         $existing = $this->materialPreparationDocument((string) $workOrder['acKey']);
 
         if ($existing === null) {
-            return $this->materialPreparation->prepare($this->connection, $workOrder, $items, $now, $userId) + ['created' => true];
+            return $this->materialPreparation->prepare($this->connection, $workOrder, $items, $now, $userId, $maker) + ['created' => true];
         }
 
         return $this->materialPreparation->append($this->connection, $workOrder, $items, $now, $userId) + ['created' => false];
@@ -1243,20 +1250,22 @@ class WorkOrderClosingService
         }
     }
 
-    private function resolveDepartment(array $workOrder, string $userName): string
+    private function resolveMaker(string $userName): string
     {
-        foreach ([
-            config('work_order_closing.department'),
-            $workOrder['acDept'] ?? '',
-            $userName,
-        ] as $candidate) {
-            $candidate = trim((string) $candidate);
-            if ($candidate !== '' && $this->connection->table('dbo.tHE_SetSubj')->whereRaw("LTRIM(RTRIM(ISNULL(acSubject, ''))) = ?", [$candidate])->exists()) {
-                return $candidate;
-            }
+        $maker = trim($userName);
+
+        if ($maker === '' || !$this->connection->table('dbo.tHE_SetSubj')
+            ->whereRaw("LTRIM(RTRIM(ISNULL(acSubject, ''))) = ?", [$maker])
+            ->exists()) {
+            throw new RuntimeException('Pantheon odgovorna osoba nije pronađena: ' . ($maker !== '' ? $maker : '[prazno]'));
         }
 
-        return '';
+        return $maker;
+    }
+
+    private function workOrderDepartment(array $workOrder): string
+    {
+        return trim((string) ($workOrder['acDept'] ?? ''));
     }
 
     private function formatNumber(string $value): string

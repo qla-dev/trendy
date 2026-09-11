@@ -116,11 +116,18 @@ $(function () {
             var $role = full[3];
             var roleBadgeObj = {
               admin: feather.icons['slack'].toSvg({ class: 'font-medium-3 text-danger me-50' }),
-              user: feather.icons['user'].toSvg({ class: 'font-medium-3 text-primary me-50' })
+              user: feather.icons['user'].toSvg({ class: 'font-medium-3 text-primary me-50' }),
+              kontrola: feather.icons['check-circle'].toSvg({ class: 'font-medium-3 text-success me-50' }),
+              bravarija: feather.icons['tool'].toSvg({ class: 'font-medium-3 text-warning me-50' })
             };
-            var roleText = $role === 'admin' ? 'Admin' : 'Korisnik';
+            var roleText = {
+              admin: 'Admin',
+              user: 'Korisnik',
+              kontrola: 'Kontrola',
+              bravarija: 'Bravarija'
+            }[$role] || $role;
 
-            return "<span class='text-truncate align-middle'>" + roleBadgeObj[$role] + roleText + '</span>';
+            return "<span class='text-truncate align-middle'>" + (roleBadgeObj[$role] || roleBadgeObj.user) + roleText + '</span>';
           }
         },
         {

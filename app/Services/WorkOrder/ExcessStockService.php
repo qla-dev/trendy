@@ -97,11 +97,42 @@ class ExcessStockService
 
     public function openWorkOrders(ConnectionInterface $db): array
     {
-        return $db->table('dbo.tHF_WOEx')
-            ->whereIn('acStatusMF', ['O', 'R'])
-            ->orderBy('adDate')->orderBy('acKey')
+        return $this->workOrdersForStatuses($db, ['O']);
+    }
+
+    /** Returns only RNs in the requested status set that do not yet have excess reservations. */
+    public function workOrdersForStatuses(ConnectionInterface $db, array $statuses, ?string $keyViewPrefix = null): array
+    {
+        $statuses = array_values(array_unique(array_filter(array_map(
+            fn ($status) => strtoupper(trim((string) $status)),
+            $statuses
+        ))));
+        if ($statuses === []) return [];
+
+        $query = $db->table('dbo.tHF_WOEx')
+            ->whereIn('acStatusMF', $statuses)
+            ->whereNotExists(function ($query) {
+                $query->selectRaw('1')
+                    ->from('dbo.tHF_WOExItem as existing_excess')
+                    ->whereColumn('existing_excess.acKey', 'tHF_WOEx.acKey')
+                    ->where(function ($itemQuery) {
+                        foreach ($this->markers() as $marker) {
+                            $itemQuery->orWhereRaw("UPPER(LTRIM(RTRIM(ISNULL(existing_excess.acNote, '')))) LIKE ?", [strtoupper($marker) . '%']);
+                        }
+                    });
+            });
+        $keyViewPrefix = trim((string) $keyViewPrefix);
+        if ($keyViewPrefix !== '') $query->whereRaw('LTRIM(RTRIM(acKeyView)) LIKE ?', [$keyViewPrefix . '%']);
+
+        return $query->orderBy('adDate')->orderBy('acKey')
             ->get(['acKey', 'acKeyView', 'adDate', 'anPlanQty'])
             ->map(fn ($row) => (array) $row)->all();
+    }
+
+    /** Builds a batch plan for only the explicitly permitted RN statuses. */
+    public function assignPreviewForStatuses(ConnectionInterface $db, array $statuses, ?string $keyViewPrefix = null): array
+    {
+        return $this->salesPriceAssignments($db, $this->previewForOrders($db, $this->workOrdersForStatuses($db, $statuses, $keyViewPrefix)));
     }
 
     /** Builds either a target-date plan or stable per-finished-piece assignments. */
@@ -200,6 +231,27 @@ class ExcessStockService
             $assignments[] = ['work_order' => $order, 'materials' => $lines];
         }
         return $preview + ['assignments' => $assignments]; */
+    }
+
+    /**
+     * Plans exactly one open RN while still subtracting every existing
+     * reservation from the available excess-stock balance.
+     */
+    public function assignPreviewForWorkOrder(ConnectionInterface $db, string $locator): ?array
+    {
+        $locator = trim($locator);
+        if ($locator === '') return null;
+
+        $order = $db->table('dbo.tHF_WOEx')
+            ->whereIn('acStatusMF', ['O', 'R'])
+            ->where(function ($query) use ($locator) {
+                $query->whereRaw('LTRIM(RTRIM(acKey)) = ?', [$locator])
+                    ->orWhereRaw('LTRIM(RTRIM(acKeyView)) = ?', [$locator]);
+            })
+            ->first(['acKey', 'acKeyView', 'adDate', 'anPlanQty']);
+        if ($order === null) return null;
+
+        return $this->salesPriceAssignments($db, $this->previewForOrders($db, [(array) $order]));
     }
 
     private function fixedAssignmentCount(string $available, string $fixed): int
@@ -428,14 +480,16 @@ class ExcessStockService
         return 0;
     }
 
-    public function assign(ConnectionInterface $db, array $assignment, int $userId): int
+    public function assign(ConnectionInterface $db, array $assignment, int $userId, bool $onlyOpen = false, ?array $allowedStatuses = null): int
     {
         $key = (string) ($assignment['work_order']['acKey'] ?? '');
         if ($key === '') throw new RuntimeException('Radni nalog za excess-stock dodjelu nije pronađen.');
         $reservedMaterials = [];
-        $added = $db->transaction(function () use ($db, $key, $assignment, $userId, &$reservedMaterials) {
+        $added = $db->transaction(function () use ($db, $key, $assignment, $userId, $onlyOpen, $allowedStatuses, &$reservedMaterials) {
             $order = $db->table('dbo.tHF_WOEx')->where('acKey', $key)->lockForUpdate()->first(['acStatusMF']);
-            if ($order === null || strtoupper(trim((string) $order->acStatusMF)) === 'Z') {
+            $status = strtoupper(trim((string) ($order->acStatusMF ?? '')));
+            $allowedStatuses = $allowedStatuses === null ? null : array_map(fn ($value) => strtoupper(trim((string) $value)), $allowedStatuses);
+            if ($order === null || ($onlyOpen ? $status !== 'O' : ($allowedStatuses !== null ? !in_array($status, $allowedStatuses, true) : $status === 'Z'))) {
                 Log::info('Automatic excess-stock assignment skipped because the work order is unavailable or closed.', [
                     'work_order_key' => $key,
                     'status' => $order->acStatusMF ?? null,

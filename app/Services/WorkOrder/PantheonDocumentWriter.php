@@ -44,17 +44,16 @@ class PantheonDocumentWriter
         $receiverQId = $this->subjectQId($connection, $receiver, $context['receiver_qid'] ?? null);
         $issuerQId = $this->subjectQId($connection, $issuer, $context['issuer_qid'] ?? null);
         $compatibility = $this->compatibilityFields($connection, (string) $number['type'], $receiver, $documentDate);
-        // Department is not a receiver/warehouse compatibility field. In
-        // particular, a 2005 receiver is a warehouse subject; copying a prior
-        // header's acDept/anDeptQId can make Pantheon resolve a warehouse (for
-        // example "Skladište sirovina") as "Prijemni odjel".
-        $deptQId = $this->resolveDepartmentQId(
-            $connection,
-            $dept,
-            $context['department_qid'] ?? null
-        );
-        $person3 = trim((string) ($context['person3'] ?? $receiver));
-        $person3QId = $this->subjectQId($connection, $person3, $context['person3_qid'] ?? null);
+        // Pantheon displays acPrsn3 as "Odgovorna osoba". It is the maker,
+        // not the receiver warehouse.
+        $maker = trim((string) ($context['maker'] ?? ''));
+        if ($maker === '') {
+            // Compatibility for pre-existing 2005 preparation callers. RN
+            // closing always supplies maker explicitly.
+            $maker = trim((string) ($context['person3'] ?? $receiver));
+        }
+        $makerQId = $this->subjectQId($connection, $maker, $context['maker_qid'] ?? $context['person3_qid'] ?? null);
+        $deptQId = $this->resolveDepartmentQId($connection, $dept, $context['department_qid'] ?? null);
         $workOrderNumber = $this->formatNumber((string) ($workOrder['acKeyView'] ?? $workOrder['acKey'] ?? ''));
         $orderReference = trim((string) ($workOrder['acLnkKey'] ?? ''));
         $position = (int) ($workOrder['anLnkNo'] ?? 0);
@@ -70,7 +69,7 @@ class PantheonDocumentWriter
             'acIssuer' => $this->limit($issuer, 30),
             'acReceiverStock' => (string) ($context['receiver_stock'] ?? 'N'),
             'acIssuerStock' => (string) ($context['issuer_stock'] ?? 'N'),
-            'acPrsn3' => $this->limit($person3, 30),
+            'acPrsn3' => $this->limit($maker, 30),
             'acDoc1' => $this->limit($orderReference, 50),
             'adDateDoc1' => $orderDate,
             'acDoc2' => $this->limit($workOrderNumber, 50),
@@ -91,6 +90,7 @@ class PantheonDocumentWriter
             'acVerifiedPrices' => 'F',
             'acCurrency' => (string) config('work_order_closing.currency', 'KM'),
             'anCurrValue' => $value,
+            // Empty unless the user explicitly selected an Odjel on the RN.
             'acDept' => $this->limit($dept, 30),
             'acPosted' => 'F',
             'acInternalNote' => $this->limit((string) ($context['internal_note'] ?? 'Zatvaranje radnog naloga putem eNalog.app'), 255),
@@ -111,7 +111,7 @@ class PantheonDocumentWriter
             'anFXRate' => '1',
             'anReceiverQId' => $receiverQId,
             'anIssuerQId' => $issuerQId,
-            'anPrsn3QId' => $person3QId,
+            'anPrsn3QId' => $makerQId,
             'anDeptQId' => $deptQId,
             'anCostDrvOutQId' => 1,
         ];
@@ -194,22 +194,23 @@ class PantheonDocumentWriter
 
     private function resolveDepartmentQId(ConnectionInterface $connection, string $department, mixed $candidate): int
     {
+        if ($department === '') {
+            return 1;
+        }
+
         if (is_numeric((string) $candidate) && (int) $candidate > 0) {
             return (int) $candidate;
         }
 
-        if ($department !== '') {
-            $qid = $connection->table('dbo.tHE_SetSubj')
-                ->whereRaw("LTRIM(RTRIM(ISNULL(acSubject, ''))) = ?", [$department])
-                ->value('anQId');
-            if (is_numeric((string) $qid) && (int) $qid > 0) {
-                return (int) $qid;
-            }
+        $qid = $connection->table('dbo.tHE_SetSubj')
+            ->whereRaw("LTRIM(RTRIM(ISNULL(acSubject, ''))) = ?", [$department])
+            ->value('anQId');
+
+        if (!is_numeric((string) $qid) || (int) $qid < 1) {
+            throw new RuntimeException('Pantheon odjel nije pronađen: ' . $department);
         }
 
-        // Pantheon's neutral/default department. It must never be inferred
-        // from an issuer or receiver warehouse QId.
-        return 1;
+        return (int) $qid;
     }
 
     private function compatibilityFields(ConnectionInterface $connection, string $type, string $receiver, Carbon $date): array

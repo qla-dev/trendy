@@ -62,7 +62,7 @@ class UserController extends Controller
                 Rule::unique($this->usersTableForValidation(), 'email'),
             ],
             'password' => 'required|string|min:6|confirmed',
-            'role' => 'required|in:admin,user',
+            'role' => ['required', Rule::in($this->availableRoles())],
         ]);
 
         if ($validator->fails()) {
@@ -129,7 +129,7 @@ class UserController extends Controller
                 'max:255',
                 Rule::unique($this->usersTableForValidation(), 'email')->ignore($id),
             ],
-            'role' => 'required|in:admin,user',
+            'role' => ['required', Rule::in($this->availableRoles())],
         ]);
 
         if ($validator->fails()) {
@@ -192,5 +192,15 @@ class UserController extends Controller
         }
 
         return $table;
+    }
+
+    private function availableRoles(): array
+    {
+        return [
+            User::ROLE_ADMIN,
+            User::ROLE_USER,
+            User::ROLE_KONTROLA,
+            User::ROLE_BRAVARIJA,
+        ];
     }
 }

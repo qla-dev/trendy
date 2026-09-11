@@ -1910,6 +1910,8 @@
   $priorityUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-update-priority', ['id' => $workOrderRouteId]) : '';
   $protectionOptionsUrl = $hasLoadedWorkOrder ? route('app-invoice-protection-options', ['id' => $workOrderRouteId]) : '';
   $protectionUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-protection-update', ['id' => $workOrderRouteId]) : '';
+  $departmentOptionsUrl = $hasLoadedWorkOrder ? route('app-invoice-department-options', ['id' => $workOrderRouteId]) : '';
+  $departmentUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-department-update', ['id' => $workOrderRouteId]) : '';
   $protectionOptionStoreUrl = $isAdminUser ? route('app-invoice-protection-options-store') : '';
   $closeWorkOrderUrl = $hasLoadedWorkOrder ? route('app-invoice-close', ['id' => $workOrderRouteId]) : '';
   $pantheonWorkersUrl = $hasLoadedWorkOrder ? route('app-invoice-pantheon-workers', ['id' => $workOrderRouteId]) : '';
@@ -2649,6 +2651,14 @@
           </button>
           @if($isAdminUser)
             <button
+              id="wo-department-trigger-btn"
+              class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center"
+              type="button"
+              @if (!$hasLoadedWorkOrder || $departmentOptionsUrl === '') disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif
+            >
+              <i class="fa fa-building me-50" style="margin-top: 1px;"></i> Dodaj odjel
+            </button>
+            <button
               id="wo-delete-order-btn"
               class="btn btn-danger w-100 mb-75 d-flex justify-content-center align-items-center"
               type="button"
@@ -2671,6 +2681,9 @@
               <i class="fa fa-cube me-50" style="margin-top: 2px;"></i> Dodaj materijal
             </a>
           @else
+            <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" @if (!$hasLoadedWorkOrder) disabled @endif id="wo-department-trigger-btn">
+              <i class="fa fa-building me-50" style="margin-top: 1px;"></i> Dodaj odjel
+            </button>
             <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" @if (!$hasLoadedWorkOrder) disabled @endif id="wo-protection-trigger-btn">
               <i class="fa fa-shield me-50" style="margin-top: 1px;"></i> Dodaj zaštitu
             </button>
@@ -3062,6 +3075,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       priorityUrl: @json($priorityUpdateUrl),
       protectionOptionsUrl: @json($protectionOptionsUrl),
       protectionUpdateUrl: @json($protectionUpdateUrl),
+      departmentOptionsUrl: @json($departmentOptionsUrl),
+      departmentUpdateUrl: @json($departmentUpdateUrl),
       protectionOptionStoreUrl: @json($protectionOptionStoreUrl),
       closeUrl: @json($closeWorkOrderUrl),
       workersUrl: @json($pantheonWorkersUrl),
@@ -3081,6 +3096,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var statusTriggerButton = document.getElementById('wo-status-trigger-btn');
     var priorityTriggerButton = document.getElementById('wo-priority-trigger-btn');
     var protectionTriggerButton = document.getElementById('wo-protection-trigger-btn');
+    var departmentTriggerButton = document.getElementById('wo-department-trigger-btn');
     var closeWorkOrderButton = document.getElementById('wo-close-order-btn');
     var closeWorkOrderSubmit = document.getElementById('wo-close-submit-btn');
     var closeWorkOrderModal = document.getElementById('close-work-order-modal');
@@ -5558,6 +5574,19 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     document.querySelector('[data-bs-target="#tab-zastita"]')?.addEventListener('shown.bs.tab', loadProtectionTab);
     if (protectionTriggerButton) protectionTriggerButton.addEventListener('click', openCompactProtectionModal);
 
+    function openDepartmentModal() {
+      if (!mutationConfig.departmentOptionsUrl || !mutationConfig.departmentUpdateUrl) return;
+      var modalElement = document.getElementById('work-order-department-modal');
+      if (!modalElement) return;
+      var search = modalElement.querySelector('#wo-department-modal-search'), results = modalElement.querySelector('#wo-department-modal-results'), empty = modalElement.querySelector('#wo-department-modal-empty'), selectedLabel = modalElement.querySelector('#wo-department-modal-selected'), clearButton = modalElement.querySelector('#wo-department-modal-clear'), saveButton = modalElement.querySelector('#wo-department-modal-save'), modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+      var selected = '', options = [], nextOffset = 0, hasMore = false, isLoading = false, initialized = false, searchTimer = null;
+      function escapeDepartmentHtml(value) { var node = document.createElement('span'); node.textContent = String(value || ''); return node.innerHTML; }
+      function render() { results.innerHTML = options.map(function (option) { var value = String(option.value || ''); return '<button type="button" class="list-group-item list-group-item-action wo-department-choice ' + (value === selected ? 'active' : '') + '" data-value="' + escapeDepartmentHtml(value) + '">' + escapeDepartmentHtml(option.label || value) + '</button>'; }).join(''); empty.classList.toggle('d-none', options.length > 0); selectedLabel.textContent = selected || 'Bez odjela'; results.querySelectorAll('.wo-department-choice').forEach(function (button) { button.onclick = function () { selected = String(button.dataset.value || ''); render(); }; }); }
+      function load(query, append) { if (isLoading || (append && !hasMore)) return; if (!append) { options = []; nextOffset = 0; hasMore = false; } isLoading = true; var url = mutationConfig.departmentOptionsUrl + (mutationConfig.departmentOptionsUrl.indexOf('?') === -1 ? '?' : '&') + 'q=' + encodeURIComponent(query || '') + '&offset=' + encodeURIComponent(nextOffset); fetch(url, { headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } }).then(function (response) { return response.json().then(function (body) { if (!response.ok) throw new Error(extractErrorMessage(body, 'Učitavanje odjela nije uspjelo.')); return body.data || {}; }); }).then(function (data) { if (!initialized) { selected = String(data.selected || ''); initialized = true; } options = options.concat(Array.isArray(data.options) ? data.options : []); nextOffset = Number(data.next_offset || options.length); hasMore = Boolean(data.has_more); render(); }).catch(function (error) { results.innerHTML = ''; empty.textContent = error.message || 'Učitavanje odjela nije uspjelo.'; empty.classList.remove('d-none'); }).finally(function () { isLoading = false; }); }
+      search.value = ''; initialized = false; results.onscroll = function () { if (results.scrollTop + results.clientHeight >= results.scrollHeight - 20) load(search.value, true); }; clearButton.onclick = function () { selected = ''; render(); }; saveButton.onclick = function () { requestMutation(mutationConfig.departmentUpdateUrl, { department: selected }, 'Ažuriranje odjela nije uspjelo.').then(function (response) { modal.hide(); return Swal.fire(swalWithTheme({ icon: 'success', title: 'Odjel je sačuvan', text: response.message || '', timer: 1300, showConfirmButton: false })); }).then(function () { window.location.reload(); }).catch(function (error) { Swal.fire(swalWithTheme({ icon: 'error', title: 'Spremanje nije uspjelo', text: error.message || 'Pokušajte ponovo.' })); }); }; search.oninput = function () { window.clearTimeout(searchTimer); searchTimer = window.setTimeout(function () { results.scrollTop = 0; load(search.value, false); }, 200); }; load('', false); modal.show();
+    }
+    if (departmentTriggerButton) departmentTriggerButton.addEventListener('click', openDepartmentModal);
+
     if (editSastavnicaModalElement) {
       editSastavnicaModalElement.addEventListener('hidden.bs.modal', function () {
         clearEditSastavnicaError();
@@ -5691,6 +5720,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 @include('content.new-components.change-priority-modal', ['currentPriority' => $priorityDisplayLabel])
 @include('content.new-components.edit-sastavnica-item-modal')
 @include('content.new-components.work-order-protection-modal')
+@include('content.new-components.work-order-department-modal')
 @include('content.new-components.nalog-scan')
 @include('content.new-components.sirovina-scan', [
   'productsFetchUrl' => $productsFetchUrl,
