@@ -1,6 +1,7 @@
 @extends('layouts/contentLayoutMaster')
 @section('title', 'Plan proizvodnje')
 @section('vendor-style')
+  <link rel="stylesheet" href="{{ asset(mix('vendors/css/forms/select/select2.min.css')) }}">
   <link rel="stylesheet" href="{{ asset('vendors/css/tables/datatable/dataTables.bootstrap5.min.css') }}">
   <link rel="stylesheet" href="{{ asset('vendors/css/pickers/flatpickr/flatpickr.min.css') }}">
   <link rel="stylesheet" href="{{ asset('vendors/css/extensions/sweetalert2.min.css') }}">
@@ -32,6 +33,7 @@
   <div class="content-header row"><div class="col-12 mb-2"><h2 class="mb-0">Plan proizvodnje — Radni nalozi</h2></div></div>
   <div class="card mb-2"><div class="card-header d-flex justify-content-between align-items-center"><h4 class="mb-0">Filter plana proizvodnje</h4><div class="d-flex align-items-center flex-wrap gap-2"><button class="btn btn-outline-primary btn-sm" id="btn-prikazi-filtere"><i data-feather="filter" class="me-50"></i>Prikaži filtere</button><button class="btn btn-outline-danger btn-sm" id="btn-obrisi-filter"><i data-feather="trash-2" class="me-50"></i>Obriši filter</button></div></div>
     <div class="card-body d-none" id="tijelo-filtera"><div class="row g-2">
+      <div class="col-md-3"><label class="form-label" for="filter-prioritet">Prioritet</label><select class="form-select f" id="filter-prioritet" data-k="prioritet"><option value="">Svi prioriteti</option>@foreach (($planConfig['priorityOptions'] ?? []) as $priorityOption)<option value="{{ $priorityOption['code'] }}">{{ $priorityOption['label'] }}</option>@endforeach</select></div>
       <div class="col-md-3"><x-filters.text label="RN" class="f" data-k="rn"/></div><div class="col-md-3"><x-filters.text label="Naručitelj" class="f" data-k="narucitelj"/></div><div class="col-md-3"><x-filters.text label="Proizvod" class="f" data-k="proizvod"/></div><div class="col-md-3"><label class="form-label">Status RN</label><input class="form-control f" data-k="status_rn"></div><div class="col-md-3"><x-filters.text label="Narudžba" class="f" data-k="narudzba"/></div><div class="col-md-3"><label class="form-label">Godina</label><input class="form-control f" data-k="year" value="{{ now()->year }}"></div><div class="col-md-3"><label class="form-label">Kalendarska sedmica</label><input class="form-control f" data-k="kw" placeholder="1–53"></div><div class="col-md-3"><x-filters.date label="Datum od" class="f" data-k="datum_od"/></div><div class="col-md-3"><x-filters.date label="Datum do" class="f" data-k="datum_do"/></div><div class="col-md-3 d-flex align-items-end"><button id="filter" class="btn btn-primary w-100"><i data-feather="filter" class="me-50"></i>Filter</button></div>
     </div></div>
   </div>
@@ -39,9 +41,9 @@
 </section>
 @endsection
 @section('vendor-script')
-  <script src="{{ asset('vendors/js/tables/datatable/jquery.dataTables.min.js') }}"></script><script src="{{ asset('vendors/js/tables/datatable/dataTables.bootstrap5.min.js') }}"></script><script src="{{ asset('vendors/js/pickers/flatpickr/flatpickr.min.js') }}"></script><script src="{{ asset('vendors/js/extensions/sweetalert2.all.min.js') }}"></script>
+  <script src="{{ asset(mix('vendors/js/forms/select/select2.full.min.js')) }}"></script><script src="{{ asset('vendors/js/tables/datatable/jquery.dataTables.min.js') }}"></script><script src="{{ asset('vendors/js/tables/datatable/dataTables.bootstrap5.min.js') }}"></script><script src="{{ asset('vendors/js/pickers/flatpickr/flatpickr.min.js') }}"></script><script src="{{ asset('vendors/js/extensions/sweetalert2.all.min.js') }}"></script>
 @endsection
 @section('page-script')
   <script>window.planProizvodnjeConfig=@json($planConfig);flatpickr('.shared-filter-date',{dateFormat:'Y-m-d',altInput:true,altFormat:'d.m.Y',allowInput:true,disableMobile:true});</script>
-  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=107') }}"></script>
+  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=108') }}"></script>
 @endsection

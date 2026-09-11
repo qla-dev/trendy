@@ -3,6 +3,7 @@
 @section('title', 'Lista narudžbi')
 
 @php
+  $priorityOptions = $priorityOptions ?? app(\App\Services\WorkOrder\DeliveryPriorityOptions::class)->all();
   $orderLinkageConfig = [
       'dataUrl' => (string) ($ordersLinkageDataUrl ?? route('app-orders-data')),
       'positionsUrl' => (string) ($ordersLinkagePositionsUrl ?? route('app-orders-positions')),
@@ -733,10 +734,9 @@
           <label class="form-label">Prioritet</label>
           <select class="form-select order-linkage-filter-input" id="filter-prioritet">
             <option value="">Svi prioriteti</option>
-            <option value="1">1 - Visoki prioritet</option>
-            <option value="5">5 - Uobi&#269;ajeni prioritet</option>
-            <option value="10">10 - Niski prioritet</option>
-            <option value="15">15 - Uzorci</option>
+            @foreach (($priorityOptions ?? []) as $priorityOption)
+              <option value="{{ $priorityOption['code'] }}">{{ $priorityOption['label'] }}</option>
+            @endforeach
           </select>
         </div>
         <div class="col-md-3 d-flex align-items-end">
@@ -834,5 +834,5 @@
 <script>
   window.orderLinkageConfig = @json($orderLinkageConfig);
 </script>
-<script src="{{ asset('js/scripts/pages/app-orders.js?v=11') }}"></script>
+<script src="{{ asset('js/scripts/pages/app-orders.js?v=12') }}"></script>
 @endsection

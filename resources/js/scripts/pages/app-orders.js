@@ -316,18 +316,12 @@ $(function () {
   }
 
   function getPriorityFilterDisplayValue(value) {
-    switch ((value || '').toString().trim()) {
-      case '1':
-        return '1 - Visoki prioritet';
-      case '5':
-        return '5 - Uobi\u010dajeni prioritet';
-      case '10':
-        return '10 - Niski prioritet';
-      case '15':
-        return '15 - Uzorci';
-      default:
-        return value || '';
-    }
+    var normalizedValue = (value || '').toString().trim();
+    var priorityLabel = $('#filter-prioritet option').filter(function () {
+      return String(this.value) === normalizedValue;
+    }).first().text().trim();
+
+    return priorityLabel || normalizedValue;
   }
 
   function isDateFilterKey(filterKey) {

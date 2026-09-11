@@ -7,6 +7,7 @@ use App\Models\Material;
 use App\Models\Product;
 use App\Services\WorkOrder\ProjectedProductionDateCalculator;
 use App\Services\WorkOrder\ExcessStockService;
+use App\Services\WorkOrder\DeliveryPriorityOptions;
 use App\Services\WorkOrder\PantheonMaterialPreparationService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
@@ -87,6 +88,7 @@ class WorkOrderController extends Controller
         $pageConfigs = ['pageHeader' => false];
         $canDeleteWorkOrders = $this->canDeleteWorkOrders(auth()->user());
         $destroyWorkOrderUrlTemplate = route('app-invoice-destroy', ['id' => '__WORK_ORDER__']);
+        $priorityOptions = app(DeliveryPriorityOptions::class)->all();
 
         try {
             return view('/content/apps/invoice/app-invoice-list', [
@@ -95,6 +97,7 @@ class WorkOrderController extends Controller
                 'statusStats' => $this->fetchStatusStats(),
                 'canDeleteWorkOrders' => $canDeleteWorkOrders,
                 'destroyWorkOrderUrlTemplate' => $destroyWorkOrderUrlTemplate,
+                'priorityOptions' => $priorityOptions,
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order list query failed.', [
@@ -109,6 +112,7 @@ class WorkOrderController extends Controller
                 'statusStats' => $this->emptyStatusStats(),
                 'canDeleteWorkOrders' => $canDeleteWorkOrders,
                 'destroyWorkOrderUrlTemplate' => $destroyWorkOrderUrlTemplate,
+                'priorityOptions' => $priorityOptions,
                 'error' => 'Greška pri učitavanju radnih naloga iz baze.',
             ]);
         }
@@ -155,6 +159,19 @@ class WorkOrderController extends Controller
                         'title' => 'Nalog nije pronađen',
                         'text' => 'Ne postoji nalog za odabrane parametre. Probaj sa drugim QR kodom.',
                     ]);
+            }
+
+            if ($isScanLookup) {
+                $scanPriorityTransition = $this->transitionScannedWorkOrderPriority(
+                    (array) ($workOrder['raw'] ?? []),
+                    $request->user()
+                );
+
+                // Reload after a successful transition so the preview shows
+                // the new priority immediately, rather than the lookup value.
+                if (($scanPriorityTransition['changed'] ?? false) === true) {
+                    $workOrder = $this->findMappedWorkOrder((string) $workOrderId, true) ?? $workOrder;
+                }
             }
 
             $raw = $workOrder['raw'] ?? [];
@@ -227,6 +244,7 @@ class WorkOrderController extends Controller
                 'plannedStartDate' => $this->formatMetaDateTime($displaySchedule['planned_start'] ?? null),
                 'dueDate' => $this->displayDate($displaySchedule['delivery_deadline'] ?? null),
                 'scanLookupNotice' => $successNotice,
+                'priorityOptions' => app(DeliveryPriorityOptions::class)->all(),
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order preview query failed.', [
@@ -514,6 +532,50 @@ class WorkOrderController extends Controller
                 'message' => 'Greška pri ažuriranju prioriteta skeniranog radnog naloga.',
             ], 500);
         }
+    }
+
+    private function transitionScannedWorkOrderPriority(array $row, mixed $user): array
+    {
+        $role = is_object($user) && method_exists($user, 'scanWorkOrderPriorityRole')
+            ? $user->scanWorkOrderPriorityRole()
+            : null;
+
+        if ($role === null || !isset(self::SCAN_PRIORITY_DEFINITIONS[$role])) {
+            return ['changed' => false];
+        }
+
+        $userId = (int) ($user->id ?? 0);
+        $priorityCodes = $this->ensureScanRolePriorityLookups($userId, Carbon::now());
+        $priorityCode = $priorityCodes[$role] ?? null;
+        $priorityName = (string) (self::SCAN_PRIORITY_DEFINITIONS[$role]['name'] ?? '');
+
+        if ($priorityCode === null || $priorityName === '') {
+            throw new RuntimeException('Prioritet za skeniranje nije dostupan.');
+        }
+
+        $priorityLabel = $priorityCode . ' - ' . $priorityName;
+        $updates = $this->priorityUpdatesForWorkOrder($row, $priorityCode, $priorityLabel);
+        if (empty($updates)) {
+            throw new RuntimeException('Kolona za prioritet nije pronađena.');
+        }
+
+        if ($this->rowAlreadyHasUpdates($row, $updates)) {
+            return [
+                'changed' => false,
+                'priority_code' => $priorityCode,
+                'priority' => $priorityLabel,
+            ];
+        }
+
+        if (!$this->updateWorkOrderRow($row, $updates)) {
+            throw new RuntimeException('Prioritet radnog naloga nije ažuriran.');
+        }
+
+        return [
+            'changed' => true,
+            'priority_code' => $priorityCode,
+            'priority' => $priorityLabel,
+        ];
     }
 
     public function createFromScan(Request $request, ExcessStockService $excessStock): JsonResponse
@@ -1776,6 +1838,7 @@ class WorkOrderController extends Controller
             'ordersLinkageWorkOrdersApiUrl' => route('app-orders-radni-nalozi'),
             'ordersLinkageDeleteUrl' => route('app-orders-destroy'),
             'canDeleteLinkedOrders' => $this->canDeleteWorkOrders($request->user()),
+            'priorityOptions' => app(DeliveryPriorityOptions::class)->all(),
         ]);
     }
 
@@ -10942,43 +11005,7 @@ class WorkOrderController extends Controller
             return $this->deliveryPriorityMap;
         }
 
-        $fallbackMap = [
-            1 => '1 - Visoki prioritet',
-            5 => '5 - Uobičajeni prioritet',
-            7 => '7 - Materijal razdužen',
-            10 => '10 - Niski prioritet',
-            15 => '15 - Uzorci',
-        ];
-
-        try {
-            $rows = DB::table($this->tableSchema() . '.tHE_SetDeliveryPriority')
-                ->select(['anPriority', 'acPriority', 'acName', 'abActive'])
-                ->where('abActive', 1)
-                ->orderBy('anPriority')
-                ->get();
-
-            $mapped = $rows
-                ->mapWithKeys(function ($row) {
-                    $code = (int) ($row->anPriority ?? 0);
-                    $label = trim((string) ($row->acPriority ?? ''));
-
-                    if ($label === '') {
-                        $name = trim((string) ($row->acName ?? ''));
-                        $label = $name !== '' ? ($code . ' - ' . $name) : (string) $code;
-                    }
-
-                    return [$code => $label];
-                })
-                ->all();
-
-            $this->deliveryPriorityMap = !empty($mapped)
-                ? array_replace($fallbackMap, $mapped)
-                : $fallbackMap;
-        } catch (Throwable $exception) {
-            $this->deliveryPriorityMap = $fallbackMap;
-        }
-
-        return $this->deliveryPriorityMap;
+        return $this->deliveryPriorityMap = app(DeliveryPriorityOptions::class)->labels();
     }
 
     private function materialIssuedPriorityLabel(): string
@@ -13891,6 +13918,7 @@ class WorkOrderController extends Controller
             'issueDate' => '',
             'plannedStartDate' => '',
             'dueDate' => '',
+            'priorityOptions' => app(DeliveryPriorityOptions::class)->all(),
         ]);
     }
 }

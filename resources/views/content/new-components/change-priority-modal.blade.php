@@ -1,4 +1,5 @@
 @php
+  $priorityOptions = $priorityOptions ?? app(\App\Services\WorkOrder\DeliveryPriorityOptions::class)->all();
   $currentPriority = (string) ($currentPriority ?? '');
   $currentPriorityCode = null;
 
@@ -17,27 +18,16 @@
       <div class="modal-body">
         <p class="text mb-1">Odaberite novi prioritet radnog naloga.</p>
         <select class="form-select" id="wo-priority-select" style="cursor: pointer;">
-          @php
-            $priorityOptions = [
-              '1 - Visoki prioritet',
-              '5 - Uobičajeni prioritet',
-              '7 - Materijal razdužen',
-              '10 - Niski prioritet',
-              '15 - Uzorci',
-            ];
-          @endphp
-          @foreach($priorityOptions as $priorityOption)
+          @foreach(($priorityOptions ?? []) as $priorityOption)
             @php
-              $priorityOptionCode = null;
-              if (preg_match('/^\s*(\d+)/', $priorityOption, $priorityOptionMatches) === 1) {
-                $priorityOptionCode = (int) ($priorityOptionMatches[1] ?? 0);
-              }
+              $priorityOptionCode = (int) ($priorityOption['code'] ?? 0);
+              $priorityOptionLabel = (string) ($priorityOption['label'] ?? '');
               $isPrioritySelected = $currentPriorityCode !== null
                 ? $currentPriorityCode === $priorityOptionCode
-                : strcasecmp($currentPriority, $priorityOption) === 0;
+                : strcasecmp($currentPriority, $priorityOptionLabel) === 0;
             @endphp
-            <option value="{{ $priorityOption }}" {{ $isPrioritySelected ? 'selected' : '' }} style="cursor: pointer;">
-              {{ $priorityOption }}
+            <option value="{{ $priorityOptionLabel }}" {{ $isPrioritySelected ? 'selected' : '' }} style="cursor: pointer;">
+              {{ $priorityOptionLabel }}
             </option>
           @endforeach
         </select>

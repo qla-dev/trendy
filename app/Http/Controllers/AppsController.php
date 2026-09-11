@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\WorkOrder\DeliveryPriorityOptions;
 use Illuminate\Http\Request;
 use App\Models\WorkOrder;
 
@@ -12,7 +13,10 @@ class AppsController extends Controller
     {
         $pageConfigs = ['pageHeader' => false];
 
-        return view('/content/apps/invoice/app-invoice-list', ['pageConfigs' => $pageConfigs]);
+        return view('/content/apps/invoice/app-invoice-list', [
+            'pageConfigs' => $pageConfigs,
+            'priorityOptions' => app(DeliveryPriorityOptions::class)->all(),
+        ]);
     }
 
     // invoice preview App
@@ -156,7 +160,8 @@ class AppsController extends Controller
         ];
 
         return view('/content/apps/calendar/app-calendar', [
-            'pageConfigs' => $pageConfigs
+            'pageConfigs' => $pageConfigs,
+            'priorityOptions' => app(DeliveryPriorityOptions::class)->all(),
         ]);
     }
 
