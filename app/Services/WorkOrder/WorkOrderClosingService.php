@@ -28,11 +28,11 @@ class WorkOrderClosingService
         $this->connection = DB::connection($name !== '' ? $name : 'work_order_target');
     }
 
-    public function close(string $locator, array $submittedOperations, int $userId, string $userName = '', array $submittedMaterials = [], ?array $submittedReceipts = null): array
+    public function close(string $locator, array $submittedOperations, int $userId, string $userName = '', array $submittedMaterials = [], ?array $submittedReceipts = null, string $fullName = ''): array
     {
         $now = Carbon::now();
 
-        return $this->connection->transaction(function () use ($locator, $submittedOperations, $submittedMaterials, $submittedReceipts, $userId, $userName, $now) {
+        return $this->connection->transaction(function () use ($locator, $submittedOperations, $submittedMaterials, $submittedReceipts, $userId, $userName, $fullName, $now) {
             $workOrder = $this->lockWorkOrder($locator);
             $existing = $this->existingClosingDocuments((string) $workOrder['acKey']);
 
@@ -131,7 +131,7 @@ class WorkOrderClosingService
             );
             $operations = $closingItems['operations'];
             $materials = $closingItems['materials'];
-            $maker = $this->resolveMaker($userName);
+            $maker = $this->resolveMaker($userName, $fullName);
             $department = $this->workOrderDepartment($workOrder);
             $departmentQId = $workOrder['anDeptQId'] ?? null;
             $preparationResult = $materialFlow['uses_2005_flow']
@@ -1250,17 +1250,35 @@ class WorkOrderClosingService
         }
     }
 
-    private function resolveMaker(string $userName): string
+    private function resolveMaker(string $userName, string $fullName = ''): string
     {
-        $maker = trim($userName);
+        $loginName = trim($userName);
+        $fullName = trim($fullName);
+        $candidates = [];
 
-        if ($maker === '' || !$this->connection->table('dbo.tHE_SetSubj')
-            ->whereRaw("LTRIM(RTRIM(ISNULL(acSubject, ''))) = ?", [$maker])
-            ->exists()) {
-            throw new RuntimeException('Pantheon odgovorna osoba nije pronađena: ' . ($maker !== '' ? $maker : '[prazno]'));
+        foreach ((array) config('work_order_closing.pantheon_maker_map', []) as $login => $pantheonSubject) {
+            if (mb_strtolower(trim((string) $login)) === mb_strtolower($loginName)) {
+                $candidates[] = trim((string) $pantheonSubject);
+                break;
+            }
         }
 
-        return $maker;
+        // If no explicit username mapping applies, use the application's full
+        // name (ime i prezime). Only an exact active Pantheon subject is
+        // accepted; this deliberately avoids ambiguous partial-name matches.
+        $candidates[] = $fullName;
+        $candidates[] = $loginName;
+
+        foreach (array_unique(array_filter($candidates, static fn (string $candidate): bool => $candidate !== '')) as $maker) {
+            if ($this->connection->table('dbo.tHE_SetSubj')
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acSubject, ''))) = ?", [$maker])
+                ->where('acActive', 'T')
+                ->exists()) {
+                return $maker;
+            }
+        }
+
+        throw new RuntimeException('Pantheon odgovorna osoba nije pronađena: ' . ($fullName !== '' ? $fullName : ($loginName !== '' ? $loginName : '[prazno]')));
     }
 
     private function workOrderDepartment(array $workOrder): string
