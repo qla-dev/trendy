@@ -89,58 +89,16 @@
               </label>
             </div>
             <div class="calendar-priority-filter">
-              <div class="form-check form-check-danger mb-1">
-                <input
-                  type="checkbox"
-                  class="form-check-input input-filter-priority"
-                  id="priority-high"
-                  data-value="1"
-                  checked
-                />
-                <label class="form-check-label d-flex justify-content-between align-items-center" for="priority-high">
-                  <span>1 - Visoki prioritet</span>
-                  <span class="calendar-priority-count" data-priority-key="1">0</span>
-                </label>
-              </div>
-              <div class="form-check form-check-warning mb-1">
-                <input
-                  type="checkbox"
-                  class="form-check-input input-filter-priority"
-                  id="priority-normal"
-                  data-value="5"
-                  checked
-                />
-                <label class="form-check-label d-flex justify-content-between align-items-center" for="priority-normal">
-                  <span>5 - Uobič. prioritet</span>
-                  <span class="calendar-priority-count" data-priority-key="5">0</span>
-                </label>
-              </div>
-              <div class="form-check form-check-info mb-1">
-                <input
-                  type="checkbox"
-                  class="form-check-input input-filter-priority"
-                  id="priority-low"
-                  data-value="10"
-                  checked
-                />
-                <label class="form-check-label d-flex justify-content-between align-items-center" for="priority-low">
-                  <span>10 - Niski prioritet</span>
-                  <span class="calendar-priority-count" data-priority-key="10">0</span>
-                </label>
-              </div>
-              <div class="form-check form-check-secondary mb-2">
-                <input
-                  type="checkbox"
-                  class="form-check-input input-filter-priority"
-                  id="priority-samples"
-                  data-value="15"
-                  checked
-                />
-                <label class="form-check-label d-flex justify-content-between align-items-center" for="priority-samples">
-                  <span>15 - Uzorci</span>
-                  <span class="calendar-priority-count" data-priority-key="15">0</span>
-                </label>
-              </div>
+              @foreach (($priorityOptions ?? app(\App\Services\WorkOrder\DeliveryPriorityOptions::class)->all()) as $priorityOption)
+                @php($priorityCode = (string) ($priorityOption['code'] ?? ''))
+                <div class="form-check form-check-secondary mb-1">
+                  <input type="checkbox" class="form-check-input input-filter-priority" id="priority-{{ $priorityCode }}" data-value="{{ $priorityCode }}" checked />
+                  <label class="form-check-label d-flex justify-content-between align-items-center" for="priority-{{ $priorityCode }}">
+                    <span>{{ $priorityOption['label'] ?? $priorityCode }}</span>
+                    <span class="calendar-priority-count" data-priority-key="{{ $priorityCode }}">0</span>
+                  </label>
+                </div>
+              @endforeach
             </div>
             <h5 class="section-label mb-1">
               <span class="align-middle">Filter statusa</span>
@@ -333,5 +291,5 @@
 @section('page-script')
   <!-- Page js files -->
   <script src="{{ asset(mix('js/scripts/pages/app-calendar-events.js')) }}"></script>
-  <script src="{{ asset(mix('js/scripts/pages/app-calendar.js') . '?v=2') }}"></script>
+  <script src="{{ asset(mix('js/scripts/pages/app-calendar.js') . '?v=3') }}"></script>
 @endsection

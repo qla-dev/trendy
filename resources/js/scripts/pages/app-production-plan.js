@@ -5,6 +5,16 @@ $(function () {
   var tableElement = $('#plan-proizvodnje-tabela');
   var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'datum', 'narudzba', 'pozicija', 'pocetak', 'kraj', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'napomena'];
   var requestErrorShown = false;
+  var priorityFilter = $('#filter-prioritet');
+
+  if (priorityFilter.length && $.fn.select2) {
+    priorityFilter.select2({
+      width: '100%',
+      placeholder: 'Svi prioriteti',
+      allowClear: true,
+      minimumResultsForSearch: 0
+    });
+  }
 
   function showError(title, message) {
     if (window.Swal && typeof window.Swal.fire === 'function') {
@@ -24,7 +34,7 @@ $(function () {
   function formatNumber(value) { var number = Number(value); return Number.isFinite(number) ? number.toLocaleString('bs-BA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; }
   function formatDate(value) { var match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return match ? match[3] + '.' + match[2] + '.' + match[1] : ''; }
   function filters() { var values = {}; $('.f').each(function () { values[$(this).data('k')] = $(this).val(); }); return values; }
-  function editable(key) { return config.canEdit && key !== 'rn' && key !== 'progress'; }
+  function editable(key) { return config.canEdit && key !== 'rn' && key !== 'progress' && key !== 'prioritet'; }
   function closeEditor() { $('.plan-inline-editor').remove(); }
 
   // DataTables' technical alerts are replaced with friendly Bosnian messages.
@@ -55,7 +65,7 @@ $(function () {
   });
   $('#filter').on('click', function () { table.ajax.reload(); });
   $('#btn-prikazi-filtere').on('click', function () { $('#tijelo-filtera').toggleClass('d-none'); });
-  $('#btn-obrisi-filter').on('click', function () { $('.f').each(function () { if (this._flatpickr) this._flatpickr.clear(); else $(this).val(''); }); $('.f[data-k="year"]').val(new Date().getFullYear()); table.ajax.reload(); });
+  $('#btn-obrisi-filter').on('click', function () { $('.f').each(function () { if (this._flatpickr) this._flatpickr.clear(); else if ($(this).is('select')) $(this).val('').trigger('change'); else $(this).val(''); }); $('.f[data-k="year"]').val(new Date().getFullYear()); table.ajax.reload(); });
   tableElement.find('tbody').on('click', 'td', function () {
     var cell = table.cell(this), row = table.row($(this).closest('tr')).data(), key = keys[cell.index().column];
     if (!row || !editable(key)) return;

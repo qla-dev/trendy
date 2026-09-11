@@ -7,6 +7,7 @@ use App\Models\Material;
 use App\Models\Product;
 use App\Services\WorkOrder\ProjectedProductionDateCalculator;
 use App\Services\WorkOrder\ExcessStockService;
+use App\Services\WorkOrder\DeliveryPriorityOptions;
 use App\Services\WorkOrder\PantheonMaterialPreparationService;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
@@ -30,6 +31,10 @@ class WorkOrderController extends Controller
     private const RELEASED_MATERIAL_CURRENCY = 'KM';
     private const MATERIAL_ISSUED_PRIORITY_CODE = 7;
     private const MATERIAL_ISSUED_PRIORITY_NAME = 'materijal pripremljen';
+    private const SCAN_PRIORITY_DEFINITIONS = [
+        'bravarija' => ['name' => 'Bravarija', 'preferred_code' => 150, 'fallback_code' => 105],
+        'kontrola' => ['name' => 'Kontrola', 'preferred_code' => 160, 'fallback_code' => 106],
+    ];
     private const RELEASED_MATERIAL_DEFAULT_ISSUER = 'Skladište sirovina';
     private const ADDITIONAL_RAW_MATERIAL_WAREHOUSE = 'Skladište dodatnih sirovina';
     private const RAW_MATERIAL_SHORTAGE_ALERT_EMAIL = 'skladiste.trendy@gmail.com';
@@ -58,6 +63,7 @@ class WorkOrderController extends Controller
     private const OPERATIONS_SET = 'OPR';
 
     private ?array $deliveryPriorityMap = null;
+    private ?array $scanRolePriorityCodes = null;
     private ?array $orderTableColumnsCache = null;
     private ?array $orderItemTableColumnsCache = null;
     private ?array $workOrderOrderItemLinkTableColumnsCache = null;
@@ -82,6 +88,7 @@ class WorkOrderController extends Controller
         $pageConfigs = ['pageHeader' => false];
         $canDeleteWorkOrders = $this->canDeleteWorkOrders(auth()->user());
         $destroyWorkOrderUrlTemplate = route('app-invoice-destroy', ['id' => '__WORK_ORDER__']);
+        $priorityOptions = app(DeliveryPriorityOptions::class)->all();
 
         try {
             return view('/content/apps/invoice/app-invoice-list', [
@@ -90,6 +97,7 @@ class WorkOrderController extends Controller
                 'statusStats' => $this->fetchStatusStats(),
                 'canDeleteWorkOrders' => $canDeleteWorkOrders,
                 'destroyWorkOrderUrlTemplate' => $destroyWorkOrderUrlTemplate,
+                'priorityOptions' => $priorityOptions,
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order list query failed.', [
@@ -104,6 +112,7 @@ class WorkOrderController extends Controller
                 'statusStats' => $this->emptyStatusStats(),
                 'canDeleteWorkOrders' => $canDeleteWorkOrders,
                 'destroyWorkOrderUrlTemplate' => $destroyWorkOrderUrlTemplate,
+                'priorityOptions' => $priorityOptions,
                 'error' => 'Greška pri učitavanju radnih naloga iz baze.',
             ]);
         }
@@ -150,6 +159,19 @@ class WorkOrderController extends Controller
                         'title' => 'Nalog nije pronađen',
                         'text' => 'Ne postoji nalog za odabrane parametre. Probaj sa drugim QR kodom.',
                     ]);
+            }
+
+            if ($isScanLookup) {
+                $scanPriorityTransition = $this->transitionScannedWorkOrderPriority(
+                    (array) ($workOrder['raw'] ?? []),
+                    $request->user()
+                );
+
+                // Reload after a successful transition so the preview shows
+                // the new priority immediately, rather than the lookup value.
+                if (($scanPriorityTransition['changed'] ?? false) === true) {
+                    $workOrder = $this->findMappedWorkOrder((string) $workOrderId, true) ?? $workOrder;
+                }
             }
 
             $raw = $workOrder['raw'] ?? [];
@@ -222,6 +244,7 @@ class WorkOrderController extends Controller
                 'plannedStartDate' => $this->formatMetaDateTime($displaySchedule['planned_start'] ?? null),
                 'dueDate' => $this->displayDate($displaySchedule['delivery_deadline'] ?? null),
                 'scanLookupNotice' => $successNotice,
+                'priorityOptions' => app(DeliveryPriorityOptions::class)->all(),
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order preview query failed.', [
@@ -444,6 +467,115 @@ class WorkOrderController extends Controller
                 'message' => 'Greška pri provjeri skeniranog QR koda.',
             ], 500);
         }
+    }
+
+    /**
+     * Applies the delivery priority assigned to the scanner user's role.
+     * The target priority is never accepted from the browser, so a user
+     * cannot select another department's priority by modifying the request.
+     */
+    public function transitionScannedWorkOrder(Request $request, string $id): JsonResponse
+    {
+        $user = $request->user();
+        $role = is_object($user) && method_exists($user, 'scanWorkOrderPriorityRole')
+            ? $user->scanWorkOrderPriorityRole()
+            : null;
+
+        if ($role === null || !isset(self::SCAN_PRIORITY_DEFINITIONS[$role])) {
+            return response()->json([
+                'data' => ['id' => $id, 'changed' => false],
+            ]);
+        }
+
+        try {
+            $userId = (int) ($user->id ?? 0);
+            $priorityCodes = $this->ensureScanRolePriorityLookups($userId, Carbon::now());
+            $priorityCode = $priorityCodes[$role] ?? null;
+            $priorityName = (string) (self::SCAN_PRIORITY_DEFINITIONS[$role]['name'] ?? '');
+
+            if ($priorityCode === null || $priorityName === '') {
+                throw new RuntimeException('Prioritet za skeniranje nije dostupan.');
+            }
+
+            $row = $this->findWorkOrderRow($id);
+            if ($row === null) {
+                return response()->json(['message' => 'Radni nalog nije pronađen.'], 404);
+            }
+
+            $priorityLabel = $priorityCode . ' - ' . $priorityName;
+            $updates = $this->priorityUpdatesForWorkOrder($row, $priorityCode, $priorityLabel);
+
+            if (empty($updates)) {
+                return response()->json(['message' => 'Kolona za prioritet nije pronađena.'], 500);
+            }
+
+            $changed = !$this->rowAlreadyHasUpdates($row, $updates)
+                && $this->updateWorkOrderRow($row, $updates);
+
+            return response()->json([
+                'message' => $changed ? 'Prioritet radnog naloga je ažuriran.' : 'Prioritet radnog naloga je već postavljen.',
+                'data' => [
+                    'id' => $id,
+                    'changed' => $changed,
+                    'priority_code' => $priorityCode,
+                    'priority' => $priorityLabel,
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Scanned work order priority transition failed.', [
+                'id' => $id,
+                'role' => $role,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Greška pri ažuriranju prioriteta skeniranog radnog naloga.',
+            ], 500);
+        }
+    }
+
+    private function transitionScannedWorkOrderPriority(array $row, mixed $user): array
+    {
+        $role = is_object($user) && method_exists($user, 'scanWorkOrderPriorityRole')
+            ? $user->scanWorkOrderPriorityRole()
+            : null;
+
+        if ($role === null || !isset(self::SCAN_PRIORITY_DEFINITIONS[$role])) {
+            return ['changed' => false];
+        }
+
+        $userId = (int) ($user->id ?? 0);
+        $priorityCodes = $this->ensureScanRolePriorityLookups($userId, Carbon::now());
+        $priorityCode = $priorityCodes[$role] ?? null;
+        $priorityName = (string) (self::SCAN_PRIORITY_DEFINITIONS[$role]['name'] ?? '');
+
+        if ($priorityCode === null || $priorityName === '') {
+            throw new RuntimeException('Prioritet za skeniranje nije dostupan.');
+        }
+
+        $priorityLabel = $priorityCode . ' - ' . $priorityName;
+        $updates = $this->priorityUpdatesForWorkOrder($row, $priorityCode, $priorityLabel);
+        if (empty($updates)) {
+            throw new RuntimeException('Kolona za prioritet nije pronađena.');
+        }
+
+        if ($this->rowAlreadyHasUpdates($row, $updates)) {
+            return [
+                'changed' => false,
+                'priority_code' => $priorityCode,
+                'priority' => $priorityLabel,
+            ];
+        }
+
+        if (!$this->updateWorkOrderRow($row, $updates)) {
+            throw new RuntimeException('Prioritet radnog naloga nije ažuriran.');
+        }
+
+        return [
+            'changed' => true,
+            'priority_code' => $priorityCode,
+            'priority' => $priorityLabel,
+        ];
     }
 
     public function createFromScan(Request $request, ExcessStockService $excessStock): JsonResponse
@@ -1257,16 +1389,7 @@ class WorkOrderController extends Controller
                 ], 404);
             }
 
-            $columns = $this->tableColumns();
-            $priorityCodeColumn = $this->firstExistingColumn($columns, ['anPriority']);
-            $priorityTextColumn = $this->firstExistingColumn($columns, ['acPriority', 'priority']);
-            $updates = [];
-
-            if ($priorityCodeColumn !== null) {
-                $updates[$priorityCodeColumn] = $priorityCode;
-            } elseif ($priorityTextColumn !== null) {
-                $updates[$priorityTextColumn] = $priorityLabel;
-            }
+            $updates = $this->priorityUpdatesForWorkOrder($row, $priorityCode, $priorityLabel);
 
             if (empty($updates)) {
                 return response()->json([
@@ -1420,6 +1543,91 @@ class WorkOrderController extends Controller
             Log::error('Work order protection update failed.', ['id' => $id, 'message' => $exception->getMessage()]);
 
             return response()->json(['message' => 'Greška pri ažuriranju površinske zaštite.'], 500);
+        }
+    }
+
+    public function workOrderDepartmentOptions(Request $request, string $id): JsonResponse
+    {
+        try {
+            $row = $this->findWorkOrderRow($id);
+            if ($row === null) {
+                return response()->json(['message' => 'Radni nalog nije pronađen.'], 404);
+            }
+
+            $query = trim((string) $request->query('q', ''));
+            $offset = max(0, (int) $request->query('offset', 0));
+            $pageSize = 50;
+            $subjects = DB::table('dbo.tHE_SetSubj')
+                ->whereRaw("LTRIM(RTRIM(ISNULL(acSubject, ''))) <> ''")
+                ->when($query !== '', fn ($builder) => $builder->where('acSubject', 'like', '%' . $query . '%'))
+                ->orderBy('acSubject')
+                ->offset($offset)
+                ->limit($pageSize + 1)
+                ->get(['acSubject', 'anQId'])
+                ->values();
+            $hasMore = $subjects->count() > $pageSize;
+            $options = $subjects->take($pageSize)
+                ->map(fn ($subject) => [
+                    'value' => trim((string) $subject->acSubject),
+                    'label' => trim((string) $subject->acSubject),
+                    'qid' => (int) $subject->anQId,
+                ])
+                ->values();
+
+            return response()->json(['data' => [
+                'selected' => (string) $this->valueTrimmed($row, ['acDept'], ''),
+                'options' => $options,
+                'has_more' => $hasMore,
+                'next_offset' => $offset + $options->count(),
+            ]]);
+        } catch (Throwable $exception) {
+            Log::error('Work order department options query failed.', ['id' => $id, 'message' => $exception->getMessage()]);
+            return response()->json(['message' => 'Greška pri učitavanju odjela.'], 500);
+        }
+    }
+
+    public function updateWorkOrderDepartment(Request $request, string $id): JsonResponse
+    {
+        $data = Validator::make($request->all(), ['department' => ['nullable', 'string', 'max:30']])->validate();
+        $department = trim((string) ($data['department'] ?? ''));
+
+        try {
+            $row = $this->findWorkOrderRow($id);
+            if ($row === null) {
+                return response()->json(['message' => 'Radni nalog nije pronađen.'], 404);
+            }
+
+            $columns = $this->tableColumns();
+            if (!in_array('acDept', $columns, true)) {
+                return response()->json(['message' => 'Pantheon tabela radnih naloga nema polje Odjel.'], 422);
+            }
+
+            $updates = ['acDept' => $department];
+            if ($department !== '') {
+                $departmentQId = DB::table('dbo.tHE_SetSubj')
+                    ->whereRaw("LTRIM(RTRIM(ISNULL(acSubject, ''))) = ?", [$department])
+                    ->value('anQId');
+                if (!is_numeric((string) $departmentQId) || (int) $departmentQId < 1) {
+                    return response()->json(['message' => 'Odaberite odjel iz Pantheon liste.'], 422);
+                }
+                if (in_array('anDeptQId', $columns, true)) {
+                    $updates['anDeptQId'] = (int) $departmentQId;
+                }
+            } elseif (in_array('anDeptQId', $columns, true)) {
+                $updates['anDeptQId'] = 1;
+            }
+
+            if ($this->rowAlreadyHasUpdates($row, $updates)) {
+                return response()->json(['message' => 'Odjel je već postavljen.', 'data' => ['changed' => false]]);
+            }
+            if (!$this->updateWorkOrderRow($row, $updates)) {
+                return response()->json(['message' => 'Odjel nije ažuriran.'], 500);
+            }
+
+            return response()->json(['message' => $department === '' ? 'Odjel je uklonjen.' : 'Odjel je uspješno dodan.', 'data' => ['department' => $department]]);
+        } catch (Throwable $exception) {
+            Log::error('Work order department update failed.', ['id' => $id, 'message' => $exception->getMessage()]);
+            return response()->json(['message' => 'Greška pri ažuriranju odjela.'], 500);
         }
     }
 
@@ -1630,6 +1838,7 @@ class WorkOrderController extends Controller
             'ordersLinkageWorkOrdersApiUrl' => route('app-orders-radni-nalozi'),
             'ordersLinkageDeleteUrl' => route('app-orders-destroy'),
             'canDeleteLinkedOrders' => $this->canDeleteWorkOrders($request->user()),
+            'priorityOptions' => app(DeliveryPriorityOptions::class)->all(),
         ]);
     }
 
@@ -10796,43 +11005,7 @@ class WorkOrderController extends Controller
             return $this->deliveryPriorityMap;
         }
 
-        $fallbackMap = [
-            1 => '1 - Visoki prioritet',
-            5 => '5 - Uobičajeni prioritet',
-            7 => '7 - Materijal razdužen',
-            10 => '10 - Niski prioritet',
-            15 => '15 - Uzorci',
-        ];
-
-        try {
-            $rows = DB::table($this->tableSchema() . '.tHE_SetDeliveryPriority')
-                ->select(['anPriority', 'acPriority', 'acName', 'abActive'])
-                ->where('abActive', 1)
-                ->orderBy('anPriority')
-                ->get();
-
-            $mapped = $rows
-                ->mapWithKeys(function ($row) {
-                    $code = (int) ($row->anPriority ?? 0);
-                    $label = trim((string) ($row->acPriority ?? ''));
-
-                    if ($label === '') {
-                        $name = trim((string) ($row->acName ?? ''));
-                        $label = $name !== '' ? ($code . ' - ' . $name) : (string) $code;
-                    }
-
-                    return [$code => $label];
-                })
-                ->all();
-
-            $this->deliveryPriorityMap = !empty($mapped)
-                ? array_replace($fallbackMap, $mapped)
-                : $fallbackMap;
-        } catch (Throwable $exception) {
-            $this->deliveryPriorityMap = $fallbackMap;
-        }
-
-        return $this->deliveryPriorityMap;
+        return $this->deliveryPriorityMap = app(DeliveryPriorityOptions::class)->labels();
     }
 
     private function materialIssuedPriorityLabel(): string
@@ -10843,52 +11016,175 @@ class WorkOrderController extends Controller
     private function ensureMaterialIssuedPriorityLookup(int $userId, Carbon $now): void
     {
         try {
-            $qualifiedTable = $this->tableSchema() . '.tHE_SetDeliveryPriority';
-            $targetCode = self::MATERIAL_ISSUED_PRIORITY_CODE;
-            $targetName = self::MATERIAL_ISSUED_PRIORITY_NAME;
-            $existing = DB::table($qualifiedTable)
-                ->where('anPriority', $targetCode)
-                ->first();
-
-            if ($existing !== null) {
-                $updates = [];
-
-                if (trim((string) ($existing->acName ?? '')) !== $targetName) {
-                    $updates['acName'] = $targetName;
-                }
-
-                if ((int) ($existing->abActive ?? 0) !== 1) {
-                    $updates['abActive'] = 1;
-                }
-
-                if (!empty($updates)) {
-                    $updates['adTimeChg'] = $now;
-                    $updates['anUserChg'] = $userId > 0 ? $userId : 0;
-
-                    DB::table($qualifiedTable)
-                        ->where('anPriority', $targetCode)
-                        ->update($updates);
-                }
-
-                return;
-            }
-
-            DB::table($qualifiedTable)->insert([
-                'anPriority' => $targetCode,
-                'acName' => $targetName,
-                'abDefault' => 0,
-                'abActive' => 1,
-                'adTimeIns' => $now,
-                'anUserIns' => $userId > 0 ? $userId : 0,
-                'adTimeChg' => $now,
-                'anUserChg' => $userId > 0 ? $userId : 0,
-            ]);
+            $this->ensureDeliveryPriorityLookup(
+                self::MATERIAL_ISSUED_PRIORITY_CODE,
+                self::MATERIAL_ISSUED_PRIORITY_NAME,
+                $userId,
+                $now
+            );
         } catch (Throwable $exception) {
             Log::warning('Unable to ensure material-issued priority lookup row.', [
                 'priority_code' => self::MATERIAL_ISSUED_PRIORITY_CODE,
                 'message' => $exception->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Finds the scanner priorities by label first. New rows use the requested
+     * codes, then their documented fallbacks, then free adjacent codes > 50.
+     */
+    private function ensureScanRolePriorityLookups(int $userId, Carbon $now): array
+    {
+        if ($this->scanRolePriorityCodes !== null) {
+            return $this->scanRolePriorityCodes;
+        }
+
+        try {
+            $qualifiedTable = $this->tableSchema() . '.tHE_SetDeliveryPriority';
+            $resolvedCodes = DB::transaction(function () use ($qualifiedTable, $userId, $now) {
+                $rows = DB::table($qualifiedTable)
+                    ->select(['anPriority', 'acName', 'acPriority'])
+                    ->lockForUpdate()
+                    ->get();
+                $usedCodes = [];
+                $resolved = [];
+
+                foreach ($rows as $row) {
+                    $code = (int) ($row->anPriority ?? 0);
+                    if ($code > 0) {
+                        $usedCodes[$code] = true;
+                    }
+
+                    $name = $this->normalizedPriorityName((string) ($row->acName ?? ''));
+                    $priorityText = preg_replace('/^\s*\d+\s*-\s*/', '', (string) ($row->acPriority ?? ''));
+                    $priorityName = $this->normalizedPriorityName((string) $priorityText);
+
+                    foreach (self::SCAN_PRIORITY_DEFINITIONS as $role => $definition) {
+                        $targetName = $this->normalizedPriorityName((string) $definition['name']);
+                        if ($code > 0 && ($name === $targetName || $priorityName === $targetName)) {
+                            $resolved[$role] = $code;
+                        }
+                    }
+                }
+
+                foreach (self::SCAN_PRIORITY_DEFINITIONS as $role => $definition) {
+                    if (isset($resolved[$role])) {
+                        continue;
+                    }
+
+                    $preferredCode = (int) $definition['preferred_code'];
+                    if (!isset($usedCodes[$preferredCode])) {
+                        $resolved[$role] = $preferredCode;
+                        $usedCodes[$preferredCode] = true;
+                    }
+                }
+
+                foreach (self::SCAN_PRIORITY_DEFINITIONS as $role => $definition) {
+                    if (isset($resolved[$role])) {
+                        continue;
+                    }
+
+                    $fallbackCode = (int) $definition['fallback_code'];
+                    if (!isset($usedCodes[$fallbackCode])) {
+                        $resolved[$role] = $fallbackCode;
+                        $usedCodes[$fallbackCode] = true;
+                    }
+                }
+
+                $unresolvedRoles = array_keys(array_diff_key(self::SCAN_PRIORITY_DEFINITIONS, $resolved));
+                if (count($unresolvedRoles) > 1) {
+                    for ($candidate = 51; ; $candidate++) {
+                        if (!isset($usedCodes[$candidate]) && !isset($usedCodes[$candidate + 1])) {
+                            foreach ($unresolvedRoles as $offset => $role) {
+                                $resolved[$role] = $candidate + $offset;
+                                $usedCodes[$candidate + $offset] = true;
+                            }
+                            break;
+                        }
+                    }
+                } elseif (count($unresolvedRoles) === 1) {
+                    $role = $unresolvedRoles[0];
+                    for ($candidate = 51; isset($usedCodes[$candidate]); $candidate++) {
+                        // Find the first free code above 50.
+                    }
+                    $resolved[$role] = $candidate;
+                }
+
+                foreach (self::SCAN_PRIORITY_DEFINITIONS as $role => $definition) {
+                    $this->ensureDeliveryPriorityLookup(
+                        (int) $resolved[$role],
+                        (string) $definition['name'],
+                        $userId,
+                        $now
+                    );
+                }
+
+                return $resolved;
+            }, 3);
+
+            $this->deliveryPriorityMap = null;
+            return $this->scanRolePriorityCodes = $resolvedCodes;
+        } catch (Throwable $exception) {
+            Log::warning('Unable to ensure scanner role priority lookup rows.', [
+                'message' => $exception->getMessage(),
+            ]);
+
+            throw $exception;
+        }
+    }
+
+    private function ensureDeliveryPriorityLookup(int $code, string $name, int $userId, Carbon $now): void
+    {
+        $qualifiedTable = $this->tableSchema() . '.tHE_SetDeliveryPriority';
+        $existing = DB::table($qualifiedTable)->where('anPriority', $code)->first();
+
+        if ($existing !== null) {
+            $updates = [];
+            if (trim((string) ($existing->acName ?? '')) !== $name) {
+                $updates['acName'] = $name;
+            }
+            if ((int) ($existing->abActive ?? 0) !== 1) {
+                $updates['abActive'] = 1;
+            }
+
+            if (!empty($updates)) {
+                $updates['adTimeChg'] = $now;
+                $updates['anUserChg'] = $userId > 0 ? $userId : 0;
+                DB::table($qualifiedTable)->where('anPriority', $code)->update($updates);
+            }
+
+            return;
+        }
+
+        DB::table($qualifiedTable)->insert([
+            'anPriority' => $code,
+            'acName' => $name,
+            'abDefault' => 0,
+            'abActive' => 1,
+            'adTimeIns' => $now,
+            'anUserIns' => $userId > 0 ? $userId : 0,
+            'adTimeChg' => $now,
+            'anUserChg' => $userId > 0 ? $userId : 0,
+        ]);
+    }
+
+    private function normalizedPriorityName(string $value): string
+    {
+        return $this->normalizeSearchValue($value);
+    }
+
+    private function priorityUpdatesForWorkOrder(array $row, int $priorityCode, string $priorityLabel): array
+    {
+        $columns = $this->tableColumns();
+        $priorityCodeColumn = $this->firstExistingColumn($columns, ['anPriority']);
+        $priorityTextColumn = $this->firstExistingColumn($columns, ['acPriority', 'priority']);
+
+        if ($priorityCodeColumn !== null) {
+            return [$priorityCodeColumn => $priorityCode];
+        }
+
+        return $priorityTextColumn !== null ? [$priorityTextColumn => $priorityLabel] : [];
     }
 
     private function applyRequestedOrdering(Builder $query, array $columns, array $sort): bool
@@ -13622,6 +13918,7 @@ class WorkOrderController extends Controller
             'issueDate' => '',
             'plannedStartDate' => '',
             'dueDate' => '',
+            'priorityOptions' => app(DeliveryPriorityOptions::class)->all(),
         ]);
     }
 }

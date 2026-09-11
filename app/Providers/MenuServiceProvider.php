@@ -53,7 +53,7 @@ class MenuServiceProvider extends ServiceProvider
 
             $aiTokenNavbarCount = (int) $aiTokenNavbarCountCache[$userCacheKey];
 
-            if (Auth::check() && Auth::user()->hasRole('user')) {
+            if (Auth::check() && $self->hasRegularUserJurisdiction(Auth::user())) {
                 $verticalMenuCopy = $self->filterMenuForUserRole($verticalMenuCopy);
             }
 
@@ -192,6 +192,13 @@ class MenuServiceProvider extends ServiceProvider
         return method_exists($user, 'canAccessAiOrderModule')
             ? (bool) $user->canAccessAiOrderModule()
             : false;
+    }
+
+    private function hasRegularUserJurisdiction($user): bool
+    {
+        return $user !== null
+            && method_exists($user, 'hasRegularUserJurisdiction')
+            && (bool) $user->hasRegularUserJurisdiction();
     }
 
     private function resolveAiTokenNavbarCount(): int

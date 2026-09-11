@@ -1,6 +1,7 @@
 @php
   $workOrderPreviewPathPattern = route('app-invoice-preview', ['id' => '__WORK_ORDER_ID__'], false);
   $workOrderScanLookupUrl = route('app-invoice-scan-lookup');
+  $workOrderScanTransitionPathPattern = route('app-invoice-scan-transition', ['id' => '__WORK_ORDER_ID__'], false);
   $workOrderScanCreateUrl = route('app-invoice-scan-create');
 @endphp
 
@@ -1067,6 +1068,7 @@
     var cameraApplyBtn = document.getElementById('qr-camera-apply-btn');
     var previewPathPattern = @json($workOrderPreviewPathPattern);
     var scanLookupUrl = @json($workOrderScanLookupUrl);
+    var scanTransitionPathPattern = @json($workOrderScanTransitionPathPattern);
     var scanCreateUrl = @json($workOrderScanCreateUrl);
     var csrfToken = @json(csrf_token());
 
@@ -1869,6 +1871,26 @@
       });
     }
 
+    async function transitionScannedWorkOrder(workOrderId) {
+      var targetId = String(workOrderId || '').trim();
+      if (!targetId) {
+        throw new Error('Radni nalog nema identifikator za promjenu prioriteta.');
+      }
+
+      var transitionUrl = scanTransitionPathPattern.replace('__WORK_ORDER_ID__', encodeURIComponent(targetId));
+      return requestJson(transitionUrl, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({})
+      });
+    }
+
     async function resumeScannerAfterPrompt() {
       redirecting = false;
       lastDecodedText = '';
@@ -1921,8 +1943,14 @@
       }));
 
       if (result.isConfirmed) {
-        setStatus('Otvaram radni nalog...', 'success');
-        window.location.assign(previewUrl);
+        try {
+          setStatus('Ažuriram radni nalog...', 'success');
+          await transitionScannedWorkOrder(workOrder.id || '');
+          setStatus('Otvaram radni nalog...', 'success');
+          window.location.assign(previewUrl);
+        } catch (error) {
+          await showScanError(error && error.message ? error.message : 'Ne mogu ažurirati radni nalog.');
+        }
         return;
       }
 

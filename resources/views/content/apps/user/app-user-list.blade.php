@@ -244,6 +244,8 @@
                 <option value="">Odaberite ulogu</option>
                 <option value="admin" {{ old('role') == 'admin' ? 'selected' : '' }}>Admin</option>
                 <option value="user" {{ old('role') == 'user' ? 'selected' : '' }}>Korisnik</option>
+                <option value="kontrola" {{ old('role') == 'kontrola' ? 'selected' : '' }}>Kontrola</option>
+                <option value="bravarija" {{ old('role') == 'bravarija' ? 'selected' : '' }}>Bravarija</option>
               </select>
               @error('role')
                 <div class="invalid-feedback">{{ $message }}</div>
@@ -285,7 +287,7 @@
 
 @section('page-script')
   {{-- Page js files --}}
-  <script src="{{ asset(mix('js/scripts/pages/app-user-list.js')) }}?v=2"></script>
+  <script src="{{ asset(mix('js/scripts/pages/app-user-list.js')) }}?v=3"></script>
   <script>
     function deleteUser(userId) {
       if (confirm('Da li ste sigurni da želite obrisati ovog korisnika? Ova akcija se ne može poništiti.')) {

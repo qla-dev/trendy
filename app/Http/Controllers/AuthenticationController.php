@@ -75,7 +75,7 @@ class AuthenticationController extends Controller
             $request->session()->put('auth_token', $tokenResult->plainTextToken);
             $request->session()->put('auth_token_id', $tokenResult->accessToken->id);
 
-            if ($user && $user->hasRole('user')) {
+            if ($user && $user->hasRegularUserJurisdiction()) {
                 return redirect()->intended(route('app-invoice-preview'));
             }
 

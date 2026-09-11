@@ -12,6 +12,11 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
+    public const ROLE_ADMIN = 'admin';
+    public const ROLE_USER = 'user';
+    public const ROLE_KONTROLA = 'kontrola';
+    public const ROLE_BRAVARIJA = 'bravarija';
+
     protected $connection = 'mysql';
 
     /**
@@ -67,7 +72,7 @@ class User extends Authenticatable
      */
     public function isAdmin()
     {
-        return $this->hasRole('admin');
+        return $this->hasRole(self::ROLE_ADMIN);
     }
 
     /**
@@ -84,6 +89,31 @@ class User extends Authenticatable
     public function isEmployee()
     {
         return $this->hasRole('employee');
+    }
+
+    /**
+     * Kontrola and Bravarija deliberately share the regular Korisnik access
+     * profile; their only extra behaviour is the scanner priority transition.
+     */
+    public function hasRegularUserJurisdiction(): bool
+    {
+        return in_array($this->getRole(), [
+            self::ROLE_USER,
+            self::ROLE_KONTROLA,
+            self::ROLE_BRAVARIJA,
+        ], true);
+    }
+
+    /**
+     * Roles which assign a Pantheon delivery priority when an existing work
+     * order is opened from the QR scanner.
+     */
+    public function scanWorkOrderPriorityRole(): ?string
+    {
+        return match ($this->getRole()) {
+            self::ROLE_KONTROLA, self::ROLE_BRAVARIJA => $this->getRole(),
+            default => null,
+        };
     }
 
     /**

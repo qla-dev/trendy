@@ -25,7 +25,7 @@ class DashboardController extends Controller
   // Dashboard - Home entrypoint (root)
   public function home()
   {
-    if (Auth::check() && Auth::user()->hasRole('user')) {
+    if (Auth::check() && Auth::user()->hasRegularUserJurisdiction()) {
       $pageConfigs = ['pageHeader' => false];
 
       return view('/content/apps/invoice/app-invoice-preview', ['pageConfigs' => $pageConfigs]);

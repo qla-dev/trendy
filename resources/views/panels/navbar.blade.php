@@ -253,7 +253,7 @@
             data-bs-toggle="tooltip" data-bs-placement="bottom" title="Dashboard"><i class="ficon"
               data-feather="home"></i></a></li>
       @endif
-      @if (!(Auth::check() && Auth::user()->role === 'user'))
+      @if (!(Auth::check() && Auth::user()->hasRegularUserJurisdiction()))
         <li class="nav-item d-none d-md-block"><a class="nav-link" href="{{ url('app/calendar') }}"
             data-bs-toggle="tooltip" data-bs-placement="bottom" title="Kalendar"><i class="ficon"
               data-feather="calendar"></i></a></li>
@@ -291,7 +291,7 @@
     @endif
     <li class="nav-item d-none d-md-block"><a class="nav-link nav-link-style"><i class="ficon"
           data-feather="{{ $configData['theme'] === 'dark' ? 'sun' : 'moon' }}"></i></a></li>
-    @if (!(Auth::check() && Auth::user()->role === 'user'))
+    @if (!(Auth::check() && Auth::user()->hasRegularUserJurisdiction()))
       <li class="nav-item nav-search"><a class="nav-link nav-link-search"><i class="ficon"
           data-feather="search"></i></a>
       <div class="search-input">

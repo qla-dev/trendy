@@ -13,5 +13,4 @@ return [
     'operation_warehouse' => env('WORK_ORDER_OPERATION_WAREHOUSE', 'RN skladište'),
     'receipt_warehouse' => env('WORK_ORDER_RECEIPT_WAREHOUSE', 'Veleprodajno skladište'),
     'scrap_receipt_warehouse' => env('WORK_ORDER_SCRAP_RECEIPT_WAREHOUSE', 'Skladište škarta'),
-    'department' => env('WORK_ORDER_CLOSING_DEPARTMENT', ''),
 ];

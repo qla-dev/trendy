@@ -79,12 +79,15 @@ Route::middleware('auth:web')->group(function () {
         Route::get('invoice/list', [WorkOrderController::class, 'invoiceList'])->name('app-invoice-list');
         Route::delete('invoice/{id}', [WorkOrderController::class, 'destroyInvoice'])->name('app-invoice-destroy');
         Route::get('invoice/scan/lookup', [WorkOrderController::class, 'scanLookup'])->name('app-invoice-scan-lookup');
+        Route::post('invoice/scan/{id}/transition', [WorkOrderController::class, 'transitionScannedWorkOrder'])->name('app-invoice-scan-transition');
         Route::post('invoice/scan/create', [WorkOrderController::class, 'createFromScan'])->name('app-invoice-scan-create');
         Route::get('invoice/preview/{id?}', [WorkOrderController::class, 'invoicePreview'])->name('app-invoice-preview');
         Route::post('invoice/preview/{id}/status', [WorkOrderController::class, 'updateInvoiceStatus'])->name('app-invoice-update-status');
         Route::post('invoice/preview/{id}/priority', [WorkOrderController::class, 'updateInvoicePriority'])->name('app-invoice-update-priority');
         Route::get('invoice/preview/{id}/protection-options', [WorkOrderController::class, 'workOrderProtectionOptions'])->name('app-invoice-protection-options');
         Route::post('invoice/preview/{id}/protection', [WorkOrderController::class, 'updateWorkOrderProtection'])->name('app-invoice-protection-update');
+        Route::get('invoice/preview/{id}/department-options', [WorkOrderController::class, 'workOrderDepartmentOptions'])->name('app-invoice-department-options');
+        Route::post('invoice/preview/{id}/department', [WorkOrderController::class, 'updateWorkOrderDepartment'])->name('app-invoice-department-update');
         Route::post('invoice/protection-options', [WorkOrderController::class, 'storeWorkOrderProtectionOption'])->name('app-invoice-protection-options-store');
         Route::get('protections', [WorkOrderController::class, 'protectionsIndex'])->name('app-protections');
         Route::get('protections/data', [WorkOrderController::class, 'protectionsData'])->name('app-protections-data');
