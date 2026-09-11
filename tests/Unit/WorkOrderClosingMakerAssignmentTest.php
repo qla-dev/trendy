@@ -10,6 +10,7 @@ class WorkOrderClosingMakerAssignmentTest extends TestCase
     private string $writer;
     private string $preparationService;
     private string $controller;
+    private string $closingController;
     private string $view;
     private string $departmentModal;
 
@@ -21,17 +22,24 @@ class WorkOrderClosingMakerAssignmentTest extends TestCase
         $this->writer = file_get_contents($base . 'PantheonDocumentWriter.php');
         $this->preparationService = file_get_contents($base . 'PantheonMaterialPreparationService.php');
         $this->controller = file_get_contents(__DIR__ . '/../../app/Http/Controllers/WorkOrderController.php');
+        $this->closingController = file_get_contents(__DIR__ . '/../../app/Http/Controllers/WorkOrderClosingController.php');
         $this->view = file_get_contents(__DIR__ . '/../../resources/views/content/apps/invoice/app-invoice-preview.blade.php');
         $this->departmentModal = file_get_contents(__DIR__ . '/../../resources/views/content/new-components/work-order-department-modal.blade.php');
     }
 
     public function test_closing_documents_use_the_logged_in_maker_as_responsible_person(): void
     {
-        $this->assertStringContainsString('$maker = $this->resolveMaker($userName);', $this->closingService);
+        $this->assertStringContainsString('$maker = $this->resolveMaker($userName, $fullName);', $this->closingService);
         $this->assertSame(4, substr_count($this->closingService, "'maker' => \$maker"));
         $this->assertStringContainsString("'maker' => \$this->resolveMaker(\$userName)", $this->closingService);
         $this->assertStringContainsString("'acPrsn3' => \$this->limit(\$maker, 30)", $this->writer);
         $this->assertStringContainsString("'anPrsn3QId' => \$makerQId", $this->writer);
+        $this->assertStringContainsString("config('work_order_closing.pantheon_maker_map', [])", $this->closingService);
+        $this->assertStringContainsString("'simbad' => 'Simbad Hrnjičić'", file_get_contents(__DIR__ . '/../../config/work_order_closing.php'));
+        $this->assertStringContainsString("private function resolveMaker(string \$userName, string \$fullName = '')", $this->closingService);
+        $this->assertStringContainsString('$maker = $this->resolveMaker($userName, $fullName);', $this->closingService);
+        $this->assertStringContainsString("trim((string) (\$user->username ?? ''))", $this->closingController);
+        $this->assertStringContainsString("trim((string) (\$user->name ?? ''))", $this->closingController);
         $this->assertStringContainsString("Pantheon odgovorna osoba nije pronađena", $this->closingService);
     }
 

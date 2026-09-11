@@ -13,4 +13,10 @@ return [
     'operation_warehouse' => env('WORK_ORDER_OPERATION_WAREHOUSE', 'RN skladište'),
     'receipt_warehouse' => env('WORK_ORDER_RECEIPT_WAREHOUSE', 'Veleprodajno skladište'),
     'scrap_receipt_warehouse' => env('WORK_ORDER_SCRAP_RECEIPT_WAREHOUSE', 'Skladište škarta'),
+    // Application login => Pantheon subject used as "Odgovorna osoba" on
+    // work-order-closing documents. Subject names are resolved on the target
+    // Pantheon database, so no environment-specific QId is stored here.
+    'pantheon_maker_map' => [
+        'simbad' => 'Simbad Hrnjičić',
+    ],
 ];
