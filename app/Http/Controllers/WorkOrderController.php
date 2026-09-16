@@ -36,8 +36,8 @@ class WorkOrderController extends Controller
         'kontrola' => ['name' => 'Kontrola', 'preferred_code' => 160, 'fallback_code' => 106],
     ];
     /**
-     * These are checkpoint-only operations. They are added when either
-     * checkpoint department scans an RN that has no such BOM operations.
+     * These are checkpoint-only operations. A department adds only its own
+     * operation when it scans an RN that has no matching BOM operation.
      * They intentionally do not represent recorded production time.
      */
     private const SCAN_CHECKPOINT_OPERATIONS = [
@@ -574,7 +574,7 @@ class WorkOrderController extends Controller
 
             $raw = (array) ($workOrder['raw'] ?? []);
             $workOrderKey = trim((string) $this->value($raw, ['acKey'], ''));
-            $this->ensureScanCheckpointOperations($workOrderKey, (int) ($request->user()->id ?? 0));
+            $this->ensureScanCheckpointOperations($workOrderKey, (int) ($request->user()->id ?? 0), $role);
             $operations = collect($this->fetchMappedOperationsFromItems($workOrderKey))
                 ->map(function (array $operation) use ($role): array {
                     $operation['is_role_operation'] = $this->operationMatchesScanRole($operation, $role);
@@ -628,7 +628,7 @@ class WorkOrderController extends Controller
 
             $raw = (array) ($workOrder['raw'] ?? []);
             $workOrderKey = trim((string) $this->value($raw, ['acKey'], ''));
-            $this->ensureScanCheckpointOperations($workOrderKey, (int) ($request->user()->id ?? 0));
+            $this->ensureScanCheckpointOperations($workOrderKey, (int) ($request->user()->id ?? 0), $role);
             $operationId = trim((string) $validator->validated()['operation_id']);
             $selectedOperation = collect($this->fetchMappedOperationsFromItems($workOrderKey))
                 ->first(fn (array $operation): bool => (string) ($operation['id'] ?? '') === $operationId);
@@ -724,15 +724,19 @@ class WorkOrderController extends Controller
         );
     }
 
-    /** Add the two scan-only department checkpoints to an RN when absent. */
-    private function ensureScanCheckpointOperations(string $workOrderKey, int $userId): void
+    /** Add the scanning department's checkpoint operation to an RN when absent. */
+    private function ensureScanCheckpointOperations(string $workOrderKey, int $userId, string $role): void
     {
         if ($workOrderKey === '') {
             throw new RuntimeException('Ključ radnog naloga nije pronađen za dodavanje kontrolnih operacija.');
         }
 
+        if (!isset(self::SCAN_CHECKPOINT_OPERATIONS[$role])) {
+            throw new RuntimeException('Unknown checkpoint department.');
+        }
+
         $operations = $this->fetchMappedOperationsFromItems($workOrderKey);
-        $missing = array_filter(self::SCAN_CHECKPOINT_OPERATIONS, function (array $definition, string $role) use ($operations): bool {
+        $missing = array_filter([$role => self::SCAN_CHECKPOINT_OPERATIONS[$role]], function (array $definition, string $role) use ($operations): bool {
             // Older BOMs can carry the department operation under a local
             // code. Its name is still authoritative, so do not add OP50 or
             // OP60 a second time merely because the code differs.
