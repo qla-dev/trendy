@@ -336,7 +336,10 @@
         </span>
       </a>
       <div class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdown-user">
-        <h6 class="dropdown-header">Upravljanje profilom</h6>
+        <div class="dropdown-header d-sm-none py-75">
+          <div class="fw-bolder text-body">{{ optional(Auth::user())->name ?: optional(Auth::user())->username ?: 'Korisnik' }}</div>
+        </div>
+        <h6 class="dropdown-header d-none d-sm-block">Upravljanje profilom</h6>
         <div class="dropdown-divider"></div>
         <a class="dropdown-item"
           href="{{ Route::has('profile.show') ? route('profile.show') : 'javascript:void(0)' }}">

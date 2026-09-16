@@ -1925,7 +1925,8 @@
 
     async function promptForExistingWorkOrder(payload, scanMeta) {
       var workOrder = payload && payload.work_order ? payload.work_order : {};
-      var previewUrl = workOrder.preview_url || toWorkOrderPreviewUrl(workOrder.id || '');
+      var checkpointUrl = workOrder.checkpoint_url || '';
+      var previewUrl = checkpointUrl || workOrder.preview_url || toWorkOrderPreviewUrl(workOrder.id || '');
       var scanSummary = mergeScanContext(scanMeta, workOrder);
       var result = await Swal.fire(swalWithProjectTheme({
         title: 'RN pronađen',
@@ -1933,7 +1934,7 @@
         icon: 'question',
         showCancelButton: true,
         reverseButtons: true,
-        confirmButtonText: 'Otvori RN',
+        confirmButtonText: checkpointUrl ? 'Prikaži operacije' : 'Otvori RN',
         cancelButtonText: 'Ponovno skeniranje',
         customClass: {
           confirmButton: 'btn btn-success ms-1',
@@ -1944,9 +1945,11 @@
 
       if (result.isConfirmed) {
         try {
-          setStatus('Ažuriram radni nalog...', 'success');
-          await transitionScannedWorkOrder(workOrder.id || '');
-          setStatus('Otvaram radni nalog...', 'success');
+          if (!checkpointUrl) {
+            setStatus('Ažuriram radni nalog...', 'success');
+            await transitionScannedWorkOrder(workOrder.id || '');
+          }
+          setStatus(checkpointUrl ? 'Otvaram operacije...' : 'Otvaram radni nalog...', 'success');
           window.location.assign(previewUrl);
         } catch (error) {
           await showScanError(error && error.message ? error.message : 'Ne mogu ažurirati radni nalog.');
