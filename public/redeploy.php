@@ -211,7 +211,6 @@ $commands = [
     ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
     ['label' => 'Installing frontend dependencies', 'command' => $npmCommand . ' ci --no-audit --no-fund'],
     ['label' => 'Building frontend assets', 'command' => $npmCommand . ' run production'],
-    ['label' => 'Clearing and rebuilding Laravel caches', 'command' => $phpCommand . ' artisan optimize --no-ansi'],
 ];
 
 if (!$frontendOnly) {
@@ -219,8 +218,10 @@ if (!$frontendOnly) {
         ['label' => 'Installing Composer dependencies', 'command' => $composerCommand . ' install --no-dev --no-interaction --prefer-dist --no-progress --optimize-autoloader --no-ansi'],
         ['label' => 'Running database migrations', 'command' => $phpCommand . ' artisan migrate --force --no-ansi'],
     );
+    $commands[] = ['label' => 'Clearing and rebuilding Laravel caches', 'command' => $phpCommand . ' artisan optimize --no-ansi'];
 } else {
-    $write("Frontend-only redeploy: Composer installation and database migrations are skipped.\n");
+    $commands[] = ['label' => 'Clearing compiled views', 'command' => $phpCommand . ' artisan view:clear --no-ansi'];
+    $write("Frontend-only redeploy: Composer installation, database migrations, and route-cache rebuilding are skipped.\n");
 }
 
 $startedAt = time();
