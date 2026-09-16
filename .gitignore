@@ -1,3 +1,5 @@
+/.composer
+/composer.phar
 /node_modules
 /public/hot
 /public/data
