@@ -205,15 +205,23 @@ if (is_file($composerPhar)) {
 }
 
 $npmCommand = escapeshellarg($npm);
+$frontendOnly = filter_var($_GET['frontend_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
 $commands = [
     ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
-    ['label' => 'Installing Composer dependencies', 'command' => $composerCommand . ' install --no-dev --no-interaction --prefer-dist --no-progress --optimize-autoloader --no-ansi'],
-    ['label' => 'Running database migrations', 'command' => $phpCommand . ' artisan migrate --force --no-ansi'],
     ['label' => 'Installing frontend dependencies', 'command' => $npmCommand . ' ci --no-audit --no-fund'],
     ['label' => 'Building frontend assets', 'command' => $npmCommand . ' run production'],
     ['label' => 'Clearing and rebuilding Laravel caches', 'command' => $phpCommand . ' artisan optimize --no-ansi'],
 ];
+
+if (!$frontendOnly) {
+    array_splice($commands, 1, 0,
+        ['label' => 'Installing Composer dependencies', 'command' => $composerCommand . ' install --no-dev --no-interaction --prefer-dist --no-progress --optimize-autoloader --no-ansi'],
+        ['label' => 'Running database migrations', 'command' => $phpCommand . ' artisan migrate --force --no-ansi'],
+    );
+} else {
+    $write("Frontend-only redeploy: Composer installation and database migrations are skipped.\n");
+}
 
 $startedAt = time();
 
