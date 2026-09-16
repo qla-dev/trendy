@@ -6,6 +6,7 @@ $(function () {
   var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'datum', 'narudzba', 'pozicija', 'pocetak', 'kraj', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'napomena'];
   var requestErrorShown = false;
   var priorityFilter = $('#filter-prioritet');
+  var rowColourFilter = $('#plan-boja-redova');
 
   if (priorityFilter.length && $.fn.select2) {
     priorityFilter.select2({
@@ -44,6 +45,20 @@ $(function () {
   function filters() { var values = {}; $('.f').each(function () { values[$(this).data('k')] = $(this).val(); }); return values; }
   function editable(key) { return config.canEdit && key !== 'rn' && key !== 'progress' && key !== 'prioritet'; }
   function closeEditor() { $('.plan-inline-editor').remove(); }
+  function rowColour(data) {
+    var mode = rowColourFilter.val() || 'all';
+    var colour = String((data && data.plan_row_color) || '').toLowerCase();
+    if (mode === 'none') return '';
+    if (mode === 'basic' && ['green', 'yellow', 'teal', 'grey'].indexOf(colour) === -1) return '';
+    return colour;
+  }
+  function applyRowColour(row, data) {
+    var colours = 'red yellow orange purple teal green grey'.split(' ');
+    var $row = $(row);
+    colours.forEach(function (colour) { $row.removeClass('production-plan-row--' + colour); });
+    var colour = rowColour(data);
+    if (colour) $row.addClass('production-plan-row--' + colour);
+  }
 
   // DataTables' technical alerts are replaced with friendly Bosnian messages.
   $.fn.dataTable.ext.errMode = 'none';
@@ -64,7 +79,8 @@ $(function () {
         else output = escapeHtml(value);
         return editable(key) ? '<span class="editable-cell">' + output + '</span>' : output;
       }};
-    })
+    }),
+    createdRow: function (row, data) { applyRowColour(row, data); }
   });
   tableElement.on('xhr.dt', function () { requestErrorShown = false; });
   tableElement.on('error.dt', function (event, settings, techNote) {
@@ -72,6 +88,9 @@ $(function () {
     else showRequestError();
   });
   $('#filter').on('click', function () { table.ajax.reload(); });
+  rowColourFilter.on('change', function () {
+    table.rows({ page: 'current' }).every(function () { applyRowColour(this.node(), this.data()); });
+  });
   $('#btn-prikazi-filtere').on('click', function () { $('#tijelo-filtera').toggleClass('d-none'); });
   $('#btn-obrisi-filter').on('click', function () { $('.f').each(function () { if (this._flatpickr) this._flatpickr.clear(); else if ($(this).is('select')) $(this).val('').trigger('change'); else $(this).val(''); }); $('.f[data-k="year"]').val(new Date().getFullYear()); table.ajax.reload(); });
   tableElement.find('tbody').on('click', 'td', function () {
