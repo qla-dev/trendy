@@ -23,6 +23,14 @@ $(function () {
     }
     window.alert(title + '\n\n' + message);
   }
+  function showSuccess(field) {
+    var message = 'Polje „' + field + '“ je uspješno uređeno.';
+    if (window.Swal && typeof window.Swal.fire === 'function') {
+      window.Swal.fire({ icon: 'success', title: 'Uspješno uređeno', text: message, confirmButtonText: 'U redu', confirmButtonClass: 'btn btn-primary', buttonsStyling: false });
+      return;
+    }
+    window.alert(message);
+  }
   function showRequestError(xhr) {
     if (requestErrorShown) return;
     requestErrorShown = true;
@@ -71,7 +79,7 @@ $(function () {
     if (!row || !editable(key)) return;
     closeEditor();
     var rect = this.getBoundingClientRect(), multiline = key === 'napomena';
-    var editor = $('<div class="plan-inline-editor" data-id="' + escapeHtml(row.id) + '" data-field="' + key + '"><label>Uredi polje</label>' + (multiline ? '<textarea class="form-control">' + escapeHtml(row[key]) + '</textarea>' : '<input class="form-control" value="' + escapeHtml(row[key]) + '">') + '<div class="mt-50"><button class="btn btn-primary btn-sm save">Sačuvaj</button><button class="btn btn-outline-secondary btn-sm cancel ms-50">Odustani</button></div></div>').appendTo('body');
+    var editor = $('<div class="plan-inline-editor" data-id="' + escapeHtml(row.id) + '" data-field="' + key + '"><label>Uredi polje</label>' + (multiline ? '<textarea class="form-control"></textarea>' : '<input class="form-control" value="' + escapeHtml(row[key]) + '">') + '<div class="mt-50"><button class="btn btn-primary btn-sm save">Sačuvaj</button><button class="btn btn-outline-secondary btn-sm cancel ms-50">Odustani</button></div></div>').appendTo('body');
     var width = Math.min(300, window.innerWidth - 16);
     editor.css({ position: 'fixed', zIndex: 2000, left: Math.min(rect.left, window.innerWidth - width - 8), top: rect.bottom + 4, width: width });
     editor.find('input,textarea').focus();
@@ -79,7 +87,13 @@ $(function () {
   $('body').on('click', '.plan-inline-editor .cancel', closeEditor).on('click', '.plan-inline-editor .save', function () {
     var editor = $(this).closest('.plan-inline-editor');
     $.post(String(config.fieldUrl).replace('__RN__', editor.data('id')), { _token: csrf, field: editor.data('field'), value: editor.find('input,textarea').val() })
-      .done(function () { closeEditor(); table.ajax.reload(null, false); })
+      .done(function () {
+        var field = editor.data('field');
+        var fieldLabel = tableElement.find('thead th').eq(keys.indexOf(field)).text().trim() || field;
+        closeEditor();
+        table.ajax.reload(null, false);
+        showSuccess(fieldLabel);
+      })
       .fail(function (xhr) { var message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Izmjena nije sačuvana. Pokušajte ponovo.'; showError('Spremanje nije uspjelo', message); });
   });
   $(document).on('keydown', function (event) { if (event.key === 'Escape') closeEditor(); });

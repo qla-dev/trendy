@@ -68,16 +68,22 @@ class ProductionPlanController extends Controller
             foreach ([['datum_od', '>='], ['datum_do', '<=']] as [$key, $operator]) {
                 $value = trim((string) ($filters[$key] ?? ''));
                 if ($value !== '') {
-                    $query->whereDate('wo.adDate', $operator, $value);
+                    $query->whereDate('wo.adSchedStartTime', $operator, $value);
                 }
             }
 
             $week = (int) ($filters['kw'] ?? 0);
-            $year = (int) ($filters['year'] ?? 0);
-            if ($week && $year) {
+            $year = (int) ($filters['year'] ?? now()->year);
+            if ($year <= 0) {
+                $year = now()->year;
+            }
+
+            $query->whereYear('wo.adSchedStartTime', $year);
+
+            if ($week) {
                 $weekStart = Carbon::now()->setISODate($year, $week)->startOfWeek();
-                $query->whereDate('wo.adDate', '>=', $weekStart)
-                    ->whereDate('wo.adDate', '<=', $weekStart->copy()->endOfWeek());
+                $query->whereDate('wo.adSchedStartTime', '>=', $weekStart)
+                    ->whereDate('wo.adSchedStartTime', '<=', $weekStart->copy()->endOfWeek());
             }
 
             $total = (clone $query)->count();
