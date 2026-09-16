@@ -51,7 +51,7 @@ class ScannedWorkOrderOperationsTest extends TestCase
         $this->assertStringNotContainsString('fa-lock', $view);
     }
 
-    public function test_checkpoint_operations_are_added_on_scan_and_excluded_from_closing_time(): void
+    public function test_scans_add_only_the_scanning_departments_checkpoint_and_exclude_it_from_closing_time(): void
     {
         $controller = file_get_contents(app_path('Http/Controllers/WorkOrderController.php'));
         $closing = file_get_contents(app_path('Services/WorkOrder/WorkOrderClosingService.php'));
@@ -59,7 +59,8 @@ class ScannedWorkOrderOperationsTest extends TestCase
 
         $this->assertStringContainsString("'bravarija' => ['code' => 'OP50', 'name' => 'Operacija - Bravarija']", $controller);
         $this->assertStringContainsString("'kontrola' => ['code' => 'OP60', 'name' => 'Operacija - Kontrola']", $controller);
-        $this->assertStringContainsString('ensureScanCheckpointOperations($workOrderKey', $controller);
+        $this->assertStringContainsString('ensureScanCheckpointOperations($workOrderKey, (int) ($request->user()->id ?? 0), $role)', $controller);
+        $this->assertStringContainsString('[$role => self::SCAN_CHECKPOINT_OPERATIONS[$role]]', $controller);
         $this->assertStringContainsString("'acOperationType' => 'D'", $controller);
         $this->assertStringContainsString('isScanCheckpointOperation($operationCode', $closing);
         $this->assertStringContainsString('isScanCheckpointOperation((string) ($input[\'code\'] ?? \'\'))', $closing);
