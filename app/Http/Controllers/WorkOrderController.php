@@ -35,6 +35,15 @@ class WorkOrderController extends Controller
         'bravarija' => ['name' => 'Bravarija', 'preferred_code' => 150, 'fallback_code' => 105],
         'kontrola' => ['name' => 'Kontrola', 'preferred_code' => 160, 'fallback_code' => 106],
     ];
+    /**
+     * These are checkpoint-only operations. They are added when either
+     * checkpoint department scans an RN that has no such BOM operations.
+     * They intentionally do not represent recorded production time.
+     */
+    private const SCAN_CHECKPOINT_OPERATIONS = [
+        'bravarija' => ['code' => 'OP50', 'name' => 'Operacija - Bravarija'],
+        'kontrola' => ['code' => 'OP60', 'name' => 'Operacija - Kontrola'],
+    ];
     private const RELEASED_MATERIAL_DEFAULT_ISSUER = 'Skladište sirovina';
     private const ADDITIONAL_RAW_MATERIAL_WAREHOUSE = 'Skladište dodatnih sirovina';
     private const RAW_MATERIAL_SHORTAGE_ALERT_EMAIL = 'skladiste.trendy@gmail.com';
@@ -162,15 +171,9 @@ class WorkOrderController extends Controller
             }
 
             if ($isScanLookup) {
-                $scanPriorityTransition = $this->transitionScannedWorkOrderPriority(
-                    (array) ($workOrder['raw'] ?? []),
-                    $request->user()
-                );
-
-                // Reload after a successful transition so the preview shows
-                // the new priority immediately, rather than the lookup value.
-                if (($scanPriorityTransition['changed'] ?? false) === true) {
-                    $workOrder = $this->findMappedWorkOrder((string) $workOrderId, true) ?? $workOrder;
+                $scanRole = $this->scanCheckpointRole($request->user());
+                if ($scanRole !== null) {
+                    return redirect()->route('app-invoice-scan-operations', ['id' => $workOrderId]);
                 }
             }
 
@@ -181,6 +184,24 @@ class WorkOrderController extends Controller
             $closingWorkOrderOperations = $this->fetchMappedOperationsFromItems(
                 trim((string) $this->value($raw, ['acKey'], ''))
             );
+            $itemOperationStatus = [];
+            foreach ($closingWorkOrderOperations as $itemOperation) {
+                $itemOperationStatus[$this->operationIdentity($itemOperation)] = [
+                    'item_id' => (string) ($itemOperation['id'] ?? ''),
+                    'is_finished' => (bool) ($itemOperation['is_finished'] ?? false),
+                ];
+            }
+            $workOrderRegOperations = array_map(function (array $operation) use ($itemOperationStatus): array {
+                $status = $itemOperationStatus[$this->operationIdentity($operation)] ?? [];
+                $operation['item_id'] = (string) ($status['item_id'] ?? '');
+                $operation['is_finished'] = (bool) ($status['is_finished'] ?? false);
+                return $operation;
+            }, $workOrderRegOperations);
+            if ($this->canDeleteWorkOrders($request->user())) {
+                usort($workOrderRegOperations, static fn (array $first, array $second): int =>
+                    ((bool) ($first['is_finished'] ?? false)) <=> ((bool) ($second['is_finished'] ?? false))
+                );
+            }
             $displaySchedule = $this->resolveWorkOrderDisplaySchedule($raw, $workOrder);
             unset($workOrder['raw']);
 
@@ -245,6 +266,7 @@ class WorkOrderController extends Controller
                 'dueDate' => $this->displayDate($displaySchedule['delivery_deadline'] ?? null),
                 'scanLookupNotice' => $successNotice,
                 'priorityOptions' => app(DeliveryPriorityOptions::class)->all(),
+                'operationCompleteUrl' => route('app-invoice-operation-complete', ['id' => $workOrderId]),
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order preview query failed.', [
@@ -376,6 +398,9 @@ class WorkOrderController extends Controller
                                 'id' => $routeId,
                                 'scan' => 1,
                             ]),
+                            'checkpoint_url' => $this->scanCheckpointRole($request->user()) !== null
+                                ? route('app-invoice-scan-operations', ['id' => $routeId])
+                                : null,
                         ],
                     ],
                 ]);
@@ -531,6 +556,280 @@ class WorkOrderController extends Controller
             return response()->json([
                 'message' => 'Greška pri ažuriranju prioriteta skeniranog radnog naloga.',
             ], 500);
+        }
+    }
+
+    public function scannedWorkOrderOperations(Request $request, string $id)
+    {
+        $role = $this->scanCheckpointRole($request->user());
+        if ($role === null) {
+            return redirect()->route('app-invoice-preview', ['id' => $id]);
+        }
+
+        try {
+            $workOrder = $this->findMappedWorkOrder($id, true);
+            if ($workOrder === null) {
+                return redirect()->route('app-invoice-list')->with('error', 'Radni nalog nije pronađen.');
+            }
+
+            $raw = (array) ($workOrder['raw'] ?? []);
+            $workOrderKey = trim((string) $this->value($raw, ['acKey'], ''));
+            $this->ensureScanCheckpointOperations($workOrderKey, (int) ($request->user()->id ?? 0));
+            $operations = collect($this->fetchMappedOperationsFromItems($workOrderKey))
+                ->map(function (array $operation) use ($role): array {
+                    $operation['is_role_operation'] = $this->operationMatchesScanRole($operation, $role);
+                    $operation['checkpoint_enabled'] = $operation['is_role_operation']
+                        && !((bool) ($operation['is_finished'] ?? false));
+                    return $operation;
+                })
+                ->sortBy(fn (array $operation): int => ($operation['is_role_operation'] ?? false) ? 0 : 1)
+                ->values()
+                ->all();
+            unset($workOrder['raw']);
+
+            return view('/content/apps/invoice/app-invoice-scan-operations', [
+                'pageConfigs' => ['pageHeader' => false],
+                'workOrder' => $workOrder,
+                'operations' => $operations,
+                'checkpointUrl' => route('app-invoice-scan-operation-checkpoint', ['id' => $id]),
+                'previewUrl' => route('app-invoice-preview', ['id' => $id]),
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Scanned work order operations view failed.', [
+                'id' => $id,
+                'role' => $role,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return redirect()->route('app-invoice-list')->with('error', 'Greška pri učitavanju operacija radnog naloga.');
+        }
+    }
+
+    public function checkpointScannedWorkOrderOperation(Request $request, string $id): JsonResponse
+    {
+        $role = $this->scanCheckpointRole($request->user());
+        if ($role === null) {
+            return response()->json(['message' => 'Nemate dozvolu za ovu kontrolnu tačku.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'operation_id' => ['required', 'string', 'max:100'],
+            'finished' => ['nullable', 'boolean'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Operacija nije odabrana.', 'errors' => $validator->errors()], 422);
+        }
+
+        try {
+            $workOrder = $this->findMappedWorkOrder($id, true);
+            if ($workOrder === null) {
+                return response()->json(['message' => 'Radni nalog nije pronađen.'], 404);
+            }
+
+            $raw = (array) ($workOrder['raw'] ?? []);
+            $workOrderKey = trim((string) $this->value($raw, ['acKey'], ''));
+            $this->ensureScanCheckpointOperations($workOrderKey, (int) ($request->user()->id ?? 0));
+            $operationId = trim((string) $validator->validated()['operation_id']);
+            $selectedOperation = collect($this->fetchMappedOperationsFromItems($workOrderKey))
+                ->first(fn (array $operation): bool => (string) ($operation['id'] ?? '') === $operationId);
+
+            if (!is_array($selectedOperation) || !$this->operationMatchesScanRole($selectedOperation, $role)) {
+                return response()->json(['message' => 'Možete označiti samo operaciju za svoje odjeljenje.'], 403);
+            }
+
+            if ((bool) ($selectedOperation['is_finished'] ?? false)) {
+                return response()->json(['message' => 'Operacija je već završena.'], 422);
+            }
+
+            $transitionResponse = $this->transitionScannedWorkOrder($request, $id);
+            if ($transitionResponse->getStatusCode() >= 400) {
+                return $transitionResponse;
+            }
+
+            $this->markScannedOperationFinished($workOrderKey, $operationId, (int) ($request->user()->id ?? 0));
+
+            return response()->json([
+                'message' => 'Operacija je označena kao završena.',
+                'data' => $transitionResponse->getData(true)['data'] ?? [],
+            ]);
+        } catch (Throwable $exception) {
+            Log::error('Scanned operation checkpoint failed.', [
+                'id' => $id,
+                'role' => $role,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json(['message' => 'Kontrolna tačka nije sačuvana.'], 500);
+        }
+    }
+
+    public function markWorkOrderOperationFinished(Request $request, string $id): JsonResponse
+    {
+        $user = $request->user();
+        if (!is_object($user) || !method_exists($user, 'isAdmin') || !$user->isAdmin()) {
+            return response()->json(['message' => 'Samo administrator može označiti operaciju kao završenu.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'operation_id' => ['required', 'string', 'max:100'],
+            'finished' => ['nullable', 'boolean'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Operacija nije odabrana.', 'errors' => $validator->errors()], 422);
+        }
+
+        try {
+            $workOrder = $this->findMappedWorkOrder($id, true);
+            if ($workOrder === null) return response()->json(['message' => 'Radni nalog nije pronađen.'], 404);
+
+            $workOrderKey = trim((string) $this->value((array) ($workOrder['raw'] ?? []), ['acKey'], ''));
+            $operationId = trim((string) $validator->validated()['operation_id']);
+            $operation = collect($this->fetchMappedOperationsFromItems($workOrderKey))
+                ->first(fn (array $item): bool => (string) ($item['id'] ?? '') === $operationId);
+            if (!is_array($operation)) return response()->json(['message' => 'Operacija nije pronađena.'], 404);
+            $finished = $request->boolean('finished', true);
+            if ((bool) ($operation['is_finished'] ?? false) === $finished) {
+                return response()->json(['message' => $finished ? 'Operacija je već završena.' : 'Operacija je već otvorena.']);
+            }
+
+            $this->markScannedOperationFinished($workOrderKey, $operationId, (int) ($user->id ?? 0), $finished);
+            return response()->json(['message' => $finished ? 'Operacija je označena kao završena.' : 'Operacija je ponovo otvorena.']);
+        } catch (Throwable $exception) {
+            Log::error('Admin operation completion failed.', ['id' => $id, 'message' => $exception->getMessage()]);
+            return response()->json(['message' => 'Operaciju nije moguće označiti kao završenu.'], 500);
+        }
+    }
+
+    private function scanCheckpointRole(mixed $user): ?string
+    {
+        $role = is_object($user) && method_exists($user, 'scanWorkOrderPriorityRole')
+            ? $user->scanWorkOrderPriorityRole()
+            : null;
+
+        return is_string($role) && isset(self::SCAN_PRIORITY_DEFINITIONS[$role]) ? $role : null;
+    }
+
+    private function operationMatchesScanRole(array $operation, string $role): bool
+    {
+        $searchable = Str::lower(trim(implode(' ', [
+            (string) ($operation['operacija'] ?? ''),
+            (string) ($operation['naziv'] ?? ''),
+        ])));
+        $needles = $role === 'kontrola'
+            ? ['kontrol']
+            : ($role === 'bravarija' ? ['bravar'] : []);
+
+        return $searchable !== '' && collect($needles)->contains(
+            static fn (string $needle): bool => Str::contains($searchable, $needle)
+        );
+    }
+
+    /** Add the two scan-only department checkpoints to an RN when absent. */
+    private function ensureScanCheckpointOperations(string $workOrderKey, int $userId): void
+    {
+        if ($workOrderKey === '') {
+            throw new RuntimeException('Ključ radnog naloga nije pronađen za dodavanje kontrolnih operacija.');
+        }
+
+        $operations = $this->fetchMappedOperationsFromItems($workOrderKey);
+        $missing = array_filter(self::SCAN_CHECKPOINT_OPERATIONS, function (array $definition, string $role) use ($operations): bool {
+            // Older BOMs can carry the department operation under a local
+            // code. Its name is still authoritative, so do not add OP50 or
+            // OP60 a second time merely because the code differs.
+            return !collect($operations)->contains(
+                fn (array $operation): bool => $this->operationMatchesScanRole($operation, $role)
+            );
+        }, ARRAY_FILTER_USE_BOTH);
+
+        if ($missing === []) {
+            return;
+        }
+
+        $itemColumns = $this->itemTableColumns();
+        if (!in_array('acKey', $itemColumns, true) || !in_array('acIdent', $itemColumns, true)) {
+            throw new RuntimeException('Pantheon stavke radnog naloga nisu dostupne.');
+        }
+
+        $now = Carbon::now();
+        $nextPosition = ((int) ($this->newItemTableQuery()->where('acKey', $workOrderKey)->max('anNo') ?? 0)) + 1;
+
+        foreach ($missing as $definition) {
+            $code = strtoupper(trim((string) $definition['code']));
+            // Recheck just before writing, so a repeated scan never creates a
+            // duplicate checkpoint row.
+            if ($this->newItemTableQuery()->where('acKey', $workOrderKey)->where('acIdent', $code)->exists()) {
+                continue;
+            }
+
+            $payload = [
+                'acKey' => $workOrderKey,
+                'anNo' => $nextPosition,
+                'anVariant' => 0,
+                'acIdent' => $code,
+                'acDescr' => (string) $definition['name'],
+                'acUM' => 'RDS',
+                'acUMTime' => 'H',
+                'anPlanQty' => 0,
+                'anQty' => 0,
+                'anQty1' => 0,
+                'anQtyBase' => 0,
+                'acOperationType' => 'D',
+                'acIssueFinished' => 'N',
+                'anIssuePerc' => 0,
+                'adTimeIns' => $now,
+                'adTimeChg' => $now,
+                'anUserIns' => $userId,
+                'anUserChg' => $userId,
+            ];
+            $this->newItemTableQuery()->insert(array_intersect_key($payload, array_flip($itemColumns)));
+
+            $identity = $this->resolveInsertedWorkOrderItemIdentity($workOrderKey, $nextPosition, $code);
+            $itemQid = (int) ($identity['anQId'] ?? 0);
+            if ($itemQid < 1) {
+                throw new RuntimeException('Pantheon QId kontrolne operacije nije kreiran.');
+            }
+
+            $this->ensureWorkOrderOperationResourceRow($itemQid, 0, 0, $userId, $now);
+            $nextPosition++;
+        }
+    }
+
+    private function operationIdentity(array $operation): string
+    {
+        return strtoupper(trim((string) ($operation['pozicija'] ?? '')))
+            . '|'
+            . strtoupper(trim((string) ($operation['operacija'] ?? '')));
+    }
+
+    private function markScannedOperationFinished(string $workOrderKey, string $operationId, int $userId, bool $finished = true): void
+    {
+        $itemColumns = $this->itemTableColumns();
+        if (!in_array('anQId', $itemColumns, true) || !in_array('acIssueFinished', $itemColumns, true)) {
+            throw new RuntimeException('Status operacije nije dostupan u Pantheon bazi.');
+        }
+
+        $now = Carbon::now();
+        $itemUpdates = ['acIssueFinished' => $finished ? 'Y' : 'N'];
+        if (in_array('anIssuePerc', $itemColumns, true)) $itemUpdates['anIssuePerc'] = $finished ? 100.0 : 0.0;
+        if (in_array('adTimeChg', $itemColumns, true)) $itemUpdates['adTimeChg'] = $now;
+        if ($userId > 0 && in_array('anUserChg', $itemColumns, true)) $itemUpdates['anUserChg'] = $userId;
+
+        $updated = $this->newItemTableQuery()
+            ->where('acKey', $workOrderKey)
+            ->where('anQId', (int) $operationId)
+            ->update($itemUpdates);
+        if ($updated < 1) throw new RuntimeException('Status operacije nije ažuriran.');
+
+        $resourceColumns = $this->itemResourcesTableColumns();
+        if (!in_array('anWOExItemQId', $resourceColumns, true)) return;
+
+        $resourceUpdates = [];
+        if (in_array('acIssueFinished', $resourceColumns, true)) $resourceUpdates['acIssueFinished'] = $finished ? 'Y' : 'N';
+        if (in_array('anExecutionPerc', $resourceColumns, true)) $resourceUpdates['anExecutionPerc'] = $finished ? 100.0 : 0.0;
+        if (in_array('adTimeChg', $resourceColumns, true)) $resourceUpdates['adTimeChg'] = $now;
+        if ($userId > 0 && in_array('anUserChg', $resourceColumns, true)) $resourceUpdates['anUserChg'] = $userId;
+        if ($resourceUpdates !== []) {
+            $this->newItemResourcesTableQuery()->where('anWOExItemQId', (int) $operationId)->update($resourceUpdates);
         }
     }
 
@@ -9902,6 +10201,7 @@ class WorkOrderController extends Controller
             'va' => $va,
             'prim_klas' => (string) $this->valueTrimmed($row, ['acFieldSB'], ''),
             'sek_klas' => (string) $this->valueTrimmed($row, ['acFieldSC'], ''),
+            'is_finished' => strtoupper((string) $this->valueTrimmed($row, ['acIssueFinished'], 'N')) === 'Y',
         ];
     }
 

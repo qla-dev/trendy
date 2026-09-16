@@ -562,6 +562,83 @@
   .semi-dark-layout .invoice-preview-wrapper #sastavnica-table thead .wo-sastavnica-action-col {
     background-color: #2f3854;
   }
+  .invoice-preview-wrapper #operacija-table .wo-operation-action-col {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    min-width: 4.5rem;
+    background-color: #ffffff;
+    border-left: 1px solid var(--wo-divider-color);
+  }
+  .invoice-preview-wrapper #operacija-table thead .wo-operation-action-col {
+    z-index: 3;
+    background-color: #f8f8fa;
+  }
+  .invoice-preview-wrapper .wo-operation-complete-btn {
+    width: 3rem;
+    height: 3rem;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0 !important;
+    border-radius: 0;
+    color: transparent;
+    background: transparent !important;
+    box-shadow: none !important;
+    -webkit-appearance: none;
+    appearance: none;
+    line-height: 1;
+  }
+  .invoice-preview-wrapper .wo-operation-complete-btn::after {
+    content: '\2713';
+    width: 22px;
+    height: 22px;
+    display: inline-grid;
+    place-items: center;
+    border: 2px solid #b9b7c1;
+    border-radius: .25rem;
+    color: transparent;
+    font-size: .9rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .invoice-preview-wrapper .wo-operation-complete-btn[data-finished="1"]::after {
+    color: #fff;
+    background: #28c76f;
+    border-color: #28c76f;
+  }
+  .invoice-preview-wrapper .wo-operation-complete-btn.is-saving::after { display: none; }
+  .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > td {
+    background-color: rgba(40, 199, 111, .08);
+    color: #6e6b7b;
+  }
+  .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > .wo-operation-action-col {
+    background-color: #effbf4;
+  }
+  body.dark-layout .invoice-preview-wrapper #operacija-table .wo-operation-action-col,
+  body.semi-dark-layout .invoice-preview-wrapper #operacija-table .wo-operation-action-col,
+  .dark-layout .invoice-preview-wrapper #operacija-table .wo-operation-action-col,
+  .semi-dark-layout .invoice-preview-wrapper #operacija-table .wo-operation-action-col { background-color: #283046; }
+  body.dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > td,
+  body.semi-dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > td,
+  .dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > td,
+  .semi-dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > td {
+    color: #aab3c6;
+    background-color: rgba(40, 199, 111, .12);
+  }
+  body.dark-layout .invoice-preview-wrapper .wo-operation-complete-btn::after,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-operation-complete-btn::after,
+  .dark-layout .invoice-preview-wrapper .wo-operation-complete-btn::after,
+  .semi-dark-layout .invoice-preview-wrapper .wo-operation-complete-btn::after { border-color: #6d7486; }
+  body.dark-layout .invoice-preview-wrapper .wo-operation-complete-btn[data-finished="1"]::after,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-operation-complete-btn[data-finished="1"]::after,
+  .dark-layout .invoice-preview-wrapper .wo-operation-complete-btn[data-finished="1"]::after,
+  .semi-dark-layout .invoice-preview-wrapper .wo-operation-complete-btn[data-finished="1"]::after { border-color: #28c76f; }
+  body.dark-layout .invoice-preview-wrapper #operacija-table thead .wo-operation-action-col,
+  body.semi-dark-layout .invoice-preview-wrapper #operacija-table thead .wo-operation-action-col,
+  .dark-layout .invoice-preview-wrapper #operacija-table thead .wo-operation-action-col,
+  .semi-dark-layout .invoice-preview-wrapper #operacija-table thead .wo-operation-action-col { background-color: #2f3854; }
   .wo-progress-shell .wo-progress-head {
     align-items: baseline;
     font-size: 0.95rem;
@@ -2445,11 +2522,12 @@
                       <th class="py-1 text-center">VA</th>
                       <th class="py-1 text-center">Prim.klas.</th>
                       <th class="py-1 text-center">Sek.klas.</th>
+                      @if($isAdminUser)<th class="py-1 text-center wo-operation-action-col">Akcije</th>@endif
                     </tr>
                   </thead>
                   <tbody>
                     @forelse(($workOrderRegOperations ?? []) as $operation)
-                      <tr>
+                      <tr class="{{ (bool) ($operation['is_finished'] ?? false) ? 'wo-operation-finished-row' : '' }}">
                         <td class="py-1">{{ $displayValue($operation['alternativa'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($operation['pozicija'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($operation['operacija'] ?? null) }}</td>
@@ -2465,10 +2543,30 @@
                         <td class="py-1">{{ $displayValue($operation['va'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($operation['prim_klas'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($operation['sek_klas'] ?? null) }}</td>
+                        @if($isAdminUser)
+                          @php
+                            $operationItemId = trim((string) ($operation['item_id'] ?? ''));
+                            $operationFinished = (bool) ($operation['is_finished'] ?? false);
+                          @endphp
+                          <td class="py-1 text-center wo-operation-action-col">
+                            <button
+                              type="button"
+                              class="btn btn-sm {{ $operationFinished ? 'btn-flat-success' : 'btn-flat-secondary' }} wo-operation-complete-btn"
+                              data-operation-id="{{ $operationItemId }}"
+                              data-finished="{{ $operationFinished ? '1' : '0' }}"
+                              data-bs-toggle="tooltip"
+                              data-bs-placement="top"
+                              data-bs-title="{{ $operationFinished ? 'Označi kao otvorenu' : 'Označi kao završenu' }}"
+                              aria-label="{{ $operationFinished ? 'Označi operaciju kao otvorenu' : 'Označi operaciju kao završenu' }}"
+                              @if($operationItemId === '') disabled @endif
+                            >
+                            </button>
+                          </td>
+                        @endif
                       </tr>
                     @empty
                       <tr>
-                        <td colspan="11" class="text-center text-muted py-2">Nema operacija za ovaj radni nalog.</td>
+                        <td colspan="{{ $isAdminUser ? 12 : 11 }}" class="text-center text-muted py-2">Nema operacija za ovaj radni nalog.</td>
                       </tr>
                     @endforelse
                   </tbody>
@@ -2651,14 +2749,6 @@
           </button>
           @if($isAdminUser)
             <button
-              id="wo-department-trigger-btn"
-              class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center"
-              type="button"
-              @if (!$hasLoadedWorkOrder || $departmentOptionsUrl === '') disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif
-            >
-              <i class="fa fa-building me-50" style="margin-top: 1px;"></i> Dodaj odjel
-            </button>
-            <button
               id="wo-delete-order-btn"
               class="btn btn-danger w-100 mb-75 d-flex justify-content-center align-items-center"
               type="button"
@@ -2666,6 +2756,14 @@
               @if (!$hasLoadedWorkOrder || $destroyWorkOrderUrl === '') disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif
             >
               <i class="fa fa-trash me-50" style="margin-top: 1px;"></i> Izbriši nalog
+            </button>
+            <button
+              id="wo-department-trigger-btn"
+              class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center"
+              type="button"
+              @if (!$hasLoadedWorkOrder || $departmentOptionsUrl === '') disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif
+            >
+              <i class="fa fa-building me-50" style="margin-top: 1px;"></i> Dodaj odjel
             </button>
           @endif
           @if($isAdminUser)
@@ -2755,7 +2853,20 @@
                 </thead>
                 <tbody>
                   @php
-                    $closeOperations = $closingWorkOrderOperations ?? $workOrderRegOperations ?? [];
+                    $closeOperations = array_values(array_filter(
+                      $closingWorkOrderOperations ?? $workOrderRegOperations ?? [],
+                      static function (array $operation): bool {
+                        $code = mb_strtoupper(trim((string) ($operation['operacija'] ?? '')));
+                        $name = mb_strtolower(trim((string) ($operation['naziv'] ?? '')));
+
+                        // These two rows are completed from the scan
+                        // checkpoint; they are not labour/document rows in
+                        // the close modal.
+                        return !in_array($code, ['OP50', 'OP60'], true)
+                          && !str_contains($name, 'bravar')
+                          && !str_contains($name, 'kontrol');
+                      }
+                    ));
                     $closeOperationPositionMap = [];
                     foreach ($closeOperations as $closeOperation) {
                       $closeOperationCode = mb_strtoupper(trim((string) ($closeOperation['operacija'] ?? '')));
@@ -3084,6 +3195,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       materialsUrl: @json($allMaterialsFetchUrl),
       plannedConsumptionUpdateUrl: @json($plannedConsumptionUpdateUrl),
       plannedConsumptionRemoveUrl: @json($plannedConsumptionRemoveUrl),
+      operationCompleteUrl: @json($operationCompleteUrl ?? ''),
       csrfToken: @json(csrf_token())
     };
     var toneClasses = ['primary', 'secondary', 'success', 'warning', 'danger', 'info'];
@@ -3332,6 +3444,66 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         });
       });
     }
+
+    function initOperationActionTooltip(button) {
+      if (!window.bootstrap || !window.bootstrap.Tooltip) return;
+
+      var tooltip = window.bootstrap.Tooltip.getInstance(button);
+      if (tooltip) tooltip.dispose();
+
+      new window.bootstrap.Tooltip(button, {
+        placement: 'top',
+        trigger: 'hover focus',
+        container: 'body'
+      });
+    }
+
+    document.querySelectorAll('.wo-operation-complete-btn:not([disabled])').forEach(function (button) {
+      initOperationActionTooltip(button);
+      button.addEventListener('click', function () {
+        var operationId = String(button.getAttribute('data-operation-id') || '').trim();
+        if (!operationId || !mutationConfig.operationCompleteUrl) return;
+        var currentlyFinished = button.getAttribute('data-finished') === '1';
+        var markFinished = !currentlyFinished;
+        var row = button.closest('tr');
+        var activeTooltip = window.bootstrap && window.bootstrap.Tooltip
+          ? window.bootstrap.Tooltip.getInstance(button)
+          : null;
+
+        if (activeTooltip) activeTooltip.hide();
+        button.disabled = true;
+        button.classList.add('is-saving');
+        button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        requestMutation(mutationConfig.operationCompleteUrl, { operation_id: operationId, finished: markFinished }, 'Status operacije nije moguće ažurirati.')
+          .then(function () {
+            button.disabled = false;
+            button.classList.remove('is-saving');
+            button.setAttribute('data-finished', markFinished ? '1' : '0');
+            button.classList.toggle('btn-flat-success', markFinished);
+            button.classList.toggle('btn-flat-secondary', !markFinished);
+            button.innerHTML = '';
+            button.setAttribute('aria-label', markFinished ? 'Označi operaciju kao otvorenu' : 'Označi operaciju kao završenu');
+            button.setAttribute('data-bs-title', markFinished ? 'Označi kao otvorenu' : 'Označi kao završenu');
+            if (row) {
+              row.classList.toggle('wo-operation-finished-row', markFinished);
+              var tableBody = row.parentElement;
+              if (tableBody && markFinished) {
+                tableBody.appendChild(row);
+              } else if (tableBody) {
+                var firstFinishedRow = tableBody.querySelector('tr.wo-operation-finished-row');
+                if (firstFinishedRow) tableBody.insertBefore(row, firstFinishedRow);
+              }
+            }
+            initOperationActionTooltip(button);
+          })
+          .catch(function (error) {
+            button.disabled = false;
+            button.classList.remove('is-saving');
+            button.innerHTML = '';
+            if (window.Swal) Swal.fire({ icon: 'error', title: 'Greška', text: error.message || 'Operaciju nije moguće označiti kao završenu.' });
+          });
+      });
+    });
 
     function escapeProtectionHtml(value) {
       return String(value == null ? '' : value).replace(/[&<>"']/g, function (character) {

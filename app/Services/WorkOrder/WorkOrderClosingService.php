@@ -517,6 +517,12 @@ class WorkOrderClosingService
             $itemQId = (int) $row->anQId;
             $inputs = $submittedByItem[$itemQId] ?? [];
             $operationCode = strtoupper(trim((string) ($inputs[0]['code'] ?? $row->acIdent)));
+            // Bravarija and Kontrola are scan checkpoints, not production
+            // work. They must never require a worker/duration or result in a
+            // 6600 line (or a worker-time record) while closing the RN.
+            if ($this->isScanCheckpointOperation($operationCode, (string) ($row->acDescr ?? ''))) {
+                continue;
+            }
             if ($inputs === []) {
                 if ($operationCode !== 'OP30') {
                     $complete = false;
@@ -585,6 +591,9 @@ class WorkOrderClosingService
         }
 
         foreach ($manualInputs as $input) {
+            if ($this->isScanCheckpointOperation((string) ($input['code'] ?? ''))) {
+                continue;
+            }
             if (!$this->hasCompleteOperationInput($input)) {
                 $complete = false;
                 continue;
@@ -629,6 +638,18 @@ class WorkOrderClosingService
         }
 
         return ['complete' => $complete, 'operations' => $prepared];
+    }
+
+    private function isScanCheckpointOperation(string $code, string $name = ''): bool
+    {
+        $code = strtoupper(trim($code));
+        if (in_array($code, ['OP50', 'OP60'], true)) {
+            return true;
+        }
+
+        $name = strtolower(trim($name));
+
+        return str_contains($name, 'bravar') || str_contains($name, 'kontrol');
     }
 
     private function hasCompleteOperationInput(array $input): bool
@@ -1174,6 +1195,11 @@ class WorkOrderClosingService
                 || strtoupper(trim((string) $item->acSetOfItem)) === 'OPR';
 
             if ($isOperation) {
+                if ($this->isScanCheckpointOperation((string) ($item->acIdent ?? ''))) {
+                    // Its completion is owned by the Bravarija/Kontrola scan,
+                    // rather than calculated from closing-time labour.
+                    continue;
+                }
                 $this->closingWorkOrderItems->ensureOperationResourceRow(
                     $this->connection,
                     $itemQid,

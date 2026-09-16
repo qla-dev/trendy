@@ -80,6 +80,9 @@ Route::middleware('auth:web')->group(function () {
         Route::delete('invoice/{id}', [WorkOrderController::class, 'destroyInvoice'])->name('app-invoice-destroy');
         Route::get('invoice/scan/lookup', [WorkOrderController::class, 'scanLookup'])->name('app-invoice-scan-lookup');
         Route::post('invoice/scan/{id}/transition', [WorkOrderController::class, 'transitionScannedWorkOrder'])->name('app-invoice-scan-transition');
+        Route::get('invoice/scan/{id}/operations', [WorkOrderController::class, 'scannedWorkOrderOperations'])->name('app-invoice-scan-operations');
+        Route::post('invoice/scan/{id}/operations/checkpoint', [WorkOrderController::class, 'checkpointScannedWorkOrderOperation'])->name('app-invoice-scan-operation-checkpoint');
+        Route::post('invoice/preview/{id}/operations/complete', [WorkOrderController::class, 'markWorkOrderOperationFinished'])->name('app-invoice-operation-complete');
         Route::post('invoice/scan/create', [WorkOrderController::class, 'createFromScan'])->name('app-invoice-scan-create');
         Route::get('invoice/preview/{id?}', [WorkOrderController::class, 'invoicePreview'])->name('app-invoice-preview');
         Route::post('invoice/preview/{id}/status', [WorkOrderController::class, 'updateInvoiceStatus'])->name('app-invoice-update-status');
