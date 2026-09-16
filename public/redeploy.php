@@ -15,8 +15,24 @@ ini_set('output_buffering', '0');
 ini_set('zlib.output_compression', '0');
 
 $baseDir = dirname(__DIR__);
+chdir($baseDir);
 putenv('COMPOSER_ALLOW_SUPERUSER=1');
 putenv('COMPOSER_NO_INTERACTION=1');
+
+// Match the cPanel-safe Composer setup used by TrackPal. Shared hosting
+// accounts often do not provide a writable global HOME or Composer cache.
+$composerHome = $baseDir . DIRECTORY_SEPARATOR . '.composer';
+$composerCache = $composerHome . DIRECTORY_SEPARATOR . 'cache';
+
+foreach ([$composerHome, $composerCache] as $directory) {
+    if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
+        throw new RuntimeException("Could not create Composer directory: {$directory}");
+    }
+}
+
+putenv('HOME=' . $composerHome);
+putenv('COMPOSER_HOME=' . $composerHome);
+putenv('COMPOSER_CACHE_DIR=' . $composerCache);
 
 if (PHP_SAPI !== 'cli') {
     header('Content-Type: text/plain; charset=utf-8');
@@ -147,12 +163,9 @@ $npm = $findExecutable([
     'npm',
 ]);
 
-if ($php === null || $composer === null || $npm === null) {
+if ($php === null || $npm === null) {
     if ($php === null) {
         $write("Could not find CLI PHP.\n");
-    }
-    if ($composer === null) {
-        $write("Could not find Composer.\n");
     }
     if ($npm === null) {
         $write("Could not find npm; enable Node.js 20 or newer in cPanel.\n");
@@ -165,7 +178,25 @@ $currentPath = (string) (getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin');
 putenv('PATH=' . $nodeBinDir . PATH_SEPARATOR . $currentPath);
 
 $phpCommand = escapeshellarg($php);
-$composerCommand = escapeshellarg($composer);
+$composerPhar = $baseDir . DIRECTORY_SEPARATOR . 'composer.phar';
+
+if (is_file($composerPhar)) {
+    $composerCommand = $phpCommand . ' ' . escapeshellarg($composerPhar);
+} elseif ($composer !== null) {
+    $composerCommand = escapeshellarg($composer);
+} else {
+    $write("Composer was not found on PATH. Downloading local composer.phar...\n");
+    $composerContents = @file_get_contents('https://getcomposer.org/download/latest-stable/composer.phar');
+
+    if ($composerContents === false || @file_put_contents($composerPhar, $composerContents) === false) {
+        $write("Could not download Composer. Upload composer.phar to the Trendy project root, then run redeploy again.\n");
+        exit(127);
+    }
+
+    $write("Saved local Composer to {$composerPhar}.\n");
+    $composerCommand = $phpCommand . ' ' . escapeshellarg($composerPhar);
+}
+
 $npmCommand = escapeshellarg($npm);
 
 $commands = [
