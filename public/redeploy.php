@@ -140,15 +140,22 @@ $findExecutable = static function (array $candidates): ?string {
     return null;
 };
 
-$php = $findExecutable([
-    PHP_BINARY,
-    'php',
-    '/usr/local/bin/php',
-    '/usr/bin/php',
+$phpCandidates = [
+    // PHP_BINARY is lsphp when this endpoint is invoked through LiteSpeed;
+    // Composer and Artisan require a CLI PHP binary instead.
     '/opt/cpanel/ea-php84/root/usr/bin/php',
     '/opt/cpanel/ea-php83/root/usr/bin/php',
     '/opt/cpanel/ea-php82/root/usr/bin/php',
-]);
+    '/usr/local/bin/php',
+    '/usr/bin/php',
+    'php',
+];
+
+if (PHP_SAPI === 'cli') {
+    array_unshift($phpCandidates, PHP_BINARY);
+}
+
+$php = $findExecutable($phpCandidates);
 
 $composer = $findExecutable(['composer', '/usr/local/bin/composer', '/usr/bin/composer']);
 $npm = $findExecutable([
