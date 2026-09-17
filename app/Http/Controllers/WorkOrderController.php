@@ -30,7 +30,7 @@ class WorkOrderController extends Controller
     private const RELEASED_MATERIAL_SEQUENCE_LENGTH = 7;
     private const RELEASED_MATERIAL_CURRENCY = 'KM';
     private const MATERIAL_ISSUED_PRIORITY_CODE = 7;
-    private const MATERIAL_ISSUED_PRIORITY_NAME = 'materijal pripremljen';
+    private const MATERIAL_ISSUED_PRIORITY_NAME = 'Materijal pripremljen';
     private const SCAN_PRIORITY_DEFINITIONS = [
         'bravarija' => ['name' => 'Bravarija', 'preferred_code' => 150, 'fallback_code' => 105],
         'kontrola' => ['name' => 'Kontrola', 'preferred_code' => 160, 'fallback_code' => 106],

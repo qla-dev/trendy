@@ -8,6 +8,14 @@ export default defineConfig(({mode}) => {
   return {
     base: './',
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        input: {
+          ponuda: path.resolve(__dirname, 'index.html'),
+          ponuda2: path.resolve(__dirname, 'index2.html'),
+        },
+      },
+    },
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
