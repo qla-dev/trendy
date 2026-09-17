@@ -2,6 +2,53 @@
 
 declare(strict_types=1);
 
+// Report failures before environment setup, binary discovery, or deployment.
+if (PHP_SAPI !== 'cli') {
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+    header('X-Content-Type-Options: nosniff');
+    header('X-Accel-Buffering: no');
+}
+
+set_exception_handler(static function (Throwable $error): void {
+    echo "\nRedeploy stopped: " . get_class($error) . ': ' . $error->getMessage()
+        . "\nLocation: " . basename($error->getFile()) . ':' . $error->getLine() . "\n";
+    exit(1);
+});
+
+register_shutdown_function(static function (): void {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        echo "\nFatal redeploy error: " . $error['message'] . "\n";
+    }
+});
+
+ini_set('memory_limit', '512M');
+ini_set('output_buffering', '0');
+ini_set('zlib.output_compression', '0');
+
+while (ob_get_level() > 0) {
+    if (!ob_end_flush()) {
+        break;
+    }
+}
+ob_implicit_flush(true);
+echo "eNalog redeploy revision 2026-09-17.2\n";
+flush();
+
+if (filter_var($_GET['diagnostics'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+    echo 'PHP version: ' . PHP_VERSION . "\n";
+    echo 'PHP handler: ' . PHP_SAPI . "\n";
+    foreach (['putenv', 'proc_open', 'proc_get_status', 'proc_close', 'escapeshellarg', 'set_time_limit'] as $function) {
+        echo $function . ': ' . (function_exists($function) ? 'available' : 'disabled') . "\n";
+    }
+    echo 'Laravel project above public folder: '
+        . (is_file(dirname(__DIR__) . '/artisan') ? 'found' : 'NOT FOUND') . "\n";
+    echo 'Project folder writable: ' . (is_writable(dirname(__DIR__)) ? 'yes' : 'no') . "\n";
+    echo "Diagnostics complete. No deployment commands were executed.\n";
+    exit(0);
+}
+
 /*
  * Single-application deployment endpoint for Trendy.
  *
@@ -9,11 +56,9 @@ declare(strict_types=1);
  * above it. Run this endpoint only from a protected deployment URL.
  */
 
-set_time_limit(0);
-ini_set('memory_limit', '512M');
-ini_set('output_buffering', '0');
-ini_set('zlib.output_compression', '0');
-
+if (function_exists('set_time_limit')) {
+    set_time_limit(0);
+}
 $baseDir = dirname(__DIR__);
 chdir($baseDir);
 putenv('COMPOSER_ALLOW_SUPERUSER=1');
@@ -33,18 +78,6 @@ foreach ([$composerHome, $composerCache] as $directory) {
 putenv('HOME=' . $composerHome);
 putenv('COMPOSER_HOME=' . $composerHome);
 putenv('COMPOSER_CACHE_DIR=' . $composerCache);
-
-if (PHP_SAPI !== 'cli') {
-    header('Content-Type: text/plain; charset=utf-8');
-    header('Cache-Control: no-store, no-cache, must-revalidate');
-    header('X-Content-Type-Options: nosniff');
-    header('X-Accel-Buffering: no');
-}
-
-while (ob_get_level() > 0) {
-    ob_end_flush();
-}
-ob_implicit_flush(true);
 
 $write = static function (string $message): void {
     echo $message;
@@ -225,6 +258,7 @@ if (is_file($composerPhar)) {
 
 $npmCommand = escapeshellarg($npm);
 $frontendOnly = filter_var($_GET['frontend_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
+$offersOnly = filter_var($_GET['offers_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
 $commands = [
     ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
@@ -233,11 +267,18 @@ $commands = [
     ['label' => 'Building frontend assets', 'command' => $npmCommand . ' run production'],
 ];
 
-if (!$frontendOnly) {
-    array_splice($commands, 1, 0,
+if ($offersOnly) {
+    $commands = [
+        ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
+        ['label' => 'Installing dependencies for both offers', 'command' => $npmCommand . ' --prefix resources/ponuda ci --no-audit --no-fund'],
+        ['label' => 'Building both offer pages', 'command' => $npmCommand . ' run build:ponuda'],
+    ];
+    $write("Offers-only redeploy: builds /ponuda/ and /ponuda-2/ together.\n");
+} elseif (!$frontendOnly) {
+    array_splice($commands, 1, 0, [
         ['label' => 'Installing Composer dependencies', 'command' => $composerCommand . ' install --no-dev --no-interaction --prefer-dist --no-progress --optimize-autoloader --no-ansi'],
         ['label' => 'Running database migrations', 'command' => $phpCommand . ' artisan migrate --force --no-ansi'],
-    );
+    ]);
     $commands[] = ['label' => 'Clearing and rebuilding Laravel caches', 'command' => $phpCommand . ' artisan optimize --no-ansi'];
 } else {
     $commands[] = ['label' => 'Clearing compiled views', 'command' => $phpCommand . ' artisan view:clear --no-ansi'];
@@ -260,4 +301,12 @@ foreach ($commands as $step) {
     }
 }
 
+foreach (['ponuda', 'ponuda-2'] as $offerFolder) {
+    if (!is_file($baseDir . '/public/' . $offerFolder . '/index.html')) {
+        $write("Deployment incomplete: /{$offerFolder}/index.html was not generated.\n");
+        exit(1);
+    }
+}
+
+$write("\nBoth offer pages are ready: /ponuda/ and /ponuda-2/.\n");
 $write("\nTrendy redeploy completed successfully in " . (time() - $startedAt) . "s.\n");

@@ -17,5 +17,9 @@ The browser redeploy endpoint installs this project's dependencies and the
 root production build builds both offers. Both URLs load their page directly
 without redirects or a `dist` URL.
 
+The browser endpoint `/redeploy.php?offers_only=1` pulls the latest code and
+builds both offers without migrations or the main application build. Deployment
+checks that both public HTML entry points exist before reporting success.
+
 For local development, install dependencies in this directory and use its
 `dev` script. The root `build:ponuda` script builds both production pages.
