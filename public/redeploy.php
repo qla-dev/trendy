@@ -51,6 +51,15 @@ $write = static function (string $message): void {
     flush();
 };
 
+if (!function_exists('proc_open')) {
+    if (PHP_SAPI !== 'cli') {
+        http_response_code(503);
+    }
+
+    $write("Redeploy cannot run because this hosting account disables PHP proc_open(). Ask the hosting provider to allow proc_open for this protected endpoint.\n");
+    exit(1);
+}
+
 $lockFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'trendy-redeploy.lock';
 $lock = fopen($lockFile, 'c');
 
@@ -122,22 +131,22 @@ $run = static function (string $command, string $cwd, callable $write): int {
 };
 
 $findExecutable = static function (array $candidates): ?string {
+    $pathCommands = [];
+
     foreach ($candidates as $candidate) {
         if (str_contains($candidate, DIRECTORY_SEPARATOR) && is_file($candidate) && is_executable($candidate)) {
             return $candidate;
         }
 
-        $lookup = PHP_OS_FAMILY === 'Windows'
-            ? 'where ' . escapeshellarg($candidate)
-            : 'command -v ' . escapeshellarg($candidate) . ' 2>/dev/null';
-        exec($lookup, $output, $exitCode);
-
-        if ($exitCode === 0 && isset($output[0]) && $output[0] !== '') {
-            return trim($output[0]);
+        if (!str_contains($candidate, DIRECTORY_SEPARATOR)) {
+            $pathCommands[] = $candidate;
         }
     }
 
-    return null;
+    // Do not use exec()/shell_exec() for discovery: many shared cPanel hosts
+    // disable those functions for web requests. proc_open() resolves commands
+    // on PATH when the deployment step is executed and streams any error.
+    return $pathCommands[0] ?? null;
 };
 
 $phpCandidates = [
@@ -158,7 +167,7 @@ if (PHP_SAPI === 'cli') {
 $php = $findExecutable($phpCandidates);
 
 $composer = $findExecutable(['composer', '/usr/local/bin/composer', '/usr/bin/composer']);
-$npm = $findExecutable([
+$npmCandidates = [
     '/opt/cpanel/ea-nodejs24/bin/npm',
     '/opt/cpanel/ea-nodejs22/bin/npm',
     '/opt/cpanel/ea-nodejs20/bin/npm',
@@ -167,8 +176,18 @@ $npm = $findExecutable([
     '/opt/alt/alt-nodejs20/root/usr/bin/npm',
     '/usr/local/bin/npm',
     '/usr/bin/npm',
-    'npm',
-]);
+];
+
+foreach ([
+    '/opt/cpanel/ea-nodejs*/bin/npm',
+    '/opt/alt/alt-nodejs*/root/usr/bin/npm',
+] as $pattern) {
+    foreach (glob($pattern) ?: [] as $candidate) {
+        $npmCandidates[] = $candidate;
+    }
+}
+
+$npm = $findExecutable(array_unique($npmCandidates));
 
 if ($php === null || $npm === null) {
     if ($php === null) {
