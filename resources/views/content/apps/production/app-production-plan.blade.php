@@ -11,14 +11,24 @@
     .production-plan-table { min-width: 1500px; }
     .production-plan-table > :not(caption) > * > * { padding: .42rem .5rem; font-size: .8rem; white-space: nowrap; }
     .production-plan-table .editable-cell { cursor: pointer; }
-    .production-plan-table tr.production-plan-row--red > td { background-color: #fff6f7 !important; color: #8f1d2c; }
-    .production-plan-table tr.production-plan-row--yellow > td { background-color: #fff9e3 !important; color: #735c00; }
-    .production-plan-table tr.production-plan-row--orange > td { background-color: #fff5ed !important; color: #9a4210; }
-    .production-plan-table tr.production-plan-row--purple > td { background-color: #f0e6ff !important; color: #6540a0; }
-    .production-plan-table tr.production-plan-row--teal > td { background-color: #eef9f6 !important; color: #0e6b5b; }
-    .production-plan-table tr.production-plan-row--green > td { background-color: #eef8f0 !important; color: #1d6e3b; }
-    .production-plan-table tr.production-plan-row--grey > td { background-color: #f5f6f8 !important; color: #69707a; }
+    .production-plan-table tr.production-plan-row--red > td { background-color: #ffd6dc !important; color: #7a0014; }
+    .production-plan-table tr.production-plan-row--yellow > td { background-color: #fff0a3 !important; color: #5f4500; }
+    .production-plan-table tr.production-plan-row--orange > td { background-color: #ffd1aa !important; color: #792b00; }
+    .production-plan-table tr.production-plan-row--purple > td { background-color: #e8d4ff !important; color: #4f167f; }
+    .production-plan-table tr.production-plan-row--teal > td { background-color: #bcefe5 !important; color: #005c4c; }
+    .production-plan-table tr.production-plan-row--green > td { background-color: #c5f1d2 !important; color: #075e2a; }
+    .production-plan-table tr.production-plan-row--grey > td { background-color: #dde2e8 !important; color: #39424e; }
     .production-plan-table tr[class*='production-plan-row--'] > td:first-child { box-shadow: inset 4px 0 0 currentColor; }
+    .production-plan-table-overlay-host { position: relative; isolation: isolate; }
+    .production-plan-table-loading-overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; min-height: 220px; background: rgba(255, 255, 255, .74); backdrop-filter: blur(1px); z-index: 30; pointer-events: none; }
+    .production-plan-table-loading-overlay.is-visible { display: flex; }
+    .production-plan-table-loading-overlay-content { display: inline-flex; flex-direction: column; align-items: center; gap: .65rem; text-align: center; }
+    .production-plan-table-loading-spinner { width: 2rem; height: 2rem; border-width: .2em; color: #495b73; }
+    .production-plan-table-loading-message { font-size: .95rem; font-weight: 600; color: #5e5873; letter-spacing: .01em; }
+    #production-plan-export-modal button { cursor: pointer; }
+    .dark-layout .production-plan-table-loading-overlay, .semi-dark-layout .production-plan-table-loading-overlay { background: rgba(20, 28, 48, .68); }
+    .dark-layout .production-plan-table-loading-spinner, .semi-dark-layout .production-plan-table-loading-spinner { color: #d6dcec; }
+    .dark-layout .production-plan-table-loading-message, .semi-dark-layout .production-plan-table-loading-message { color: #f4f5fb; }
     .production-plan-wrapper .card-datatable.table-responsive { overflow-x: hidden; }
     .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child,
     .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:last-child { margin-right: 0; margin-left: 0; padding: 1rem; }
@@ -48,11 +58,33 @@
   </div>
   <div class="card production-plan-wrapper"><div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela"><thead><tr><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Datum</th><th>Narudžba</th><th>Br. poz.</th><th>Poč. termin</th><th>Kraj termin</th><th>Proizvod</th><th>Plan. kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Napomena</th></tr></thead></table></div></div>
 </section>
+
+<div class="modal fade" id="production-plan-export-modal" tabindex="-1" aria-labelledby="production-plan-export-modal-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-transparent">
+        <h5 class="modal-title" id="production-plan-export-modal-title"><i data-feather="download" class="me-50"></i>Izvoz plana proizvodnje</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
+      </div>
+      <div class="modal-body pt-0">
+        <div class="mb-2"><label class="form-label d-block mb-50">Obuhvat izvoza</label>
+          <div class="form-check mb-75"><input class="form-check-input" type="radio" name="production-plan-export-scope" id="production-plan-export-filtered" value="filtered" checked><label class="form-check-label" for="production-plan-export-filtered">Izvezi s trenutnim filterima</label></div>
+          <div id="production-plan-active-filters" class="border rounded p-75 bg-light mb-1 small"></div>
+          <div class="form-check"><input class="form-check-input" type="radio" name="production-plan-export-scope" id="production-plan-export-all" value="all"><label class="form-check-label" for="production-plan-export-all">Izvezi kompletan plan (sve godine)</label></div>
+        </div>
+        <hr>
+        <div class="form-check form-switch mb-75"><input class="form-check-input" type="checkbox" id="production-plan-export-colours" checked><label class="form-check-label" for="production-plan-export-colours">Uključi boje prioriteta</label></div>
+        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="production-plan-export-filter-summary" checked><label class="form-check-label" for="production-plan-export-filter-summary">Uključi sažetak filtera u dokument</label></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Odustani</button><button type="button" class="btn btn-primary" id="btn-potvrdi-izvoz-plana"><i data-feather="download" class="me-50"></i>Preuzmi Excel</button></div>
+    </div>
+  </div>
+</div>
 @endsection
 @section('vendor-script')
   <script src="{{ asset(mix('vendors/js/forms/select/select2.full.min.js')) }}"></script><script src="{{ asset('vendors/js/tables/datatable/jquery.dataTables.min.js') }}"></script><script src="{{ asset('vendors/js/tables/datatable/dataTables.bootstrap5.min.js') }}"></script><script src="{{ asset('vendors/js/pickers/flatpickr/flatpickr.min.js') }}"></script><script src="{{ asset('vendors/js/extensions/sweetalert2.all.min.js') }}"></script>
 @endsection
 @section('page-script')
   <script>window.planProizvodnjeConfig=@json($planConfig);flatpickr('.shared-filter-date',{dateFormat:'Y-m-d',altInput:true,altFormat:'d.m.Y',allowInput:true,disableMobile:true});</script>
-  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=111') }}"></script>
+  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=118') }}"></script>
 @endsection

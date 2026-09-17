@@ -17,6 +17,13 @@
       "slug": "app-invoice-preview"
     },
     {
+      "name": "Ponuda za nadogradnju",
+      "icon": "file-text",
+      "url": "ponuda/",
+      "slug": "ponuda",
+      "newTab": true
+    },
+    {
       "navheader": "Narudžbe",
       "slug": "app-orders-navheader"
     },

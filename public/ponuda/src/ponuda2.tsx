@@ -426,7 +426,7 @@ export default function App() {
                 "Automatsko praćenje i označavanje kašnjenja radnih naloga",
                 "Sistem operativnih notifikacija za bitne događaje",
                 "Automatsko zatvaranje RN nakon završetka proizvodnog ciklusa",
-                "Napredno izvještavanje o toku i efikasnosti proizvodnje"
+                "Izvještavanje o kapacitetima i efikasnosti proizvodnje"
               ]}
               delay={0.2}
             />
