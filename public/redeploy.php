@@ -33,7 +33,7 @@ while (ob_get_level() > 0) {
     }
 }
 ob_implicit_flush(true);
-echo "eNalog redeploy revision 2026-09-17.3 (no migrations)\n";
+echo "eNalog redeploy revision 2026-09-17.4 (frontend only)\n";
 flush();
 
 if (filter_var($_GET['diagnostics'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
@@ -61,23 +61,6 @@ if (function_exists('set_time_limit')) {
 }
 $baseDir = dirname(__DIR__);
 chdir($baseDir);
-putenv('COMPOSER_ALLOW_SUPERUSER=1');
-putenv('COMPOSER_NO_INTERACTION=1');
-
-// Match the cPanel-safe Composer setup used by TrackPal. Shared hosting
-// accounts often do not provide a writable global HOME or Composer cache.
-$composerHome = $baseDir . DIRECTORY_SEPARATOR . '.composer';
-$composerCache = $composerHome . DIRECTORY_SEPARATOR . 'cache';
-
-foreach ([$composerHome, $composerCache] as $directory) {
-    if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
-        throw new RuntimeException("Could not create Composer directory: {$directory}");
-    }
-}
-
-putenv('HOME=' . $composerHome);
-putenv('COMPOSER_HOME=' . $composerHome);
-putenv('COMPOSER_CACHE_DIR=' . $composerCache);
 
 $write = static function (string $message): void {
     echo $message;
@@ -182,24 +165,6 @@ $findExecutable = static function (array $candidates): ?string {
     return $pathCommands[0] ?? null;
 };
 
-$phpCandidates = [
-    // PHP_BINARY is lsphp when this endpoint is invoked through LiteSpeed;
-    // Composer and Artisan require a CLI PHP binary instead.
-    '/opt/cpanel/ea-php84/root/usr/bin/php',
-    '/opt/cpanel/ea-php83/root/usr/bin/php',
-    '/opt/cpanel/ea-php82/root/usr/bin/php',
-    '/usr/local/bin/php',
-    '/usr/bin/php',
-    'php',
-];
-
-if (PHP_SAPI === 'cli') {
-    array_unshift($phpCandidates, PHP_BINARY);
-}
-
-$php = $findExecutable($phpCandidates);
-
-$composer = $findExecutable(['composer', '/usr/local/bin/composer', '/usr/bin/composer']);
 $npmCandidates = [
     '/opt/cpanel/ea-nodejs24/bin/npm',
     '/opt/cpanel/ea-nodejs22/bin/npm',
@@ -222,13 +187,8 @@ foreach ([
 
 $npm = $findExecutable(array_unique($npmCandidates));
 
-if ($php === null || $npm === null) {
-    if ($php === null) {
-        $write("Could not find CLI PHP.\n");
-    }
-    if ($npm === null) {
-        $write("Could not find npm; enable Node.js 20 or newer in cPanel.\n");
-    }
+if ($npm === null) {
+    $write("Could not find npm; enable Node.js 20 or newer in cPanel.\n");
     exit(127);
 }
 
@@ -236,28 +196,7 @@ $nodeBinDir = dirname($npm);
 $currentPath = (string) (getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin');
 putenv('PATH=' . $nodeBinDir . PATH_SEPARATOR . $currentPath);
 
-$phpCommand = escapeshellarg($php);
-$composerPhar = $baseDir . DIRECTORY_SEPARATOR . 'composer.phar';
-
-if (is_file($composerPhar)) {
-    $composerCommand = $phpCommand . ' ' . escapeshellarg($composerPhar);
-} elseif ($composer !== null) {
-    $composerCommand = escapeshellarg($composer);
-} else {
-    $write("Composer was not found on PATH. Downloading local composer.phar...\n");
-    $composerContents = @file_get_contents('https://getcomposer.org/download/latest-stable/composer.phar');
-
-    if ($composerContents === false || @file_put_contents($composerPhar, $composerContents) === false) {
-        $write("Could not download Composer. Upload composer.phar to the Trendy project root, then run redeploy again.\n");
-        exit(127);
-    }
-
-    $write("Saved local Composer to {$composerPhar}.\n");
-    $composerCommand = $phpCommand . ' ' . escapeshellarg($composerPhar);
-}
-
 $npmCommand = escapeshellarg($npm);
-$frontendOnly = filter_var($_GET['frontend_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 $offersOnly = filter_var($_GET['offers_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
 $commands = [
@@ -274,14 +213,6 @@ if ($offersOnly) {
         ['label' => 'Building both offer pages', 'command' => $npmCommand . ' run build:ponuda'],
     ];
     $write("Offers-only redeploy: builds /ponuda/ and /ponuda-2/ together.\n");
-} elseif (!$frontendOnly) {
-    array_splice($commands, 1, 0, [
-        ['label' => 'Installing Composer dependencies', 'command' => $composerCommand . ' install --no-dev --no-interaction --prefer-dist --no-progress --optimize-autoloader --no-ansi'],
-    ]);
-    $commands[] = ['label' => 'Clearing and rebuilding Laravel caches', 'command' => $phpCommand . ' artisan optimize --no-ansi'];
-} else {
-    $commands[] = ['label' => 'Clearing compiled views', 'command' => $phpCommand . ' artisan view:clear --no-ansi'];
-    $write("Frontend-only redeploy: Composer installation, database migrations, and route-cache rebuilding are skipped.\n");
 }
 
 $startedAt = time();
