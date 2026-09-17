@@ -33,7 +33,7 @@ while (ob_get_level() > 0) {
     }
 }
 ob_implicit_flush(true);
-echo "eNalog redeploy revision 2026-09-17.4 (frontend only)\n";
+echo "eNalog redeploy revision 2026-09-17.5 (frontend only)\n";
 flush();
 
 if (filter_var($_GET['diagnostics'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
@@ -229,6 +229,15 @@ foreach ($commands as $step) {
         $write("{$step['label']} failed with exit code {$exitCode}.\n");
         exit($exitCode);
     }
+}
+
+if (!$offersOnly) {
+    $planScript = $baseDir . '/public/js/scripts/pages/app-production-plan.js';
+    if (!is_file($planScript) || strpos((string) file_get_contents($planScript), 'btn-potvrdi-izvoz-plana') === false) {
+        $write("Deployment incomplete: production-plan JavaScript with Excel export controls was not generated.\n");
+        exit(1);
+    }
+    $write("Production-plan JavaScript generated, including Excel export controls.\n");
 }
 
 foreach (['ponuda', 'ponuda-2'] as $offerFolder) {

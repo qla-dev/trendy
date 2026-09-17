@@ -84,6 +84,53 @@ $(function () {
     createdRow: function (row, data) { applyRowColour(row, data); }
   });
   tableElement.on('xhr.dt', function () { requestErrorShown = false; });
+  var exportModalElement = document.getElementById('production-plan-export-modal');
+  function toggleExportModal(show) {
+    if (window.bootstrap && window.bootstrap.Modal) {
+      var modal = window.bootstrap.Modal.getOrCreateInstance(exportModalElement);
+      modal[show ? 'show' : 'hide']();
+    } else {
+      $(exportModalElement).modal(show ? 'show' : 'hide');
+    }
+  }
+  function updateExportScope() {
+    var filtered = $('#production-plan-export-filtered').is(':checked');
+    var summary = [];
+    $('.f').each(function () {
+      var value = $(this).val();
+      if (value == null || value === '') return;
+      var label = $(this).closest('[class*="col-"]').find('label').first().text().trim() || $(this).data('k');
+      if ($(this).is('select')) value = $(this).find('option:selected').text();
+      summary.push(escapeHtml(label) + ': ' + escapeHtml(value));
+    });
+    $('#production-plan-active-filters').toggle(filtered).html(summary.length ? summary.join('<br>') : 'Nema aktivnih filtera.');
+  }
+  $('#btn-izvoz-plana').on('click', function () {
+    updateExportScope();
+    toggleExportModal(true);
+  });
+  $('input[name="production-plan-export-scope"]').on('change', updateExportScope);
+  $('#btn-potvrdi-izvoz-plana').on('click', function () {
+    if (!config.exportUrl) {
+      showError('Izvoz nije dostupan', 'Adresa za izvoz nije podešena.');
+      return;
+    }
+    var order = table.order()[0] || [7, 'desc'];
+    var parameters = {
+      scope: $('input[name="production-plan-export-scope"]:checked').val() || 'filtered',
+      filter: filters(),
+      sort: keys[order[0]],
+      dir: order[1],
+      include_colours: $('#production-plan-export-colours').is(':checked') ? 1 : 0,
+      include_filter_summary: $('#production-plan-export-filter-summary').is(':checked') ? 1 : 0
+    };
+    var link = document.createElement('a');
+    link.href = config.exportUrl + (config.exportUrl.indexOf('?') === -1 ? '?' : '&') + $.param(parameters);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    toggleExportModal(false);
+  });
   tableElement.on('error.dt', function (event, settings, techNote) {
     if (techNote === 4) showError('Prikaz podataka nije uspio', 'Primljeni podaci nisu u očekivanom formatu. Obavijestite administratora ako se problem ponovi.');
     else showRequestError();

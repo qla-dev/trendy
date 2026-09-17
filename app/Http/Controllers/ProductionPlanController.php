@@ -308,14 +308,15 @@ class ProductionPlanController extends Controller
             $xml .= '<Row><Cell><Data ss:Type="String">Filteri: ' . $escape($summary) . '</Data></Cell></Row><Row></Row>';
         }
 
-        $headers = ['Napredak', 'RN', 'Naručitelj', 'Prioritet', 'Datum', 'Narudžba', 'Br. poz.', 'Poč. termin', 'Kraj termin', 'Proizvod', 'Plan. kol.', 'Izr. kol.', 'Naziv', 'Napomena', 'Status RN'];
+        $headers = ['R. br.', 'Napredak', 'RN', 'Naručitelj', 'Prioritet', 'Datum', 'Narudžba', 'Br. poz.', 'Poč. termin', 'Kraj termin', 'Proizvod', 'Plan. kol.', 'Izr. kol.', 'Naziv', 'Napomena', 'Status RN'];
         $xml .= '<Row>' . implode('', array_map(fn ($header) => $cell($header, 'Header'), $headers)) . '</Row>';
+        $rowNumber = 1;
         foreach ($rows as $row) {
             $style = $includeColours
                 ? ($row->is_previous_week_open_order ?? false ? 'red' : (string) $row->priority_row_color)
                 : '';
             $values = [$row->progress . '%', $row->rn, $row->narucitelj, $row->prioritet, $row->datum, $row->narudzba, $row->pozicija, $row->pocetak, $row->kraj, $row->proizvod, $row->plan_kol, $row->izr_kol, $row->naziv, $row->napomena, $row->status_code];
-            $xml .= '<Row>' . implode('', array_map(fn ($value) => $cell($value, $style), $values)) . '</Row>';
+            $xml .= '<Row><Cell' . ($style ? ' ss:StyleID="' . $style . '"' : '') . '><Data ss:Type="Number">' . $rowNumber++ . '</Data></Cell>' . implode('', array_map(fn ($value) => $cell($value, $style), $values)) . '</Row>';
         }
 
         return $xml . '</Table></Worksheet></Workbook>';

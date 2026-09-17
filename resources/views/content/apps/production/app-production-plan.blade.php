@@ -48,7 +48,7 @@
 @endsection
 @section('content')
 <section id="rn-plan">
-  <div class="content-header row"><div class="col-12 mb-2"><h2 class="mb-0">Plan proizvodnje — Radni nalozi</h2></div></div>
+  <div class="content-header row"><div class="col-12 mb-2 d-flex justify-content-between align-items-center flex-wrap gap-1"><h2 class="mb-0">Plan proizvodnje — Radni nalozi</h2><button type="button" class="btn btn-outline-success" id="btn-izvoz-plana"><i data-feather="download" class="me-50"></i>Izvoz u Excel</button></div></div>
   <div class="card mb-2"><div class="card-header d-flex justify-content-between align-items-center"><h4 class="mb-0">Filter plana proizvodnje</h4><div class="d-flex align-items-center flex-wrap gap-2"><button class="btn btn-outline-primary btn-sm" id="btn-prikazi-filtere"><i data-feather="filter" class="me-50"></i>Prikaži filtere</button><button class="btn btn-outline-danger btn-sm" id="btn-obrisi-filter"><i data-feather="trash-2" class="me-50"></i>Obriši filter</button></div></div>
     <div class="card-body d-none" id="tijelo-filtera"><div class="row g-2">
       <div class="col-md-3"><label class="form-label" for="filter-prioritet">Prioritet</label><select class="form-select f" id="filter-prioritet" data-k="prioritet"><option value="">Svi prioriteti</option>@foreach (($planConfig['priorityOptions'] ?? []) as $priorityOption)<option value="{{ $priorityOption['code'] }}">{{ $priorityOption['label'] }}</option>@endforeach</select></div>
@@ -86,5 +86,5 @@
 @endsection
 @section('page-script')
   <script>window.planProizvodnjeConfig=@json($planConfig);flatpickr('.shared-filter-date',{dateFormat:'Y-m-d',altInput:true,altFormat:'d.m.Y',allowInput:true,disableMobile:true});</script>
-  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=119') }}"></script>
+  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=120') }}"></script>
 @endsection
