@@ -5,14 +5,18 @@ import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
+  const secondOffer = mode === 'ponuda-2';
+  const offerRoot = secondOffer ? path.resolve(__dirname, 'ponuda-2') : __dirname;
   return {
+    root: offerRoot,
     base: './',
     plugins: [react(), tailwindcss()],
     build: {
+      outDir: path.resolve(__dirname, secondOffer ? '../../public/ponuda-2' : '../../public/ponuda'),
+      emptyOutDir: true,
       rollupOptions: {
         input: {
-          ponuda: path.resolve(__dirname, 'index.html'),
-          ponuda2: path.resolve(__dirname, 'index2.html'),
+          index: path.resolve(offerRoot, 'index.html'),
         },
       },
     },

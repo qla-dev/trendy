@@ -8,7 +8,8 @@
         "watch-poll": "mix watch -- --watch-options-poll=1000",
         "hot": "mix watch --hot",
         "prod": "npm run production",
-        "production": "mix --production"
+        "production": "mix --production && npm run build:ponuda",
+        "build:ponuda": "npm --prefix resources/ponuda run build"
     },
     "dependencies": {
         "@lottiefiles/dotlottie-wc": "^0.9.16",
