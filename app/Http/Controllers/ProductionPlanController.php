@@ -147,9 +147,9 @@ class ProductionPlanController extends Controller
             foreach ($rows as $row) {
                 $row->is_previous_week_open_order = isset($weekRange)
                     && $this->isPreviousWeekOpenOrder($row, $weekRange['previous_start'], $weekRange['previous_end']);
-                if ($row->is_previous_week_open_order) {
-                    $row->plan_row_color = 'red';
-                }
+                $row->plan_row_color = $row->is_previous_week_open_order
+                    ? 'red'
+                    : $row->priority_row_color;
                 $row->progress = ($totalOperations[$row->id] ?? 0)
                     ? min(100, round(($finishedOperations[$row->id] ?? 0) / $totalOperations[$row->id] * 100))
                     : 0;
