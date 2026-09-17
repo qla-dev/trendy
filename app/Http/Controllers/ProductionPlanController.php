@@ -63,6 +63,28 @@ class ProductionPlanController extends Controller
                 }
             }
 
+            $search = trim((string) $request->input('search.value', ''));
+            if ($search !== '') {
+                $like = '%' . $search . '%';
+                $query->where(function ($searchQuery) use ($like) {
+                    $searchQuery->where('wo.acKeyView', 'like', $like)
+                        ->orWhere('wo.acConsignee', 'like', $like)
+                        ->orWhere('wo.acReceiver', 'like', $like)
+                        ->orWhere('priority.acName', 'like', $like)
+                        ->orWhere('wo.acLnkKeyView', 'like', $like)
+                        ->orWhere('wo.acIdent', 'like', $like)
+                        ->orWhere('wo.acName', 'like', $like)
+                        ->orWhere('wo.acNote', 'like', $like)
+                        ->orWhere('wo.acStatusMF', 'like', $like)
+                        ->orWhereRaw('CONVERT(char(10), wo.adDate, 104) LIKE ?', [$like])
+                        ->orWhereRaw('CONVERT(char(10), wo.adSchedStartTime, 104) LIKE ?', [$like])
+                        ->orWhereRaw('CONVERT(char(10), wo.adSchedEndTime, 104) LIKE ?', [$like])
+                        ->orWhereRaw('CAST(wo.anLnkNo AS nvarchar(50)) LIKE ?', [$like])
+                        ->orWhereRaw('CAST(wo.anPlanQty AS nvarchar(50)) LIKE ?', [$like])
+                        ->orWhereRaw('CAST(wo.anProducedQty AS nvarchar(50)) LIKE ?', [$like]);
+                });
+            }
+
             $priority = trim((string) ($filters['prioritet'] ?? ''));
             if ($priority !== '' && ctype_digit($priority)) {
                 $query->where('wo.anPriority', (int) $priority);
@@ -81,12 +103,10 @@ class ProductionPlanController extends Controller
                 $year = now()->year;
             }
 
-            $query->whereYear('wo.adSchedStartTime', $year);
-
             if ($week) {
-                $weekStart = Carbon::now()->setISODate($year, $week)->startOfWeek();
-                $query->whereDate('wo.adSchedStartTime', '>=', $weekStart)
-                    ->whereDate('wo.adSchedStartTime', '<=', $weekStart->copy()->endOfWeek());
+                $weekRange = $this->applyWeekFilter($query, $year, $week);
+            } else {
+                $query->whereYear('wo.adSchedStartTime', $year);
             }
 
             $total = (clone $query)->count();
@@ -97,8 +117,15 @@ class ProductionPlanController extends Controller
                 'plan_kol' => 'wo.anPlanQty', 'izr_kol' => 'wo.anProducedQty', 'naziv' => 'wo.acName',
                 'napomena' => 'wo.acNote',
             ];
-            $sort = $sorts[$request->input('sort', 'datum')] ?? 'wo.adDate';
+            $sort = $sorts[$request->input('sort', 'pocetak')] ?? 'wo.adSchedStartTime';
             $direction = $request->input('dir') === 'asc' ? 'asc' : 'desc';
+            if (isset($weekRange) && $sort === 'wo.adSchedStartTime' && $direction === 'desc') {
+                $query->orderByRaw(
+                    "CASE WHEN CAST(wo.adSchedStartTime AS date) >= ? AND CAST(wo.adSchedStartTime AS date) <= ? AND UPPER(LTRIM(RTRIM(wo.acStatusMF))) NOT IN ('F', 'I', 'Z') THEN 0 ELSE 1 END",
+                    [$weekRange['previous_start']->toDateString(), $weekRange['previous_end']->toDateString()]
+                );
+            }
+
             $rows = $query->orderBy($sort, $direction)
                 ->offset(max(0, (int) $request->input('start', 0)))
                 ->limit(min(100, max(10, (int) $request->input('length', 25))))
@@ -118,6 +145,11 @@ class ProductionPlanController extends Controller
                 ->pluck('n', 'acKey');
 
             foreach ($rows as $row) {
+                $row->is_previous_week_open_order = isset($weekRange)
+                    && $this->isPreviousWeekOpenOrder($row, $weekRange['previous_start'], $weekRange['previous_end']);
+                if ($row->is_previous_week_open_order) {
+                    $row->plan_row_color = 'red';
+                }
                 $row->progress = ($totalOperations[$row->id] ?? 0)
                     ? min(100, round(($finishedOperations[$row->id] ?? 0) / $totalOperations[$row->id] * 100))
                     : 0;
@@ -134,6 +166,45 @@ class ProductionPlanController extends Controller
 
             return response()->json(['message' => 'Greška pri učitavanju plana proizvodnje.'], 500);
         }
+    }
+
+    /**
+     * Include the selected ISO week and unfinished orders from the previous ISO week.
+     *
+     * @return array{previous_start: Carbon, previous_end: Carbon}
+     */
+    private function applyWeekFilter($query, int $year, int $week): array
+    {
+        $weekStart = Carbon::now()->setISODate($year, $week)->startOfWeek();
+        $weekEnd = $weekStart->copy()->endOfWeek();
+        $previousWeekStart = $weekStart->copy()->subWeek()->startOfWeek();
+        $previousWeekEnd = $previousWeekStart->copy()->endOfWeek();
+        $status = DB::raw("UPPER(LTRIM(RTRIM(wo.acStatusMF)))");
+
+        $query->where(function ($scheduleQuery) use ($weekStart, $weekEnd, $previousWeekStart, $previousWeekEnd, $status) {
+            $scheduleQuery->where(function ($currentWeekQuery) use ($weekStart, $weekEnd) {
+                $currentWeekQuery->whereDate('wo.adSchedStartTime', '>=', $weekStart)
+                    ->whereDate('wo.adSchedStartTime', '<=', $weekEnd);
+            })->orWhere(function ($previousWeekQuery) use ($previousWeekStart, $previousWeekEnd, $status) {
+                $previousWeekQuery->whereDate('wo.adSchedStartTime', '>=', $previousWeekStart)
+                    ->whereDate('wo.adSchedStartTime', '<=', $previousWeekEnd)
+                    ->whereNotIn($status, ['F', 'I', 'Z']);
+            });
+        });
+
+        return ['previous_start' => $previousWeekStart, 'previous_end' => $previousWeekEnd];
+    }
+
+    private function isPreviousWeekOpenOrder($row, Carbon $previousWeekStart, Carbon $previousWeekEnd): bool
+    {
+        if (in_array(strtoupper(trim((string) ($row->status_code ?? ''))), ['F', 'I', 'Z'], true) || empty($row->pocetak)) {
+            return false;
+        }
+
+        $scheduledStart = Carbon::parse($row->pocetak);
+
+        return $scheduledStart->greaterThanOrEqualTo($previousWeekStart)
+            && $scheduledStart->lessThanOrEqualTo($previousWeekEnd);
     }
 
     public function export(Request $request)
@@ -175,15 +246,15 @@ class ProductionPlanController extends Controller
                 }
 
                 $year = (int) ($filters['year'] ?? now()->year);
-                if ($year > 0) {
-                    $query->whereYear('wo.adSchedStartTime', $year);
+                if ($year <= 0) {
+                    $year = now()->year;
                 }
 
                 $week = (int) ($filters['kw'] ?? 0);
                 if ($week) {
-                    $weekStart = Carbon::now()->setISODate($year, $week)->startOfWeek();
-                    $query->whereDate('wo.adSchedStartTime', '>=', $weekStart)
-                        ->whereDate('wo.adSchedStartTime', '<=', $weekStart->copy()->endOfWeek());
+                    $weekRange = $this->applyWeekFilter($query, $year, $week);
+                } else {
+                    $query->whereYear('wo.adSchedStartTime', $year);
                 }
             }
 
@@ -204,6 +275,8 @@ class ProductionPlanController extends Controller
                 );
             }
             foreach ($rows as $row) {
+                $row->is_previous_week_open_order = isset($weekRange)
+                    && $this->isPreviousWeekOpenOrder($row, $weekRange['previous_start'], $weekRange['previous_end']);
                 $row->progress = ($totalOperations[$row->id] ?? 0) ? min(100, round(($finishedOperations[$row->id] ?? 0) / $totalOperations[$row->id] * 100)) : 0;
             }
 
@@ -238,7 +311,9 @@ class ProductionPlanController extends Controller
         $headers = ['Napredak', 'RN', 'Naručitelj', 'Prioritet', 'Datum', 'Narudžba', 'Br. poz.', 'Poč. termin', 'Kraj termin', 'Proizvod', 'Plan. kol.', 'Izr. kol.', 'Naziv', 'Napomena', 'Status RN'];
         $xml .= '<Row>' . implode('', array_map(fn ($header) => $cell($header, 'Header'), $headers)) . '</Row>';
         foreach ($rows as $row) {
-            $style = $includeColours ? (string) $row->priority_row_color : '';
+            $style = $includeColours
+                ? ($row->is_previous_week_open_order ?? false ? 'red' : (string) $row->priority_row_color)
+                : '';
             $values = [$row->progress . '%', $row->rn, $row->narucitelj, $row->prioritet, $row->datum, $row->narudzba, $row->pozicija, $row->pocetak, $row->kraj, $row->proizvod, $row->plan_kol, $row->izr_kol, $row->naziv, $row->napomena, $row->status_code];
             $xml .= '<Row>' . implode('', array_map(fn ($value) => $cell($value, $style), $values)) . '</Row>';
         }

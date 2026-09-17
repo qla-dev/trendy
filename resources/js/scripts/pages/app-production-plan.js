@@ -47,7 +47,8 @@ $(function () {
   function closeEditor() { $('.plan-inline-editor').remove(); }
   function rowColour(data) {
     var mode = rowColourFilter.val() || 'all';
-    var colour = String((data && data.plan_row_color) || '').toLowerCase();
+    if (data && data.is_previous_week_open_order) return mode === 'none' ? '' : 'red';
+    var colour = String((data && data.priority_row_color) || '').toLowerCase();
     if (mode === 'none') return '';
     if (mode === 'basic' && ['green', 'yellow', 'teal', 'grey'].indexOf(colour) === -1) return '';
     return colour;
@@ -63,7 +64,7 @@ $(function () {
   // DataTables' technical alerts are replaced with friendly Bosnian messages.
   $.fn.dataTable.ext.errMode = 'none';
   var table = tableElement.DataTable({
-    serverSide: true, processing: true, scrollX: true, pageLength: 25, order: [[4, 'desc']],
+    serverSide: true, processing: true, scrollX: true, pageLength: 25, order: [[7, 'desc']],
     ajax: {
       url: config.dataUrl,
       data: function (data) { data.filter = filters(); data.sort = keys[data.order[0] ? data.order[0].column : 4]; data.dir = data.order[0] ? data.order[0].dir : 'desc'; },
