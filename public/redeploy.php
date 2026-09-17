@@ -33,7 +33,7 @@ while (ob_get_level() > 0) {
     }
 }
 ob_implicit_flush(true);
-echo "eNalog redeploy revision 2026-09-17.2\n";
+echo "eNalog redeploy revision 2026-09-17.3 (no migrations)\n";
 flush();
 
 if (filter_var($_GET['diagnostics'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
@@ -277,7 +277,6 @@ if ($offersOnly) {
 } elseif (!$frontendOnly) {
     array_splice($commands, 1, 0, [
         ['label' => 'Installing Composer dependencies', 'command' => $composerCommand . ' install --no-dev --no-interaction --prefer-dist --no-progress --optimize-autoloader --no-ansi'],
-        ['label' => 'Running database migrations', 'command' => $phpCommand . ' artisan migrate --force --no-ansi'],
     ]);
     $commands[] = ['label' => 'Clearing and rebuilding Laravel caches', 'command' => $phpCommand . ' artisan optimize --no-ansi'];
 } else {
