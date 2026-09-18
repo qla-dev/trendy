@@ -233,8 +233,10 @@ foreach ($commands as $step) {
 if (!$offersOnly) {
     $planScript = $baseDir . '/public/js/scripts/pages/app-production-plan.js';
     $planScriptContents = is_file($planScript) ? (string) file_get_contents($planScript) : '';
-    if (strpos($planScriptContents, 'btn-potvrdi-izvoz-plana') === false || strpos($planScriptContents, 'production-plan-loading-overlay') === false) {
-        $write("Deployment incomplete: production-plan JavaScript with Excel export and loading controls was not generated.\n");
+    if (strpos($planScriptContents, 'btn-potvrdi-izvoz-plana') === false
+        || strpos($planScriptContents, 'production-plan-loading-overlay') === false
+        || strpos($planScriptContents, 'xhr.dt error.dt draw.dt init.dt') === false) {
+        $write("Deployment incomplete: production-plan JavaScript with the current loading controls was not generated.\n");
         exit(1);
     }
     $write("Production-plan JavaScript generated, including Excel export and loading controls.\n");

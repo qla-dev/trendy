@@ -97,5 +97,5 @@
 @endsection
 @section('page-script')
   <script>window.planProizvodnjeConfig=@json($planConfig);flatpickr('.shared-filter-date',{dateFormat:'Y-m-d',altInput:true,altFormat:'d.m.Y',allowInput:true,disableMobile:true});</script>
-  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=123') }}"></script>
+  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=124') }}"></script>
 @endsection
