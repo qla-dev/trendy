@@ -22,10 +22,16 @@
     .production-plan-table-overlay-host { position: relative; isolation: isolate; }
     .production-plan-table-loading-overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; min-height: 220px; background: rgba(255, 255, 255, .74); backdrop-filter: blur(1px); z-index: 30; pointer-events: none; }
     .production-plan-table-loading-overlay.is-visible { display: flex; }
+    .production-plan-wrapper .dataTables_processing { display: none !important; }
     .production-plan-table-loading-overlay-content { display: inline-flex; flex-direction: column; align-items: center; gap: .65rem; text-align: center; }
     .production-plan-table-loading-spinner { width: 2rem; height: 2rem; border-width: .2em; color: #495b73; }
     .production-plan-table-loading-message { font-size: .95rem; font-weight: 600; color: #5e5873; letter-spacing: .01em; }
-    #production-plan-export-modal button { cursor: pointer; }
+    #btn-izvoz-plana { color: #5e5873; border-color: currentColor; cursor: pointer; }
+    #btn-izvoz-plana:hover, #btn-izvoz-plana:focus-visible { background-color: rgba(94, 88, 115, .12); }
+    .dark-layout #btn-izvoz-plana { color: #d0d2d6; }
+    #production-plan-export-modal button,
+    #production-plan-export-modal .form-check-input:not(:disabled),
+    #production-plan-export-modal .form-check-input:not(:disabled) + .form-check-label { cursor: pointer; }
     .dark-layout .production-plan-table-loading-overlay, .semi-dark-layout .production-plan-table-loading-overlay { background: rgba(20, 28, 48, .68); }
     .dark-layout .production-plan-table-loading-spinner, .semi-dark-layout .production-plan-table-loading-spinner { color: #d6dcec; }
     .dark-layout .production-plan-table-loading-message, .semi-dark-layout .production-plan-table-loading-message { color: #f4f5fb; }
@@ -48,7 +54,7 @@
 @endsection
 @section('content')
 <section id="rn-plan">
-  <div class="content-header row"><div class="col-12 mb-2 d-flex justify-content-between align-items-center flex-wrap gap-1"><h2 class="mb-0">Plan proizvodnje — Radni nalozi</h2><button type="button" class="btn btn-outline-success" id="btn-izvoz-plana"><i data-feather="download" class="me-50"></i>Izvoz u Excel</button></div></div>
+  <div class="content-header row"><div class="col-12 mb-2 d-flex justify-content-between align-items-center flex-wrap gap-1"><h2 class="mb-0">Plan proizvodnje — Radni nalozi</h2><button type="button" class="btn" id="btn-izvoz-plana"><i data-feather="download" class="me-50"></i>Izvoz u Excel</button></div></div>
   <div class="card mb-2"><div class="card-header d-flex justify-content-between align-items-center"><h4 class="mb-0">Filter plana proizvodnje</h4><div class="d-flex align-items-center flex-wrap gap-2"><button class="btn btn-outline-primary btn-sm" id="btn-prikazi-filtere"><i data-feather="filter" class="me-50"></i>Prikaži filtere</button><button class="btn btn-outline-danger btn-sm" id="btn-obrisi-filter"><i data-feather="trash-2" class="me-50"></i>Obriši filter</button></div></div>
     <div class="card-body d-none" id="tijelo-filtera"><div class="row g-2">
       <div class="col-md-3"><label class="form-label" for="filter-prioritet">Prioritet</label><select class="form-select f" id="filter-prioritet" data-k="prioritet"><option value="">Svi prioriteti</option>@foreach (($planConfig['priorityOptions'] ?? []) as $priorityOption)<option value="{{ $priorityOption['code'] }}">{{ $priorityOption['label'] }}</option>@endforeach</select></div>
@@ -56,7 +62,12 @@
       <div class="col-md-3"><x-filters.text label="RN" class="f" data-k="rn"/></div><div class="col-md-3"><x-filters.text label="Naručitelj" class="f" data-k="narucitelj"/></div><div class="col-md-3"><x-filters.text label="Proizvod" class="f" data-k="proizvod"/></div><div class="col-md-3"><label class="form-label">Status RN</label><input class="form-control f" data-k="status_rn"></div><div class="col-md-3"><x-filters.text label="Narudžba" class="f" data-k="narudzba"/></div><div class="col-md-3"><label class="form-label">Godina</label><input class="form-control f" data-k="year" value="{{ now()->year }}"></div><div class="col-md-3"><label class="form-label">Kalendarska sedmica</label><input class="form-control f" data-k="kw" placeholder="1–53"></div><div class="col-md-3"><x-filters.date label="Datum od" class="f" data-k="datum_od"/></div><div class="col-md-3"><x-filters.date label="Datum do" class="f" data-k="datum_do"/></div><div class="col-md-3 d-flex align-items-end"><button id="filter" class="btn btn-primary w-100"><i data-feather="filter" class="me-50"></i>Filter</button></div>
     </div></div>
   </div>
-  <div class="card production-plan-wrapper"><div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela"><thead><tr><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Datum</th><th>Narudžba</th><th>Br. poz.</th><th>Poč. termin</th><th>Kraj termin</th><th>Proizvod</th><th>Plan. kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Napomena</th></tr></thead></table></div></div>
+  <div class="card production-plan-wrapper production-plan-table-overlay-host">
+    <div id="production-plan-loading-overlay" class="production-plan-table-loading-overlay is-visible" role="status" aria-live="polite" aria-hidden="false">
+      <div class="production-plan-table-loading-overlay-content"><span class="spinner-border production-plan-table-loading-spinner" aria-hidden="true"></span><span class="production-plan-table-loading-message">Učitavanje plana proizvodnje...</span></div>
+    </div>
+    <div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela" aria-busy="true"><thead><tr><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Datum</th><th>Narudžba</th><th>Br. poz.</th><th>Poč. termin</th><th>Kraj termin</th><th>Proizvod</th><th>Plan. kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Nositelj troška</th><th>Napomena</th></tr></thead></table></div>
+  </div>
 </section>
 
 <div class="modal fade" id="production-plan-export-modal" tabindex="-1" aria-labelledby="production-plan-export-modal-title" aria-hidden="true">
@@ -86,5 +97,5 @@
 @endsection
 @section('page-script')
   <script>window.planProizvodnjeConfig=@json($planConfig);flatpickr('.shared-filter-date',{dateFormat:'Y-m-d',altInput:true,altFormat:'d.m.Y',allowInput:true,disableMobile:true});</script>
-  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=120') }}"></script>
+  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=123') }}"></script>
 @endsection

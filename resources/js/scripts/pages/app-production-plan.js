@@ -3,7 +3,7 @@ $(function () {
   var config = window.planProizvodnjeConfig || {};
   var csrf = $('meta[name="csrf-token"]').attr('content');
   var tableElement = $('#plan-proizvodnje-tabela');
-  var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'datum', 'narudzba', 'pozicija', 'pocetak', 'kraj', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'napomena'];
+  var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'datum', 'narudzba', 'pozicija', 'pocetak', 'kraj', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'nositelj_troska', 'napomena'];
   var requestErrorShown = false;
   var priorityFilter = $('#filter-prioritet');
   var rowColourFilter = $('#plan-boja-redova');
@@ -42,9 +42,48 @@ $(function () {
   function escapeHtml(value) { return $('<div>').text(value == null ? '' : value).html(); }
   function formatNumber(value) { var number = Number(value); return Number.isFinite(number) ? number.toLocaleString('bs-BA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; }
   function formatDate(value) { var match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return match ? match[3] + '.' + match[2] + '.' + match[1] : ''; }
-  function filters() { var values = {}; $('.f').each(function () { values[$(this).data('k')] = $(this).val(); }); return values; }
+  var weekDatesAuto = false;
+  var weekInput = $('.f[data-k="kw"]');
+  var yearInput = $('.f[data-k="year"]');
+  var dateInputs = $('.f[data-k="datum_od"], .f[data-k="datum_do"]');
+  function isoWeekDates(year, week) {
+    var start = new Date(Date.UTC(year, 0, 4));
+    start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7) + (week - 1) * 7);
+    var thursday = new Date(start);
+    thursday.setUTCDate(thursday.getUTCDate() + 3);
+    if (thursday.getUTCFullYear() !== year) return null;
+    var end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 6);
+    return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
+  }
+  function syncWeekDates() {
+    var rawWeek = String(weekInput.val() || '').trim();
+    var year = Number(yearInput.val()) || new Date().getFullYear();
+    var dates = rawWeek === '' ? ['', ''] : (/^\d{1,2}$/.test(rawWeek) && Number(rawWeek) >= 1 && Number(rawWeek) <= 53 ? isoWeekDates(year, Number(rawWeek)) : null);
+    if (!dates) return;
+    dateInputs.each(function () {
+      var value = dates[$(this).data('k') === 'datum_od' ? 0 : 1];
+      if (this._flatpickr) {
+        if (value) this._flatpickr.setDate(value, false, 'Y-m-d');
+        else this._flatpickr.clear(false);
+      } else $(this).val(value);
+    });
+    weekDatesAuto = rawWeek !== '';
+  }
+  weekInput.on('input change', syncWeekDates);
+  yearInput.on('input change', function () { if (weekInput.val()) syncWeekDates(); });
+  dateInputs.on('input change', function () { weekDatesAuto = false; }).each(function () {
+    if (this._flatpickr) {
+      this._flatpickr.config.onChange.push(function () { weekDatesAuto = false; });
+      $(this._flatpickr.altInput).on('input change', function () { weekDatesAuto = false; });
+    }
+  });
+  function filters() { var values = {}; $('.f').each(function () { values[$(this).data('k')] = $(this).val(); }); values.week_dates_auto = weekDatesAuto ? 1 : 0; return values; }
   function editable(key) { return config.canEdit && key !== 'rn' && key !== 'progress' && key !== 'prioritet'; }
-  function closeEditor() { $('.plan-inline-editor').remove(); }
+  function closeEditor() {
+    $('.plan-inline-editor .select2-hidden-accessible').each(function () { $(this).select2('destroy'); });
+    $('.plan-inline-editor').remove();
+  }
   function rowColour(data) {
     var mode = rowColourFilter.val() || 'all';
     if (data && data.is_previous_week_open_order) return mode === 'none' ? '' : 'red';
@@ -63,12 +102,21 @@ $(function () {
 
   // DataTables' technical alerts are replaced with friendly Bosnian messages.
   $.fn.dataTable.ext.errMode = 'none';
+  var loadingOverlay = $('#production-plan-loading-overlay');
+  function setPlanLoading(loading) {
+    loadingOverlay.toggleClass('is-visible', loading).attr('aria-hidden', String(!loading));
+    tableElement.attr('aria-busy', String(loading));
+  }
+  // Register before initialization so the first request shows the overlay too.
+  tableElement.on('preXhr.dt', function () { setPlanLoading(true); });
+  tableElement.on('processing.dt', function (event, settings, processing) { setPlanLoading(processing); });
+  tableElement.on('xhr.dt error.dt', function () { setPlanLoading(false); });
   var table = tableElement.DataTable({
     serverSide: true, processing: true, scrollX: true, pageLength: 25, order: [[7, 'desc']],
     ajax: {
       url: config.dataUrl,
       data: function (data) { data.filter = filters(); data.sort = keys[data.order[0] ? data.order[0].column : 4]; data.dir = data.order[0] ? data.order[0].dir : 'desc'; },
-      error: function (xhr) { showRequestError(xhr); }
+      error: function (xhr) { setPlanLoading(false); showRequestError(xhr); }
     },
     language: { processing: 'Učitavanje...', search: 'Pretraga:', lengthMenu: 'Prikaži _MENU_ redova', info: 'Prikaz _START_ do _END_ od _TOTAL_ radnih naloga', infoEmpty: 'Nema podataka', zeroRecords: 'Nema pronađenih radnih naloga', paginate: { next: 'Sljedeća', previous: 'Prethodna' } },
     columns: keys.map(function (key) {
@@ -150,10 +198,28 @@ $(function () {
     var width = Math.min(300, window.innerWidth - 16);
     editor.css({ position: 'fixed', zIndex: 2000, left: Math.min(rect.left, window.innerWidth - width - 8), top: rect.bottom + 4, width: width });
     editor.find('input,textarea').focus();
+    if (key === 'nositelj_troska') {
+      var select = $('<select class="form-select"><option value="">Bez nositelja troška</option></select>');
+      if (row[key]) select.append(new Option(row[key], row[key], true, true));
+      editor.find('input').replaceWith(select);
+      var save = editor.find('.save').prop('disabled', true);
+      $.getJSON(String(config.costDriverOptionsUrl).replace('__RN__', encodeURIComponent(row.id)))
+        .done(function (response) {
+          if (!editor.closest('body').length) return;
+          (response.data.options || []).forEach(function (option) {
+            if (option.code === row[key]) return;
+            select.append(new Option(option.label + (option.description ? ' — ' + option.description : ''), option.code));
+          });
+          select.select2({ dropdownParent: editor, width: '100%', placeholder: 'Pretraži nositelj troška', minimumResultsForSearch: 0 });
+          save.prop('disabled', false);
+          select.select2('open');
+        })
+        .fail(function () { showError('Prijedlozi nisu dostupni', 'Učitavanje nositelja troška nije uspjelo. Pokušajte ponovo.'); });
+    }
   });
   $('body').on('click', '.plan-inline-editor .cancel', closeEditor).on('click', '.plan-inline-editor .save', function () {
     var editor = $(this).closest('.plan-inline-editor');
-    $.post(String(config.fieldUrl).replace('__RN__', editor.data('id')), { _token: csrf, field: editor.data('field'), value: editor.find('input,textarea').val() })
+    $.post(String(config.fieldUrl).replace('__RN__', editor.data('id')), { _token: csrf, field: editor.data('field'), value: editor.find('input,textarea,select').val() })
       .done(function () {
         var field = editor.data('field');
         var fieldLabel = tableElement.find('thead th').eq(keys.indexOf(field)).text().trim() || field;

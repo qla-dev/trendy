@@ -28,6 +28,7 @@ class ProductionPlanController extends Controller
                 'operationsUrl' => route('app-production-plan-operations', ['id' => '__RN__']),
                 'fieldUrl' => route('app-production-plan-field', ['id' => '__RN__']),
                 'exportUrl' => route('app-production-plan-export'),
+                'costDriverOptionsUrl' => route('app-invoice-protection-options', ['id' => '__RN__']),
                 'previewUrl' => route('app-invoice-preview', ['id' => '__RN__']),
                 'canEdit' => $this->admin($request->user()),
                 'priorityOptions' => $priorityOptions,
@@ -46,7 +47,8 @@ class ProductionPlanController extends Controller
                 ->leftJoin($schema . '.tHE_SetDeliveryPriority as priority', 'priority.anPriority', '=', 'wo.anPriority')
                 ->selectRaw("wo.acKey id, wo.acKeyView rn, ISNULL(wo.acConsignee, wo.acReceiver) narucitelj, COALESCE(NULLIF(LTRIM(RTRIM(priority.acName)), ''), N'Nedefinisan') prioritet, CAST(wo.adDate AS date) datum, wo.acLnkKeyView narudzba, wo.anLnkNo pozicija, wo.adSchedStartTime pocetak, wo.adSchedEndTime kraj, wo.acIdent proizvod, wo.anPlanQty plan_kol, wo.anProducedQty izr_kol, wo.acName naziv, wo.acNote napomena, $status status_code, CASE $status WHEN 'D' THEN N'Raspisan' WHEN 'O' THEN N'Otvoren' WHEN 'E' THEN N'U radu' WHEN 'P' THEN N'U toku' WHEN 'R' THEN N'Djelomično zaključen' WHEN 'F' THEN N'Zaključen' WHEN 'I' THEN N'Zaključen' WHEN 'Z' THEN N'Zaključen' WHEN 'N' THEN N'Novo' WHEN 'C' THEN N'Otkazano' ELSE N'Nedefinisan' END status_rn, CASE $status WHEN 'F' THEN 'green' WHEN 'I' THEN 'green' WHEN 'Z' THEN 'green' WHEN 'E' THEN 'yellow' WHEN 'P' THEN 'orange' WHEN 'D' THEN 'orange' WHEN 'S' THEN 'orange' WHEN 'O' THEN 'purple' WHEN 'N' THEN 'purple' WHEN 'R' THEN 'teal' WHEN 'C' THEN 'grey' ELSE 'red' END plan_row_color");
 
-            $query->addSelect(DB::raw("CASE wo.anPriority WHEN 1 THEN 'red' WHEN 5 THEN 'yellow' WHEN 7 THEN 'teal' WHEN 10 THEN 'green' WHEN 15 THEN 'purple' ELSE 'grey' END AS priority_row_color"));
+            $query->addSelect(DB::raw("CASE wo.anPriority WHEN 1 THEN 'red' WHEN 5 THEN 'yellow' WHEN 7 THEN 'teal' WHEN 10 THEN 'green' WHEN 15 THEN 'purple' ELSE 'grey' END AS priority_row_color"))
+                ->addSelect('wo.acCostDrv as nositelj_troska');
 
             $filterMap = [
                 'rn' => 'wo.acKeyView',
@@ -75,6 +77,7 @@ class ProductionPlanController extends Controller
                         ->orWhere('wo.acIdent', 'like', $like)
                         ->orWhere('wo.acName', 'like', $like)
                         ->orWhere('wo.acNote', 'like', $like)
+                        ->orWhere('wo.acCostDrv', 'like', $like)
                         ->orWhere('wo.acStatusMF', 'like', $like)
                         ->orWhereRaw('CONVERT(char(10), wo.adDate, 104) LIKE ?', [$like])
                         ->orWhereRaw('CONVERT(char(10), wo.adSchedStartTime, 104) LIKE ?', [$like])
@@ -92,7 +95,7 @@ class ProductionPlanController extends Controller
 
             foreach ([['datum_od', '>='], ['datum_do', '<=']] as [$key, $operator]) {
                 $value = trim((string) ($filters[$key] ?? ''));
-                if ($value !== '') {
+                if ($value !== '' && !($request->boolean('filter.week_dates_auto') && !empty($filters['kw']))) {
                     $query->whereDate('wo.adSchedStartTime', $operator, $value);
                 }
             }
@@ -115,14 +118,14 @@ class ProductionPlanController extends Controller
                 'datum' => 'wo.adDate', 'narudzba' => 'wo.acLnkKeyView', 'pozicija' => 'wo.anLnkNo',
                 'pocetak' => 'wo.adSchedStartTime', 'kraj' => 'wo.adSchedEndTime', 'proizvod' => 'wo.acIdent',
                 'plan_kol' => 'wo.anPlanQty', 'izr_kol' => 'wo.anProducedQty', 'naziv' => 'wo.acName',
-                'napomena' => 'wo.acNote',
+                'napomena' => 'wo.acNote', 'nositelj_troska' => 'wo.acCostDrv',
             ];
             $sort = $sorts[$request->input('sort', 'pocetak')] ?? 'wo.adSchedStartTime';
             $direction = $request->input('dir') === 'asc' ? 'asc' : 'desc';
             if (isset($weekRange) && $sort === 'wo.adSchedStartTime' && $direction === 'desc') {
                 $query->orderByRaw(
-                    "CASE WHEN CAST(wo.adSchedStartTime AS date) >= ? AND CAST(wo.adSchedStartTime AS date) <= ? AND UPPER(LTRIM(RTRIM(wo.acStatusMF))) NOT IN ('F', 'I', 'Z') THEN 0 ELSE 1 END",
-                    [$weekRange['previous_start']->toDateString(), $weekRange['previous_end']->toDateString()]
+                    "CASE WHEN CAST(wo.adSchedStartTime AS date) < ? AND UPPER(LTRIM(RTRIM(wo.acStatusMF))) NOT IN ('F', 'I', 'Z') THEN 0 ELSE 1 END",
+                    [$weekRange['start']->toDateString()]
                 );
             }
 
@@ -146,7 +149,7 @@ class ProductionPlanController extends Controller
 
             foreach ($rows as $row) {
                 $row->is_previous_week_open_order = isset($weekRange)
-                    && $this->isPreviousWeekOpenOrder($row, $weekRange['previous_start'], $weekRange['previous_end']);
+                    && $this->isEarlierWeekOpenOrder($row, $weekRange['start']);
                 $row->plan_row_color = $row->is_previous_week_open_order
                     ? 'red'
                     : $row->priority_row_color;
@@ -169,33 +172,31 @@ class ProductionPlanController extends Controller
     }
 
     /**
-     * Include the selected ISO week and unfinished orders from the previous ISO week.
+     * Include the selected ISO week and unfinished orders from all earlier weeks,
+     * including earlier years. Other active filters still apply.
      *
-     * @return array{previous_start: Carbon, previous_end: Carbon}
+     * @return array{start: Carbon}
      */
     private function applyWeekFilter($query, int $year, int $week): array
     {
         $weekStart = Carbon::now()->setISODate($year, $week)->startOfWeek();
         $weekEnd = $weekStart->copy()->endOfWeek();
-        $previousWeekStart = $weekStart->copy()->subWeek()->startOfWeek();
-        $previousWeekEnd = $previousWeekStart->copy()->endOfWeek();
         $status = DB::raw("UPPER(LTRIM(RTRIM(wo.acStatusMF)))");
 
-        $query->where(function ($scheduleQuery) use ($weekStart, $weekEnd, $previousWeekStart, $previousWeekEnd, $status) {
+        $query->where(function ($scheduleQuery) use ($weekStart, $weekEnd, $status) {
             $scheduleQuery->where(function ($currentWeekQuery) use ($weekStart, $weekEnd) {
                 $currentWeekQuery->whereDate('wo.adSchedStartTime', '>=', $weekStart)
                     ->whereDate('wo.adSchedStartTime', '<=', $weekEnd);
-            })->orWhere(function ($previousWeekQuery) use ($previousWeekStart, $previousWeekEnd, $status) {
-                $previousWeekQuery->whereDate('wo.adSchedStartTime', '>=', $previousWeekStart)
-                    ->whereDate('wo.adSchedStartTime', '<=', $previousWeekEnd)
+            })->orWhere(function ($previousWeekQuery) use ($weekStart, $status) {
+                $previousWeekQuery->whereDate('wo.adSchedStartTime', '<', $weekStart)
                     ->whereNotIn($status, ['F', 'I', 'Z']);
             });
         });
 
-        return ['previous_start' => $previousWeekStart, 'previous_end' => $previousWeekEnd];
+        return ['start' => $weekStart];
     }
 
-    private function isPreviousWeekOpenOrder($row, Carbon $previousWeekStart, Carbon $previousWeekEnd): bool
+    private function isEarlierWeekOpenOrder($row, Carbon $weekStart): bool
     {
         if (in_array(strtoupper(trim((string) ($row->status_code ?? ''))), ['F', 'I', 'Z'], true) || empty($row->pocetak)) {
             return false;
@@ -203,8 +204,7 @@ class ProductionPlanController extends Controller
 
         $scheduledStart = Carbon::parse($row->pocetak);
 
-        return $scheduledStart->greaterThanOrEqualTo($previousWeekStart)
-            && $scheduledStart->lessThanOrEqualTo($previousWeekEnd);
+        return $scheduledStart->lessThan($weekStart);
     }
 
     public function export(Request $request)
@@ -218,7 +218,8 @@ class ProductionPlanController extends Controller
             $query = DB::table($schema . '.tHF_WOEx as wo')
                 ->leftJoin($schema . '.tHE_SetDeliveryPriority as priority', 'priority.anPriority', '=', 'wo.anPriority')
                 ->selectRaw("wo.acKey id, wo.acKeyView rn, ISNULL(wo.acConsignee, wo.acReceiver) narucitelj, COALESCE(NULLIF(LTRIM(RTRIM(priority.acName)), ''), N'Nedefinisan') prioritet, CAST(wo.adDate AS date) datum, wo.acLnkKeyView narudzba, wo.anLnkNo pozicija, wo.adSchedStartTime pocetak, wo.adSchedEndTime kraj, wo.acIdent proizvod, wo.anPlanQty plan_kol, wo.anProducedQty izr_kol, wo.acName naziv, wo.acNote napomena, $status status_code")
-                ->addSelect(DB::raw("CASE wo.anPriority WHEN 1 THEN 'red' WHEN 5 THEN 'yellow' WHEN 7 THEN 'teal' WHEN 10 THEN 'green' WHEN 15 THEN 'purple' ELSE 'grey' END AS priority_row_color"));
+                ->addSelect(DB::raw("CASE wo.anPriority WHEN 1 THEN 'red' WHEN 5 THEN 'yellow' WHEN 7 THEN 'teal' WHEN 10 THEN 'green' WHEN 15 THEN 'purple' ELSE 'grey' END AS priority_row_color"))
+                ->addSelect('wo.acCostDrv as nositelj_troska');
 
             if ($filtered) {
                 $filterMap = [
@@ -240,7 +241,7 @@ class ProductionPlanController extends Controller
 
                 foreach ([['datum_od', '>='], ['datum_do', '<=']] as [$key, $operator]) {
                     $value = trim((string) ($filters[$key] ?? ''));
-                    if ($value !== '') {
+                    if ($value !== '' && !($request->boolean('filter.week_dates_auto') && !empty($filters['kw']))) {
                         $query->whereDate('wo.adSchedStartTime', $operator, $value);
                     }
                 }
@@ -258,9 +259,15 @@ class ProductionPlanController extends Controller
                 }
             }
 
-            $sorts = ['rn' => 'wo.acKeyView', 'narucitelj' => 'wo.acConsignee', 'prioritet' => 'wo.anPriority', 'datum' => 'wo.adDate', 'narudzba' => 'wo.acLnkKeyView', 'pozicija' => 'wo.anLnkNo', 'pocetak' => 'wo.adSchedStartTime', 'kraj' => 'wo.adSchedEndTime', 'proizvod' => 'wo.acIdent', 'plan_kol' => 'wo.anPlanQty', 'izr_kol' => 'wo.anProducedQty', 'naziv' => 'wo.acName', 'napomena' => 'wo.acNote'];
-            $sort = $sorts[$request->input('sort', 'datum')] ?? 'wo.adDate';
+            $sorts = ['rn' => 'wo.acKeyView', 'narucitelj' => 'wo.acConsignee', 'prioritet' => 'wo.anPriority', 'datum' => 'wo.adDate', 'narudzba' => 'wo.acLnkKeyView', 'pozicija' => 'wo.anLnkNo', 'pocetak' => 'wo.adSchedStartTime', 'kraj' => 'wo.adSchedEndTime', 'proizvod' => 'wo.acIdent', 'plan_kol' => 'wo.anPlanQty', 'izr_kol' => 'wo.anProducedQty', 'naziv' => 'wo.acName', 'napomena' => 'wo.acNote', 'nositelj_troska' => 'wo.acCostDrv'];
+            $sort = $sorts[$request->input('sort', 'pocetak')] ?? 'wo.adSchedStartTime';
             $direction = $request->input('dir') === 'asc' ? 'asc' : 'desc';
+            if (isset($weekRange) && $sort === 'wo.adSchedStartTime' && $direction === 'desc') {
+                $query->orderByRaw(
+                    "CASE WHEN CAST(wo.adSchedStartTime AS date) < ? AND UPPER(LTRIM(RTRIM(wo.acStatusMF))) NOT IN ('F', 'I', 'Z') THEN 0 ELSE 1 END",
+                    [$weekRange['start']->toDateString()]
+                );
+            }
             $rows = $query->orderBy($sort, $direction)->get();
 
             $keys = $rows->pluck('id')->filter()->values();
@@ -276,7 +283,7 @@ class ProductionPlanController extends Controller
             }
             foreach ($rows as $row) {
                 $row->is_previous_week_open_order = isset($weekRange)
-                    && $this->isPreviousWeekOpenOrder($row, $weekRange['previous_start'], $weekRange['previous_end']);
+                    && $this->isEarlierWeekOpenOrder($row, $weekRange['start']);
                 $row->progress = ($totalOperations[$row->id] ?? 0) ? min(100, round(($finishedOperations[$row->id] ?? 0) / $totalOperations[$row->id] * 100)) : 0;
             }
 
@@ -308,14 +315,14 @@ class ProductionPlanController extends Controller
             $xml .= '<Row><Cell><Data ss:Type="String">Filteri: ' . $escape($summary) . '</Data></Cell></Row><Row></Row>';
         }
 
-        $headers = ['R. br.', 'Napredak', 'RN', 'Naručitelj', 'Prioritet', 'Datum', 'Narudžba', 'Br. poz.', 'Poč. termin', 'Kraj termin', 'Proizvod', 'Plan. kol.', 'Izr. kol.', 'Naziv', 'Napomena', 'Status RN'];
+        $headers = ['R. br.', 'Napredak', 'RN', 'Naručitelj', 'Prioritet', 'Datum', 'Narudžba', 'Br. poz.', 'Poč. termin', 'Kraj termin', 'Proizvod', 'Plan. kol.', 'Izr. kol.', 'Naziv', 'Nositelj troška', 'Napomena', 'Status RN'];
         $xml .= '<Row>' . implode('', array_map(fn ($header) => $cell($header, 'Header'), $headers)) . '</Row>';
         $rowNumber = 1;
         foreach ($rows as $row) {
             $style = $includeColours
                 ? ($row->is_previous_week_open_order ?? false ? 'red' : (string) $row->priority_row_color)
                 : '';
-            $values = [$row->progress . '%', $row->rn, $row->narucitelj, $row->prioritet, $row->datum, $row->narudzba, $row->pozicija, $row->pocetak, $row->kraj, $row->proizvod, $row->plan_kol, $row->izr_kol, $row->naziv, $row->napomena, $row->status_code];
+            $values = [$row->progress . '%', $row->rn, $row->narucitelj, $row->prioritet, $row->datum, $row->narudzba, $row->pozicija, $row->pocetak, $row->kraj, $row->proizvod, $row->plan_kol, $row->izr_kol, $row->naziv, $row->nositelj_troska, $row->napomena, $row->status_code];
             $xml .= '<Row><Cell' . ($style ? ' ss:StyleID="' . $style . '"' : '') . '><Data ss:Type="Number">' . $rowNumber++ . '</Data></Cell>' . implode('', array_map(fn ($value) => $cell($value, $style), $values)) . '</Row>';
         }
 
@@ -347,16 +354,32 @@ class ProductionPlanController extends Controller
             'pozicija' => 'anLnkNo', 'pocetak' => 'adSchedStartTime', 'kraj' => 'adSchedEndTime',
             'proizvod' => 'acIdent', 'plan_kol' => 'anPlanQty', 'izr_kol' => 'anProducedQty',
             'naziv' => 'acName', 'napomena' => 'acNote',
+            'nositelj_troska' => 'acCostDrv',
         ];
         $field = (string) $request->input('field');
         if (!isset($map[$field])) {
             return response()->json(['message' => 'Polje nije dozvoljeno.'], 422);
         }
 
+        $value = $request->input('value');
+        if ($field === 'nositelj_troska') {
+            $request->validate(['value' => 'nullable|string|max:255']);
+            if (trim((string) $value) !== '') {
+                $catalogueCode = DB::table(config('workorders.schema', 'dbo') . '.' . config('workorders.protection_catalogue_table', 'tHE_CostDrv'))
+                    ->where('acCostDrv', $value)->value('acCostDrv');
+                if ($catalogueCode === null) {
+                    return response()->json(['message' => 'Odaberite važeći nositelj troška iz ponuđenih prijedloga.'], 422);
+                }
+                $value = $catalogueCode;
+            } else {
+                $value = '';
+            }
+        }
+
         DB::table(config('workorders.schema', 'dbo') . '.tHF_WOEx')
             ->where('acKey', $id)
             ->update([
-                $map[$field] => $request->input('value'),
+                $map[$field] => $value,
                 'adTimeChg' => now(),
                 'anUserChg' => (int) $request->user()->id,
             ]);
