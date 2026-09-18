@@ -61,13 +61,13 @@ class ProductionPlanCarryOverTest extends TestCase
         }
     }
 
-    public function test_week_filter_has_no_lower_date_limit_on_carry_over_and_preserves_other_filters(): void
+    public function test_week_filter_limits_carry_over_to_the_selected_calendar_year(): void
     {
         // Compile SQL only: no database access or writes.
         $query = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo')->where('wo.acIdent', 'ABC');
         $range = $this->invoke('applyWeekFilter', $query, 2026, 1);
         $this->assertSame('2025-12-29', $range['start']->toDateString());
-        $this->assertSame(['ABC', '2025-12-29', '2026-01-04', '2025-12-29', 'F', 'I', 'Z'], $query->getBindings());
+        $this->assertSame(['ABC', '2025-12-29', '2026-01-04', '2026-01-01', '2025-12-29', 'F', 'I', 'Z'], $query->getBindings());
         $this->assertStringContainsString(' or ', $query->toSql());
         $this->assertStringContainsString('not in', $query->toSql());
     }

@@ -172,8 +172,8 @@ class ProductionPlanController extends Controller
     }
 
     /**
-     * Include the selected ISO week and unfinished orders from all earlier weeks,
-     * including earlier years. Other active filters still apply.
+     * Include the selected ISO week and unfinished orders from earlier weeks in
+     * the selected calendar year. Other active filters still apply.
      *
      * @return array{start: Carbon}
      */
@@ -181,14 +181,16 @@ class ProductionPlanController extends Controller
     {
         $weekStart = Carbon::now()->setISODate($year, $week)->startOfWeek();
         $weekEnd = $weekStart->copy()->endOfWeek();
+        $yearStart = Carbon::create($year, 1, 1)->startOfDay();
         $status = DB::raw("UPPER(LTRIM(RTRIM(wo.acStatusMF)))");
 
-        $query->where(function ($scheduleQuery) use ($weekStart, $weekEnd, $status) {
+        $query->where(function ($scheduleQuery) use ($weekStart, $weekEnd, $yearStart, $status) {
             $scheduleQuery->where(function ($currentWeekQuery) use ($weekStart, $weekEnd) {
                 $currentWeekQuery->whereDate('wo.adSchedStartTime', '>=', $weekStart)
                     ->whereDate('wo.adSchedStartTime', '<=', $weekEnd);
-            })->orWhere(function ($previousWeekQuery) use ($weekStart, $status) {
-                $previousWeekQuery->whereDate('wo.adSchedStartTime', '<', $weekStart)
+            })->orWhere(function ($previousWeekQuery) use ($yearStart, $weekStart, $status) {
+                $previousWeekQuery->whereDate('wo.adSchedStartTime', '>=', $yearStart)
+                    ->whereDate('wo.adSchedStartTime', '<', $weekStart)
                     ->whereNotIn($status, ['F', 'I', 'Z']);
             });
         });
