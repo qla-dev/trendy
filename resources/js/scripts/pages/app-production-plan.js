@@ -107,10 +107,11 @@ $(function () {
     loadingOverlay.toggleClass('is-visible', loading).attr('aria-hidden', String(!loading));
     tableElement.attr('aria-busy', String(loading));
   }
+  // The overlay belongs to the Ajax request, not DataTables' internal processing
+  // state. With scrolling enabled, that state can remain true after rows draw.
   // Register before initialization so the first request shows the overlay too.
   tableElement.on('preXhr.dt', function () { setPlanLoading(true); });
-  tableElement.on('processing.dt', function (event, settings, processing) { setPlanLoading(processing); });
-  tableElement.on('xhr.dt error.dt', function () { setPlanLoading(false); });
+  tableElement.on('xhr.dt error.dt draw.dt init.dt', function () { setPlanLoading(false); });
   var table = tableElement.DataTable({
     serverSide: true, processing: true, scrollX: true, pageLength: 25, order: [[7, 'desc']],
     ajax: {
