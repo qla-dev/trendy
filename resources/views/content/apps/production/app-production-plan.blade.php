@@ -8,7 +8,7 @@
 @endsection
 @section('page-style')
   <style>
-    .production-plan-table { min-width: 1500px; }
+    .production-plan-table { min-width: 1700px; }
     .production-plan-table > :not(caption) > * > * { padding: .42rem .5rem; font-size: .8rem; white-space: nowrap; }
     .production-plan-table .editable-cell { cursor: pointer; }
     .production-plan-table tr.production-plan-row--red > td { background-color: #ffd6dc !important; color: #7a0014; }
@@ -35,7 +35,7 @@
     .dark-layout .production-plan-table-loading-overlay, .semi-dark-layout .production-plan-table-loading-overlay { background: rgba(20, 28, 48, .68); }
     .dark-layout .production-plan-table-loading-spinner, .semi-dark-layout .production-plan-table-loading-spinner { color: #d6dcec; }
     .dark-layout .production-plan-table-loading-message, .semi-dark-layout .production-plan-table-loading-message { color: #f4f5fb; }
-    .production-plan-wrapper .card-datatable.table-responsive { overflow-x: hidden; }
+    .production-plan-wrapper .card-datatable.table-responsive { overflow-x: auto; }
     .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child,
     .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:last-child { margin-right: 0; margin-left: 0; padding: 1rem; }
     .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-'],
@@ -66,7 +66,7 @@
     <div id="production-plan-loading-overlay" class="production-plan-table-loading-overlay is-visible" role="status" aria-live="polite" aria-hidden="false">
       <div class="production-plan-table-loading-overlay-content"><span class="spinner-border production-plan-table-loading-spinner" aria-hidden="true"></span><span class="production-plan-table-loading-message">Učitavanje plana proizvodnje...</span></div>
     </div>
-    <div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela" aria-busy="true"><thead><tr><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Datum</th><th>Narudžba</th><th>Br. poz.</th><th>Poč. termin</th><th>Kraj termin</th><th>Proizvod</th><th>Plan. kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Nositelj troška</th><th>Napomena</th></tr></thead></table></div>
+    <div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela" aria-busy="true"><thead><tr><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Datum</th><th>Narudžba</th><th>Br. narudžbe kupca</th><th>Br. poz.</th><th>Poč. termin</th><th>Datum isporuke</th><th>Proizvod</th><th>Plan. kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Nositelj troška</th><th>Napomena</th></tr></thead></table></div>
   </div>
 </section>
 
@@ -97,5 +97,5 @@
 @endsection
 @section('page-script')
   <script>window.planProizvodnjeConfig=@json($planConfig);flatpickr('.shared-filter-date',{dateFormat:'Y-m-d',altInput:true,altFormat:'d.m.Y',allowInput:true,disableMobile:true});</script>
-  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=124') }}"></script>
+  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=126') }}"></script>
 @endsection

@@ -45,7 +45,8 @@ class ProductionPlanController extends Controller
 
             $query = DB::table($schema . '.tHF_WOEx as wo')
                 ->leftJoin($schema . '.tHE_SetDeliveryPriority as priority', 'priority.anPriority', '=', 'wo.anPriority')
-                ->selectRaw("wo.acKey id, wo.acKeyView rn, ISNULL(wo.acConsignee, wo.acReceiver) narucitelj, COALESCE(NULLIF(LTRIM(RTRIM(priority.acName)), ''), N'Nedefinisan') prioritet, CAST(wo.adDate AS date) datum, wo.acLnkKeyView narudzba, wo.anLnkNo pozicija, wo.adSchedStartTime pocetak, wo.adSchedEndTime kraj, wo.acIdent proizvod, wo.anPlanQty plan_kol, wo.anProducedQty izr_kol, wo.acName naziv, wo.acNote napomena, $status status_code, CASE $status WHEN 'D' THEN N'Raspisan' WHEN 'O' THEN N'Otvoren' WHEN 'E' THEN N'U radu' WHEN 'P' THEN N'U toku' WHEN 'R' THEN N'Djelomično zaključen' WHEN 'F' THEN N'Zaključen' WHEN 'I' THEN N'Zaključen' WHEN 'Z' THEN N'Zaključen' WHEN 'N' THEN N'Novo' WHEN 'C' THEN N'Otkazano' ELSE N'Nedefinisan' END status_rn, CASE $status WHEN 'F' THEN 'green' WHEN 'I' THEN 'green' WHEN 'Z' THEN 'green' WHEN 'E' THEN 'yellow' WHEN 'P' THEN 'orange' WHEN 'D' THEN 'orange' WHEN 'S' THEN 'orange' WHEN 'O' THEN 'purple' WHEN 'N' THEN 'purple' WHEN 'R' THEN 'teal' WHEN 'C' THEN 'grey' ELSE 'red' END plan_row_color");
+                ->leftJoin($schema . '.tHE_Order as sales_order', 'sales_order.acKey', '=', 'wo.acLnkKey')
+                ->selectRaw("wo.acKey id, wo.acKeyView rn, ISNULL(wo.acConsignee, wo.acReceiver) narucitelj, COALESCE(NULLIF(LTRIM(RTRIM(priority.acName)), ''), N'Nedefinisan') prioritet, CAST(wo.adDate AS date) datum, wo.acLnkKey narudzba_key, wo.acLnkKeyView narudzba, sales_order.acDoc1 broj_narudzbe_kupca, wo.anLnkNo pozicija, wo.adSchedStartTime pocetak, wo.adSchedEndTime kraj, wo.acIdent proizvod, wo.anPlanQty plan_kol, wo.anProducedQty izr_kol, wo.acName naziv, wo.acNote napomena, $status status_code, CASE $status WHEN 'D' THEN N'Raspisan' WHEN 'O' THEN N'Otvoren' WHEN 'E' THEN N'U radu' WHEN 'P' THEN N'U toku' WHEN 'R' THEN N'Djelomično zaključen' WHEN 'F' THEN N'Zaključen' WHEN 'I' THEN N'Zaključen' WHEN 'Z' THEN N'Zaključen' WHEN 'N' THEN N'Novo' WHEN 'C' THEN N'Otkazano' ELSE N'Nedefinisan' END status_rn, CASE $status WHEN 'F' THEN 'green' WHEN 'I' THEN 'green' WHEN 'Z' THEN 'green' WHEN 'E' THEN 'yellow' WHEN 'P' THEN 'orange' WHEN 'D' THEN 'orange' WHEN 'S' THEN 'orange' WHEN 'O' THEN 'purple' WHEN 'N' THEN 'purple' WHEN 'R' THEN 'teal' WHEN 'C' THEN 'grey' ELSE 'red' END plan_row_color");
 
             $query->addSelect(DB::raw("CASE wo.anPriority WHEN 1 THEN 'red' WHEN 5 THEN 'yellow' WHEN 7 THEN 'teal' WHEN 10 THEN 'green' WHEN 15 THEN 'purple' ELSE 'grey' END AS priority_row_color"))
                 ->addSelect('wo.acCostDrv as nositelj_troska');
@@ -115,7 +116,7 @@ class ProductionPlanController extends Controller
             $total = (clone $query)->count();
             $sorts = [
                 'rn' => 'wo.acKeyView', 'narucitelj' => 'wo.acConsignee', 'prioritet' => 'wo.anPriority',
-                'datum' => 'wo.adDate', 'narudzba' => 'wo.acLnkKeyView', 'pozicija' => 'wo.anLnkNo',
+                'datum' => 'wo.adDate', 'narudzba' => 'wo.acLnkKeyView', 'broj_narudzbe_kupca' => 'sales_order.acDoc1', 'pozicija' => 'wo.anLnkNo',
                 'pocetak' => 'wo.adSchedStartTime', 'kraj' => 'wo.adSchedEndTime', 'proizvod' => 'wo.acIdent',
                 'plan_kol' => 'wo.anPlanQty', 'izr_kol' => 'wo.anProducedQty', 'naziv' => 'wo.acName',
                 'napomena' => 'wo.acNote', 'nositelj_troska' => 'wo.acCostDrv',
@@ -219,7 +220,8 @@ class ProductionPlanController extends Controller
 
             $query = DB::table($schema . '.tHF_WOEx as wo')
                 ->leftJoin($schema . '.tHE_SetDeliveryPriority as priority', 'priority.anPriority', '=', 'wo.anPriority')
-                ->selectRaw("wo.acKey id, wo.acKeyView rn, ISNULL(wo.acConsignee, wo.acReceiver) narucitelj, COALESCE(NULLIF(LTRIM(RTRIM(priority.acName)), ''), N'Nedefinisan') prioritet, CAST(wo.adDate AS date) datum, wo.acLnkKeyView narudzba, wo.anLnkNo pozicija, wo.adSchedStartTime pocetak, wo.adSchedEndTime kraj, wo.acIdent proizvod, wo.anPlanQty plan_kol, wo.anProducedQty izr_kol, wo.acName naziv, wo.acNote napomena, $status status_code")
+                ->leftJoin($schema . '.tHE_Order as sales_order', 'sales_order.acKey', '=', 'wo.acLnkKey')
+                ->selectRaw("wo.acKey id, wo.acKeyView rn, ISNULL(wo.acConsignee, wo.acReceiver) narucitelj, COALESCE(NULLIF(LTRIM(RTRIM(priority.acName)), ''), N'Nedefinisan') prioritet, CAST(wo.adDate AS date) datum, wo.acLnkKey narudzba_key, wo.acLnkKeyView narudzba, sales_order.acDoc1 broj_narudzbe_kupca, wo.anLnkNo pozicija, wo.adSchedStartTime pocetak, wo.adSchedEndTime kraj, wo.acIdent proizvod, wo.anPlanQty plan_kol, wo.anProducedQty izr_kol, wo.acName naziv, wo.acNote napomena, $status status_code")
                 ->addSelect(DB::raw("CASE wo.anPriority WHEN 1 THEN 'red' WHEN 5 THEN 'yellow' WHEN 7 THEN 'teal' WHEN 10 THEN 'green' WHEN 15 THEN 'purple' ELSE 'grey' END AS priority_row_color"))
                 ->addSelect('wo.acCostDrv as nositelj_troska');
 
@@ -261,7 +263,7 @@ class ProductionPlanController extends Controller
                 }
             }
 
-            $sorts = ['rn' => 'wo.acKeyView', 'narucitelj' => 'wo.acConsignee', 'prioritet' => 'wo.anPriority', 'datum' => 'wo.adDate', 'narudzba' => 'wo.acLnkKeyView', 'pozicija' => 'wo.anLnkNo', 'pocetak' => 'wo.adSchedStartTime', 'kraj' => 'wo.adSchedEndTime', 'proizvod' => 'wo.acIdent', 'plan_kol' => 'wo.anPlanQty', 'izr_kol' => 'wo.anProducedQty', 'naziv' => 'wo.acName', 'napomena' => 'wo.acNote', 'nositelj_troska' => 'wo.acCostDrv'];
+            $sorts = ['rn' => 'wo.acKeyView', 'narucitelj' => 'wo.acConsignee', 'prioritet' => 'wo.anPriority', 'datum' => 'wo.adDate', 'narudzba' => 'wo.acLnkKeyView', 'broj_narudzbe_kupca' => 'sales_order.acDoc1', 'pozicija' => 'wo.anLnkNo', 'pocetak' => 'wo.adSchedStartTime', 'kraj' => 'wo.adSchedEndTime', 'proizvod' => 'wo.acIdent', 'plan_kol' => 'wo.anPlanQty', 'izr_kol' => 'wo.anProducedQty', 'naziv' => 'wo.acName', 'napomena' => 'wo.acNote', 'nositelj_troska' => 'wo.acCostDrv'];
             $sort = $sorts[$request->input('sort', 'pocetak')] ?? 'wo.adSchedStartTime';
             $direction = $request->input('dir') === 'asc' ? 'asc' : 'desc';
             if (isset($weekRange) && $sort === 'wo.adSchedStartTime' && $direction === 'desc') {
@@ -317,18 +319,40 @@ class ProductionPlanController extends Controller
             $xml .= '<Row><Cell><Data ss:Type="String">Filteri: ' . $escape($summary) . '</Data></Cell></Row><Row></Row>';
         }
 
-        $headers = ['R. br.', 'Napredak', 'RN', 'Naručitelj', 'Prioritet', 'Datum', 'Narudžba', 'Br. poz.', 'Poč. termin', 'Kraj termin', 'Proizvod', 'Plan. kol.', 'Izr. kol.', 'Naziv', 'Nositelj troška', 'Napomena', 'Status RN'];
+        $headers = ['R. br.', 'Napredak', 'RN', 'Naručitelj', 'Prioritet', 'Datum', 'Narudžba', 'Br. narudžbe kupca', 'Br. poz.', 'Poč. termin', 'Datum isporuke', 'Proizvod', 'Plan. kol.', 'Izr. kol.', 'Naziv', 'Nositelj troška', 'Napomena', 'Status RN'];
         $xml .= '<Row>' . implode('', array_map(fn ($header) => $cell($header, 'Header'), $headers)) . '</Row>';
         $rowNumber = 1;
         foreach ($rows as $row) {
             $style = $includeColours
                 ? ($row->is_previous_week_open_order ?? false ? 'red' : (string) $row->priority_row_color)
                 : '';
-            $values = [$row->progress . '%', $row->rn, $row->narucitelj, $row->prioritet, $row->datum, $row->narudzba, $row->pozicija, $row->pocetak, $row->kraj, $row->proizvod, $row->plan_kol, $row->izr_kol, $row->naziv, $row->nositelj_troska, $row->napomena, $row->status_code];
+            $values = [$row->progress . '%', $row->rn, $row->narucitelj, $row->prioritet, $this->europeanDate($row->datum), $row->narudzba, $row->broj_narudzbe_kupca, $row->pozicija, $this->europeanDate($row->pocetak), $this->europeanDate($row->kraj), $row->proizvod, $this->displayQuantity($row->plan_kol), $this->displayQuantity($row->izr_kol), $row->naziv, $row->nositelj_troska, $row->napomena, $row->status_code];
             $xml .= '<Row><Cell' . ($style ? ' ss:StyleID="' . $style . '"' : '') . '><Data ss:Type="Number">' . $rowNumber++ . '</Data></Cell>' . implode('', array_map(fn ($value) => $cell($value, $style), $values)) . '</Row>';
         }
 
         return $xml . '</Table></Worksheet></Workbook>';
+    }
+
+    private function europeanDate($value): string
+    {
+        if (empty($value)) {
+            return '';
+        }
+
+        try {
+            return Carbon::parse($value)->format('d.m.Y');
+        } catch (\Throwable $exception) {
+            return (string) $value;
+        }
+    }
+
+    private function displayQuantity($value): string
+    {
+        if (!is_numeric($value)) {
+            return (string) $value;
+        }
+
+        return rtrim(rtrim(number_format((float) $value, 4, '.', ''), '0'), '.');
     }
 
     private function filterSummary(array $filters): string
