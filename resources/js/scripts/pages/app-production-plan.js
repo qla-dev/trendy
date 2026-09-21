@@ -3,7 +3,7 @@ $(function () {
   var config = window.planProizvodnjeConfig || {};
   var csrf = $('meta[name="csrf-token"]').attr('content');
   var tableElement = $('#plan-proizvodnje-tabela');
-  var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'datum', 'narudzba', 'pozicija', 'pocetak', 'kraj', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'nositelj_troska', 'napomena'];
+  var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'nositelj_troska', 'napomena'];
   var requestErrorShown = false;
   var priorityFilter = $('#filter-prioritet');
   var rowColourFilter = $('#plan-boja-redova');
@@ -40,7 +40,7 @@ $(function () {
     showError('Učitavanje plana nije uspjelo', message);
   }
   function escapeHtml(value) { return $('<div>').text(value == null ? '' : value).html(); }
-  function formatNumber(value) { var number = Number(value); return Number.isFinite(number) ? number.toLocaleString('bs-BA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; }
+  function formatQuantity(value) { var number = Number(value); return Number.isFinite(number) ? number.toLocaleString('bs-BA', { minimumFractionDigits: 0, maximumFractionDigits: 4 }) : ''; }
   function formatDate(value) { var match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return match ? match[3] + '.' + match[2] + '.' + match[1] : ''; }
   var weekDatesAuto = false;
   var weekInput = $('.f[data-k="kw"]');
@@ -79,7 +79,7 @@ $(function () {
     }
   });
   function filters() { var values = {}; $('.f').each(function () { values[$(this).data('k')] = $(this).val(); }); values.week_dates_auto = weekDatesAuto ? 1 : 0; return values; }
-  function editable(key) { return config.canEdit && key !== 'rn' && key !== 'progress' && key !== 'prioritet'; }
+  function editable(key) { return config.canEdit && ['rn', 'progress', 'prioritet', 'broj_narudzbe_kupca'].indexOf(key) === -1; }
   function closeEditor() {
     $('.plan-inline-editor .select2-hidden-accessible').each(function () { $(this).select2('destroy'); });
     $('.plan-inline-editor').remove();
@@ -113,7 +113,7 @@ $(function () {
   tableElement.on('preXhr.dt', function () { setPlanLoading(true); });
   tableElement.on('xhr.dt error.dt draw.dt init.dt', function () { setPlanLoading(false); });
   var table = tableElement.DataTable({
-    serverSide: true, processing: true, scrollX: true, pageLength: 25, order: [[7, 'desc']],
+    serverSide: true, processing: true, scrollX: false, pageLength: 25, order: [[8, 'desc']],
     ajax: {
       url: config.dataUrl,
       data: function (data) { data.filter = filters(); data.sort = keys[data.order[0] ? data.order[0].column : 4]; data.dir = data.order[0] ? data.order[0].dir : 'desc'; },
@@ -124,7 +124,7 @@ $(function () {
       return { data: key, defaultContent: '', orderable: key !== 'progress', render: function (value) {
         var output;
         if (key === 'progress') output = '<b>' + escapeHtml(value) + '%</b>';
-        else if (key === 'plan_kol' || key === 'izr_kol') output = formatNumber(value);
+        else if (key === 'plan_kol' || key === 'izr_kol') output = formatQuantity(value);
         else if (['datum', 'pocetak', 'kraj'].indexOf(key) >= 0) output = formatDate(value);
         else output = escapeHtml(value);
         return editable(key) ? '<span class="editable-cell">' + output + '</span>' : output;
@@ -164,7 +164,7 @@ $(function () {
       showError('Izvoz nije dostupan', 'Adresa za izvoz nije podešena.');
       return;
     }
-    var order = table.order()[0] || [7, 'desc'];
+    var order = table.order()[0] || [8, 'desc'];
     var parameters = {
       scope: $('input[name="production-plan-export-scope"]:checked').val() || 'filtered',
       filter: filters(),
