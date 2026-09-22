@@ -26,29 +26,29 @@ class ScannedWorkOrderOperationsTest extends TestCase
         $this->assertFalse($matchesRole->invoke($controller, $other, 'bravarija'));
     }
 
-    public function test_scanner_routes_checkpoint_roles_to_the_operations_view(): void
+    public function test_scanner_routes_checkpoint_roles_to_the_regular_details_operations_tab(): void
     {
         $scanner = file_get_contents(resource_path('views/content/new-components/nalog-scan.blade.php'));
         $controller = file_get_contents(app_path('Http/Controllers/WorkOrderController.php'));
-        $view = file_get_contents(resource_path('views/content/apps/invoice/app-invoice-scan-operations.blade.php'));
         $preview = file_get_contents(resource_path('views/content/apps/invoice/app-invoice-preview.blade.php'));
 
         $this->assertStringContainsString("var checkpointUrl = workOrder.checkpoint_url || '';", $scanner);
         $this->assertStringContainsString("if (!checkpointUrl)", $scanner);
-        $this->assertStringContainsString("route('app-invoice-scan-operations'", $controller);
+        $this->assertStringContainsString("'checkpoint_url' => null", $controller);
+        $this->assertStringContainsString('ensureScanCheckpointOperations(', $controller);
         $this->assertStringContainsString("operationMatchesScanRole(\$selectedOperation, \$role)", $controller);
-        $this->assertStringContainsString("scan-operation-row {{ \$finished ? 'is-finished' : (\$enabled ? 'is-enabled' : 'is-disabled') }}", $view);
         $this->assertStringContainsString("'operation_id' => ['required', 'string', 'max:100']", $controller);
         $this->assertStringContainsString("'acIssueFinished' => \$finished ? 'Y' : 'N'", $controller);
-        $this->assertStringContainsString("sortBy(fn (array \$operation): int => (\$operation['is_role_operation'] ?? false) ? 0 : 1)", $controller);
-        $this->assertStringContainsString('calc(4rem + env(safe-area-inset-bottom, 0px))', $view);
-        $this->assertStringContainsString('-webkit-appearance: none', $view);
+        $this->assertStringContainsString("'operationCheckpointUrl' => \$scanRole !== null", $controller);
+        $this->assertStringContainsString('data-checkpoint-role', $preview);
+        $this->assertStringContainsString('wo-operation-role-locked-row', $preview);
+        $this->assertStringContainsString('wo-mobile-column-label', $preview);
+        $this->assertStringContainsString('Alt.</span>', $preview);
+        $this->assertStringContainsString('Pos.</span>', $preview);
         $this->assertStringContainsString('wo-operation-finished-row', $preview);
         $this->assertStringContainsString("content: '\\2713'", $preview);
         $this->assertStringContainsString('markWorkOrderOperationFinished', $controller);
         $this->assertStringContainsString('usort($workOrderRegOperations', $controller);
-        $this->assertStringNotContainsString('scan-operation-state', $view);
-        $this->assertStringNotContainsString('fa-lock', $view);
     }
 
     public function test_scans_add_only_the_scanning_departments_checkpoint_and_exclude_it_from_closing_time(): void
