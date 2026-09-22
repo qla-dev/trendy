@@ -170,19 +170,26 @@ class WorkOrderController extends Controller
                     ]);
             }
 
-            if ($isScanLookup) {
-                $scanRole = $this->scanCheckpointRole($request->user());
-                if ($scanRole !== null) {
-                    return redirect()->route('app-invoice-scan-operations', ['id' => $workOrderId]);
-                }
+            $raw = $workOrder['raw'] ?? [];
+            $scanRole = $this->scanCheckpointRole($request->user());
+            $workOrderKey = trim((string) $this->value($raw, ['acKey'], ''));
+
+            // A scan by Kontrola or Bravarija still opens the normal RN
+            // details page. Add that department's checkpoint before building
+            // the Operations tab so it is immediately available there.
+            if ($isScanLookup && $scanRole !== null) {
+                $this->ensureScanCheckpointOperations(
+                    $workOrderKey,
+                    (int) ($request->user()->id ?? 0),
+                    $scanRole
+                );
             }
 
-            $raw = $workOrder['raw'] ?? [];
             $workOrderItems = $this->fetchMappedWorkOrderItems($raw);
             $workOrderItemResources = $this->fetchMappedWorkOrderItemResources($raw);
             $workOrderRegOperations = $this->fetchMappedWorkOrderRegOperations($raw);
             $closingWorkOrderOperations = $this->fetchMappedOperationsFromItems(
-                trim((string) $this->value($raw, ['acKey'], ''))
+                $workOrderKey
             );
             $itemOperationStatus = [];
             foreach ($closingWorkOrderOperations as $itemOperation) {
@@ -197,6 +204,27 @@ class WorkOrderController extends Controller
                 $operation['is_finished'] = (bool) ($status['is_finished'] ?? false);
                 return $operation;
             }, $workOrderRegOperations);
+            if ($scanRole !== null) {
+                // Checkpoint rows are added directly to RN items and may not
+                // exist in the registered-operations source. Include any such
+                // item operation once in the normal Operations tab.
+                $registeredIdentities = array_fill_keys(array_map(
+                    fn (array $operation): string => $this->operationIdentity($operation),
+                    $workOrderRegOperations
+                ), true);
+                foreach ($closingWorkOrderOperations as $itemOperation) {
+                    $identity = $this->operationIdentity($itemOperation);
+                    if (!isset($registeredIdentities[$identity])) {
+                        $workOrderRegOperations[] = $itemOperation;
+                        $registeredIdentities[$identity] = true;
+                    }
+                }
+
+                $workOrderRegOperations = array_map(function (array $operation) use ($scanRole): array {
+                    $operation['is_role_operation'] = $this->operationMatchesScanRole($operation, $scanRole);
+                    return $operation;
+                }, $workOrderRegOperations);
+            }
             if ($this->canDeleteWorkOrders($request->user())) {
                 usort($workOrderRegOperations, static fn (array $first, array $second): int =>
                     ((bool) ($first['is_finished'] ?? false)) <=> ((bool) ($second['is_finished'] ?? false))
@@ -267,6 +295,10 @@ class WorkOrderController extends Controller
                 'scanLookupNotice' => $successNotice,
                 'priorityOptions' => app(DeliveryPriorityOptions::class)->all(),
                 'operationCompleteUrl' => route('app-invoice-operation-complete', ['id' => $workOrderId]),
+                'operationCheckpointUrl' => $scanRole !== null
+                    ? route('app-invoice-scan-operation-checkpoint', ['id' => $workOrderId])
+                    : '',
+                'scanCheckpointRole' => $scanRole,
             ]);
         } catch (Throwable $exception) {
             Log::error('Work order preview query failed.', [
@@ -398,9 +430,9 @@ class WorkOrderController extends Controller
                                 'id' => $routeId,
                                 'scan' => 1,
                             ]),
-                            'checkpoint_url' => $this->scanCheckpointRole($request->user()) !== null
-                                ? route('app-invoice-scan-operations', ['id' => $routeId])
-                                : null,
+                            // All roles now use the regular RN details page;
+                            // checkpoint controls live in its Operations tab.
+                            'checkpoint_url' => null,
                         ],
                     ],
                 ]);

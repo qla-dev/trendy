@@ -566,7 +566,11 @@
     position: sticky;
     right: 0;
     z-index: 2;
+    width: 4.5rem;
     min-width: 4.5rem;
+    padding-left: 0;
+    padding-right: 0;
+    vertical-align: middle;
     background-color: #ffffff;
     border-left: 1px solid var(--wo-divider-color);
   }
@@ -578,9 +582,11 @@
     width: 3rem;
     height: 3rem;
     padding: 0;
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
+    margin-left: auto;
+    margin-right: auto;
     border: 0 !important;
     border-radius: 0;
     color: transparent;
@@ -616,6 +622,18 @@
   .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > .wo-operation-action-col {
     background-color: #effbf4;
   }
+  .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-locked-row > td {
+    color: #9a97a5;
+    background-color: #f8f8f8;
+  }
+  .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-locked-row > .wo-operation-action-col {
+    background-color: #f8f8f8;
+  }
+  .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-row > td {
+    background-color: #ffffff;
+  }
+  .invoice-preview-wrapper .wo-operation-complete-btn.is-role-locked { cursor: not-allowed; opacity: .55; }
+  .invoice-preview-wrapper .wo-mobile-column-label { display: none; }
   body.dark-layout .invoice-preview-wrapper #operacija-table .wo-operation-action-col,
   body.semi-dark-layout .invoice-preview-wrapper #operacija-table .wo-operation-action-col,
   .dark-layout .invoice-preview-wrapper #operacija-table .wo-operation-action-col,
@@ -626,6 +644,21 @@
   .semi-dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > td {
     color: #aab3c6;
     background-color: rgba(40, 199, 111, .12);
+  }
+  body.dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-locked-row > td,
+  body.semi-dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-locked-row > td,
+  .dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-locked-row > td,
+  .semi-dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-locked-row > td {
+    color: #747d92;
+    background-color: #202533;
+  }
+  body.dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-row > td,
+  body.semi-dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-row > td,
+  .dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-row > td,
+  .semi-dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-row > td { background-color: #283046; }
+  @media (max-width: 767.98px) {
+    .invoice-preview-wrapper .wo-desktop-column-label { display: none; }
+    .invoice-preview-wrapper .wo-mobile-column-label { display: inline; }
   }
   body.dark-layout .invoice-preview-wrapper .wo-operation-complete-btn::after,
   body.semi-dark-layout .invoice-preview-wrapper .wo-operation-complete-btn::after,
@@ -1967,6 +2000,9 @@
         ? (bool) $currentUser->isAdmin()
         : strtolower((string) ($currentUser->role ?? '')) === 'admin')
     : false;
+  $scanCheckpointRole = $scanCheckpointRole ?? null;
+  $isScanCheckpointUser = in_array($scanCheckpointRole, ['kontrola', 'bravarija'], true);
+  $canCompleteOperations = $isAdminUser || $isScanCheckpointUser;
   $showSastavnicaActions = !$isBasicUserRole;
   $sastavnicaEmptyColspan = $showSastavnicaActions ? 16 : 15;
   $workOrderMetaHighlights = $workOrderMeta['highlights'] ?? [];
@@ -2511,8 +2547,8 @@
                 <table class="table" id="operacija-table">
                   <thead>
                     <tr>
-                      <th class="py-1 text-center">Alternativa</th>
-                      <th class="py-1 text-center">Pozicija</th>
+                      <th class="py-1 text-center"><span class="wo-desktop-column-label">Alternativa</span><span class="wo-mobile-column-label">Alt.</span></th>
+                      <th class="py-1 text-center"><span class="wo-desktop-column-label">Pozicija</span><span class="wo-mobile-column-label">Pos.</span></th>
                       <th class="py-1 text-center">Operacija</th>
                       <th class="py-1 text-center">Naziv</th>
                       <th class="py-1 text-center">Napo...</th>
@@ -2522,12 +2558,21 @@
                       <th class="py-1 text-center">VA</th>
                       <th class="py-1 text-center">Prim.klas.</th>
                       <th class="py-1 text-center">Sek.klas.</th>
-                      @if($isAdminUser)<th class="py-1 text-center wo-operation-action-col">Akcije</th>@endif
+                      @if($canCompleteOperations)<th class="py-1 text-center wo-operation-action-col">&#10003;</th>@endif
                     </tr>
                   </thead>
                   <tbody>
                     @forelse(($workOrderRegOperations ?? []) as $operation)
-                      <tr class="{{ (bool) ($operation['is_finished'] ?? false) ? 'wo-operation-finished-row' : '' }}">
+                      @php
+                        $operationItemId = trim((string) ($operation['item_id'] ?? $operation['id'] ?? ''));
+                        $operationFinished = (bool) ($operation['is_finished'] ?? false);
+                        $isRoleOperation = (bool) ($operation['is_role_operation'] ?? false);
+                        $roleLocked = $isScanCheckpointUser && !$isRoleOperation;
+                        $rowClasses = [];
+                        if ($operationFinished) $rowClasses[] = 'wo-operation-finished-row';
+                        if ($isScanCheckpointUser) $rowClasses[] = $roleLocked ? 'wo-operation-role-locked-row' : 'wo-operation-role-row';
+                      @endphp
+                      <tr class="{{ implode(' ', $rowClasses) }}">
                         <td class="py-1">{{ $displayValue($operation['alternativa'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($operation['pozicija'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($operation['operacija'] ?? null) }}</td>
@@ -2543,30 +2588,23 @@
                         <td class="py-1">{{ $displayValue($operation['va'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($operation['prim_klas'] ?? null) }}</td>
                         <td class="py-1">{{ $displayValue($operation['sek_klas'] ?? null) }}</td>
-                        @if($isAdminUser)
-                          @php
-                            $operationItemId = trim((string) ($operation['item_id'] ?? ''));
-                            $operationFinished = (bool) ($operation['is_finished'] ?? false);
-                          @endphp
+                        @if($canCompleteOperations)
                           <td class="py-1 text-center wo-operation-action-col">
                             <button
                               type="button"
-                              class="btn btn-sm {{ $operationFinished ? 'btn-flat-success' : 'btn-flat-secondary' }} wo-operation-complete-btn"
+                              class="btn btn-sm {{ $operationFinished ? 'btn-flat-success' : 'btn-flat-secondary' }} wo-operation-complete-btn {{ $roleLocked ? 'is-role-locked' : '' }}"
                               data-operation-id="{{ $operationItemId }}"
                               data-finished="{{ $operationFinished ? '1' : '0' }}"
-                              data-bs-toggle="tooltip"
-                              data-bs-placement="top"
-                              data-bs-title="{{ $operationFinished ? 'Označi kao otvorenu' : 'Označi kao završenu' }}"
+                              data-checkpoint-role="{{ $isScanCheckpointUser ? '1' : '0' }}"
                               aria-label="{{ $operationFinished ? 'Označi operaciju kao otvorenu' : 'Označi operaciju kao završenu' }}"
-                              @if($operationItemId === '') disabled @endif
-                            >
-                            </button>
+                              @if($operationItemId === '' || $roleLocked || ($isScanCheckpointUser && $operationFinished)) disabled @endif
+                            ></button>
                           </td>
                         @endif
                       </tr>
                     @empty
                       <tr>
-                        <td colspan="{{ $isAdminUser ? 12 : 11 }}" class="text-center text-muted py-2">Nema operacija za ovaj radni nalog.</td>
+                        <td colspan="{{ $canCompleteOperations ? 12 : 11 }}" class="text-center text-muted py-2">Nema operacija za ovaj radni nalog.</td>
                       </tr>
                     @endforelse
                   </tbody>
@@ -3196,6 +3234,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       plannedConsumptionUpdateUrl: @json($plannedConsumptionUpdateUrl),
       plannedConsumptionRemoveUrl: @json($plannedConsumptionRemoveUrl),
       operationCompleteUrl: @json($operationCompleteUrl ?? ''),
+      operationCheckpointUrl: @json($operationCheckpointUrl ?? ''),
       csrfToken: @json(csrf_token())
     };
     var toneClasses = ['primary', 'secondary', 'success', 'warning', 'danger', 'info'];
@@ -3462,9 +3501,14 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
       initOperationActionTooltip(button);
       button.addEventListener('click', function () {
         var operationId = String(button.getAttribute('data-operation-id') || '').trim();
-        if (!operationId || !mutationConfig.operationCompleteUrl) return;
+        var isCheckpointRole = button.getAttribute('data-checkpoint-role') === '1';
+        var operationUrl = isCheckpointRole
+          ? mutationConfig.operationCheckpointUrl
+          : mutationConfig.operationCompleteUrl;
+        if (!operationId || !operationUrl) return;
+        if (isCheckpointRole) mutationConfig.operationCompleteUrl = operationUrl;
         var currentlyFinished = button.getAttribute('data-finished') === '1';
-        var markFinished = !currentlyFinished;
+        var markFinished = isCheckpointRole ? true : !currentlyFinished;
         var row = button.closest('tr');
         var activeTooltip = window.bootstrap && window.bootstrap.Tooltip
           ? window.bootstrap.Tooltip.getInstance(button)
@@ -3476,7 +3520,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
         button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
         requestMutation(mutationConfig.operationCompleteUrl, { operation_id: operationId, finished: markFinished }, 'Status operacije nije moguće ažurirati.')
           .then(function () {
-            button.disabled = false;
+            button.disabled = isCheckpointRole && markFinished;
             button.classList.remove('is-saving');
             button.setAttribute('data-finished', markFinished ? '1' : '0');
             button.classList.toggle('btn-flat-success', markFinished);
@@ -3487,11 +3531,13 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
             if (row) {
               row.classList.toggle('wo-operation-finished-row', markFinished);
               var tableBody = row.parentElement;
-              if (tableBody && markFinished) {
-                tableBody.appendChild(row);
-              } else if (tableBody) {
-                var firstFinishedRow = tableBody.querySelector('tr.wo-operation-finished-row');
-                if (firstFinishedRow) tableBody.insertBefore(row, firstFinishedRow);
+              if (tableBody && !isCheckpointRole) {
+                if (markFinished) {
+                  tableBody.appendChild(row);
+                } else {
+                  var firstFinishedRow = tableBody.querySelector('tr.wo-operation-finished-row');
+                  if (firstFinishedRow) tableBody.insertBefore(row, firstFinishedRow);
+                }
               }
             }
             initOperationActionTooltip(button);
