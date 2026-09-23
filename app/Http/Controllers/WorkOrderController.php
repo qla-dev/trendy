@@ -170,8 +170,24 @@ class WorkOrderController extends Controller
                     ]);
             }
 
-            $raw = $workOrder['raw'] ?? [];
             $scanRole = $this->scanCheckpointRole($request->user());
+
+            // Apply the scanner role's priority on the server. This is
+            // deliberately independent of the browser's transition request:
+            // every QR-scanned RN must receive the department priority even
+            // if the browser request is interrupted while opening the page.
+            if ($isScanLookup && $scanRole !== null) {
+                $scanPriorityTransition = $this->transitionScannedWorkOrderPriority(
+                    (array) ($workOrder['raw'] ?? []),
+                    $request->user()
+                );
+
+                if (($scanPriorityTransition['changed'] ?? false) === true) {
+                    $workOrder = $this->findMappedWorkOrder((string) $workOrderId, true) ?? $workOrder;
+                }
+            }
+
+            $raw = $workOrder['raw'] ?? [];
             $workOrderKey = trim((string) $this->value($raw, ['acKey'], ''));
 
             // A scan by Kontrola or Bravarija still opens the normal RN
