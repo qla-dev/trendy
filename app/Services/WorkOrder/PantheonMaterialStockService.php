@@ -36,6 +36,61 @@ class PantheonMaterialStockService
         return true;
     }
 
+    /**
+     * Returns only the quantity that must still be moved into a warehouse for
+     * the supplied issue. Rows are locked just like canIssue(), so a closing
+     * transaction uses one consistent stock view.
+     */
+    public function shortages(ConnectionInterface $db, string $warehouse, array $items): array
+    {
+        $available = [];
+        $shortages = [];
+
+        foreach ($items as $item) {
+            if (!$this->hasPositiveQuantity($item)) continue;
+
+            $code = trim((string) ($item['code'] ?? ''));
+            if ($code === '') {
+                $shortages[] = $item;
+                continue;
+            }
+
+            $key = mb_strtolower($code);
+            if (!array_key_exists($key, $available)) {
+                $row = $db->selectOne(
+                    "SELECT TOP 1 anStock FROM dbo.tHE_Stock WITH (UPDLOCK, HOLDLOCK) WHERE LTRIM(RTRIM(acWarehouse)) = ? AND LTRIM(RTRIM(acIdent)) = ?",
+                    [$warehouse, $code]
+                );
+                $available[$key] = WorkOrderClosingCalculator::decimal($row->anStock ?? 0);
+            }
+
+            $quantity = WorkOrderClosingCalculator::decimal($item['quantity']);
+            $usable = bccomp($available[$key], '0', WorkOrderClosingCalculator::SCALE) > 0
+                ? $available[$key]
+                : '0';
+            $missing = bccomp($usable, $quantity, WorkOrderClosingCalculator::SCALE) < 0
+                ? bcsub($quantity, $usable, WorkOrderClosingCalculator::SCALE)
+                : '0';
+
+            if (bccomp($missing, '0', WorkOrderClosingCalculator::SCALE) > 0) {
+                $shortage = $item;
+                $shortage['quantity'] = $missing;
+                if (array_key_exists('total', $shortage)) {
+                    $shortage['total'] = bcmul(
+                        $missing,
+                        WorkOrderClosingCalculator::decimal($shortage['price'] ?? 0),
+                        WorkOrderClosingCalculator::SCALE
+                    );
+                }
+                $shortages[] = $shortage;
+            }
+
+            $available[$key] = bcsub($usable, $quantity, WorkOrderClosingCalculator::SCALE);
+        }
+
+        return $shortages;
+    }
+
     private function hasPositiveQuantity(array $item): bool
     {
         return bccomp((string) ($item['quantity'] ?? '0'), '0', WorkOrderClosingCalculator::SCALE) > 0;
