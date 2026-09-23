@@ -68,7 +68,7 @@ class WorkOrderMaterialFlowCompatibilityTest extends TestCase
         $this->assertStringContainsString("\$this->writer->linkWorkOrder(\$db,\$number,\$qid,\$wo,'P',\$now,\$userId);", $this->preparation);
         $this->assertStringContainsString("\$connection->table('dbo.tHF_LinkMoveWOEx')->insert([", $this->writer);
         $this->assertStringContainsString("\$connection->table('dbo.tHF_LinkMoveItemWOExItem')->insert([", $this->writer);
-        $this->assertStringContainsString("unset(\$blockingExisting['6400']);", $this->service);
+        $this->assertStringContainsString("unset(\$blockingExisting['6400'], \$blockingExisting['6400_excess']);", $this->service);
         $this->assertStringContainsString('$this->materialCostTotal((string) $workOrder[\'acKey\'])', $this->service);
     }
 
@@ -89,6 +89,16 @@ class WorkOrderMaterialFlowCompatibilityTest extends TestCase
         $this->assertStringContainsString('materialPreparation->prepare', $this->service);
         $this->assertStringContainsString('materialPreparation->append', $this->service);
         $this->assertStringContainsString("'document_type'=>'2005'", $this->preparation);
+    }
+
+    public function test_closing_replenishes_each_material_missing_from_wip_on_the_linked_2005(): void
+    {
+        $stock = file_get_contents(__DIR__ . '/../../app/Services/WorkOrder/PantheonMaterialStockService.php');
+
+        $this->assertStringContainsString('materialStock->shortages', $this->service);
+        $this->assertStringContainsString('Replenish only the material missing from WIP', $this->service);
+        $this->assertStringContainsString('function shortages', $stock);
+        $this->assertStringContainsString('return $shortages;', $stock);
     }
 
     public function test_missing_wip_stock_without_2005_falls_back_to_raw_materials_and_notifies_the_user(): void

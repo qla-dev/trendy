@@ -957,13 +957,18 @@ class WorkOrderClosingService
     }
 
     /**
-     * Materials entered only on the closing tab have not yet left the raw
-     * material warehouse. Create (or extend) their 2005 transfer before the
-     * closing 6400 releases the same linked WO material from WIP.
+     * Replenish only the material missing from WIP before the closing 6400.
+     * This keeps 2005 -> 6400 as the normal flow even when an RN has a linked
+     * 2005 that does not contain every material selected at closing time.
      */
     private function prepareCloseTimeMaterials(array $workOrder, array $materials, Carbon $now, int $userId, string $maker): ?array
     {
-        $items = array_values(array_filter($materials, fn (array $material) => (bool) ($material['requires_close_time_preparation'] ?? false)));
+        $wip = trim((string) config('work_order_closing.work_in_progress_warehouse', config('work_order_closing.operation_warehouse', '')));
+        if ($wip === '') {
+            throw new RuntimeException('Konfiguracija međuskladišta nije postavljena.');
+        }
+
+        $items = $this->materialStock->shortages($this->connection, $wip, $materials);
         if ($items === []) {
             return null;
         }
