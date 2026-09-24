@@ -101,6 +101,13 @@ class ProductionPlanController extends Controller
                 }
             }
 
+            foreach ([['isporuka_od', '>='], ['isporuka_do', '<=']] as [$key, $operator]) {
+                $value = trim((string) ($filters[$key] ?? ''));
+                if ($value !== '') {
+                    $query->whereDate('wo.adSchedEndTime', $operator, $value);
+                }
+            }
+
             $week = (int) ($filters['kw'] ?? 0);
             $year = (int) ($filters['year'] ?? now()->year);
             if ($year <= 0) {
@@ -250,6 +257,13 @@ class ProductionPlanController extends Controller
                     }
                 }
 
+                foreach ([['isporuka_od', '>='], ['isporuka_do', '<=']] as [$key, $operator]) {
+                    $value = trim((string) ($filters[$key] ?? ''));
+                    if ($value !== '') {
+                        $query->whereDate('wo.adSchedEndTime', $operator, $value);
+                    }
+                }
+
                 $year = (int) ($filters['year'] ?? now()->year);
                 if ($year <= 0) {
                     $year = now()->year;
@@ -357,7 +371,7 @@ class ProductionPlanController extends Controller
 
     private function filterSummary(array $filters): string
     {
-        $labels = ['rn' => 'RN', 'narucitelj' => 'Naručitelj', 'prioritet' => 'Prioritet', 'proizvod' => 'Proizvod', 'status_rn' => 'Status RN', 'narudzba' => 'Narudžba', 'year' => 'Godina', 'kw' => 'Kalendarska sedmica', 'datum_od' => 'Datum od', 'datum_do' => 'Datum do'];
+        $labels = ['rn' => 'RN', 'narucitelj' => 'Naručitelj', 'prioritet' => 'Prioritet', 'proizvod' => 'Proizvod', 'status_rn' => 'Status RN', 'narudzba' => 'Narudžba', 'year' => 'Godina', 'kw' => 'Kalendarska sedmica', 'datum_od' => 'Početni termin od', 'datum_do' => 'Početni termin do', 'isporuka_od' => 'Datum isporuke od', 'isporuka_do' => 'Datum isporuke do'];
         $parts = [];
         foreach ($labels as $key => $label) {
             $value = trim((string) ($filters[$key] ?? ''));
