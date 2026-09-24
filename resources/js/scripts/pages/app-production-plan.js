@@ -4,6 +4,20 @@ $(function () {
   var csrf = $('meta[name="csrf-token"]').attr('content');
   var tableElement = $('#plan-proizvodnje-tabela');
   var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'nositelj_troska', 'napomena'];
+  var columnLabels = tableElement.find('thead th').map(function () { return $(this).text().trim(); }).get();
+  var columnStorageKey = 'production-plan-visible-columns-v2';
+  var savedColumns = null;
+  try {
+    var storedColumns = JSON.parse(window.localStorage.getItem(columnStorageKey));
+    if (!Array.isArray(storedColumns)) {
+      storedColumns = JSON.parse(window.localStorage.getItem('production-plan-visible-columns'));
+      if (Array.isArray(storedColumns)) {
+        storedColumns = storedColumns.filter(function (key) { return key !== 'izr_kol'; });
+        window.localStorage.setItem(columnStorageKey, JSON.stringify(storedColumns));
+      }
+    }
+    if (Array.isArray(storedColumns) && storedColumns.some(function (key) { return keys.indexOf(key) !== -1; })) savedColumns = storedColumns;
+  } catch (error) { /* Browsers may block local storage. The picker still works for this visit. */ }
   var requestErrorShown = false;
   var priorityFilter = $('#filter-prioritet');
   var rowColourFilter = $('#plan-boja-redova');
@@ -121,7 +135,7 @@ $(function () {
     },
     language: { processing: 'Učitavanje...', search: 'Pretraga:', lengthMenu: 'Prikaži _MENU_ redova', info: 'Prikaz _START_ do _END_ od _TOTAL_ radnih naloga', infoEmpty: 'Nema podataka', zeroRecords: 'Nema pronađenih radnih naloga', paginate: { next: 'Sljedeća', previous: 'Prethodna' } },
     columns: keys.map(function (key) {
-      return { data: key, defaultContent: '', orderable: key !== 'progress', render: function (value) {
+      return { data: key, defaultContent: '', visible: savedColumns ? savedColumns.indexOf(key) !== -1 : key !== 'izr_kol', orderable: key !== 'progress', render: function (value) {
         var output;
         if (key === 'progress') output = '<b>' + escapeHtml(value) + '%</b>';
         else if (key === 'plan_kol' || key === 'izr_kol') output = formatQuantity(value);
@@ -133,6 +147,95 @@ $(function () {
     createdRow: function (row, data) { applyRowColour(row, data); }
   });
   tableElement.on('xhr.dt', function () { requestErrorShown = false; });
+  var columnOptions = $('#production-plan-column-options');
+  keys.forEach(function (key, index) {
+    var option = $('<div class="form-check"><input class="form-check-input production-plan-column-toggle" type="checkbox"><label class="form-check-label"></label></div>');
+    var input = option.find('input').attr({ id: 'production-plan-column-' + index, 'data-column-index': index }).prop('checked', table.column(index).visible());
+    option.find('label').attr('for', input.attr('id')).text(columnLabels[index]);
+    columnOptions.append(option);
+  });
+  function saveColumnSelection() {
+    var selected = columnOptions.find('input:checked').map(function () { return keys[Number(this.dataset.columnIndex)]; }).get();
+    try { window.localStorage.setItem(columnStorageKey, JSON.stringify(selected)); } catch (error) { /* Storage is optional. */ }
+  }
+  function columnCells(index) {
+    return [table.column(index).header()].concat(table.column(index).nodes().toArray());
+  }
+  function columnPositions() {
+    var positions = new Map();
+    keys.forEach(function (key, index) {
+      if (!table.column(index).visible()) return;
+      columnCells(index).forEach(function (cell) {
+        if (cell && cell.isConnected) positions.set(cell, cell.getBoundingClientRect().left);
+      });
+    });
+    return positions;
+  }
+  function changeVisibleColumns() {
+    var changes = keys.map(function (key, index) {
+      return { index: index, visible: columnOptions.find('[data-column-index="' + index + '"]').prop('checked') };
+    }).filter(function (change) { return table.column(change.index).visible() !== change.visible; });
+    if (!changes.length) return Promise.resolve();
+    var canAnimate = Element.prototype.animate && (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    var exits = [];
+    if (canAnimate) changes.filter(function (change) { return !change.visible; }).forEach(function (change) {
+      columnCells(change.index).forEach(function (cell) {
+        if (cell && cell.isConnected) exits.push(cell.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 110, easing: 'ease-in' }).finished.catch(function () {}));
+      });
+    });
+    return Promise.all(exits).then(function () {
+      var previousPositions = canAnimate ? columnPositions() : null;
+      changes.forEach(function (change) { table.column(change.index).visible(change.visible, false); });
+      table.columns.adjust();
+      if (!canAnimate) return;
+      var animations = [];
+      keys.forEach(function (key, index) {
+        if (!table.column(index).visible()) return;
+        columnCells(index).forEach(function (cell) {
+          if (!cell || !cell.isConnected) return;
+          if (previousPositions.has(cell)) {
+            var shift = previousPositions.get(cell) - cell.getBoundingClientRect().left;
+            if (Math.abs(shift) > 1) animations.push(cell.animate([{ transform: 'translateX(' + shift + 'px)' }, { transform: 'translateX(0)' }], { duration: 230, easing: 'ease-out' }).finished.catch(function () {}));
+          } else {
+            animations.push(cell.animate([{ opacity: 0, transform: 'scaleX(.75)' }, { opacity: 1, transform: 'scaleX(1)' }], { duration: 230, easing: 'ease-out' }).finished.catch(function () {}));
+          }
+        });
+      });
+      return Promise.all(animations);
+    });
+  }
+  var columnChangeQueue = Promise.resolve();
+  function scheduleColumnChange() {
+    saveColumnSelection();
+    columnChangeQueue = columnChangeQueue.then(changeVisibleColumns).catch(function () {
+      keys.forEach(function (key, index) {
+        table.column(index).visible(columnOptions.find('[data-column-index="' + index + '"]').prop('checked'), false);
+      });
+      table.columns.adjust();
+    });
+  }
+  columnOptions.on('change', 'input', function () {
+    if (!columnOptions.find('input:checked').length) {
+      $(this).prop('checked', true);
+      return;
+    }
+    scheduleColumnChange();
+  });
+  $('#btn-sve-kolone-plana').on('click', function () {
+    columnOptions.find('input').prop('checked', true);
+    scheduleColumnChange();
+  });
+  $('#btn-kolone-plana, #btn-prikazi-filtere').on('click', function () {
+    var columnsClicked = this.id === 'btn-kolone-plana';
+    var panel = $(columnsClicked ? '#tijelo-kolona-plana' : '#tijelo-filtera');
+    var otherPanel = $(columnsClicked ? '#tijelo-filtera' : '#tijelo-kolona-plana');
+    var otherButton = $(columnsClicked ? '#btn-prikazi-filtere' : '#btn-kolone-plana');
+    var opening = panel.hasClass('d-none');
+    otherPanel.addClass('d-none');
+    otherButton.attr('aria-expanded', 'false');
+    panel.toggleClass('d-none', !opening);
+    $(this).attr('aria-expanded', String(opening));
+  });
   var exportModalElement = document.getElementById('production-plan-export-modal');
   function toggleExportModal(show) {
     if (window.bootstrap && window.bootstrap.Modal) {
@@ -188,14 +291,14 @@ $(function () {
   rowColourFilter.on('change', function () {
     table.rows({ page: 'current' }).every(function () { applyRowColour(this.node(), this.data()); });
   });
-  $('#btn-prikazi-filtere').on('click', function () { $('#tijelo-filtera').toggleClass('d-none'); });
   $('#btn-obrisi-filter').on('click', function () { $('.f').each(function () { if (this._flatpickr) this._flatpickr.clear(); else if ($(this).is('select')) $(this).val('').trigger('change'); else $(this).val(''); }); $('.f[data-k="year"]').val(new Date().getFullYear()); table.ajax.reload(); });
   tableElement.find('tbody').on('click', 'td', function () {
     var cell = table.cell(this), row = table.row($(this).closest('tr')).data(), key = keys[cell.index().column];
     if (!row || !editable(key)) return;
     closeEditor();
     var rect = this.getBoundingClientRect(), multiline = key === 'napomena';
-    var editor = $('<div class="plan-inline-editor" data-id="' + escapeHtml(row.id) + '" data-field="' + key + '"><label>Uredi polje</label>' + (multiline ? '<textarea class="form-control"></textarea>' : '<input class="form-control" value="' + escapeHtml(row[key]) + '">') + '<div class="mt-50"><button class="btn btn-primary btn-sm save">Sačuvaj</button><button class="btn btn-outline-secondary btn-sm cancel ms-50">Odustani</button></div></div>').appendTo('body');
+    var editor = $('<div class="plan-inline-editor" data-id="' + escapeHtml(row.id) + '" data-field="' + key + '"><label>Uredi polje</label>' + (multiline ? '<textarea class="form-control"></textarea>' : '<input class="form-control">') + '<div class="mt-50"><button class="btn btn-primary btn-sm save">Sačuvaj</button><button class="btn btn-outline-secondary btn-sm cancel ms-50">Odustani</button></div></div>').appendTo('body');
+    editor.find('input,textarea').val(row[key] == null ? '' : row[key]);
     var width = Math.min(300, window.innerWidth - 16);
     editor.css({ position: 'fixed', zIndex: 2000, left: Math.min(rect.left, window.innerWidth - width - 8), top: rect.bottom + 4, width: width });
     editor.find('input,textarea').focus();

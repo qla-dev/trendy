@@ -8,7 +8,7 @@
 @endsection
 @section('page-style')
   <style>
-    .production-plan-table { min-width: 1700px; }
+    .production-plan-table { width: max-content !important; min-width: 100%; }
     .production-plan-table > :not(caption) > * > * { padding: .42rem .5rem; font-size: .8rem; white-space: nowrap; }
     .production-plan-table .editable-cell { cursor: pointer; }
     .production-plan-table tr.production-plan-row--red > td { background-color: #ffd6dc !important; color: #7a0014; }
@@ -32,6 +32,11 @@
     #production-plan-export-modal button,
     #production-plan-export-modal .form-check-input:not(:disabled),
     #production-plan-export-modal .form-check-input:not(:disabled) + .form-check-label { cursor: pointer; }
+    #tijelo-kolona-plana button,
+    #tijelo-kolona-plana .form-check-input:not(:disabled),
+    #tijelo-kolona-plana .form-check-input:not(:disabled) + .form-check-label { cursor: pointer; }
+    .production-plan-column-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem 1rem; }
+    .production-plan-column-options .form-check { margin: 0; }
     .dark-layout .production-plan-table-loading-overlay, .semi-dark-layout .production-plan-table-loading-overlay { background: rgba(20, 28, 48, .68); }
     .dark-layout .production-plan-table-loading-spinner, .semi-dark-layout .production-plan-table-loading-spinner { color: #d6dcec; }
     .dark-layout .production-plan-table-loading-message, .semi-dark-layout .production-plan-table-loading-message { color: #f4f5fb; }
@@ -55,12 +60,20 @@
 @section('content')
 <section id="rn-plan">
   <div class="content-header row"><div class="col-12 mb-2 d-flex justify-content-between align-items-center flex-wrap gap-1"><h2 class="mb-0">Plan proizvodnje — Radni nalozi</h2><button type="button" class="btn" id="btn-izvoz-plana"><i data-feather="download" class="me-50"></i>Izvoz u Excel</button></div></div>
-  <div class="card mb-2"><div class="card-header d-flex justify-content-between align-items-center"><h4 class="mb-0">Filter plana proizvodnje</h4><div class="d-flex align-items-center flex-wrap gap-2"><button class="btn btn-outline-primary btn-sm" id="btn-prikazi-filtere"><i data-feather="filter" class="me-50"></i>Prikaži filtere</button><button class="btn btn-outline-danger btn-sm" id="btn-obrisi-filter"><i data-feather="trash-2" class="me-50"></i>Obriši filter</button></div></div>
+  <div class="card mb-2"><div class="card-header d-flex justify-content-between align-items-center"><h4 class="mb-0">Filter plana proizvodnje</h4><div class="d-flex align-items-center flex-wrap gap-2"><button type="button" class="btn btn-outline-primary btn-sm" id="btn-kolone-plana" aria-controls="tijelo-kolona-plana" aria-expanded="false"><i data-feather="columns" class="me-50"></i>Filter kolona</button><button type="button" class="btn btn-outline-primary btn-sm" id="btn-prikazi-filtere" aria-controls="tijelo-filtera" aria-expanded="false"><i data-feather="filter" class="me-50"></i>Prikaži filtere</button><button class="btn btn-outline-danger btn-sm" id="btn-obrisi-filter"><i data-feather="trash-2" class="me-50"></i>Obriši filter</button></div></div>
     <div class="card-body d-none" id="tijelo-filtera"><div class="row g-2">
       <div class="col-md-3"><label class="form-label" for="filter-prioritet">Prioritet</label><select class="form-select f" id="filter-prioritet" data-k="prioritet"><option value="">Svi prioriteti</option>@foreach (($planConfig['priorityOptions'] ?? []) as $priorityOption)<option value="{{ $priorityOption['code'] }}">{{ $priorityOption['label'] }}</option>@endforeach</select></div>
       <div class="col-md-3"><label class="form-label" for="plan-boja-redova">Boja redova</label><select class="form-select" id="plan-boja-redova"><option value="none">Bez boje</option><option value="basic">Osnovne</option><option value="all" selected>Sve</option></select></div>
-      <div class="col-md-3"><x-filters.text label="RN" class="f" data-k="rn"/></div><div class="col-md-3"><x-filters.text label="Naručitelj" class="f" data-k="narucitelj"/></div><div class="col-md-3"><x-filters.text label="Proizvod" class="f" data-k="proizvod"/></div><div class="col-md-3"><label class="form-label">Status RN</label><input class="form-control f" data-k="status_rn"></div><div class="col-md-3"><x-filters.text label="Narudžba" class="f" data-k="narudzba"/></div><div class="col-md-3"><label class="form-label">Godina</label><input class="form-control f" data-k="year" value="{{ now()->year }}"></div><div class="col-md-3"><label class="form-label">Kalendarska sedmica</label><input class="form-control f" data-k="kw" placeholder="1–53"></div><div class="col-md-3"><x-filters.date label="Datum od" class="f" data-k="datum_od"/></div><div class="col-md-3"><x-filters.date label="Datum do" class="f" data-k="datum_do"/></div><div class="col-md-3 d-flex align-items-end"><button id="filter" class="btn btn-primary w-100"><i data-feather="filter" class="me-50"></i>Filter</button></div>
+      <div class="col-md-3"><x-filters.text label="RN" class="f" data-k="rn"/></div><div class="col-md-3"><x-filters.text label="Naručitelj" class="f" data-k="narucitelj"/></div><div class="col-md-3"><x-filters.text label="Proizvod" class="f" data-k="proizvod"/></div><div class="col-md-3"><label class="form-label">Status RN</label><input class="form-control f" data-k="status_rn"></div><div class="col-md-3"><x-filters.text label="Narudžba" class="f" data-k="narudzba"/></div><div class="col-md-3"><label class="form-label">Godina</label><input class="form-control f" data-k="year" value="{{ now()->year }}"></div>
+    </div><div class="row g-2 mt-0">
+      <div class="col-md-3"><x-filters.date label="Početni termin od" class="f" data-k="datum_od"/></div><div class="col-md-3"><x-filters.date label="Početni termin do" class="f" data-k="datum_do"/></div><div class="col-md-3"><x-filters.date label="Datum isporuke od" class="f" data-k="isporuka_od"/></div><div class="col-md-3"><x-filters.date label="Datum isporuke do" class="f" data-k="isporuka_do"/></div>
+    </div><div class="row g-2 mt-0">
+      <div class="col-md-3"><label class="form-label">Kalendarska sedmica</label><input class="form-control f" data-k="kw" placeholder="1–53"></div><div class="col-md-3 ms-md-auto d-flex align-items-end"><button id="filter" class="btn btn-primary w-100"><i data-feather="filter" class="me-50"></i>Primijeni filter</button></div>
     </div></div>
+    <div class="card-body border-top d-none" id="tijelo-kolona-plana">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-1 mb-1"><h5 class="mb-0">Prikazane kolone</h5><button type="button" class="btn btn-outline-secondary btn-sm" id="btn-sve-kolone-plana">Prikaži sve</button></div>
+      <div id="production-plan-column-options" class="production-plan-column-options"></div>
+    </div>
   </div>
   <div class="card production-plan-wrapper production-plan-table-overlay-host">
     <div id="production-plan-loading-overlay" class="production-plan-table-loading-overlay is-visible" role="status" aria-live="polite" aria-hidden="false">
@@ -97,5 +110,5 @@
 @endsection
 @section('page-script')
   <script>window.planProizvodnjeConfig=@json($planConfig);flatpickr('.shared-filter-date',{dateFormat:'Y-m-d',altInput:true,altFormat:'d.m.Y',allowInput:true,disableMobile:true});</script>
-  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=126') }}"></script>
+  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=132') }}"></script>
 @endsection

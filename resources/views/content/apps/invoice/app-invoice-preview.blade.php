@@ -483,6 +483,19 @@
     width: 100%;
     background-color: rgba(115, 103, 240, 0.06);
   }
+  .wo-mobile-priority {
+    display: none;
+  }
+  .wo-mobile-priority-dot {
+    flex: 0 0 0.5rem;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--wo-priority-dot, #6e6b7b);
+  }
+  .wo-mobile-priority.wo-priority-danger { --wo-priority-dot: #ea5455; }
+  .wo-mobile-priority.wo-priority-warning { --wo-priority-dot: #ff9f43; }
+  .wo-mobile-priority.wo-priority-info { --wo-priority-dot: #00cfe8; }
 
   .wo-meta-grid {
     display: grid;
@@ -1649,6 +1662,24 @@
       gap: 0.55rem;
       padding: 0.55rem;
     }
+    .wo-mobile-top-actions .wo-mobile-priority {
+      display: flex;
+      grid-column: 1 / -1;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0.25rem 0.4rem;
+      padding: 0.15rem 0.2rem 0.35rem;
+      border-bottom: 1px solid var(--wo-divider-color);
+      font-size: 0.9rem;
+      line-height: 1.2;
+      text-align: center;
+    }
+    .wo-mobile-priority-current {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
     .wo-mobile-top-actions .btn {
       width: 100%;
       height: 44px;
@@ -2194,6 +2225,12 @@
   <div class="wo-mobile-top-actions">
     <div class="card">
       <div class="card-body">
+        @if($hasLoadedWorkOrder)
+          <div id="wo-mobile-priority" class="wo-mobile-priority wo-priority-{{ $priorityToneClass }}">
+            <span class="wo-meta-chip-label">Prioritet RN:</span>
+            <span class="wo-mobile-priority-current wo-meta-chip-value"><span class="wo-mobile-priority-dot" aria-hidden="true"></span><strong id="wo-mobile-priority-value" aria-live="polite">{{ $priorityDisplayLabel === '-' ? 'Nije dodijeljen' : $priorityDisplayLabel }}</strong></span>
+          </div>
+        @endif
         <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#qr-scanner-modal">
           <i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog
         </button>
@@ -3244,6 +3281,8 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var prioritySelect = document.getElementById('wo-priority-select');
     var statusLabel = document.getElementById('wo-status-label');
     var priorityLabel = document.getElementById('wo-priority-label');
+    var mobilePriority = document.getElementById('wo-mobile-priority');
+    var mobilePriorityValue = document.getElementById('wo-mobile-priority-value');
     var statusTriggerButton = document.getElementById('wo-status-trigger-btn');
     var priorityTriggerButton = document.getElementById('wo-priority-trigger-btn');
     var protectionTriggerButton = document.getElementById('wo-protection-trigger-btn');
@@ -5694,6 +5733,14 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 
               if (priorityLabel) {
                 priorityLabel.textContent = resolvedPriority;
+              }
+
+              if (mobilePriority && mobilePriorityValue) {
+                mobilePriorityValue.textContent = resolvedPriority;
+                toneClasses.forEach(function (toneClass) {
+                  mobilePriority.classList.remove('wo-priority-' + toneClass);
+                });
+                mobilePriority.classList.add('wo-priority-' + resolvePriorityToneClass(resolvedPriority));
               }
 
               updateSideButtonTone(priorityTriggerButton, resolvePriorityToneClass(resolvedPriority));
