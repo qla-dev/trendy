@@ -3,16 +3,18 @@ $(function () {
   var config = window.planProizvodnjeConfig || {};
   var csrf = $('meta[name="csrf-token"]').attr('content');
   var tableElement = $('#plan-proizvodnje-tabela');
-  var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'status_rn', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'nositelj_troska', 'napomena'];
+  var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'status_rn', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'datum_isporuke', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'nositelj_troska', 'napomena'];
   var columnLabels = tableElement.find('thead th').map(function () { return $(this).text().trim(); }).get();
-  var columnStorageKey = 'production-plan-visible-columns-v2';
+  var columnStorageKey = 'production-plan-visible-columns-v3';
   var savedColumns = null;
   try {
     var storedColumns = JSON.parse(window.localStorage.getItem(columnStorageKey));
     if (!Array.isArray(storedColumns)) {
-      storedColumns = JSON.parse(window.localStorage.getItem('production-plan-visible-columns'));
+      storedColumns = JSON.parse(window.localStorage.getItem('production-plan-visible-columns-v2'));
+      if (!Array.isArray(storedColumns)) storedColumns = JSON.parse(window.localStorage.getItem('production-plan-visible-columns'));
       if (Array.isArray(storedColumns)) {
         storedColumns = storedColumns.filter(function (key) { return key !== 'izr_kol'; });
+        if (storedColumns.indexOf('datum_isporuke') === -1) storedColumns.push('datum_isporuke');
         window.localStorage.setItem(columnStorageKey, JSON.stringify(storedColumns));
       }
     }
@@ -93,7 +95,7 @@ $(function () {
     }
   });
   function filters() { var values = {}; $('.f').each(function () { values[$(this).data('k')] = $(this).val(); }); values.week_dates_auto = weekDatesAuto ? 1 : 0; return values; }
-  function editable(key) { return config.canEdit && ['rn', 'progress', 'prioritet', 'status_rn', 'broj_narudzbe_kupca'].indexOf(key) === -1; }
+  function editable(key) { return config.canEdit && ['rn', 'progress', 'prioritet', 'status_rn', 'broj_narudzbe_kupca', 'datum_isporuke'].indexOf(key) === -1; }
   function closeEditor() {
     $('.plan-inline-editor .select2-hidden-accessible').each(function () { $(this).select2('destroy'); });
     $('.plan-inline-editor').remove();
@@ -145,7 +147,7 @@ $(function () {
         var output;
         if (key === 'progress') output = '<b>' + escapeHtml(value) + '%</b>';
         else if (key === 'plan_kol' || key === 'izr_kol') output = formatQuantity(value);
-        else if (['datum', 'pocetak', 'kraj'].indexOf(key) >= 0) output = formatDate(value);
+        else if (['datum', 'pocetak', 'kraj', 'datum_isporuke'].indexOf(key) >= 0) output = formatDate(value);
         else output = escapeHtml(value);
         return editable(key) ? '<span class="editable-cell">' + output + '</span>' : output;
       }};
