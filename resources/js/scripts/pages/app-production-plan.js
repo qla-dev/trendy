@@ -3,7 +3,7 @@ $(function () {
   var config = window.planProizvodnjeConfig || {};
   var csrf = $('meta[name="csrf-token"]').attr('content');
   var tableElement = $('#plan-proizvodnje-tabela');
-  var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'nositelj_troska', 'napomena'];
+  var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'status_rn', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'nositelj_troska', 'napomena'];
   var columnLabels = tableElement.find('thead th').map(function () { return $(this).text().trim(); }).get();
   var columnStorageKey = 'production-plan-visible-columns-v2';
   var savedColumns = null;
@@ -93,7 +93,7 @@ $(function () {
     }
   });
   function filters() { var values = {}; $('.f').each(function () { values[$(this).data('k')] = $(this).val(); }); values.week_dates_auto = weekDatesAuto ? 1 : 0; return values; }
-  function editable(key) { return config.canEdit && ['rn', 'progress', 'prioritet', 'broj_narudzbe_kupca'].indexOf(key) === -1; }
+  function editable(key) { return config.canEdit && ['rn', 'progress', 'prioritet', 'status_rn', 'broj_narudzbe_kupca'].indexOf(key) === -1; }
   function closeEditor() {
     $('.plan-inline-editor .select2-hidden-accessible').each(function () { $(this).select2('destroy'); });
     $('.plan-inline-editor').remove();
@@ -121,21 +121,27 @@ $(function () {
     loadingOverlay.toggleClass('is-visible', loading).attr('aria-hidden', String(!loading));
     tableElement.attr('aria-busy', String(loading));
   }
+  function sizeEmptyMessage() {
+    var viewport = tableElement.closest('.dataTables_wrapper').children('.row').eq(1)[0];
+    if (viewport) viewport.style.setProperty('--production-plan-visible-width', viewport.clientWidth + 'px');
+  }
   // The overlay belongs to the Ajax request, not DataTables' internal processing
   // state. With scrolling enabled, that state can remain true after rows draw.
   // Register before initialization so the first request shows the overlay too.
   tableElement.on('preXhr.dt', function () { setPlanLoading(true); });
   tableElement.on('xhr.dt error.dt draw.dt init.dt', function () { setPlanLoading(false); });
+  tableElement.on('draw.dt', sizeEmptyMessage);
+  $(window).on('resize', sizeEmptyMessage);
   var table = tableElement.DataTable({
-    serverSide: true, processing: true, scrollX: false, pageLength: 25, order: [[8, 'desc']],
+    serverSide: true, processing: true, scrollX: false, pageLength: 25, order: [[9, 'desc']],
     ajax: {
       url: config.dataUrl,
       data: function (data) { data.filter = filters(); data.sort = keys[data.order[0] ? data.order[0].column : 4]; data.dir = data.order[0] ? data.order[0].dir : 'desc'; },
       error: function (xhr) { setPlanLoading(false); showRequestError(xhr); }
     },
-    language: { processing: 'Učitavanje...', search: 'Pretraga:', lengthMenu: 'Prikaži _MENU_ redova', info: 'Prikaz _START_ do _END_ od _TOTAL_ radnih naloga', infoEmpty: 'Nema podataka', zeroRecords: 'Nema pronađenih radnih naloga', paginate: { next: 'Sljedeća', previous: 'Prethodna' } },
+    language: { processing: 'Učitavanje...', search: 'Pretraga:', lengthMenu: 'Prikaži _MENU_ redova', info: 'Prikaz _START_ do _END_ od _TOTAL_ radnih naloga', infoEmpty: 'Nema podataka', emptyTable: '<span class="production-plan-empty-message">Nema radnih naloga</span>', zeroRecords: '<span class="production-plan-empty-message">Nema pronađenih radnih naloga</span>', paginate: { next: 'Sljedeća', previous: 'Prethodna' } },
     columns: keys.map(function (key) {
-      return { data: key, defaultContent: '', visible: savedColumns ? savedColumns.indexOf(key) !== -1 : key !== 'izr_kol', orderable: key !== 'progress', render: function (value) {
+      return { data: key, defaultContent: '', visible: savedColumns ? savedColumns.indexOf(key) !== -1 : ['izr_kol', 'status_rn'].indexOf(key) === -1, orderable: key !== 'progress', render: function (value) {
         var output;
         if (key === 'progress') output = '<b>' + escapeHtml(value) + '%</b>';
         else if (key === 'plan_kol' || key === 'izr_kol') output = formatQuantity(value);
@@ -267,7 +273,7 @@ $(function () {
       showError('Izvoz nije dostupan', 'Adresa za izvoz nije podešena.');
       return;
     }
-    var order = table.order()[0] || [8, 'desc'];
+    var order = table.order()[0] || [9, 'desc'];
     var parameters = {
       scope: $('input[name="production-plan-export-scope"]:checked').val() || 'filtered',
       filter: filters(),
