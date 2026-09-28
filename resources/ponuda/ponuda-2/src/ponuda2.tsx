@@ -38,36 +38,40 @@ const PhaseCard = ({
   duration, 
   price, 
   items, 
-  delay = 0 
+  delay = 0,
+  completed = false
 }: { 
   number: string; 
   title: string; 
-  duration: string; 
+  duration?: string;
   price: string; 
   items: string[];
   delay?: number;
+  completed?: boolean;
 }) => (
   <motion.div 
     initial={{ opacity: 0, y: 20 }}
     whileInView={{ opacity: 1, y: 0 }}
     viewport={{ once: true }}
     transition={{ delay, duration: 0.5 }}
-    className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm hover:shadow-md transition-all group"
+    className="bg-white rounded-3xl p-6 xl:p-8 border border-slate-200 shadow-sm hover:shadow-md transition-all group h-full min-w-0 flex flex-col"
   >
-    <div className="flex justify-between items-start mb-6">
+    <div className="flex flex-col items-start gap-4 mb-6">
       <div>
         <span className="text-xs font-bold tracking-widest text-slate-500 uppercase mb-2 block">{number}</span>
-        <h3 className="text-2xl font-semibold text-slate-900">{title}</h3>
+        <h3 className="text-xl xl:text-2xl font-semibold text-slate-900">{title}</h3>
       </div>
-      <div className="bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
-        <div className="flex items-center gap-2 text-slate-500 text-sm font-medium whitespace-nowrap">
-          <Clock className="w-4 h-4" />
-          {duration}
+      {duration && (
+        <div className="bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100 self-start">
+          <div className="flex items-center gap-2 text-slate-500 text-sm font-medium whitespace-nowrap">
+            <Clock className="w-4 h-4" />
+            {duration}
+          </div>
         </div>
-      </div>
+      )}
     </div>
     
-    <ul className="space-y-4 mb-8">
+    <ul className="space-y-3 mb-8 flex-1">
       {items.map((item, idx) => (
         <li key={idx} className="flex items-start gap-3 text-slate-600">
           <CheckCircle2 className="w-5 h-5 text-slate-900 mt-0.5 shrink-0" />
@@ -76,9 +80,16 @@ const PhaseCard = ({
       ))}
     </ul>
     
-    <div className="pt-6 border-t border-slate-100 flex justify-between items-center">
+    <div className="pt-6 border-t border-slate-100 flex flex-wrap justify-between items-center gap-3">
       <span className="text-slate-400 text-sm font-medium uppercase tracking-wider">Investicija</span>
-      <span className="text-2xl font-bold text-slate-900">{price} <span className="text-sm font-medium text-slate-400">KM</span></span>
+      {completed ? (
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="text-xl font-bold text-slate-400 line-through decoration-2">{price} KM</span>
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700">Završeno</span>
+        </span>
+      ) : (
+        <span className="text-2xl font-bold text-slate-900">{price} <span className="text-sm font-medium text-slate-400">KM</span></span>
+      )}
     </div>
   </motion.div>
 );
@@ -195,7 +206,7 @@ export default function App() {
               Digitalna transformacija <span className="text-slate-400">proizvodnje.</span>
             </h1>
             <p className="text-xl text-slate-500 leading-relaxed mb-10 max-w-xl">
-              Nadogradnja trenutne web aplikacije na nivo potpune automatizacije skladišta i operativnog praćenja radnih naloga u realnom vremenu.
+              Nadogradnja web aplikacije za digitalni tok proizvodnje, automatizaciju procesa i inteligentnu analizu poslovanja.
             </p>
             <div className="flex flex-wrap gap-4">
               <a href="#faze" className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all flex items-center gap-2 group">
@@ -395,16 +406,17 @@ export default function App() {
           <div className="text-center mb-20">
             <h2 className="text-4xl font-bold text-slate-900 mb-4">Struktura Nadogradnje</h2>
             <p className="text-slate-500 max-w-2xl mx-auto">
-              Projekat je podijeljen u dvije ključne faze koje osiguravaju stabilnu implementaciju i postepeno usvajanje novih procesa.
+              Tri faze povezuju digitalni tok proizvodnje, automatizaciju i inteligentnu analizu poslovanja.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             <PhaseCard 
               number="Faza I"
               title="Digitalna kontrola toka materijala i radnih operacija"
               duration="1.5 mj."
               price="4.900"
+              completed
               items={[
                 "Integracija skladišta sirovina sa proizvodnjom",
                 "Definisanje šifarnika sirovina i lokacija",
@@ -430,6 +442,25 @@ export default function App() {
               ]}
               delay={0.2}
             />
+            <PhaseCard
+              number="Faza III"
+              title="Inteligentna analiza, predikcija i optimizacija poslovanja"
+              price="4.900"
+              items={[
+                "Prediktivno planiranje potražnje, zaliha i kapaciteta",
+                "AI predikcija kašnjenja i proizvodnih rizika",
+                "Automatsko otkrivanje uskih grla i gubitaka",
+                "Analitika profitabilnosti po proizvodu i proizvodnom satu",
+                "Analiza učinka zaposlenih i sistem stimulacije",
+                "Machine Performance, OEE i Machine Health Score",
+                "Kalkulator isplativosti ulaganja u opremu",
+                "AI Production Advisor",
+                "Industrijski benchmarking proizvodnih KPI-jeva",
+                "What-if simulacije proizvodnih scenarija",
+                "AI Industry Advisor i sedmični pregled tržišta i inovacija"
+              ]}
+              delay={0.3}
+            />
           </div>
 
           <motion.div 
@@ -439,8 +470,8 @@ export default function App() {
             className="mt-12 p-10 bg-slate-900 rounded-[2.5rem] text-white flex flex-col md:flex-row justify-between items-center gap-8"
           >
             <div>
-              <h3 className="text-3xl font-bold mb-2">Ukupna Investicija</h3>
-              <p className="text-slate-400">Kompletna nadogradnja web platforme (Faza I + II)</p>
+              <h3 className="text-3xl font-bold mb-2">Preostala investicija</h3>
+              <p className="text-slate-400">Faza II + III · Faza I završena</p>
             </div>
             <div className="text-right">
               <div className="text-5xl font-bold mb-1">9.800 KM</div>

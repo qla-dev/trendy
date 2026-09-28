@@ -1,7 +1,8 @@
 # Ponuda
 
 Both offers share build dependencies but have separate entry points, stylesheets,
-source PDF copies, and public folders. Their page content differs only in the Faza II items.
+source PDF copies, and public folders. The second offer has its own phase content
+and a completed Faza I presentation.
 
 - Regular offer: `/ponuda/`
 - Second offer: `/ponuda-2/`
