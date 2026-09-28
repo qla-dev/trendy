@@ -91,7 +91,10 @@ class ProductionPlanCarryOverTest extends TestCase
 
     public function test_excel_includes_cost_driver_numbering_and_preserves_priority_colours(): void
     {
-        $row = (object) array_fill_keys(['rn', 'narucitelj', 'prioritet', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'napomena', 'status_code'], 'test');
+        $row = (object) array_fill_keys(['rn', 'narucitelj', 'prioritet', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'datum_isporuke', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'napomena', 'status_code'], 'test');
+        $row->pocetak = '2026-09-24';
+        $row->kraj = '2026-09-24';
+        $row->datum_isporuke = '2026-10-15';
         $row->nositelj_troska = 'Plazma & Lakiranje';
         $row->progress = 0;
         $row->priority_row_color = 'yellow';
@@ -101,8 +104,12 @@ class ProductionPlanCarryOverTest extends TestCase
         $xml = simplexml_load_string($this->invoke('excelXml', [$row, $current], [], true, true, false));
         $xml->registerXPathNamespace('ss', 'urn:schemas-microsoft-com:office:spreadsheet');
         $rows = $xml->xpath('//ss:Table/ss:Row');
-        $this->assertSame('Nositelj troška', (string) $rows[1]->Cell[15]->Data);
-        $this->assertSame('Plazma & Lakiranje', (string) $rows[2]->Cell[15]->Data);
+        $this->assertSame('Kraj termin', (string) $rows[1]->Cell[10]->Data);
+        $this->assertSame('Datum isporuke', (string) $rows[1]->Cell[11]->Data);
+        $this->assertSame('24.09.2026', (string) $rows[2]->Cell[10]->Data);
+        $this->assertSame('15.10.2026', (string) $rows[2]->Cell[11]->Data);
+        $this->assertSame('Nositelj troška', (string) $rows[1]->Cell[16]->Data);
+        $this->assertSame('Plazma & Lakiranje', (string) $rows[2]->Cell[16]->Data);
         $this->assertSame('1', (string) $rows[2]->Cell[0]->Data);
         $this->assertSame('2', (string) $rows[3]->Cell[0]->Data);
         $namespace = 'urn:schemas-microsoft-com:office:spreadsheet';
