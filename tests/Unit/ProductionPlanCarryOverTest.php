@@ -72,9 +72,26 @@ class ProductionPlanCarryOverTest extends TestCase
         $this->assertStringContainsString('not in', $query->toSql());
     }
 
+    public function test_default_plan_excludes_closed_orders_and_selected_status_can_show_them(): void
+    {
+        $query = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo');
+        $this->invoke('applyStatusFilter', $query, []);
+        $this->assertStringContainsString('not in', $query->toSql());
+        $this->assertSame(['F', 'I', 'Z'], $query->getBindings());
+
+        $closed = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo');
+        $this->invoke('applyStatusFilter', $closed, ['status_rn' => 'Z']);
+        $this->assertStringNotContainsString('not in', $closed->toSql());
+        $this->assertSame(['Z'], $closed->getBindings());
+
+        $all = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo');
+        $this->invoke('applyStatusFilter', $all, ['status_rn' => '__all__']);
+        $this->assertSame([], $all->getBindings());
+    }
+
     public function test_excel_includes_cost_driver_numbering_and_preserves_priority_colours(): void
     {
-        $row = (object) array_fill_keys(['rn', 'narucitelj', 'prioritet', 'datum', 'narudzba', 'pozicija', 'pocetak', 'kraj', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'napomena', 'status_code'], 'test');
+        $row = (object) array_fill_keys(['rn', 'narucitelj', 'prioritet', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'napomena', 'status_code'], 'test');
         $row->nositelj_troska = 'Plazma & Lakiranje';
         $row->progress = 0;
         $row->priority_row_color = 'yellow';
@@ -84,8 +101,8 @@ class ProductionPlanCarryOverTest extends TestCase
         $xml = simplexml_load_string($this->invoke('excelXml', [$row, $current], [], true, true, false));
         $xml->registerXPathNamespace('ss', 'urn:schemas-microsoft-com:office:spreadsheet');
         $rows = $xml->xpath('//ss:Table/ss:Row');
-        $this->assertSame('Nositelj troška', (string) $rows[1]->Cell[14]->Data);
-        $this->assertSame('Plazma & Lakiranje', (string) $rows[2]->Cell[14]->Data);
+        $this->assertSame('Nositelj troška', (string) $rows[1]->Cell[15]->Data);
+        $this->assertSame('Plazma & Lakiranje', (string) $rows[2]->Cell[15]->Data);
         $this->assertSame('1', (string) $rows[2]->Cell[0]->Data);
         $this->assertSame('2', (string) $rows[3]->Cell[0]->Data);
         $namespace = 'urn:schemas-microsoft-com:office:spreadsheet';

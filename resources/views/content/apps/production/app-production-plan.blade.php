@@ -23,6 +23,8 @@
     .production-plan-table-loading-overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; min-height: 220px; background: rgba(255, 255, 255, .74); backdrop-filter: blur(1px); z-index: 30; pointer-events: none; }
     .production-plan-table-loading-overlay.is-visible { display: flex; }
     .production-plan-wrapper .dataTables_processing { display: none !important; }
+    .production-plan-table td.dataTables_empty { padding: 0 !important; text-align: left !important; }
+    .production-plan-empty-message { position: sticky; left: 0; display: block; box-sizing: border-box; width: var(--production-plan-visible-width, 100%); padding: .42rem .5rem; text-align: center; }
     .production-plan-table-loading-overlay-content { display: inline-flex; flex-direction: column; align-items: center; gap: .65rem; text-align: center; }
     .production-plan-table-loading-spinner { width: 2rem; height: 2rem; border-width: .2em; color: #495b73; }
     .production-plan-table-loading-message { font-size: .95rem; font-weight: 600; color: #5e5873; letter-spacing: .01em; }
@@ -64,7 +66,7 @@
     <div class="card-body d-none" id="tijelo-filtera"><div class="row g-2">
       <div class="col-md-3"><label class="form-label" for="filter-prioritet">Prioritet</label><select class="form-select f" id="filter-prioritet" data-k="prioritet"><option value="">Svi prioriteti</option>@foreach (($planConfig['priorityOptions'] ?? []) as $priorityOption)<option value="{{ $priorityOption['code'] }}">{{ $priorityOption['label'] }}</option>@endforeach</select></div>
       <div class="col-md-3"><label class="form-label" for="plan-boja-redova">Boja redova</label><select class="form-select" id="plan-boja-redova"><option value="none">Bez boje</option><option value="basic">Osnovne</option><option value="all" selected>Sve</option></select></div>
-      <div class="col-md-3"><x-filters.text label="RN" class="f" data-k="rn"/></div><div class="col-md-3"><x-filters.text label="Naručitelj" class="f" data-k="narucitelj"/></div><div class="col-md-3"><x-filters.text label="Proizvod" class="f" data-k="proizvod"/></div><div class="col-md-3"><label class="form-label">Status RN</label><input class="form-control f" data-k="status_rn"></div><div class="col-md-3"><x-filters.text label="Narudžba" class="f" data-k="narudzba"/></div><div class="col-md-3"><label class="form-label">Godina</label><input class="form-control f" data-k="year" value="{{ now()->year }}"></div>
+      <div class="col-md-3"><x-filters.text label="RN" class="f" data-k="rn"/></div><div class="col-md-3"><x-filters.text label="Naručitelj" class="f" data-k="narucitelj"/></div><div class="col-md-3"><x-filters.text label="Proizvod" class="f" data-k="proizvod"/></div><div class="col-md-3"><label class="form-label" for="filter-status-rn">Status RN</label><select class="form-select f" id="filter-status-rn" data-k="status_rn"><option value="">Nezaključeni</option><option value="__all__">Svi statusi</option>@foreach (($planConfig['statusOptions'] ?? []) as $statusOption)<option value="{{ $statusOption['code'] }}">{{ $statusOption['label'] }}</option>@endforeach</select></div><div class="col-md-3"><x-filters.text label="Narudžba" class="f" data-k="narudzba"/></div><div class="col-md-3"><label class="form-label">Godina</label><input class="form-control f" data-k="year" value="{{ now()->year }}"></div>
     </div><div class="row g-2 mt-0">
       <div class="col-md-3"><x-filters.date label="Početni termin od" class="f" data-k="datum_od"/></div><div class="col-md-3"><x-filters.date label="Početni termin do" class="f" data-k="datum_do"/></div><div class="col-md-3"><x-filters.date label="Datum isporuke od" class="f" data-k="isporuka_od"/></div><div class="col-md-3"><x-filters.date label="Datum isporuke do" class="f" data-k="isporuka_do"/></div>
     </div><div class="row g-2 mt-0">
@@ -79,7 +81,7 @@
     <div id="production-plan-loading-overlay" class="production-plan-table-loading-overlay is-visible" role="status" aria-live="polite" aria-hidden="false">
       <div class="production-plan-table-loading-overlay-content"><span class="spinner-border production-plan-table-loading-spinner" aria-hidden="true"></span><span class="production-plan-table-loading-message">Učitavanje plana proizvodnje...</span></div>
     </div>
-    <div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela" aria-busy="true"><thead><tr><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Datum</th><th>Narudžba</th><th>Br. narudžbe kupca</th><th>Br. poz.</th><th>Poč. termin</th><th>Datum isporuke</th><th>Proizvod</th><th>Plan. kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Nositelj troška</th><th>Napomena</th></tr></thead></table></div>
+    <div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela" aria-busy="true"><thead><tr><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Status RN</th><th>Datum</th><th>Narudžba</th><th>Br. narudžbe kupca</th><th>Br. poz.</th><th>Poč. termin</th><th>Datum isporuke</th><th>Proizvod</th><th>Plan. kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Nositelj troška</th><th>Napomena</th></tr></thead></table></div>
   </div>
 </section>
 
@@ -110,5 +112,5 @@
 @endsection
 @section('page-script')
   <script>window.planProizvodnjeConfig=@json($planConfig);flatpickr('.shared-filter-date',{dateFormat:'Y-m-d',altInput:true,altFormat:'d.m.Y',allowInput:true,disableMobile:true});</script>
-  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=132') }}"></script>
+  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=134') }}"></script>
 @endsection

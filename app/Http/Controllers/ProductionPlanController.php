@@ -20,6 +20,21 @@ class ProductionPlanController extends Controller
     public function index(Request $request)
     {
         $priorityOptions = app(DeliveryPriorityOptions::class)->all();
+        $statusLabels = [
+            'D' => 'Raspisan', 'O' => 'Otvoren', 'E' => 'U radu', 'P' => 'U toku',
+            'R' => 'Djelomično zaključen', 'F' => 'Zaključen', 'I' => 'Zaključen',
+            'Z' => 'Zaključen', 'N' => 'Novo', 'C' => 'Otkazano', 'S' => 'Raspisan',
+        ];
+        $statusOptions = DB::table(config('workorders.schema', 'dbo') . '.tHF_WOEx')
+            ->selectRaw('DISTINCT UPPER(LTRIM(RTRIM(acStatusMF))) AS code')
+            ->whereNotNull('acStatusMF')
+            ->whereRaw("LTRIM(RTRIM(acStatusMF)) <> ''")
+            ->orderBy('code')
+            ->pluck('code')
+            ->map(fn ($code) => [
+                'code' => $code,
+                'label' => ($statusLabels[$code] ?? $code) . ' (' . $code . ')',
+            ]);
 
         return view('content.apps.production.app-production-plan', [
             'pageConfigs' => ['pageHeader' => false],
@@ -32,6 +47,7 @@ class ProductionPlanController extends Controller
                 'previewUrl' => route('app-invoice-preview', ['id' => '__RN__']),
                 'canEdit' => $this->admin($request->user()),
                 'priorityOptions' => $priorityOptions,
+                'statusOptions' => $statusOptions,
             ],
         ]);
     }
@@ -46,7 +62,7 @@ class ProductionPlanController extends Controller
             $query = DB::table($schema . '.tHF_WOEx as wo')
                 ->leftJoin($schema . '.tHE_SetDeliveryPriority as priority', 'priority.anPriority', '=', 'wo.anPriority')
                 ->leftJoin($schema . '.tHE_Order as sales_order', 'sales_order.acKey', '=', 'wo.acLnkKey')
-                ->selectRaw("wo.acKey id, wo.acKeyView rn, ISNULL(wo.acConsignee, wo.acReceiver) narucitelj, COALESCE(NULLIF(LTRIM(RTRIM(priority.acName)), ''), N'Nedefinisan') prioritet, CAST(wo.adDate AS date) datum, wo.acLnkKey narudzba_key, wo.acLnkKeyView narudzba, sales_order.acDoc1 broj_narudzbe_kupca, wo.anLnkNo pozicija, wo.adSchedStartTime pocetak, wo.adSchedEndTime kraj, wo.acIdent proizvod, wo.anPlanQty plan_kol, wo.anProducedQty izr_kol, wo.acName naziv, wo.acNote napomena, $status status_code, CASE $status WHEN 'D' THEN N'Raspisan' WHEN 'O' THEN N'Otvoren' WHEN 'E' THEN N'U radu' WHEN 'P' THEN N'U toku' WHEN 'R' THEN N'Djelomično zaključen' WHEN 'F' THEN N'Zaključen' WHEN 'I' THEN N'Zaključen' WHEN 'Z' THEN N'Zaključen' WHEN 'N' THEN N'Novo' WHEN 'C' THEN N'Otkazano' ELSE N'Nedefinisan' END status_rn, CASE $status WHEN 'F' THEN 'green' WHEN 'I' THEN 'green' WHEN 'Z' THEN 'green' WHEN 'E' THEN 'yellow' WHEN 'P' THEN 'orange' WHEN 'D' THEN 'orange' WHEN 'S' THEN 'orange' WHEN 'O' THEN 'purple' WHEN 'N' THEN 'purple' WHEN 'R' THEN 'teal' WHEN 'C' THEN 'grey' ELSE 'red' END plan_row_color");
+                ->selectRaw("wo.acKey id, wo.acKeyView rn, ISNULL(wo.acConsignee, wo.acReceiver) narucitelj, COALESCE(NULLIF(LTRIM(RTRIM(priority.acName)), ''), N'Nedefinisan') prioritet, CAST(wo.adDate AS date) datum, wo.acLnkKey narudzba_key, wo.acLnkKeyView narudzba, sales_order.acDoc1 broj_narudzbe_kupca, wo.anLnkNo pozicija, wo.adSchedStartTime pocetak, wo.adSchedEndTime kraj, wo.acIdent proizvod, wo.anPlanQty plan_kol, wo.anProducedQty izr_kol, wo.acName naziv, wo.acNote napomena, $status status_code, CASE $status WHEN 'D' THEN N'Raspisan' WHEN 'S' THEN N'Raspisan' WHEN 'O' THEN N'Otvoren' WHEN 'E' THEN N'U radu' WHEN 'P' THEN N'U toku' WHEN 'R' THEN N'Djelomično zaključen' WHEN 'F' THEN N'Zaključen' WHEN 'I' THEN N'Zaključen' WHEN 'Z' THEN N'Zaključen' WHEN 'N' THEN N'Novo' WHEN 'C' THEN N'Otkazano' ELSE N'Nedefinisan' END status_rn, CASE $status WHEN 'F' THEN 'green' WHEN 'I' THEN 'green' WHEN 'Z' THEN 'green' WHEN 'E' THEN 'yellow' WHEN 'P' THEN 'orange' WHEN 'D' THEN 'orange' WHEN 'S' THEN 'orange' WHEN 'O' THEN 'purple' WHEN 'N' THEN 'purple' WHEN 'R' THEN 'teal' WHEN 'C' THEN 'grey' ELSE 'red' END plan_row_color");
 
             $query->addSelect(DB::raw("CASE wo.anPriority WHEN 1 THEN 'red' WHEN 5 THEN 'yellow' WHEN 7 THEN 'teal' WHEN 10 THEN 'green' WHEN 15 THEN 'purple' ELSE 'grey' END AS priority_row_color"))
                 ->addSelect('wo.acCostDrv as nositelj_troska');
@@ -55,7 +71,6 @@ class ProductionPlanController extends Controller
                 'rn' => 'wo.acKeyView',
                 'narucitelj' => 'wo.acConsignee',
                 'proizvod' => 'wo.acIdent',
-                'status_rn' => 'wo.acStatusMF',
                 'narudzba' => 'wo.acLnkKeyView',
             ];
 
@@ -65,6 +80,8 @@ class ProductionPlanController extends Controller
                     $query->where($column, 'like', '%' . $value . '%');
                 }
             }
+
+            $this->applyStatusFilter($query, $filters);
 
             $search = trim((string) $request->input('search.value', ''));
             if ($search !== '') {
@@ -126,7 +143,7 @@ class ProductionPlanController extends Controller
                 'datum' => 'wo.adDate', 'narudzba' => 'wo.acLnkKeyView', 'broj_narudzbe_kupca' => 'sales_order.acDoc1', 'pozicija' => 'wo.anLnkNo',
                 'pocetak' => 'wo.adSchedStartTime', 'kraj' => 'wo.adSchedEndTime', 'proizvod' => 'wo.acIdent',
                 'plan_kol' => 'wo.anPlanQty', 'izr_kol' => 'wo.anProducedQty', 'naziv' => 'wo.acName',
-                'napomena' => 'wo.acNote', 'nositelj_troska' => 'wo.acCostDrv',
+                'napomena' => 'wo.acNote', 'nositelj_troska' => 'wo.acCostDrv', 'status_rn' => DB::raw("UPPER(LTRIM(RTRIM(wo.acStatusMF)))"),
             ];
             $sort = $sorts[$request->input('sort', 'pocetak')] ?? 'wo.adSchedStartTime';
             $direction = $request->input('dir') === 'asc' ? 'asc' : 'desc';
@@ -217,6 +234,25 @@ class ProductionPlanController extends Controller
         return $scheduledStart->lessThan($weekStart);
     }
 
+    private function applyStatusFilter($query, array $filters): void
+    {
+        $status = DB::raw('UPPER(LTRIM(RTRIM(wo.acStatusMF)))');
+        $selected = strtoupper(trim((string) ($filters['status_rn'] ?? '')));
+
+        if ($selected === '__ALL__') {
+            return;
+        }
+
+        if ($selected !== '') {
+            $query->where($status, $selected);
+            return;
+        }
+
+        $query->where(function ($active) use ($status) {
+            $active->whereNull('wo.acStatusMF')->orWhereNotIn($status, ['F', 'I', 'Z']);
+        });
+    }
+
     public function export(Request $request)
     {
         try {
@@ -235,7 +271,7 @@ class ProductionPlanController extends Controller
             if ($filtered) {
                 $filterMap = [
                     'rn' => 'wo.acKeyView', 'narucitelj' => 'wo.acConsignee', 'proizvod' => 'wo.acIdent',
-                    'status_rn' => 'wo.acStatusMF', 'narudzba' => 'wo.acLnkKeyView',
+                    'narudzba' => 'wo.acLnkKeyView',
                 ];
 
                 foreach ($filterMap as $key => $column) {
@@ -244,6 +280,8 @@ class ProductionPlanController extends Controller
                         $query->where($column, 'like', '%' . $value . '%');
                     }
                 }
+
+                $this->applyStatusFilter($query, $filters);
 
                 $priority = trim((string) ($filters['prioritet'] ?? ''));
                 if ($priority !== '' && ctype_digit($priority)) {
