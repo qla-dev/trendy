@@ -447,17 +447,17 @@ export default function App() {
               title="Inteligentna analiza, predikcija i optimizacija poslovanja"
               price="4.900"
               items={[
-                "Prediktivno planiranje potražnje, zaliha i kapaciteta",
-                "AI predikcija kašnjenja i proizvodnih rizika",
-                "Automatsko otkrivanje uskih grla i gubitaka",
-                "Analitika profitabilnosti po proizvodu i proizvodnom satu",
-                "Analiza učinka zaposlenih i sistem stimulacije",
-                "Machine Performance, OEE i Machine Health Score",
-                "Kalkulator isplativosti ulaganja u opremu",
-                "AI Production Advisor",
-                "Industrijski benchmarking proizvodnih KPI-jeva",
-                "What-if simulacije proizvodnih scenarija",
-                "AI Industry Advisor i sedmični pregled tržišta i inovacija"
+                "Prediktivno planiranje buduće potražnje i potreba za materijalom",
+                "Predviđanje budućih proizvodnih rizika prije njihovog nastanka",
+                "Automatska analiza uzroka gubitaka i prijedlozi optimizacije procesa",
+                "Analiza profitabilnosti po proizvodu, kupcu, nalogu i proizvodnom satu",
+                "Sistem stimulacije zaposlenih na osnovu historijskih rezultata i kvaliteta rada",
+                "Prediktivno održavanje i procjena budućeg stanja mašina",
+                "Kalkulator isplativosti remonta, zamjene i nabavke nove opreme",
+                "AI savjetnik za poslovne i proizvodne odluke",
+                "Poređenje rezultata sa industrijskim referentnim vrijednostima",
+                "Simulator proizvodnih scenarija „šta ako“",
+                "Sedmični AI pregled industrije, tehnologija i poslovnih prilika"
               ]}
               delay={0.3}
             />
