@@ -38,6 +38,7 @@ const PhaseCard = ({
   duration, 
   price, 
   items, 
+  emphasizedItems = [],
   delay = 0,
   completed = false
 }: { 
@@ -45,7 +46,8 @@ const PhaseCard = ({
   title: string; 
   duration?: string;
   price: string; 
-  items: string[];
+  items: React.ReactNode[];
+  emphasizedItems?: number[];
   delay?: number;
   completed?: boolean;
 }) => (
@@ -75,7 +77,7 @@ const PhaseCard = ({
       {items.map((item, idx) => (
         <li key={idx} className="flex items-start gap-3 text-slate-600">
           <CheckCircle2 className="w-5 h-5 text-slate-900 mt-0.5 shrink-0" />
-          <span className="text-sm leading-relaxed">{item}</span>
+          <span className={cn("text-sm leading-relaxed", emphasizedItems.includes(idx) && "font-semibold text-slate-900")}>{item}</span>
         </li>
       ))}
     </ul>
@@ -429,36 +431,37 @@ export default function App() {
             />
             <PhaseCard 
               number="Faza II"
-              title="Automatizacija procesa i zatvaranje ciklusa"
+              title="Automatizacija proizvodnog toka i kontrola operacija"
               duration="1.5 mj."
               price="4.900"
               items={[
-                "Implementacija i standardizacija operacija proizvodnog toka",
+                "Implementacija inventure sa QR evidencijom i usklađivanjem količina",
                 "Digitalni tok radnih naloga kroz proizvodne operacije",
-                "Automatsko praćenje i označavanje kašnjenja radnih naloga",
-                "Sistem operativnih notifikacija za bitne događaje",
-                "Automatsko zatvaranje RN nakon završetka proizvodnog ciklusa",
-                "Izvještavanje o kapacitetima i efikasnosti proizvodnje"
+                "Ulazna i procesna kontrola sa opcijama „dozvoljava / ne dozvoljava“ i vraćanjem neispravnih komada",
+                "Digitalno upravljanje radom operatera kroz „Početak“, „Zastoj“, „Kraj“ i „Kraj operacije“, uz preuzimanje operacije skeniranjem RN-a",
+                "Evidencija prijave radnika i praćenje stvarnog vremena rada i učinka",
+                "Panel resursa sa pregledom radnika, mašina, kapaciteta i efikasnosti",
+                "Proces dorade sa kontrolom, evidencijom naplate i pratećom dokumentacijom",
+                "Automatsko praćenje kašnjenja radnih naloga i operativne notifikacije",
+                "Automatsko zatvaranje radnog naloga nakon završetka proizvodnog ciklusa",
+                "Menadžerski panel sa ključnim statistikama proizvodnje *"
               ]}
+              emphasizedItems={[9]}
               delay={0.2}
             />
             <PhaseCard
               number="Faza III"
-              title="Inteligentna analiza, predikcija i optimizacija poslovanja"
+              title="Analitika, optimizacija i podrška poslovnom odlučivanju"
               price="4.900"
               items={[
-                "Prediktivno planiranje buduće potražnje i potreba za materijalom",
-                "Predviđanje budućih proizvodnih rizika prije njihovog nastanka",
-                "Automatska analiza uzroka gubitaka i prijedlozi optimizacije procesa",
-                "Analiza profitabilnosti po proizvodu, kupcu, nalogu i proizvodnom satu",
-                "Sistem stimulacije zaposlenih na osnovu historijskih rezultata i kvaliteta rada",
-                "Prediktivno održavanje i procjena budućeg stanja mašina",
-                "Kalkulator isplativosti remonta, zamjene i nabavke nove opreme",
-                "AI savjetnik za poslovne i proizvodne odluke",
-                "Poređenje rezultata sa industrijskim referentnim vrijednostima",
-                "Simulator proizvodnih scenarija „šta ako“",
-                "Sedmični AI pregled industrije, tehnologija i poslovnih prilika"
+                "Prediktivno planiranje potreba za materijalom i buduće potražnje",
+                "Analiza uskih grla, čekanja i uzroka gubitaka u proizvodnji",
+                "Analiza profitabilnosti i proizvodnog miksa po proizvodu, kupcu, RN-u i proizvodnom satu",
+                <><strong>Analiza stanja mašina i isplativosti ulaganja</strong> — KPI pokazatelji, kvarovi, zastoji, troškovi održavanja, remont, zamjena i povrat investicije</>,
+                "Poređenje ključnih proizvodnih pokazatelja sa industrijskim referentnim vrijednostima",
+                "Sedmični pregled industrijskih trendova, tehnologija, materijala i poslovnih prilika"
               ]}
+              emphasizedItems={[0, 1, 2, 4, 5]}
               delay={0.3}
             />
           </div>
