@@ -74,7 +74,7 @@ const PhaseCard = ({
         <li key={idx} className="flex items-start gap-3 text-slate-600">
           <CheckCircle2 className="w-5 h-5 text-slate-900 mt-0.5 shrink-0" />
           <span className="text-sm leading-relaxed">
-            {item.endsWith(" *") ? <>{item.slice(0, -1)}<strong>*</strong></> : item}
+            {item}
           </span>
         </li>
       ))}
@@ -417,7 +417,7 @@ export default function App() {
                 "Proces dorade sa kontrolom, evidencijom naplate i pratećom dokumentacijom",
                 "Automatsko praćenje kašnjenja radnih naloga i operativne notifikacije",
                 "Automatsko zatvaranje radnog naloga nakon završetka proizvodnog ciklusa",
-                "Menadžerski panel sa ključnim statistikama proizvodnje *"
+                "Menadžerski panel sa ključnim statistikama proizvodnje"
               ]}
               delay={0.2}
             />
@@ -433,8 +433,8 @@ export default function App() {
                 "Analiza uskih grla, čekanja i uzroka gubitaka u proizvodnji",
                 "Analiza profitabilnosti i proizvodnog miksa po proizvodu, kupcu, RN-u i proizvodnom satu",
                 "Analiza stanja mašina i isplativosti ulaganja — KPI pokazatelji, kvarovi, zastoji, troškovi održavanja, remont, zamjena i povrat investicije",
-                "Poređenje ključnih proizvodnih pokazatelja sa industrijskim referentnim vrijednostima *",
-                "Sedmični pregled industrijskih trendova, tehnologija, materijala i poslovnih prilika *"
+                "Poređenje ključnih proizvodnih pokazatelja sa industrijskim referentnim vrijednostima",
+                "Sedmični pregled industrijskih trendova, tehnologija, materijala i poslovnih prilika"
               ]}
               delay={0.3}
             />

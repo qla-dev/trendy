@@ -21,6 +21,9 @@ without redirects or a `dist` URL.
 The browser endpoint `/redeploy.php?offers_only=1` pulls the latest code and
 builds both offers without migrations or the main application build. Deployment
 checks that both public HTML entry points exist before reporting success.
+The browser endpoint `/redeploy.php?ponuda_2_only=1` pulls the latest code,
+installs the offer dependencies, and builds only `/ponuda-2/`.
 
 For local development, install dependencies in this directory and use its
-`dev` script. The root `build:ponuda` script builds both production pages.
+`dev` script. The root `build:ponuda` script builds both production pages. The
+offer project's `build:ponuda-2` script builds only the second offer page.

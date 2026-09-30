@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build && vite build --mode ponuda-2",
+    "build:ponuda-2": "vite build --mode ponuda-2",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
   },

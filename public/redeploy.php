@@ -198,6 +198,7 @@ putenv('PATH=' . $nodeBinDir . PATH_SEPARATOR . $currentPath);
 
 $npmCommand = escapeshellarg($npm);
 $offersOnly = filter_var($_GET['offers_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
+$ponuda2Only = filter_var($_GET['ponuda_2_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
 $commands = [
     ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
@@ -205,7 +206,14 @@ $commands = [
     ['label' => 'Building frontend assets', 'command' => $npmCommand . ' run production'],
 ];
 
-if ($offersOnly) {
+if ($ponuda2Only) {
+    $commands = [
+        ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
+        ['label' => 'Installing dependencies for ponuda-2', 'command' => $npmCommand . ' --prefix resources/ponuda ci --no-audit --no-fund'],
+        ['label' => 'Building ponuda-2 assets', 'command' => $npmCommand . ' --prefix resources/ponuda run build:ponuda-2'],
+    ];
+    $write("Ponuda-2-only redeploy: builds /ponuda-2/ only.\n");
+} elseif ($offersOnly) {
     $commands = [
         ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
         ['label' => 'Installing dependencies for both offers', 'command' => $npmCommand . ' --prefix resources/ponuda ci --no-audit --no-fund'],
@@ -230,7 +238,7 @@ foreach ($commands as $step) {
     }
 }
 
-if (!$offersOnly) {
+if (!$offersOnly && !$ponuda2Only) {
     $planScript = $baseDir . '/public/js/scripts/pages/app-production-plan.js';
     $planScriptContents = is_file($planScript) ? (string) file_get_contents($planScript) : '';
     if (strpos($planScriptContents, 'btn-potvrdi-izvoz-plana') === false
@@ -242,12 +250,14 @@ if (!$offersOnly) {
     $write("Production-plan JavaScript generated, including Excel export and loading controls.\n");
 }
 
-foreach (['ponuda', 'ponuda-2'] as $offerFolder) {
+foreach ($ponuda2Only ? ['ponuda-2'] : ['ponuda', 'ponuda-2'] as $offerFolder) {
     if (!is_file($baseDir . '/public/' . $offerFolder . '/index.html')) {
         $write("Deployment incomplete: /{$offerFolder}/index.html was not generated.\n");
         exit(1);
     }
 }
 
-$write("\nBoth offer pages are ready: /ponuda/ and /ponuda-2/.\n");
+$write($ponuda2Only
+    ? "\nPonuda-2 page is ready: /ponuda-2/.\n"
+    : "\nBoth offer pages are ready: /ponuda/ and /ponuda-2/.\n");
 $write("\nTrendy redeploy completed successfully in " . (time() - $startedAt) . "s.\n");
