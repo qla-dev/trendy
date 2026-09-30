@@ -408,11 +408,9 @@ export default function App() {
               duration="1.5 mj."
               price="4.900"
               items={[
-                "Implementacija inventure sa QR evidencijom i usklađivanjem količina",
                 "Digitalni tok radnih naloga kroz proizvodne operacije",
                 "Ulazna i procesna kontrola sa opcijama „dozvoljava / ne dozvoljava“ i vraćanjem neispravnih komada",
                 "Digitalno upravljanje radom operatera kroz „Početak“, „Zastoj“, „Kraj“ i „Kraj operacije“, uz preuzimanje operacije skeniranjem RN-a",
-                "Evidencija prijave radnika i praćenje stvarnog vremena rada i učinka",
                 "Panel resursa sa pregledom radnika, mašina, kapaciteta i efikasnosti",
                 "Proces dorade sa kontrolom, evidencijom naplate i pratećom dokumentacijom",
                 "Automatsko praćenje kašnjenja radnih naloga i operativne notifikacije",
@@ -424,14 +422,17 @@ export default function App() {
             <PhaseCard
               number="Faza III"
               title="Analitika, optimizacija i podrška poslovnom odlučivanju"
+              duration="1.5 mj."
               price="4.900"
               items={[
+                "Implementacija inventure sa QR evidencijom i usklađivanjem količina",
+                "Evidencija prijave radnika i praćenje stvarnog vremena rada i učinka",
                 "Prediktivno planiranje potreba za materijalom i buduće potražnje",
                 "Analiza uskih grla, čekanja i uzroka gubitaka u proizvodnji",
                 "Analiza profitabilnosti i proizvodnog miksa po proizvodu, kupcu, RN-u i proizvodnom satu",
                 "Analiza stanja mašina i isplativosti ulaganja — KPI pokazatelji, kvarovi, zastoji, troškovi održavanja, remont, zamjena i povrat investicije",
-                "Poređenje ključnih proizvodnih pokazatelja sa industrijskim referentnim vrijednostima",
-                "Sedmični pregled industrijskih trendova, tehnologija, materijala i poslovnih prilika"
+                "Poređenje ključnih proizvodnih pokazatelja sa industrijskim referentnim vrijednostima *",
+                "Sedmični pregled industrijskih trendova, tehnologija, materijala i poslovnih prilika *"
               ]}
               delay={0.3}
             />
