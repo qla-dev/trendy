@@ -38,18 +38,14 @@ const PhaseCard = ({
   duration, 
   price, 
   items, 
-  emphasizedItems = [],
-  delay = 0,
-  completed = false
+  delay = 0
 }: { 
   number: string; 
   title: string; 
   duration?: string;
   price: string; 
-  items: React.ReactNode[];
-  emphasizedItems?: number[];
+  items: string[];
   delay?: number;
-  completed?: boolean;
 }) => (
   <motion.div 
     initial={{ opacity: 0, y: 20 }}
@@ -77,21 +73,14 @@ const PhaseCard = ({
       {items.map((item, idx) => (
         <li key={idx} className="flex items-start gap-3 text-slate-600">
           <CheckCircle2 className="w-5 h-5 text-slate-900 mt-0.5 shrink-0" />
-          <span className={cn("text-sm leading-relaxed", emphasizedItems.includes(idx) && "font-semibold text-slate-900")}>{item}</span>
+          <span className="text-sm leading-relaxed">{item}</span>
         </li>
       ))}
     </ul>
     
     <div className="pt-6 border-t border-slate-100 flex flex-wrap justify-between items-center gap-3">
       <span className="text-slate-400 text-sm font-medium uppercase tracking-wider">Investicija</span>
-      {completed ? (
-        <span className="flex flex-wrap items-center gap-2">
-          <span className="text-xl font-bold text-slate-400 line-through decoration-2">{price} KM</span>
-          <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700">Završeno</span>
-        </span>
-      ) : (
-        <span className="text-2xl font-bold text-slate-900">{price} <span className="text-sm font-medium text-slate-400">KM</span></span>
-      )}
+      <span className="text-2xl font-bold text-slate-900">{price} <span className="text-sm font-medium text-slate-400">KM</span></span>
     </div>
   </motion.div>
 );
@@ -408,27 +397,11 @@ export default function App() {
           <div className="text-center mb-20">
             <h2 className="text-4xl font-bold text-slate-900 mb-4">Struktura Nadogradnje</h2>
             <p className="text-slate-500 max-w-2xl mx-auto">
-              Tri faze povezuju digitalni tok proizvodnje, automatizaciju i inteligentnu analizu poslovanja.
+              Faze II i III povezuju automatizaciju proizvodnog toka i analitiku za poslovno odlučivanje.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <PhaseCard 
-              number="Faza I"
-              title="Digitalna kontrola toka materijala i radnih operacija"
-              duration="1.5 mj."
-              price="4.900"
-              completed
-              items={[
-                "Integracija skladišta sirovina sa proizvodnjom",
-                "Definisanje šifarnika sirovina i lokacija",
-                "Automatsko generisanje dokumenata izdavanja",
-                "QR mehanizam za praćenje početka/pauze/kraja rada",
-                "Povezivanje potrošnje sa konkretnim RN",
-                "Precizno mjerenje učinka po radniku"
-              ]}
-              delay={0.1}
-            />
+          <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
             <PhaseCard 
               number="Faza II"
               title="Automatizacija proizvodnog toka i kontrola operacija"
@@ -446,7 +419,6 @@ export default function App() {
                 "Automatsko zatvaranje radnog naloga nakon završetka proizvodnog ciklusa",
                 "Menadžerski panel sa ključnim statistikama proizvodnje *"
               ]}
-              emphasizedItems={[9]}
               delay={0.2}
             />
             <PhaseCard
@@ -457,11 +429,10 @@ export default function App() {
                 "Prediktivno planiranje potreba za materijalom i buduće potražnje",
                 "Analiza uskih grla, čekanja i uzroka gubitaka u proizvodnji",
                 "Analiza profitabilnosti i proizvodnog miksa po proizvodu, kupcu, RN-u i proizvodnom satu",
-                <><strong>Analiza stanja mašina i isplativosti ulaganja</strong> — KPI pokazatelji, kvarovi, zastoji, troškovi održavanja, remont, zamjena i povrat investicije</>,
+                "Analiza stanja mašina i isplativosti ulaganja — KPI pokazatelji, kvarovi, zastoji, troškovi održavanja, remont, zamjena i povrat investicije",
                 "Poređenje ključnih proizvodnih pokazatelja sa industrijskim referentnim vrijednostima",
                 "Sedmični pregled industrijskih trendova, tehnologija, materijala i poslovnih prilika"
               ]}
-              emphasizedItems={[0, 1, 2, 4, 5]}
               delay={0.3}
             />
           </div>
