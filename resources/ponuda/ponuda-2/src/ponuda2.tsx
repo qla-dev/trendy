@@ -417,7 +417,7 @@ export default function App() {
                 "Proces dorade sa kontrolom, evidencijom naplate i pratećom dokumentacijom",
                 "Automatsko praćenje kašnjenja radnih naloga i operativne notifikacije",
                 "Automatsko zatvaranje radnog naloga nakon završetka proizvodnog ciklusa",
-                "Menadžerski panel sa ključnim statistikama proizvodnje"
+                "Live Manager Analytics Dashboard"
               ]}
               delay={0.2}
             />
