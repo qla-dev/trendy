@@ -73,7 +73,9 @@ const PhaseCard = ({
       {items.map((item, idx) => (
         <li key={idx} className="flex items-start gap-3 text-slate-600">
           <CheckCircle2 className="w-5 h-5 text-slate-900 mt-0.5 shrink-0" />
-          <span className="text-sm leading-relaxed">{item}</span>
+          <span className="text-sm leading-relaxed">
+            {item.endsWith(" *") ? <>{item.slice(0, -1)}<strong>*</strong></> : item}
+          </span>
         </li>
       ))}
     </ul>
