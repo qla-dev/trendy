@@ -20,6 +20,18 @@ class ProductionPlanController extends Controller
     public function index(Request $request)
     {
         $priorityOptions = app(DeliveryPriorityOptions::class)->all();
+        $trendyGermanyNumberOptions = DB::table(config('workorders.schema', 'dbo') . '.tHF_WOEx')
+            ->selectRaw('DISTINCT LTRIM(RTRIM(ISNULL(acConsignee, acReceiver))) AS customer')
+            ->whereRaw("UPPER(LTRIM(RTRIM(ISNULL(acConsignee, acReceiver)))) LIKE 'TRENDY GERMANY%'")
+            ->pluck('customer')
+            ->map(function ($customer) {
+                return preg_match('/-(\d+)\s*$/', trim((string) $customer), $matches) ? $matches[1] : null;
+            })
+            ->filter()
+            ->unique()
+            ->sortBy(fn ($number) => (int) $number)
+            ->values()
+            ->map(fn ($number) => ['code' => (string) $number, 'label' => '-' . $number]);
         $statusLabels = [
             'D' => 'Raspisan', 'O' => 'Otvoren', 'E' => 'U radu', 'P' => 'U toku',
             'R' => 'Djelomično zaključen', 'F' => 'Zaključen', 'I' => 'Zaključen',
@@ -47,6 +59,7 @@ class ProductionPlanController extends Controller
                 'previewUrl' => route('app-invoice-preview', ['id' => '__RN__']),
                 'canEdit' => $this->admin($request->user()),
                 'priorityOptions' => $priorityOptions,
+                'trendyGermanyNumberOptions' => $trendyGermanyNumberOptions,
                 'statusOptions' => $statusOptions,
             ],
         ]);
@@ -73,7 +86,6 @@ class ProductionPlanController extends Controller
 
             $filterMap = [
                 'rn' => 'wo.acKeyView',
-                'narucitelj' => 'wo.acConsignee',
                 'proizvod' => 'wo.acIdent',
                 'narudzba' => 'wo.acLnkKeyView',
             ];
@@ -84,6 +96,10 @@ class ProductionPlanController extends Controller
                     $query->where($column, 'like', '%' . $value . '%');
                 }
             }
+
+            $this->applySelectionFilters($query, $filters);
+
+            $this->applyCustomerDateFilters($query, $filters);
 
             $this->applyStatusFilter($query, $filters);
 
@@ -109,11 +125,6 @@ class ProductionPlanController extends Controller
                         ->orWhereRaw('CAST(wo.anPlanQty AS nvarchar(50)) LIKE ?', [$like])
                         ->orWhereRaw('CAST(wo.anProducedQty AS nvarchar(50)) LIKE ?', [$like]);
                 });
-            }
-
-            $priority = trim((string) ($filters['prioritet'] ?? ''));
-            if ($priority !== '' && ctype_digit($priority)) {
-                $query->where('wo.anPriority', (int) $priority);
             }
 
             foreach ([['datum_od', '>='], ['datum_do', '<=']] as [$key, $operator]) {
@@ -242,19 +253,113 @@ class ProductionPlanController extends Controller
     private function applyStatusFilter($query, array $filters): void
     {
         $status = DB::raw('UPPER(LTRIM(RTRIM(wo.acStatusMF)))');
-        $selected = strtoupper(trim((string) ($filters['status_rn'] ?? '')));
+        $hasSelection = array_key_exists('status_rn', $filters);
+        $selection = $filters['status_rn'] ?? '';
 
-        if ($selected === '__ALL__') {
+        if ($selection === '__all__' || $selection === '__ALL__') {
             return;
         }
 
-        if ($selected !== '') {
+        if ($selection === '__none__' || (is_array($selection) && count($selection) === 0)) {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        if (is_array($selection)) {
+            $selectedStatuses = array_values(array_unique(array_filter(array_map(
+                fn ($value) => is_scalar($value) ? strtoupper(trim((string) $value)) : '',
+                $selection
+            ), fn ($value) => $value !== '')));
+            if ($selectedStatuses) {
+                $query->whereIn($status, $selectedStatuses);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+            return;
+        }
+
+        $selected = strtoupper(trim((string) $selection));
+        if ($selected !== '' && $selected !== '__ALL__') {
             $query->where($status, $selected);
+            return;
+        }
+
+        if ($hasSelection && $selected === '') {
             return;
         }
 
         $query->where(function ($active) use ($status) {
             $active->whereNull('wo.acStatusMF')->orWhereNotIn($status, ['F', 'I', 'Z']);
+        });
+    }
+
+    private function applySelectionFilters($query, array $filters): void
+    {
+        foreach (['prioritet' => 'wo.anPriority'] as $key => $column) {
+            $selection = $filters[$key] ?? '';
+            if ($selection === '' || $selection === null) {
+                continue;
+            }
+            if ($selection === '__none__' || $selection === []) {
+                $query->whereRaw('1 = 0');
+                continue;
+            }
+            $values = array_values(array_filter((array) $selection, function ($value) use ($key) {
+                return is_scalar($value) && ($key !== 'prioritet' || ctype_digit((string) $value));
+            }));
+            if ($values) {
+                $query->whereIn($column, $values);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+    }
+
+    private function applyCustomerDateFilters($query, array $filters): void
+    {
+        $selectedGermanyNumbers = $filters['trendy_germany_numbers'] ?? '';
+        $filterGermanyNumbers = is_array($selectedGermanyNumbers) && count($selectedGermanyNumbers) > 0;
+        $noGermanyNumbers = $selectedGermanyNumbers === '__none__' || (is_array($selectedGermanyNumbers) && count($selectedGermanyNumbers) === 0);
+        $germanyNumbers = $filterGermanyNumbers
+            ? array_values(array_filter($selectedGermanyNumbers, fn ($number) => is_scalar($number) && ctype_digit((string) $number)))
+            : [];
+        $customers = [
+            'grob' => 'GROB%',
+            'trendy_germany' => 'TRENDY GERMANY%',
+        ];
+        $ranges = [];
+        foreach ($customers as $key => $pattern) {
+            $from = trim((string) ($filters[$key . '_date_from'] ?? ''));
+            $to = trim((string) ($filters[$key . '_date_to'] ?? ''));
+            $ranges[] = compact('pattern', 'from', 'to');
+        }
+
+        if (!collect($ranges)->contains(fn ($range) => $range['from'] !== '' || $range['to'] !== '') && !$filterGermanyNumbers && !$noGermanyNumbers) {
+            return;
+        }
+
+        $query->where(function ($customerQuery) use ($ranges, $germanyNumbers, $filterGermanyNumbers, $noGermanyNumbers) {
+            foreach ($ranges as $range) {
+                $isGermany = $range['pattern'] === 'TRENDY GERMANY%';
+                $customerQuery->orWhere(function ($rowQuery) use ($range, $isGermany, $germanyNumbers, $filterGermanyNumbers, $noGermanyNumbers) {
+                    $rowQuery->whereRaw('UPPER(LTRIM(RTRIM(ISNULL(wo.acConsignee, wo.acReceiver)))) LIKE ?', [$range['pattern']]);
+                    if ($isGermany && $noGermanyNumbers) {
+                        $rowQuery->whereRaw('1 = 0');
+                    } elseif ($isGermany && $filterGermanyNumbers) {
+                        $rowQuery->where(function ($numberQuery) use ($germanyNumbers) {
+                            foreach ($germanyNumbers as $number) {
+                                $numberQuery->orWhereRaw('UPPER(LTRIM(RTRIM(ISNULL(wo.acConsignee, wo.acReceiver)))) LIKE ?', ['%-' . $number]);
+                            }
+                        });
+                    }
+                    if ($range['from'] !== '') {
+                        $rowQuery->whereDate('wo.adSchedStartTime', '>=', $range['from']);
+                    }
+                    if ($range['to'] !== '') {
+                        $rowQuery->whereDate('wo.adSchedStartTime', '<=', $range['to']);
+                    }
+                });
+            }
         });
     }
 
@@ -279,7 +384,7 @@ class ProductionPlanController extends Controller
 
             if ($filtered) {
                 $filterMap = [
-                    'rn' => 'wo.acKeyView', 'narucitelj' => 'wo.acConsignee', 'proizvod' => 'wo.acIdent',
+                    'rn' => 'wo.acKeyView', 'proizvod' => 'wo.acIdent',
                     'narudzba' => 'wo.acLnkKeyView',
                 ];
 
@@ -290,12 +395,11 @@ class ProductionPlanController extends Controller
                     }
                 }
 
-                $this->applyStatusFilter($query, $filters);
+                $this->applySelectionFilters($query, $filters);
 
-                $priority = trim((string) ($filters['prioritet'] ?? ''));
-                if ($priority !== '' && ctype_digit($priority)) {
-                    $query->where('wo.anPriority', (int) $priority);
-                }
+                $this->applyCustomerDateFilters($query, $filters);
+
+                $this->applyStatusFilter($query, $filters);
 
                 foreach ([['datum_od', '>='], ['datum_do', '<=']] as [$key, $operator]) {
                     $value = trim((string) ($filters[$key] ?? ''));
@@ -418,10 +522,14 @@ class ProductionPlanController extends Controller
 
     private function filterSummary(array $filters): string
     {
-        $labels = ['rn' => 'RN', 'narucitelj' => 'Naručitelj', 'prioritet' => 'Prioritet', 'proizvod' => 'Proizvod', 'status_rn' => 'Status RN', 'narudzba' => 'Narudžba', 'year' => 'Godina', 'kw' => 'Kalendarska sedmica', 'datum_od' => 'Početni termin od', 'datum_do' => 'Početni termin do', 'isporuka_od' => 'Datum isporuke od', 'isporuka_do' => 'Datum isporuke do'];
+        $labels = ['rn' => 'RN', 'prioritet' => 'Prioritet', 'proizvod' => 'Proizvod', 'status_rn' => 'Status RN', 'narudzba' => 'Narudžba', 'year' => 'Godina', 'kw' => 'Kalendarska sedmica', 'datum_od' => 'Početni termin od', 'datum_do' => 'Početni termin do', 'isporuka_od' => 'Datum isporuke od', 'isporuka_do' => 'Datum isporuke do', 'grob_date_from' => 'GROB datum od', 'grob_date_to' => 'GROB datum do', 'trendy_germany_date_from' => 'TRENDY GERMANY datum od', 'trendy_germany_date_to' => 'TRENDY GERMANY datum do'];
         $parts = [];
         foreach ($labels as $key => $label) {
-            $value = trim((string) ($filters[$key] ?? ''));
+            $raw = $filters[$key] ?? '';
+            $value = is_array($raw) ? implode(', ', $raw) : trim((string) $raw);
+            if ($value === '__none__') {
+                $value = 'Nijedan';
+            }
             if ($value !== '') {
                 $parts[] = $label . ': ' . $value;
             }

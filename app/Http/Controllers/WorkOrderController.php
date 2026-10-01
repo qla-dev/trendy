@@ -1658,6 +1658,40 @@ class WorkOrderController extends Controller
         }
     }
 
+    public function updateWorkOrderNote(Request $request, string $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'note' => ['present', 'nullable', 'string', 'max:4000'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Napomena nije ispravna.', 'errors' => $validator->errors()], 422);
+        }
+
+        try {
+            $row = $this->findWorkOrderRow($id);
+            if ($row === null) {
+                return response()->json(['message' => 'Radni nalog nije pronađen.'], 404);
+            }
+
+            $columns = $this->tableColumns();
+            if (!in_array('acNote', $columns, true)) {
+                return response()->json(['message' => 'Kolona za napomenu nije pronađena.'], 500);
+            }
+
+            $note = (string) ($validator->validated()['note'] ?? '');
+            if (!$this->rowAlreadyHasUpdates($row, ['acNote' => $note])
+                && !$this->updateWorkOrderRow($row, ['acNote' => $note])) {
+                return response()->json(['message' => 'Napomena nije sačuvana.'], 500);
+            }
+
+            return response()->json(['message' => 'Napomena je sačuvana.', 'data' => ['note' => $note]]);
+        } catch (Throwable $exception) {
+            Log::error('Work order note update failed.', ['id' => $id, 'table' => $this->qualifiedTableName(), 'message' => $exception->getMessage()]);
+            return response()->json(['message' => 'Greška pri čuvanju napomene.'], 500);
+        }
+    }
+
     /**
      * The status modal must not bypass the transactional closing endpoint.
      * A material WO uses 6400 as its closing material issue; 2005 only moves
@@ -8894,6 +8928,7 @@ class WorkOrderController extends Controller
             'acName',
             'acDescr',
             'title',
+            'acNote',
             'acCostDrv',
             'acStatusMF',
             'acStatus',
@@ -9013,16 +9048,6 @@ class WorkOrderController extends Controller
         if ($nextQId !== null) {
             $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'anQId', $nextQId);
         }
-
-        $noteOrderNumber = $orderNumber !== '' ? $orderNumber : $orderKey;
-        $note = 'Kreirano iz eNalog.app preko QR skena narudžbe ' . $this->formatOrderNumberForDisplay($noteOrderNumber);
-        if (!empty($orderContext['order_position'])) {
-            $note .= ' / poz ' . $orderContext['order_position'];
-        }
-        if ($productCode !== '') {
-            $note .= ' / šifra ' . $productCode;
-        }
-        $this->setInsertColumnValue($payload, $columns, $nonInsertableColumns, 'acNote', $note, false);
 
         return $payload;
     }

@@ -563,6 +563,15 @@
     z-index: 3;
     background-color: #f8f8fa;
   }
+  .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-toggle {
+    border: 0;
+    padding: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .invoice-preview-wrapper #sastavnica-table .wo-action-collapsed-label { display: none; }
   body.dark-layout .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col,
   body.semi-dark-layout .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col,
   .dark-layout .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col,
@@ -672,6 +681,46 @@
   @media (max-width: 767.98px) {
     .invoice-preview-wrapper .wo-desktop-column-label { display: none; }
     .invoice-preview-wrapper .wo-mobile-column-label { display: inline; }
+    .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-toggle {
+      width: 100%;
+    }
+    .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col {
+      box-sizing: border-box;
+      width: 7.25rem;
+      min-width: 7.25rem;
+      max-width: 7.25rem;
+      overflow: hidden;
+      white-space: nowrap;
+      padding-left: .35rem;
+      padding-right: .35rem;
+      transition: width .3s ease, min-width .3s ease, max-width .3s ease, padding .3s ease;
+    }
+    .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col > .d-inline-flex {
+      max-width: 6.5rem;
+      overflow: hidden;
+      opacity: 1;
+      transition: max-width .3s ease, opacity .2s ease;
+    }
+    .invoice-preview-wrapper #sastavnica-table.wo-actions-collapsed .wo-sastavnica-action-col {
+      width: 2.5rem;
+      min-width: 2.5rem;
+      max-width: 2.5rem;
+      padding-left: .25rem;
+      padding-right: .25rem;
+    }
+    .invoice-preview-wrapper #sastavnica-table.wo-actions-collapsed .wo-sastavnica-action-col > .d-inline-flex {
+      max-width: 0;
+      opacity: 0;
+      pointer-events: none;
+      visibility: hidden;
+      transition: max-width .3s ease, opacity .2s ease, visibility 0s linear .3s;
+    }
+    .invoice-preview-wrapper #sastavnica-table.wo-actions-collapsed .wo-action-expanded-label { display: none; }
+    .invoice-preview-wrapper #sastavnica-table.wo-actions-collapsed .wo-action-collapsed-label { display: inline; }
+  }
+  @media (max-width: 767.98px) and (prefers-reduced-motion: reduce) {
+    .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col,
+    .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col > .d-inline-flex { transition: none; }
   }
   body.dark-layout .invoice-preview-wrapper .wo-operation-complete-btn::after,
   body.semi-dark-layout .invoice-preview-wrapper .wo-operation-complete-btn::after,
@@ -850,6 +899,11 @@
     line-height: 1.65;
     white-space: pre-wrap;
     word-break: break-word;
+  }
+  .wo-note-editor {
+    min-height: 220px;
+    resize: vertical;
+    white-space: pre-wrap;
   }
   .wo-note-empty {
     border: 1px dashed var(--wo-divider-color);
@@ -1562,6 +1616,13 @@
       height: 108px;
     }
   }
+  @media (min-width: 1440px) {
+    .wo-header-meta .invoice-title .invoice-order-number,
+    .wo-header-meta .invoice-date-title,
+    .wo-header-meta .invoice-date {
+      font-size: 1.2rem;
+    }
+  }
   @media (min-width: 768px) and (max-width: 1199.98px) {
     .invoice-actions .btn {
       font-size: 0.7rem;
@@ -1662,23 +1723,48 @@
       gap: 0.55rem;
       padding: 0.55rem;
     }
-    .wo-mobile-top-actions .wo-mobile-priority {
+    .wo-mobile-meta-row {
       display: flex;
       grid-column: 1 / -1;
+      min-width: 0;
       align-items: center;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 0.25rem 0.4rem;
+      gap: 0.4rem;
       padding: 0.15rem 0.2rem 0.35rem;
       border-bottom: 1px solid var(--wo-divider-color);
-      font-size: 0.9rem;
+    }
+    .wo-mobile-top-actions .wo-mobile-priority,
+    .wo-mobile-top-actions .wo-mobile-protection {
+      display: flex;
+      flex: 1 1 0;
+      min-width: 0;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+      overflow: hidden;
+      white-space: nowrap;
+      font-size: 0.78rem;
       line-height: 1.2;
       text-align: center;
     }
+    .wo-mobile-top-actions .wo-mobile-priority {
+      padding-right: 0.4rem;
+      border-right: 1px solid var(--wo-divider-color);
+    }
+    .wo-mobile-meta-row .wo-meta-chip-label {
+      flex: 0 0 auto;
+    }
     .wo-mobile-priority-current {
       display: inline-flex;
+      min-width: 0;
       align-items: center;
-      gap: 0.35rem;
+      gap: 0.25rem;
+    }
+    .wo-mobile-priority-current strong,
+    .wo-mobile-protection-value {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .wo-mobile-top-actions .btn {
       width: 100%;
@@ -2051,6 +2137,7 @@
     $workOrderRouteId = trim((string) ($invoiceNumber ?? ''));
   }
   $statusUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-update-status', ['id' => $workOrderRouteId]) : '';
+  $noteUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-update-note', ['id' => $workOrderRouteId]) : '';
   $priorityUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-update-priority', ['id' => $workOrderRouteId]) : '';
   $protectionOptionsUrl = $hasLoadedWorkOrder ? route('app-invoice-protection-options', ['id' => $workOrderRouteId]) : '';
   $protectionUpdateUrl = $hasLoadedWorkOrder ? route('app-invoice-protection-update', ['id' => $workOrderRouteId]) : '';
@@ -2190,6 +2277,7 @@
   $workOrderQuantityUnit = $displayValue($workOrder['mj'] ?? null);
   $statusDisplayLabel = $displayValue($workOrder['status'] ?? null);
   $priorityDisplayLabel = $displayValue($workOrder['prioritet'] ?? null);
+  $protectionDisplayLabel = $displayValue($workOrder['povrsinska_zastita'] ?? null);
   $statusToneClass = 'secondary';
   $priorityToneClass = 'secondary';
   $normalizedStatusLabel = strtolower($statusDisplayLabel);
@@ -2226,9 +2314,15 @@
     <div class="card">
       <div class="card-body">
         @if($hasLoadedWorkOrder)
-          <div id="wo-mobile-priority" class="wo-mobile-priority wo-priority-{{ $priorityToneClass }}">
-            <span class="wo-meta-chip-label">Prioritet RN:</span>
-            <span class="wo-mobile-priority-current wo-meta-chip-value"><span class="wo-mobile-priority-dot" aria-hidden="true"></span><strong id="wo-mobile-priority-value" aria-live="polite">{{ $priorityDisplayLabel === '-' ? 'Nije dodijeljen' : $priorityDisplayLabel }}</strong></span>
+          <div class="wo-mobile-meta-row">
+            <div id="wo-mobile-priority" class="wo-mobile-priority wo-priority-{{ $priorityToneClass }}">
+              <span class="wo-meta-chip-label">Prioritet RN:</span>
+              <span class="wo-mobile-priority-current wo-meta-chip-value"><span class="wo-mobile-priority-dot" aria-hidden="true"></span><strong id="wo-mobile-priority-value" aria-live="polite">{{ $priorityDisplayLabel === '-' ? 'Nije dodijeljen' : $priorityDisplayLabel }}</strong></span>
+            </div>
+            <div class="wo-mobile-protection">
+              <span class="wo-meta-chip-label">Zaštita:</span>
+              <strong class="wo-mobile-protection-value wo-meta-chip-value" title="{{ $protectionDisplayLabel }}">{{ $protectionDisplayLabel === '-' ? 'Nije dodijeljena' : $protectionDisplayLabel }}</strong>
+            </div>
           </div>
         @endif
         <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center" data-bs-toggle="modal" data-bs-target="#qr-scanner-modal">
@@ -2433,8 +2527,8 @@
                 <table class="table" id="sastavnica-table">
                   <thead>
                     <tr>
-                      <th class="py-1 text-center">Alternat...</th>
-                      <th class="py-1 text-center">Pozicija</th>
+                      <th class="py-1 text-center"><span class="wo-desktop-column-label">Alternat...</span><span class="wo-mobile-column-label">alt.</span></th>
+                      <th class="py-1 text-center"><span class="wo-desktop-column-label">Pozicija</span><span class="wo-mobile-column-label">poz</span></th>
                       <th class="py-1 text-center">Artikal</th>
                       <th class="py-1 text-center">Opis</th>
                       <th class="py-1 text-center">Slika</th>
@@ -2449,7 +2543,7 @@
                       <th class="py-1 text-center">Prim.klas</th>
                       <th class="py-1 text-center">Sek.klas</th>
                       @if($showSastavnicaActions)
-                        <th class="py-1 text-center wo-sastavnica-action-col">Akcija</th>
+                        <th class="py-1 text-center wo-sastavnica-action-col"><span class="wo-desktop-column-label">Akcija</span><button type="button" class="wo-mobile-column-label wo-sastavnica-action-toggle" aria-expanded="true" aria-label="Sažmi kolonu Akcija" title="Sažmi kolonu Akcija"><span class="wo-action-expanded-label">AKCIJA</span><span class="wo-action-collapsed-label"><i class="fa fa-angle-left" aria-hidden="true"></i></span></button></th>
                       @endif
                     </tr>
                   </thead>
@@ -2651,11 +2745,11 @@
             <!-- Napomena Tab -->
             <div class="tab-pane fade" id="tab-napomena" role="tabpanel">
               <div class="wo-subtle-tabs-pane wo-note-pane">
-                @if($workOrderNote !== '')
-                  <div class="wo-note-readonly" role="textbox" aria-readonly="true">{{ $workOrderNote }}</div>
-                @else
-                  <div class="wo-note-empty">Nema napomene za ovaj radni nalog.</div>
-                @endif
+                <textarea class="form-control wo-note-editor" id="wo-note-editor" maxlength="4000" placeholder="Unesite napomenu za radni nalog">{{ $workOrderNote }}</textarea>
+                <div class="d-flex align-items-center justify-content-between mt-1">
+                  <small class="text-muted" id="wo-note-save-status" aria-live="polite">Izmjene čuvajte klikom na dugme.</small>
+                  <button type="button" class="btn btn-primary" id="wo-note-save-btn">Sačuvaj napomenu</button>
+                </div>
               </div>
             </div>
             <!-- KPI Tab -->
@@ -2822,6 +2916,14 @@
           <button id="wo-priority-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-{{ $priorityToneClass }}" data-bs-toggle="modal" data-bs-target="#change-priority-modal" @if (!$hasLoadedWorkOrder) disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif>
             <span id="wo-priority-label">{{ $priorityDisplayLabel === '-' ? 'Prioritet -' : $priorityDisplayLabel }}</span>
           </button>
+          <button
+            id="wo-protection-trigger-btn"
+            class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-secondary"
+            type="button"
+            @if (!$hasLoadedWorkOrder || $protectionOptionsUrl === '') disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif
+          >
+            <i class="fa fa-shield me-50" style="margin-top: 1px;"></i> Zaštita: <span class="ms-25">{{ $protectionDisplayLabel }}</span>
+          </button>
           @if($isAdminUser)
             <button
               id="wo-delete-order-btn"
@@ -2842,23 +2944,12 @@
             </button>
           @endif
           @if($isAdminUser)
-            <button
-              id="wo-protection-trigger-btn"
-              class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center"
-              type="button"
-              @if (!$hasLoadedWorkOrder || $protectionOptionsUrl === '') disabled aria-disabled="true" title="Skeniraj radni nalog prvo" @endif
-            >
-              <i class="fa fa-shield me-50" style="margin-top: 1px;"></i> Dodaj zaštitu
-            </button>
             <a class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center" href="{{ route('app-stock', ['open' => 'create-material']) }}">
               <i class="fa fa-cube me-50" style="margin-top: 2px;"></i> Dodaj materijal
             </a>
           @else
             <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" @if (!$hasLoadedWorkOrder) disabled @endif id="wo-department-trigger-btn">
               <i class="fa fa-building me-50" style="margin-top: 1px;"></i> Dodaj odjel
-            </button>
-            <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" @if (!$hasLoadedWorkOrder) disabled @endif id="wo-protection-trigger-btn">
-              <i class="fa fa-shield me-50" style="margin-top: 1px;"></i> Dodaj zaštitu
             </button>
             <button class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center" type="button" onclick="alert('Uskoro')">
               <i class="fa fa-cube me-50" style="margin-top: 2px;"></i> Dodaj materijal
@@ -3258,6 +3349,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var scanLookupNotice = @json(session('scan_lookup_notice') ?? ($scanLookupNotice ?? null));
     var mutationConfig = {
       statusUrl: @json($statusUpdateUrl),
+      noteUrl: @json($noteUpdateUrl),
       priorityUrl: @json($priorityUpdateUrl),
       protectionOptionsUrl: @json($protectionOptionsUrl),
       protectionUpdateUrl: @json($protectionUpdateUrl),
@@ -3276,6 +3368,19 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     };
     var toneClasses = ['primary', 'secondary', 'success', 'warning', 'danger', 'info'];
     var statusSaveButton = document.getElementById('wo-status-save-btn');
+    var noteSaveButton = document.getElementById('wo-note-save-btn');
+    var noteEditor = document.getElementById('wo-note-editor');
+    var noteSaveStatus = document.getElementById('wo-note-save-status');
+    if (noteSaveButton && noteEditor && mutationConfig.noteUrl) {
+      noteSaveButton.addEventListener('click', function () {
+        noteSaveButton.disabled = true;
+        noteSaveStatus.textContent = 'Čuvanje...';
+        requestMutation(mutationConfig.noteUrl, { note: noteEditor.value }, 'Čuvanje napomene nije uspjelo.')
+          .then(function (response) { noteSaveStatus.textContent = response.message || 'Napomena je sačuvana.'; })
+          .catch(function (error) { noteSaveStatus.textContent = error.message || 'Čuvanje napomene nije uspjelo.'; })
+          .finally(function () { noteSaveButton.disabled = false; });
+      });
+    }
     var prioritySaveButton = document.getElementById('wo-priority-save-btn');
     var statusSelect = document.getElementById('wo-status-select');
     var prioritySelect = document.getElementById('wo-priority-select');
@@ -3304,6 +3409,17 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
     var priorityModalElement = document.getElementById('change-priority-modal');
     var editSastavnicaModalElement = document.getElementById('edit-sastavnica-item-modal');
     var sastavnicaTable = document.getElementById('sastavnica-table');
+    var sastavnicaActionToggle = sastavnicaTable && sastavnicaTable.querySelector('.wo-sastavnica-action-toggle');
+    if (sastavnicaActionToggle) {
+      sastavnicaActionToggle.addEventListener('click', function () {
+        if (!window.matchMedia('(max-width: 767.98px)').matches) return;
+        var collapsed = sastavnicaTable.classList.toggle('wo-actions-collapsed');
+        var actionLabel = collapsed ? 'Proširi kolonu Akcija' : 'Sažmi kolonu Akcija';
+        sastavnicaActionToggle.setAttribute('aria-expanded', String(!collapsed));
+        sastavnicaActionToggle.setAttribute('aria-label', actionLabel);
+        sastavnicaActionToggle.title = actionLabel;
+      });
+    }
     var materijaliTable = document.getElementById('materijali-table');
     var closeWorkOrderMaterialsTable = document.getElementById('close-work-order-materials-table');
     var operacijaTable = document.getElementById('operacija-table');

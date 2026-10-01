@@ -89,6 +89,50 @@ class ProductionPlanCarryOverTest extends TestCase
         $this->assertSame([], $all->getBindings());
     }
 
+    public function test_customer_date_ranges_are_grouped_and_keep_other_filters(): void
+    {
+        $cases = [
+            'GROB only' => [['grob_date_from' => '2026-09-01', 'grob_date_to' => '2026-09-15'], ['GROB%', '2026-09-01', '2026-09-15', 'TRENDY GERMANY%']],
+            'Germany only' => [['trendy_germany_date_from' => '2026-09-10', 'trendy_germany_date_to' => '2026-09-30'], ['GROB%', 'TRENDY GERMANY%', '2026-09-10', '2026-09-30']],
+            'both' => [['grob_date_from' => '2026-09-01', 'grob_date_to' => '2026-09-15', 'trendy_germany_date_from' => '2026-09-10', 'trendy_germany_date_to' => '2026-09-30'], ['GROB%', '2026-09-01', '2026-09-15', 'TRENDY GERMANY%', '2026-09-10', '2026-09-30']],
+            'from only' => [['grob_date_from' => '2026-09-01'], ['GROB%', '2026-09-01', 'TRENDY GERMANY%']],
+            'to only' => [['trendy_germany_date_to' => '2026-09-30'], ['GROB%', 'TRENDY GERMANY%', '2026-09-30']],
+        ];
+
+        foreach ($cases as $name => [$filters, $expected]) {
+            $query = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo')->where('wo.acIdent', 'ABC');
+            $this->invoke('applyCustomerDateFilters', $query, $filters);
+            $this->invoke('applyStatusFilter', $query, ['status_rn' => 'O']);
+            $this->assertSame(array_merge(['ABC'], $expected, ['O']), $query->getBindings(), $name);
+            $this->assertSame(2, substr_count($query->toSql(), 'UPPER(LTRIM(RTRIM(ISNULL(wo.acConsignee, wo.acReceiver)))) LIKE ?'), $name);
+            $this->assertStringContainsString(' or ', $query->toSql(), $name);
+            $this->assertStringContainsString('wo].[acIdent', $query->toSql(), $name);
+        }
+
+        $query = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo')->where('wo.acIdent', 'ABC');
+        $this->invoke('applyCustomerDateFilters', $query, []);
+        $this->assertSame(['ABC'], $query->getBindings());
+        $this->assertStringNotContainsString('acConsignee', $query->toSql());
+    }
+
+    public function test_priority_selection_filter_supports_multiple_values_and_select_none(): void
+    {
+        $query = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo');
+        $this->invoke('applySelectionFilters', $query, [
+            'prioritet' => ['1', '5'],
+        ]);
+        $this->assertSame(['1', '5'], $query->getBindings());
+        $this->assertStringContainsString('[wo].[anPriority] in', $query->toSql());
+
+        $none = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo');
+        $this->invoke('applySelectionFilters', $none, ['prioritet' => '__none__']);
+        $this->assertStringContainsString('1 = 0', $none->toSql());
+
+        $all = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo');
+        $this->invoke('applySelectionFilters', $all, ['prioritet' => '']);
+        $this->assertSame([], $all->getBindings());
+    }
+
     public function test_excel_includes_cost_driver_numbering_and_preserves_priority_colours(): void
     {
         $row = (object) array_fill_keys(['rn', 'narucitelj', 'prioritet', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'datum_isporuke', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'napomena', 'status_code'], 'test');

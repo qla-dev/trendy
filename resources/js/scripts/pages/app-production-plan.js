@@ -21,17 +21,59 @@ $(function () {
     if (Array.isArray(storedColumns) && storedColumns.some(function (key) { return keys.indexOf(key) !== -1; })) savedColumns = storedColumns;
   } catch (error) { /* Browsers may block local storage. The picker still works for this visit. */ }
   var requestErrorShown = false;
-  var priorityFilter = $('#filter-prioritet');
   var rowColourFilter = $('#plan-boja-redova');
-
-  if (priorityFilter.length && $.fn.select2) {
-    priorityFilter.select2({
-      width: '100%',
-      placeholder: 'Svi prioriteti',
-      allowClear: true,
-      minimumResultsForSearch: 0
-    });
+  var multiSelects = $('.plan-multiselect');
+  function selectedValues(picker) {
+    return picker.find('.plan-multiselect-option:checked').map(function () { return this.value; }).get();
   }
+  function syncMultiSelect(picker) {
+    var options = picker.find('.plan-multiselect-option');
+    var selected = selectedValues(picker);
+    var all = picker.find('.plan-multiselect-all')[0];
+    var defaultStatusOptions = picker.find('.plan-multiselect-option[data-default-selected="1"]');
+    var isDefaultStatusSelection = picker.data('k') === 'status_rn'
+      && selected.length === defaultStatusOptions.length
+      && defaultStatusOptions.filter(':checked').length === selected.length;
+    all.checked = selected.length === options.length;
+    all.indeterminate = selected.length > 0 && selected.length < options.length;
+    picker.find('.plan-multiselect-toggle').text(selected.length === options.length ? picker.data('all-label') : isDefaultStatusSelection ? 'Nezaključeni' : selected.length ? selected.length + ' odabrano' : picker.data('none-label'));
+  }
+  multiSelects.each(function () { syncMultiSelect($(this)); });
+  multiSelects.on('click', '.plan-multiselect-toggle', function () {
+    var picker = $(this).closest('.plan-multiselect');
+    var opening = picker.find('.plan-multiselect-menu').hasClass('d-none');
+    multiSelects.not(picker).find('.plan-multiselect-menu').addClass('d-none');
+    multiSelects.not(picker).find('.plan-multiselect-toggle').attr('aria-expanded', 'false');
+    picker.find('.plan-multiselect-menu').toggleClass('d-none', !opening);
+    $(this).attr('aria-expanded', String(opening));
+    if (opening) picker.find('.plan-multiselect-search').trigger('focus');
+  });
+  multiSelects.on('change', '.plan-multiselect-all', function () {
+    var picker = $(this).closest('.plan-multiselect');
+    picker.find('.plan-multiselect-option').prop('checked', this.checked);
+    syncMultiSelect(picker);
+  }).on('change', '.plan-multiselect-option', function () {
+    syncMultiSelect($(this).closest('.plan-multiselect'));
+  }).on('input', '.plan-multiselect-search', function () {
+    var picker = $(this).closest('.plan-multiselect');
+    var term = $(this).val().trim().toLocaleLowerCase();
+    var visible = 0;
+    picker.find('.plan-multiselect-options .form-check').each(function () {
+      var match = $(this).find('label').text().toLocaleLowerCase().indexOf(term) !== -1;
+      $(this).toggleClass('d-none', !match);
+      if (match) visible++;
+    });
+    picker.find('.plan-multiselect-empty').toggleClass('d-none', visible !== 0);
+  });
+  $(document).on('click', function (event) {
+    multiSelects.each(function () {
+      if (this.contains(event.target)) return;
+      $(this).find('.plan-multiselect-menu').addClass('d-none');
+      $(this).find('.plan-multiselect-toggle').attr('aria-expanded', 'false');
+    });
+  }).on('keydown', function (event) {
+    if (event.key === 'Escape') multiSelects.find('.plan-multiselect-menu').addClass('d-none').end().find('.plan-multiselect-toggle').attr('aria-expanded', 'false');
+  });
 
   function showError(title, message) {
     if (window.Swal && typeof window.Swal.fire === 'function') {
@@ -94,7 +136,16 @@ $(function () {
       $(this._flatpickr.altInput).on('input change', function () { weekDatesAuto = false; });
     }
   });
-  function filters() { var values = {}; $('.f').each(function () { values[$(this).data('k')] = $(this).val(); }); values.week_dates_auto = weekDatesAuto ? 1 : 0; return values; }
+  function filters() {
+    var values = {};
+    $('.f').each(function () { values[$(this).data('k')] = $(this).val(); });
+    multiSelects.each(function () {
+      var picker = $(this), selected = selectedValues(picker), total = picker.find('.plan-multiselect-option').length;
+      values[picker.data('k')] = selected.length === total ? '' : selected.length ? selected : '__none__';
+    });
+    values.week_dates_auto = weekDatesAuto ? 1 : 0;
+    return values;
+  }
   function editable(key) { return config.canEdit && ['rn', 'progress', 'prioritet', 'status_rn', 'broj_narudzbe_kupca', 'datum_isporuke'].indexOf(key) === -1; }
   function closeEditor() {
     $('.plan-inline-editor .select2-hidden-accessible').each(function () { $(this).select2('destroy'); });
@@ -148,6 +199,7 @@ $(function () {
         if (key === 'progress') output = '<b>' + escapeHtml(value) + '%</b>';
         else if (key === 'plan_kol' || key === 'izr_kol') output = formatQuantity(value);
         else if (['datum', 'pocetak', 'kraj', 'datum_isporuke'].indexOf(key) >= 0) output = formatDate(value);
+        else if (key === 'napomena') output = '<span class="production-plan-note-preview" title="' + escapeHtml(value).replace(/"/g, '&quot;') + '">' + escapeHtml(value) + '</span>';
         else output = escapeHtml(value);
         return editable(key) ? '<span class="editable-cell">' + output + '</span>' : output;
       }};
@@ -259,9 +311,23 @@ $(function () {
     $('.f').each(function () {
       var value = $(this).val();
       if (value == null || value === '') return;
+      var customerRow = $(this).closest('.plan-customer-dates-row');
+      if (customerRow.length) {
+        var customer = customerRow.find('span.fw-bold').first().text().trim();
+        var dateLabel = $(this).closest('.shared-filter-field').find('label').first().text().trim();
+        summary.push(escapeHtml(customer + ' ' + dateLabel) + ': ' + escapeHtml(formatDate(value) || value));
+        return;
+      }
       var label = $(this).closest('[class*="col-"]').find('label').first().text().trim() || $(this).data('k');
       if ($(this).is('select')) value = $(this).find('option:selected').text();
       summary.push(escapeHtml(label) + ': ' + escapeHtml(value));
+    });
+    multiSelects.each(function () {
+      var picker = $(this), selected = picker.find('.plan-multiselect-option:checked');
+      if (selected.length === picker.find('.plan-multiselect-option').length) return;
+      var label = picker.data('label') || picker.closest('[class*="col-"]').find('label').first().text().trim() || picker.data('k');
+      var names = selected.map(function () { return $(this).next('label').text(); }).get();
+      summary.push(escapeHtml(label) + ': ' + escapeHtml(names.length ? names.join(', ') : 'Nijedan'));
     });
     $('#production-plan-active-filters').toggle(filtered).html(summary.length ? summary.join('<br>') : 'Nema aktivnih filtera.');
   }
@@ -299,7 +365,7 @@ $(function () {
   rowColourFilter.on('change', function () {
     table.rows({ page: 'current' }).every(function () { applyRowColour(this.node(), this.data()); });
   });
-  $('#btn-obrisi-filter').on('click', function () { $('.f').each(function () { if (this._flatpickr) this._flatpickr.clear(); else if ($(this).is('select')) $(this).val('').trigger('change'); else $(this).val(''); }); $('.f[data-k="year"]').val(new Date().getFullYear()); table.ajax.reload(); });
+  $('#btn-obrisi-filter').on('click', function () { $('.f').each(function () { if (this._flatpickr) this._flatpickr.clear(); else if ($(this).is('select')) $(this).val('').trigger('change'); else $(this).val(''); }); multiSelects.each(function () { var picker = $(this); picker.find('.plan-multiselect-option').each(function () { $(this).prop('checked', picker.data('k') === 'status_rn' ? $(this).data('default-selected') === 1 : true); }); picker.find('.plan-multiselect-search').val('').trigger('input'); syncMultiSelect(picker); }); weekDatesAuto = false; $('.f[data-k="year"]').val(new Date().getFullYear()); table.ajax.reload(); });
   tableElement.find('tbody').on('click', 'td', function () {
     var cell = table.cell(this), row = table.row($(this).closest('tr')).data(), key = keys[cell.index().column];
     if (!row || !editable(key)) return;

@@ -87,6 +87,7 @@ Route::middleware('auth:web')->group(function () {
         Route::get('invoice/preview/{id?}', [WorkOrderController::class, 'invoicePreview'])->name('app-invoice-preview');
         Route::post('invoice/preview/{id}/status', [WorkOrderController::class, 'updateInvoiceStatus'])->name('app-invoice-update-status');
         Route::post('invoice/preview/{id}/priority', [WorkOrderController::class, 'updateInvoicePriority'])->name('app-invoice-update-priority');
+        Route::post('invoice/preview/{id}/note', [WorkOrderController::class, 'updateWorkOrderNote'])->name('app-invoice-update-note');
         Route::get('invoice/preview/{id}/protection-options', [WorkOrderController::class, 'workOrderProtectionOptions'])->name('app-invoice-protection-options');
         Route::post('invoice/preview/{id}/protection', [WorkOrderController::class, 'updateWorkOrderProtection'])->name('app-invoice-protection-update');
         Route::get('invoice/preview/{id}/department-options', [WorkOrderController::class, 'workOrderDepartmentOptions'])->name('app-invoice-department-options');
