@@ -32,6 +32,11 @@ class ProductionPlanController extends Controller
             ->sortBy(fn ($number) => (int) $number)
             ->values()
             ->map(fn ($number) => ['code' => (string) $number, 'label' => '-' . $number]);
+        $otherCustomerOptions = DB::table(config('workorders.schema', 'dbo') . '.tHF_WOEx')
+            ->selectRaw('DISTINCT UPPER(LTRIM(RTRIM(ISNULL(acConsignee, acReceiver)))) AS customer')
+            ->whereRaw("UPPER(LTRIM(RTRIM(ISNULL(acConsignee, acReceiver)))) NOT LIKE 'TRENDY GERMANY%'")
+            ->orderBy('customer')->pluck('customer')->filter()
+            ->map(fn ($customer) => ['code' => $customer, 'label' => $customer])->values();
         $statusLabels = [
             'D' => 'Raspisan', 'O' => 'Otvoren', 'E' => 'U radu', 'P' => 'U toku',
             'R' => 'Djelomično zaključen', 'F' => 'Zaključen', 'I' => 'Zaključen',
@@ -60,6 +65,7 @@ class ProductionPlanController extends Controller
                 'canEdit' => $this->admin($request->user()),
                 'priorityOptions' => $priorityOptions,
                 'trendyGermanyNumberOptions' => $trendyGermanyNumberOptions,
+                'otherCustomerOptions' => $otherCustomerOptions,
                 'statusOptions' => $statusOptions,
             ],
         ]);
@@ -331,10 +337,13 @@ class ProductionPlanController extends Controller
         foreach ($customers as $key => $pattern) {
             $from = trim((string) ($filters[$key . '_date_from'] ?? ''));
             $to = trim((string) ($filters[$key . '_date_to'] ?? ''));
-            $ranges[] = compact('pattern', 'from', 'to');
+            $selectionKey = $key . '_customers';
+            $selection = $filters[$selectionKey] ?? '';
+            $hasSelection = array_key_exists($selectionKey, $filters);
+            $ranges[] = compact('pattern', 'from', 'to', 'selection', 'hasSelection');
         }
 
-        if (!collect($ranges)->contains(fn ($range) => $range['from'] !== '' || $range['to'] !== '') && !$filterGermanyNumbers && !$noGermanyNumbers) {
+        if (!collect($ranges)->contains(fn ($range) => $range['from'] !== '' || $range['to'] !== '' || $range['hasSelection']) && !$filterGermanyNumbers && !$noGermanyNumbers) {
             return;
         }
 
@@ -342,7 +351,34 @@ class ProductionPlanController extends Controller
             foreach ($ranges as $range) {
                 $isGermany = $range['pattern'] === 'TRENDY GERMANY%';
                 $customerQuery->orWhere(function ($rowQuery) use ($range, $isGermany, $germanyNumbers, $filterGermanyNumbers, $noGermanyNumbers) {
-                    $rowQuery->whereRaw('UPPER(LTRIM(RTRIM(ISNULL(wo.acConsignee, wo.acReceiver)))) LIKE ?', [$range['pattern']]);
+                    $customerSql = 'UPPER(LTRIM(RTRIM(ISNULL(wo.acConsignee, wo.acReceiver))))';
+                    if (!$range['hasSelection']) {
+                        $rowQuery->whereRaw($customerSql . ' LIKE ?', [$range['pattern']]);
+                    } elseif ($range['selection'] === '__none__' || $range['selection'] === []) {
+                        $rowQuery->whereRaw('1 = 0');
+                    } elseif ($isGermany) {
+                        $rowQuery->whereRaw($customerSql . ' LIKE ?', ['TRENDY GERMANY%']);
+                        $selected = (array) $range['selection'];
+                        if ($range['selection'] !== '' && $range['selection'] !== '__all__') {
+                            $rowQuery->where(function ($companies) use ($selected, $customerSql) {
+                                if (in_array('germany', $selected, true)) {
+                                    $companies->orWhereRaw($customerSql . ' NOT LIKE ?', ['%GMBH%']);
+                                }
+                                if (in_array('germany_gmbh', $selected, true)) {
+                                    $companies->orWhereRaw($customerSql . ' LIKE ?', ['%GMBH%']);
+                                }
+                                if (!array_intersect(['germany', 'germany_gmbh'], $selected)) {
+                                    $companies->whereRaw('1 = 0');
+                                }
+                            });
+                        }
+                    } else {
+                        $rowQuery->whereRaw($customerSql . ' NOT LIKE ?', ['TRENDY GERMANY%']);
+                        if ($range['selection'] !== '' && $range['selection'] !== '__all__') {
+                            $selected = array_values(array_filter((array) $range['selection'], 'is_scalar'));
+                            $rowQuery->whereIn(DB::raw($customerSql), $selected);
+                        }
+                    }
                     if ($isGermany && $noGermanyNumbers) {
                         $rowQuery->whereRaw('1 = 0');
                     } elseif ($isGermany && $filterGermanyNumbers) {

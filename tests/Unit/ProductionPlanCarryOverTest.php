@@ -115,6 +115,32 @@ class ProductionPlanCarryOverTest extends TestCase
         $this->assertStringNotContainsString('acConsignee', $query->toSql());
     }
 
+    public function test_customer_selections_split_germany_and_exclude_it_from_other_customers(): void
+    {
+        $query = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo');
+        $this->invoke('applyCustomerDateFilters', $query, [
+            'trendy_germany_customers' => ['germany_gmbh'],
+            'grob_customers' => ['GROB-WERKE', 'OTHER CUSTOMER'],
+            'grob_date_from' => '2026-10-01',
+        ]);
+        $this->assertSame(['TRENDY GERMANY%', 'GROB-WERKE', 'OTHER CUSTOMER', '2026-10-01', 'TRENDY GERMANY%', '%GMBH%'], $query->getBindings());
+        $this->assertStringContainsString(' NOT LIKE ?', $query->toSql());
+        $this->assertStringContainsString(' in (?, ?)', $query->toSql());
+
+        $none = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo');
+        $this->invoke('applyCustomerDateFilters', $none, [
+            'trendy_germany_customers' => '__none__', 'grob_customers' => '__none__',
+        ]);
+        $this->assertSame(2, substr_count($none->toSql(), '1 = 0'));
+
+        $germany = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo');
+        $this->invoke('applyCustomerDateFilters', $germany, [
+            'trendy_germany_customers' => ['germany'], 'grob_customers' => '__none__',
+        ]);
+        $this->assertSame(['TRENDY GERMANY%', '%GMBH%'], $germany->getBindings());
+        $this->assertStringContainsString(' NOT LIKE ?', $germany->toSql());
+    }
+
     public function test_priority_selection_filter_supports_multiple_values_and_select_none(): void
     {
         $query = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo');
