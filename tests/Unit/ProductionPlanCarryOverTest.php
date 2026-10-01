@@ -107,6 +107,8 @@ class ProductionPlanCarryOverTest extends TestCase
             $this->assertSame(2, substr_count($query->toSql(), 'UPPER(LTRIM(RTRIM(ISNULL(wo.acConsignee, wo.acReceiver)))) LIKE ?'), $name);
             $this->assertStringContainsString(' or ', $query->toSql(), $name);
             $this->assertStringContainsString('wo].[acIdent', $query->toSql(), $name);
+            $this->assertStringNotContainsString('adSchedStartTime', $query->toSql(), $name);
+            $this->assertSame(count(array_intersect_key($filters, array_flip(['grob_date_from', 'grob_date_to', 'trendy_germany_date_from', 'trendy_germany_date_to']))), substr_count($query->toSql(), 'CAST(COALESCE(order_item.adDeliveryDeadline, order_item.adDeliveryDate, sales_order.adDeliveryDeadline, sales_order.adDeliveryDate) AS date)'), $name);
         }
 
         $query = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo')->where('wo.acIdent', 'ABC');

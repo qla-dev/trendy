@@ -77,7 +77,7 @@ class ProductionPlanController extends Controller
             $filters = (array) $request->input('filter', []);
             $schema = config('workorders.schema', 'dbo');
             $status = "UPPER(LTRIM(RTRIM(wo.acStatusMF)))";
-            $deliveryDate = "COALESCE(order_item.adDeliveryDeadline, order_item.adDeliveryDate, sales_order.adDeliveryDeadline, sales_order.adDeliveryDate)";
+            $deliveryDate = $this->deliveryDateExpression();
 
             $query = DB::table($schema . '.tHF_WOEx as wo')
                 ->leftJoin($schema . '.tHE_SetDeliveryPriority as priority', 'priority.anPriority', '=', 'wo.anPriority')
@@ -321,8 +321,14 @@ class ProductionPlanController extends Controller
         }
     }
 
+    private function deliveryDateExpression(): string
+    {
+        return "COALESCE(order_item.adDeliveryDeadline, order_item.adDeliveryDate, sales_order.adDeliveryDeadline, sales_order.adDeliveryDate)";
+    }
+
     private function applyCustomerDateFilters($query, array $filters): void
     {
+        $deliveryDate = $this->deliveryDateExpression();
         $selectedGermanyNumbers = $filters['trendy_germany_numbers'] ?? '';
         $filterGermanyNumbers = is_array($selectedGermanyNumbers) && count($selectedGermanyNumbers) > 0;
         $noGermanyNumbers = $selectedGermanyNumbers === '__none__' || (is_array($selectedGermanyNumbers) && count($selectedGermanyNumbers) === 0);
@@ -347,10 +353,10 @@ class ProductionPlanController extends Controller
             return;
         }
 
-        $query->where(function ($customerQuery) use ($ranges, $germanyNumbers, $filterGermanyNumbers, $noGermanyNumbers) {
+        $query->where(function ($customerQuery) use ($ranges, $germanyNumbers, $filterGermanyNumbers, $noGermanyNumbers, $deliveryDate) {
             foreach ($ranges as $range) {
                 $isGermany = $range['pattern'] === 'TRENDY GERMANY%';
-                $customerQuery->orWhere(function ($rowQuery) use ($range, $isGermany, $germanyNumbers, $filterGermanyNumbers, $noGermanyNumbers) {
+                $customerQuery->orWhere(function ($rowQuery) use ($range, $isGermany, $germanyNumbers, $filterGermanyNumbers, $noGermanyNumbers, $deliveryDate) {
                     $customerSql = 'UPPER(LTRIM(RTRIM(ISNULL(wo.acConsignee, wo.acReceiver))))';
                     if (!$range['hasSelection']) {
                         $rowQuery->whereRaw($customerSql . ' LIKE ?', [$range['pattern']]);
@@ -389,10 +395,10 @@ class ProductionPlanController extends Controller
                         });
                     }
                     if ($range['from'] !== '') {
-                        $rowQuery->whereDate('wo.adSchedStartTime', '>=', $range['from']);
+                        $rowQuery->whereRaw("CAST($deliveryDate AS date) >= ?", [$range['from']]);
                     }
                     if ($range['to'] !== '') {
-                        $rowQuery->whereDate('wo.adSchedStartTime', '<=', $range['to']);
+                        $rowQuery->whereRaw("CAST($deliveryDate AS date) <= ?", [$range['to']]);
                     }
                 });
             }
@@ -406,7 +412,7 @@ class ProductionPlanController extends Controller
             $filters = $filtered ? (array) $request->input('filter', []) : [];
             $schema = config('workorders.schema', 'dbo');
             $status = "UPPER(LTRIM(RTRIM(wo.acStatusMF)))";
-            $deliveryDate = "COALESCE(order_item.adDeliveryDeadline, order_item.adDeliveryDate, sales_order.adDeliveryDeadline, sales_order.adDeliveryDate)";
+            $deliveryDate = $this->deliveryDateExpression();
 
             $query = DB::table($schema . '.tHF_WOEx as wo')
                 ->leftJoin($schema . '.tHE_SetDeliveryPriority as priority', 'priority.anPriority', '=', 'wo.anPriority')
@@ -558,7 +564,7 @@ class ProductionPlanController extends Controller
 
     private function filterSummary(array $filters): string
     {
-        $labels = ['rn' => 'RN', 'prioritet' => 'Prioritet', 'proizvod' => 'Proizvod', 'status_rn' => 'Status RN', 'narudzba' => 'Narudžba', 'year' => 'Godina', 'kw' => 'Kalendarska sedmica', 'datum_od' => 'Početni termin od', 'datum_do' => 'Početni termin do', 'isporuka_od' => 'Datum isporuke od', 'isporuka_do' => 'Datum isporuke do', 'grob_date_from' => 'GROB datum od', 'grob_date_to' => 'GROB datum do', 'trendy_germany_date_from' => 'TRENDY GERMANY datum od', 'trendy_germany_date_to' => 'TRENDY GERMANY datum do'];
+        $labels = ['rn' => 'RN', 'prioritet' => 'Prioritet', 'proizvod' => 'Proizvod', 'status_rn' => 'Status RN', 'narudzba' => 'Narudžba', 'year' => 'Godina', 'kw' => 'Kalendarska sedmica', 'datum_od' => 'Početni termin od', 'datum_do' => 'Početni termin do', 'isporuka_od' => 'Datum isporuke od', 'isporuka_do' => 'Datum isporuke do', 'grob_date_from' => 'Ostali naručitelji datum isporuke od', 'grob_date_to' => 'Ostali naručitelji datum isporuke do', 'trendy_germany_date_from' => 'Trendy naručitelji datum isporuke od', 'trendy_germany_date_to' => 'Trendy naručitelji datum isporuke do'];
         $parts = [];
         foreach ($labels as $key => $label) {
             $raw = $filters[$key] ?? '';
