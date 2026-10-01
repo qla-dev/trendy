@@ -681,7 +681,7 @@
           <label class="form-label">Plan. po&#269;etak od</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control order-linkage-filter-input order-linkage-filter-date" id="filter-plan-pocetak-od" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control order-linkage-filter-input order-linkage-filter-date" id="filter-plan-pocetak-od" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
       </div>
@@ -690,28 +690,28 @@
           <label class="form-label">Plan. po&#269;etak do</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control order-linkage-filter-input order-linkage-filter-date" id="filter-plan-pocetak-do" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control order-linkage-filter-input order-linkage-filter-date" id="filter-plan-pocetak-do" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">
           <label class="form-label">Plan. kraj od</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control order-linkage-filter-input order-linkage-filter-date" id="filter-plan-kraj-od" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control order-linkage-filter-input order-linkage-filter-date" id="filter-plan-kraj-od" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">
           <label class="form-label">Plan. kraj do</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control order-linkage-filter-input order-linkage-filter-date" id="filter-plan-kraj-do" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control order-linkage-filter-input order-linkage-filter-date" id="filter-plan-kraj-do" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">
           <label class="form-label">Datum od</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control order-linkage-filter-input order-linkage-filter-date" id="filter-datum-od" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control order-linkage-filter-input order-linkage-filter-date" id="filter-datum-od" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
       </div>
@@ -720,7 +720,7 @@
           <label class="form-label">Datum do</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control order-linkage-filter-input order-linkage-filter-date" id="filter-datum-do" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control order-linkage-filter-input order-linkage-filter-date" id="filter-datum-do" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">

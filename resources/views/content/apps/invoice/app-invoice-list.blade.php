@@ -197,7 +197,7 @@
           <label class="form-label">Plan. početak od</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control filter-input filter-date-input" id="filter-plan-pocetak-od" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control filter-input filter-date-input" id="filter-plan-pocetak-od" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
       </div>
@@ -206,28 +206,28 @@
           <label class="form-label">Plan. početak do</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control filter-input filter-date-input" id="filter-plan-pocetak-do" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control filter-input filter-date-input" id="filter-plan-pocetak-do" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">
           <label class="form-label">Plan. kraj od</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control filter-input filter-date-input" id="filter-plan-kraj-od" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control filter-input filter-date-input" id="filter-plan-kraj-od" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">
           <label class="form-label">Plan. kraj do</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control filter-input filter-date-input" id="filter-plan-kraj-do" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control filter-input filter-date-input" id="filter-plan-kraj-do" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">
           <label class="form-label">Datum od</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control filter-input filter-date-input" id="filter-datum-od" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control filter-input filter-date-input" id="filter-datum-od" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
       </div>
@@ -236,7 +236,7 @@
           <label class="form-label">RN datum do</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control filter-input filter-date-input" id="filter-datum-do" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control filter-input filter-date-input" id="filter-datum-do" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">

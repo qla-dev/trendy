@@ -453,14 +453,14 @@
           <label class="form-label">Datum od</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control released-doc-filter-input released-doc-filter-date" id="filter-datum-od" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control released-doc-filter-input released-doc-filter-date" id="filter-datum-od" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">
           <label class="form-label">Datum do</label>
           <div class="input-group input-group-merge">
             <span class="input-group-text"><i data-feather="calendar"></i></span>
-            <input type="text" class="form-control released-doc-filter-input released-doc-filter-date" id="filter-datum-do" placeholder="dd.mm.yyyy" autocomplete="off">
+            <input type="text" class="form-control released-doc-filter-input released-doc-filter-date" id="filter-datum-do" placeholder="dd.mm.gggg" autocomplete="off">
           </div>
         </div>
         <div class="col-md-3">

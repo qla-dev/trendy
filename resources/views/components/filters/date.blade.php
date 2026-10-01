@@ -1,4 +1,4 @@
-@props(['label', 'placeholder' => 'dd.mm.yyyy'])
+@props(['label', 'placeholder' => 'dd.mm.gggg'])
 
 <div class="shared-filter-field">
   <label class="form-label">{{ $label }}</label>

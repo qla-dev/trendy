@@ -632,7 +632,7 @@
                 type="text"
                 name="date_from"
                 class="form-control ai-token-history-filter-input ai-token-history-filter-date"
-                placeholder="dd.mm.yyyy"
+                placeholder="dd.mm.gggg"
                 autocomplete="off"
                 value="{{ $filters['date_from_display'] ?? '' }}">
             </div>
@@ -646,7 +646,7 @@
                 type="text"
                 name="date_to"
                 class="form-control ai-token-history-filter-input ai-token-history-filter-date"
-                placeholder="dd.mm.yyyy"
+                placeholder="dd.mm.gggg"
                 autocomplete="off"
                 value="{{ $filters['date_to_display'] ?? '' }}">
             </div>
