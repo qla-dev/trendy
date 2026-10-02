@@ -33,7 +33,7 @@ while (ob_get_level() > 0) {
     }
 }
 ob_implicit_flush(true);
-echo "eNalog redeploy revision 2026-09-17.5 (frontend only)\n";
+echo "eNalog redeploy revision 2026-10-02.1 (frontend and offers)\n";
 flush();
 
 if (filter_var($_GET['diagnostics'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
@@ -207,6 +207,8 @@ $commands = [
     ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
     ['label' => 'Installing frontend dependencies', 'command' => $npmCommand . ' ci --no-audit --no-fund'],
     ['label' => 'Building frontend assets', 'command' => $npmCommand . ' run production'],
+    ['label' => 'Installing dependencies for offers', 'command' => $npmCommand . ' --prefix resources/ponuda ci --no-audit --no-fund'],
+    ['label' => 'Building offer pages', 'command' => $npmCommand . ' --prefix resources/ponuda run build'],
 ];
 
 if ($ponudaOnly) {
@@ -267,8 +269,7 @@ if ($ponudaOnly) {
 } elseif ($offersOnly) {
     $offerFolders = ['ponuda', 'ponuda-sara-ai'];
 } else {
-    // The full app redeploy does not build offers; it only checks the main offer exists.
-    $offerFolders = ['ponuda'];
+    $offerFolders = ['ponuda', 'ponuda-sara-ai'];
 }
 foreach ($offerFolders as $offerFolder) {
     if (!is_file($baseDir . '/public/' . $offerFolder . '/index.html')) {
@@ -278,7 +279,7 @@ foreach ($offerFolders as $offerFolder) {
 }
 
 // The former /ponuda-2/ offer moved to /ponuda/: replace its old build with a redirect.
-if ($ponudaOnly || $offersOnly) {
+if (!$ponudaSaraAiOnly) {
     $retiredOffer = $baseDir . '/public/ponuda-2';
     if (is_dir($retiredOffer)) {
         $entries = new RecursiveIteratorIterator(
