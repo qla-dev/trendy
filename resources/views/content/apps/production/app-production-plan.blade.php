@@ -31,14 +31,10 @@
     .production-plan-table { width: max-content !important; min-width: 100%; }
     .production-plan-table > :not(caption) > * > * { padding: .42rem .5rem; font-size: .8rem; white-space: nowrap; }
     .production-plan-table thead th { max-width: 7rem; white-space: normal; line-height: 1.2; }
-    table.production-plan-table.dataTable > thead > tr > th[class*="sorting"]::before,
-    table.production-plan-table.dataTable > thead > tr > th[class*="sorting"]::after { top: 50%; bottom: auto; transform: translateY(-50%); }
+    table.production-plan-table.dataTable > thead > tr > th[class*="sorting"]::before { top: calc(50% - .5rem); right: .45em; bottom: auto; transform: translateY(-50%); }
+    table.production-plan-table.dataTable > thead > tr > th[class*="sorting"]::after { top: calc(50% + .5rem); right: .45em; bottom: auto; transform: translateY(-50%); }
     .production-plan-table thead th:nth-child(9):not(.sorting_disabled),
     .production-plan-table thead th:nth-child(13):not(.sorting_disabled) { padding-right: 20px; }
-    .production-plan-table thead th:nth-child(9)::before,
-    .production-plan-table thead th:nth-child(13)::before { right: .55em; }
-    .production-plan-table thead th:nth-child(9)::after,
-    .production-plan-table thead th:nth-child(13)::after { right: .1em; }
     .production-plan-table .editable-cell { cursor: pointer; }
     .production-plan-table .production-plan-note-preview { display: inline-block; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
     .production-plan-table tr.production-plan-row--red > td { background-color: #ffd6dc !important; color: #7a0014; }
