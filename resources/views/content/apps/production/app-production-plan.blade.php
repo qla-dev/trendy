@@ -30,8 +30,9 @@
     @media (prefers-reduced-motion: reduce) { .plan-expand-button i { transition: none; } }
     .production-plan-table { width: max-content !important; min-width: 100%; }
     .production-plan-table > :not(caption) > * > * { padding: .42rem .5rem; font-size: .8rem; white-space: nowrap; }
+    .production-plan-table thead th { max-width: 7rem; white-space: normal; line-height: 1.2; }
     .production-plan-table .editable-cell { cursor: pointer; }
-    .production-plan-table .production-plan-note-preview { display: inline-block; max-width: 25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+    .production-plan-table .production-plan-note-preview { display: inline-block; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
     .production-plan-table tr.production-plan-row--red > td { background-color: #ffd6dc !important; color: #7a0014; }
     .production-plan-table tr.production-plan-row--yellow > td { background-color: #fff0a3 !important; color: #5f4500; }
     .production-plan-table tr.production-plan-row--orange > td { background-color: #ffd1aa !important; color: #792b00; }
