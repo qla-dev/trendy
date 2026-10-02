@@ -17,6 +17,7 @@
 /public/vendors
 /public/ponuda/
 /public/ponuda-2/
+/public/ponuda-sara-ai/
 /storage/*.key
 /vendor
 .env

@@ -5,14 +5,16 @@ import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
-  const secondOffer = mode === 'ponuda-2';
-  const offerRoot = secondOffer ? path.resolve(__dirname, 'ponuda-2') : __dirname;
+  // Each extra offer lives in its own folder and builds into public/<mode>/
+  const extraOffers = ['ponuda-2', 'ponuda-sara-ai'];
+  const offerFolder = extraOffers.includes(mode) ? mode : null;
+  const offerRoot = offerFolder ? path.resolve(__dirname, offerFolder) : __dirname;
   return {
     root: offerRoot,
     base: './',
     plugins: [react(), tailwindcss()],
     build: {
-      outDir: path.resolve(__dirname, secondOffer ? '../../public/ponuda-2' : '../../public/ponuda'),
+      outDir: path.resolve(__dirname, `../../public/${offerFolder ?? 'ponuda'}`),
       emptyOutDir: true,
       rollupOptions: {
         input: {
