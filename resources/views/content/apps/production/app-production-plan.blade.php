@@ -127,7 +127,7 @@
     <div id="production-plan-loading-overlay" class="production-plan-table-loading-overlay is-visible" role="status" aria-live="polite" aria-hidden="false">
       <div class="production-plan-table-loading-overlay-content"><span class="spinner-border production-plan-table-loading-spinner" aria-hidden="true"></span><span class="production-plan-table-loading-message">Učitavanje plana proizvodnje...</span></div>
     </div>
-    <div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela" aria-busy="true"><thead><tr><th aria-label="Detalji"></th><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Status RN</th><th>Datum</th><th>Narudžba</th><th>Br. narudžbe kupca</th><th>Br. poz.</th><th>Poč. termin</th><th>Kraj termin</th><th>Datum isporuke</th><th>Proizvod</th><th>Plan. kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Nositelj troška</th><th>Napomena</th></tr></thead></table></div>
+    <div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela" aria-busy="true"><thead><tr><th aria-label="Detalji"></th><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Status RN</th><th>Datum</th><th>Narudžba</th><th>Br. narudžbe kupca</th><th>Br. <br>poz.</th><th>Poč. <br>termin</th><th>Kraj <br>termin</th><th>Datum isporuke</th><th>Proizvod</th><th>Plan. <br>kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Nositelj troška</th><th>Napomena</th></tr></thead></table></div>
   </div>
 </section>
 
