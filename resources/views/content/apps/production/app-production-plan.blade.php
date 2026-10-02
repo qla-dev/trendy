@@ -8,6 +8,24 @@
 @endsection
 @section('page-style')
   <style>
+    .production-plan-table .plan-expand-cell { width: 28px; padding: .25rem; }
+    .plan-expand-button { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 0; border-radius: .35rem; background: transparent; color: inherit; }
+    .plan-expand-button:hover { background: rgba(94, 88, 115, .12); }
+    .plan-expand-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+    .plan-expand-button i { transition: transform .15s ease; font-size: .7rem; }
+    .plan-expand-button[aria-expanded='true'] i { transform: rotate(90deg); }
+    .production-plan-table .plan-detail-row > td { padding: 0; background: #f8f8f8; border-bottom: 1px solid #d8d6de; }
+    .plan-expanded-details { box-sizing: border-box; width: min(100%, var(--production-plan-visible-width, 80vw)); padding: .75rem 1rem; white-space: normal; }
+    .plan-expanded-details h6 { font-size: .75rem; margin-bottom: .5rem; }
+    .plan-detail-scroll { max-width: 100%; overflow-x: auto; }
+    .plan-operations-flow { display: flex; flex-wrap: nowrap; list-style: none; padding: 0; margin: 0; width: max-content; }
+    .plan-operations-flow li { display: flex; align-items: center; flex: 0 0 auto; }
+    .plan-operations-flow li:not(:last-child)::after { content: ''; width: 2rem; height: 1px; margin: 0 .75rem; background: #d8d6de; }
+    .plan-operation-circle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 26px; height: 26px; border: 2px solid currentColor; border-radius: 50%; margin-right: .5rem; }
+    .plan-operations-flow strong { font-size: .8rem; }
+    .plan-operations-flow small { display: block; font-size: .7rem; }
+    .dark-layout .production-plan-table .plan-detail-row > td, .semi-dark-layout .production-plan-table .plan-detail-row > td { background: #283046; border-color: #3b4253; }
+    @media (prefers-reduced-motion: reduce) { .plan-expand-button i { transition: none; } }
     .production-plan-table { width: max-content !important; min-width: 100%; }
     .production-plan-table > :not(caption) > * > * { padding: .42rem .5rem; font-size: .8rem; white-space: nowrap; }
     .production-plan-table .editable-cell { cursor: pointer; }
@@ -55,6 +73,12 @@
       .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-']:first-child { flex: 1 1 auto; width: auto; max-width: none; }
       .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-']:last-child { flex: 0 0 auto; width: auto; max-width: none; margin-left: auto; }
     }
+    body.production-plan-fullscreen { overflow: hidden; }
+    .production-plan-fullscreen-toolbar { display: none; }
+    #production-plan-list.is-fullscreen { position: fixed; inset: 0; z-index: 1040; margin: 0; border-radius: 0; overflow: auto; background: #fff; }
+    .dark-layout #production-plan-list.is-fullscreen { background: #283046; }
+    #production-plan-list.is-fullscreen .dataTables_wrapper > .row:first-child,
+    #production-plan-list.is-fullscreen .dataTables_wrapper > .row:last-child { display: none; }
     .plan-inline-editor { z-index: 2000; min-width: 240px; max-width: calc(100vw - 16px); padding: .65rem; background: #fff; border: 1px solid #d8d6de; border-radius: .35rem; box-shadow: 0 5px 18px rgba(34,41,47,.16); }
     .plan-inline-editor label { font-size: .75rem; margin-bottom: .35rem; }
     .plan-inline-editor textarea { min-height: 80px; }
@@ -69,7 +93,7 @@
 @endsection
 @section('content')
 <section id="rn-plan">
-  <div class="content-header row"><div class="col-12 mb-2 d-flex justify-content-between align-items-center flex-wrap gap-1"><h2 class="mb-0">Plan proizvodnje — Radni nalozi</h2><button type="button" class="btn" id="btn-izvoz-plana"><i data-feather="download" class="me-50"></i>Izvoz u Excel</button></div></div>
+  <div class="content-header row"><div class="col-12 mb-2 d-flex justify-content-between align-items-center flex-wrap gap-1"><h2 class="mb-0">Plan proizvodnje — Radni nalozi</h2><div class="d-flex flex-wrap gap-1"><button type="button" class="btn btn-outline-secondary" id="btn-fullscreen-plana" aria-controls="production-plan-list" aria-expanded="false"><i data-feather="maximize" class="me-50"></i>Prikaz preko cijelog ekrana</button><button type="button" class="btn" id="btn-izvoz-plana"><i data-feather="download" class="me-50"></i>Izvoz u Excel</button></div></div></div>
   <div class="card mb-2"><div class="card-header d-flex justify-content-between align-items-center"><h4 class="mb-0">Filter plana proizvodnje</h4><div class="d-flex align-items-center flex-wrap gap-2"><button type="button" class="btn btn-outline-primary btn-sm" id="btn-kolone-plana" aria-controls="tijelo-kolona-plana" aria-expanded="false"><i data-feather="columns" class="me-50"></i>Filter kolona</button><button type="button" class="btn btn-outline-primary btn-sm" id="btn-prikazi-filtere" aria-controls="tijelo-filtera" aria-expanded="false"><i data-feather="filter" class="me-50"></i>Prikaži filtere</button><button class="btn btn-outline-danger btn-sm" id="btn-obrisi-filter"><i data-feather="trash-2" class="me-50"></i>Obriši filter</button></div></div>
     <div class="card-body d-none" id="tijelo-filtera"><div class="row g-2">
       <div class="col-md-3"><label class="form-label" for="filter-prioritet">Prioritet</label><div class="plan-multiselect" data-k="prioritet" data-all-label="Svi prioriteti" data-none-label="Nijedan prioritet"><button type="button" class="form-select text-start plan-multiselect-toggle" id="filter-prioritet" aria-expanded="false" aria-controls="filter-prioritet-options">Svi prioriteti</button><div class="plan-multiselect-menu d-none" id="filter-prioritet-options"><div class="form-check border-bottom mb-50"><input class="form-check-input plan-multiselect-all" type="checkbox" id="filter-prioritet-all" checked><label class="form-check-label" for="filter-prioritet-all">Odaberi sve</label></div><div class="plan-multiselect-options">@foreach (($planConfig['priorityOptions'] ?? []) as $priorityOption)<div class="form-check"><input class="form-check-input plan-multiselect-option" type="checkbox" id="filter-prioritet-{{ $loop->index }}" value="{{ $priorityOption['code'] }}" checked><label class="form-check-label" for="filter-prioritet-{{ $loop->index }}">{{ $priorityOption['label'] }}</label></div>@endforeach</div></div></div></div>
@@ -95,11 +119,12 @@
       <div id="production-plan-column-options" class="production-plan-column-options"></div>
     </div>
   </div>
-  <div class="card production-plan-wrapper production-plan-table-overlay-host">
+  <div class="card production-plan-wrapper production-plan-table-overlay-host" id="production-plan-list" tabindex="-1">
+    <div class="production-plan-fullscreen-toolbar"><button type="button" class="btn btn-outline-secondary btn-sm" id="btn-exit-fullscreen-plana"><i data-feather="minimize" class="me-50"></i>Vrati prikaz</button></div>
     <div id="production-plan-loading-overlay" class="production-plan-table-loading-overlay is-visible" role="status" aria-live="polite" aria-hidden="false">
       <div class="production-plan-table-loading-overlay-content"><span class="spinner-border production-plan-table-loading-spinner" aria-hidden="true"></span><span class="production-plan-table-loading-message">Učitavanje plana proizvodnje...</span></div>
     </div>
-    <div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela" aria-busy="true"><thead><tr><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Status RN</th><th>Datum</th><th>Narudžba</th><th>Br. narudžbe kupca</th><th>Br. poz.</th><th>Poč. termin</th><th>Kraj termin</th><th>Datum isporuke</th><th>Proizvod</th><th>Plan. kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Nositelj troška</th><th>Napomena</th></tr></thead></table></div>
+    <div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela" aria-busy="true"><thead><tr><th aria-label="Detalji"></th><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Status RN</th><th>Datum</th><th>Narudžba</th><th>Br. narudžbe kupca</th><th>Br. poz.</th><th>Poč. termin</th><th>Kraj termin</th><th>Datum isporuke</th><th>Proizvod</th><th>Plan. kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Nositelj troška</th><th>Napomena</th></tr></thead></table></div>
   </div>
 </section>
 
@@ -150,5 +175,5 @@
       }
     });
   </script>
-  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=139') }}"></script>
+  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=144') }}"></script>
 @endsection

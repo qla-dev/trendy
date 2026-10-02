@@ -7259,9 +7259,22 @@
     });
 
     if (confirmModalEl) {
+      // visualViewport also handles Safari versions where vh includes browser chrome.
+      function syncConfirmVisibleHeight() {
+        var viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        confirmModalEl.style.setProperty('--confirm-visible-height', viewportHeight + 'px');
+      }
+
       confirmModalEl.addEventListener('show.bs.modal', function () {
         stopBarcodeScanner();
+        syncConfirmVisibleHeight();
+        confirmModalEl.querySelector('.modal-body').scrollTop = 0;
       });
+
+      window.addEventListener('resize', syncConfirmVisibleHeight);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', syncConfirmVisibleHeight);
+      }
 
       confirmModalEl.addEventListener('hidden.bs.modal', function () {
         var modalStillVisible = modalEl.classList.contains('show');

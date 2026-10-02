@@ -117,6 +117,7 @@ $(function () {
             var roleBadgeObj = {
               admin: feather.icons['slack'].toSvg({ class: 'font-medium-3 text-danger me-50' }),
               user: feather.icons['user'].toSvg({ class: 'font-medium-3 text-primary me-50' }),
+              proizvodnja: feather.icons['calendar'].toSvg({ class: 'font-medium-3 text-primary me-50' }),
               kontrola: feather.icons['check-circle'].toSvg({ class: 'font-medium-3 text-success me-50' }),
               bravarija: feather.icons['tool'].toSvg({ class: 'font-medium-3 text-warning me-50' })
             };
@@ -124,6 +125,7 @@ $(function () {
               admin: 'Admin',
               user: 'Korisnik',
               kontrola: 'Kontrola',
+              proizvodnja: 'Proizvodnja',
               bravarija: 'Bravarija'
             }[$role] || $role;
 

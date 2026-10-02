@@ -245,6 +245,7 @@
                 <option value="admin" {{ old('role') == 'admin' ? 'selected' : '' }}>Admin</option>
                 <option value="user" {{ old('role') == 'user' ? 'selected' : '' }}>Korisnik</option>
                 <option value="kontrola" {{ old('role') == 'kontrola' ? 'selected' : '' }}>Kontrola</option>
+                <option value="proizvodnja" {{ old('role') == 'proizvodnja' ? 'selected' : '' }}>Proizvodnja</option>
                 <option value="bravarija" {{ old('role') == 'bravarija' ? 'selected' : '' }}>Bravarija</option>
               </select>
               @error('role')
