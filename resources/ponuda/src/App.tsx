@@ -786,21 +786,21 @@ export default function App() {
       </section>
 
       {/* Mobile App Section */}
-      <section id="mobilna" className="py-32 px-6 bg-white">
+      <section id="mobilna" className="py-16 sm:py-32 px-4 sm:px-6 bg-white">
         <div className="max-w-7xl mx-auto">
-          <div className="bg-slate-50 rounded-[3rem] border border-slate-200 overflow-hidden relative shadow-sm">
+          <div className="bg-slate-50 rounded-3xl sm:rounded-[3rem] border border-slate-200 overflow-hidden relative shadow-sm">
             <div className="absolute top-0 right-0 w-1/2 h-full bg-slate-500/5 blur-[120px]" />
             
-            <div className="grid lg:grid-cols-2 gap-16 p-12 lg:p-24 items-center">
-              <div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 p-5 sm:p-12 lg:p-24 items-center">
+              <div className="min-w-0">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider mb-8">
                   <SmartphoneIcon className="w-3.5 h-3.5" />
                   Uključeno u ponudu
                 </div>
-                <h2 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-8 leading-tight">
+                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 mb-6 sm:mb-8 leading-tight break-words">
                   Native Mobilna & Tablet Aplikacija
                 </h2>
-                <p className="text-slate-500 text-lg mb-10 leading-relaxed">
+                <p className="text-slate-500 text-base sm:text-lg mb-8 sm:mb-10 leading-relaxed">
                   Za maksimalnu efikasnost na terenu, u sklopu ponude razvijamo nativnu aplikaciju optimizovanu za tablete i mobilne uređaje, bez dodatnih troškova.
                 </p>
                 
@@ -809,7 +809,7 @@ export default function App() {
                     <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center shrink-0 border border-slate-100">
                       <QrCode className="text-slate-900 w-6 h-6" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <h4 className="text-slate-900 font-bold mb-1">Besplatna Migracija</h4>
                       <p className="text-slate-500 text-sm">Postojeći moduli za QR skeniranje RN i sirovina biće besplatno prebačeni na mobilnu aplikaciju.</p>
                     </div>
@@ -818,17 +818,17 @@ export default function App() {
                     <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center shrink-0 border border-slate-100">
                       <Zap className="text-slate-900 w-6 h-6" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <h4 className="text-slate-900 font-bold mb-1">Brzina i Offline Rad</h4>
                       <p className="text-slate-500 text-sm">Native performanse omogućavaju brže skeniranje i rad u uslovima slabije konekcije.</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-6">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:gap-x-6">
                   <div className="text-3xl font-bold text-emerald-600">Besplatno</div>
-                  <div className="h-8 w-px bg-slate-200" />
-                  <div className="text-slate-500 font-bold uppercase tracking-widest text-sm">Uključeno u ponudu</div>
+                  <div className="hidden sm:block h-8 w-px bg-slate-200" />
+                  <div className="w-full sm:w-auto text-slate-500 font-bold uppercase tracking-widest text-xs sm:text-sm">Uključeno u ponudu</div>
                 </div>
               </div>
 
