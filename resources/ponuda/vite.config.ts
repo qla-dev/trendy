@@ -6,7 +6,7 @@ import {defineConfig, loadEnv} from 'vite';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   // Each extra offer lives in its own folder and builds into public/<mode>/
-  const extraOffers = ['ponuda-2', 'ponuda-sara-ai'];
+  const extraOffers = ['ponuda-sara-ai'];
   const offerFolder = extraOffers.includes(mode) ? mode : null;
   const offerRoot = offerFolder ? path.resolve(__dirname, offerFolder) : __dirname;
   return {

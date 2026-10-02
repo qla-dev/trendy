@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build && vite build --mode ponuda-2 && vite build --mode ponuda-sara-ai",
-    "build:ponuda-2": "vite build --mode ponuda-2",
+    "build": "vite build && vite build --mode ponuda-sara-ai",
+    "build:ponuda": "vite build",
     "build:ponuda-sara-ai": "vite build --mode ponuda-sara-ai",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
