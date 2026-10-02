@@ -393,9 +393,10 @@ export default function PonudaSaraAi() {
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <img src="https://enalog.app/images/logo/TrendyCNC.png" alt="Trendy CNC Logo" className="h-10 object-contain" referrerPolicy="no-referrer" />
-            <div className="h-6 w-px bg-slate-200 hidden sm:block" />
-            <span className="text-lg font-bold tracking-tight hidden sm:block">eNalog<span className="text-slate-500">.app</span> <span className="text-violet-600">· SaraAI</span></span>
+            <div className="h-6 w-px bg-slate-200 hidden md:block" />
+            <span className="text-lg font-bold tracking-tight hidden md:block">eNalog<span className="text-slate-500">.app</span> <span className="text-violet-600">· SaraAI</span></span>
           </div>
+          <span className="md:hidden text-lg font-bold tracking-tight">eNalog<span className="text-slate-500">.app</span> <span className="text-violet-600">· SaraAI</span></span>
           <div className="hidden md:flex items-center gap-8">
             <a href="#ukljuceno" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Šta je uključeno</a>
             <a href="#vjestine" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Vještine</a>
@@ -407,25 +408,25 @@ export default function PonudaSaraAi() {
       </nav>
 
       {/* Hero */}
-      <section className="pt-20 pb-28 px-6 overflow-hidden">
+      <section className="pt-8 sm:pt-20 pb-20 sm:pb-28 px-6 overflow-hidden">
         <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-50 border border-violet-100 text-violet-700 text-xs font-bold uppercase tracking-wider mb-6">
               <BrainCircuit className="w-3.5 h-3.5" />
               AI asistent za eNalog.app
             </div>
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-8 leading-[1.1]">
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-6 sm:mb-8 leading-[1.1]">
               Pitajte proizvodnju. <span className="text-violet-500">Sara odgovara.</span>
             </h1>
-            <p className="text-xl text-slate-500 leading-relaxed mb-10 max-w-xl">
+            <p className="text-lg sm:text-xl text-slate-500 leading-relaxed mb-8 sm:mb-10 max-w-xl">
               SaraAI je ugrađena u eNalog.app web i native aplikaciju. Pitajte običnim jezikom i dobijte odgovor iz vaših podataka za nekoliko sekundi.
             </p>
-            <div className="flex flex-wrap gap-4">
-              <a href="#vjestine" className="px-8 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all flex items-center gap-2 group">
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 sm:flex sm:flex-wrap sm:gap-4">
+              <a href="#vjestine" className="px-2 min-[380px]:px-4 sm:px-8 py-3.5 sm:py-4 bg-slate-900 text-white rounded-2xl font-bold text-[13px] min-[380px]:text-sm sm:text-base whitespace-nowrap hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group">
                 Pogledaj vještine
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </a>
-              <a href="#cijena" className="px-8 py-4 bg-white border border-slate-200 text-slate-900 rounded-2xl font-bold flex items-center gap-3 hover:border-slate-400 transition-all">
+              <a href="#cijena" className="px-2 min-[380px]:px-4 sm:px-8 py-3.5 sm:py-4 bg-white border border-slate-200 text-slate-900 rounded-2xl font-bold text-[13px] min-[380px]:text-sm sm:text-base whitespace-nowrap flex items-center justify-center gap-2 sm:gap-3 hover:border-slate-400 transition-all">
                 <Coins className="w-5 h-5 text-slate-500" />
                 4.900 KM
               </a>

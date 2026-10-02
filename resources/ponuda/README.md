@@ -1,29 +1,29 @@
 # Ponuda
 
-Both offers share build dependencies but have separate entry points, stylesheets,
-source PDF copies, and public folders. The second offer has its own phase content
-and a completed Faza I presentation.
+Both offers share build dependencies but have separate entry points, stylesheets
+and public folders.
 
-- Regular offer: `/ponuda/`
-- Second offer: `/ponuda-2/`
+- Main offer (Faze II, III i IV): `/ponuda/`
+- SaraAI offer: `/ponuda-sara-ai/`
 
 Source files, dependencies, and source PDFs live in `resources/ponuda`.
-The regular offer is defined in `src/App.tsx`; the second is defined in
-`ponuda-2/src/ponuda2.tsx`.
-Vite builds `public/ponuda/index.html` and `public/ponuda-2/index.html` separately,
-each with its own assets directory. Neither public folder loads assets from the other.
-Both generated directories are ignored by Git; do not edit their files manually.
+The main offer is defined in `src/App.tsx`, with its PDFs in `assets/`.
+The SaraAI offer is defined in `ponuda-sara-ai/src/ponudaSaraAi.tsx`.
+Vite builds `public/ponuda/index.html` and `public/ponuda-sara-ai/index.html`
+separately, each with its own assets directory. Both generated directories are
+ignored by Git; do not edit their files manually.
 
-The browser redeploy endpoint installs this project's dependencies and the
-root production build builds both offers. Both URLs load their page directly
-without redirects or a `dist` URL.
+The former `/ponuda-2/` offer now lives at `/ponuda/`; the previous first offer
+was retired. A ponuda redeploy replaces the old `public/ponuda-2/` build with a
+redirect to `/ponuda/`.
 
-The browser endpoint `/redeploy.php?offers_only=1` pulls the latest code and
-builds both offers without migrations or the main application build. Deployment
-checks that both public HTML entry points exist before reporting success.
-The browser endpoint `/redeploy.php?ponuda_2_only=1` pulls the latest code,
-installs the offer dependencies, and builds only `/ponuda-2/`.
+Browser redeploy endpoints (each pulls the latest `main` first):
+
+- `/redeploy.php?ponuda_only=1` builds only `/ponuda/` (`ponuda_2_only=1` is an alias).
+- `/redeploy.php?ponuda_sara_ai_only=1` builds only `/ponuda-sara-ai/`.
+- `/redeploy.php?offers_only=1` builds both offers without the main application build.
 
 For local development, install dependencies in this directory and use its
-`dev` script. The root `build:ponuda` script builds both production pages. The
-offer project's `build:ponuda-2` script builds only the second offer page.
+`dev` script (add `--mode ponuda-sara-ai` for the SaraAI offer). The offer
+project's `build` script builds both pages; `build:ponuda` and
+`build:ponuda-sara-ai` build one each.

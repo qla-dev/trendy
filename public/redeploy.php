@@ -198,7 +198,9 @@ putenv('PATH=' . $nodeBinDir . PATH_SEPARATOR . $currentPath);
 
 $npmCommand = escapeshellarg($npm);
 $offersOnly = filter_var($_GET['offers_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
-$ponuda2Only = filter_var($_GET['ponuda_2_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
+// ponuda_2_only is kept as an alias: the former /ponuda-2/ offer now lives at /ponuda/.
+$ponudaOnly = filter_var($_GET['ponuda_only'] ?? false, FILTER_VALIDATE_BOOLEAN)
+    || filter_var($_GET['ponuda_2_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 $ponudaSaraAiOnly = filter_var($_GET['ponuda_sara_ai_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
 $commands = [
@@ -207,13 +209,13 @@ $commands = [
     ['label' => 'Building frontend assets', 'command' => $npmCommand . ' run production'],
 ];
 
-if ($ponuda2Only) {
+if ($ponudaOnly) {
     $commands = [
         ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
-        ['label' => 'Installing dependencies for ponuda-2', 'command' => $npmCommand . ' --prefix resources/ponuda ci --no-audit --no-fund'],
-        ['label' => 'Building ponuda-2 assets', 'command' => $npmCommand . ' --prefix resources/ponuda run build:ponuda-2'],
+        ['label' => 'Installing dependencies for ponuda', 'command' => $npmCommand . ' --prefix resources/ponuda ci --no-audit --no-fund'],
+        ['label' => 'Building ponuda assets', 'command' => $npmCommand . ' --prefix resources/ponuda run build:ponuda'],
     ];
-    $write("Ponuda-2-only redeploy: builds /ponuda-2/ only.\n");
+    $write("Ponuda-only redeploy: builds /ponuda/ only.\n");
 } elseif ($ponudaSaraAiOnly) {
     $commands = [
         ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
@@ -224,10 +226,10 @@ if ($ponuda2Only) {
 } elseif ($offersOnly) {
     $commands = [
         ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
-        ['label' => 'Installing dependencies for both offers', 'command' => $npmCommand . ' --prefix resources/ponuda ci --no-audit --no-fund'],
-        ['label' => 'Building both offer pages', 'command' => $npmCommand . ' run build:ponuda'],
+        ['label' => 'Installing dependencies for offers', 'command' => $npmCommand . ' --prefix resources/ponuda ci --no-audit --no-fund'],
+        ['label' => 'Building offer pages', 'command' => $npmCommand . ' run build:ponuda'],
     ];
-    $write("Offers-only redeploy: builds /ponuda/, /ponuda-2/ and /ponuda-sara-ai/ together.\n");
+    $write("Offers-only redeploy: builds /ponuda/ and /ponuda-sara-ai/ together.\n");
 }
 
 $startedAt = time();
@@ -246,7 +248,7 @@ foreach ($commands as $step) {
     }
 }
 
-if (!$offersOnly && !$ponuda2Only && !$ponudaSaraAiOnly) {
+if (!$offersOnly && !$ponudaOnly && !$ponudaSaraAiOnly) {
     $planScript = $baseDir . '/public/js/scripts/pages/app-production-plan.js';
     $planScriptContents = is_file($planScript) ? (string) file_get_contents($planScript) : '';
     if (strpos($planScriptContents, 'btn-potvrdi-izvoz-plana') === false
@@ -258,21 +260,43 @@ if (!$offersOnly && !$ponuda2Only && !$ponudaSaraAiOnly) {
     $write("Production-plan JavaScript generated, including Excel export and loading controls.\n");
 }
 
-if ($ponuda2Only) {
-    $offerFolders = ['ponuda-2'];
+if ($ponudaOnly) {
+    $offerFolders = ['ponuda'];
 } elseif ($ponudaSaraAiOnly) {
     $offerFolders = ['ponuda-sara-ai'];
 } elseif ($offersOnly) {
-    $offerFolders = ['ponuda', 'ponuda-2', 'ponuda-sara-ai'];
+    $offerFolders = ['ponuda', 'ponuda-sara-ai'];
 } else {
-    // The full app redeploy does not build offers; it only checks the long-standing ones exist.
-    $offerFolders = ['ponuda', 'ponuda-2'];
+    // The full app redeploy does not build offers; it only checks the main offer exists.
+    $offerFolders = ['ponuda'];
 }
 foreach ($offerFolders as $offerFolder) {
     if (!is_file($baseDir . '/public/' . $offerFolder . '/index.html')) {
         $write("Deployment incomplete: /{$offerFolder}/index.html was not generated.\n");
         exit(1);
     }
+}
+
+// The former /ponuda-2/ offer moved to /ponuda/: replace its old build with a redirect.
+if ($ponudaOnly || $offersOnly) {
+    $retiredOffer = $baseDir . '/public/ponuda-2';
+    if (is_dir($retiredOffer)) {
+        $entries = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($retiredOffer, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($entries as $entry) {
+            $entry->isDir() ? rmdir($entry->getPathname()) : unlink($entry->getPathname());
+        }
+    } else {
+        mkdir($retiredOffer, 0755, true);
+    }
+    file_put_contents(
+        $retiredOffer . '/index.html',
+        "<!doctype html>\n<meta charset=\"utf-8\">\n<meta http-equiv=\"refresh\" content=\"0; url=../ponuda/\">\n"
+        . "<link rel=\"canonical\" href=\"../ponuda/\">\n<a href=\"../ponuda/\">/ponuda/</a>\n"
+    );
+    $write("Retired /ponuda-2/: it now redirects to /ponuda/.\n");
 }
 
 $write(count($offerFolders) === 1
