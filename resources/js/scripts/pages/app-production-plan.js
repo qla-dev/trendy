@@ -234,17 +234,22 @@ $(function () {
       retainedRows.set(String(this.data().id), { value: JSON.stringify(this.data()), node: this.node(), cells: settings.aoData[this.index()].anCells });
     });
     livePolling = true;
-    table.ajax.reload(function () { livePolling = false; retainedRows.clear(); }, false);
+    function reloadPlan() {
+      table.ajax.reload(function () { livePolling = false; retainedRows.clear(); }, false);
+    }
+    // Pace tracks Ajax globally; background polling should not restart its progress bar.
+    if (window.Pace && typeof window.Pace.ignore === 'function') window.Pace.ignore(reloadPlan);
+    else reloadPlan();
   }, 2000);
   $(window).on('pagehide', function () { window.clearInterval(liveTimer); });
 
   var detailCache = new Map();
-  var expandedId = null;
+  var expandedIds = new Set();
   function renderOperationsFlow(operations) {
     if (!operations.length) return '<p class="text-muted mb-0">Nema operacija za ovaj radni nalog.</p>';
     return '<ol class="plan-operations-flow">' + operations.map(function (operation) {
       var status = operation.is_finished ? 'Završeno' : 'Nezavršeno';
-      return '<li><span class="plan-operation-circle ' + (operation.is_finished ? 'text-success' : 'text-secondary') + '" aria-hidden="true">' + (operation.is_finished ? '&#10003;' : '') + '</span><div><strong>' + escapeHtml(operation.naziv || operation.operacija) + '</strong><small class="text-muted">' + escapeHtml([operation.pozicija ? '#' + operation.pozicija : '', operation.operacija, status].filter(Boolean).join(' · ')) + '</small></div></li>';
+      return '<li><span class="plan-operation-circle ' + (operation.is_finished ? 'plan-operation-circle--finished' : 'plan-operation-circle--unfinished') + '" aria-hidden="true">' + (operation.is_finished ? '&#10003;' : '') + '</span><div><strong>' + escapeHtml(operation.naziv || operation.operacija) + '</strong><small>' + escapeHtml([operation.pozicija ? '#' + operation.pozicija : '', operation.operacija, status].filter(Boolean).join(' · ')) + '</small></div></li>';
     }).join('') + '</ol>';
   }
   function renderDetails(entry, id) {
@@ -268,26 +273,34 @@ $(function () {
     $(row.node()).find('.plan-expand-button').attr({ 'aria-expanded': 'true', 'aria-label': 'Sakrij detalje', 'aria-controls': 'plan-details-' + id });
   }
   function refreshExpandedRow(id) {
-    if (expandedId !== id) return;
+    if (!expandedIds.has(id)) return;
     table.rows({ page: 'current' }).every(function () { if (String(this.data().id) === id) showRowDetails(this); });
   }
   tableElement.on('click', '.plan-expand-button', function (event) {
     event.preventDefault();
     event.stopPropagation();
-    var row = table.row($(this).closest('tr')), id = String(row.data().id), closing = expandedId === id;
-    table.rows({ page: 'current' }).every(function () {
-      this.child.hide();
-      $(this.node()).find('.plan-expand-button').attr({ 'aria-expanded': 'false', 'aria-label': 'Prikaži detalje' }).removeAttr('aria-controls');
-    });
-    expandedId = closing ? null : id;
-    if (!closing) showRowDetails(row);
+    var row = table.row($(this).closest('tr')), id = String(row.data().id);
+    if (expandedIds.has(id)) {
+      expandedIds.delete(id);
+      row.child.hide();
+      $(row.node()).find('.plan-expand-button').attr({ 'aria-expanded': 'false', 'aria-label': 'Prikaži detalje' }).removeAttr('aria-controls');
+    } else {
+      expandedIds.add(id);
+      showRowDetails(row);
+    }
   });
   tableElement.on('click', '.plan-details-retry', function (event) {
     event.stopPropagation();
-    detailCache.delete(expandedId);
-    refreshExpandedRow(expandedId);
+    var detailsId = $(this).closest('.plan-expanded-details').attr('id');
+    var id = detailsId.slice('plan-details-'.length);
+    detailCache.delete(id);
+    refreshExpandedRow(id);
   });
-  tableElement.on('draw.dt', function () { if (expandedId) refreshExpandedRow(expandedId); });
+  tableElement.on('draw.dt', function () {
+    table.rows({ page: 'current' }).every(function () {
+      if (expandedIds.has(String(this.data().id))) showRowDetails(this);
+    });
+  });
   var columnOptions = $('#production-plan-column-options');
   keys.forEach(function (key, index) {
     if (key === 'details') return;

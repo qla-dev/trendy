@@ -199,6 +199,7 @@ putenv('PATH=' . $nodeBinDir . PATH_SEPARATOR . $currentPath);
 $npmCommand = escapeshellarg($npm);
 $offersOnly = filter_var($_GET['offers_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 $ponuda2Only = filter_var($_GET['ponuda_2_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
+$ponudaSaraAiOnly = filter_var($_GET['ponuda_sara_ai_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
 $commands = [
     ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
@@ -213,13 +214,20 @@ if ($ponuda2Only) {
         ['label' => 'Building ponuda-2 assets', 'command' => $npmCommand . ' --prefix resources/ponuda run build:ponuda-2'],
     ];
     $write("Ponuda-2-only redeploy: builds /ponuda-2/ only.\n");
+} elseif ($ponudaSaraAiOnly) {
+    $commands = [
+        ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
+        ['label' => 'Installing dependencies for ponuda-sara-ai', 'command' => $npmCommand . ' --prefix resources/ponuda ci --no-audit --no-fund'],
+        ['label' => 'Building ponuda-sara-ai assets', 'command' => $npmCommand . ' --prefix resources/ponuda run build:ponuda-sara-ai'],
+    ];
+    $write("Ponuda-SaraAI-only redeploy: builds /ponuda-sara-ai/ only.\n");
 } elseif ($offersOnly) {
     $commands = [
         ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
         ['label' => 'Installing dependencies for both offers', 'command' => $npmCommand . ' --prefix resources/ponuda ci --no-audit --no-fund'],
         ['label' => 'Building both offer pages', 'command' => $npmCommand . ' run build:ponuda'],
     ];
-    $write("Offers-only redeploy: builds /ponuda/ and /ponuda-2/ together.\n");
+    $write("Offers-only redeploy: builds /ponuda/, /ponuda-2/ and /ponuda-sara-ai/ together.\n");
 }
 
 $startedAt = time();
@@ -238,7 +246,7 @@ foreach ($commands as $step) {
     }
 }
 
-if (!$offersOnly && !$ponuda2Only) {
+if (!$offersOnly && !$ponuda2Only && !$ponudaSaraAiOnly) {
     $planScript = $baseDir . '/public/js/scripts/pages/app-production-plan.js';
     $planScriptContents = is_file($planScript) ? (string) file_get_contents($planScript) : '';
     if (strpos($planScriptContents, 'btn-potvrdi-izvoz-plana') === false
@@ -250,14 +258,24 @@ if (!$offersOnly && !$ponuda2Only) {
     $write("Production-plan JavaScript generated, including Excel export and loading controls.\n");
 }
 
-foreach ($ponuda2Only ? ['ponuda-2'] : ['ponuda', 'ponuda-2'] as $offerFolder) {
+if ($ponuda2Only) {
+    $offerFolders = ['ponuda-2'];
+} elseif ($ponudaSaraAiOnly) {
+    $offerFolders = ['ponuda-sara-ai'];
+} elseif ($offersOnly) {
+    $offerFolders = ['ponuda', 'ponuda-2', 'ponuda-sara-ai'];
+} else {
+    // The full app redeploy does not build offers; it only checks the long-standing ones exist.
+    $offerFolders = ['ponuda', 'ponuda-2'];
+}
+foreach ($offerFolders as $offerFolder) {
     if (!is_file($baseDir . '/public/' . $offerFolder . '/index.html')) {
         $write("Deployment incomplete: /{$offerFolder}/index.html was not generated.\n");
         exit(1);
     }
 }
 
-$write($ponuda2Only
-    ? "\nPonuda-2 page is ready: /ponuda-2/.\n"
-    : "\nBoth offer pages are ready: /ponuda/ and /ponuda-2/.\n");
+$write(count($offerFolders) === 1
+    ? "\nOffer page is ready: /{$offerFolders[0]}/.\n"
+    : "\nOffer pages are ready: /" . implode('/, /', $offerFolders) . "/.\n");
 $write("\nTrendy redeploy completed successfully in " . (time() - $startedAt) . "s.\n");

@@ -22,8 +22,10 @@
     .plan-operations-flow li { display: flex; align-items: center; flex: 0 0 auto; }
     .plan-operations-flow li:not(:last-child)::after { content: ''; width: 2rem; height: 1px; margin: 0 .75rem; background: #d8d6de; }
     .plan-operation-circle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 26px; height: 26px; border: 2px solid currentColor; border-radius: 50%; margin-right: .5rem; }
+    .plan-operation-circle--finished { color: #28a745; background: rgba(40, 167, 69, .12); }
+    .plan-operation-circle--unfinished { color: #e69a19; background: rgba(230, 154, 25, .12); }
     .plan-operations-flow strong { font-size: .8rem; }
-    .plan-operations-flow small { display: block; font-size: .7rem; }
+    .plan-operations-flow small { display: block; font-size: .7rem; color: inherit; }
     .dark-layout .production-plan-table .plan-detail-row > td, .semi-dark-layout .production-plan-table .plan-detail-row > td { background: #283046; border-color: #3b4253; }
     @media (prefers-reduced-motion: reduce) { .plan-expand-button i { transition: none; } }
     .production-plan-table { width: max-content !important; min-width: 100%; }
@@ -175,5 +177,5 @@
       }
     });
   </script>
-  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=144') }}"></script>
+  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=145') }}"></script>
 @endsection
