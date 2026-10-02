@@ -37,11 +37,12 @@ import {
   IdCardLanyard,
   KeyRound,
   LogIn,
-  Fingerprint
+  Mail
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+const trendyCardsUrl = new URL('../assets/trendy-cards.png', import.meta.url).href;
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -277,8 +278,8 @@ export default function App() {
   const predracunPdfUrl = new URL('../assets/predracun-qla-dev_trendy.pdf', import.meta.url).href;
 
   const steps = [
-    { icon: ArrowRightLeft, label: "Prenosnica", status: "Prenosnica", detail: "Materijal prenesen na radni nalog" },
-    { icon: ShieldCheck, label: "Kontrola", status: "Ulazna kontrola", detail: "Dozvoljava · operacija može početi" },
+    { icon: ShieldCheck, label: "Ulazna kontrola", status: "Ulazna kontrola", detail: "Provjera materijala prije početka operacija" },
+    { icon: Wrench, label: "Dorada", status: "Dorada po potrebi", detail: "Otklanjanje nedostataka utvrđenih ulaznom kontrolom" },
     { icon: QrCode, label: "Operacije", status: "Skeniranje RN-a", detail: "Početak, Zastoj, Kraj operacije" },
     { icon: CheckCircle2, label: "Zatvaranje", status: "Završen ciklus", detail: "Automatsko zatvaranje RN-a" }
   ];
@@ -499,22 +500,16 @@ export default function App() {
             subtitle="Od prenosa materijala do zatvaranja radnog naloga, svaki korak se skenira, kontroliše i vidi u realnom vremenu."
             steps={[
               {
-                title: "Skladište",
-                desc: "Šifarnik, lokacije i stanje sirovina.",
-                icon: Database,
-                tags: ["Šifre", "Lokacije"]
-              },
-              {
-                title: "Prenosnica",
-                desc: "Digitalni prenos materijala na radni nalog.",
-                icon: ArrowRightLeft,
-                badge: { icon: FileText, label: "Dokument" }
-              },
-              {
                 title: "Ulazna kontrola",
                 desc: "Odluka „dozvoljava / ne dozvoljava“ prije početka operacije.",
                 icon: ShieldCheck,
                 badge: { icon: ClipboardCheck, label: "Kontrola" }
+              },
+              {
+                title: "Procesna kontrola",
+                desc: "Neispravni komadi se vraćaju ili idu na doradu.",
+                icon: ClipboardCheck,
+                badge: { icon: RotateCcw, label: "Dorada" }
               },
               {
                 title: "Operacije",
@@ -524,10 +519,16 @@ export default function App() {
                 badge: { icon: QrCode, label: "QR" }
               },
               {
-                title: "Procesna kontrola",
-                desc: "Neispravni komadi se vraćaju ili idu na doradu.",
-                icon: ClipboardCheck,
-                badge: { icon: RotateCcw, label: "Dorada" }
+                title: "Evidencija radnika",
+                desc: "Pregled radnika i evidencija njihovog rada u proizvodnji.",
+                icon: Users,
+                tags: ["Evidencija"]
+              },
+              {
+                title: "Detekcija kašnjenja",
+                desc: "Automatsko praćenje kašnjenja radnih naloga.",
+                icon: ArrowRightLeft,
+                badge: { icon: FileText, label: "RN" }
               },
               {
                 title: "Zatvaranje",
@@ -612,12 +613,28 @@ export default function App() {
               title: "Kontekst za odluke",
               items: [
                 { icon: Target, title: "Industrijski benchmark", desc: "Ključni pokazatelji naspram referentnih vrijednosti." },
-                { icon: Globe, title: "Sedmični pregled trendova", desc: "Tehnologije, materijali i poslovne prilike." },
-                { icon: Lightbulb, title: "Podrška odlučivanju", desc: "Preporuke na osnovu stvarnih podataka iz pogona." }
+                { icon: Lightbulb, title: "Podrška odlučivanju", desc: "Preporuke na osnovu stvarnih podataka iz pogona." },
+                { icon: BarChart3, title: "Detaljna analiza", desc: "Uska grla, profitabilnost i isplativost ulaganja." }
               ]
             }}
           />
           <div className="my-32 h-px bg-slate-100" />
+
+          <div className="mb-12 grid md:grid-cols-2 items-center gap-8 rounded-[2rem] border border-slate-200 bg-slate-50 p-6 sm:p-10">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                <Nfc className="h-4 w-4" /> Faza IV · Postojeće Trendy kartice
+              </span>
+              <h3 className="mt-5 text-2xl sm:text-3xl font-bold text-slate-900">Vaša kartica, nova namjena</h3>
+              <p className="mt-4 text-slate-500 leading-relaxed">
+                Koristimo Trendy kartice koje radnici već imaju. Povezujemo ih s evidencijom radnika iz Pantheona za prijavu, evidenciju dolaska i odlaska te potvrdu rada na operacijama.
+              </p>
+              <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                <CheckCircle2 className="h-4 w-4 shrink-0" /> Bez izdavanja novih kartica
+              </p>
+            </div>
+            <img src={trendyCardsUrl} alt="Postojeće Trendy CNC kartice za identifikaciju radnika u Fazi IV" className="mx-auto w-full max-w-md object-contain" loading="lazy" width="1536" height="1024" />
+          </div>
 
           <FlowBlock
             phase="Faza IV"
@@ -627,7 +644,7 @@ export default function App() {
             steps={[
               {
                 title: "Postojeće kartice",
-                desc: "Kartice koje radnici već imaju povezuju se s radnikom iz Pantheona.",
+                desc: "Postojeće Trendy kartice povezuju se s radnikom iz Pantheona.",
                 icon: IdCardLanyard,
                 badge: { icon: Users, label: "Radnik" }
               },
@@ -657,11 +674,11 @@ export default function App() {
                 badge: { icon: FileText, label: "Potpis" }
               },
               {
-                title: "Jasna odgovornost",
-                desc: "Za svaku operaciju i potvrdu na RN-u zna se ko je radio i kada, bez ručnog unosa.",
-                icon: Fingerprint,
+                title: "Industrijski newsletter",
+                desc: "Praćenje trendova u mašinskoj industriji kroz sedmični pregled tehnologija i poslovnih prilika.",
+                icon: Mail,
                 success: true,
-                badge: { icon: ShieldCheck, label: "Historija" }
+                badge: { icon: Globe, label: "Trendovi" }
               }
             ]}
             note={{
@@ -703,7 +720,8 @@ export default function App() {
                 "Digitalni tok radnih naloga kroz proizvodne operacije",
                 "Ulazna i procesna kontrola sa opcijama „dozvoljava / ne dozvoljava“ i vraćanjem neispravnih komada",
                 "Digitalno upravljanje radom operatera kroz „Početak“, „Zastoj“, „Kraj“ i „Kraj operacije“, uz preuzimanje operacije skeniranjem RN-a",
-                "Panel resursa sa pregledom radnika, mašina, kapaciteta i efikasnosti",
+                "Panel resursa sa pregledom radnika i mašina",
+                "Postavljanje finansijskih ciljeva",
                 "Proces dorade sa kontrolom, evidencijom naplate i pratećom dokumentacijom",
                 "Automatsko praćenje kašnjenja radnih naloga i operativne notifikacije",
                 "Automatsko zatvaranje radnog naloga nakon završetka proizvodnog ciklusa",
@@ -718,12 +736,13 @@ export default function App() {
               price="4.900"
               items={[
                 "Implementacija inventure sa QR evidencijom i usklađivanjem količina",
-                "Evidencija prijave radnika i praćenje stvarnog vremena rada i učinka",                "Prediktivno planiranje potreba za materijalom i buduće potražnje",
+                "Evidencija prijave radnika i praćenje stvarnog vremena rada i učinka",
+                "Prediktivno planiranje potreba za materijalom i buduće potražnje",
                 "Analiza uskih grla, čekanja i uzroka gubitaka u proizvodnji",
                 "Analiza profitabilnosti i proizvodnog miksa po proizvodu, kupcu, RN-u i proizvodnom satu",
                 "Analiza stanja mašina i isplativosti ulaganja — KPI pokazatelji, kvarovi, zastoji, troškovi održavanja, remont, zamjena i povrat investicije",
                 "Poređenje ključnih proizvodnih pokazatelja sa industrijskim referentnim vrijednostima",
-                "Sedmični pregled industrijskih trendova, tehnologija, materijala i poslovnih prilika"
+                "Detaljan prikaz radnika sa učinkovitosti, efikasnosti, radnim vremenom i urađenim operacijama"
               ]}
               delay={0.3}
             />
@@ -733,15 +752,16 @@ export default function App() {
               duration="1.5 mj."
               price="4.900"
               items={[
-                "Integracija postojećih RFID kartica i povezivanje s radnicima iz Pantheona",
-                "Podrška za RFID čitače na tabletima i računarima te NFC u native aplikaciji",
+                "Integracija postojećih Trendy RFID kartica i povezivanje s radnicima iz Pantheona",
                 "Prijava radnika prislanjanjem kartice, bez korisničkog imena i lozinke",
+                "Podrška za RFID čitače na tabletima i računarima te NFC u native aplikaciji",
                 "Evidencija dolaska, pauze i odlaska karticom",
                 "Početak, Zastoj i Kraj operacije bilježe se na ime radnika koji je prislonio karticu",
                 "Potvrda izdavanja materijala, kontrole i dorade karticom",
                 "Automatsko popunjavanje radnika i vremena pri zatvaranju radnog naloga",
                 "Automatsko zaključavanje neaktivnog uređaja i brzo otključavanje 4-cifrenim PIN-om, kao zaštita od rada na tuđe ime",
-                "Blokada izgubljenih kartica i dodatni PIN za osjetljive radnje"
+                "Blokada izgubljenih kartica i dodatni PIN za osjetljive radnje",
+                "Sedmični pregled industrijskih trendova, tehnologija, materijala i poslovnih prilika"
               ]}
               delay={0.4}
             />
