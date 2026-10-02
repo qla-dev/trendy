@@ -36,7 +36,8 @@ import {
   Nfc,
   IdCardLanyard,
   KeyRound,
-  LogIn
+  LogIn,
+  Fingerprint
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -655,18 +656,18 @@ export default function App() {
                 badge: { icon: FileText, label: "Potpis" }
               },
               {
-                title: "Zatvaranje",
-                desc: "Radnici i vremena na RN-u se popunjavaju sami, bez ručnog unosa.",
-                icon: CheckCircle2,
+                title: "Jasna odgovornost",
+                desc: "Za svaku operaciju i potvrdu na RN-u zna se ko je radio i kada, bez ručnog unosa.",
+                icon: Fingerprint,
                 success: true,
-                badge: { icon: FileText, label: "Dokument" }
+                badge: { icon: ShieldCheck, label: "Historija" }
               }
             ]}
             note={{
               tone: "slate",
               icon: KeyRound,
               label: "Sigurnost",
-              text: "izgubljena kartica se blokira jednim klikom, a osjetljive radnje mogu dodatno tražiti PIN."
+              text: "ako prijavljen uređaj ostane neaktivan, zaključava se i traži 4-cifreni PIN, pa niko ne može raditi na tuđe ime."
             }}
             live={{
               eyebrow: "Bez lozinki",
@@ -738,6 +739,7 @@ export default function App() {
                 "Početak, Zastoj i Kraj operacije bilježe se na ime radnika koji je prislonio karticu",
                 "Potvrda izdavanja materijala, kontrole i dorade karticom",
                 "Automatsko popunjavanje radnika i vremena pri zatvaranju radnog naloga",
+                "Automatsko zaključavanje neaktivnog uređaja i brzo otključavanje 4-cifrenim PIN-om, kao zaštita od rada na tuđe ime",
                 "Blokada izgubljenih kartica i dodatni PIN za osjetljive radnje"
               ]}
               delay={0.4}
