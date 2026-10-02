@@ -31,6 +31,8 @@
     .production-plan-table { width: max-content !important; min-width: 100%; }
     .production-plan-table > :not(caption) > * > * { padding: .42rem .5rem; font-size: .8rem; white-space: nowrap; }
     .production-plan-table thead th { max-width: 7rem; white-space: normal; line-height: 1.2; }
+    table.production-plan-table.dataTable > thead > tr > th[class*="sorting"]::before,
+    table.production-plan-table.dataTable > thead > tr > th[class*="sorting"]::after { top: 50%; bottom: auto; transform: translateY(-50%); }
     .production-plan-table thead th:nth-child(9):not(.sorting_disabled),
     .production-plan-table thead th:nth-child(13):not(.sorting_disabled) { padding-right: 20px; }
     .production-plan-table thead th:nth-child(9)::before,
