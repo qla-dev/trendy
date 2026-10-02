@@ -21,5 +21,5 @@ assert.equal(settings.aoData[1].nTr, changedNode);
 assert.equal(settings.aoData[2].nTr, newNode);
 assert(source.includes('data.filter = filters()'));
 assert(source.includes('}, false);'));
-assert(source.includes('}, 2000);'));
+assert(source.includes('}, 5 * 60 * 1000);'));
 console.log('Live polling retains unchanged rows and leaves new/changed rows intact.');

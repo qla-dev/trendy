@@ -240,7 +240,7 @@ $(function () {
     // Pace tracks Ajax globally; background polling should not restart its progress bar.
     if (window.Pace && typeof window.Pace.ignore === 'function') window.Pace.ignore(reloadPlan);
     else reloadPlan();
-  }, 2000);
+  }, 5 * 60 * 1000);
   $(window).on('pagehide', function () { window.clearInterval(liveTimer); });
 
   var detailCache = new Map();
