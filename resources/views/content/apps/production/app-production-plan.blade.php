@@ -8,6 +8,24 @@
 @endsection
 @section('page-style')
   <style>
+    .production-plan-table .plan-expand-cell { width: 28px; padding: .25rem; }
+    .plan-expand-button { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 0; border-radius: .35rem; background: transparent; color: inherit; }
+    .plan-expand-button:hover { background: rgba(94, 88, 115, .12); }
+    .plan-expand-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+    .plan-expand-button i { transition: transform .15s ease; font-size: .7rem; }
+    .plan-expand-button[aria-expanded='true'] i { transform: rotate(90deg); }
+    .production-plan-table .plan-detail-row > td { padding: 0; background: #f8f8f8; border-bottom: 1px solid #d8d6de; }
+    .plan-expanded-details { box-sizing: border-box; width: min(100%, var(--production-plan-visible-width, 80vw)); padding: .75rem 1rem; white-space: normal; }
+    .plan-expanded-details h6 { font-size: .75rem; margin-bottom: .5rem; }
+    .plan-detail-scroll { max-width: 100%; overflow-x: auto; }
+    .plan-operations-flow { display: flex; flex-wrap: nowrap; list-style: none; padding: 0; margin: 0; width: max-content; }
+    .plan-operations-flow li { display: flex; align-items: center; flex: 0 0 auto; }
+    .plan-operations-flow li:not(:last-child)::after { content: ''; width: 2rem; height: 1px; margin: 0 .75rem; background: #d8d6de; }
+    .plan-operation-circle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 26px; height: 26px; border: 2px solid currentColor; border-radius: 50%; margin-right: .5rem; }
+    .plan-operations-flow strong { font-size: .8rem; }
+    .plan-operations-flow small { display: block; font-size: .7rem; }
+    .dark-layout .production-plan-table .plan-detail-row > td, .semi-dark-layout .production-plan-table .plan-detail-row > td { background: #283046; border-color: #3b4253; }
+    @media (prefers-reduced-motion: reduce) { .plan-expand-button i { transition: none; } }
     .production-plan-table { width: max-content !important; min-width: 100%; }
     .production-plan-table > :not(caption) > * > * { padding: .42rem .5rem; font-size: .8rem; white-space: nowrap; }
     .production-plan-table .editable-cell { cursor: pointer; }
@@ -102,10 +120,11 @@
     </div>
   </div>
   <div class="card production-plan-wrapper production-plan-table-overlay-host" id="production-plan-list" tabindex="-1">
+    <div class="production-plan-fullscreen-toolbar"><button type="button" class="btn btn-outline-secondary btn-sm" id="btn-exit-fullscreen-plana"><i data-feather="minimize" class="me-50"></i>Vrati prikaz</button></div>
     <div id="production-plan-loading-overlay" class="production-plan-table-loading-overlay is-visible" role="status" aria-live="polite" aria-hidden="false">
       <div class="production-plan-table-loading-overlay-content"><span class="spinner-border production-plan-table-loading-spinner" aria-hidden="true"></span><span class="production-plan-table-loading-message">Učitavanje plana proizvodnje...</span></div>
     </div>
-    <div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela" aria-busy="true"><thead><tr><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Status RN</th><th>Datum</th><th>Narudžba</th><th>Br. narudžbe kupca</th><th>Br. poz.</th><th>Poč. termin</th><th>Kraj termin</th><th>Datum isporuke</th><th>Proizvod</th><th>Plan. kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Nositelj troška</th><th>Napomena</th></tr></thead></table></div>
+    <div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela" aria-busy="true"><thead><tr><th aria-label="Detalji"></th><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Status RN</th><th>Datum</th><th>Narudžba</th><th>Br. narudžbe kupca</th><th>Br. poz.</th><th>Poč. termin</th><th>Kraj termin</th><th>Datum isporuke</th><th>Proizvod</th><th>Plan. kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Nositelj troška</th><th>Napomena</th></tr></thead></table></div>
   </div>
 </section>
 

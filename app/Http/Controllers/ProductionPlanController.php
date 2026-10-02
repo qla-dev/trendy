@@ -177,6 +177,7 @@ class ProductionPlanController extends Controller
             }
 
             $rows = $query->orderBy($sort, $direction)
+                ->orderBy('wo.acKey', $direction)
                 ->offset(max(0, (int) $request->input('start', 0)))
                 ->limit(min(100, max(10, (int) $request->input('length', 25))))
                 ->get();
@@ -479,7 +480,8 @@ class ProductionPlanController extends Controller
                     [$weekRange['start']->toDateString()]
                 );
             }
-            $rows = $query->orderBy($sort, $direction)->get();
+            $rows = $query->orderBy($sort, $direction)
+                ->orderBy('wo.acKey', $direction)->get();
 
             $keys = $rows->pluck('id')->filter()->values();
             $totalOperations = collect();
@@ -626,6 +628,13 @@ class ProductionPlanController extends Controller
 
     public function operations(string $id)
     {
-        return response()->json(['data' => []]);
+        abort_unless(DB::table(config('workorders.schema', 'dbo') . '.tHF_WOEx')->where('acKey', $id)->exists(), 404);
+
+        try {
+            return response()->json(['data' => app(WorkOrderController::class)->productionPlanDetails($id)]);
+        } catch (\Throwable $exception) {
+            Log::error('Production plan details failed.', ['id' => $id, 'message' => $exception->getMessage()]);
+            return response()->json(['message' => 'Detalji radnog naloga trenutno nisu dostupni.'], 500);
+        }
     }
 }

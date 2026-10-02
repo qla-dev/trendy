@@ -201,6 +201,7 @@ class UserController extends Controller
             User::ROLE_USER,
             User::ROLE_KONTROLA,
             User::ROLE_BRAVARIJA,
+            User::ROLE_PROIZVODNJA,
         ];
     }
 }

@@ -758,7 +758,7 @@
     }
   }
 
-  @media (max-width: 575.98px) {
+  @media (max-width: 767.98px) {
     #confirm-weight-modal .confirm-material-meta-grid {
       grid-template-columns: minmax(0, 1fr);
     }
@@ -789,7 +789,8 @@
 
     #confirm-weight-modal .modal-body {
       flex: 1 1 auto;
-      display: flex;
+      min-height: 0;
+      display: block;
       overflow-y: auto;
     }
 
@@ -797,12 +798,12 @@
       width: 100%;
       display: flex;
       flex-direction: column;
-      flex: 1 1 auto;
-      min-height: 0;
+      flex: 0 0 auto;
+      min-height: min-content;
     }
 
     #confirm-weight-modal .confirm-weight-info-panel {
-      flex: 1 1 auto;
+      flex: 0 0 auto;
       min-height: 0;
     }
 
@@ -841,7 +842,7 @@
     }
   }
 
-  @media (max-width: 575.98px) {
+  @media (max-width: 767.98px) {
     #confirm-weight-modal .confirm-weight-close-btn {
       width: 3.6rem;
       height: 3.6rem;
@@ -869,7 +870,7 @@
     }
   }
 
-  @media (max-width: 575.98px) {
+  @media (max-width: 767.98px) {
     #confirm-weight-modal .modal-dialog {
       max-width: none;
       width: 100vw;
@@ -902,7 +903,8 @@
       flex: 1 1 auto;
       min-height: 0;
       padding: 0 0.75rem 0.75rem;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
 
     #confirm-weight-modal .confirm-weight-header-copy {
@@ -934,8 +936,8 @@
       display: flex;
       flex-direction: column;
       gap: 0.65rem;
-      height: 100%;
-      min-height: 0;
+      height: auto;
+      min-height: min-content;
     }
 
     #confirm-weight-modal .confirm-weight-info-panel {
@@ -945,7 +947,7 @@
     }
 
     #confirm-weight-modal .confirm-weight-console {
-      flex: 1 1 auto;
+      flex: 0 0 auto;
       min-height: 0;
       gap: 0.6rem;
       justify-content: flex-start;
@@ -1096,7 +1098,7 @@
     }
   }
 
-  @media (max-width: 575.98px) and (max-height: 760px) {
+  @media (max-width: 767.98px) and (max-height: 760px) {
     #confirm-weight-modal .confirm-weight-selection-name {
       font-size: 0.98rem;
       padding-top: 0.65rem;
@@ -1133,7 +1135,7 @@
   }
 
   @supports (height: 100dvh) {
-    @media (max-width: 575.98px) {
+    @media (max-width: 767.98px) {
       #confirm-weight-modal .modal-dialog {
         height: 100dvh;
         max-height: 100dvh;
@@ -1153,7 +1155,7 @@
       }
     }
 
-    @media (max-width: 575.98px) and (max-height: 760px) {
+    @media (max-width: 767.98px) and (max-height: 760px) {
       #confirm-weight-modal .confirm-weight-screen-readout,
       #confirm-weight-modal .confirm-weight-screen-delete {
         min-height: clamp(4.2rem, 10dvh, 5rem);
@@ -1162,6 +1164,50 @@
       #confirm-weight-modal .confirm-weight-keypad {
         --confirm-key-height: clamp(2.7rem, 6dvh, 3.2rem);
       }
+    }
+  }
+  /* Keep the header visible and let the complete keypad scroll on phones/tablets. */
+  @media (orientation: portrait), (max-width: 767.98px) {
+    #confirm-weight-modal .modal-header {
+      flex-shrink: 0;
+      padding-top: calc(0.75rem + env(safe-area-inset-top, 0px));
+      padding-left: calc(0.85rem + env(safe-area-inset-left, 0px));
+      padding-right: calc(0.85rem + env(safe-area-inset-right, 0px));
+    }
+
+    #confirm-weight-modal .modal-body {
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+      padding-left: calc(0.75rem + env(safe-area-inset-left, 0px));
+      padding-right: calc(0.75rem + env(safe-area-inset-right, 0px));
+      padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    #confirm-weight-modal .modal-content {
+      max-height: calc(var(--confirm-visible-height, 100vh) - 1rem);
+    }
+  }
+
+  @media (orientation: portrait), (max-width: 767.98px) {
+    #confirm-weight-modal .modal-dialog {
+      height: var(--confirm-visible-height, 100vh);
+      min-height: var(--confirm-visible-height, 100vh);
+      max-height: var(--confirm-visible-height, 100vh);
+    }
+
+    #confirm-weight-modal .modal-content {
+      height: 100%;
+      min-height: 0;
+      max-height: 100%;
+    }
+  }
+
+  @supports (height: 100dvh) {
+    #confirm-weight-modal {
+      --confirm-visible-height: 100dvh;
     }
   }
 </style>
