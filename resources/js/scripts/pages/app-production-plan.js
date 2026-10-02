@@ -361,6 +361,56 @@ $(function () {
     if (techNote === 4) showError('Prikaz podataka nije uspio', 'Primljeni podaci nisu u očekivanom formatu. Obavijestite administratora ako se problem ponovi.');
     else showRequestError();
   });
+  var planList = $('#production-plan-list');
+  var fullscreenButton = $('#btn-fullscreen-plana');
+  var fullscreenPlaceholder = null;
+  var ownsBrowserFullscreen = false;
+  function resizePlanList() {
+    window.requestAnimationFrame(function () { table.columns.adjust(); sizeEmptyMessage(); });
+  }
+  function restorePlanList() {
+    if (!fullscreenPlaceholder) return;
+    closeEditor();
+    planList.removeClass('is-fullscreen').insertBefore(fullscreenPlaceholder);
+    fullscreenPlaceholder.remove();
+    fullscreenPlaceholder = null;
+    $('body').removeClass('production-plan-fullscreen');
+    fullscreenButton.attr('aria-expanded', 'false').trigger('focus');
+    resizePlanList();
+  }
+  function exitPlanFullscreen() {
+    restorePlanList();
+    if (ownsBrowserFullscreen && document.fullscreenElement === document.documentElement) {
+      document.exitFullscreen().catch(function () { /* The list is already restored. */ });
+    }
+    ownsBrowserFullscreen = false;
+  }
+  fullscreenButton.on('click', function () {
+    if (fullscreenPlaceholder) return;
+    closeEditor();
+    fullscreenPlaceholder = $('<div hidden></div>').insertBefore(planList);
+    planList.appendTo('body').addClass('is-fullscreen');
+    $('body').addClass('production-plan-fullscreen');
+    fullscreenButton.attr('aria-expanded', 'true');
+    planList.trigger('focus');
+    resizePlanList();
+    // Fullscreen the document so inline editors and dialogs remain available.
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      ownsBrowserFullscreen = true;
+      try {
+        document.documentElement.requestFullscreen().catch(function () { ownsBrowserFullscreen = false; });
+      } catch (error) { ownsBrowserFullscreen = false; }
+    }
+  });
+  $(document).on('fullscreenchange', function () {
+    if (ownsBrowserFullscreen && !document.fullscreenElement) {
+      ownsBrowserFullscreen = false;
+      restorePlanList();
+    }
+    resizePlanList();
+  }).on('keydown.productionPlanFullscreen', function (event) {
+    if (event.key === 'Escape' && fullscreenPlaceholder) exitPlanFullscreen();
+  });
   $('#filter').on('click', function () { table.ajax.reload(); });
   rowColourFilter.on('change', function () {
     table.rows({ page: 'current' }).every(function () { applyRowColour(this.node(), this.data()); });
