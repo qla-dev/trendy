@@ -22,7 +22,17 @@ import {
   SmartphoneIcon,
   ArrowRightLeft,
   FileText,
-  Truck
+  Truck,
+  ClipboardCheck,
+  RotateCcw,
+  BellRing,
+  Gauge,
+  Users,
+  TrendingUp,
+  Wrench,
+  Target,
+  Globe,
+  Lightbulb
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -101,16 +111,170 @@ const ProcessStep = ({ icon: Icon, title, subtitle, description, isLast }: { ico
   </div>
 );
 
+type FlowStep = {
+  title: string;
+  desc: string;
+  icon: any;
+  tags?: string[];
+  badge?: { icon: any; label: string };
+  active?: boolean;
+  success?: boolean;
+};
+
+const noteTones = {
+  amber: { box: "bg-amber-50 border-amber-100 text-amber-900", icon: "text-amber-600", text: "text-amber-700" },
+  emerald: { box: "bg-emerald-50 border-emerald-100 text-emerald-900", icon: "text-emerald-600", text: "text-emerald-700" }
+};
+
+const FlowBlock = ({
+  phase,
+  eyebrow,
+  title,
+  subtitle,
+  steps,
+  note,
+  live
+}: {
+  phase: string;
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  steps: FlowStep[];
+  note: { tone: keyof typeof noteTones; icon: any; label: string; text: string };
+  live: { eyebrow: string; title: string; items: { icon: any; title: string; desc: string }[] };
+}) => {
+  const tone = noteTones[note.tone];
+  return (
+    <div>
+      <div className="text-center mb-20">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+        >
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <span className="px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-bold uppercase tracking-wider">{phase}</span>
+            <span className="text-xs font-bold tracking-[0.3em] text-slate-400 uppercase">{eyebrow}</span>
+          </div>
+          <h2 className="text-4xl lg:text-5xl font-bold mb-6 tracking-tight text-slate-900">{title}</h2>
+          <p className="text-slate-500 max-w-2xl mx-auto text-lg">{subtitle}</p>
+        </motion.div>
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-4 xl:gap-5">
+        {steps.map((item, idx) => (
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: idx * 0.08 }}
+            className="relative"
+          >
+            <div className={cn(
+              "p-6 rounded-[1.75rem] border transition-all duration-500 h-full flex flex-col items-center text-center",
+              item.active ? "bg-slate-900 text-white border-slate-900 shadow-xl" :
+              item.success ? "bg-emerald-50 border-emerald-100 text-slate-900" :
+              "bg-white border-slate-200 text-slate-900 hover:border-slate-300"
+            )}>
+              <div className={cn(
+                "w-12 h-12 rounded-2xl flex items-center justify-center mb-5",
+                item.active ? "bg-white text-slate-900" :
+                item.success ? "bg-white text-emerald-600" :
+                "bg-slate-50 text-slate-500"
+              )}>
+                <item.icon className="w-6 h-6" />
+              </div>
+
+              <span className={cn(
+                "text-[10px] font-black uppercase tracking-[0.2em] mb-2",
+                item.active ? "text-slate-500" : "text-slate-400"
+              )}>Korak {String(idx + 1).padStart(2, "0")}</span>
+
+              <h3 className="text-lg font-bold mb-2 leading-tight">{item.title}</h3>
+              <p className={cn(
+                "text-sm leading-relaxed flex-1",
+                item.active ? "text-slate-300" : "text-slate-500"
+              )}>{item.desc}</p>
+
+              {item.tags && (
+                <div className="flex gap-2 mt-4">
+                  {item.tags.map(t => (
+                    <span key={t} className="px-2 py-1 bg-slate-50 text-[9px] font-bold uppercase rounded-md border border-slate-100 text-slate-500">{t}</span>
+                  ))}
+                </div>
+              )}
+
+              {item.badge && (
+                <div className={cn(
+                  "mt-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[9px] font-bold uppercase",
+                  item.active ? "bg-white/10 border-white/10 text-slate-300" :
+                  item.success ? "bg-white border-emerald-100 text-emerald-700" :
+                  "bg-slate-50 border-slate-100 text-slate-500"
+                )}>
+                  <item.badge.icon className="w-3 h-3" />
+                  {item.badge.label}
+                </div>
+              )}
+            </div>
+
+            {idx < steps.length - 1 && (
+              <div className="hidden lg:flex absolute top-1/2 -right-[0.85rem] xl:-right-[1rem] -translate-y-1/2 z-10 w-6 h-6 rounded-full bg-white border border-slate-200 items-center justify-center text-slate-400">
+                <ChevronRight className="w-3.5 h-3.5" />
+              </div>
+            )}
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="mt-6 flex justify-center">
+        <div className={cn("inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-5 py-3 rounded-2xl border text-sm", tone.box)}>
+          <note.icon className={cn("w-4 h-4 shrink-0", tone.icon)} />
+          <span className="font-bold">{note.label}</span>
+          <span className={tone.text}>{note.text}</span>
+        </div>
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="mt-12 p-8 lg:p-10 bg-slate-50 rounded-[2.5rem] border border-slate-200"
+      >
+        <div className="flex flex-col lg:flex-row lg:items-center gap-8">
+          <div className="lg:w-1/4 shrink-0">
+            <span className="text-xs font-bold tracking-[0.3em] text-slate-400 uppercase mb-2 block">{live.eyebrow}</span>
+            <h3 className="text-2xl font-bold text-slate-900 leading-tight">{live.title}</h3>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-4 flex-1">
+            {live.items.map((f) => (
+              <div key={f.title} className="p-5 bg-white rounded-2xl border border-slate-100 flex gap-4">
+                <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center shrink-0">
+                  <f.icon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 mb-1">{f.title}</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">{f.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 export default function App() {
   const [activeStep, setActiveStep] = useState(0);
   const ponudaPdfUrl = new URL('../assets/ponuda-qla-dev_trendy.pdf', import.meta.url).href;
   const predracunPdfUrl = new URL('../assets/predracun-qla-dev_trendy.pdf', import.meta.url).href;
 
   const steps = [
-    { icon: Database, label: "Skladište" },
-    { icon: Factory, label: "Proizvodnja" },
-    { icon: QrCode, label: "QR Skeniranje" },
-    { icon: CheckCircle2, label: "Zatvaranje" }
+    { icon: ArrowRightLeft, label: "Prenosnica", status: "Prenosnica", detail: "Materijal prenesen na radni nalog" },
+    { icon: ShieldCheck, label: "Kontrola", status: "Ulazna kontrola", detail: "Dozvoljava · operacija može početi" },
+    { icon: QrCode, label: "Operacije", status: "Skeniranje RN-a", detail: "Početak, Zastoj, Kraj operacije" },
+    { icon: CheckCircle2, label: "Zatvaranje", status: "Završen ciklus", detail: "Automatsko zatvaranje RN-a" }
   ];
 
   React.useEffect(() => {
@@ -195,7 +359,7 @@ export default function App() {
               <ShieldCheck className="w-3.5 h-3.5" />
               Upgrade Ponuda 2026
             </div>
-            <h1 className="text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-8 leading-[1.1]">
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-8 leading-[1.1]">
               Digitalna transformacija <span className="text-slate-400">proizvodnje.</span>
             </h1>
             <p className="text-xl text-slate-500 leading-relaxed mb-10 max-w-xl">
@@ -220,176 +384,231 @@ export default function App() {
             className="relative"
           >
             <div className="absolute -inset-4 bg-slate-500/5 blur-3xl rounded-full" />
-            <div className="relative bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl p-10 overflow-hidden">
-              <div className="flex items-center justify-between mb-12">
-                <h4 className="text-lg font-bold text-slate-900">Status Sistema</h4>
-                <div className="flex gap-1.5">
-                  {[1, 2, 3].map(i => <div key={i} className="w-2 h-2 rounded-full bg-slate-100" />)}
+            <div className="relative bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl p-6 sm:p-8 lg:p-10 overflow-hidden">
+              <div className="flex items-center justify-between mb-10">
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Faza II</p>
+                  <h4 className="text-lg font-bold text-slate-900">Tok radnog naloga</h4>
+                </div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Uživo
                 </div>
               </div>
-              
-              <div className="flex justify-between items-center relative">
-                <div className="absolute top-8 left-0 right-0 h-0.5 bg-slate-100 -z-10" />
+
+              <div className="relative flex justify-between items-start [--flow-inset:3rem] sm:[--flow-inset:4rem]">
+                <div className="absolute top-6 sm:top-8 left-6 sm:left-8 right-6 sm:right-8 h-0.5 bg-slate-100" />
+                <motion.div
+                  className="absolute top-6 sm:top-8 left-6 sm:left-8 h-0.5 bg-slate-900"
+                  animate={{ width: `calc((100% - var(--flow-inset)) * ${activeStep / (steps.length - 1)})` }}
+                  transition={{ duration: 0.5 }}
+                />
                 {steps.map((step, idx) => (
-                  <div key={idx} className="flex flex-col items-center gap-3">
+                  <div key={idx} className="relative flex flex-col items-center gap-3 w-12 sm:w-16">
                     <div className={cn(
-                      "w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-500",
-                      idx === activeStep ? "bg-slate-900 text-white shadow-lg shadow-slate-200" : "bg-slate-100 text-slate-400"
+                      "w-12 h-12 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center transition-all duration-500",
+                      idx === activeStep ? "bg-slate-900 text-white shadow-lg shadow-slate-200" :
+                      idx < activeStep ? "bg-white border border-slate-900 text-slate-900" :
+                      "bg-slate-100 text-slate-400"
                     )}>
-                      <step.icon className="w-8 h-8" />
+                      <step.icon className="w-5 h-5 sm:w-7 sm:h-7" />
                     </div>
                     <span className={cn(
-                      "text-[10px] font-bold uppercase tracking-wider text-center",
-                      idx === activeStep ? "text-slate-900" : "text-slate-400"
+                      "text-[8px] sm:text-[10px] font-bold uppercase tracking-wider text-center whitespace-nowrap",
+                      idx <= activeStep ? "text-slate-900" : "text-slate-400"
                     )}>{step.label}</span>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-16 p-6 bg-slate-50 rounded-3xl border border-slate-100">
+              <div className="mt-12 p-6 bg-slate-50 rounded-3xl border border-slate-100">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm">
-                    <QrCode className="text-slate-900 w-6 h-6" />
+                  <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm shrink-0">
+                    {React.createElement(steps[activeStep].icon, { className: "text-slate-900 w-6 h-6" })}
                   </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Skeniranje</p>
-                    <p className="text-sm font-bold text-slate-900">Automatsko Zatvaranje RN</p>
-                  </div>
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={activeStep}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.25 }}
+                    >
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{steps[activeStep].status}</p>
+                      <p className="text-sm font-bold text-slate-900">{steps[activeStep].detail}</p>
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
                 <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                  <motion.div 
+                  <motion.div
                     className="h-full bg-slate-900"
-                    animate={{ width: `${(activeStep + 1) * 25}%` }}
+                    animate={{ width: `${((activeStep + 1) / steps.length) * 100}%` }}
                     transition={{ duration: 0.5 }}
                   />
                 </div>
               </div>
             </div>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="mt-6 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-start gap-3"
+              className="mt-6 grid grid-cols-3 gap-3"
             >
-              <Zap className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-              <p className="text-xs font-medium text-emerald-800 leading-relaxed">
-                Pripremljeno za potrebe: <span className="font-bold">Javni konkurs za odabir korisnika grant sredstava tekućih transfera za 2026. godinu - Jačanje konkurentnosti malih i srednjih preduzeća</span>
-              </p>
+              {[
+                { label: "Faza II", value: "Automatizacija" },
+                { label: "Faza III", value: "Analitika" },
+                { label: "Native app", value: "Besplatno", highlight: true }
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className={cn(
+                    "p-3 sm:p-4 rounded-2xl border",
+                    item.highlight ? "bg-emerald-50 border-emerald-100" : "bg-white border-slate-200"
+                  )}
+                >
+                  <p className={cn(
+                    "text-[9px] sm:text-[10px] font-bold uppercase tracking-widest mb-1",
+                    item.highlight ? "text-emerald-600" : "text-slate-400"
+                  )}>{item.label}</p>
+                  <p className={cn(
+                    "text-xs sm:text-sm font-bold",
+                    item.highlight ? "text-emerald-800" : "text-slate-900"
+                  )}>{item.value}</p>
+                </div>
+              ))}
             </motion.div>
           </motion.div>
         </div>
       </section>
 
-      {/* Process Section (Redesigned for Maximum Clarity) */}
+      {/* Process Section: one flow per phase */}
       <section id="proces" className="py-32 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-24">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-            >
-              <span className="text-xs font-bold tracking-[0.3em] text-slate-400 uppercase mb-4 block">Operativni Model</span>
-              <h2 className="text-4xl lg:text-5xl font-bold mb-6 tracking-tight text-slate-900">Digitalni Tok Proizvodnje</h2>
-              <p className="text-slate-500 max-w-2xl mx-auto text-lg">
-                Precizno definisan put od ulaza sirovine do finalnog proizvoda, eliminišući manuelne greške.
-              </p>
-            </motion.div>
-          </div>
+          <FlowBlock
+            phase="Faza II"
+            eyebrow="Operativni Model"
+            title="Digitalni Tok Proizvodnje"
+            subtitle="Od prenosa materijala do zatvaranja radnog naloga, svaki korak se skenira, kontroliše i vidi u realnom vremenu."
+            steps={[
+              {
+                title: "Skladište",
+                desc: "Šifarnik, lokacije i stanje sirovina.",
+                icon: Database,
+                tags: ["Šifre", "Lokacije"]
+              },
+              {
+                title: "Prenosnica",
+                desc: "Digitalni prenos materijala na radni nalog.",
+                icon: ArrowRightLeft,
+                badge: { icon: FileText, label: "Dokument" }
+              },
+              {
+                title: "Ulazna kontrola",
+                desc: "Odluka „dozvoljava / ne dozvoljava“ prije početka operacije.",
+                icon: ShieldCheck,
+                badge: { icon: ClipboardCheck, label: "Kontrola" }
+              },
+              {
+                title: "Operacije",
+                desc: "Skeniranjem RN-a: Početak, Zastoj, Kraj i Kraj operacije.",
+                icon: QrCode,
+                active: true,
+                badge: { icon: QrCode, label: "QR" }
+              },
+              {
+                title: "Procesna kontrola",
+                desc: "Neispravni komadi se vraćaju ili idu na doradu.",
+                icon: ClipboardCheck,
+                badge: { icon: RotateCcw, label: "Dorada" }
+              },
+              {
+                title: "Zatvaranje",
+                desc: "Izdavanje materijala i automatsko zatvaranje RN-a.",
+                icon: CheckCircle2,
+                success: true,
+                badge: { icon: FileText, label: "Dokument" }
+              }
+            ]}
+            note={{
+              tone: "amber",
+              icon: RotateCcw,
+              label: "Ne dozvoljava",
+              text: "komad se vraća na operaciju ili ide na doradu, uz evidenciju naplate i prateću dokumentaciju."
+            }}
+            live={{
+              eyebrow: "Kroz cijeli tok",
+              title: "Uživo za menadžment",
+              items: [
+                { icon: Users, title: "Panel resursa", desc: "Radnici, mašine, kapaciteti i efikasnost." },
+                { icon: BellRing, title: "Kašnjenja RN-a", desc: "Automatsko praćenje i operativne notifikacije." },
+                { icon: Gauge, title: "Live Manager Analytics", desc: "Stanje proizvodnje u realnom vremenu." }
+              ]
+            }}
+          />
 
-          <div className="relative">
-            {/* Connection Line (Desktop) */}
-            <div className="absolute top-1/2 left-0 w-full h-px bg-slate-100 -translate-y-1/2 hidden lg:block" />
+          <div className="my-32 h-px bg-slate-100" />
 
-            <div className="grid lg:grid-cols-5 gap-8 relative">
-              {[
-                {
-                  step: "01",
-                  title: "Skladište",
-                  desc: "Definisanje šifarnika i lokacija sirovina.",
-                  icon: Database,
-                  tags: ["Šifre", "Lokacije"]
-                },
-                {
-                  step: "02",
-                  title: "Prenosnica",
-                  desc: "Digitalni prenos materijala u proizvodnju.",
-                  icon: ArrowRightLeft,
-                  isDoc: true
-                },
-                {
-                  step: "03",
-                  title: "Proizvodnja",
-                  desc: "QR skeniranje: Početak, Pauza, Kraj.",
-                  icon: QrCode,
-                  active: true
-                },
-                {
-                  step: "04",
-                  title: "Izdavanje",
-                  desc: "Automatski dokument izdavanja materijala.",
-                  icon: FileText,
-                  isDoc: true
-                },
-                {
-                  step: "05",
-                  title: "Zatvaranje",
-                  desc: "Automatsko zatvaranje RN nakon pakovanja.",
-                  icon: CheckCircle2,
-                  success: true
-                }
-              ].map((item, idx) => (
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: idx * 0.1 }}
-                  className="relative z-10"
-                >
-                  <div className={cn(
-                    "p-8 rounded-[2rem] border transition-all duration-500 h-full flex flex-col items-center text-center",
-                    item.active ? "bg-slate-900 text-white border-slate-900 shadow-xl scale-105" : 
-                    item.success ? "bg-emerald-50 border-emerald-100 text-slate-900" :
-                    "bg-white border-slate-100 text-slate-900 hover:border-slate-300"
-                  )}>
-                    <div className={cn(
-                      "w-14 h-14 rounded-2xl flex items-center justify-center mb-6 shadow-sm",
-                      item.active ? "bg-white text-slate-900" : "bg-slate-50 text-slate-400"
-                    )}>
-                      <item.icon className="w-7 h-7" />
-                    </div>
-                    
-                    <span className={cn(
-                      "text-[10px] font-black uppercase tracking-[0.2em] mb-2",
-                      item.active ? "text-slate-400" : "text-slate-300"
-                    )}>Korak {item.step}</span>
-                    
-                    <h3 className="text-xl font-bold mb-3">{item.title}</h3>
-                    <p className={cn(
-                      "text-sm leading-relaxed",
-                      item.active ? "text-slate-400" : "text-slate-500"
-                    )}>{item.desc}</p>
-
-                    {item.tags && (
-                      <div className="flex gap-2 mt-4">
-                        {item.tags.map(t => (
-                          <span key={t} className="px-2 py-1 bg-slate-50 text-[9px] font-bold uppercase rounded-md border border-slate-100 text-slate-400">{t}</span>
-                        ))}
-                      </div>
-                    )}
-
-                    {item.isDoc && (
-                      <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 rounded-full border border-slate-100 text-[9px] font-bold uppercase text-slate-400">
-                        <FileText className="w-3 h-3" />
-                        Dokument
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
+          <FlowBlock
+            phase="Faza III"
+            eyebrow="Analitički Model"
+            title="Od Podataka do Odluke"
+            subtitle="Podaci iz proizvodnje, skladišta i rada se pretvaraju u analize, prognoze i jasne poslovne odluke."
+            steps={[
+              {
+                title: "Inventura",
+                desc: "QR evidencija i usklađivanje stvarnih količina.",
+                icon: Package,
+                badge: { icon: QrCode, label: "QR" }
+              },
+              {
+                title: "Prijava radnika",
+                desc: "Stvarno vrijeme rada i učinak po radniku.",
+                icon: Users,
+                badge: { icon: Clock, label: "Evidencija" }
+              },
+              {
+                title: "Uska grla",
+                desc: "Čekanja, zastoji i uzroci gubitaka u proizvodnji.",
+                icon: Gauge,
+                badge: { icon: BarChart3, label: "Analiza" }
+              },
+              {
+                title: "Profitabilnost",
+                desc: "Po proizvodu, kupcu, RN-u i proizvodnom satu.",
+                icon: BarChart3,
+                active: true,
+                badge: { icon: TrendingUp, label: "Miks" }
+              },
+              {
+                title: "Mašine i ulaganja",
+                desc: "KPI, kvarovi, održavanje, remont i povrat investicije.",
+                icon: Wrench,
+                badge: { icon: BarChart3, label: "ROI" }
+              },
+              {
+                title: "Planiranje",
+                desc: "Prediktivne potrebe za materijalom i buduća potražnja.",
+                icon: Target,
+                success: true,
+                badge: { icon: TrendingUp, label: "Prognoza" }
+              }
+            ]}
+            note={{
+              tone: "emerald",
+              icon: RotateCcw,
+              label: "Povratna veza",
+              text: "zaključci analize se vraćaju u plan materijala, raspored mašina i radnika iz Faze II."
+            }}
+            live={{
+              eyebrow: "Šira slika",
+              title: "Kontekst za odluke",
+              items: [
+                { icon: Target, title: "Industrijski benchmark", desc: "Ključni pokazatelji naspram referentnih vrijednosti." },
+                { icon: Globe, title: "Sedmični pregled trendova", desc: "Tehnologije, materijali i poslovne prilike." },
+                { icon: Lightbulb, title: "Podrška odlučivanju", desc: "Preporuke na osnovu stvarnih podataka iz pogona." }
+              ]
+            }}
+          />
         </div>
       </section>
 
@@ -468,13 +687,13 @@ export default function App() {
               <div>
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider mb-8">
                   <SmartphoneIcon className="w-3.5 h-3.5" />
-                  Premium Add-on
+                  Uključeno u ponudu
                 </div>
                 <h2 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-8 leading-tight">
                   Native Mobilna & Tablet Aplikacija
                 </h2>
                 <p className="text-slate-500 text-lg mb-10 leading-relaxed">
-                  Za maksimalnu efikasnost na terenu, nudimo razvoj nativne aplikacije optimizovane za tablete i mobilne uređaje.
+                  Za maksimalnu efikasnost na terenu, u sklopu ponude razvijamo nativnu aplikaciju optimizovanu za tablete i mobilne uređaje, bez dodatnih troškova.
                 </p>
                 
                 <div className="space-y-6 mb-12">
@@ -499,9 +718,9 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-6">
-                  <div className="text-3xl font-bold text-slate-900">4.900 KM</div>
+                  <div className="text-3xl font-bold text-emerald-600">Besplatno</div>
                   <div className="h-8 w-px bg-slate-200" />
-                  <div className="text-slate-500 font-bold uppercase tracking-widest text-sm">Jednokratno</div>
+                  <div className="text-slate-500 font-bold uppercase tracking-widest text-sm">Uz Fazu II i III</div>
                 </div>
               </div>
 
