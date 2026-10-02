@@ -32,7 +32,12 @@ import {
   Wrench,
   Target,
   Globe,
-  Lightbulb
+  Lightbulb,
+  Nfc,
+  IdCardLanyard,
+  KeyRound,
+  LogIn,
+  Fingerprint
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -123,7 +128,8 @@ type FlowStep = {
 
 const noteTones = {
   amber: { box: "bg-amber-50 border-amber-100 text-amber-900", icon: "text-amber-600", text: "text-amber-700" },
-  emerald: { box: "bg-emerald-50 border-emerald-100 text-emerald-900", icon: "text-emerald-600", text: "text-emerald-700" }
+  emerald: { box: "bg-emerald-50 border-emerald-100 text-emerald-900", icon: "text-emerald-600", text: "text-emerald-700" },
+  slate: { box: "bg-slate-50 border-slate-200 text-slate-900", icon: "text-slate-600", text: "text-slate-600" }
 };
 
 const FlowBlock = ({
@@ -320,7 +326,7 @@ export default function App() {
             <a href="#proces" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Proces</a>
             <a href="#mobilna" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Mobilna App</a>
             <div className="h-6 w-px bg-slate-200" />
-            <span className="text-sm font-bold text-slate-900">Ukupno: 9.800 KM</span>
+            <span className="text-sm font-bold text-slate-900">Ukupno: 14.700 KM</span>
             <div className="flex items-center gap-3 print:hidden">
               <a
                 href={ponudaPdfUrl}
@@ -452,11 +458,12 @@ export default function App() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="mt-6 grid grid-cols-3 gap-3"
+              className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3"
             >
               {[
                 { label: "Faza II", value: "Automatizacija" },
                 { label: "Faza III", value: "Analitika" },
+                { label: "Faza IV", value: "RFID prijava" },
                 { label: "Native app", value: "Besplatno", highlight: true }
               ].map((item) => (
                 <div
@@ -609,6 +616,69 @@ export default function App() {
               ]
             }}
           />
+          <div className="my-32 h-px bg-slate-100" />
+
+          <FlowBlock
+            phase="Faza IV"
+            eyebrow="RFID Model"
+            title="Prijava Jednim Dodirom"
+            subtitle="Radnik prisloni postojeću RFID karticu i sistem zna ko radi, bez korisničkog imena i lozinke, na svakom uređaju u pogonu."
+            steps={[
+              {
+                title: "Postojeće kartice",
+                desc: "Kartice koje radnici već imaju povezuju se s radnikom iz Pantheona.",
+                icon: IdCardLanyard,
+                badge: { icon: Users, label: "Radnik" }
+              },
+              {
+                title: "Čitač na mjestu rada",
+                desc: "RFID čitač na tabletu ili računaru, NFC u native aplikaciji.",
+                icon: Nfc,
+                badge: { icon: Smartphone, label: "USB / NFC" }
+              },
+              {
+                title: "Dolazak i odlazak",
+                desc: "Dolazak, pauza i odlazak bilježe se jednim prislanjanjem.",
+                icon: LogIn,
+                badge: { icon: Clock, label: "Evidencija" }
+              },
+              {
+                title: "Operacije",
+                desc: "Kartica i RN: Početak, Zastoj i Kraj na ime radnika.",
+                icon: QrCode,
+                active: true,
+                badge: { icon: Nfc, label: "RFID" }
+              },
+              {
+                title: "Potvrde",
+                desc: "Izdavanje materijala, kontrola i dorada potvrđeni karticom.",
+                icon: ClipboardCheck,
+                badge: { icon: FileText, label: "Potpis" }
+              },
+              {
+                title: "Jasna odgovornost",
+                desc: "Za svaku operaciju i potvrdu na RN-u zna se ko je radio i kada, bez ručnog unosa.",
+                icon: Fingerprint,
+                success: true,
+                badge: { icon: ShieldCheck, label: "Historija" }
+              }
+            ]}
+            note={{
+              tone: "slate",
+              icon: KeyRound,
+              label: "Sigurnost",
+              text: "ako prijavljen uređaj ostane neaktivan, zaključava se i traži 4-cifreni PIN, pa niko ne može raditi na tuđe ime."
+            }}
+            live={{
+              eyebrow: "Bez lozinki",
+              title: "Gdje kartica mijenja prijavu",
+              items: [
+                { icon: Smartphone, title: "Dijeljeni tableti", desc: "Više radnika na jednom uređaju, bez odjave i ponovne prijave." },
+                { icon: Package, title: "Inventura", desc: "Svako brojanje vezano je za radnika koji ga je uradio." },
+                { icon: BarChart3, title: "Tačan učinak", desc: "Vrijeme i rad po osobi, a ne po odjeljenju." }
+              ]
+            }}
+          />
         </div>
       </section>
 
@@ -618,11 +688,11 @@ export default function App() {
           <div className="text-center mb-20">
             <h2 className="text-4xl font-bold text-slate-900 mb-4">Struktura Nadogradnje</h2>
             <p className="text-slate-500 max-w-2xl mx-auto">
-              Faze II i III povezuju automatizaciju proizvodnog toka i analitiku za poslovno odlučivanje.
+              Faze II, III i IV povezuju automatizaciju proizvodnog toka, analitiku za poslovno odlučivanje i prijavu radnika RFID karticama.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8">
             <PhaseCard 
               number="Faza II"
               title="Automatizacija proizvodnog toka i kontrola operacija"
@@ -647,8 +717,7 @@ export default function App() {
               price="4.900"
               items={[
                 "Implementacija inventure sa QR evidencijom i usklađivanjem količina",
-                "Evidencija prijave radnika i praćenje stvarnog vremena rada i učinka",
-                "Prediktivno planiranje potreba za materijalom i buduće potražnje",
+                "Evidencija prijave radnika i praćenje stvarnog vremena rada i učinka",                "Prediktivno planiranje potreba za materijalom i buduće potražnje",
                 "Analiza uskih grla, čekanja i uzroka gubitaka u proizvodnji",
                 "Analiza profitabilnosti i proizvodnog miksa po proizvodu, kupcu, RN-u i proizvodnom satu",
                 "Analiza stanja mašina i isplativosti ulaganja — KPI pokazatelji, kvarovi, zastoji, troškovi održavanja, remont, zamjena i povrat investicije",
@@ -656,6 +725,24 @@ export default function App() {
                 "Sedmični pregled industrijskih trendova, tehnologija, materijala i poslovnih prilika"
               ]}
               delay={0.3}
+            />
+            <PhaseCard
+              number="Faza IV"
+              title="RFID identifikacija radnika i prijava bez lozinke"
+              duration="1.5 mj."
+              price="4.900"
+              items={[
+                "Integracija postojećih RFID kartica i povezivanje s radnicima iz Pantheona",
+                "Podrška za RFID čitače na tabletima i računarima te NFC u native aplikaciji",
+                "Prijava radnika prislanjanjem kartice, bez korisničkog imena i lozinke",
+                "Evidencija dolaska, pauze i odlaska karticom",
+                "Početak, Zastoj i Kraj operacije bilježe se na ime radnika koji je prislonio karticu",
+                "Potvrda izdavanja materijala, kontrole i dorade karticom",
+                "Automatsko popunjavanje radnika i vremena pri zatvaranju radnog naloga",
+                "Automatsko zaključavanje neaktivnog uređaja i brzo otključavanje 4-cifrenim PIN-om, kao zaštita od rada na tuđe ime",
+                "Blokada izgubljenih kartica i dodatni PIN za osjetljive radnje"
+              ]}
+              delay={0.4}
             />
           </div>
 
@@ -667,10 +754,10 @@ export default function App() {
           >
             <div>
               <h3 className="text-3xl font-bold mb-2">Preostala investicija</h3>
-              <p className="text-slate-400">Faza II + III · Faza I završena</p>
+              <p className="text-slate-400">Faza II + III + IV · Faza I završena</p>
             </div>
             <div className="text-right">
-              <div className="text-5xl font-bold mb-1">9.800 KM</div>
+              <div className="text-5xl font-bold mb-1">14.700 KM</div>
               <p className="text-slate-400 text-sm font-medium uppercase tracking-widest">Fiksna cijena projekta</p>
             </div>
           </motion.div>
@@ -720,7 +807,7 @@ export default function App() {
                 <div className="flex items-center gap-6">
                   <div className="text-3xl font-bold text-emerald-600">Besplatno</div>
                   <div className="h-8 w-px bg-slate-200" />
-                  <div className="text-slate-500 font-bold uppercase tracking-widest text-sm">Uz Fazu II i III</div>
+                  <div className="text-slate-500 font-bold uppercase tracking-widest text-sm">Uključeno u ponudu</div>
                 </div>
               </div>
 
