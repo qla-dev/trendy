@@ -30,8 +30,15 @@
     @media (prefers-reduced-motion: reduce) { .plan-expand-button i { transition: none; } }
     .production-plan-table { width: max-content !important; min-width: 100%; }
     .production-plan-table > :not(caption) > * > * { padding: .42rem .5rem; font-size: .8rem; white-space: nowrap; }
+    .production-plan-table thead th { max-width: 7rem; white-space: normal; line-height: 1.2; }
+    .production-plan-table thead th:nth-child(9):not(.sorting_disabled),
+    .production-plan-table thead th:nth-child(13):not(.sorting_disabled) { padding-right: 20px; }
+    .production-plan-table thead th:nth-child(9)::before,
+    .production-plan-table thead th:nth-child(13)::before { right: .55em; }
+    .production-plan-table thead th:nth-child(9)::after,
+    .production-plan-table thead th:nth-child(13)::after { right: .1em; }
     .production-plan-table .editable-cell { cursor: pointer; }
-    .production-plan-table .production-plan-note-preview { display: inline-block; max-width: 25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+    .production-plan-table .production-plan-note-preview { display: inline-block; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
     .production-plan-table tr.production-plan-row--red > td { background-color: #ffd6dc !important; color: #7a0014; }
     .production-plan-table tr.production-plan-row--yellow > td { background-color: #fff0a3 !important; color: #5f4500; }
     .production-plan-table tr.production-plan-row--orange > td { background-color: #ffd1aa !important; color: #792b00; }
@@ -126,7 +133,7 @@
     <div id="production-plan-loading-overlay" class="production-plan-table-loading-overlay is-visible" role="status" aria-live="polite" aria-hidden="false">
       <div class="production-plan-table-loading-overlay-content"><span class="spinner-border production-plan-table-loading-spinner" aria-hidden="true"></span><span class="production-plan-table-loading-message">Učitavanje plana proizvodnje...</span></div>
     </div>
-    <div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela" aria-busy="true"><thead><tr><th aria-label="Detalji"></th><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Status RN</th><th>Datum</th><th>Narudžba</th><th>Br. narudžbe kupca</th><th>Br. poz.</th><th>Poč. termin</th><th>Kraj termin</th><th>Datum isporuke</th><th>Proizvod</th><th>Plan. kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Nositelj troška</th><th>Napomena</th></tr></thead></table></div>
+    <div class="card-datatable table-responsive"><table class="table production-plan-table" id="plan-proizvodnje-tabela" aria-busy="true"><thead><tr><th aria-label="Detalji"></th><th>%</th><th>RN</th><th>Naručitelj</th><th>Prioritet</th><th>Status RN</th><th>Datum</th><th>Narudžba</th><th>Br. narudžbe <br>kupca</th><th>Br. <br>poz.</th><th>Poč. <br>termin</th><th>Kraj <br>termin</th><th>Datum <br>isporuke</th><th>Proizvod</th><th>Plan. <br>kol.</th><th>Izr. kol.</th><th>Naziv</th><th>Nositelj troška</th><th>Napomena</th></tr></thead></table></div>
   </div>
 </section>
 
@@ -177,5 +184,5 @@
       }
     });
   </script>
-  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=145') }}"></script>
+  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=146') }}"></script>
 @endsection

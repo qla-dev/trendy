@@ -99,6 +99,12 @@ $(function () {
     showError('Učitavanje plana nije uspjelo', message);
   }
   function escapeHtml(value) { return $('<div>').text(value == null ? '' : value).html(); }
+  function shortCustomerName(value) {
+    var name = String(value == null ? '' : value).trim();
+    if (/^grob[\s-]+werke$/i.test(name)) return 'GW';
+    var trendy = name.match(/^trendy\s+germany\s+gmbh[\s-]*(\d+)$/i);
+    return trendy ? 'TG GmbH ' + trendy[1] : name;
+  }
   function formatQuantity(value) { var number = Number(value); return Number.isFinite(number) ? number.toLocaleString('bs-BA', { minimumFractionDigits: 0, maximumFractionDigits: 4 }) : ''; }
   function formatDate(value) { var match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return match ? match[3] + '.' + match[2] + '.' + match[1] : ''; }
   var weekDatesAuto = false;
@@ -212,11 +218,15 @@ $(function () {
       if (key === 'details') return { data: null, orderable: false, searchable: false, width: '28px', className: 'plan-expand-cell', render: function () {
         return '<button type="button" class="plan-expand-button" aria-label="Prikaži detalje" aria-expanded="false"><i class="fa fa-chevron-right" aria-hidden="true"></i></button>';
       }};
-      return { data: key, defaultContent: '', visible: savedColumns ? savedColumns.indexOf(key) !== -1 : ['izr_kol', 'status_rn'].indexOf(key) === -1, orderable: key !== 'progress', render: function (value) {
+      return { data: key, defaultContent: '', visible: savedColumns ? savedColumns.indexOf(key) !== -1 : ['izr_kol', 'status_rn'].indexOf(key) === -1, orderable: key !== 'progress', render: function (value, type) {
         var output;
         if (key === 'progress') output = '<b>' + escapeHtml(value) + '%</b>';
         else if (key === 'plan_kol' || key === 'izr_kol') output = formatQuantity(value);
         else if (['datum', 'pocetak', 'kraj', 'datum_isporuke'].indexOf(key) >= 0) output = formatDate(value);
+        else if (key === 'narucitelj' && type === 'display') {
+          var fullName = String(value == null ? '' : value).trim();
+          output = '<span title="' + escapeHtml(fullName).replace(/"/g, '&quot;') + '">' + escapeHtml(shortCustomerName(fullName)) + '</span>';
+        }
         else if (key === 'napomena') output = '<span class="production-plan-note-preview" title="' + escapeHtml(value).replace(/"/g, '&quot;') + '">' + escapeHtml(value) + '</span>';
         else output = escapeHtml(value);
         return editable(key) ? '<span class="editable-cell">' + output + '</span>' : output;
@@ -240,7 +250,7 @@ $(function () {
     // Pace tracks Ajax globally; background polling should not restart its progress bar.
     if (window.Pace && typeof window.Pace.ignore === 'function') window.Pace.ignore(reloadPlan);
     else reloadPlan();
-  }, 2000);
+  }, 5 * 60 * 1000);
   $(window).on('pagehide', function () { window.clearInterval(liveTimer); });
 
   var detailCache = new Map();
