@@ -379,10 +379,10 @@ const skillLinks = [
 ];
 
 const included = [
-  { icon: Wrench, title: 'Setup i konfiguracija', desc: 'Povezivanje SaraAI s podacima iz eNalog.app i Pantheona, uz prava pristupa po ulogama.' },
-  { icon: Globe, title: 'Integracija u eNalog.app web', desc: 'SaraAI chat direktno unutar web aplikacije, dostupan sa svakog ekrana.' },
-  { icon: Smartphone, title: 'Integracija u native aplikaciju', desc: 'Isti asistent u novoj mobilnoj i tablet aplikaciji, za rad u pogonu i na terenu.' },
-  { icon: Sparkles, title: '5 početnih vještina', desc: 'Nalozi u kašnjenju, promet, ciljevi, cijene i statistika radnika, spremni od prvog dana.' },
+  { icon: Wrench, title: 'Setup i konfiguracija', desc: 'SaraAI će biti povezana s podacima iz eNalog.app i Pantheona, uz prava pristupa po ulogama.' },
+  { icon: Globe, title: 'Integracija u eNalog.app web', desc: 'SaraAI chat će biti dostupan direktno u web aplikaciji, sa svakog ekrana.' },
+  { icon: Smartphone, title: 'Integracija u native aplikaciju', desc: 'Isti asistent će biti dostupan i u novoj mobilnoj i tablet aplikaciji, za rad u pogonu i na terenu.' },
+  { icon: Sparkles, title: '5 početnih vještina', desc: 'Nalozi u kašnjenju, promet, ciljevi, cijene i statistika radnika, spremni od prvog dana rada.' },
 ];
 
 export default function PonudaSaraAi() {
@@ -413,13 +413,13 @@ export default function PonudaSaraAi() {
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-50 border border-violet-100 text-violet-700 text-xs font-bold uppercase tracking-wider mb-6">
               <BrainCircuit className="w-3.5 h-3.5" />
-              AI asistent za eNalog.app
+              Prijedlog · AI asistent za eNalog.app
             </div>
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-6 sm:mb-8 leading-[1.1]">
-              Pitajte proizvodnju. <span className="text-violet-500">Sara odgovara.</span>
+              Pitajte proizvodnju. <span className="text-violet-500">Sara će odgovoriti.</span>
             </h1>
             <p className="text-lg sm:text-xl text-slate-500 leading-relaxed mb-8 sm:mb-10 max-w-xl">
-              SaraAI je ugrađena u eNalog.app web i native aplikaciju. Pitajte običnim jezikom i dobijte odgovor iz vaših podataka za nekoliko sekundi.
+              SaraAI će biti ugrađena u eNalog.app web i native aplikaciju. Pitat ćete običnim jezikom, a odgovor iz vaših podataka dobit ćete za nekoliko sekundi.
             </p>
             <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 sm:flex sm:flex-wrap sm:gap-4">
               <a href="#vjestine" className="px-2 min-[380px]:px-4 sm:px-8 py-3.5 sm:py-4 bg-slate-900 text-white rounded-2xl font-bold text-[13px] min-[380px]:text-sm sm:text-base whitespace-nowrap hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group">
@@ -444,9 +444,9 @@ export default function PonudaSaraAi() {
                     <p className="text-[11px] font-semibold text-slate-400">eNalog.app asistent</p>
                   </div>
                 </div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Online
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-50 border border-violet-100 text-violet-700 text-[10px] font-bold uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                  Primjer
                 </div>
               </div>
               <motion.div initial="hidden" animate="visible" className="space-y-4 p-6 sm:p-8">
@@ -460,7 +460,7 @@ export default function PonudaSaraAi() {
                 </motion.div>
               </motion.div>
               <div className="border-t border-slate-100 bg-slate-50 px-6 sm:px-8 py-4">
-                <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-slate-400">Pitajte Saru</p>
+                <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-slate-400">Primjeri pitanja</p>
                 <div className="flex flex-wrap gap-2">
                   {skillLinks.map((s) => (
                     <a key={s.id} href={`#${s.id}`} className={cn('rounded-full px-3 py-1.5 text-xs font-bold transition-opacity hover:opacity-80', tones[s.tone].chip)}>{s.label}</a>
@@ -479,7 +479,7 @@ export default function PonudaSaraAi() {
             <span className="text-xs font-bold tracking-[0.3em] text-slate-400 uppercase mb-4 block">Šta je uključeno</span>
             <h2 className="text-4xl lg:text-5xl font-bold mb-6 tracking-tight text-slate-900">Jedan asistent, svuda u eNalog.app</h2>
             <p className="text-slate-500 max-w-2xl mx-auto text-lg">
-              Postavljanje, integracija u web i native aplikaciju i pet vještina koje odmah odgovaraju na najčešća pitanja iz proizvodnje.
+              Ponuda obuhvata postavljanje, integraciju u web i native aplikaciju i pet vještina koje će odgovarati na najčešća pitanja iz proizvodnje.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -495,7 +495,7 @@ export default function PonudaSaraAi() {
             <div className="inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-5 py-3 rounded-2xl border bg-slate-50 border-slate-200 text-sm text-slate-900">
               <ShieldCheck className="w-4 h-4 shrink-0 text-slate-600" />
               <span className="font-bold">Sigurnost</span>
-              <span className="text-slate-600">Sara vidi samo podatke koje prijavljeni korisnik smije vidjeti u eNalog.app.</span>
+              <span className="text-slate-600">Sara će vidjeti samo podatke koje prijavljeni korisnik smije vidjeti u eNalog.app.</span>
             </div>
           </div>
         </div>
@@ -506,9 +506,9 @@ export default function PonudaSaraAi() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-8">
             <span className="text-xs font-bold tracking-[0.3em] text-slate-400 uppercase mb-4 block">5 početnih vještina</span>
-            <h2 className="text-4xl lg:text-5xl font-bold mb-6 tracking-tight text-slate-900">Kako izgleda razgovor sa Sarom</h2>
+            <h2 className="text-4xl lg:text-5xl font-bold mb-6 tracking-tight text-slate-900">Kako će izgledati razgovor sa Sarom</h2>
             <p className="text-slate-500 max-w-2xl mx-auto text-lg">
-              Primjeri razgovora sa ilustrativnim podacima. Kliknite filtere da vidite kako Sara mijenja odgovor.
+              Prikaz budućih razgovora sa ilustrativnim podacima. Kliknite filtere da vidite kako će Sara prilagoditi odgovor.
             </p>
           </div>
 
@@ -516,33 +516,33 @@ export default function PonudaSaraAi() {
             <SkillSection
               id="vjestina-1"
               tone="rose"
-              copy={<SkillCopy number="01" tone="rose" title="Nalozi u kašnjenju" description="Sara odmah izdvaja radne naloge koji kasne, koliko kasne i na kojoj su operaciji zapeli." bullets={['Filter: danas, ovaj mjesec ili ukupno', 'Broj naloga i koliko je kritičnih', 'Najveća kašnjenja s operacijom i kupcem']} />}
+              copy={<SkillCopy number="01" tone="rose" title="Nalozi u kašnjenju" description="Sara će odmah izdvojiti radne naloge koji kasne, koliko kasne i na kojoj su operaciji zapeli." bullets={['Filter: danas, ovaj mjesec ili ukupno', 'Broj naloga i koliko je kritičnih', 'Najveća kašnjenja s operacijom i kupcem']} />}
               visual={<DelayedVisual />}
             />
             <SkillSection
               id="vjestina-2"
               tone="emerald"
               flip
-              copy={<SkillCopy number="02" tone="emerald" title="Ukupni promet" description="Jedno pitanje umjesto izvještaja. Sara sabira promet za traženi period i odmah ga upoređuje s prethodnim." bullets={['Filter: danas, ovaj mjesec ili ova godina', 'Poređenje s prethodnim periodom', 'Kretanje prometa kroz vrijeme']} />}
+              copy={<SkillCopy number="02" tone="emerald" title="Ukupni promet" description="Jedno pitanje umjesto izvještaja. Sara će sabrati promet za traženi period i odmah ga uporediti s prethodnim." bullets={['Filter: danas, ovaj mjesec ili ova godina', 'Poređenje s prethodnim periodom', 'Kretanje prometa kroz vrijeme']} />}
               visual={<TurnoverVisual />}
             />
             <SkillSection
               id="vjestina-3"
               tone="violet"
-              copy={<SkillCopy number="03" tone="violet" badge="Uskoro u eNalog.app" title="Stanje ciljeva" description="eNalog.app uskoro dobija postavljanje ciljeva. Sara tada za svaki cilj kaže gdje ste sada i šta treba do kraja perioda." bullets={['Trenutno stanje svakog cilja u procentima', 'Koliko je ostalo do kraja perioda', 'Šta je potrebno dnevno da se cilj dostigne']} />}
+              copy={<SkillCopy number="03" tone="violet" badge="Uskoro u eNalog.app" title="Stanje ciljeva" description="eNalog.app će uskoro dobiti postavljanje ciljeva. Sara će tada za svaki cilj reći gdje ste sada i šta treba do kraja perioda." bullets={['Trenutno stanje svakog cilja u procentima', 'Koliko je ostalo do kraja perioda', 'Šta je potrebno dnevno da se cilj dostigne']} />}
               visual={<GoalsVisual />}
             />
             <SkillSection
               id="vjestina-4"
               tone="amber"
               flip
-              copy={<SkillCopy number="04" tone="amber" title="Nabavna i prodajna cijena" description="Pitajte za bilo koji proizvod i Sara uporedi nabavnu i prodajnu cijenu, razliku i maržu." bullets={['Pretraga proizvoda po nazivu ili šifri', 'Nabavna i prodajna cijena jedna pored druge', 'Razlika u KM i marža u procentima']} />}
+              copy={<SkillCopy number="04" tone="amber" title="Nabavna i prodajna cijena" description="Za bilo koji proizvod Sara će uporediti nabavnu i prodajnu cijenu, razliku i maržu." bullets={['Pretraga proizvoda po nazivu ili šifri', 'Nabavna i prodajna cijena jedna pored druge', 'Razlika u KM i marža u procentima']} />}
               visual={<PriceVisual />}
             />
             <SkillSection
               id="vjestina-5"
               tone="sky"
-              copy={<SkillCopy number="05" tone="sky" title="Statistika po radnicima" description="Odaberite radnika i period, a Sara prikaže njegove operacije, sate rada, učinak i zastoje." bullets={['Odabir radnika po imenu', 'Filter: danas ili ovaj mjesec', 'Operacije, sati rada, učinak i zastoji']} />}
+              copy={<SkillCopy number="05" tone="sky" title="Statistika po radnicima" description="Kada odaberete radnika i period, Sara će prikazati njegove operacije, sate rada, učinak i zastoje." bullets={['Odabir radnika po imenu', 'Filter: danas ili ovaj mjesec', 'Operacije, sati rada, učinak i zastoji']} />}
               visual={<WorkerVisual />}
             />
           </div>
@@ -581,7 +581,7 @@ export default function PonudaSaraAi() {
                 <p className="mt-6 text-5xl font-bold">4.900 KM</p>
                 <p className="mt-2 text-sm font-medium uppercase tracking-widest text-slate-400">Fiksna cijena</p>
               </div>
-              <p className="text-sm text-slate-400 leading-relaxed">Nove vještine se mogu dodavati kasnije, kako se pojave nova pitanja iz proizvodnje.</p>
+              <p className="text-sm text-slate-400 leading-relaxed">Nove vještine će se moći dodavati i kasnije, kako se budu pojavljivala nova pitanja iz proizvodnje.</p>
             </div>
           </motion.div>
         </div>
