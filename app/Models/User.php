@@ -16,6 +16,7 @@ class User extends Authenticatable
     public const ROLE_USER = 'user';
     public const ROLE_KONTROLA = 'kontrola';
     public const ROLE_BRAVARIJA = 'bravarija';
+    public const ROLE_PROIZVODNJA = 'proizvodnja';
 
     protected $connection = 'mysql';
 

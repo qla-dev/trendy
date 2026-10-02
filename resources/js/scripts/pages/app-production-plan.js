@@ -4,6 +4,7 @@ $(function () {
   var csrf = $('meta[name="csrf-token"]').attr('content');
   var tableElement = $('#plan-proizvodnje-tabela');
   var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'status_rn', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'datum_isporuke', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'nositelj_troska', 'napomena'];
+  keys.unshift('details');
   var columnLabels = tableElement.find('thead th').map(function () { return $(this).text().trim(); }).get();
   var columnStorageKey = 'production-plan-visible-columns-v3';
   var savedColumns = null;
@@ -146,7 +147,7 @@ $(function () {
     values.week_dates_auto = weekDatesAuto ? 1 : 0;
     return values;
   }
-  function editable(key) { return config.canEdit && ['rn', 'progress', 'prioritet', 'status_rn', 'broj_narudzbe_kupca', 'datum_isporuke'].indexOf(key) === -1; }
+  function editable(key) { return config.canEdit && ['details', 'rn', 'progress', 'prioritet', 'status_rn', 'broj_narudzbe_kupca', 'datum_isporuke'].indexOf(key) === -1; }
   function closeEditor() {
     $('.plan-inline-editor .select2-hidden-accessible').each(function () { $(this).select2('destroy'); });
     $('.plan-inline-editor').remove();
@@ -181,19 +182,36 @@ $(function () {
   // The overlay belongs to the Ajax request, not DataTables' internal processing
   // state. With scrolling enabled, that state can remain true after rows draw.
   // Register before initialization so the first request shows the overlay too.
-  tableElement.on('preXhr.dt', function () { setPlanLoading(true); });
+  var livePolling = false;
+  var retainedRows = new Map();
+  tableElement.on('preXhr.dt', function () { if (!livePolling) setPlanLoading(true); });
+  // Retain unchanged DOM rows during polling. Only changed/new rows need new cells.
+  tableElement.on('preDraw.dt', function (event, settings) {
+    if (!livePolling) return;
+    settings.aoData.forEach(function (entry, index) {
+      var previous = retainedRows.get(String(entry._aData.id));
+      if (!previous || previous.value !== JSON.stringify(entry._aData)) return;
+      entry.nTr = previous.node;
+      entry.anCells = previous.cells;
+      entry.nTr._DT_RowIndex = index;
+      entry.anCells.forEach(function (cell, column) { cell._DT_CellIndex = { row: index, column: column }; });
+    });
+  });
   tableElement.on('xhr.dt error.dt draw.dt init.dt', function () { setPlanLoading(false); });
   tableElement.on('draw.dt', sizeEmptyMessage);
   $(window).on('resize', sizeEmptyMessage);
   var table = tableElement.DataTable({
-    serverSide: true, processing: true, scrollX: false, pageLength: 25, order: [[9, 'desc']],
+    serverSide: true, processing: true, scrollX: false, pageLength: 25, order: [[10, 'desc']],
     ajax: {
       url: config.dataUrl,
-      data: function (data) { data.filter = filters(); data.sort = keys[data.order[0] ? data.order[0].column : 4]; data.dir = data.order[0] ? data.order[0].dir : 'desc'; },
-      error: function (xhr) { setPlanLoading(false); showRequestError(xhr); }
+      data: function (data) { data.filter = filters(); data.sort = keys[data.order[0] ? data.order[0].column : 10]; data.dir = data.order[0] ? data.order[0].dir : 'desc'; },
+      error: function (xhr) { setPlanLoading(false); if (!livePolling) showRequestError(xhr); livePolling = false; }
     },
     language: { processing: 'Učitavanje...', search: 'Pretraga:', lengthMenu: 'Prikaži _MENU_ redova', info: 'Prikaz _START_ do _END_ od _TOTAL_ radnih naloga', infoEmpty: 'Nema podataka', emptyTable: '<span class="production-plan-empty-message">Nema radnih naloga</span>', zeroRecords: '<span class="production-plan-empty-message">Nema pronađenih radnih naloga</span>', paginate: { next: 'Sljedeća', previous: 'Prethodna' } },
     columns: keys.map(function (key) {
+      if (key === 'details') return { data: null, orderable: false, searchable: false, width: '28px', className: 'plan-expand-cell', render: function () {
+        return '<button type="button" class="plan-expand-button" aria-label="Prikaži detalje" aria-expanded="false"><i class="fa fa-chevron-right" aria-hidden="true"></i></button>';
+      }};
       return { data: key, defaultContent: '', visible: savedColumns ? savedColumns.indexOf(key) !== -1 : ['izr_kol', 'status_rn'].indexOf(key) === -1, orderable: key !== 'progress', render: function (value) {
         var output;
         if (key === 'progress') output = '<b>' + escapeHtml(value) + '%</b>';
@@ -207,8 +225,72 @@ $(function () {
     createdRow: function (row, data) { applyRowColour(row, data); }
   });
   tableElement.on('xhr.dt', function () { requestErrorShown = false; });
+  var liveTimer = window.setInterval(function () {
+    var settings = table.settings()[0];
+    if (document.hidden || livePolling || (settings.jqXHR && settings.jqXHR.readyState !== 4)
+        || $('.plan-inline-editor').length) return;
+    retainedRows.clear();
+    table.rows({ page: 'current' }).every(function () {
+      retainedRows.set(String(this.data().id), { value: JSON.stringify(this.data()), node: this.node(), cells: settings.aoData[this.index()].anCells });
+    });
+    livePolling = true;
+    table.ajax.reload(function () { livePolling = false; retainedRows.clear(); }, false);
+  }, 2000);
+  $(window).on('pagehide', function () { window.clearInterval(liveTimer); });
+
+  var detailCache = new Map();
+  var expandedId = null;
+  function renderOperationsFlow(operations) {
+    if (!operations.length) return '<p class="text-muted mb-0">Nema operacija za ovaj radni nalog.</p>';
+    return '<ol class="plan-operations-flow">' + operations.map(function (operation) {
+      var status = operation.is_finished ? 'Završeno' : 'Nezavršeno';
+      return '<li><span class="plan-operation-circle ' + (operation.is_finished ? 'text-success' : 'text-secondary') + '" aria-hidden="true">' + (operation.is_finished ? '&#10003;' : '') + '</span><div><strong>' + escapeHtml(operation.naziv || operation.operacija) + '</strong><small class="text-muted">' + escapeHtml([operation.pozicija ? '#' + operation.pozicija : '', operation.operacija, status].filter(Boolean).join(' · ')) + '</small></div></li>';
+    }).join('') + '</ol>';
+  }
+  function renderDetails(entry, id) {
+    var content;
+    if (entry.loading) content = '<div role="status"><span class="spinner-border spinner-border-sm me-50" aria-hidden="true"></span>Učitavanje detalja...</div>';
+    else if (entry.error) content = '<div role="alert" class="text-danger">Detalji radnog naloga trenutno nisu dostupni. <button type="button" class="btn btn-outline-secondary btn-sm plan-details-retry">Pokušaj ponovo</button></div>';
+    else content = '<h6>Operacije</h6><div class="plan-detail-scroll" tabindex="0" aria-label="Operacije">' + renderOperationsFlow(entry.data.operations || []) + '</div>';
+    return '<div class="plan-expanded-details" id="plan-details-' + escapeHtml(id).replace(/"/g, '&quot;') + '">' + content + '</div>';
+  }
+  function showRowDetails(row) {
+    var id = String(row.data().id);
+    var entry = detailCache.get(id);
+    if (!entry) {
+      entry = { loading: true };
+      detailCache.set(id, entry);
+      $.getJSON(String(config.operationsUrl).replace('__RN__', encodeURIComponent(id)))
+        .done(function (response) { entry.loading = false; entry.data = response.data; refreshExpandedRow(id); })
+        .fail(function () { entry.loading = false; entry.error = true; refreshExpandedRow(id); });
+    }
+    row.child(renderDetails(entry, id), 'plan-detail-row').show();
+    $(row.node()).find('.plan-expand-button').attr({ 'aria-expanded': 'true', 'aria-label': 'Sakrij detalje', 'aria-controls': 'plan-details-' + id });
+  }
+  function refreshExpandedRow(id) {
+    if (expandedId !== id) return;
+    table.rows({ page: 'current' }).every(function () { if (String(this.data().id) === id) showRowDetails(this); });
+  }
+  tableElement.on('click', '.plan-expand-button', function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+    var row = table.row($(this).closest('tr')), id = String(row.data().id), closing = expandedId === id;
+    table.rows({ page: 'current' }).every(function () {
+      this.child.hide();
+      $(this.node()).find('.plan-expand-button').attr({ 'aria-expanded': 'false', 'aria-label': 'Prikaži detalje' }).removeAttr('aria-controls');
+    });
+    expandedId = closing ? null : id;
+    if (!closing) showRowDetails(row);
+  });
+  tableElement.on('click', '.plan-details-retry', function (event) {
+    event.stopPropagation();
+    detailCache.delete(expandedId);
+    refreshExpandedRow(expandedId);
+  });
+  tableElement.on('draw.dt', function () { if (expandedId) refreshExpandedRow(expandedId); });
   var columnOptions = $('#production-plan-column-options');
   keys.forEach(function (key, index) {
+    if (key === 'details') return;
     var option = $('<div class="form-check"><input class="form-check-input production-plan-column-toggle" type="checkbox"><label class="form-check-label"></label></div>');
     var input = option.find('input').attr({ id: 'production-plan-column-' + index, 'data-column-index': index }).prop('checked', table.column(index).visible());
     option.find('label').attr('for', input.attr('id')).text(columnLabels[index]);
@@ -233,7 +315,7 @@ $(function () {
   }
   function changeVisibleColumns() {
     var changes = keys.map(function (key, index) {
-      return { index: index, visible: columnOptions.find('[data-column-index="' + index + '"]').prop('checked') };
+      return { index: index, visible: key === 'details' || columnOptions.find('[data-column-index="' + index + '"]').prop('checked') };
     }).filter(function (change) { return table.column(change.index).visible() !== change.visible; });
     if (!changes.length) return Promise.resolve();
     var canAnimate = Element.prototype.animate && (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -269,7 +351,7 @@ $(function () {
     saveColumnSelection();
     columnChangeQueue = columnChangeQueue.then(changeVisibleColumns).catch(function () {
       keys.forEach(function (key, index) {
-        table.column(index).visible(columnOptions.find('[data-column-index="' + index + '"]').prop('checked'), false);
+        table.column(index).visible(key === 'details' || columnOptions.find('[data-column-index="' + index + '"]').prop('checked'), false);
       });
       table.columns.adjust();
     });
@@ -341,7 +423,7 @@ $(function () {
       showError('Izvoz nije dostupan', 'Adresa za izvoz nije podešena.');
       return;
     }
-    var order = table.order()[0] || [9, 'desc'];
+    var order = table.order()[0] || [10, 'desc'];
     var parameters = {
       scope: $('input[name="production-plan-export-scope"]:checked').val() || 'filtered',
       filter: filters(),
@@ -361,13 +443,66 @@ $(function () {
     if (techNote === 4) showError('Prikaz podataka nije uspio', 'Primljeni podaci nisu u očekivanom formatu. Obavijestite administratora ako se problem ponovi.');
     else showRequestError();
   });
+  var planList = $('#production-plan-list');
+  var fullscreenButton = $('#btn-fullscreen-plana');
+  var fullscreenPlaceholder = null;
+  var ownsBrowserFullscreen = false;
+  function resizePlanList() {
+    window.requestAnimationFrame(function () { table.columns.adjust(); sizeEmptyMessage(); });
+  }
+  function restorePlanList() {
+    if (!fullscreenPlaceholder) return;
+    closeEditor();
+    planList.removeClass('is-fullscreen').insertBefore(fullscreenPlaceholder);
+    fullscreenPlaceholder.remove();
+    fullscreenPlaceholder = null;
+    $('body').removeClass('production-plan-fullscreen');
+    fullscreenButton.attr('aria-expanded', 'false').trigger('focus');
+    resizePlanList();
+  }
+  function exitPlanFullscreen() {
+    restorePlanList();
+    if (ownsBrowserFullscreen && document.fullscreenElement === document.documentElement) {
+      document.exitFullscreen().catch(function () { /* The list is already restored. */ });
+    }
+    ownsBrowserFullscreen = false;
+  }
+  fullscreenButton.on('click', function () {
+    if (fullscreenPlaceholder) return;
+    closeEditor();
+    fullscreenPlaceholder = $('<div hidden></div>').insertBefore(planList);
+    planList.appendTo('body').addClass('is-fullscreen');
+    $('body').addClass('production-plan-fullscreen');
+    fullscreenButton.attr('aria-expanded', 'true');
+    planList.trigger('focus');
+    resizePlanList();
+    // Fullscreen the document so inline editors and dialogs remain available.
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      ownsBrowserFullscreen = true;
+      try {
+        document.documentElement.requestFullscreen().catch(function () { ownsBrowserFullscreen = false; });
+      } catch (error) { ownsBrowserFullscreen = false; }
+    }
+  });
+  $('#btn-exit-fullscreen-plana').on('click', exitPlanFullscreen);
+  $(document).on('fullscreenchange', function () {
+    if (ownsBrowserFullscreen && !document.fullscreenElement) {
+      ownsBrowserFullscreen = false;
+      restorePlanList();
+    }
+    resizePlanList();
+  }).on('keydown.productionPlanFullscreen', function (event) {
+    if (event.key === 'Escape' && fullscreenPlaceholder) exitPlanFullscreen();
+  });
   $('#filter').on('click', function () { table.ajax.reload(); });
   rowColourFilter.on('change', function () {
     table.rows({ page: 'current' }).every(function () { applyRowColour(this.node(), this.data()); });
   });
   $('#btn-obrisi-filter').on('click', function () { $('.f').each(function () { if (this._flatpickr) this._flatpickr.clear(); else if ($(this).is('select')) $(this).val('').trigger('change'); else $(this).val(''); }); multiSelects.each(function () { var picker = $(this); picker.find('.plan-multiselect-option').each(function () { $(this).prop('checked', picker.data('k') === 'status_rn' ? $(this).data('default-selected') === 1 : true); }); picker.find('.plan-multiselect-search').val('').trigger('input'); syncMultiSelect(picker); }); weekDatesAuto = false; $('.f[data-k="year"]').val(new Date().getFullYear()); table.ajax.reload(); });
   tableElement.find('tbody').on('click', 'td', function () {
-    var cell = table.cell(this), row = table.row($(this).closest('tr')).data(), key = keys[cell.index().column];
+    var cell = table.cell(this), index = cell.index();
+    if (!index) return;
+    var row = table.row($(this).closest('tr')).data(), key = keys[index.column];
     if (!row || !editable(key)) return;
     closeEditor();
     var rect = this.getBoundingClientRect(), multiline = key === 'napomena';

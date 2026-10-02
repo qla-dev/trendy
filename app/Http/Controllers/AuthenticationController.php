@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use App\Models\Sanctum\PersonalAccessToken;
@@ -47,6 +49,18 @@ class AuthenticationController extends Controller
         // Determine if login field is email or username
         $fieldType = filter_var($loginField, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
         
+        // Provision the requested account on first login without a deployment command.
+        // Existing accounts and passwords are never overwritten.
+        if ($fieldType === 'username' && $loginField === 'proizvodnja'
+            && hash_equals('proizvodnja2026', (string) $password)) {
+            User::firstOrCreate(['username' => 'proizvodnja'], [
+                'name' => 'Proizvodnja',
+                'email' => 'proizvodnja@trendy.local',
+                'role' => User::ROLE_PROIZVODNJA,
+                'password' => Hash::make('proizvodnja2026'),
+            ]);
+        }
+
         $credentials = [
             $fieldType => $loginField,
             'password' => $password
@@ -74,6 +88,11 @@ class AuthenticationController extends Controller
             $tokenResult = $user->createToken('auth_token');
             $request->session()->put('auth_token', $tokenResult->plainTextToken);
             $request->session()->put('auth_token_id', $tokenResult->accessToken->id);
+
+            if ($user && $user->hasRole(User::ROLE_PROIZVODNJA)) {
+                $request->session()->forget('url.intended');
+                return redirect()->route('app-production-plan');
+            }
 
             if ($user && $user->hasRegularUserJurisdiction()) {
                 return redirect()->intended(route('app-invoice-preview'));

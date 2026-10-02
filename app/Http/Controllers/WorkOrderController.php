@@ -6438,6 +6438,13 @@ class WorkOrderController extends Controller
         return $this->fetchMappedOperationsFromItems($workOrderKey);
     }
 
+    public function productionPlanDetails(string $workOrderKey): array
+    {
+        return [
+            'operations' => $this->fetchMappedOperationsFromItems($workOrderKey),
+        ];
+    }
+
     private function fetchMappedOperationsFromItems(string $workOrderKey): array
     {
         $itemRows = $this->fetchWorkOrderItemRows($workOrderKey);

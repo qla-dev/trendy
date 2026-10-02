@@ -57,6 +57,11 @@ class MenuServiceProvider extends ServiceProvider
                 $verticalMenuCopy = $self->filterMenuForUserRole($verticalMenuCopy);
             }
 
+            if (Auth::check() && Auth::user()->hasRole(\App\Models\User::ROLE_PROIZVODNJA)) {
+                $verticalMenuCopy->menu = array_values(array_filter($verticalMenuCopy->menu,
+                    fn ($menu) => ($menu->slug ?? '') === 'app-production-plan'));
+            }
+
             $view->with([
                 'menuData' => [$verticalMenuCopy, $horizontalMenuData],
                 'aiTokenNavbarCount' => $aiTokenNavbarCount,
