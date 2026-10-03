@@ -162,9 +162,6 @@
 
     .nfc-support-note { margin-top: 1.25rem; font-size: .85rem; color: #b9b9c3; }
 
-    /* hidden input that catches keyboard-wedge readers */
-    .nfc-wedge { position: absolute; left: -9999px; opacity: 0; width: 1px; height: 1px; }
-
     /* ---------- 3D card ---------- */
     .nfc-card-scene {
       perspective: 1400px;
@@ -375,7 +372,6 @@
         </form>
 
         <div class="nfc-support-note" id="nfc-support-note"></div>
-        <input type="text" class="nfc-wedge" id="nfc-wedge" aria-hidden="true" tabindex="-1" autocomplete="off">
       </div>
 
       {{-- ================= Linked card ================= --}}
@@ -450,7 +446,6 @@
       var supportNote = document.getElementById('nfc-support-note');
       var manualForm = document.getElementById('nfc-manual');
       var manualInput = document.getElementById('nfc-manual-input');
-      var wedge = document.getElementById('nfc-wedge');
       var cardScene = document.getElementById('nfc-card-scene');
       var card = document.getElementById('nfc-card');
       var cancelReplace = document.getElementById('nfc-cancel-replace');
@@ -591,7 +586,6 @@
 
       function startScan() {
         uidLive.innerHTML = '';
-        focusWedge();
 
         if (!hasWebNfc) {
           setState('scanning', 'Prislonite karticu', 'Čekam karticu sa čitača… (ili unesite UID ručno)');
@@ -626,24 +620,28 @@
         });
       }
 
-      // Keyboard-wedge readers "type" the UID and press Enter.
-      function focusWedge() {
-        if (document.activeElement === manualInput) return;
-        try { wedge.focus({ preventScroll: true }); } catch (e) { wedge.focus(); }
-      }
+      // Keyboard-wedge readers "type" the UID and press Enter. Listening on the
+      // document (instead of focusing an input) keeps the on-screen keyboard closed.
+      var wedgeBuffer = '';
+      var wedgeLastKey = 0;
 
-      wedge.addEventListener('keydown', function (e) {
+      document.addEventListener('keydown', function (e) {
+        if (page.dataset.state === 'linked' || e.target.closest('input, textarea, [contenteditable]')) return;
+
+        var now = Date.now();
+        if (now - wedgeLastKey > 120) wedgeBuffer = '';
+        wedgeLastKey = now;
+
         if (e.key === 'Enter') {
-          e.preventDefault();
-          var value = wedge.value;
-          wedge.value = '';
-          if (normalizeUid(value).length >= 8) saveUid(value);
+          var value = wedgeBuffer;
+          wedgeBuffer = '';
+          if (normalizeUid(value).length >= 8) {
+            e.preventDefault();
+            saveUid(value);
+          }
+        } else if (/^[0-9a-f:]$/i.test(e.key)) {
+          wedgeBuffer += e.key;
         }
-      });
-
-      document.addEventListener('click', function (e) {
-        var scanStates = ['scanning', 'error', 'idle'];
-        if (scanStates.indexOf(page.dataset.state) !== -1 && !e.target.closest('input, button, a, form')) focusWedge();
       });
 
       startBtn.addEventListener('click', startScan);
