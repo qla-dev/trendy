@@ -237,6 +237,17 @@
       -webkit-user-drag: none;
     }
 
+    .nfc-card__corner-uid {
+      position: absolute;
+      right: 6%;
+      bottom: 7%;
+      z-index: 1;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: clamp(.55rem, 2.4vw, .72rem);
+      letter-spacing: .12em;
+      color: #a3a3a3;
+    }
+
     .nfc-card__back { transform: rotateY(180deg); display: flex; align-items: center; gap: 6%; padding: 7%; }
     .nfc-card__logo--small { width: 32%; flex: 0 0 auto; opacity: .95; }
     .nfc-card__info { display: grid; gap: .55rem; min-width: 0; position: relative; z-index: 1; }
@@ -350,6 +361,7 @@
           <div class="nfc-card" id="nfc-card">
             <div class="nfc-card__face nfc-card__front">
               <img class="nfc-card__logo" src="{{ asset('images/pwa/trendy-gear-logo.png') }}" alt="Trendy CNC">
+              <span class="nfc-card__corner-uid" data-card-uid>{{ $nfcCard['uid_display'] ?? '' }}</span>
             </div>
             <div class="nfc-card__face nfc-card__back">
               <img class="nfc-card__logo nfc-card__logo--small" src="{{ asset('images/pwa/trendy-gear-logo.png') }}" alt="">
