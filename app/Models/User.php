@@ -41,6 +41,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'nfc_card_uid',
     ];
 
     /**
@@ -50,6 +51,7 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'nfc_card_linked_at' => 'datetime',
     ];
 
     /**
@@ -134,5 +136,14 @@ class User extends Authenticatable
 
         return $username === 'qla.dev'
             || $email === 'colakovic.vedad@qla.dev';
+    }
+
+    /**
+     * Card UIDs arrive as "c3:6e:1c:28" (Web NFC) or "C36E1C28" (POS reader);
+     * both are stored as plain lowercase hex.
+     */
+    public static function normalizeNfcCardUid(?string $uid): string
+    {
+        return strtolower((string) preg_replace('/[^0-9a-fA-F]/', '', (string) $uid));
     }
 }
