@@ -85,7 +85,17 @@
       border: 0;
     }
 
-    .nfc-scanner__core svg { width: 46%; height: 46%; }
+    .nfc-scanner__core svg { width: 46%; height: 46%; transition: opacity .3s, transform .45s cubic-bezier(.3, 1.5, .5, 1); }
+    .nfc-scanner__core .nfc-icon-check { position: absolute; opacity: 0; transform: scale(.3) rotate(-30deg); }
+    .nfc-page.is-saved .nfc-scanner__core .nfc-icon-wave { opacity: 0; transform: scale(.3); }
+    .nfc-page.is-saved .nfc-scanner__core .nfc-icon-check { opacity: 1; transform: none; }
+    .nfc-icon-check path { stroke-dasharray: 30; stroke-dashoffset: 30; }
+    .nfc-page.is-saved .nfc-icon-check path { animation: nfc-draw .5s .1s ease forwards; }
+    @keyframes nfc-draw { to { stroke-dashoffset: 0; } }
+
+    /* scanner steps back before the card flies in */
+    .nfc-page.is-leaving .nfc-view--scan { animation: nfc-leave .45s ease forwards; }
+    @keyframes nfc-leave { to { opacity: 0; transform: scale(.92) translateY(-10px); } }
     .nfc-page[data-state="idle"] .nfc-scanner__core { animation: nfc-breathe 2.6s ease-in-out infinite; }
     .nfc-page[data-state="scanning"] .nfc-scanner__core { cursor: default; }
     @keyframes nfc-breathe { 50% { transform: scale(1.06); } }
@@ -110,23 +120,12 @@
       width: 38%;
       aspect-ratio: 1.586;
       border-radius: 9px;
-      background: linear-gradient(135deg, var(--nfc-navy), var(--nfc-navy-deep));
-      box-shadow: 0 10px 24px -8px rgba(0, 0, 0, .45);
+      background: #fff url("{{ asset('images/pwa/trendy-gear-logo.png') }}") center / 58% auto no-repeat;
+      box-shadow: 0 10px 24px -8px rgba(0, 0, 0, .45), 0 0 0 1px rgba(0, 0, 0, .06);
       right: -4%;
       top: 4%;
       opacity: 0;
       pointer-events: none;
-    }
-
-    .nfc-scanner__ghost::after {
-      content: '';
-      position: absolute;
-      left: 12%;
-      top: 30%;
-      width: 18%;
-      height: 26%;
-      border-radius: 3px;
-      background: linear-gradient(135deg, #e7c77d, #b8913a);
     }
 
     .nfc-page[data-state="scanning"] .nfc-scanner__ghost { animation: nfc-tap 3.2s ease-in-out infinite; }
@@ -194,90 +193,56 @@
       100% { transform: rotateY(-16deg) rotateX(8deg) scale(1); opacity: 1; }
     }
 
+    /* white plastic card, same as the physical Trendy CNC cards */
     .nfc-card__face {
       position: absolute;
       inset: 0;
-      border-radius: 18px;
+      border-radius: 5.5% / 8.7%;
       overflow: hidden;
       backface-visibility: hidden;
       -webkit-backface-visibility: hidden;
-      color: #fff;
+      color: #1b1b1b;
       text-align: left;
-      box-shadow: 0 30px 60px -20px rgba(34, 48, 63, .75), inset 0 1px 0 rgba(255, 255, 255, .2);
       background:
-        radial-gradient(120% 90% at 100% 0%, rgba(158, 149, 245, .55), transparent 55%),
-        radial-gradient(90% 80% at 0% 100%, rgba(115, 103, 240, .35), transparent 60%),
-        linear-gradient(135deg, var(--nfc-navy) 0%, var(--nfc-navy-deep) 100%);
+        radial-gradient(140% 120% at 20% 0%, #ffffff 0%, #f6f6f4 55%, #e9e9e6 100%);
+      box-shadow:
+        0 30px 60px -22px rgba(0, 0, 0, .55),
+        0 0 0 1px rgba(0, 0, 0, .06),
+        inset 0 1px 0 rgba(255, 255, 255, .9),
+        inset 0 -2px 6px rgba(0, 0, 0, .06);
     }
 
-    /* moving sheen */
+    /* glossy sheen sweeping across the plastic */
     .nfc-card__face::before {
       content: '';
       position: absolute;
       inset: -50%;
-      background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, .22) 50%, transparent 60%);
+      background: linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, .85) 50%, transparent 58%);
+      mix-blend-mode: soft-light;
       animation: nfc-sheen 5s ease-in-out infinite;
       pointer-events: none;
+      z-index: 2;
     }
 
     @keyframes nfc-sheen { 0%, 30% { transform: translateX(-60%); } 70%, 100% { transform: translateX(60%); } }
 
-    /* fine guilloche lines */
-    .nfc-card__face::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: repeating-radial-gradient(circle at 85% 120%, rgba(255, 255, 255, .05) 0 1px, transparent 1px 9px);
-      pointer-events: none;
+    .nfc-card__front { display: grid; place-items: center; }
+
+    .nfc-card__logo {
+      width: 58%;
+      height: auto;
+      position: relative;
+      z-index: 1;
+      user-select: none;
+      -webkit-user-drag: none;
     }
 
-    .nfc-card__front { padding: 6% 7%; }
-    .nfc-card__back { transform: rotateY(180deg); padding: 7%; display: flex; flex-direction: column; justify-content: center; }
-
-    .nfc-card__mark {
-      position: absolute;
-      right: 5%;
-      top: 7%;
-      width: 30%;
-      opacity: .95;
-      filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .25));
-    }
-
-    .nfc-card__brand { font-weight: 800; letter-spacing: .28em; font-size: clamp(.75rem, 3.2vw, 1rem); opacity: .9; }
-    .nfc-card__brand small { display: block; letter-spacing: .2em; font-weight: 500; opacity: .7; font-size: .7em; margin-top: 2px; }
-
-    .nfc-card__chip {
-      position: absolute;
-      left: 7%;
-      top: 38%;
-      width: 15%;
-      aspect-ratio: 1.3;
-      border-radius: 7px;
-      background:
-        linear-gradient(90deg, transparent 32%, rgba(0, 0, 0, .22) 32% 35%, transparent 35% 65%, rgba(0, 0, 0, .22) 65% 68%, transparent 68%),
-        linear-gradient(0deg, transparent 45%, rgba(0, 0, 0, .22) 45% 55%, transparent 55%),
-        linear-gradient(135deg, #f3dc9b, #c9a24a 55%, #9c7a2c);
-      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15);
-    }
-
-    .nfc-card__waves { position: absolute; left: 25%; top: 40%; width: 8%; opacity: .85; }
-
-    .nfc-card__uid {
-      position: absolute;
-      left: 7%;
-      bottom: 24%;
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-      font-size: clamp(1rem, 4.6vw, 1.45rem);
-      letter-spacing: .16em;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, .35);
-    }
-
-    .nfc-card__holder { position: absolute; left: 7%; bottom: 8%; right: 7%; display: flex; justify-content: space-between; align-items: flex-end; }
-    .nfc-card__label { display: block; font-size: .6rem; text-transform: uppercase; letter-spacing: .14em; opacity: .65; }
-    .nfc-card__value { font-weight: 600; font-size: clamp(.8rem, 3.4vw, 1rem); text-transform: uppercase; letter-spacing: .06em; }
-
-    .nfc-card__stripe { position: absolute; left: 0; right: 0; top: 12%; height: 18%; background: rgba(0, 0, 0, .55); }
-    .nfc-card__back-row { margin-top: 18%; display: grid; gap: .8rem; }
+    .nfc-card__back { transform: rotateY(180deg); display: flex; align-items: center; gap: 6%; padding: 7%; }
+    .nfc-card__logo--small { width: 32%; flex: 0 0 auto; opacity: .95; }
+    .nfc-card__info { display: grid; gap: .55rem; min-width: 0; position: relative; z-index: 1; }
+    .nfc-card__label { display: block; font-size: .6rem; text-transform: uppercase; letter-spacing: .14em; color: #8a8a8a; }
+    .nfc-card__value { display: block; font-weight: 700; font-size: clamp(.8rem, 3.4vw, 1rem); color: #1b1b1b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nfc-card__value--mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; letter-spacing: .12em; color: #e30613; }
 
     .nfc-card-status {
       display: inline-flex;
@@ -341,7 +306,10 @@
           <span class="nfc-scanner__radar"></span>
           <span class="nfc-scanner__ghost"></span>
           <button type="button" class="nfc-scanner__core" id="nfc-core" aria-label="Pokreni skeniranje">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg class="nfc-icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12.5l4.5 4.5L19 7.5"/>
+            </svg>
+            <svg class="nfc-icon-wave" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36"/>
               <path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58"/>
               <path d="M12.91 4.1a15.91 15.91 0 0 1 .01 15.8"/>
@@ -381,30 +349,18 @@
         <div class="nfc-card-scene" id="nfc-card-scene" title="Dodirnite za okretanje">
           <div class="nfc-card" id="nfc-card">
             <div class="nfc-card__face nfc-card__front">
-              <div class="nfc-card__brand">TRENDY<small>CNC · eNalog</small></div>
-              <img class="nfc-card__mark" src="{{ asset('images/pwa/trendy-mark-white.png') }}" alt="">
-              <span class="nfc-card__chip"></span>
-              <svg class="nfc-card__waves" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36"/><path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58"/><path d="M12.91 4.1a15.91 15.91 0 0 1 .01 15.8"/>
-              </svg>
-              <div class="nfc-card__uid" data-card-uid>{{ $nfcCard['uid_display'] ?? '' }}</div>
-              <div class="nfc-card__holder">
+              <img class="nfc-card__logo" src="{{ asset('images/pwa/trendy-gear-logo.png') }}" alt="Trendy CNC">
+            </div>
+            <div class="nfc-card__face nfc-card__back">
+              <img class="nfc-card__logo nfc-card__logo--small" src="{{ asset('images/pwa/trendy-gear-logo.png') }}" alt="">
+              <div class="nfc-card__info">
                 <div>
                   <span class="nfc-card__label">Korisnik</span>
                   <span class="nfc-card__value">{{ $holderName }}</span>
                 </div>
-                <div class="text-end">
-                  <span class="nfc-card__label">Uloga</span>
-                  <span class="nfc-card__value">{{ $nfcUser->role }}</span>
-                </div>
-              </div>
-            </div>
-            <div class="nfc-card__face nfc-card__back">
-              <span class="nfc-card__stripe"></span>
-              <div class="nfc-card__back-row">
                 <div>
                   <span class="nfc-card__label">UID kartice</span>
-                  <span class="nfc-card__value" style="font-family: Consolas, monospace; letter-spacing: .14em;" data-card-uid>{{ $nfcCard['uid_display'] ?? '' }}</span>
+                  <span class="nfc-card__value nfc-card__value--mono" data-card-uid>{{ $nfcCard['uid_display'] ?? '' }}</span>
                 </div>
                 <div>
                   <span class="nfc-card__label">Povezana</span>
@@ -470,15 +426,65 @@
         return (uid.toUpperCase().match(/.{1,2}/g) || []).join(' ');
       }
 
+      // Returns how long the digit animation takes, so the green phase can finish first.
       function typeUid(uid) {
+        var chars = formatUid(uid).split('');
         uidLive.innerHTML = '';
-        formatUid(uid).split('').forEach(function (ch, i) {
+        chars.forEach(function (ch, i) {
           var s = document.createElement('span');
           s.textContent = ch === ' ' ? ' ' : ch;
-          s.style.animationDelay = (i * 45) + 'ms';
+          s.style.animationDelay = (i * 70) + 'ms';
           uidLive.appendChild(s);
         });
+        return chars.length * 70 + 300;
       }
+
+      // ---------- Sounds (Web Audio, no files needed) ----------
+      var audioCtx = null;
+
+      function unlockAudio() {
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        try {
+          if (!audioCtx) audioCtx = new Ctx();
+          if (audioCtx.state === 'suspended') audioCtx.resume();
+        } catch (e) {}
+      }
+
+      function tone(freq, at, duration, type, volume) {
+        var t0 = audioCtx.currentTime + at;
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = type || 'sine';
+        osc.frequency.setValueAtTime(freq, t0);
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(volume || 0.25, t0 + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(t0);
+        osc.stop(t0 + duration + 0.02);
+      }
+
+      function playSound(kind) {
+        unlockAudio();
+        if (!audioCtx) return;
+        try {
+          if (kind === 'detect') {
+            tone(1320, 0, 0.09, 'square', 0.12);
+            tone(1760, 0.11, 0.12, 'square', 0.12);
+          } else if (kind === 'saved') {
+            tone(1046.5, 0, 0.22, 'triangle', 0.3);
+            tone(1318.5, 0.1, 0.22, 'triangle', 0.3);
+            tone(1568, 0.2, 0.22, 'triangle', 0.3);
+            tone(2093, 0.3, 0.5, 'sine', 0.22);
+          } else if (kind === 'error') {
+            tone(220, 0, 0.18, 'sawtooth', 0.15);
+            tone(165, 0.2, 0.3, 'sawtooth', 0.15);
+          }
+        } catch (e) {}
+      }
+
+      document.addEventListener('pointerdown', unlockAudio, { once: true });
 
       function vibrate(pattern) {
         try { navigator.vibrate && navigator.vibrate(pattern); } catch (e) {}
@@ -487,7 +493,7 @@
       function burst() {
         var layer = document.createElement('div');
         layer.className = 'nfc-burst';
-        var colors = ['#7367f0', '#28c76f', '#ff9f43', '#00cfe8', '#4a5c75', '#e7c77d'];
+        var colors = ['#e30613', '#111111', '#e30613', '#28c76f', '#ffffff', '#9a9a9a'];
         var rect = cardScene.getBoundingClientRect();
         var cx = rect.left + rect.width / 2;
         var cy = rect.top + rect.height / 2;
@@ -526,7 +532,8 @@
           card.classList.remove('is-entering');
           void card.offsetWidth;
           card.classList.add('is-entering');
-          setTimeout(burst, 650);
+          setTimeout(function () { playSound('saved'); }, 900);
+          setTimeout(burst, 900);
         }
       }
 
@@ -552,6 +559,10 @@
         });
       }
 
+      function wait(ms) {
+        return new Promise(function (resolve) { setTimeout(resolve, ms); });
+      }
+
       function saveUid(raw) {
         var uid = normalizeUid(raw);
         if (saving) return;
@@ -563,12 +574,27 @@
         saving = true;
         stopScan();
         vibrate([60, 40, 60]);
-        typeUid(uid);
+        playSound('detect');
+        page.classList.remove('is-saved');
         setState('reading', 'Kartica očitana', 'Spašavam karticu na vaš profil…');
 
-        request('POST', page.dataset.storeUrl, { uid: uid })
+        // The green phase stays on screen until every digit is shown and held,
+        // even when the server answers sooner.
+        var greenPhase = wait(typeUid(uid) + 1300);
+        var saved = request('POST', page.dataset.storeUrl, { uid: uid }).then(function (data) {
+          page.classList.add('is-saved');
+          subtitle.textContent = 'Kartica je spašena na vaš profil.';
+          return data;
+        });
+
+        Promise.all([saved, greenPhase])
+          .then(function (results) {
+            page.classList.add('is-leaving');
+            return wait(450).then(function () { return results[0]; });
+          })
           .then(function (data) {
-            setTimeout(function () { showCard(data.card, true); }, 700);
+            page.classList.remove('is-leaving', 'is-saved');
+            showCard(data.card, true);
           })
           .catch(function (err) {
             vibrate([200]);
@@ -578,6 +604,8 @@
       }
 
       function showError(message) {
+        playSound('error');
+        page.classList.remove('is-saved', 'is-leaving');
         setState('error', 'Nije uspjelo', message);
         setTimeout(function () {
           if (page.dataset.state === 'error') startScan();
