@@ -170,7 +170,8 @@
       cursor: pointer;
     }
 
-    .nfc-card {
+    /* outer layer floats / flies in, inner layer only flips, so both can animate */
+    .nfc-card-float {
       position: relative;
       width: 100%;
       height: 100%;
@@ -178,9 +179,22 @@
       animation: nfc-float 7s ease-in-out infinite;
     }
 
-    .nfc-card.is-entering { animation: nfc-enter 1.5s cubic-bezier(.2, .8, .2, 1) both, nfc-float 7s ease-in-out 1.5s infinite; }
-    .nfc-card-scene.is-flipped .nfc-card { animation: none; transform: rotateY(180deg); transition: transform .9s cubic-bezier(.3, 1.3, .5, 1); }
-    .nfc-card-scene:not(.is-flipped) .nfc-card { transition: transform .9s cubic-bezier(.3, 1.3, .5, 1); }
+    .nfc-card-float.is-entering { animation: nfc-enter 1.5s cubic-bezier(.2, .8, .2, 1) both, nfc-float 7s ease-in-out 1.5s infinite; }
+
+    .nfc-card {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      transition: transform .85s cubic-bezier(.34, 1.36, .5, 1);
+    }
+
+    .nfc-card-scene.is-flipped .nfc-card { transform: rotateY(180deg); }
+
+    /* small lift while turning over */
+    .nfc-card-scene.is-flipping .nfc-card-float { animation-play-state: paused; }
+    .nfc-card-scene.is-flipping .nfc-card { animation: nfc-flip-lift .85s ease; }
+    @keyframes nfc-flip-lift { 50% { scale: 1.08; } }
 
     @keyframes nfc-float {
       0%, 100% { transform: rotateY(-16deg) rotateX(8deg) translateY(0); }
@@ -193,18 +207,23 @@
       100% { transform: rotateY(-16deg) rotateX(8deg) scale(1); opacity: 1; }
     }
 
-    /* white plastic card, same as the physical Trendy CNC cards */
+    /* white plastic card, same as the physical Trendy CNC cards.
+       The sheen is a background layer (no oversized child), so nothing can
+       leak past the rounded corners while the card turns in 3D. */
     .nfc-card__face {
       position: absolute;
       inset: 0;
       border-radius: 5.5% / 8.7%;
-      overflow: hidden;
       backface-visibility: hidden;
       -webkit-backface-visibility: hidden;
       color: #1b1b1b;
       text-align: left;
       background:
-        radial-gradient(140% 120% at 20% 0%, #ffffff 0%, #f6f6f4 55%, #e9e9e6 100%);
+        linear-gradient(115deg, rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, .95) 50%, rgba(255, 255, 255, 0) 60%) no-repeat,
+        radial-gradient(140% 120% at 20% 0%, #ffffff 0%, #f4f4f2 55%, #e6e6e3 100%);
+      background-size: 260% 100%, 100% 100%;
+      background-position: 160% 0, 0 0;
+      animation: nfc-sheen 5s ease-in-out infinite;
       box-shadow:
         0 30px 60px -22px rgba(0, 0, 0, .55),
         0 0 0 1px rgba(0, 0, 0, .06),
@@ -212,19 +231,10 @@
         inset 0 -2px 6px rgba(0, 0, 0, .06);
     }
 
-    /* glossy sheen sweeping across the plastic */
-    .nfc-card__face::before {
-      content: '';
-      position: absolute;
-      inset: -50%;
-      background: linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, .85) 50%, transparent 58%);
-      mix-blend-mode: soft-light;
-      animation: nfc-sheen 5s ease-in-out infinite;
-      pointer-events: none;
-      z-index: 2;
+    @keyframes nfc-sheen {
+      0%, 30% { background-position: 160% 0, 0 0; }
+      70%, 100% { background-position: -60% 0, 0 0; }
     }
-
-    @keyframes nfc-sheen { 0%, 30% { transform: translateX(-60%); } 70%, 100% { transform: translateX(60%); } }
 
     .nfc-card__front { display: grid; place-items: center; }
 
@@ -358,6 +368,7 @@
         <div class="nfc-card-status">Kartica je aktivna</div>
 
         <div class="nfc-card-scene" id="nfc-card-scene" title="Dodirnite za okretanje">
+          <div class="nfc-card-float" id="nfc-card-float">
           <div class="nfc-card" id="nfc-card">
             <div class="nfc-card__face nfc-card__front">
               <img class="nfc-card__logo" src="{{ asset('images/pwa/trendy-gear-logo.png') }}" alt="Trendy CNC">
@@ -380,6 +391,7 @@
                 </div>
               </div>
             </div>
+          </div>
           </div>
         </div>
         <div class="nfc-hint">Dodirnite karticu da je okrenete</div>
@@ -416,6 +428,7 @@
       var manualInput = document.getElementById('nfc-manual-input');
       var cardScene = document.getElementById('nfc-card-scene');
       var card = document.getElementById('nfc-card');
+      var cardFloat = document.getElementById('nfc-card-float');
       var cancelReplace = document.getElementById('nfc-cancel-replace');
 
       var hasWebNfc = 'NDEFReader' in window;
@@ -477,6 +490,30 @@
         osc.stop(t0 + duration + 0.02);
       }
 
+      // Short filtered-noise sweep that sounds like a card turning over.
+      function whoosh(at, duration) {
+        var t0 = audioCtx.currentTime + at;
+        var length = Math.floor(audioCtx.sampleRate * duration);
+        var buffer = audioCtx.createBuffer(1, length, audioCtx.sampleRate);
+        var data = buffer.getChannelData(0);
+        for (var i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+        var noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        var filter = audioCtx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.Q.value = 1.2;
+        filter.frequency.setValueAtTime(600, t0);
+        filter.frequency.exponentialRampToValueAtTime(3200, t0 + duration * 0.6);
+        filter.frequency.exponentialRampToValueAtTime(900, t0 + duration);
+        var gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(0.35, t0 + duration * 0.4);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+        noise.connect(filter).connect(gain).connect(audioCtx.destination);
+        noise.start(t0);
+        noise.stop(t0 + duration);
+      }
+
       function playSound(kind) {
         unlockAudio();
         if (!audioCtx) return;
@@ -489,6 +526,9 @@
             tone(1318.5, 0.1, 0.22, 'triangle', 0.3);
             tone(1568, 0.2, 0.22, 'triangle', 0.3);
             tone(2093, 0.3, 0.5, 'sine', 0.22);
+          } else if (kind === 'flip') {
+            whoosh(0, 0.32);
+            tone(2400, 0.3, 0.05, 'square', 0.05);
           } else if (kind === 'error') {
             tone(220, 0, 0.18, 'sawtooth', 0.15);
             tone(165, 0.2, 0.3, 'sawtooth', 0.15);
@@ -541,9 +581,9 @@
         hadCardBeforeReplace = true;
         cancelReplace.classList.add('d-none');
         if (animate) {
-          card.classList.remove('is-entering');
-          void card.offsetWidth;
-          card.classList.add('is-entering');
+          cardFloat.classList.remove('is-entering');
+          void cardFloat.offsetWidth;
+          cardFloat.classList.add('is-entering');
           setTimeout(function () { playSound('saved'); }, 900);
           setTimeout(burst, 900);
         }
@@ -701,9 +741,14 @@
         manualForm.classList.remove('is-open');
       });
 
+      var flipTimer = null;
       cardScene.addEventListener('click', function () {
-        card.classList.remove('is-entering');
+        playSound('flip');
+        vibrate(15);
+        cardScene.classList.add('is-flipping');
         cardScene.classList.toggle('is-flipped');
+        clearTimeout(flipTimer);
+        flipTimer = setTimeout(function () { cardScene.classList.remove('is-flipping'); }, 850);
       });
 
       document.getElementById('nfc-replace').addEventListener('click', function () {
