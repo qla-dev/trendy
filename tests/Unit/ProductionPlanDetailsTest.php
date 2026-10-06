@@ -9,11 +9,10 @@ use Tests\TestCase;
 
 class ProductionPlanDetailsTest extends TestCase
 {
-    public function test_creator_filter_uses_enalog_user_id_and_excludes_pantheon_id_collisions(): void
+    public function test_creator_filter_uses_stored_user_id_without_requiring_notes(): void
     {
         $query = \Mockery::mock();
         $query->shouldReceive('where')->once()->with('wo.anUserIns', 7)->andReturnSelf();
-        $query->shouldReceive('where')->once()->with('wo.acNote', 'like', '%eNalog.app%')->andReturnSelf();
         $method = new \ReflectionMethod(ProductionPlanController::class, 'applyCreatorFilter');
         $method->setAccessible(true);
         $method->invoke(new ProductionPlanController(), $query, ['kreirao' => '7']);
