@@ -36,6 +36,20 @@ class ProductionPlanController extends Controller
                 if ($name !== '') $names->put($contact->anUserID, $name);
             }
         }
+        // Contacts may be incomplete or absent for older Pantheon accounts.
+        foreach (['tPA_User', 'tPA_UserArh'] as $table) {
+            $missing = $ids->reject(fn ($id) => $names->has($id))->values();
+            if ($missing->isEmpty()) break;
+            $accounts = DB::table(config('workorders.schema', 'dbo') . '.' . $table)
+                ->whereIn('anUserId', $missing)->orderByDesc('adTimeChg')
+                ->get(['anUserId', 'acUserId']);
+            foreach ($accounts as $account) {
+                $login = trim((string) $account->acUserId);
+                if (!$names->has($account->anUserId) && $login !== '') {
+                    $names->put($account->anUserId, $login);
+                }
+            }
+        }
         return $names;
     }
 
