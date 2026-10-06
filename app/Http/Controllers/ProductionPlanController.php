@@ -14,8 +14,7 @@ class ProductionPlanController extends Controller
     {
         $id = trim((string) ($filters['kreirao'] ?? ''));
         if ($id === '') return;
-        // eNalog writes its own user ID here; Pantheon IDs belong to a separate namespace.
-        $query->where('wo.anUserIns', (int) $id)->where('wo.acNote', 'like', '%eNalog.app%');
+        $query->where('wo.anUserIns', (int) $id);
     }
 
     private function attachCreators($rows): void
@@ -25,7 +24,7 @@ class ProductionPlanController extends Controller
             ->whereIn('id', $ids)->get(['id', 'name', 'username'])->keyBy('id');
         foreach ($rows as $row) {
             $user = $users->get($row->creator_id ?? null);
-            $row->kreirao = $user ? (trim((string) $user->name) ?: (string) $user->username) : '';
+            $row->kreirao = $user ? (trim((string) $user->name) ?: (string) $user->username) : (empty($row->creator_id) ? '' : 'Korisnik #' . $row->creator_id);
         }
     }
 
@@ -138,7 +137,7 @@ class ProductionPlanController extends Controller
             $query->addSelect(DB::raw("CASE wo.anPriority WHEN 1 THEN 'red' WHEN 5 THEN 'yellow' WHEN 7 THEN 'teal' WHEN 10 THEN 'green' WHEN 15 THEN 'purple' ELSE 'grey' END AS priority_row_color"))
                 ->addSelect('wo.acCostDrv as nositelj_troska')
                 ->addSelect('wo.acIdent as sifra_crtez')
-                ->selectRaw("CASE WHEN wo.acNote LIKE '%eNalog.app%' THEN wo.anUserIns END AS creator_id")
+                ->addSelect('wo.anUserIns as creator_id')
                 ->selectRaw("CASE WHEN sales_order.acCurrency = 'EUR' THEN order_item.anPrice END AS cijena_eur, CASE WHEN sales_order.acCurrency = 'EUR' THEN order_item.anPrice * wo.anPlanQty END AS ukupno_eur");
 
             $filterMap = [
@@ -480,7 +479,7 @@ class ProductionPlanController extends Controller
                 ->addSelect(DB::raw("CASE wo.anPriority WHEN 1 THEN 'red' WHEN 5 THEN 'yellow' WHEN 7 THEN 'teal' WHEN 10 THEN 'green' WHEN 15 THEN 'purple' ELSE 'grey' END AS priority_row_color"))
                 ->addSelect('wo.acCostDrv as nositelj_troska')
                 ->addSelect('wo.acIdent as sifra_crtez')
-                ->selectRaw("CASE WHEN wo.acNote LIKE '%eNalog.app%' THEN wo.anUserIns END AS creator_id")
+                ->addSelect('wo.anUserIns as creator_id')
                 ->selectRaw("CASE WHEN sales_order.acCurrency = 'EUR' THEN order_item.anPrice END AS cijena_eur, CASE WHEN sales_order.acCurrency = 'EUR' THEN order_item.anPrice * wo.anPlanQty END AS ukupno_eur");
 
             if ($filtered) {
@@ -591,7 +590,7 @@ class ProductionPlanController extends Controller
             $xml .= '<Row><Cell><Data ss:Type="String">Filteri: ' . $escape($summary) . '</Data></Cell></Row><Row></Row>';
         }
 
-        $headers = ['Napredak', 'RN', 'Naručitelj', 'Prioritet', 'Datum', 'Narudžba', 'Br. narudžbe kupca', 'Br. poz.', 'Poč. termin', 'Kraj termin', 'Datum isporuke', 'Proizvod', 'Plan. kol.', 'Izr. kol.', 'Naziv', 'Nositelj troška', 'Napomena', 'Status RN', 'Šifra-crtež', 'Datum zavarivanja', 'Utrošeno vrijeme (min)', 'Materijal naručen', 'Zavarivač', 'Cijena artikla/kom (EUR)', 'Ukupno (EUR)', 'Kreirao RN (eNalog)'];
+        $headers = ['Napredak', 'RN', 'Naručitelj', 'Prioritet', 'Datum', 'Narudžba', 'Br. narudžbe kupca', 'Br. poz.', 'Poč. termin', 'Kraj termin', 'Datum isporuke', 'Proizvod', 'Plan. kol.', 'Izr. kol.', 'Naziv', 'Nositelj troška', 'Napomena', 'Status RN', 'Šifra-crtež', 'Datum zavarivanja', 'Utrošeno vrijeme (min)', 'Materijal naručen', 'Zavarivač', 'Cijena artikla/kom (EUR)', 'Ukupno (EUR)', 'Kreirao RN'];
         $xml .= '<Row>' . implode('', array_map(fn ($header) => $cell($header, 'Header'), $headers)) . '</Row>';
         foreach ($rows as $row) {
             $style = $includeColours
@@ -628,7 +627,7 @@ class ProductionPlanController extends Controller
 
     private function filterSummary(array $filters): string
     {
-        $labels = ['kreirao' => 'Kreirao RN (eNalog ID)', 'rn' => 'RN', 'prioritet' => 'Prioritet', 'proizvod' => 'Proizvod', 'status_rn' => 'Status RN', 'narudzba' => 'Narudžba', 'year' => 'Godina', 'kw' => 'Kalendarska sedmica', 'datum_od' => 'Početni termin od', 'datum_do' => 'Početni termin do', 'isporuka_od' => 'Datum isporuke od', 'isporuka_do' => 'Datum isporuke do', 'grob_date_from' => 'Ostali naručitelji datum isporuke od', 'grob_date_to' => 'Ostali naručitelji datum isporuke do', 'trendy_germany_date_from' => 'Trendy naručitelji datum isporuke od', 'trendy_germany_date_to' => 'Trendy naručitelji datum isporuke do'];
+        $labels = ['kreirao' => 'Kreirao RN (ID)', 'rn' => 'RN', 'prioritet' => 'Prioritet', 'proizvod' => 'Proizvod', 'status_rn' => 'Status RN', 'narudzba' => 'Narudžba', 'year' => 'Godina', 'kw' => 'Kalendarska sedmica', 'datum_od' => 'Početni termin od', 'datum_do' => 'Početni termin do', 'isporuka_od' => 'Datum isporuke od', 'isporuka_do' => 'Datum isporuke do', 'grob_date_from' => 'Ostali naručitelji datum isporuke od', 'grob_date_to' => 'Ostali naručitelji datum isporuke do', 'trendy_germany_date_from' => 'Trendy naručitelji datum isporuke od', 'trendy_germany_date_to' => 'Trendy naručitelji datum isporuke do'];
         $parts = [];
         foreach ($labels as $key => $label) {
             $raw = $filters[$key] ?? '';
