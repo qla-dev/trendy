@@ -3,7 +3,7 @@ $(function () {
   var config = window.planProizvodnjeConfig || {};
   var csrf = $('meta[name="csrf-token"]').attr('content');
   var tableElement = $('#plan-proizvodnje-tabela');
-  var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'status_rn', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'datum_isporuke', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'nositelj_troska', 'napomena', 'sifra_crtez', 'datum_zavarivanja', 'utroseno_vrijeme', 'materijal_narucen', 'zavarivac', 'cijena_eur', 'ukupno_eur'];
+  var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'status_rn', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'datum_isporuke', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'nositelj_troska', 'napomena', 'sifra_crtez', 'datum_zavarivanja', 'utroseno_vrijeme', 'materijal_narucen', 'zavarivac', 'cijena_eur', 'ukupno_eur', 'kreirao'];
   keys.unshift('details');
   var columnLabels = tableElement.find('thead th').map(function () { return $(this).text().trim(); }).get();
   var columnStorageKey = 'production-plan-visible-columns-v3';
@@ -218,7 +218,7 @@ $(function () {
       if (key === 'details') return { data: null, orderable: false, searchable: false, width: '28px', className: 'plan-expand-cell', render: function () {
         return '<button type="button" class="plan-expand-button" aria-label="Prikaži detalje" aria-expanded="false"><i class="fa fa-chevron-right" aria-hidden="true"></i></button>';
       }};
-      return { data: key, defaultContent: '', visible: savedColumns ? savedColumns.indexOf(key) !== -1 : ['izr_kol', 'status_rn', 'sifra_crtez', 'datum_zavarivanja', 'utroseno_vrijeme', 'materijal_narucen', 'zavarivac', 'cijena_eur', 'ukupno_eur'].indexOf(key) === -1, orderable: ['progress', 'datum_zavarivanja', 'utroseno_vrijeme', 'materijal_narucen', 'zavarivac'].indexOf(key) === -1, render: function (value, type, row, meta) {
+      return { data: key, defaultContent: '', visible: savedColumns ? savedColumns.indexOf(key) !== -1 : ['izr_kol', 'status_rn', 'sifra_crtez', 'datum_zavarivanja', 'utroseno_vrijeme', 'materijal_narucen', 'zavarivac', 'cijena_eur', 'ukupno_eur', 'kreirao'].indexOf(key) === -1, orderable: ['kreirao', 'progress', 'datum_zavarivanja', 'utroseno_vrijeme', 'materijal_narucen', 'zavarivac'].indexOf(key) === -1, render: function (value, type, row, meta) {
         var output;
         if (key === 'progress') output = '<b>' + escapeHtml(value) + '%</b>';
         else if (key === 'plan_kol' || key === 'izr_kol' || key === 'utroseno_vrijeme' || key === 'cijena_eur' || key === 'ukupno_eur') output = formatQuantity(value);
