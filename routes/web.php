@@ -35,6 +35,7 @@ use App\Http\Controllers\AuthenticationController;
 use App\Http\Controllers\ChartsController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ProductionPlanController;
+use App\Http\Controllers\NfcCardController;
 
 /*
 |--------------------------------------------------------------------------
@@ -133,6 +134,9 @@ Route::middleware('auth:web')->group(function () {
         Route::get('ai-tokens/history/payment/{document}', ExportPaymentDocumentController::class)->name('app-ai-token-history-payment');
         Route::get('ai-tokens/history/statuses', [AiTokenHistoryController::class, 'statuses'])->name('app-ai-token-history-statuses');
         Route::post('ai-tokens/history/{scan}/retry', [AiTokenHistoryController::class, 'retry'])->name('app-ai-token-history-retry');
+        Route::get('nfc-card', [NfcCardController::class, 'index'])->name('app-nfc-card');
+        Route::post('nfc-card', [NfcCardController::class, 'store'])->name('app-nfc-card-store');
+        Route::delete('nfc-card', [NfcCardController::class, 'destroy'])->name('app-nfc-card-destroy');
         Route::get('ai-assistant/whitelist', [AiInboxWhitelistController::class, 'index'])->name('app-ai-whitelist');
         Route::post('ai-assistant/whitelist', [AiInboxWhitelistController::class, 'store'])->name('app-ai-whitelist-store');
         Route::put('ai-assistant/whitelist/{entry}', [AiInboxWhitelistController::class, 'update'])->name('app-ai-whitelist-update');

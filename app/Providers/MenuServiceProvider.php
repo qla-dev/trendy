@@ -156,6 +156,7 @@ class MenuServiceProvider extends ServiceProvider
             'app-released-operation-documents',
             'app-finished-goods-receipt-documents',
             'app-scrap-receipt-documents',
+            'app-nfc-card',
         ];
 
         $menuData->menu = array_values(array_filter($menuData->menu, function ($menu) use ($adminOnlySlugs) {

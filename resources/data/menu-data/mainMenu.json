@@ -109,6 +109,12 @@
       "url": "app/user/list"
     },
     {
+      "name": "Moja NFC kartica",
+      "icon": "credit-card",
+      "url": "app/nfc-card",
+      "slug": "app-nfc-card"
+    },
+    {
       "name": "Pošiljatelji",
       "icon": "send",
       "url": "inventory/soon",
