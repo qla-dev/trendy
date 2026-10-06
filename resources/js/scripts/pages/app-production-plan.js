@@ -3,7 +3,7 @@ $(function () {
   var config = window.planProizvodnjeConfig || {};
   var csrf = $('meta[name="csrf-token"]').attr('content');
   var tableElement = $('#plan-proizvodnje-tabela');
-  var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'status_rn', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'datum_isporuke', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'nositelj_troska', 'napomena'];
+  var keys = ['progress', 'rn', 'narucitelj', 'prioritet', 'status_rn', 'datum', 'narudzba', 'broj_narudzbe_kupca', 'pozicija', 'pocetak', 'kraj', 'datum_isporuke', 'proizvod', 'plan_kol', 'izr_kol', 'naziv', 'nositelj_troska', 'napomena', 'sifra_crtez', 'datum_zavarivanja', 'utroseno_vrijeme', 'materijal_narucen', 'zavarivac', 'cijena_eur', 'ukupno_eur'];
   keys.unshift('details');
   var columnLabels = tableElement.find('thead th').map(function () { return $(this).text().trim(); }).get();
   var columnStorageKey = 'production-plan-visible-columns-v3';
@@ -105,7 +105,7 @@ $(function () {
     var trendy = name.match(/^trendy\s+germany\s+gmbh[\s-]*(\d+)$/i);
     return trendy ? 'TG GmbH ' + trendy[1] : name;
   }
-  function formatQuantity(value) { var number = Number(value); return Number.isFinite(number) ? number.toLocaleString('bs-BA', { minimumFractionDigits: 0, maximumFractionDigits: 4 }) : ''; }
+  function formatQuantity(value) { if (value === null || value === undefined || value === '') return ''; var number = Number(value); return Number.isFinite(number) ? number.toLocaleString('bs-BA', { minimumFractionDigits: 0, maximumFractionDigits: 4 }) : ''; }
   function formatDate(value) { var match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return match ? match[3] + '.' + match[2] + '.' + match[1] : ''; }
   var weekDatesAuto = false;
   var weekInput = $('.f[data-k="kw"]');
@@ -218,11 +218,11 @@ $(function () {
       if (key === 'details') return { data: null, orderable: false, searchable: false, width: '28px', className: 'plan-expand-cell', render: function () {
         return '<button type="button" class="plan-expand-button" aria-label="Prikaži detalje" aria-expanded="false"><i class="fa fa-chevron-right" aria-hidden="true"></i></button>';
       }};
-      return { data: key, defaultContent: '', visible: savedColumns ? savedColumns.indexOf(key) !== -1 : ['izr_kol', 'status_rn'].indexOf(key) === -1, orderable: key !== 'progress', render: function (value, type) {
+      return { data: key, defaultContent: '', visible: savedColumns ? savedColumns.indexOf(key) !== -1 : ['izr_kol', 'status_rn', 'sifra_crtez', 'datum_zavarivanja', 'utroseno_vrijeme', 'materijal_narucen', 'zavarivac', 'cijena_eur', 'ukupno_eur'].indexOf(key) === -1, orderable: ['progress', 'datum_zavarivanja', 'utroseno_vrijeme', 'materijal_narucen', 'zavarivac'].indexOf(key) === -1, render: function (value, type, row, meta) {
         var output;
         if (key === 'progress') output = '<b>' + escapeHtml(value) + '%</b>';
-        else if (key === 'plan_kol' || key === 'izr_kol') output = formatQuantity(value);
-        else if (['datum', 'pocetak', 'kraj', 'datum_isporuke'].indexOf(key) >= 0) output = formatDate(value);
+        else if (key === 'plan_kol' || key === 'izr_kol' || key === 'utroseno_vrijeme' || key === 'cijena_eur' || key === 'ukupno_eur') output = formatQuantity(value);
+        else if (['datum', 'pocetak', 'kraj', 'datum_isporuke', 'datum_zavarivanja', 'materijal_narucen'].indexOf(key) >= 0) output = formatDate(value);
         else if (key === 'narucitelj' && type === 'display') {
           var fullName = String(value == null ? '' : value).trim();
           output = '<span title="' + escapeHtml(fullName).replace(/"/g, '&quot;') + '">' + escapeHtml(shortCustomerName(fullName)) + '</span>';
