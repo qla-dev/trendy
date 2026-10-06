@@ -9,6 +9,25 @@ use Tests\TestCase;
 
 class ProductionPlanDetailsTest extends TestCase
 {
+    public function test_creator_filter_uses_enalog_user_id_and_excludes_pantheon_id_collisions(): void
+    {
+        $query = \Mockery::mock();
+        $query->shouldReceive('where')->once()->with('wo.anUserIns', 7)->andReturnSelf();
+        $query->shouldReceive('where')->once()->with('wo.acNote', 'like', '%eNalog.app%')->andReturnSelf();
+        $method = new \ReflectionMethod(ProductionPlanController::class, 'applyCreatorFilter');
+        $method->setAccessible(true);
+        $method->invoke(new ProductionPlanController(), $query, ['kreirao' => '7']);
+    }
+
+    public function test_empty_creator_filter_preserves_all_orders(): void
+    {
+        $query = \Mockery::mock();
+        $query->shouldNotReceive('where');
+        $method = new \ReflectionMethod(ProductionPlanController::class, 'applyCreatorFilter');
+        $method->setAccessible(true);
+        $method->invoke(new ProductionPlanController(), $query, ['kreirao' => '']);
+    }
+
     public function test_details_are_requested_by_the_exact_work_order_key(): void
     {
         $orders = \Mockery::mock();
