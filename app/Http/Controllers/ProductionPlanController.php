@@ -17,14 +17,44 @@ class ProductionPlanController extends Controller
         $query->where('wo.anUserIns', (int) $id);
     }
 
+    private function creatorNames($ids)
+    {
+        if ($ids->isEmpty()) return collect();
+        $names = \App\Models\User::query()->whereIn('id', $ids)
+            ->get(['id', 'name', 'username'])->mapWithKeys(fn ($user) => [
+                $user->id => trim((string) $user->name) ?: trim((string) $user->username),
+            ])->filter();
+        $missing = $ids->reject(fn ($id) => $names->has($id))->values();
+        if ($missing->isNotEmpty()) {
+            $contacts = DB::table(config('workorders.schema', 'dbo') . '.tHE_SetSubjContact')
+                ->whereIn('anUserID', $missing)->orderBy('anQId')
+                ->get(['anUserID', 'acName', 'acSurname', 'acUserId']);
+            foreach ($contacts as $contact) {
+                if ($names->has($contact->anUserID)) continue;
+                $name = trim(trim((string) $contact->acName) . ' ' . trim((string) $contact->acSurname));
+                $name = $name ?: trim((string) $contact->acUserId);
+                if ($name !== '') $names->put($contact->anUserID, $name);
+            }
+        }
+        return $names;
+    }
+
+    private function creatorOptions()
+    {
+        $ids = DB::table(config('workorders.schema', 'dbo') . '.tHF_WOEx')
+            ->distinct()->pluck('anUserIns')->filter()->unique()->values();
+        $names = $this->creatorNames($ids);
+        return $ids->map(fn ($id) => (object) [
+            'id' => $id, 'name' => $names->get($id, 'Korisnik #' . $id), 'username' => '',
+        ])->sortBy('name')->values();
+    }
+
     private function attachCreators($rows): void
     {
-        $ids = $rows->pluck('creator_id')->filter()->unique()->values();
-        $users = $ids->isEmpty() ? collect() : \App\Models\User::query()
-            ->whereIn('id', $ids)->get(['id', 'name', 'username'])->keyBy('id');
+        $names = $this->creatorNames($rows->pluck('creator_id')->filter()->unique()->values());
         foreach ($rows as $row) {
-            $user = $users->get($row->creator_id ?? null);
-            $row->kreirao = $user ? (trim((string) $user->name) ?: (string) $user->username) : (empty($row->creator_id) ? '' : 'Korisnik #' . $row->creator_id);
+            $id = $row->creator_id ?? null;
+            $row->kreirao = empty($id) ? '' : $names->get($id, 'Korisnik #' . $id);
         }
     }
 
@@ -113,7 +143,7 @@ class ProductionPlanController extends Controller
                 'trendyGermanyNumberOptions' => $trendyGermanyNumberOptions,
                 'otherCustomerOptions' => $otherCustomerOptions,
                 'statusOptions' => $statusOptions,
-                'creatorOptions' => \App\Models\User::query()->orderBy('name')->get(['id', 'name', 'username']),
+                'creatorOptions' => $this->creatorOptions(),
             ],
         ]);
     }
