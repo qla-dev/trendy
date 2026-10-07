@@ -95,7 +95,8 @@ $trendyDePromptRules = <<<'PROMPT'
 - Extract the order reference number that appears after the heading "Bestellung" into external_document_number.
 - Extract the visible Datum value into order.external_document_date, but never use it as a delivery deadline.
 - Never use Datum as order.delivery_deadline or item.delivery_deadline.
-- At the start of Trendy Germany PDFs, the first standalone date row is Datum and the second standalone date row before "Trendy Germany GmbH" is the header Liefertermin/Lieferdatum. If those first rows are "27. 6. 2026.", "28. 9. 2026.", "Trendy Germany GmbH", then order.delivery_deadline and every item.delivery_deadline should be "28. 9. 2026.".
+- At the start of Trendy Germany PDFs, the first standalone date row is Datum and the second standalone date row before "Trendy Germany GmbH" is the header Liefertermin/Lieferdatum. If those first rows are "27. 6. 2026.", "28. 9. 2026.", "Trendy Germany GmbH", then order.delivery_deadline should be "28. 9. 2026.". Use this header date only for items without their own visible delivery date.
+- A visible line-item Liefertermin/Lieferdatum always takes priority over the header date. Never copy the most common item date to all positions or promote an item date into a blank header Liefertermin.
 - If there is only one standalone date before "Trendy Germany GmbH", then the header Liefertermin/Lieferdatum is blank. Set order.delivery_deadline to an empty string and use each line-item Liefertermin/Lieferdatum value individually.
 - Extract the header Liefertermin/Lieferdatum into order.delivery_deadline only when a visible delivery date is confirmed by the second standalone date row or by an explicit delivery label. If Datum and Liefertermin/Lieferdatum appear on the same line, use the date after/right of the delivery label, not the earlier Datum date.
 - Liefertermin/Lieferdatum is the Pantheon delivery deadline ("rok isporuke"), not a dispatch/shipping date.
@@ -129,7 +130,7 @@ $trendyDePromptRules = <<<'PROMPT'
 PROMPT;
 
 return [
-    'transfer_failure_recipient' => env('AI_ORDER_SCAN_TRANSFER_FAILURE_RECIPIENT', 'colakovicvedad1607@gmail.com'),
+    'transfer_failure_recipient' => env('AI_ORDER_SCAN_TRANSFER_FAILURE_RECIPIENT', 'colakovic.vedad@qla.dev'),
     'provider' => env('AI_ORDER_SCAN_PROVIDER', 'mock'),
     'model' => env('AI_ORDER_SCAN_MODEL', 'gpt-5'),
     'timeout' => (int) env('AI_ORDER_SCAN_TIMEOUT', 120),

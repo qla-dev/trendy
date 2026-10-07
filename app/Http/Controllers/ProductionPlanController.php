@@ -10,6 +10,96 @@ use Illuminate\Support\Facades\Log;
 
 class ProductionPlanController extends Controller
 {
+    private function applyCreatorFilter($query, array $filters): void
+    {
+        $id = trim((string) ($filters['kreirao'] ?? ''));
+        if ($id === '') return;
+        $query->where('wo.anUserIns', (int) $id);
+    }
+
+    private function creatorNames($ids)
+    {
+        if ($ids->isEmpty()) return collect();
+        $names = \App\Models\User::query()->whereIn('id', $ids)
+            ->get(['id', 'name', 'username'])->mapWithKeys(fn ($user) => [
+                $user->id => trim((string) $user->name) ?: trim((string) $user->username),
+            ])->filter();
+        $missing = $ids->reject(fn ($id) => $names->has($id))->values();
+        if ($missing->isNotEmpty()) {
+            $contacts = DB::table(config('workorders.schema', 'dbo') . '.tHE_SetSubjContact')
+                ->whereIn('anUserID', $missing)->orderBy('anQId')
+                ->get(['anUserID', 'acName', 'acSurname', 'acUserId']);
+            foreach ($contacts as $contact) {
+                if ($names->has($contact->anUserID)) continue;
+                $name = trim(trim((string) $contact->acName) . ' ' . trim((string) $contact->acSurname));
+                $name = $name ?: trim((string) $contact->acUserId);
+                if ($name !== '') $names->put($contact->anUserID, $name);
+            }
+        }
+        // Contacts may be incomplete or absent for older Pantheon accounts.
+        foreach (['tPA_User', 'tPA_UserArh'] as $table) {
+            $missing = $ids->reject(fn ($id) => $names->has($id))->values();
+            if ($missing->isEmpty()) break;
+            $accounts = DB::table(config('workorders.schema', 'dbo') . '.' . $table)
+                ->whereIn('anUserId', $missing)->orderByDesc('adTimeChg')
+                ->get(['anUserId', 'acUserId']);
+            foreach ($accounts as $account) {
+                $login = trim((string) $account->acUserId);
+                if (!$names->has($account->anUserId) && $login !== '') {
+                    $names->put($account->anUserId, $login);
+                }
+            }
+        }
+        return $names;
+    }
+
+    private function creatorOptions()
+    {
+        $ids = DB::table(config('workorders.schema', 'dbo') . '.tHF_WOEx')
+            ->distinct()->pluck('anUserIns')->filter()->unique()->values();
+        $names = $this->creatorNames($ids);
+        return $ids->map(fn ($id) => (object) [
+            'id' => $id, 'name' => $names->get($id, 'Korisnik #' . $id), 'username' => '',
+        ])->sortBy('name')->values();
+    }
+
+    private function attachCreators($rows): void
+    {
+        $names = $this->creatorNames($rows->pluck('creator_id')->filter()->unique()->values());
+        foreach ($rows as $row) {
+            $id = $row->creator_id ?? null;
+            $row->kreirao = empty($id) ? '' : $names->get($id, 'Korisnik #' . $id);
+        }
+    }
+
+    private function attachWeldingData($rows, string $schema): void
+    {
+        $keys = $rows->pluck('id')->filter()->values();
+        $work = $keys->isEmpty() ? collect() : DB::table($schema . '.tHF_WOExItemWork as work')
+            ->join($schema . '.tHF_WOExItem as item', 'item.anQId', '=', 'work.anWOExItemQid')
+            ->join($schema . '.tHE_SetItem as catalog', 'catalog.acIdent', '=', 'work.acIdent')
+            ->whereIn('item.acKey', $keys)
+            ->where(function ($query) {
+                $query->where('catalog.acName', 'like', '%zavarivanje%')
+                    ->orWhere('catalog.acName', 'like', '%welding%');
+            })
+            ->get(['item.acKey', 'work.adDate', 'work.anTime', 'work.acWorker'])
+            ->groupBy('acKey');
+        $workerCodes = $work->flatten(1)->pluck('acWorker')->filter()->unique()->values();
+        $workerNames = $workerCodes->isEmpty() ? collect() : DB::table($schema . '.tHR_Prsn')
+            ->whereIn('acWorker', $workerCodes)
+            ->selectRaw("acWorker, LTRIM(RTRIM(CONCAT(acName, ' ', acSurname))) AS name")
+            ->pluck('name', 'acWorker');
+        foreach ($rows as $row) {
+            $entries = $work->get($row->id, collect());
+            $row->datum_zavarivanja = $entries->max('adDate');
+            $row->utroseno_vrijeme = $entries->isEmpty() ? null : $entries->sum('anTime');
+            $row->zavarivac = $entries->pluck('acWorker')->filter()->unique()->map(fn ($code) => $workerNames->get($code) ?: $code)->implode(', ');
+            // No confirmed source for the spreadsheet's material-order date.
+            $row->materijal_narucen = null;
+        }
+    }
+
     private function admin($user): bool
     {
         return $user && method_exists($user, 'isAdmin')
@@ -67,6 +157,7 @@ class ProductionPlanController extends Controller
                 'trendyGermanyNumberOptions' => $trendyGermanyNumberOptions,
                 'otherCustomerOptions' => $otherCustomerOptions,
                 'statusOptions' => $statusOptions,
+                'creatorOptions' => $this->creatorOptions(),
             ],
         ]);
     }
@@ -88,7 +179,10 @@ class ProductionPlanController extends Controller
                 ->selectRaw("wo.acKey id, wo.acKeyView rn, ISNULL(wo.acConsignee, wo.acReceiver) narucitelj, COALESCE(NULLIF(LTRIM(RTRIM(priority.acName)), ''), N'Nedefinisan') prioritet, CAST(wo.adDate AS date) datum, wo.acLnkKey narudzba_key, wo.acLnkKeyView narudzba, sales_order.acDoc1 broj_narudzbe_kupca, wo.anLnkNo pozicija, wo.adSchedStartTime pocetak, wo.adSchedEndTime kraj, $deliveryDate datum_isporuke, wo.acIdent proizvod, wo.anPlanQty plan_kol, wo.anProducedQty izr_kol, wo.acName naziv, wo.acNote napomena, $status status_code, CASE $status WHEN 'D' THEN N'Raspisan' WHEN 'S' THEN N'Raspisan' WHEN 'O' THEN N'Otvoren' WHEN 'E' THEN N'U radu' WHEN 'P' THEN N'U toku' WHEN 'R' THEN N'Djelomično zaključen' WHEN 'F' THEN N'Zaključen' WHEN 'I' THEN N'Zaključen' WHEN 'Z' THEN N'Zaključen' WHEN 'N' THEN N'Novo' WHEN 'C' THEN N'Otkazano' ELSE N'Nedefinisan' END status_rn, CASE $status WHEN 'F' THEN 'green' WHEN 'I' THEN 'green' WHEN 'Z' THEN 'green' WHEN 'E' THEN 'yellow' WHEN 'P' THEN 'orange' WHEN 'D' THEN 'orange' WHEN 'S' THEN 'orange' WHEN 'O' THEN 'purple' WHEN 'N' THEN 'purple' WHEN 'R' THEN 'teal' WHEN 'C' THEN 'grey' ELSE 'red' END plan_row_color");
 
             $query->addSelect(DB::raw("CASE wo.anPriority WHEN 1 THEN 'red' WHEN 5 THEN 'yellow' WHEN 7 THEN 'teal' WHEN 10 THEN 'green' WHEN 15 THEN 'purple' ELSE 'grey' END AS priority_row_color"))
-                ->addSelect('wo.acCostDrv as nositelj_troska');
+                ->addSelect('wo.acCostDrv as nositelj_troska')
+                ->addSelect('wo.acIdent as sifra_crtez')
+                ->addSelect('wo.anUserIns as creator_id')
+                ->selectRaw("CASE WHEN sales_order.acCurrency = 'EUR' THEN order_item.anPrice END AS cijena_eur, CASE WHEN sales_order.acCurrency = 'EUR' THEN order_item.anPrice * wo.anPlanQty END AS ukupno_eur");
 
             $filterMap = [
                 'rn' => 'wo.acKeyView',
@@ -103,6 +197,7 @@ class ProductionPlanController extends Controller
                 }
             }
 
+            $this->applyCreatorFilter($query, $filters);
             $this->applySelectionFilters($query, $filters);
 
             $this->applyCustomerDateFilters($query, $filters);
@@ -161,6 +256,7 @@ class ProductionPlanController extends Controller
 
             $total = (clone $query)->count();
             $sorts = [
+                'sifra_crtez' => 'wo.acIdent', 'cijena_eur' => 'cijena_eur', 'ukupno_eur' => 'ukupno_eur',
                 'rn' => 'wo.acKeyView', 'narucitelj' => 'wo.acConsignee', 'prioritet' => 'wo.anPriority',
                 'datum' => 'wo.adDate', 'narudzba' => 'wo.acLnkKeyView', 'broj_narudzbe_kupca' => 'sales_order.acDoc1', 'pozicija' => 'wo.anLnkNo',
                 'pocetak' => 'wo.adSchedStartTime', 'kraj' => 'wo.adSchedEndTime', 'datum_isporuke' => DB::raw($deliveryDate), 'proizvod' => 'wo.acIdent',
@@ -182,6 +278,8 @@ class ProductionPlanController extends Controller
                 ->limit(min(100, max(10, (int) $request->input('length', 25))))
                 ->get();
 
+            $this->attachCreators($rows);
+            $this->attachWeldingData($rows, $schema);
             $keys = $rows->pluck('id')->filter()->values();
             $totalOperations = $keys->isEmpty() ? collect() : DB::table($schema . '.tHF_WOExRegOper')
                 ->whereIn('acKey', $keys)
@@ -423,7 +521,10 @@ class ProductionPlanController extends Controller
                 })
                 ->selectRaw("wo.acKey id, wo.acKeyView rn, ISNULL(wo.acConsignee, wo.acReceiver) narucitelj, COALESCE(NULLIF(LTRIM(RTRIM(priority.acName)), ''), N'Nedefinisan') prioritet, CAST(wo.adDate AS date) datum, wo.acLnkKey narudzba_key, wo.acLnkKeyView narudzba, sales_order.acDoc1 broj_narudzbe_kupca, wo.anLnkNo pozicija, wo.adSchedStartTime pocetak, wo.adSchedEndTime kraj, $deliveryDate datum_isporuke, wo.acIdent proizvod, wo.anPlanQty plan_kol, wo.anProducedQty izr_kol, wo.acName naziv, wo.acNote napomena, $status status_code")
                 ->addSelect(DB::raw("CASE wo.anPriority WHEN 1 THEN 'red' WHEN 5 THEN 'yellow' WHEN 7 THEN 'teal' WHEN 10 THEN 'green' WHEN 15 THEN 'purple' ELSE 'grey' END AS priority_row_color"))
-                ->addSelect('wo.acCostDrv as nositelj_troska');
+                ->addSelect('wo.acCostDrv as nositelj_troska')
+                ->addSelect('wo.acIdent as sifra_crtez')
+                ->addSelect('wo.anUserIns as creator_id')
+                ->selectRaw("CASE WHEN sales_order.acCurrency = 'EUR' THEN order_item.anPrice END AS cijena_eur, CASE WHEN sales_order.acCurrency = 'EUR' THEN order_item.anPrice * wo.anPlanQty END AS ukupno_eur");
 
             if ($filtered) {
                 $filterMap = [
@@ -438,6 +539,7 @@ class ProductionPlanController extends Controller
                     }
                 }
 
+                $this->applyCreatorFilter($query, $filters);
                 $this->applySelectionFilters($query, $filters);
 
                 $this->applyCustomerDateFilters($query, $filters);
@@ -471,7 +573,8 @@ class ProductionPlanController extends Controller
                 }
             }
 
-            $sorts = ['rn' => 'wo.acKeyView', 'narucitelj' => 'wo.acConsignee', 'prioritet' => 'wo.anPriority', 'datum' => 'wo.adDate', 'narudzba' => 'wo.acLnkKeyView', 'broj_narudzbe_kupca' => 'sales_order.acDoc1', 'pozicija' => 'wo.anLnkNo', 'pocetak' => 'wo.adSchedStartTime', 'kraj' => 'wo.adSchedEndTime', 'datum_isporuke' => DB::raw($deliveryDate), 'proizvod' => 'wo.acIdent', 'plan_kol' => 'wo.anPlanQty', 'izr_kol' => 'wo.anProducedQty', 'naziv' => 'wo.acName', 'napomena' => 'wo.acNote', 'nositelj_troska' => 'wo.acCostDrv'];
+            $sorts = ['sifra_crtez' => 'wo.acIdent', 'cijena_eur' => 'cijena_eur', 'ukupno_eur' => 'ukupno_eur',
+                'rn' => 'wo.acKeyView', 'narucitelj' => 'wo.acConsignee', 'prioritet' => 'wo.anPriority', 'datum' => 'wo.adDate', 'narudzba' => 'wo.acLnkKeyView', 'broj_narudzbe_kupca' => 'sales_order.acDoc1', 'pozicija' => 'wo.anLnkNo', 'pocetak' => 'wo.adSchedStartTime', 'kraj' => 'wo.adSchedEndTime', 'datum_isporuke' => DB::raw($deliveryDate), 'proizvod' => 'wo.acIdent', 'plan_kol' => 'wo.anPlanQty', 'izr_kol' => 'wo.anProducedQty', 'naziv' => 'wo.acName', 'napomena' => 'wo.acNote', 'nositelj_troska' => 'wo.acCostDrv'];
             $sort = $sorts[$request->input('sort', 'pocetak')] ?? 'wo.adSchedStartTime';
             $direction = $request->input('dir') === 'asc' ? 'asc' : 'desc';
             if (isset($weekRange) && $sort === 'wo.adSchedStartTime' && $direction === 'desc') {
@@ -482,6 +585,9 @@ class ProductionPlanController extends Controller
             }
             $rows = $query->orderBy($sort, $direction)
                 ->orderBy('wo.acKey', $direction)->get();
+
+            $this->attachCreators($rows);
+            foreach ($rows->chunk(1000) as $chunk) $this->attachWeldingData($chunk, $schema);
 
             $keys = $rows->pluck('id')->filter()->values();
             $totalOperations = collect();
@@ -528,15 +634,14 @@ class ProductionPlanController extends Controller
             $xml .= '<Row><Cell><Data ss:Type="String">Filteri: ' . $escape($summary) . '</Data></Cell></Row><Row></Row>';
         }
 
-        $headers = ['R. br.', 'Napredak', 'RN', 'Naručitelj', 'Prioritet', 'Datum', 'Narudžba', 'Br. narudžbe kupca', 'Br. poz.', 'Poč. termin', 'Kraj termin', 'Datum isporuke', 'Proizvod', 'Plan. kol.', 'Izr. kol.', 'Naziv', 'Nositelj troška', 'Napomena', 'Status RN'];
+        $headers = ['Napredak', 'RN', 'Naručitelj', 'Prioritet', 'Datum', 'Narudžba', 'Br. narudžbe kupca', 'Br. poz.', 'Poč. termin', 'Kraj termin', 'Datum isporuke', 'Proizvod', 'Plan. kol.', 'Izr. kol.', 'Naziv', 'Nositelj troška', 'Napomena', 'Status RN', 'Šifra-crtež', 'Datum zavarivanja', 'Utrošeno vrijeme (min)', 'Materijal naručen', 'Zavarivač', 'Cijena artikla/kom (EUR)', 'Ukupno (EUR)', 'Kreirao RN'];
         $xml .= '<Row>' . implode('', array_map(fn ($header) => $cell($header, 'Header'), $headers)) . '</Row>';
-        $rowNumber = 1;
         foreach ($rows as $row) {
             $style = $includeColours
                 ? ($row->is_previous_week_open_order ?? false ? 'red' : (string) $row->priority_row_color)
                 : '';
-            $values = [$row->progress . '%', $row->rn, $row->narucitelj, $row->prioritet, $this->europeanDate($row->datum), $row->narudzba, $row->broj_narudzbe_kupca, $row->pozicija, $this->europeanDate($row->pocetak), $this->europeanDate($row->kraj), $this->europeanDate($row->datum_isporuke), $row->proizvod, $this->displayQuantity($row->plan_kol), $this->displayQuantity($row->izr_kol), $row->naziv, $row->nositelj_troska, $row->napomena, $row->status_code];
-            $xml .= '<Row><Cell' . ($style ? ' ss:StyleID="' . $style . '"' : '') . '><Data ss:Type="Number">' . $rowNumber++ . '</Data></Cell>' . implode('', array_map(fn ($value) => $cell($value, $style), $values)) . '</Row>';
+            $values = [$row->progress . '%', $row->rn, $row->narucitelj, $row->prioritet, $this->europeanDate($row->datum), $row->narudzba, $row->broj_narudzbe_kupca, $row->pozicija, $this->europeanDate($row->pocetak), $this->europeanDate($row->kraj), $this->europeanDate($row->datum_isporuke), $row->proizvod, $this->displayQuantity($row->plan_kol), $this->displayQuantity($row->izr_kol), $row->naziv, $row->nositelj_troska, $row->napomena, $row->status_code, ($row->sifra_crtez ?? $row->proizvod), $this->europeanDate(($row->datum_zavarivanja ?? null)), $this->displayQuantity(($row->utroseno_vrijeme ?? null)), $this->europeanDate(($row->materijal_narucen ?? null)), ($row->zavarivac ?? ''), $this->displayQuantity(($row->cijena_eur ?? null)), $this->displayQuantity(($row->ukupno_eur ?? null)), ($row->kreirao ?? '')];
+            $xml .= '<Row>' . implode('', array_map(fn ($value) => $cell($value, $style), $values)) . '</Row>';
         }
 
         return $xml . '</Table></Worksheet></Workbook>';
@@ -566,7 +671,7 @@ class ProductionPlanController extends Controller
 
     private function filterSummary(array $filters): string
     {
-        $labels = ['rn' => 'RN', 'prioritet' => 'Prioritet', 'proizvod' => 'Proizvod', 'status_rn' => 'Status RN', 'narudzba' => 'Narudžba', 'year' => 'Godina', 'kw' => 'Kalendarska sedmica', 'datum_od' => 'Početni termin od', 'datum_do' => 'Početni termin do', 'isporuka_od' => 'Datum isporuke od', 'isporuka_do' => 'Datum isporuke do', 'grob_date_from' => 'Ostali naručitelji datum isporuke od', 'grob_date_to' => 'Ostali naručitelji datum isporuke do', 'trendy_germany_date_from' => 'Trendy naručitelji datum isporuke od', 'trendy_germany_date_to' => 'Trendy naručitelji datum isporuke do'];
+        $labels = ['kreirao' => 'Kreirao RN (ID)', 'rn' => 'RN', 'prioritet' => 'Prioritet', 'proizvod' => 'Proizvod', 'status_rn' => 'Status RN', 'narudzba' => 'Narudžba', 'year' => 'Godina', 'kw' => 'Kalendarska sedmica', 'datum_od' => 'Početni termin od', 'datum_do' => 'Početni termin do', 'isporuka_od' => 'Datum isporuke od', 'isporuka_do' => 'Datum isporuke do', 'grob_date_from' => 'Ostali naručitelji datum isporuke od', 'grob_date_to' => 'Ostali naručitelji datum isporuke do', 'trendy_germany_date_from' => 'Trendy naručitelji datum isporuke od', 'trendy_germany_date_to' => 'Trendy naručitelji datum isporuke do'];
         $parts = [];
         foreach ($labels as $key => $label) {
             $raw = $filters[$key] ?? '';

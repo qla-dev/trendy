@@ -10,6 +10,21 @@ use Tests\TestCase;
 
 class PantheonOrderTransferServiceProfileTest extends TestCase
 {
+    public function test_ai_document_type_uses_the_same_configuration_as_the_local_parser(): void
+    {
+        config(['ai-order-scan.default_doc_type' => '0110']);
+        $service = new PantheonOrderTransferService();
+        $method = (new ReflectionClass($service))->getMethod('resolvePantheonDocType');
+        $method->setAccessible(true);
+
+        foreach (['PO', 'Bestellung', '', '0200', '0110'] as $candidate) {
+            $this->assertSame('0110', $method->invoke($service, $candidate));
+        }
+
+        config(['ai-order-scan.default_doc_type' => '0200']);
+        $this->assertSame('0200', $method->invoke($service, 'PO'));
+    }
+
     public function test_stu_unit_alias_is_normalized_to_default_unit(): void
     {
         $service = new PantheonOrderTransferService();
@@ -556,11 +571,33 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertSame('', $result['acPayMethod']);
         $this->assertSame('Trendy Germany GmbH-45', $result['acConsignee']);
         $this->assertSame('Trendy Germany GmbH-45', $result['acReceiver']);
-        // A template QId is not copied unless it can be verified against
-        // tHE_SetSubj; this isolated unit test intentionally has no subject
-        // table connection.
-        $this->assertArrayNotHasKey('anConsigneeQId', $result);
-        $this->assertArrayNotHasKey('anReceiverQId', $result);
+        // Verified subject IDs are retained; unresolved IDs are omitted.
+        foreach (['anConsigneeQId', 'anReceiverQId'] as $column) {
+            if (array_key_exists($column, $result)) {
+                $this->assertGreaterThan(0, $result[$column]);
+            }
+        }
+        $unresolved = $method->invoke($service, [], [
+            'customer_name' => '',
+            'supplier_name' => '',
+            'receiver_name' => '',
+            'contact_name' => '',
+            'external_document_number' => '',
+            'external_document_date' => '',
+            'delivery_deadline' => '',
+            'currency' => 'EUR',
+            'way_of_sale' => 'D',
+            'subtotal' => 0,
+            'vat_total' => 0,
+            'grand_total' => 0,
+            'referent_id' => 46,
+        ], [
+            'raw_key' => '2601100001713',
+            'display_key' => '26-0110-001713',
+            'doc_type' => '0110',
+        ], null, null);
+        $this->assertArrayNotHasKey('anConsigneeQId', $unresolved);
+        $this->assertArrayNotHasKey('anReceiverQId', $unresolved);
         $this->assertSame(46, $result['anClerk']);
         $this->assertSame(46, $result['anNoteClerk']);
         $this->assertSame(46, $result['anUserIns']);
