@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html class="loaded light-layout" lang="bs" data-textdirection="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Radni nalozi</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=block" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="../vendors/css/vendors.min.css">
+<link rel="stylesheet" href="../css/core.css">
+<link rel="stylesheet" href="../css/base/core/menu/menu-types/vertical-menu.css">
+<link rel="stylesheet" href="../vendors/css/tables/datatable/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="../css/base/pages/app-invoice-list.css">
+<link rel="stylesheet" href="../css/overrides.css">
+<style>html .content .content-wrapper .content-header-title{border-right:0!important;padding-right:0!important;margin-right:0!important}</style>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+.navbar-ai-token-link{padding-left:.2rem!important;padding-right:.2rem!important}
+.navbar-ai-token-pill{position:relative;display:inline-flex;align-items:center;gap:.45rem;min-height:2.7rem;padding:.38rem .8rem;border-radius:1rem;background:rgba(255,255,255,.95);box-shadow:0 10px 24px rgba(34,41,47,.08)}
+.navbar-ai-token-pill__icon{position:relative;display:inline-grid;width:1.3rem;height:1.35rem;place-items:center;flex:0 0 auto}
+.navbar-ai-token-pill__label,.navbar-ai-token-pill__divider{display:inline-flex;align-items:center;line-height:1;color:#6e7f91;font-size:.92rem;font-weight:600}
+.navbar-ai-token-pill__divider{opacity:.7}
+.navbar-ai-token-pill__value{display:inline-flex;align-items:center;justify-content:center;min-width:2.2rem;font-size:1rem;font-weight:700;line-height:1;color:#4b5d78}
+.navbar-ai-token-coin{position:absolute;width:.95rem;height:.42rem;border-radius:999px;background:linear-gradient(180deg,#ffd86f 0%,#f5b301 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 2px 4px rgba(196,140,0,.2)}
+.navbar-ai-token-coin--top{transform:translateY(-.34rem)}
+.navbar-ai-token-coin--mid{width:1.05rem}
+.navbar-ai-token-coin--bottom{transform:translateY(.34rem)}
+html,body{overflow:hidden}
+.pace,.pace-progress{display:none!important}
+*,*::before,*::after{animation-duration:.001s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important}
+
+  .invoice-list-wrapper {
+    --wo-table-scroll-track: var(--app-scroll-track);
+    --wo-table-scroll-thumb: var(--app-scroll-thumb-flat);
+    --wo-table-scroll-thumb-hover: var(--app-scroll-thumb-flat-hover);
+    --wo-table-scroll-thumb-active: var(--app-scroll-thumb-flat-active);
+    --wo-table-scroll-thumb-border: var(--app-scroll-thumb-border);
+  }
+
+  body.dark-layout .invoice-list-wrapper,
+  body.semi-dark-layout .invoice-list-wrapper,
+  .dark-layout .invoice-list-wrapper,
+  .semi-dark-layout .invoice-list-wrapper {
+    --wo-table-scroll-track: var(--app-scroll-track);
+    --wo-table-scroll-thumb: var(--app-scroll-thumb-flat);
+    --wo-table-scroll-thumb-hover: var(--app-scroll-thumb-flat-hover);
+    --wo-table-scroll-thumb-active: var(--app-scroll-thumb-flat-active);
+    --wo-table-scroll-thumb-border: var(--app-scroll-thumb-border);
+  }
+
+  .content-header {
+    margin-top: -6px;
+    margin-bottom: 4px;
+  }
+  .content-header-title {
+    margin-top: 5px;
+  }
+
+  .invoice-list-wrapper .card-datatable {
+    scrollbar-width: thin;
+    scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
+    scrollbar-gutter: stable;
+  }
+
+  .invoice-list-wrapper .card-datatable::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .invoice-list-wrapper .card-datatable::-webkit-scrollbar-track {
+    background: var(--wo-table-scroll-track);
+    border-radius: 999px;
+  }
+
+  .invoice-list-wrapper .card-datatable::-webkit-scrollbar-thumb {
+    background: var(--wo-table-scroll-thumb);
+    border-radius: 999px;
+    border: 1px solid var(--wo-table-scroll-thumb-border);
+  }
+
+  .invoice-list-wrapper .card-datatable::-webkit-scrollbar-thumb:hover {
+    background: var(--wo-table-scroll-thumb-hover);
+  }
+
+  .invoice-list-wrapper .card-datatable::-webkit-scrollbar-thumb:active {
+    background: var(--wo-table-scroll-thumb-active);
+  }
+
+  .invoice-list-wrapper .card-datatable::-webkit-scrollbar-corner {
+    background: var(--wo-table-scroll-track);
+  }
+
+
+  .status-cards-wrapper {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 14px;
+    width: 100%;
+    align-items: stretch;
+    margin: 0;
+    padding: 0;
+  }
+
+  .status-card {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+    background: #fff;
+    border: 1px solid #ebe9f1;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: none;
+  }
+
+  .status-card:hover {
+    background-color: #f8f8f8;
+  }
+
+  /* Keep original border colors on hover */
+  .status-card[data-status="svi"]:hover,
+  .status-card[data-status="planiran"]:hover,
+  .status-card[data-status="otvoren"]:hover,
+  .status-card[data-status="rezerviran"]:hover,
+  .status-card[data-status="raspisan"]:hover,
+  .status-card[data-status="u_radu"]:hover,
+  .status-card[data-status="djelimicno_zakljucen"]:hover,
+  .status-card[data-status="zakljucen"]:hover {
+    border-color: inherit;
+  }
+
+  .status-card-active {
+    border-color: #495B73;
+    background-color: #fff;
+    box-shadow: 0 4px 24px 0 rgba(34, 41, 47, 0.1);
+  }
+
+  .status-card-active:hover {
+    border-color: #495B73;
+    background-color: #f8f8f8;
+    box-shadow: 0 4px 24px 0 rgba(34, 41, 47, 0.15);
+  }
+
+  /* Specific colors for each status card */
+  .status-card[data-status="svi"] {
+    border-color: #6e6b7b;
+  }
+
+  .status-card[data-status="svi"]:hover {
+    border-color: #6e6b7b;
+  }
+
+  .status-card[data-status="planiran"] {
+    border-color: #00cfe8;
+  }
+
+  .status-card[data-status="planiran"]:hover {
+    border-color: #00cfe8;
+  }
+
+  .status-card[data-status="otvoren"] {
+    border-color: #28c76f;
+  }
+
+  .status-card[data-status="otvoren"]:hover {
+    border-color: #28c76f;
+  }
+
+  .status-card[data-status="rezerviran"] {
+    border-color: #ff9f43;
+  }
+
+  .status-card[data-status="rezerviran"]:hover {
+    border-color: #ff9f43;
+  }
+
+  .status-card[data-status="raspisan"] {
+    border-color: #495B73;
+  }
+
+  .status-card[data-status="raspisan"]:hover {
+    border-color: #495B73;
+  }
+
+  .status-card[data-status="u_radu"] {
+    border-color: #ffc107;
+  }
+
+  .status-card[data-status="u_radu"]:hover {
+    border-color: #ffc107;
+  }
+
+  .status-card[data-status="djelimicno_zakljucen"] {
+    border-color: #fd7e14;
+  }
+
+  .status-card[data-status="djelimicno_zakljucen"]:hover {
+    border-color: #fd7e14;
+  }
+
+  .status-card[data-status="zakljucen"] {
+    border-color: #ea5455;
+  }
+
+  .status-card[data-status="zakljucen"]:hover {
+    border-color: #ea5455;
+  }
+
+  .status-card-body {
+    padding: 10px 15px;
+    text-align: center;
+  }
+
+  .status-label {
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 5px;
+    color: #6e6b7b;
+    white-space: nowrap;
+  }
+
+  /* Status label colors matching border colors */
+  .status-card[data-status="svi"] .status-label {
+    color: #6e6b7b;
+  }
+
+  .status-card[data-status="planiran"] .status-label {
+    color: #00cfe8;
+  }
+
+  .status-card[data-status="otvoren"] .status-label {
+    color: #28c76f;
+  }
+
+  .status-card[data-status="rezerviran"] .status-label {
+    color: #ff9f43;
+  }
+
+  .status-card[data-status="raspisan"] .status-label {
+    color: #495B73;
+  }
+
+  .status-card[data-status="u_radu"] .status-label {
+    color: #ffc107;
+  }
+
+  .status-card[data-status="djelimicno_zakljucen"] .status-label {
+    color: #fd7e14;
+  }
+
+  .status-card[data-status="zakljucen"] .status-label {
+    color: #ea5455;
+  }
+
+  .status-count {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #5e5873;
+    line-height: 1;
+  }
+
+  @media (max-width: 1147.98px) {
+    .status-cards-wrapper {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+
+    .status-card {
+      flex: 0 0 152px;
+      min-width: 152px;
+    }
+  }
+
+  .status-badge {
+    font-weight: 500;
+  }
+
+  .status-badge-default {
+    background-color: rgba(110, 107, 123, 0.12) !important;
+    color: #6e6b7b !important;
+  }
+
+  .status-badge-planiran {
+    background-color: rgba(0, 207, 232, 0.12) !important;
+    color: #00cfe8 !important;
+  }
+
+  .status-badge-otvoren {
+    background-color: rgba(40, 199, 111, 0.12) !important;
+    color: #28c76f !important;
+  }
+
+  .status-badge-rezerviran {
+    background-color: rgba(255, 159, 67, 0.12) !important;
+    color: #ff9f43 !important;
+  }
+
+  .status-badge-raspisan {
+    background-color: rgba(73, 91, 115, 0.12) !important;
+    color: #495B73 !important;
+  }
+
+  .status-badge-u-radu {
+    background-color: rgba(255, 193, 7, 0.16) !important;
+    color: #b38600 !important;
+  }
+
+  .status-badge-djelimicno-zakljucen {
+    background-color: rgba(253, 126, 20, 0.12) !important;
+    color: #fd7e14 !important;
+  }
+
+  .status-badge-zakljucen {
+    background-color: rgba(234, 84, 85, 0.12) !important;
+    color: #ea5455 !important;
+  }
+
+  .avatar.avatar-status.status-avatar-default {
+    background-color: rgba(110, 107, 123, 0.12);
+    color: #6e6b7b;
+  }
+
+  .avatar.avatar-status.status-avatar-planiran {
+    background-color: rgba(0, 207, 232, 0.12);
+    color: #00cfe8;
+  }
+
+  .avatar.avatar-status.status-avatar-otvoren {
+    background-color: rgba(40, 199, 111, 0.12);
+    color: #28c76f;
+  }
+
+  .avatar.avatar-status.status-avatar-rezerviran {
+    background-color: rgba(255, 159, 67, 0.12);
+    color: #ff9f43;
+  }
+
+  .avatar.avatar-status.status-avatar-raspisan {
+    background-color: rgba(73, 91, 115, 0.12);
+    color: #495B73;
+  }
+
+  .avatar.avatar-status.status-avatar-u-radu {
+    background-color: rgba(255, 193, 7, 0.16);
+    color: #b38600;
+  }
+
+  .avatar.avatar-status.status-avatar-djelimicno-zakljucen {
+    background-color: rgba(253, 126, 20, 0.12);
+    color: #fd7e14;
+  }
+
+  .avatar.avatar-status.status-avatar-zakljucen {
+    background-color: rgba(234, 84, 85, 0.12);
+    color: #ea5455;
+  }
+
+  .filter-input {
+    font-size: 14px;
+  }
+
+  .filter-date-input,
+  .filter-date-input.flatpickr-input,
+  .filter-date-input + .flatpickr-input,
+  .filter-date-input[readonly],
+  .flatpickr-input[readonly] {
+    cursor: pointer;
+  }
+
+  .filter-header-actions {
+    row-gap: 8px;
+  }
+
+  .active-filters-container {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .active-filters-divider {
+    width: 1px;
+    height: 28px;
+    background-color: #d8d6de;
+    margin-right: 2px;
+  }
+
+  .active-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid #d8d6de;
+    border-radius: 999px;
+    background-color: #f8f8f8;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .active-filter-chip-label {
+    color: #6e6b7b;
+    font-weight: 500;
+  }
+
+  .active-filter-chip-value {
+    color: #5e5873;
+    font-weight: 600;
+  }
+
+  .active-filter-remove {
+    border: 0;
+    background: transparent;
+    color: #ea5455;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+  }
+
+  #btn-toggle-filters:focus,
+  #btn-toggle-filters:active,
+  #btn-delete-filter:focus,
+  #btn-delete-filter:active {
+    box-shadow: none !important;
+  }
+
+  #btn-toggle-filters:not(:hover):not(:active),
+  #btn-delete-filter:not(:hover):not(:active) {
+    background-color: transparent;
+  }
+
+  .filter-input::placeholder {
+    padding-left: 8px;
+  }
+
+  .input-group-text {
+    background: #f8f8f8;
+    border-right: none;
+  }
+
+  .content-header-right {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+  }
+
+  .content-header-right .breadcrumb-right {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .invoice-list-table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  .invoice-list-table tbody tr td a,
+  .invoice-list-table tbody tr td button,
+  .invoice-list-table tbody tr td .wo-eye-action,
+  .invoice-list-table tbody tr td .wo-delete-action {
+    cursor: pointer;
+  }
+
+  .invoice-list-table.table tbody tr:hover > * {
+    background-color: #f8f8fc;
+  }
+
+  .invoice-list-wrapper .invoice-list-table .wo-invoice-list-action-col {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background-color: #ffffff;
+    box-shadow: none;
+    border-left: 1px solid #ebe9f1;
+  }
+
+  .invoice-list-wrapper .invoice-list-table thead .wo-invoice-list-action-col {
+    z-index: 3;
+    background-color: #f8f8fa;
+  }
+
+  .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > .wo-invoice-list-action-col {
+    background-color: #f8f8fc;
+  }
+  .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  .invoice-list-wrapper .invoice-list-table tbody tr > td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background-color: #ffffff;
+    box-shadow: none;
+    border-left: 1px solid #ebe9f1;
+  }
+
+  .invoice-list-wrapper .invoice-list-table thead tr > th:last-child {
+    z-index: 3;
+    background-color: #f8f8fa;
+  }
+
+  .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > td:last-child {
+    background-color: #f8f8fc;
+  }
+
+  .invoice-list-wrapper .invoice-list-table {
+    min-width: 1180px;
+  }
+
+  .invoice-list-table tbody .invoice-table-loading-spacer-row > td {
+    height: 250px;
+    padding: 0 !important;
+    border-top: 0 !important;
+    border-bottom: 0 !important;
+    background: transparent !important;
+  }
+
+  .invoice-list-wrapper .card-datatable.table-responsive {
+    overflow-x: visible;
+  }
+
+  .card-datatable.invoice-table-initial-loading .dataTables_wrapper > .row:last-child {
+    display: none;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:last-child {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:last-child > div:first-child {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:last-child > div:last-child {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+    margin-left: auto !important;
+    justify-content: flex-end !important;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:last-child .dataTables_paginate {
+    display: flex !important;
+    width: auto !important;
+    justify-content: flex-end !important;
+    margin-left: auto !important;
+    text-align: right !important;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:last-child .dataTables_paginate .pagination {
+    margin-left: auto !important;
+    justify-content: flex-end !important;
+  }
+
+  .invoice-list-wrapper .card-datatable .pagination {
+    margin-bottom: 1rem !important;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_info {
+    padding-top: 0 !important;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-'] {
+    padding-left: 0;
+    padding-right: 0;
+    overflow: visible;
+  }
+
+  .invoice-list-wrapper .invoice-table-body-scroll {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
+  }
+
+  .invoice-list-wrapper .invoice-table-body-cell {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    overflow: visible !important;
+  }
+
+  .invoice-list-wrapper .invoice-table-body-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .invoice-list-wrapper .invoice-table-body-scroll::-webkit-scrollbar-track {
+    background: var(--wo-table-scroll-track);
+    border-radius: 999px;
+  }
+
+  .invoice-list-wrapper .invoice-table-body-scroll::-webkit-scrollbar-thumb {
+    background: var(--wo-table-scroll-thumb);
+    border-radius: 999px;
+    border: 1px solid var(--wo-table-scroll-thumb-border);
+  }
+
+  .invoice-list-wrapper .invoice-table-body-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--wo-table-scroll-thumb-hover);
+  }
+
+  .invoice-list-wrapper .invoice-table-body-scroll::-webkit-scrollbar-thumb:active {
+    background: var(--wo-table-scroll-thumb-active);
+  }
+
+  .invoice-list-wrapper .invoice-table-body-scroll::-webkit-scrollbar-corner {
+    background: var(--wo-table-scroll-track);
+  }
+
+  .invoice-table-overlay-host {
+    position: relative;
+  }
+
+  .invoice-table-loading-overlay {
+    position: absolute;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.74);
+    backdrop-filter: blur(1px);
+    z-index: 9;
+    pointer-events: none;
+  }
+
+  .invoice-table-loading-overlay.is-visible {
+    display: flex;
+  }
+
+  .invoice-table-loading-overlay-content {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    text-align: center;
+  }
+
+  .invoice-table-loading-spinner {
+    width: 2rem;
+    height: 2rem;
+    border-width: 0.2em;
+    color: #495b73;
+  }
+
+  .invoice-table-loading-message {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #5e5873;
+    letter-spacing: 0.01em;
+  }
+
+  .wo-eye-action {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #96a0b5;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #6e6b7b;
+    background-color: transparent;
+    transition: all 0.2s ease;
+  }
+
+  .wo-eye-action svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .wo-eye-action svg * {
+    stroke: currentColor;
+  }
+
+  .wo-eye-action:hover,
+  .wo-eye-action:focus {
+    color: #42526e;
+    border-color: #42526e;
+    background-color: rgba(66, 82, 110, 0.08);
+  }
+
+  .wo-eye-action:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(66, 82, 110, 0.18);
+  }
+
+  .wo-delete-action {
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(234, 84, 85, 0.45);
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #ea5455;
+    background-color: transparent;
+    transition: all 0.2s ease;
+  }
+
+  .wo-delete-action svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .wo-delete-action svg * {
+    stroke: currentColor;
+  }
+
+  .wo-delete-action:hover,
+  .wo-delete-action:focus {
+    color: #fff;
+    border-color: #ea5455;
+    background-color: rgba(234, 84, 85, 0.92);
+  }
+
+  .wo-delete-action:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(234, 84, 85, 0.18);
+  }
+
+  div.dataTables_wrapper div.dataTables_filter {
+    text-align: right;
+    float: right;
+  }
+
+  div.dataTables_wrapper div.dataTables_filter label {
+    margin-top: 0;
+    margin-bottom: 0;
+    text-align: right;
+    float: right;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  div.dataTables_wrapper div.dataTables_filter input {
+    text-align: left;
+  }
+
+  .invoice-search-label-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-right: 0.5rem;
+    color: #6e6b7b;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .invoice-search-header-spinner {
+    width: 0.9rem;
+    height: 0.9rem;
+    border-width: 0.15em;
+    color: #495b73;
+    display: none;
+  }
+
+  .invoice-search-header-spinner.is-visible {
+    display: inline-block;
+  }
+
+  div.dataTables_wrapper div.dataTables_length select,
+  div.dataTables_wrapper .dataTables_length .form-select {
+    cursor: pointer;
+  }
+
+  .dark-layout .status-card .status-count {
+    color: #fff;
+  }
+
+  .dark-layout .invoice-search-label-wrap,
+  .semi-dark-layout .invoice-search-label-wrap {
+    color: #d6dcec;
+  }
+
+  .dark-layout .invoice-search-header-spinner,
+  .semi-dark-layout .invoice-search-header-spinner {
+    color: #d6dcec;
+  }
+
+  .dark-layout .invoice-list-table tbody td:nth-child(1) a,
+  .dark-layout .invoice-list-table tbody td:nth-child(1) a:visited,
+  .dark-layout .invoice-list-table tbody td:nth-child(1) a:hover,
+  .dark-layout .invoice-list-table tbody td:nth-child(1) a:focus {
+    color: #fff !important;
+  }
+
+  .dark-layout .invoice-list-table.table tbody tr:hover > *,
+  .semi-dark-layout .invoice-list-table.table tbody tr:hover > * {
+    background-color: #36405a !important;
+    color: #fff !important;
+  }
+
+  body.dark-layout .invoice-list-wrapper .invoice-list-table .wo-invoice-list-action-col,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table .wo-invoice-list-action-col,
+  .dark-layout .invoice-list-wrapper .invoice-list-table .wo-invoice-list-action-col,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table .wo-invoice-list-action-col {
+    background-color: #283046;
+    border-left-color: rgba(184, 190, 220, 0.22);
+  }
+
+  body.dark-layout .invoice-list-wrapper .invoice-list-table thead .wo-invoice-list-action-col,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table thead .wo-invoice-list-action-col,
+  .dark-layout .invoice-list-wrapper .invoice-list-table thead .wo-invoice-list-action-col,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table thead .wo-invoice-list-action-col {
+    background-color: #2f3854;
+  }
+
+  body.dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > .wo-invoice-list-action-col,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > .wo-invoice-list-action-col,
+  .dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > .wo-invoice-list-action-col,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > .wo-invoice-list-action-col {
+    background-color: #36405a !important;
+  }
+  body.dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  body.dark-layout .invoice-list-wrapper .invoice-list-table tbody tr > td:last-child,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table tbody tr > td:last-child,
+  .dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  .dark-layout .invoice-list-wrapper .invoice-list-table tbody tr > td:last-child,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table tbody tr > td:last-child {
+    background-color: #283046;
+    border-left-color: rgba(184, 190, 220, 0.22);
+  }
+
+  body.dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  .dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table thead tr > th:last-child {
+    background-color: #2f3854;
+  }
+
+  body.dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > td:last-child,
+  body.semi-dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > td:last-child,
+  .dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > td:last-child,
+  .semi-dark-layout .invoice-list-wrapper .invoice-list-table.table tbody tr:hover > td:last-child {
+    background-color: #36405a !important;
+  }
+
+  .dark-layout .invoice-table-loading-overlay,
+  .semi-dark-layout .invoice-table-loading-overlay {
+    background: rgba(20, 28, 48, 0.68);
+  }
+
+  .dark-layout .invoice-table-loading-spinner,
+  .semi-dark-layout .invoice-table-loading-spinner {
+    color: #d6dcec;
+  }
+
+  .dark-layout .invoice-table-loading-message,
+  .semi-dark-layout .invoice-table-loading-message {
+    color: #f4f5fb;
+  }
+
+  .dark-layout #btn-toggle-filters,
+  .dark-layout #btn-toggle-filters:hover,
+  .dark-layout #btn-toggle-filters:focus {
+    color: #fff !important;
+    border-color: #fff !important;
+  }
+
+  .dark-layout .active-filters-divider {
+    background-color: rgba(255, 255, 255, 0.4);
+  }
+
+  .dark-layout .active-filter-chip {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.24);
+  }
+
+  .dark-layout .active-filter-chip-label,
+  .dark-layout .active-filter-chip-value {
+    color: #fff;
+  }
+
+
+  .dark-layout .wo-eye-action,
+  .semi-dark-layout .wo-eye-action {
+    color: #d6dcec;
+    border-color: rgba(214, 220, 236, 0.45);
+    background-color: transparent;
+  }
+
+  .dark-layout .wo-eye-action:hover,
+  .dark-layout .wo-eye-action:focus,
+  .semi-dark-layout .wo-eye-action:hover,
+  .semi-dark-layout .wo-eye-action:focus {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .dark-layout .wo-delete-action,
+  .semi-dark-layout .wo-delete-action {
+    border-color: rgba(234, 84, 85, 0.45);
+    color: #ff8f90;
+  }
+
+  .dark-layout .wo-delete-action:hover,
+  .dark-layout .wo-delete-action:focus,
+  .semi-dark-layout .wo-delete-action:hover,
+  .semi-dark-layout .wo-delete-action:focus {
+    color: #fff;
+    border-color: rgba(234, 84, 85, 0.9);
+    background-color: rgba(234, 84, 85, 0.92);
+  }
+
+ @media (min-width: 768px) {
+  .invoice-list-wrapper .col-lg-6:first-child {
+    flex: 0 0 auto;
+    width: 25%;
+  }
+
+  .invoice-list-wrapper .col-lg-6:nth-child(2) {
+    flex: 0 0 auto;
+    width: 75%;
+  }
+}
+
+
+  /* first <style> (page-style) */
+  .content-header { margin-top: -6px; margin-bottom: 4px; }
+  .content-header-title { margin-top: 5px; }
+  /* second <style> (status cards etc.) — verbatim subset */
+  .status-cards-wrapper { display: flex; flex-wrap: nowrap; gap: 14px; width: 100%; align-items: stretch; margin: 0; padding: 0; }
+  .status-card { flex: 1 1 0; min-width: 0; max-width: none; background: #fff; border: 1px solid #ebe9f1; border-radius: 5px; cursor: pointer; transition: all 0.2s ease; box-shadow: none; }
+  .status-card:hover { background-color: #f8f8f8; }
+  .status-card-active { border-color: #495B73; background-color: #fff; box-shadow: 0 4px 24px 0 rgba(34, 41, 47, 0.1); }
+  .status-card[data-status="svi"] { border-color: #6e6b7b; }
+  .status-card[data-status="planiran"] { border-color: #00cfe8; }
+  .status-card[data-status="otvoren"] { border-color: #28c76f; }
+  .status-card[data-status="rezerviran"] { border-color: #ff9f43; }
+  .status-card[data-status="u_radu"] { border-color: #ffc107; }
+  .status-card[data-status="djelimicno_zakljucen"] { border-color: #fd7e14; }
+  .status-card[data-status="zakljucen"] { border-color: #ea5455; }
+  .status-card-body { padding: 10px 15px; text-align: center; }
+  .status-label { font-size: 13px; font-weight: 500; margin-bottom: 5px; color: #6e6b7b; white-space: nowrap; }
+  .status-card[data-status="svi"] .status-label { color: #6e6b7b; }
+  .status-card[data-status="planiran"] .status-label { color: #00cfe8; }
+  .status-card[data-status="otvoren"] .status-label { color: #28c76f; }
+  .status-card[data-status="rezerviran"] .status-label { color: #ff9f43; }
+  .status-card[data-status="u_radu"] .status-label { color: #ffc107; }
+  .status-card[data-status="djelimicno_zakljucen"] .status-label { color: #fd7e14; }
+  .status-card[data-status="zakljucen"] .status-label { color: #ea5455; }
+  .status-count { font-size: 1.5rem; font-weight: 700; color: #5e5873; line-height: 1; }
+  .status-badge { font-weight: 500; }
+  .status-badge-default { background-color: rgba(110, 107, 123, 0.12) !important; color: #6e6b7b !important; }
+  .status-badge-planiran { background-color: rgba(0, 207, 232, 0.12) !important; color: #00cfe8 !important; }
+  .status-badge-otvoren { background-color: rgba(40, 199, 111, 0.12) !important; color: #28c76f !important; }
+  .status-badge-rezerviran { background-color: rgba(255, 159, 67, 0.12) !important; color: #ff9f43 !important; }
+  .status-badge-raspisan { background-color: rgba(73, 91, 115, 0.12) !important; color: #495B73 !important; }
+  .status-badge-u-radu { background-color: rgba(255, 193, 7, 0.16) !important; color: #b38600 !important; }
+  .status-badge-djelimicno-zakljucen { background-color: rgba(253, 126, 20, 0.12) !important; color: #fd7e14 !important; }
+  .status-badge-zakljucen { background-color: rgba(234, 84, 85, 0.12) !important; color: #ea5455 !important; }
+  .filter-input { font-size: 14px; }
+  .filter-header-actions { row-gap: 8px; }
+  #btn-toggle-filters:not(:hover):not(:active), #btn-delete-filter:not(:hover):not(:active) { background-color: transparent; }
+  .filter-input::placeholder { padding-left: 8px; }
+  .input-group-text { background: #f8f8f8; border-right: none; }
+  .content-header-right { display: flex; justify-content: flex-end; align-items: center; }
+  .content-header-right .breadcrumb-right { width: 100%; display: flex; justify-content: flex-end; }
+  .invoice-list-table tbody tr { cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease; }
+  .invoice-list-table.table tbody tr:hover > * { background-color: #f8f8fc; }
+  .invoice-list-wrapper .invoice-list-table { min-width: 1100px; }
+  .invoice-list-wrapper .card-datatable.table-responsive { overflow-x: visible; }
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:last-child { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center; }
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:last-child > div:first-child { flex: 0 0 auto !important; width: auto !important; max-width: none !important; }
+  .invoice-list-wrapper .card-datatable .dataTables_wrapper > .row:last-child > div:last-child { display: flex !important; flex: 0 0 auto !important; width: auto !important; max-width: none !important; margin-left: auto !important; justify-content: flex-end !important; }
+  .invoice-list-wrapper .card-datatable .pagination { margin-bottom: 1rem !important; }
+  .invoice-list-wrapper .card-datatable .dataTables_info { padding-top: 0 !important; }
+  div.dataTables_wrapper div.dataTables_filter { text-align: right; float: right; }
+  div.dataTables_wrapper div.dataTables_filter label { margin-top: 0; margin-bottom: 0; text-align: right; float: right; display: inline-flex; align-items: center; }
+  .invoice-search-label-wrap { display: inline-flex; align-items: center; gap: 0.45rem; margin-right: 0.5rem; color: #6e6b7b; font-weight: 500; line-height: 1; white-space: nowrap; }
+  .invoice-search-header-spinner { width: 0.9rem; height: 0.9rem; border-width: 0.15em; color: #495b73; display: none; }
+  @media (min-width: 768px) {
+    .invoice-list-wrapper .col-lg-6:first-child { flex: 0 0 auto; width: 25%; }
+    .invoice-list-wrapper .col-lg-6:nth-child(2) { flex: 0 0 auto; width: 75%; }
+  }
+
+
+</style>
+</head>
+<body class="vertical-layout vertical-menu-modern menu-expanded navbar-floating footer-static default">
+
+<nav class="header-navbar navbar navbar-expand-lg align-items-center floating-nav navbar-light navbar-shadow">
+  <div class="navbar-container d-flex content">
+    <div class="bookmark-wrapper d-flex align-items-center">
+      <ul class="nav navbar-nav d-xl-none align-items-center">
+        <li class="nav-item"><a class="nav-link menu-toggle" href="#"><i class="ficon" data-feather="menu"></i></a></li>
+        <li class="nav-item d-md-none"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+      <ul class="nav navbar-nav bookmark-icons">
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="home"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="calendar"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+    </div>
+    <ul class="nav navbar-nav align-items-center ms-auto">
+      <li class="nav-item">
+        <a class="nav-link navbar-ai-token-link" href="#">
+          <span class="navbar-ai-token-pill">
+            <span class="navbar-ai-token-pill__label">Tokeni</span>
+            <span class="navbar-ai-token-pill__icon"><span class="navbar-ai-token-coin navbar-ai-token-coin--top"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--mid"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--bottom"></span></span>
+            <span class="navbar-ai-token-pill__divider">|</span>
+            <span class="navbar-ai-token-pill__value">12.480</span>
+          </span>
+        </a>
+      </li>
+      <li class="nav-item d-none d-md-block"><a class="nav-link nav-link-style"><i class="ficon" data-feather="moon"></i></a></li>
+      <li class="nav-item nav-search"><a class="nav-link nav-link-search"><i class="ficon" data-feather="search"></i></a></li>
+      <li class="nav-item dropdown dropdown-user">
+        <a class="nav-link dropdown-toggle dropdown-user-link" href="#">
+          <div class="user-nav d-sm-flex d-none"><span class="user-name fw-bolder">Admin</span><span class="user-status">ADMIN</span></div>
+          <span class="avatar"><img class="round" src="../images/portrait/avatar-s-22.jpg" alt="avatar" height="40" width="40"><span class="avatar-status-online"></span></span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="main-menu menu-fixed menu-light menu-accordion menu-shadow">
+  <div class="navbar-header">
+    <ul class="nav navbar-nav flex-row">
+      <li class="nav-item me-auto">
+        <a class="navbar-brand d-flex align-items-center" href="#">
+          <span class="brand-logo"><img src="../images/logo/TrendyCNC.png" alt="eNalog.app" width="36"></span>
+          <h2 class="brand-text mb-0 ms-50">eNalog.app</h2>
+        </a>
+      </li>
+      <li class="nav-item nav-toggle"><a class="nav-link modern-nav-toggle pe-0"><i class="d-none d-xl-block collapse-toggle-icon font-medium-4 text-primary" data-feather="disc"></i></a></li>
+    </ul>
+  </div>
+  <div class="shadow-bottom"></div>
+  <div class="main-menu-content">
+    <ul class="navigation navigation-main">
+      <li class="navigation-header"><span>Radni nalozi</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item active"><a href="#" class="d-flex align-items-center"><i data-feather="file-text"></i><span class="menu-title text-truncate">Upravljanje nalozima</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="camera"></i><span class="menu-title text-truncate">Skeniraj nalog</span></a></li>
+      <li class="navigation-header"><span>Narudžbe</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="briefcase"></i><span class="menu-title text-truncate">Upravljanje narudžbama</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i class="fa fa-magic fa-fw"></i><span class="menu-title text-truncate">AI narudžba</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="inbox"></i><span class="menu-title text-truncate">AI Inbox</span></a></li>
+      <li class="navigation-header"><span>Proizvodnja</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="clipboard"></i><span class="menu-title text-truncate">Plan proizvodnje</span></a></li>
+      <li class="navigation-header"><span>AI asistent</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="activity"></i><span class="menu-title text-truncate">Historija AI skeniranja</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Dozvoljeni pošiljaoci</span></a></li>
+      <li class="navigation-header"><span>Dokumenti</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="archive"></i><span class="menu-title text-truncate">Razduženi materijali</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="box"></i><span class="menu-title text-truncate">Razduživanje WIP</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="tool"></i><span class="menu-title text-truncate">Razdužene operacije</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="package"></i><span class="menu-title text-truncate">Prijem VP skladište</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="package"></i><span class="menu-title text-truncate">Prijem škarta</span></a></li>
+      <li class="navigation-header"><span>Administracija</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="user"></i><span class="menu-title text-truncate">Korisnici</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="credit-card"></i><span class="menu-title text-truncate">Moja NFC kartica</span></a></li>
+      <li class="navigation-header"><span>Skladišni alati</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="layers"></i><span class="menu-title text-truncate">Pregled zaliha</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Površinske zaštite</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Kreiranje rezervi</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="map"></i><span class="menu-title text-truncate">Mapa skladišta</span></a></li>
+    </ul>
+  </div>
+</div>
+<div class="app-content content">
+  <div class="content-overlay"></div>
+  <div class="header-navbar-shadow"></div>
+  <div class="content-wrapper container-xxxl p-0">
+    
+    <div class="content-body">
+
+
+<section class="invoice-list-wrapper">
+  <div class="content-header row">
+    <div class="content-header-left col-md-8 col-12 mb-2">
+      <div class="row breadcrumbs-top"><div class="col-12"><h2 class="content-header-title float-start mb-0">Radni nalozi</h2></div></div>
+    </div>
+    <div class="content-header-right text-md-end col-md-4 col-12 d-md-block d-none">
+      <div class="mb-1 breadcrumb-right">
+        <button type="button" class="btn btn-primary" id="btn-add"><i data-feather="plus" class="me-50"></i> Dodaj radni nalog</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mb-2"><div class="col-12"><div class="d-flex status-cards-wrapper">
+    <div class="status-card status-card-active" data-status="svi"><div class="status-card-body"><div class="status-label">Svi</div><div class="status-count">1248</div></div></div>
+    <div class="status-card" data-status="planiran"><div class="status-card-body"><div class="status-label">Planiran</div><div class="status-count">86</div></div></div>
+    <div class="status-card" data-status="otvoren"><div class="status-card-body"><div class="status-label">Otvoren</div><div class="status-count">142</div></div></div>
+    <div class="status-card" data-status="rezerviran"><div class="status-card-body"><div class="status-label">Rezerviran</div><div class="status-count">37</div></div></div>
+    <div class="status-card" data-status="u_radu"><div class="status-card-body"><div class="status-label">U radu</div><div class="status-count">64</div></div></div>
+    <div class="status-card" data-status="djelimicno_zakljucen"><div class="status-card-body"><div class="status-label">Djel. zaključen</div><div class="status-count">21</div></div></div>
+    <div class="status-card" data-status="zakljucen"><div class="status-card-body"><div class="status-label">Zaključen</div><div class="status-count">898</div></div></div>
+  </div></div></div>
+
+  <div class="card mb-2">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h4 class="mb-0">Filter radnih naloga</h4>
+      <div class="d-flex align-items-center flex-wrap gap-2 filter-header-actions">
+        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-toggle-filters"><i data-feather="filter" class="me-50"></i> Sakrij filtere</button>
+        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete-filter"><i data-feather="trash-2" class="me-50"></i> Obriši filter</button>
+      </div>
+    </div>
+    <div class="card-body" id="filters-body">
+      <div class="row g-2 mb-2">
+        <div class="col-md-3"><label class="form-label">Kupac</label><div class="input-group input-group-merge"><span class="input-group-text"><i data-feather="search"></i></span><input type="text" class="form-control filter-input" placeholder="Kupac"></div></div>
+        <div class="col-md-3"><label class="form-label">Primatelj</label><div class="input-group input-group-merge"><span class="input-group-text"><i data-feather="search"></i></span><input type="text" class="form-control filter-input" placeholder="Primatelj"></div></div>
+        <div class="col-md-3"><label class="form-label">Proizvod</label><div class="input-group input-group-merge"><span class="input-group-text"><i data-feather="search"></i></span><input type="text" class="form-control filter-input" placeholder="Proizvod"></div></div>
+        <div class="col-md-3"><label class="form-label">Plan. početak od</label><div class="input-group input-group-merge"><span class="input-group-text"><i data-feather="calendar"></i></span><input type="text" class="form-control filter-input filter-date-input" placeholder="dd.mm.gggg"></div></div>
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-md-3"><label class="form-label">Plan. početak do</label><div class="input-group input-group-merge"><span class="input-group-text"><i data-feather="calendar"></i></span><input type="text" class="form-control filter-input filter-date-input" placeholder="dd.mm.gggg"></div></div>
+        <div class="col-md-3"><label class="form-label">Plan. kraj od</label><div class="input-group input-group-merge"><span class="input-group-text"><i data-feather="calendar"></i></span><input type="text" class="form-control filter-input filter-date-input" placeholder="dd.mm.gggg"></div></div>
+        <div class="col-md-3"><label class="form-label">Plan. kraj do</label><div class="input-group input-group-merge"><span class="input-group-text"><i data-feather="calendar"></i></span><input type="text" class="form-control filter-input filter-date-input" placeholder="dd.mm.gggg"></div></div>
+        <div class="col-md-3"><label class="form-label">Datum od</label><div class="input-group input-group-merge"><span class="input-group-text"><i data-feather="calendar"></i></span><input type="text" class="form-control filter-input filter-date-input" placeholder="dd.mm.gggg"></div></div>
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-md-3"><label class="form-label">RN datum do</label><div class="input-group input-group-merge"><span class="input-group-text"><i data-feather="calendar"></i></span><input type="text" class="form-control filter-input filter-date-input" placeholder="dd.mm.gggg"></div></div>
+        <div class="col-md-3"><label class="form-label">Vezni dok.</label><div class="input-group input-group-merge"><span class="input-group-text"><i data-feather="search"></i></span><input type="text" class="form-control filter-input" placeholder="Vezni dok."></div></div>
+        <div class="col-md-3"><label class="form-label">Prioritet</label><select class="form-select filter-input"><option>Svi prioriteti</option><option>1 - Visoki prioritet</option><option>5 - Uobičajeni prioritet</option><option>7 - Materijal razdužen</option><option>10 - Niski prioritet</option><option>15 - Uzorci</option></select></div>
+        <div class="col-md-3 d-flex align-items-end"><button type="button" class="btn btn-primary w-100" id="btn-filter"><i data-feather="filter" class="me-50"></i> Filter</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-datatable table-responsive">
+      <div class="dataTables_wrapper dt-bootstrap5 no-footer">
+        <div class="row d-flex justify-content-between align-items-center m-1">
+          <div class="col-lg-6 d-flex align-items-center">
+            <div class="dataTables_length"><label>Prikaži <select class="form-select"><option>10</option><option>25</option><option>50</option></select></label></div>
+            <div class="dt-action-buttons text-xl-end text-lg-start text-lg-end text-start "><div class="dt-buttons"></div></div>
+          </div>
+          <div class="col-lg-6 d-flex align-items-center justify-content-lg-end flex-lg-nowrap flex-wrap pe-lg-1 p-0">
+            <div class="dataTables_filter"><label>
+              <span class="invoice-search-label-wrap"><span class="spinner-border spinner-border-sm invoice-search-header-spinner"></span><span class="invoice-search-header-label">Brza pretraga po nazivu, šifri, klijentu itd..</span></span>
+              <input type="search" class="form-control" placeholder="Pretraži...">
+            </label></div>
+          </div>
+        </div>
+        <table class="invoice-list-table table dataTable">
+          <thead><tr><th>#</th><th>Narudžba</th><th>Naziv</th><th>Šifra</th><th>Qty</th><th>Klijent</th><th class="text-truncate">Datum</th><th>Status</th><th>Prioritet</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="text-nowrap"><a class="fw-bold text-nowrap" href="#">26-6000-0001284</a></td>
+              <td><span class="text-nowrap">26-0100-0000412</span></td>
+              <td><span class="text-truncate d-inline-block w-100" title="Prirubnica DN80 PN16">Prirubnica..</span></td>
+              <td><span class="text-nowrap">PR-080-16</span></td>
+              <td class="align-middle"><span class="text-nowrap fw-semibold">120 <small class="text-muted">kom</small></span></td>
+              <td><div class="d-flex justify-content-left align-items-center"><div class="avatar-wrapper"><div class="avatar me-50" style="background-color: hsla(212, 70%, 54%, 0.18); color: hsl(212, 78%, 34%); border: 1px solid hsla(212, 70%, 54%, 0.35);"><div class="avatar-content">GW</div></div></div><div class="d-flex flex-column"><h6 class="user-name text-truncate mb-0" title="GROB-WERKE">GROB-WERKE</h6><small class="text-truncate text-muted">Amir H.</small></div></div></td>
+              <td>06 Oct 2026</td>
+              <td class="text-center align-middle"><div class="d-flex justify-content-center"><span class="badge rounded-pill status-badge status-badge-u-radu"> U radu </span></div></td>
+              <td><span class="badge rounded-pill badge-light-danger text-danger"> 1 - Visoki </span></td>
+            </tr>
+            <tr>
+              <td class="text-nowrap"><a class="fw-bold text-nowrap" href="#">26-6000-0001283</a></td>
+              <td><span class="text-nowrap">26-0100-0000411</span></td>
+              <td><span class="text-truncate d-inline-block w-100" title="Osovina vratila Ø40">Osovina vr..</span></td>
+              <td><span class="text-nowrap">OV-040-220</span></td>
+              <td class="align-middle"><span class="text-nowrap fw-semibold">48 <small class="text-muted">kom</small></span></td>
+              <td><div class="d-flex justify-content-left align-items-center"><div class="avatar-wrapper"><div class="avatar me-50" style="background-color: hsla(28, 70%, 54%, 0.18); color: hsl(28, 78%, 34%); border: 1px solid hsla(28, 70%, 54%, 0.35);"><div class="avatar-content">TG</div></div></div><div class="d-flex flex-column"><h6 class="user-name text-truncate mb-0" title="TRENDY GERMANY GMBH">TRENDY GER..</h6><small class="text-truncate text-muted">Lejla K.</small></div></div></td>
+              <td>06 Oct 2026</td>
+              <td class="text-center align-middle"><div class="d-flex justify-content-center"><span class="badge rounded-pill status-badge status-badge-otvoren"> Otvoren </span></div></td>
+              <td><span class="badge rounded-pill badge-light-warning text-warning"> 5 - Uobičajeni </span></td>
+            </tr>
+            <tr>
+              <td class="text-nowrap"><a class="fw-bold text-nowrap" href="#">26-6000-0001282</a></td>
+              <td><span class="text-nowrap">26-0100-0000409</span></td>
+              <td><span class="text-truncate d-inline-block w-100" title="Nosač motora 3mm">Nosač moto..</span></td>
+              <td><span class="text-nowrap">NM-300-A</span></td>
+              <td class="align-middle"><span class="text-nowrap fw-semibold">2,5 <small class="text-muted">kg</small></span></td>
+              <td><div class="d-flex justify-content-left align-items-center"><div class="avatar-wrapper"><div class="avatar me-50" style="background-color: hsla(140, 70%, 54%, 0.18); color: hsl(140, 78%, 34%); border: 1px solid hsla(140, 70%, 54%, 0.35);"><div class="avatar-content">KH</div></div></div><div class="d-flex flex-column"><h6 class="user-name text-truncate mb-0" title="KOVIS Hidraulika">KOVIS Hidr..</h6><small class="text-truncate text-muted"></small></div></div></td>
+              <td>05 Oct 2026</td>
+              <td class="text-center align-middle"><div class="d-flex justify-content-center"><span class="badge rounded-pill status-badge status-badge-planiran"> Planiran </span></div></td>
+              <td><span class="badge rounded-pill badge-light-info text-info"> 10 - Niski </span></td>
+            </tr>
+            <tr>
+              <td class="text-nowrap"><a class="fw-bold text-nowrap" href="#">26-6000-0001281</a></td>
+              <td><span class="text-muted">-</span></td>
+              <td><span class="text-truncate d-inline-block w-100" title="Kućište ležaja">Kućište le..</span></td>
+              <td><span class="text-nowrap">KL-6205</span></td>
+              <td class="align-middle"><span class="text-nowrap fw-semibold">300 <small class="text-muted">kom</small></span></td>
+              <td><div class="d-flex justify-content-left align-items-center"><div class="avatar-wrapper"><div class="avatar me-50" style="background-color: hsla(212, 70%, 54%, 0.18); color: hsl(212, 78%, 34%); border: 1px solid hsla(212, 70%, 54%, 0.35);"><div class="avatar-content">GW</div></div></div><div class="d-flex flex-column"><h6 class="user-name text-truncate mb-0" title="GROB-WERKE">GROB-WERKE</h6><small class="text-truncate text-muted">Amir H.</small></div></div></td>
+              <td>03 Oct 2026</td>
+              <td class="text-center align-middle"><div class="d-flex justify-content-center"><span class="badge rounded-pill status-badge status-badge-rezerviran"> Rezerviran </span></div></td>
+              <td><span class="badge rounded-pill badge-light-secondary "> 7 - Materijal razdužen </span></td>
+            </tr>
+            <tr>
+              <td class="text-nowrap"><a class="fw-bold text-nowrap" href="#">26-6000-0001279</a></td>
+              <td><span class="text-nowrap">26-0100-0000398</span></td>
+              <td><span class="text-truncate d-inline-block w-100" title="Distantna čahura">Distantna ..</span></td>
+              <td><span class="text-nowrap">DC-12-30</span></td>
+              <td class="align-middle"><span class="text-nowrap fw-semibold">1.000 <small class="text-muted">kom</small></span></td>
+              <td><div class="d-flex justify-content-left align-items-center"><div class="avatar-wrapper"><div class="avatar me-50" style="background-color: hsla(28, 70%, 54%, 0.18); color: hsl(28, 78%, 34%); border: 1px solid hsla(28, 70%, 54%, 0.35);"><div class="avatar-content">TG</div></div></div><div class="d-flex flex-column"><h6 class="user-name text-truncate mb-0" title="TRENDY GERMANY GMBH">TRENDY GER..</h6><small class="text-truncate text-muted">Lejla K.</small></div></div></td>
+              <td>02 Oct 2026</td>
+              <td class="text-center align-middle"><div class="d-flex justify-content-center"><span class="badge rounded-pill status-badge status-badge-djelimicno-zakljucen"> Djelomično zaključen </span></div></td>
+              <td><span class="badge rounded-pill badge-light-warning text-warning"> 5 - Uobičajeni </span></td>
+            </tr>
+            <tr>
+              <td class="text-nowrap"><a class="fw-bold text-nowrap" href="#">26-6000-0001275</a></td>
+              <td><span class="text-nowrap">26-0100-0000390</span></td>
+              <td><span class="text-truncate d-inline-block w-100" title="Ploča adaptera">Ploča adap..</span></td>
+              <td><span class="text-nowrap">PA-200-10</span></td>
+              <td class="align-middle"><span class="text-nowrap fw-semibold">60 <small class="text-muted">kom</small></span></td>
+              <td><div class="d-flex justify-content-left align-items-center"><div class="avatar-wrapper"><div class="avatar me-50" style="background-color: hsla(300, 70%, 54%, 0.18); color: hsl(300, 78%, 34%); border: 1px solid hsla(300, 70%, 54%, 0.35);"><div class="avatar-content">MS</div></div></div><div class="d-flex flex-column"><h6 class="user-name text-truncate mb-0" title="Metalac Sarajevo">Metalac Sa..</h6><small class="text-truncate text-muted"></small></div></div></td>
+              <td>30 Sep 2026</td>
+              <td class="text-center align-middle"><div class="d-flex justify-content-center"><span class="badge rounded-pill status-badge status-badge-zakljucen"> Zaključen </span></div></td>
+              <td><span class="badge rounded-pill badge-light-info text-info"> 15 - Uzorci </span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="d-flex justify-content-between mx-2 row">
+          <div class="col-sm-12 col-md-6"><div class="dataTables_info">Prikazano 1 do 10 od 1248 naloga</div></div>
+          <div class="col-sm-12 col-md-6"><div class="dataTables_paginate paging_simple_numbers"><ul class="pagination">
+            <li class="paginate_button page-item previous disabled"><a class="page-link" href="#">&nbsp;</a></li>
+            <li class="paginate_button page-item active"><a class="page-link" href="#">1</a></li>
+            <li class="paginate_button page-item"><a class="page-link" href="#">2</a></li>
+            <li class="paginate_button page-item"><a class="page-link" href="#">3</a></li>
+            <li class="paginate_button page-item"><a class="page-link" href="#">4</a></li>
+            <li class="paginate_button page-item"><a class="page-link" href="#">5</a></li>
+            <li class="paginate_button page-item disabled"><a class="page-link" href="#">…</a></li>
+            <li class="paginate_button page-item"><a class="page-link" href="#">125</a></li>
+            <li class="paginate_button page-item next"><a class="page-link" href="#">&nbsp;</a></li>
+          </ul></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+    </div>
+  </div>
+</div>
+<script src="../vendors/js/vendors.min.js"></script>
+<script>feather.replace({width: 14, height: 14});</script>
+</body>
+</html>

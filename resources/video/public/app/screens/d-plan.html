@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html class="loaded light-layout" lang="bs" data-textdirection="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Plan proizvodnje</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=block" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="../vendors/css/vendors.min.css">
+<link rel="stylesheet" href="../css/core.css">
+<link rel="stylesheet" href="../css/base/core/menu/menu-types/vertical-menu.css">
+<link rel="stylesheet" href="../vendors/css/tables/datatable/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="../css/overrides.css">
+<style>html .content .content-wrapper .content-header-title{border-right:0!important;padding-right:0!important;margin-right:0!important}</style>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+.navbar-ai-token-link{padding-left:.2rem!important;padding-right:.2rem!important}
+.navbar-ai-token-pill{position:relative;display:inline-flex;align-items:center;gap:.45rem;min-height:2.7rem;padding:.38rem .8rem;border-radius:1rem;background:rgba(255,255,255,.95);box-shadow:0 10px 24px rgba(34,41,47,.08)}
+.navbar-ai-token-pill__icon{position:relative;display:inline-grid;width:1.3rem;height:1.35rem;place-items:center;flex:0 0 auto}
+.navbar-ai-token-pill__label,.navbar-ai-token-pill__divider{display:inline-flex;align-items:center;line-height:1;color:#6e7f91;font-size:.92rem;font-weight:600}
+.navbar-ai-token-pill__divider{opacity:.7}
+.navbar-ai-token-pill__value{display:inline-flex;align-items:center;justify-content:center;min-width:2.2rem;font-size:1rem;font-weight:700;line-height:1;color:#4b5d78}
+.navbar-ai-token-coin{position:absolute;width:.95rem;height:.42rem;border-radius:999px;background:linear-gradient(180deg,#ffd86f 0%,#f5b301 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 2px 4px rgba(196,140,0,.2)}
+.navbar-ai-token-coin--top{transform:translateY(-.34rem)}
+.navbar-ai-token-coin--mid{width:1.05rem}
+.navbar-ai-token-coin--bottom{transform:translateY(.34rem)}
+html,body{overflow:hidden}
+.pace,.pace-progress{display:none!important}
+*,*::before,*::after{animation-duration:.001s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important}
+
+    .production-plan-table .plan-expand-cell { width: 28px; padding: .25rem; }
+    .plan-expand-button { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 0; border-radius: .35rem; background: transparent; color: inherit; }
+    .plan-expand-button:hover { background: rgba(94, 88, 115, .12); }
+    .plan-expand-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+    .plan-expand-button i { transition: transform .15s ease; font-size: .7rem; }
+    .plan-expand-button[aria-expanded='true'] i { transform: rotate(90deg); }
+    .production-plan-table .plan-detail-row > td { padding: 0; background: #f8f8f8; border-bottom: 1px solid #d8d6de; }
+    .plan-expanded-details { box-sizing: border-box; width: min(100%, var(--production-plan-visible-width, 80vw)); padding: .75rem 1rem; white-space: normal; }
+    .plan-expanded-details h6 { font-size: .75rem; margin-bottom: .5rem; }
+    .plan-detail-scroll { max-width: 100%; overflow-x: auto; }
+    .plan-operations-flow { display: flex; flex-wrap: nowrap; list-style: none; padding: 0; margin: 0; width: max-content; }
+    .plan-operations-flow li { display: flex; align-items: center; flex: 0 0 auto; }
+    .plan-operations-flow li:not(:last-child)::after { content: ''; width: 2rem; height: 1px; margin: 0 .75rem; background: #d8d6de; }
+    .plan-operation-circle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 26px; height: 26px; border: 2px solid currentColor; border-radius: 50%; margin-right: .5rem; }
+    .plan-operation-circle--finished { color: #28a745; background: rgba(40, 167, 69, .12); }
+    .plan-operation-circle--unfinished { color: #e69a19; background: rgba(230, 154, 25, .12); }
+    .plan-operations-flow strong { font-size: .8rem; }
+    .plan-operations-flow small { display: block; font-size: .7rem; color: inherit; }
+    .dark-layout .production-plan-table .plan-detail-row > td, .semi-dark-layout .production-plan-table .plan-detail-row > td { background: #283046; border-color: #3b4253; }
+    @media (prefers-reduced-motion: reduce) { .plan-expand-button i { transition: none; } }
+    .production-plan-table { width: max-content !important; min-width: 100%; }
+    .production-plan-table > :not(caption) > * > * { padding: .42rem .5rem; font-size: .8rem; white-space: nowrap; }
+    .production-plan-table thead th { max-width: 7rem; white-space: normal; line-height: 1.2; }
+    table.production-plan-table.dataTable > thead > tr > th[class*="sorting"]::before { top: calc(50% - .5rem); right: .45em; bottom: auto; transform: translateY(-50%); }
+    table.production-plan-table.dataTable > thead > tr > th[class*="sorting"]::after { top: calc(50% + .5rem); right: .45em; bottom: auto; transform: translateY(-50%); }
+    .production-plan-table thead th:nth-child(9):not(.sorting_disabled),
+    .production-plan-table thead th:nth-child(13):not(.sorting_disabled) { padding-right: 20px; }
+    .production-plan-table .editable-cell { cursor: pointer; }
+    .production-plan-table .production-plan-note-preview { display: inline-block; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+    .production-plan-table tr.production-plan-row--red > td { background-color: #ffd6dc !important; color: #7a0014; }
+    .production-plan-table tr.production-plan-row--yellow > td { background-color: #fff0a3 !important; color: #5f4500; }
+    .production-plan-table tr.production-plan-row--orange > td { background-color: #ffd1aa !important; color: #792b00; }
+    .production-plan-table tr.production-plan-row--purple > td { background-color: #e8d4ff !important; color: #4f167f; }
+    .production-plan-table tr.production-plan-row--teal > td { background-color: #bcefe5 !important; color: #005c4c; }
+    .production-plan-table tr.production-plan-row--green > td { background-color: #c5f1d2 !important; color: #075e2a; }
+    .production-plan-table tr.production-plan-row--grey > td { background-color: #dde2e8 !important; color: #39424e; }
+    .production-plan-table tr[class*='production-plan-row--'] > td:first-child { box-shadow: inset 4px 0 0 currentColor; }
+    .production-plan-table-overlay-host { position: relative; isolation: isolate; }
+    .production-plan-table-loading-overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; min-height: 220px; background: rgba(255, 255, 255, .74); backdrop-filter: blur(1px); z-index: 30; pointer-events: none; }
+    .production-plan-table-loading-overlay.is-visible { display: flex; }
+    .production-plan-wrapper .dataTables_processing { display: none !important; }
+    .production-plan-table td.dataTables_empty { padding: 0 !important; text-align: left !important; }
+    .production-plan-empty-message { position: sticky; left: 0; display: block; box-sizing: border-box; width: var(--production-plan-visible-width, 100%); padding: .42rem .5rem; text-align: center; }
+    .production-plan-table-loading-overlay-content { display: inline-flex; flex-direction: column; align-items: center; gap: .65rem; text-align: center; }
+    .production-plan-table-loading-spinner { width: 2rem; height: 2rem; border-width: .2em; color: #495b73; }
+    .production-plan-table-loading-message { font-size: .95rem; font-weight: 600; color: #5e5873; letter-spacing: .01em; }
+    #btn-izvoz-plana { color: #5e5873; border-color: currentColor; cursor: pointer; }
+    #btn-izvoz-plana:hover, #btn-izvoz-plana:focus-visible { background-color: rgba(94, 88, 115, .12); }
+    .dark-layout #btn-izvoz-plana { color: #d0d2d6; }
+    #production-plan-export-modal button,
+    #production-plan-export-modal .form-check-input:not(:disabled),
+    #production-plan-export-modal .form-check-input:not(:disabled) + .form-check-label { cursor: pointer; }
+    #tijelo-kolona-plana button,
+    #tijelo-kolona-plana .form-check-input:not(:disabled),
+    #tijelo-kolona-plana .form-check-input:not(:disabled) + .form-check-label { cursor: pointer; }
+    .production-plan-column-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem 1rem; }
+    .production-plan-column-options .form-check { margin: 0; }
+    .dark-layout .production-plan-table-loading-overlay, .semi-dark-layout .production-plan-table-loading-overlay { background: rgba(20, 28, 48, .68); }
+    .dark-layout .production-plan-table-loading-spinner, .semi-dark-layout .production-plan-table-loading-spinner { color: #d6dcec; }
+    .dark-layout .production-plan-table-loading-message, .semi-dark-layout .production-plan-table-loading-message { color: #f4f5fb; }
+    .production-plan-wrapper .card-datatable.table-responsive { overflow: visible; }
+    .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child,
+    .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:last-child { margin-right: 0; margin-left: 0; padding: 1rem; }
+    .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-'],
+    .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:last-child > [class*='col-'] { padding-right: 0; padding-left: 0; }
+    .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) { margin-right: 0; margin-left: 0; overflow-x: auto; }
+    .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-'] { min-width: max-content; padding-right: 0; padding-left: 0; }
+    @media (min-width: 768px) {
+      .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+      .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-']:first-child { flex: 1 1 auto; width: auto; max-width: none; }
+      .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-']:last-child { flex: 0 0 auto; width: auto; max-width: none; margin-left: auto; }
+    }
+    body.production-plan-fullscreen { overflow: hidden; }
+    .production-plan-fullscreen-toolbar { display: none; }
+    #production-plan-list.is-fullscreen { position: fixed; inset: 0; z-index: 1040; margin: 0; border-radius: 0; overflow: auto; background: #fff; }
+    .dark-layout #production-plan-list.is-fullscreen { background: #283046; }
+    #production-plan-list.is-fullscreen .dataTables_wrapper > .row:first-child,
+    #production-plan-list.is-fullscreen .dataTables_wrapper > .row:last-child { display: none; }
+    .plan-inline-editor { z-index: 2000; min-width: 240px; max-width: calc(100vw - 16px); padding: .65rem; background: #fff; border: 1px solid #d8d6de; border-radius: .35rem; box-shadow: 0 5px 18px rgba(34,41,47,.16); }
+    .plan-inline-editor label { font-size: .75rem; margin-bottom: .35rem; }
+    .plan-inline-editor textarea { min-height: 80px; }
+    .plan-multiselect { position: relative; }
+    .plan-multiselect-menu { position: absolute; z-index: 1050; top: 100%; left: 0; width: 100%; min-width: 230px; padding: .65rem; background: #fff; border: 1px solid #d8d6de; border-radius: .35rem; box-shadow: 0 5px 18px rgba(34,41,47,.16); }
+    .plan-multiselect-options { max-height: 220px; overflow-y: auto; }
+    .plan-multiselect .form-check { padding-top: .25rem; padding-bottom: .25rem; }
+    .plan-multiselect .form-check-input, .plan-multiselect .form-check-label { cursor: pointer; }
+    .dark-layout .plan-multiselect-menu { background: #283046; border-color: #3b4253; }
+    .plan-customer-dates { max-width: 100%; }
+  
+
+  .production-plan-table .plan-expand-cell { width: 28px; padding: .25rem; }
+  .plan-expand-button { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 0; border-radius: .35rem; background: transparent; color: inherit; }
+  .plan-expand-button:hover { background: rgba(94, 88, 115, .12); }
+  .plan-expand-button i { transition: transform .15s ease; font-size: .7rem; }
+  .plan-expand-button[aria-expanded='true'] i { transform: rotate(90deg); }
+  .production-plan-table .plan-detail-row > td { padding: 0; background: #f8f8f8; border-bottom: 1px solid #d8d6de; }
+  .plan-expanded-details { box-sizing: border-box; width: min(100%, var(--production-plan-visible-width, 80vw)); padding: .75rem 1rem; white-space: normal; }
+  .plan-expanded-details h6 { font-size: .75rem; margin-bottom: .5rem; }
+  .plan-detail-scroll { max-width: 100%; overflow-x: auto; }
+  .plan-operations-flow { display: flex; flex-wrap: nowrap; list-style: none; padding: 0; margin: 0; width: max-content; }
+  .plan-operations-flow li { display: flex; align-items: center; flex: 0 0 auto; }
+  .plan-operations-flow li:not(:last-child)::after { content: ''; width: 2rem; height: 1px; margin: 0 .75rem; background: #d8d6de; }
+  .plan-operation-circle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 26px; height: 26px; border: 2px solid currentColor; border-radius: 50%; margin-right: .5rem; }
+  .plan-operation-circle--finished { color: #28a745; background: rgba(40, 167, 69, .12); }
+  .plan-operation-circle--unfinished { color: #e69a19; background: rgba(230, 154, 25, .12); }
+  .plan-operations-flow strong { font-size: .8rem; }
+  .plan-operations-flow small { display: block; font-size: .7rem; color: inherit; }
+  .production-plan-table { width: max-content !important; min-width: 100%; }
+  .production-plan-table > :not(caption) > * > * { padding: .42rem .5rem; font-size: .8rem; white-space: nowrap; }
+  .production-plan-table thead th { max-width: 7rem; white-space: normal; line-height: 1.2; }
+  table.production-plan-table.dataTable > thead > tr > th[class*="sorting"]::before { top: calc(50% - .5rem); right: .45em; bottom: auto; transform: translateY(-50%); }
+  table.production-plan-table.dataTable > thead > tr > th[class*="sorting"]::after { top: calc(50% + .5rem); right: .45em; bottom: auto; transform: translateY(-50%); }
+  .production-plan-table thead th:nth-child(9):not(.sorting_disabled),
+  .production-plan-table thead th:nth-child(13):not(.sorting_disabled) { padding-right: 20px; }
+  .production-plan-table .editable-cell { cursor: pointer; }
+  .production-plan-table .production-plan-note-preview { display: inline-block; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+  .production-plan-table tr.production-plan-row--red > td { background-color: #ffd6dc !important; color: #7a0014; }
+  .production-plan-table tr.production-plan-row--yellow > td { background-color: #fff0a3 !important; color: #5f4500; }
+  .production-plan-table tr.production-plan-row--orange > td { background-color: #ffd1aa !important; color: #792b00; }
+  .production-plan-table tr.production-plan-row--purple > td { background-color: #e8d4ff !important; color: #4f167f; }
+  .production-plan-table tr.production-plan-row--teal > td { background-color: #bcefe5 !important; color: #005c4c; }
+  .production-plan-table tr.production-plan-row--green > td { background-color: #c5f1d2 !important; color: #075e2a; }
+  .production-plan-table tr.production-plan-row--grey > td { background-color: #dde2e8 !important; color: #39424e; }
+  .production-plan-table tr[class*='production-plan-row--'] > td:first-child { box-shadow: inset 4px 0 0 currentColor; }
+  .production-plan-table-overlay-host { position: relative; isolation: isolate; }
+  .production-plan-table-loading-overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; min-height: 220px; background: rgba(255, 255, 255, .74); backdrop-filter: blur(1px); z-index: 30; pointer-events: none; }
+  .production-plan-table-loading-overlay.is-visible { display: flex; }
+  #btn-izvoz-plana { color: #5e5873; border-color: currentColor; cursor: pointer; }
+  #btn-izvoz-plana:hover, #btn-izvoz-plana:focus-visible { background-color: rgba(94, 88, 115, .12); }
+  .production-plan-wrapper .card-datatable.table-responsive { overflow: visible; }
+  .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child,
+  .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:last-child { margin-right: 0; margin-left: 0; padding: 1rem; }
+  .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-'],
+  .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:last-child > [class*='col-'] { padding-right: 0; padding-left: 0; }
+  .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) { margin-right: 0; margin-left: 0; overflow-x: auto; }
+  .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-'] { min-width: max-content; padding-right: 0; padding-left: 0; }
+  @media (min-width: 768px) {
+    .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-']:first-child { flex: 1 1 auto; width: auto; max-width: none; }
+    .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-']:last-child { flex: 0 0 auto; width: auto; max-width: none; margin-left: auto; }
+  }
+  .production-plan-fullscreen-toolbar { display: none; }
+
+
+</style>
+</head>
+<body class="vertical-layout vertical-menu-modern menu-expanded navbar-floating footer-static default">
+
+<nav class="header-navbar navbar navbar-expand-lg align-items-center floating-nav navbar-light navbar-shadow">
+  <div class="navbar-container d-flex content">
+    <div class="bookmark-wrapper d-flex align-items-center">
+      <ul class="nav navbar-nav d-xl-none align-items-center">
+        <li class="nav-item"><a class="nav-link menu-toggle" href="#"><i class="ficon" data-feather="menu"></i></a></li>
+        <li class="nav-item d-md-none"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+      <ul class="nav navbar-nav bookmark-icons">
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="home"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="calendar"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+    </div>
+    <ul class="nav navbar-nav align-items-center ms-auto">
+      <li class="nav-item">
+        <a class="nav-link navbar-ai-token-link" href="#">
+          <span class="navbar-ai-token-pill">
+            <span class="navbar-ai-token-pill__label">Tokeni</span>
+            <span class="navbar-ai-token-pill__icon"><span class="navbar-ai-token-coin navbar-ai-token-coin--top"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--mid"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--bottom"></span></span>
+            <span class="navbar-ai-token-pill__divider">|</span>
+            <span class="navbar-ai-token-pill__value">12.480</span>
+          </span>
+        </a>
+      </li>
+      <li class="nav-item d-none d-md-block"><a class="nav-link nav-link-style"><i class="ficon" data-feather="moon"></i></a></li>
+      <li class="nav-item nav-search"><a class="nav-link nav-link-search"><i class="ficon" data-feather="search"></i></a></li>
+      <li class="nav-item dropdown dropdown-user">
+        <a class="nav-link dropdown-toggle dropdown-user-link" href="#">
+          <div class="user-nav d-sm-flex d-none"><span class="user-name fw-bolder">Admin</span><span class="user-status">ADMIN</span></div>
+          <span class="avatar"><img class="round" src="../images/portrait/avatar-s-22.jpg" alt="avatar" height="40" width="40"><span class="avatar-status-online"></span></span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="main-menu menu-fixed menu-light menu-accordion menu-shadow">
+  <div class="navbar-header">
+    <ul class="nav navbar-nav flex-row">
+      <li class="nav-item me-auto">
+        <a class="navbar-brand d-flex align-items-center" href="#">
+          <span class="brand-logo"><img src="../images/logo/TrendyCNC.png" alt="eNalog.app" width="36"></span>
+          <h2 class="brand-text mb-0 ms-50">eNalog.app</h2>
+        </a>
+      </li>
+      <li class="nav-item nav-toggle"><a class="nav-link modern-nav-toggle pe-0"><i class="d-none d-xl-block collapse-toggle-icon font-medium-4 text-primary" data-feather="disc"></i></a></li>
+    </ul>
+  </div>
+  <div class="shadow-bottom"></div>
+  <div class="main-menu-content">
+    <ul class="navigation navigation-main">
+      <li class="navigation-header"><span>Radni nalozi</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="file-text"></i><span class="menu-title text-truncate">Upravljanje nalozima</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="camera"></i><span class="menu-title text-truncate">Skeniraj nalog</span></a></li>
+      <li class="navigation-header"><span>Narudžbe</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="briefcase"></i><span class="menu-title text-truncate">Upravljanje narudžbama</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i class="fa fa-magic fa-fw"></i><span class="menu-title text-truncate">AI narudžba</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="inbox"></i><span class="menu-title text-truncate">AI Inbox</span></a></li>
+      <li class="navigation-header"><span>Proizvodnja</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item active"><a href="#" class="d-flex align-items-center"><i data-feather="clipboard"></i><span class="menu-title text-truncate">Plan proizvodnje</span></a></li>
+      <li class="navigation-header"><span>AI asistent</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="activity"></i><span class="menu-title text-truncate">Historija AI skeniranja</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Dozvoljeni pošiljaoci</span></a></li>
+      <li class="navigation-header"><span>Dokumenti</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="archive"></i><span class="menu-title text-truncate">Razduženi materijali</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="box"></i><span class="menu-title text-truncate">Razduživanje WIP</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="tool"></i><span class="menu-title text-truncate">Razdužene operacije</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="package"></i><span class="menu-title text-truncate">Prijem VP skladište</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="package"></i><span class="menu-title text-truncate">Prijem škarta</span></a></li>
+      <li class="navigation-header"><span>Administracija</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="user"></i><span class="menu-title text-truncate">Korisnici</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="credit-card"></i><span class="menu-title text-truncate">Moja NFC kartica</span></a></li>
+      <li class="navigation-header"><span>Skladišni alati</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="layers"></i><span class="menu-title text-truncate">Pregled zaliha</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Površinske zaštite</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Kreiranje rezervi</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="map"></i><span class="menu-title text-truncate">Mapa skladišta</span></a></li>
+    </ul>
+  </div>
+</div>
+<div class="app-content content">
+  <div class="content-overlay"></div>
+  <div class="header-navbar-shadow"></div>
+  <div class="content-wrapper container-xxxl p-0">
+    
+    <div class="content-body">
+
+
+<section id="rn-plan">
+  <div class="content-header row"><div class="col-12 mb-2 d-flex justify-content-between align-items-center flex-wrap gap-1">
+    <h2 class="mb-0">Plan proizvodnje — Radni nalozi</h2>
+    <div class="d-flex flex-wrap gap-1">
+      <button type="button" class="btn btn-outline-secondary" id="btn-fullscreen-plana"><i data-feather="maximize" class="me-50"></i>Prikaz preko cijelog ekrana</button>
+      <button type="button" class="btn" id="btn-izvoz-plana"><i data-feather="download" class="me-50"></i>Izvoz u Excel</button>
+    </div>
+  </div></div>
+
+  <div class="card mb-2">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h4 class="mb-0">Filter plana proizvodnje</h4>
+      <div class="d-flex align-items-center flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-kolone-plana"><i data-feather="columns" class="me-50"></i>Filter kolona</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-prikazi-filtere"><i data-feather="filter" class="me-50"></i>Prikaži filtere</button>
+        <button class="btn btn-outline-danger btn-sm" id="btn-obrisi-filter"><i data-feather="trash-2" class="me-50"></i>Obriši filter</button>
+      </div>
+    </div>
+    <!-- #tijelo-filtera and #tijelo-kolona-plana are d-none by default -->
+  </div>
+
+  <div class="card production-plan-wrapper production-plan-table-overlay-host" id="production-plan-list">
+    <div class="card-datatable table-responsive">
+      <div class="dataTables_wrapper dt-bootstrap5 no-footer">
+        <div class="row">
+          <div class="col-sm-12 col-md-6"><div class="dataTables_length"><label>Prikaži <select class="form-select form-select-sm"><option>25</option></select> redova</label></div></div>
+          <div class="col-sm-12 col-md-6"><div class="dataTables_filter"><label>Pretraga:<input type="search" class="form-control form-control-sm"></label></div></div>
+        </div>
+        <div class="row dt-row"><div class="col-sm-12">
+          <table class="table production-plan-table dataTable" id="plan-proizvodnje-tabela">
+            <thead><tr>
+              <th aria-label="Detalji" class="plan-expand-cell sorting_disabled"></th><th class="sorting_disabled">%</th><th class="sorting">RN</th><th class="sorting">Naručitelj</th><th class="sorting">Prioritet</th><th class="sorting">Datum</th><th class="sorting">Narudžba</th><th class="sorting">Br. narudžbe <br>kupca</th><th class="sorting">Br. <br>poz.</th><th class="sorting sorting_desc">Poč. <br>termin</th><th class="sorting">Kraj <br>termin</th><th class="sorting">Datum <br>isporuke</th><th class="sorting">Proizvod</th><th class="sorting">Plan. <br>kol.</th><th class="sorting">Naziv</th><th class="sorting">Nositelj troška</th><th class="sorting">Napomena</th>
+            </tr></thead>
+            <tbody>
+              <tr class="production-plan-row--red">
+                <td class="plan-expand-cell"><button type="button" class="plan-expand-button" aria-expanded="false"><i class="fa fa-chevron-right"></i></button></td>
+                <td><b>35%</b></td><td>26-6000-0001284</td><td><span class="editable-cell"><span title="GROB-WERKE">GW</span></span></td><td>Visoki prioritet</td><td><span class="editable-cell">01.10.2026</span></td><td><span class="editable-cell">26-0100-0000412</span></td><td>4500123456</td><td><span class="editable-cell">10</span></td><td><span class="editable-cell">06.10.2026</span></td><td><span class="editable-cell">09.10.2026</span></td><td>14.10.2026</td><td><span class="editable-cell">PR-080-16</span></td><td><span class="editable-cell">120</span></td><td><span class="editable-cell">Prirubnica DN80 PN16</span></td><td><span class="editable-cell">CNC-1</span></td><td><span class="editable-cell"><span class="production-plan-note-preview" title="Hitno – kupac čeka">Hitno – kupac čeka</span></span></td>
+              </tr>
+              <tr class="production-plan-row--yellow">
+                <td class="plan-expand-cell"><button type="button" class="plan-expand-button" aria-expanded="false"><i class="fa fa-chevron-right"></i></button></td>
+                <td><b>60%</b></td><td>26-6000-0001283</td><td><span class="editable-cell"><span title="TRENDY GERMANY GMBH 2">TG GmbH 2</span></span></td><td>Uobičajeni prioritet</td><td><span class="editable-cell">30.09.2026</span></td><td><span class="editable-cell">26-0100-0000411</span></td><td>PO-88213</td><td><span class="editable-cell">20</span></td><td><span class="editable-cell">05.10.2026</span></td><td><span class="editable-cell">08.10.2026</span></td><td>16.10.2026</td><td><span class="editable-cell">OV-040-220</span></td><td><span class="editable-cell">48</span></td><td><span class="editable-cell">Osovina vratila Ø40</span></td><td><span class="editable-cell">TOK-2</span></td><td><span class="editable-cell"><span class="production-plan-note-preview" title=""></span></span></td>
+              </tr>
+              <tr class="production-plan-row--teal">
+                <td class="plan-expand-cell"><button type="button" class="plan-expand-button" aria-expanded="false"><i class="fa fa-chevron-right"></i></button></td>
+                <td><b>80%</b></td><td>26-6000-0001281</td><td><span class="editable-cell"><span title="GROB-WERKE">GW</span></span></td><td>Materijal razdužen</td><td><span class="editable-cell">28.09.2026</span></td><td><span class="editable-cell">26-0100-0000405</span></td><td>4500122987</td><td><span class="editable-cell">30</span></td><td><span class="editable-cell">03.10.2026</span></td><td><span class="editable-cell">07.10.2026</span></td><td>12.10.2026</td><td><span class="editable-cell">KL-6205</span></td><td><span class="editable-cell">300</span></td><td><span class="editable-cell">Kućište ležaja</span></td><td><span class="editable-cell">CNC-3</span></td><td><span class="editable-cell"><span class="production-plan-note-preview" title="Materijal izdan">Materijal izdan</span></span></td>
+              </tr>
+              <tr class="production-plan-row--green">
+                <td class="plan-expand-cell"><button type="button" class="plan-expand-button" aria-expanded="false"><i class="fa fa-chevron-right"></i></button></td>
+                <td><b>10%</b></td><td>26-6000-0001282</td><td><span class="editable-cell"><span title="KOVIS Hidraulika">KOVIS Hidraulika</span></span></td><td>Niski prioritet</td><td><span class="editable-cell">29.09.2026</span></td><td><span class="editable-cell">26-0100-0000409</span></td><td>N-2026/118</td><td><span class="editable-cell">10</span></td><td><span class="editable-cell">02.10.2026</span></td><td><span class="editable-cell">10.10.2026</span></td><td>23.10.2026</td><td><span class="editable-cell">NM-300-A</span></td><td><span class="editable-cell">2,5</span></td><td><span class="editable-cell">Nosač motora 3mm</span></td><td><span class="editable-cell">LAS-1</span></td><td><span class="editable-cell"><span class="production-plan-note-preview" title=""></span></span></td>
+              </tr>
+              <tr class="production-plan-row--purple">
+                <td class="plan-expand-cell"><button type="button" class="plan-expand-button" aria-expanded="false"><i class="fa fa-chevron-right"></i></button></td>
+                <td><b>0%</b></td><td>26-6000-0001286</td><td><span class="editable-cell"><span title="TRENDY GERMANY GMBH 1">TG GmbH 1</span></span></td><td>Uzorci</td><td><span class="editable-cell">01.10.2026</span></td><td><span class="editable-cell">26-0100-0000415</span></td><td>PO-88240</td><td><span class="editable-cell">10</span></td><td><span class="editable-cell">01.10.2026</span></td><td><span class="editable-cell">03.10.2026</span></td><td>09.10.2026</td><td><span class="editable-cell">UZ-DC-12</span></td><td><span class="editable-cell">5</span></td><td><span class="editable-cell">Uzorak distantne čahure</span></td><td><span class="editable-cell">TOK-1</span></td><td><span class="editable-cell"><span class="production-plan-note-preview" title="Uzorak za odobrenje">Uzorak za odobrenje</span></span></td>
+              </tr>
+              <tr class="production-plan-row--yellow">
+                <td class="plan-expand-cell"><button type="button" class="plan-expand-button" aria-expanded="false"><i class="fa fa-chevron-right"></i></button></td>
+                <td><b>100%</b></td><td>26-6000-0001279</td><td><span class="editable-cell"><span title="TRENDY GERMANY GMBH 2">TG GmbH 2</span></span></td><td>Uobičajeni prioritet</td><td><span class="editable-cell">25.09.2026</span></td><td><span class="editable-cell">26-0100-0000398</span></td><td>PO-88177</td><td><span class="editable-cell">40</span></td><td><span class="editable-cell">29.09.2026</span></td><td><span class="editable-cell">02.10.2026</span></td><td>07.10.2026</td><td><span class="editable-cell">DC-12-30</span></td><td><span class="editable-cell">1.000</span></td><td><span class="editable-cell">Distantna čahura</span></td><td><span class="editable-cell">TOK-2</span></td><td><span class="editable-cell"><span class="production-plan-note-preview" title=""></span></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div></div>
+        <div class="row">
+          <div class="col-sm-12 col-md-5"><div class="dataTables_info">Prikaz 1 do 25 od 312 radnih naloga</div></div>
+          <div class="col-sm-12 col-md-7"><div class="dataTables_paginate paging_simple_numbers"><ul class="pagination">
+            <li class="paginate_button page-item previous disabled"><a class="page-link" href="#">Prethodna</a></li>
+            <li class="paginate_button page-item active"><a class="page-link" href="#">1</a></li>
+            <li class="paginate_button page-item"><a class="page-link" href="#">2</a></li>
+            <li class="paginate_button page-item"><a class="page-link" href="#">3</a></li>
+            <li class="paginate_button page-item disabled"><a class="page-link" href="#">…</a></li>
+            <li class="paginate_button page-item"><a class="page-link" href="#">13</a></li>
+            <li class="paginate_button page-item next"><a class="page-link" href="#">Sljedeća</a></li>
+          </ul></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+    </div>
+  </div>
+</div>
+<script src="../vendors/js/vendors.min.js"></script>
+<script>feather.replace({width: 14, height: 14});</script>
+</body>
+</html>

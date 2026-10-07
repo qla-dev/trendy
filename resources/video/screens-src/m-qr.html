@@ -1,0 +1,36 @@
+<!--{"title":"Skeniraj nalog","mobile":true,"bare":true,"blade":["new-components/nalog-scan.blade.php"],"css":[]}-->
+<style>body{background:#05070a!important}.modal-backdrop{opacity:.992!important;background:#000}</style>
+<div class="modal-backdrop fade show"></div><div class="modal fade show d-block" id="qr-scanner-modal"><div class="modal-dialog modal-dialog-centered"><div class="modal-content" style="background: transparent; border: none;">
+ <div class="modal-body p-0 text-center wo-qr-modal-body">
+  <div class="wo-qr-modal-copy">
+   <h4 class="text-white mb-2 wo-qr-modal-title">Skeniraj QR code radnog naloga</h4>
+   <div class="qr-scanner-container position-relative" style="max-width: 400px; margin: 0 auto;">
+    <div id="qr-scanner-frame" class="qr-scanner-frame position-relative" style="width: 100%; padding-top: 100%; background: rgba(255, 255, 255, 0.1); border: 2px solid var(--bs-success, #28c76f); border-radius: 12px; overflow: hidden;">
+     <div id="qr-scanner-region" class="position-absolute" style="inset: 0;"><img src="../images/qr-label.svg" style="position:absolute;inset:14%;width:72%;height:72%;transform:rotate(-4deg);border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.6)"></div>
+     <div class="qr-corner qr-corner-top-left" style="position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-top: 3px solid var(--bs-success, #28c76f); border-left: 3px solid var(--bs-success, #28c76f);"></div>
+     <div class="qr-corner qr-corner-top-right" style="position: absolute; top: 0; right: 0; width: 40px; height: 40px; border-top: 3px solid var(--bs-success, #28c76f); border-right: 3px solid var(--bs-success, #28c76f);"></div>
+     <div class="qr-corner qr-corner-bottom-left" style="position: absolute; bottom: 0; left: 0; width: 40px; height: 40px; border-bottom: 3px solid var(--bs-success, #28c76f); border-left: 3px solid var(--bs-success, #28c76f);"></div>
+     <div class="qr-corner qr-corner-bottom-right" style="position: absolute; bottom: 0; right: 0; width: 40px; height: 40px; border-bottom: 3px solid var(--bs-success, #28c76f); border-right: 3px solid var(--bs-success, #28c76f);"></div>
+     <div class="qr-scan-line" style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--bs-success, #28c76f), transparent); animation: scanLineNalog 2s linear infinite;"></div>
+     <div class="qr-grid" style="position: absolute; inset: 0; background-image: linear-gradient(rgba(40, 199, 111, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(40, 199, 111, 0.1) 1px, transparent 1px); background-size: 20px 20px; opacity: 0.3;"></div>
+    </div>
+   </div>
+   <div class="wo-qr-controls-wrap" style="max-width: 400px; margin: 0 auto;">
+    <div class="wo-qr-controls-panel mt-2 mb-1">
+     <div class="wo-qr-controls-row wo-qr-display-row">
+      <div class="wo-qr-control-block"><span class="wo-qr-control-kicker">Prikaz</span>
+       <div class="form-check form-switch mb-0 d-flex align-items-center"><input class="form-check-input me-50" type="checkbox" id="qr-mirror-toggle"><label class="form-check-label mb-0" for="qr-mirror-toggle">Mirror</label></div></div>
+      <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-subtle"><i class="fa fa-refresh me-50"></i> Ponovo pokreni</button>
+     </div>
+     <div class="wo-qr-controls-row wo-qr-camera-controls-row">
+      <span class="wo-qr-camera-icon"><i class="fa fa-camera"></i></span>
+      <div class="wo-qr-camera-row"><select class="form-select form-select-sm"><option>Automatski odabir</option></select>
+       <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-primary">Primijeni</button></div>
+     </div>
+    </div>
+    <div class="wo-qr-feedback-wrap"><div id="qr-scanner-status" class="small wo-qr-status">Usmjeri kameru prema QR kodu radnog naloga.</div></div>
+   </div>
+  </div>
+  <button type="button" class="btn btn-secondary wo-scanner-close-fab"><i class="fa fa-times me-50"></i> Zatvori</button>
+ </div>
+</div></div></div>

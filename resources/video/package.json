@@ -1,0 +1,25 @@
+{
+  "name": "enalog-video",
+  "private": true,
+  "version": "1.0.0",
+  "description": "eNalog.app promo video (Remotion)",
+  "scripts": {
+    "dev": "remotion studio",
+    "screens": "node scripts/prep-sources.cjs && node scripts/build-screens.mjs && bash scripts/capture.sh",
+    "sfx": "node scripts/make-sfx.mjs",
+    "render": "remotion render eNalogPromo out/enalog-promo-vertical.mp4",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.534",
+    "@remotion/google-fonts": "4.0.534",
+    "@remotion/transitions": "4.0.534",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "4.0.534"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "~5.8.2"
+  }
+}

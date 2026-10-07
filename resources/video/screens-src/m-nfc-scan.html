@@ -1,0 +1,100 @@
+<!--{"title":"Moja NFC kartica","mobile":true,"blade":["apps/nfc-card/app-nfc-card.blade.php"]}-->
+  
+
+  <section
+    class="nfc-page"
+    id="nfc-page"
+    data-state="idle"
+    data-store-url="#"
+    data-destroy-url="#">
+
+    <div class="nfc-stage">
+      
+      <div class="nfc-view nfc-view--scan">
+        <div class="nfc-scanner">
+          <span class="nfc-scanner__ring"></span>
+          <span class="nfc-scanner__ring"></span>
+          <span class="nfc-scanner__ring"></span>
+          <span class="nfc-scanner__radar"></span>
+          <span class="nfc-scanner__ghost"></span>
+          <button type="button" class="nfc-scanner__core" id="nfc-core" aria-label="Pokreni skeniranje">
+            <svg class="nfc-icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12.5l4.5 4.5L19 7.5"/>
+            </svg>
+            <svg class="nfc-icon-wave" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36"/>
+              <path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58"/>
+              <path d="M12.91 4.1a15.91 15.91 0 0 1 .01 15.8"/>
+              <path d="M16.37 2a20.16 20.16 0 0 1 0 20"/>
+            </svg>
+          </button>
+        </div>
+
+        <h2 class="nfc-title" id="nfc-title">Povežite svoju NFC karticu</h2>
+        <p class="nfc-subtitle" id="nfc-subtitle">Dodirnite krug da pokrenete skener, zatim prislonite karticu na poleđinu uređaja.</p>
+        <div class="nfc-uid-live" id="nfc-uid-live" aria-live="polite"></div>
+
+        <div class="nfc-actions">
+          <button type="button" class="btn btn-primary" id="nfc-start">
+            <i data-feather="radio" class="me-50"></i>Pokreni skener
+          </button>
+          <button type="button" class="btn btn-outline-secondary" id="nfc-manual-toggle">
+            <i data-feather="edit-3" class="me-50"></i>Unesi ručno
+          </button>
+          <button type="button" class="btn btn-flat-secondary d-none" id="nfc-cancel-replace">Odustani</button>
+        </div>
+
+        <form class="nfc-manual" id="nfc-manual" autocomplete="off">
+          <div class="input-group">
+            <input type="text" class="form-control text-uppercase" id="nfc-manual-input" placeholder="npr. C36E1C28" maxlength="64" spellcheck="false">
+            <button class="btn btn-primary" type="submit">Spasi</button>
+          </div>
+        </form>
+
+        <div class="nfc-support-note" id="nfc-support-note"></div>
+      </div>
+
+      
+      <div class="nfc-view nfc-view--card">
+        <div class="nfc-card-status">Kartica je aktivna</div>
+
+        <div class="nfc-card-scene" id="nfc-card-scene" title="Dodirnite za okretanje">
+          <div class="nfc-card-float" id="nfc-card-float">
+          <div class="nfc-card" id="nfc-card">
+            <div class="nfc-card__face nfc-card__front">
+              <img class="nfc-card__logo" src="../images/pwa/trendy-gear-logo.png" alt="Trendy CNC">
+              <span class="nfc-card__corner-uid" data-card-uid>C3 6E 1C 28</span>
+            </div>
+            <div class="nfc-card__face nfc-card__back">
+              <img class="nfc-card__logo nfc-card__logo--small" src="../images/pwa/trendy-gear-logo.png" alt="">
+              <div class="nfc-card__info">
+                <div>
+                  <span class="nfc-card__label">Korisnik</span>
+                  <span class="nfc-card__value">Admin</span>
+                </div>
+                <div>
+                  <span class="nfc-card__label">UID kartice</span>
+                  <span class="nfc-card__value nfc-card__value--mono" data-card-uid>C3 6E 1C 28</span>
+                </div>
+                <div>
+                  <span class="nfc-card__label">Povezana</span>
+                  <span class="nfc-card__value" data-card-linked>07.10.2026. 08:14</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          </div>
+        </div>
+        <div class="nfc-hint">Dodirnite karticu da je okrenete</div>
+
+        <div class="nfc-actions">
+          <button type="button" class="btn btn-outline-primary" id="nfc-replace">
+            <i data-feather="refresh-cw" class="me-50"></i>Zamijeni karticu
+          </button>
+          <button type="button" class="btn btn-outline-danger" id="nfc-remove">
+            <i data-feather="trash-2" class="me-50"></i>Ukloni
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>

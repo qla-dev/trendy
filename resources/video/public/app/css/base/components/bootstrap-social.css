@@ -1,0 +1,17 @@
+/* Error: Undefined variable.
+ *   ,
+ * 1 | $bs-height-base: ($line-height-base + $input-btn-padding-y * 2) !default;
+ *   |                   ^^^^^^^^^^^^^^^^^
+ *   '
+ *   resources\scss\base\components\bootstrap-social.scss 1:19  root stylesheet */
+
+body::before {
+  font-family: "Source Code Pro", "SF Mono", Monaco, Inconsolata, "Fira Mono",
+      "Droid Sans Mono", monospace, monospace;
+  white-space: pre;
+  display: block;
+  padding: 1em;
+  margin-bottom: 1em;
+  border-bottom: 2px solid black;
+  content: "Error: Undefined variable.\a   \2577 \a 1 \2502  $bs-height-base: ($line-height-base + $input-btn-padding-y * 2) !default;\d\a   \2502                    ^^^^^^^^^^^^^^^^^\a   \2575 \a   resources\\scss\\base\\components\\bootstrap-social.scss 1:19  root stylesheet";
+}

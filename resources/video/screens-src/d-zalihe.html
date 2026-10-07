@@ -1,0 +1,96 @@
+<!--{"title":"Pregled zaliha","active":"zalihe","blade":["apps/materials/app-material.blade.php"],"css":["vendors/css/tables/datatable/dataTables.bootstrap5.min.css"],"noHeader":true}-->
+<section class="material-barcode-generator-wrapper">
+  <div class="content-header row">
+    <div class="content-header-left col-md-3 col-lg-6 col-12 mb-2"><div class="row breadcrumbs-top"><div class="col-12"><h2 class="content-header-title float-start mb-0">Pregled zaliha</h2></div></div></div>
+    <div class="content-header-right text-md-end col-md-9 col-lg-6 col-12"><div class="mb-1 breadcrumb-right"><div class="material-header-actions">
+      <div class="material-warehouse-filter"><select class="form-select" id="material-warehouse-filter"><option value="">Sva skladišta</option><option>Skladište sirovina</option></select></div>
+      <button type="button" class="btn btn-primary" id="material-create-open-btn"><i data-feather="plus" class="me-50"></i> Dodaj novi materijal</button>
+    </div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-datatable table-responsive">
+      <div class="dataTables_wrapper dt-bootstrap5">
+        <div class="row">
+          <div class="col-sm-12 col-md-6"><div class="material-table-inline-controls"><div class="dataTables_length"><label>Prikaži <select class="form-select form-select-sm"><option>25</option></select> materijala</label></div></div></div>
+          <div class="col-sm-12 col-md-6"><div class="dataTables_filter"><label>Pretraga:<input type="search" class="form-control form-control-sm"></label></div></div>
+        </div>
+        <div class="row material-bulk-download-toolbar-row"><div class="col-12"><div class="material-bulk-download-toolbar">
+          <button type="button" class="btn material-action-btn material-barcode-preview-btn material-bulk-download-btn"><i class="fa fa-download me-50"></i> Preuzmi sve etikete</button>
+          <button type="button" class="btn material-action-btn material-qr-preview-btn material-bulk-download-btn"><i class="fa fa-qrcode me-50"></i> Preuzmi sve QR etikete</button>
+        </div></div></div>
+        <div class="row"><div class="col-sm-12">
+          <table class="table material-barcode-table" id="material-barcode-table">
+            <thead><tr><th>Šifra</th><th>Naziv</th><th>MJ</th><th>Skladište</th><th>Zaliha</th><th class="material-actions-cell">Akcija</th></tr></thead>
+            <tbody>
+              <tr><td class="material-code-cell">LIM-S235-5</td><td>Lim S235 5mm 1500x3000</td><td class="material-unit-cell">KG</td><td class="material-warehouse-cell">Skladište sirovina</td><td class="text-end material-stock-cell">1.250,5</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">SIP-S355-40</td><td>Šipka S355 Ø40</td><td class="material-unit-cell">M</td><td class="material-warehouse-cell">Skladište sirovina</td><td class="text-end material-stock-cell">386,2</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">AL-6082-20</td><td>Aluminij EN AW-6082 20mm</td><td class="material-unit-cell">KG</td><td class="material-warehouse-cell">Skladište sirovina</td><td class="text-end material-stock-cell">742</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">INOX-304-2</td><td>Inox lim 1.4301 2mm</td><td class="material-unit-cell">KG</td><td class="material-warehouse-cell">Skladište sirovina</td><td class="text-end material-stock-cell">518,75</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">CIJ-60x40</td><td>Cijev pravougaona 60x40x3</td><td class="material-unit-cell">M</td><td class="material-warehouse-cell">Skladište sirovina</td><td class="text-end material-stock-cell">214</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">VIJ-M10-35</td><td>Vijak M10x35 DIN 933 8.8</td><td class="material-unit-cell">KOM</td><td class="material-warehouse-cell">Skladište repromaterijala</td><td class="text-end material-stock-cell">6.400</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">MAT-M10</td><td>Matica M10 DIN 934</td><td class="material-unit-cell">KOM</td><td class="material-warehouse-cell">Skladište repromaterijala</td><td class="text-end material-stock-cell">9.850</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">PRA-RAL7016</td><td>Prah RAL 7016</td><td class="material-unit-cell">KG</td><td class="material-warehouse-cell">Skladište boja</td><td class="text-end material-stock-cell">96,5</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+            </tbody>
+          </table>
+        </div></div>
+        <div class="row"><div class="col-sm-12 col-md-5"><div class="dataTables_info">Prikaz 1 do 25 od 1.482 materijala</div></div><div class="col-sm-12 col-md-7"><div class="dataTables_paginate paging_simple_numbers"><ul class="pagination"><li class="paginate_button page-item previous disabled"><a class="page-link">Prethodna</a></li><li class="paginate_button page-item active"><a class="page-link">1</a></li><li class="paginate_button page-item"><a class="page-link">2</a></li><li class="paginate_button page-item next"><a class="page-link">Sljedeća</a></li></ul></div></div></div>
+      </div>
+    </div>
+  </div>
+</section>

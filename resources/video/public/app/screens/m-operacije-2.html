@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html class="loaded light-layout" lang="bs" data-textdirection="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Operacije radnog naloga</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=block" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="../vendors/css/vendors.min.css">
+<link rel="stylesheet" href="../css/core.css">
+<link rel="stylesheet" href="../css/base/core/menu/menu-types/vertical-menu.css">
+
+<link rel="stylesheet" href="../css/overrides.css">
+<style>html .content .content-wrapper .content-header-title{border-right:0!important;padding-right:0!important;margin-right:0!important}</style>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+.navbar-ai-token-link{padding-left:.2rem!important;padding-right:.2rem!important}
+.navbar-ai-token-pill{position:relative;display:inline-flex;align-items:center;gap:.45rem;min-height:2.7rem;padding:.38rem .8rem;border-radius:1rem;background:rgba(255,255,255,.95);box-shadow:0 10px 24px rgba(34,41,47,.08)}
+.navbar-ai-token-pill__icon{position:relative;display:inline-grid;width:1.3rem;height:1.35rem;place-items:center;flex:0 0 auto}
+.navbar-ai-token-pill__label,.navbar-ai-token-pill__divider{display:inline-flex;align-items:center;line-height:1;color:#6e7f91;font-size:.92rem;font-weight:600}
+.navbar-ai-token-pill__divider{opacity:.7}
+.navbar-ai-token-pill__value{display:inline-flex;align-items:center;justify-content:center;min-width:2.2rem;font-size:1rem;font-weight:700;line-height:1;color:#4b5d78}
+.navbar-ai-token-coin{position:absolute;width:.95rem;height:.42rem;border-radius:999px;background:linear-gradient(180deg,#ffd86f 0%,#f5b301 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 2px 4px rgba(196,140,0,.2)}
+.navbar-ai-token-coin--top{transform:translateY(-.34rem)}
+.navbar-ai-token-coin--mid{width:1.05rem}
+.navbar-ai-token-coin--bottom{transform:translateY(.34rem)}
+html,body{overflow:hidden}
+.pace,.pace-progress{display:none!important}
+*,*::before,*::after{animation-duration:.001s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important}
+
+  .scan-operations-page { min-height: calc(100vh - 14rem); min-height: calc(100svh - 14rem); padding: .25rem 0 calc(4rem + env(safe-area-inset-bottom, 0px)); }
+  .scan-operations-shell { width: 100%; max-width: 900px; }
+  .scan-operations-card { overflow: hidden; border-radius: .428rem; }
+  .scan-operations-card-header { display: flex; justify-content: center; align-items: center; padding: 1rem 1.2rem; border-bottom: 1px solid rgba(34,41,47,.08); }
+  .scan-operations-card-header strong { font-size: 1.05rem; text-align: center; }
+  .scan-operations-list { padding: .75rem; display: grid; gap: .65rem; }
+  .scan-operation-row { width: 100%; min-height: 78px; display: grid; grid-template-columns: 48px minmax(0,1fr) 28px; align-items: center; gap: 1rem; padding: .85rem 1rem; border-radius: 10px; text-align: left; border: 1px solid transparent; transition: .18s ease; font: inherit; -webkit-appearance: none; appearance: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .scan-operation-position { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 9px; font-weight: 800; }
+  .scan-operation-copy { min-width: 0; display: flex; flex-direction: column; gap: .25rem; }
+  .scan-operation-code { font-size: .76rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  .scan-operation-name { font-size: 1.05rem; font-weight: 700; }
+  .scan-operation-finished-check { width: 22px; height: 22px; display: inline-grid; place-items: center; border: 2px solid #b9b7c1; border-radius: .25rem; color: transparent; }
+  .scan-operation-finished-check::after { content: '✓'; font-size: .9rem; font-weight: 800; line-height: 1; }
+  .scan-operation-finished-check.is-checked { color: #fff; background: #28c76f; border-color: #28c76f; }
+  .scan-operation-row.is-disabled { color: #9a97a5; background: #f8f8f8; border-color: #ebe9f1; cursor: not-allowed; opacity: .64; }
+  .scan-operation-row.is-disabled .scan-operation-position { background: #ebe9f1; }
+  .scan-operation-row.is-enabled { color: #3b4253; background: rgba(40,199,111,.08); border-color: rgba(40,199,111,.42); cursor: pointer; box-shadow: 0 4px 15px rgba(40,199,111,.06); }
+  .scan-operation-row.is-enabled .scan-operation-position { color: #111c17; background: #65dba0; }
+  .scan-operation-row.is-enabled .scan-operation-code { color: #65dba0; }
+  .scan-operation-row.is-enabled:hover { transform: translateY(-2px); border-color: #65dba0; box-shadow: 0 12px 30px rgba(40,199,111,.15); }
+  .scan-operation-row.is-finished { color: #6e6b7b; background: rgba(40,199,111,.08); border-color: rgba(40,199,111,.2); opacity: .72; cursor: default; }
+  .scan-operation-row.is-finished .scan-operation-position { color: #16824a; background: rgba(40,199,111,.18); }
+  .scan-operation-row.is-saving { opacity: .7; cursor: wait; }
+  .scan-operation-row.is-complete { background: rgba(40,199,111,.27); }
+  .scan-operations-empty { padding: 3rem 1rem; text-align: center; color: #8790a6; }
+  .scan-operations-empty i { font-size: 2rem; margin-bottom: .75rem; }
+  body.dark-layout .scan-operations-card-header, body.semi-dark-layout .scan-operations-card-header { border-bottom-color: rgba(184,190,220,.15); }
+  body.dark-layout .scan-operation-row.is-disabled, body.semi-dark-layout .scan-operation-row.is-disabled { color: #747d92; background: #202533; border-color: rgba(184,190,220,.1); }
+  body.dark-layout .scan-operation-row.is-disabled .scan-operation-position, body.semi-dark-layout .scan-operation-row.is-disabled .scan-operation-position { background: #303747; }
+  body.dark-layout .scan-operation-row.is-enabled, body.semi-dark-layout .scan-operation-row.is-enabled { color: #e8e9ed; background: rgba(40,199,111,.12); }
+  body.dark-layout .scan-operation-row.is-finished, body.semi-dark-layout .scan-operation-row.is-finished { color: #aab3c6; }
+  body.dark-layout .scan-operation-finished-check, body.semi-dark-layout .scan-operation-finished-check { border-color: #6d7486; }
+  @media (max-width: 575.98px) {
+    .scan-operations-page { padding: .75rem 0 calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
+    .scan-operation-row { grid-template-columns: 42px minmax(0,1fr) 26px; gap: .7rem; }
+  }
+
+
+  .screen-footer-actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  footer.screen-actions-footer {
+    position: fixed !important;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1030;
+    display: block !important;
+    background: rgba(255, 255, 255, 0.96);
+    border-top: 1px solid rgba(34, 41, 47, 0.08);
+    box-shadow: 0 -4px 18px rgba(34, 41, 47, 0.08);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+
+  body.dark-layout footer.screen-actions-footer,
+  body.semi-dark-layout footer.screen-actions-footer {
+    background: rgba(40, 48, 70, 0.96);
+    border-top-color: rgba(184, 190, 220, 0.15);
+  }
+
+  .screen-footer-actions > .btn,
+  .screen-footer-actions > form,
+  .screen-footer-actions > form .btn {
+    min-width: 12rem;
+  }
+
+  .footer-app-version {
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+
+  .footer-copyright {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.34rem;
+    flex-wrap: wrap;
+    line-height: 1.2;
+  }
+
+  .footer-qla-link .footer-qla-logo {
+    height: 18px;
+    width: auto;
+    display: block;
+    margin-bottom: 0;
+  }
+
+  .footer-qla-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    vertical-align: middle;
+  }
+
+  .footer-qla-link .footer-qla-logo-dark {
+    display: none;
+  }
+
+  body.dark-layout .footer-qla-link .footer-qla-logo-light,
+  body.semi-dark-layout .footer-qla-link .footer-qla-logo-light,
+  .dark-layout .footer-qla-link .footer-qla-logo-light,
+  .semi-dark-layout .footer-qla-link .footer-qla-logo-light {
+    display: none;
+  }
+
+  body.dark-layout .footer-qla-link .footer-qla-logo-dark,
+  body.semi-dark-layout .footer-qla-link .footer-qla-logo-dark,
+  .dark-layout .footer-qla-link .footer-qla-logo-dark,
+  .semi-dark-layout .footer-qla-link .footer-qla-logo-dark {
+    display: inline-block;
+  }
+
+  @media (max-width: 480px) {
+    .screen-footer-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    .screen-footer-actions > .btn,
+    .screen-footer-actions > form,
+    .screen-footer-actions > form .btn {
+      width: 100%;
+      min-width: 0;
+    }
+
+    footer .clearfix {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      gap: 0.2rem;
+      flex-wrap: nowrap;
+      margin-bottom: 0;
+      padding-left: 0;
+      padding-right: 0;
+      padding-bottom: calc(4.9rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    footer .clearfix > span {
+      float: none !important;
+      display: flex !important;
+      align-items: center;
+      min-width: 0;
+      margin-top: 0 !important;
+    }
+
+    .footer-app-version {
+      flex: 0 0 auto;
+      font-size: 1.12rem;
+      line-height: 1.02;
+    }
+
+    footer .clearfix > span.text-end {
+      flex: 1 1 auto;
+      font-size: 0.72rem;
+      line-height: 1.02;
+      letter-spacing: -0.02em;
+      justify-content: flex-end;
+      text-align: right !important;
+      white-space: nowrap;
+    }
+
+    .footer-copyright {
+      gap: 0.24rem;
+      flex-wrap: nowrap;
+    }
+
+    .footer-qla-link .footer-qla-logo {
+      height: 14px;
+    }
+  }
+
+
+  .scan-operations-page { min-height: calc(100vh - 14rem); min-height: calc(100svh - 14rem); padding: .25rem 0 calc(4rem + env(safe-area-inset-bottom, 0px)); }
+  .scan-operations-shell { width: 100%; max-width: 900px; }
+  .scan-operations-card { overflow: hidden; border-radius: .428rem; }
+  .scan-operations-card-header { display: flex; justify-content: center; align-items: center; padding: 1rem 1.2rem; border-bottom: 1px solid rgba(34,41,47,.08); }
+  .scan-operations-card-header strong { font-size: 1.05rem; text-align: center; }
+  .scan-operations-list { padding: .75rem; display: grid; gap: .65rem; }
+  .scan-operation-row { width: 100%; min-height: 78px; display: grid; grid-template-columns: 48px minmax(0,1fr) 28px; align-items: center; gap: 1rem; padding: .85rem 1rem; border-radius: 10px; text-align: left; border: 1px solid transparent; transition: .18s ease; font: inherit; -webkit-appearance: none; appearance: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .scan-operation-position { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 9px; font-weight: 800; }
+  .scan-operation-copy { min-width: 0; display: flex; flex-direction: column; gap: .25rem; }
+  .scan-operation-code { font-size: .76rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  .scan-operation-name { font-size: 1.05rem; font-weight: 700; }
+  .scan-operation-finished-check { width: 22px; height: 22px; display: inline-grid; place-items: center; border: 2px solid #b9b7c1; border-radius: .25rem; color: transparent; }
+  .scan-operation-finished-check::after { content: '✓'; font-size: .9rem; font-weight: 800; line-height: 1; }
+  .scan-operation-finished-check.is-checked { color: #fff; background: #28c76f; border-color: #28c76f; }
+  .scan-operation-row.is-disabled { color: #9a97a5; background: #f8f8f8; border-color: #ebe9f1; cursor: not-allowed; opacity: .64; }
+  .scan-operation-row.is-disabled .scan-operation-position { background: #ebe9f1; }
+  .scan-operation-row.is-enabled { color: #3b4253; background: rgba(40,199,111,.08); border-color: rgba(40,199,111,.42); cursor: pointer; box-shadow: 0 4px 15px rgba(40,199,111,.06); }
+  .scan-operation-row.is-enabled .scan-operation-position { color: #111c17; background: #65dba0; }
+  .scan-operation-row.is-enabled .scan-operation-code { color: #65dba0; }
+  .scan-operation-row.is-enabled:hover { transform: translateY(-2px); border-color: #65dba0; box-shadow: 0 12px 30px rgba(40,199,111,.15); }
+  .scan-operation-row.is-finished { color: #6e6b7b; background: rgba(40,199,111,.08); border-color: rgba(40,199,111,.2); opacity: .72; cursor: default; }
+  .scan-operation-row.is-finished .scan-operation-position { color: #16824a; background: rgba(40,199,111,.18); }
+  .scan-operation-row.is-saving { opacity: .7; cursor: wait; }
+  .scan-operation-row.is-complete { background: rgba(40,199,111,.27); }
+  .scan-operations-empty { padding: 3rem 1rem; text-align: center; color: #8790a6; }
+  .scan-operations-empty i { font-size: 2rem; margin-bottom: .75rem; }
+  @media (max-width: 575.98px) {
+    .scan-operations-page { padding: .75rem 0 calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
+    .scan-operation-row { grid-template-columns: 42px minmax(0,1fr) 26px; gap: .7rem; }
+  }
+
+
+</style>
+</head>
+<body class="vertical-layout vertical-overlay-menu menu-hide navbar-floating footer-static default">
+
+<nav class="header-navbar navbar navbar-expand-lg align-items-center floating-nav navbar-light navbar-shadow">
+  <div class="navbar-container d-flex content">
+    <div class="bookmark-wrapper d-flex align-items-center">
+      <ul class="nav navbar-nav d-xl-none align-items-center">
+        <li class="nav-item"><a class="nav-link menu-toggle" href="#"><i class="ficon" data-feather="menu"></i></a></li>
+        <li class="nav-item d-md-none"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+      <ul class="nav navbar-nav bookmark-icons">
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="home"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="calendar"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+    </div>
+    <ul class="nav navbar-nav align-items-center ms-auto">
+      <li class="nav-item">
+        <a class="nav-link navbar-ai-token-link" href="#">
+          <span class="navbar-ai-token-pill">
+            <span class="navbar-ai-token-pill__label">Tokeni</span>
+            <span class="navbar-ai-token-pill__icon"><span class="navbar-ai-token-coin navbar-ai-token-coin--top"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--mid"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--bottom"></span></span>
+            <span class="navbar-ai-token-pill__divider">|</span>
+            <span class="navbar-ai-token-pill__value">12.480</span>
+          </span>
+        </a>
+      </li>
+      
+      <li class="nav-item nav-search"><a class="nav-link nav-link-search"><i class="ficon" data-feather="search"></i></a></li>
+      <li class="nav-item dropdown dropdown-user">
+        <a class="nav-link dropdown-toggle dropdown-user-link" href="#">
+          <div class="user-nav d-sm-flex d-none"><span class="user-name fw-bolder">Admin</span><span class="user-status">ADMIN</span></div>
+          <span class="avatar"><img class="round" src="../images/portrait/avatar-s-22.jpg" alt="avatar" height="40" width="40"><span class="avatar-status-online"></span></span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="app-content content">
+  <div class="content-overlay"></div>
+  <div class="header-navbar-shadow"></div>
+  <div class="content-wrapper container-xxxl p-0">
+    <div class="content-header row">
+      <div class="content-header-left col-md-9 col-12 mb-2">
+        <div class="row breadcrumbs-top"><div class="col-12">
+          <h2 class="content-header-title float-start mb-0">Operacije radnog naloga</h2>
+          <div class="breadcrumb-wrapper"><ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="#">Početna</a></li>
+            
+          </ol></div>
+        </div></div>
+      </div>
+    </div>
+    <div class="content-body">
+
+<div class="scan-operations-page"><div class="scan-operations-shell">
+  <div class="card scan-operations-card mb-0">
+    <div class="scan-operations-card-header"><strong>26-6000-0001687</strong></div>
+    <div class="scan-operations-list" role="list">
+      <button type="button" class="scan-operation-row is-finished" disabled role="listitem"><span class="scan-operation-position">10</span><span class="scan-operation-copy"><span class="scan-operation-code">OP10</span><span class="scan-operation-name">Lasersko rezanje</span></span><span class="scan-operation-finished-check is-checked" aria-label="Operacija završena"></span></button>
+      <button type="button" class="scan-operation-row is-disabled" disabled role="listitem"><span class="scan-operation-position">20</span><span class="scan-operation-copy"><span class="scan-operation-code">OP20</span><span class="scan-operation-name">CNC savijanje</span></span><span class="scan-operation-finished-check" aria-label="Operacija nije završena"></span></button>
+      <button type="button" class="scan-operation-row is-finished is-complete" role="listitem"><span class="scan-operation-position">50</span><span class="scan-operation-copy"><span class="scan-operation-code">OP50</span><span class="scan-operation-name">Bravarija</span></span><span class="scan-operation-finished-check is-checked" aria-label="Operacija završena"></span></button>
+      <button type="button" class="scan-operation-row is-disabled" disabled role="listitem"><span class="scan-operation-position">60</span><span class="scan-operation-copy"><span class="scan-operation-code">OP60</span><span class="scan-operation-name">Kontrola</span></span><span class="scan-operation-finished-check" aria-label="Operacija nije završena"></span></button>
+    </div>
+  </div>
+</div></div>
+<!-- fixed footer -->
+<footer class="footer footer-light screen-actions-footer"><div class="screen-footer-actions">
+  <button class="btn btn-success d-flex justify-content-center align-items-center"><i class="fa fa-qrcode me-50"></i> Skeniraj radni nalog</button>
+  <a class="btn btn-outline-primary">Detalji RN</a>
+</div></footer>
+
+    </div>
+  </div>
+</div>
+<script src="../vendors/js/vendors.min.js"></script>
+<script>feather.replace({width: 14, height: 14});</script>
+</body>
+</html>
