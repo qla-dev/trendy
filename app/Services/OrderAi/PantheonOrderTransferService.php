@@ -1482,34 +1482,10 @@ class PantheonOrderTransferService
 
     private function resolvePantheonDocType(string $candidate): string
     {
-        $fallback = strtoupper(trim((string) config('ai-order-scan.default_doc_type', '0200'))) ?: '0200';
-        $candidate = strtoupper(trim($candidate));
-
-        if ($candidate === '') {
-            return $fallback;
-        }
-
-        $maxLength = (int) ($this->orderStringLengths()['acDocType'] ?? 4);
-
-        if ($maxLength > 0 && strlen($candidate) > $maxLength) {
-            Log::info('Order AI doc type fallback applied because extracted document type is not a Pantheon code.', [
-                'source_document_type' => $candidate,
-                'pantheon_document_type' => $fallback,
-            ]);
-
-            return $fallback;
-        }
-
-        if (!empty($this->resolveHeaderTemplate($candidate))) {
-            return $candidate;
-        }
-
-        Log::info('Order AI doc type fallback applied because Pantheon template was not found.', [
-            'source_document_type' => $candidate,
-            'pantheon_document_type' => $fallback,
-        ]);
-
-        return $fallback;
+        // Use the same configured Pantheon type as the local PDF parser.
+        // AI labels such as PO describe the source document, not a valid
+        // destination type, and must not override the transfer configuration.
+        return strtoupper(trim((string) config('ai-order-scan.default_doc_type', '0110'))) ?: '0110';
     }
 
     private function resolveOrderItemVatProfile(string $documentType, string $vatCode, float $vatRate): array

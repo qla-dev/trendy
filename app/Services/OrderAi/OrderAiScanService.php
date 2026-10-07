@@ -2294,7 +2294,7 @@ class OrderAiScanService
                 'contact_name' => $this->normalizeScannedText((string) ($order['contact_name'] ?? '')),
                 'external_document_number' => trim((string) ($order['external_document_number'] ?? '')),
                 'external_document_date' => trim((string) ($order['external_document_date'] ?? '')),
-                'document_type' => trim((string) ($order['document_type'] ?? '')),
+                'document_type' => (string) config('ai-order-scan.default_doc_type', '0110'),
                 'currency' => trim((string) ($order['currency'] ?? config('ai-order-scan.default_currency', 'KM'))),
                 'delivery_deadline' => trim((string) ($order['delivery_deadline'] ?? '')),
                 'note' => $isGrobOrder ? '' : $this->normalizeScannedText((string) ($order['note'] ?? '')),
@@ -3589,12 +3589,10 @@ class OrderAiScanService
             }
         }
 
-        $itemDeliveryDeadlines = $deliveryDeadline === ''
-            ? $this->extractTrendyDeItemDeliveryDeadlines(
-                is_array($context['processed_pages'] ?? null) ? $context['processed_pages'] : [],
-                $searchableText
-            )
-            : [];
+        $itemDeliveryDeadlines = $this->extractTrendyDeItemDeliveryDeadlines(
+            is_array($context['processed_pages'] ?? null) ? $context['processed_pages'] : [],
+            $searchableText
+        );
 
         $payload['order'] = $order;
         $payload['items'] = $this->postProcessTrendyDeItems(
@@ -3680,14 +3678,12 @@ class OrderAiScanService
                 $lineNumber
             );
 
-            $item['delivery_deadline'] = trim($headerDeliveryDeadline) !== ''
-                ? trim($headerDeliveryDeadline)
-                : $this->resolveTrendyDeItemDeliveryDeadline(
-                    $lineNumber,
-                    $productCode,
-                    $itemDeliveryDeadlines,
-                    $deliveryDeadline
-                );
+            $item['delivery_deadline'] = $this->resolveTrendyDeItemDeliveryDeadline(
+                $lineNumber,
+                $productCode,
+                $itemDeliveryDeadlines,
+                $deliveryDeadline !== '' ? $deliveryDeadline : trim($headerDeliveryDeadline)
+            );
             $item['unit'] = $this->normalizeScannedUnit((string) ($item['unit'] ?? ''));
 
             return $item;

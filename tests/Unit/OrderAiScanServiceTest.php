@@ -18,6 +18,60 @@ use Tests\TestCase;
 
 class OrderAiScanServiceTest extends TestCase
 {
+    public function test_trendy_de_position_dates_survive_blank_or_conflicting_header_dates(): void
+    {
+        $codes = ['2155039500', '2155046000', 'DS12A16340', 'DS12A16840', '2158075200', 'EXC110A090030'];
+        $dates = ['26.10.2026', '26.10.2026', '02.11.2026', '02.11.2026', '02.11.2026', '02.11.2026'];
+
+        foreach (['', '02.11.2026'] as $headerDate) {
+            $lines = [
+                'Trendy Germany GmbH',
+                'Datum 6.10.2026',
+                'Liefertermin ' . $headerDate,
+                'Bestellung 26-020-001390',
+                'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            ];
+            $items = [];
+            foreach ($codes as $index => $code) {
+                $lines[] = ($index + 1) . ' ' . $code . ' Product 1,00 STU 10,00 0,00 10,00';
+                $lines[] = 'Liefertermin: ' . $dates[$index];
+                $items[] = [
+                    'line_number' => $index + 1,
+                    'product_code' => $code,
+                    'product_name' => 'Product',
+                    'quantity' => 1,
+                    'unit_price' => 10,
+                    'line_total' => 10,
+                    'delivery_deadline' => '02.11.2026',
+                ];
+            }
+            $lines[] = 'Total 60,00';
+            $text = implode("\n", $lines);
+            $page = ['page' => 1, 'text' => $text, 'lines' => $lines, 'items' => array_map(function ($line) {
+                return ['text' => $line, 'cells' => [['x' => 18.0, 'text' => $line]]];
+            }, $lines)];
+
+            $service = app(OrderAiScanService::class);
+            $method = (new ReflectionClass($service))->getMethod('postProcessTrendyDePayload');
+            $method->setAccessible(true);
+            $result = $method->invoke($service, [
+                'order' => ['delivery_deadline' => '02.11.2026'],
+                'items' => $items,
+            ], ['searchable_text' => $text, 'processed_pages' => [$page]]);
+            $this->assertSame($headerDate, $result['order']['delivery_deadline']);
+            $this->assertSame($dates, array_column($result['items'], 'delivery_deadline'));
+
+            $scan = new OrderAiScan(['document_profile' => 'trendy_de', 'source_file_name' => 'Bestellung_26-020-001390.pdf']);
+            $parsed = app(OrderAiDigitalPdfRulesParser::class)->parse($scan, [
+                'pdf_type' => 'digital',
+                'provider_input_mode' => 'text',
+                'searchable_text' => $text,
+                'processed_pages' => [$page],
+            ]);
+            $this->assertSame($dates, array_column($parsed['normalized_payload']['items'], 'delivery_deadline'));
+        }
+    }
+
     public function test_post_process_profile_payload_extracts_trendy_de_header_fields(): void
     {
         Storage::fake('local');
