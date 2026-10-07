@@ -184,7 +184,9 @@ class OrderAiDigitalPdfRulesParser
         $deliveryDeadline = $header['delivery_deadline'];
         if ($deliveryDeadline !== '') {
             $items = array_values(array_map(function (array $item) use ($deliveryDeadline): array {
-                $item['delivery_deadline'] = $deliveryDeadline;
+                if (trim((string) ($item['delivery_deadline'] ?? '')) === '') {
+                    $item['delivery_deadline'] = $deliveryDeadline;
+                }
 
                 return $item;
             }, $items));
