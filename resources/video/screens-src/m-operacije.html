@@ -1,0 +1,49 @@
+<!--{"title":"Operacije radnog naloga","active":"skeniraj","mobile":true,"blade":["apps/invoice/app-invoice-scan-operations.blade.php","../panels/footer.blade.php"],"css":[]}-->
+<style>
+  .scan-operations-page { min-height: calc(100vh - 14rem); min-height: calc(100svh - 14rem); padding: .25rem 0 calc(4rem + env(safe-area-inset-bottom, 0px)); }
+  .scan-operations-shell { width: 100%; max-width: 900px; }
+  .scan-operations-card { overflow: hidden; border-radius: .428rem; }
+  .scan-operations-card-header { display: flex; justify-content: center; align-items: center; padding: 1rem 1.2rem; border-bottom: 1px solid rgba(34,41,47,.08); }
+  .scan-operations-card-header strong { font-size: 1.05rem; text-align: center; }
+  .scan-operations-list { padding: .75rem; display: grid; gap: .65rem; }
+  .scan-operation-row { width: 100%; min-height: 78px; display: grid; grid-template-columns: 48px minmax(0,1fr) 28px; align-items: center; gap: 1rem; padding: .85rem 1rem; border-radius: 10px; text-align: left; border: 1px solid transparent; transition: .18s ease; font: inherit; -webkit-appearance: none; appearance: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+  .scan-operation-position { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 9px; font-weight: 800; }
+  .scan-operation-copy { min-width: 0; display: flex; flex-direction: column; gap: .25rem; }
+  .scan-operation-code { font-size: .76rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  .scan-operation-name { font-size: 1.05rem; font-weight: 700; }
+  .scan-operation-finished-check { width: 22px; height: 22px; display: inline-grid; place-items: center; border: 2px solid #b9b7c1; border-radius: .25rem; color: transparent; }
+  .scan-operation-finished-check::after { content: '✓'; font-size: .9rem; font-weight: 800; line-height: 1; }
+  .scan-operation-finished-check.is-checked { color: #fff; background: #28c76f; border-color: #28c76f; }
+  .scan-operation-row.is-disabled { color: #9a97a5; background: #f8f8f8; border-color: #ebe9f1; cursor: not-allowed; opacity: .64; }
+  .scan-operation-row.is-disabled .scan-operation-position { background: #ebe9f1; }
+  .scan-operation-row.is-enabled { color: #3b4253; background: rgba(40,199,111,.08); border-color: rgba(40,199,111,.42); cursor: pointer; box-shadow: 0 4px 15px rgba(40,199,111,.06); }
+  .scan-operation-row.is-enabled .scan-operation-position { color: #111c17; background: #65dba0; }
+  .scan-operation-row.is-enabled .scan-operation-code { color: #65dba0; }
+  .scan-operation-row.is-enabled:hover { transform: translateY(-2px); border-color: #65dba0; box-shadow: 0 12px 30px rgba(40,199,111,.15); }
+  .scan-operation-row.is-finished { color: #6e6b7b; background: rgba(40,199,111,.08); border-color: rgba(40,199,111,.2); opacity: .72; cursor: default; }
+  .scan-operation-row.is-finished .scan-operation-position { color: #16824a; background: rgba(40,199,111,.18); }
+  .scan-operation-row.is-saving { opacity: .7; cursor: wait; }
+  .scan-operation-row.is-complete { background: rgba(40,199,111,.27); }
+  .scan-operations-empty { padding: 3rem 1rem; text-align: center; color: #8790a6; }
+  .scan-operations-empty i { font-size: 2rem; margin-bottom: .75rem; }
+  @media (max-width: 575.98px) {
+    .scan-operations-page { padding: .75rem 0 calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
+    .scan-operation-row { grid-template-columns: 42px minmax(0,1fr) 26px; gap: .7rem; }
+  }
+</style>
+<div class="scan-operations-page"><div class="scan-operations-shell">
+  <div class="card scan-operations-card mb-0">
+    <div class="scan-operations-card-header"><strong>26-6000-0001687</strong></div>
+    <div class="scan-operations-list" role="list">
+      <button type="button" class="scan-operation-row is-finished" disabled role="listitem"><span class="scan-operation-position">10</span><span class="scan-operation-copy"><span class="scan-operation-code">OP10</span><span class="scan-operation-name">Lasersko rezanje</span></span><span class="scan-operation-finished-check is-checked" aria-label="Operacija završena"></span></button>
+      <button type="button" class="scan-operation-row is-disabled" disabled role="listitem"><span class="scan-operation-position">20</span><span class="scan-operation-copy"><span class="scan-operation-code">OP20</span><span class="scan-operation-name">CNC savijanje</span></span><span class="scan-operation-finished-check" aria-label="Operacija nije završena"></span></button>
+      <button type="button" class="scan-operation-row is-enabled" role="listitem"><span class="scan-operation-position">50</span><span class="scan-operation-copy"><span class="scan-operation-code">OP50</span><span class="scan-operation-name">Bravarija</span></span><span class="scan-operation-finished-check" aria-label="Operacija nije završena"></span></button>
+      <button type="button" class="scan-operation-row is-disabled" disabled role="listitem"><span class="scan-operation-position">60</span><span class="scan-operation-copy"><span class="scan-operation-code">OP60</span><span class="scan-operation-name">Kontrola</span></span><span class="scan-operation-finished-check" aria-label="Operacija nije završena"></span></button>
+    </div>
+  </div>
+</div></div>
+<!-- fixed footer -->
+<footer class="footer footer-light screen-actions-footer"><div class="screen-footer-actions">
+  <button class="btn btn-success d-flex justify-content-center align-items-center"><i class="fa fa-qrcode me-50"></i> Skeniraj radni nalog</button>
+  <a class="btn btn-outline-primary">Detalji RN</a>
+</div></footer>

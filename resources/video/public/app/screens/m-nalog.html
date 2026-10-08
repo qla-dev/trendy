@@ -1,0 +1,2264 @@
+<!DOCTYPE html>
+<html class="loaded light-layout" lang="bs" data-textdirection="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Radni nalog</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=block" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="../vendors/css/vendors.min.css">
+<link rel="stylesheet" href="../css/core.css">
+<link rel="stylesheet" href="../css/base/core/menu/menu-types/vertical-menu.css">
+
+<link rel="stylesheet" href="../css/overrides.css">
+<style>html .content .content-wrapper .content-header-title{border-right:0!important;padding-right:0!important;margin-right:0!important}</style>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+.navbar-ai-token-link{padding-left:.2rem!important;padding-right:.2rem!important}
+.navbar-ai-token-pill{position:relative;display:inline-flex;align-items:center;gap:.45rem;min-height:2.7rem;padding:.38rem .8rem;border-radius:1rem;background:rgba(255,255,255,.95);box-shadow:0 10px 24px rgba(34,41,47,.08)}
+.navbar-ai-token-pill__icon{position:relative;display:inline-grid;width:1.3rem;height:1.35rem;place-items:center;flex:0 0 auto}
+.navbar-ai-token-pill__label,.navbar-ai-token-pill__divider{display:inline-flex;align-items:center;line-height:1;color:#6e7f91;font-size:.92rem;font-weight:600}
+.navbar-ai-token-pill__divider{opacity:.7}
+.navbar-ai-token-pill__value{display:inline-flex;align-items:center;justify-content:center;min-width:2.2rem;font-size:1rem;font-weight:700;line-height:1;color:#4b5d78}
+.navbar-ai-token-coin{position:absolute;width:.95rem;height:.42rem;border-radius:999px;background:linear-gradient(180deg,#ffd86f 0%,#f5b301 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 2px 4px rgba(196,140,0,.2)}
+.navbar-ai-token-coin--top{transform:translateY(-.34rem)}
+.navbar-ai-token-coin--mid{width:1.05rem}
+.navbar-ai-token-coin--bottom{transform:translateY(.34rem)}
+html,body{overflow:hidden}
+.pace,.pace-progress{display:none!important}
+*,*::before,*::after{animation-duration:.001s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important}
+
+  #qr-scanner-modal .modal-body {
+    background-color: unset !important;
+  }
+  .nav-tabs {
+    margin-bottom: 0 !important;
+  }
+  .image-placeholder:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+  .invoice-preview .invoice-title, .invoice-edit .invoice-title, .invoice-add .invoice-title {
+    margin-bottom: 0.5rem !important;
+  }
+  .invoice-preview .invoice-title .invoice-number {
+    margin-left: 0.5rem;
+    font-weight: 400;
+  }
+  .invoice-preview .invoice-title .invoice-key {
+    font-weight: 700;
+  }
+  .invoice-preview .invoice-title .invoice-order-number {
+    margin-left: 0;
+    font-size: 0.85em;
+    font-weight: 700;
+    color: #6e6b7b;
+  }
+  .invoice-preview .invoice-title .invoice-title-stack {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+  }
+  .invoice-preview .invoice-title .invoice-order-number .invoice-number {
+    margin-left: 0.45rem;
+    font-weight: 400;
+  }
+  body.dark-layout .invoice-preview .invoice-title .invoice-order-number,
+  body.semi-dark-layout .invoice-preview .invoice-title .invoice-order-number,
+  .dark-layout .invoice-preview .invoice-title .invoice-order-number,
+  .semi-dark-layout .invoice-preview .invoice-title .invoice-order-number {
+    color: #b4bdd3;
+  }
+  .invoice-preview .invoice-date-wrapper, .invoice-edit .invoice-date-wrapper, .invoice-add .invoice-date-wrapper {
+    justify-content: flex-end;
+    margin-bottom: 0.45rem !important;
+  }
+  .invoice-preview .invoice-date-wrapper:last-child {
+    margin-bottom: 0 !important;
+  }
+  .invoice-preview .invoice-date-wrapper .invoice-date-title, .invoice-edit .invoice-date-wrapper .invoice-date-title, .invoice-add .invoice-date-wrapper .invoice-date-title {
+    width: unset;
+    font-weight: 700;
+  }
+  .invoice-preview .invoice-date-wrapper .invoice-date, .invoice-edit .invoice-date-wrapper .invoice-date, .invoice-add .invoice-date-wrapper .invoice-date {
+    font-weight: 400;
+  }
+  .invoice-preview-wrapper .logo-wrapper .invoice-logo {
+    color: #42526e !important;
+  }
+  .invoice-preview-wrapper .logo-wrapper .wo-brand-logo {
+    border-radius: 999px;
+  }
+  .invoice-actions .btn {
+    height: 40px;
+    color: #5e5873;
+  }
+  .invoice-actions .btn i {
+    color: inherit;
+  }
+  .invoice-preview-wrapper .invoice-actions {
+    position: sticky;
+    top: 5rem;
+    align-self: flex-start;
+    z-index: 5;
+  }
+  .invoice-preview-wrapper .invoice-actions .card {
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+  }
+  .wo-mobile-top-actions {
+    display: none;
+  }
+  .invoice-preview-wrapper {
+    --wo-divider-color: #ebe9f1;
+    --wo-table-scroll-track: var(--app-scroll-track);
+    --wo-table-scroll-thumb: var(--app-scroll-thumb-flat);
+    --wo-table-scroll-thumb-hover: var(--app-scroll-thumb-flat-hover);
+    --wo-table-scroll-thumb-active: var(--app-scroll-thumb-flat-active);
+    --wo-table-scroll-thumb-border: var(--app-scroll-thumb-border);
+  }
+  body.dark-layout .invoice-preview-wrapper,
+  body.semi-dark-layout .invoice-preview-wrapper,
+  .dark-layout .invoice-preview-wrapper,
+  .semi-dark-layout .invoice-preview-wrapper {
+    --wo-divider-color: rgba(184, 190, 220, 0.22);
+    --wo-table-scroll-track: var(--app-scroll-track);
+    --wo-table-scroll-thumb: var(--app-scroll-thumb-flat);
+    --wo-table-scroll-thumb-hover: var(--app-scroll-thumb-flat-hover);
+    --wo-table-scroll-thumb-active: var(--app-scroll-thumb-flat-active);
+    --wo-table-scroll-thumb-border: var(--app-scroll-thumb-border);
+  }
+  .invoice-preview-wrapper hr.invoice-spacing {
+    border-top-color: var(--wo-divider-color) !important;
+  }
+  .invoice-preview-wrapper .invoice-actions.invoice-actions-scrolled .card {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(34, 41, 47, 0.12);
+  }
+  .invoice-actions-divider {
+    border-top: 1px solid var(--wo-divider-color) !important;
+    margin: 0.25rem 0 0.75rem;
+  }
+  .wo-side-meta-btn {
+    border-width: 1px;
+    background-color: #fff;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  .wo-side-meta-btn.wo-side-meta-btn-success { border-color: #28c76f; color: #28c76f; background-color: rgba(40, 199, 111, 0.08); }
+  .wo-side-meta-btn.wo-side-meta-btn-warning { border-color: #ff9f43; color: #ff9f43; background-color: rgba(255, 159, 67, 0.1); }
+  .wo-side-meta-btn.wo-side-meta-btn-danger { border-color: #ea5455; color: #ea5455; background-color: rgba(234, 84, 85, 0.08); }
+  .wo-side-meta-btn.wo-side-meta-btn-info { border-color: #00cfe8; color: #00cfe8; background-color: rgba(0, 207, 232, 0.08); }
+  .wo-side-meta-btn.wo-side-meta-btn-primary { border-color: #7367f0; color: #7367f0; background-color: rgba(115, 103, 240, 0.08); }
+  .wo-side-meta-btn.wo-side-meta-btn-secondary { border-color: #6e6b7b; color: #6e6b7b; background-color: rgba(110, 107, 123, 0.08); }
+  .wo-side-meta-btn:hover {
+    filter: brightness(0.96);
+  }
+  .wo-other-options-toggle {
+    display: none !important;
+  }
+  .invoice-preview-wrapper .wo-other-options-collapse.collapse:not(.show) {
+    display: block;
+  }
+  .wo-other-options-chevron {
+    transition: transform 0.2s ease;
+  }
+  .wo-other-options-toggle[aria-expanded="true"] .wo-other-options-chevron {
+    transform: rotate(180deg);
+  }
+  .wo-close-table .form-control {
+    min-width: 180px;
+  }
+  .wo-close-table .wo-close-duration,
+  .wo-close-table .wo-close-time,
+  .wo-close-table .wo-close-downtime {
+    min-width: 148px;
+    width: 148px;
+  }
+  .wo-close-table .wo-close-actions-column {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    min-width: 112px;
+    background: var(--bs-body-bg, #fff);
+    box-shadow: -8px 0 10px -10px rgba(0, 0, 0, 0.55);
+  }
+  .wo-close-table thead .wo-close-actions-column {
+    z-index: 3;
+  }
+  .wo-close-table .wo-close-total-row > * {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: var(--bs-body-bg, #fff);
+    border-top: 2px solid #7367f0;
+    font-weight: 700;
+  }
+  .wo-close-table .wo-close-total-row .wo-close-actions-column {
+    z-index: 3;
+  }
+  .wo-close-clock-fields {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 145px;
+  }
+  .wo-close-clock-fields .form-control {
+    min-width: 0;
+    width: 58px;
+    text-align: center;
+  }
+  .wo-close-worker-suggestions {
+    position: fixed;
+    z-index: 1085;
+    max-height: 210px;
+    overflow-y: auto;
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid #d8d6de;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.25rem 1rem rgba(34, 41, 47, 0.16);
+  }
+  .wo-close-code-suggestions {
+    position: fixed;
+    z-index: 1085;
+    max-height: 210px;
+    overflow-y: auto;
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid #d8d6de;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.25rem 1rem rgba(34, 41, 47, 0.16);
+  }
+  .wo-close-worker-suggestion {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 0;
+    background: transparent;
+    text-align: left;
+  }
+  .wo-close-worker-suggestion:hover,
+  .wo-close-worker-suggestion:focus {
+    background: rgba(115, 103, 240, 0.08);
+  }
+  .wo-close-worker-suggestion.is-active {
+    background: rgba(115, 103, 240, 0.16);
+  }
+  .wo-close-code-suggestion.is-active {
+    background: rgba(115, 103, 240, 0.16);
+  }
+  .wo-close-add-material-row-btn,
+  .wo-close-add-material-row-btn:disabled,
+  .wo-close-add-material-row-btn:hover,
+  .wo-close-add-material-row-btn:focus,
+  .wo-close-add-material-row-btn:active,
+  .wo-close-add-material-row-btn.active {
+    background-color: #fff !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+  .wo-close-code-suggestion {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 0;
+    background: transparent;
+    text-align: left;
+  }
+  .wo-close-code-suggestion:hover,
+  .wo-close-code-suggestion:focus {
+    background: rgba(115, 103, 240, 0.08);
+  }
+  .wo-close-action-buttons {
+    display: inline-flex;
+    gap: 0.45rem;
+  }
+  .wo-close-copy-row-btn,
+  .wo-close-clear-row-btn,
+  .wo-close-delete-row-btn,
+  .wo-close-add-material-row-btn,
+  .wo-close-material-clear-row-btn,
+  .wo-close-material-delete-row-btn {
+    display: inline-flex;
+    width: 2.25rem;
+    height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .wo-close-copy-row-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 1px solid #7367f0 !important;
+    border-radius: 0.358rem;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1;
+    transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+  }
+  .wo-close-copy-row-btn:focus,
+  .wo-close-clear-row-btn:focus,
+  .wo-close-delete-row-btn:focus {
+    box-shadow: none;
+  }
+  .wo-close-copy-row-btn,
+  .wo-close-copy-row-btn:focus,
+  .wo-close-copy-row-btn:active,
+  .wo-close-copy-row-btn.active {
+    color: #7367f0 !important;
+    background-color: #fff !important;
+    border-color: #7367f0 !important;
+    box-shadow: none !important;
+  }
+  .wo-close-copy-row-btn:hover:not(:active) {
+    color: #fff !important;
+    background-color: #7367f0 !important;
+    border-color: #7367f0 !important;
+  }
+  .wo-close-operation-error {
+    display: none;
+    font-size: 0.78rem;
+  }
+  .wo-close-operation-row.is-invalid .wo-close-operation-error {
+    display: block;
+  }
+  .wo-close-break-error {
+    display: none;
+    font-size: 0.78rem;
+  }
+  .wo-close-break-error.is-visible {
+    display: block;
+  }
+  .wo-close-clock-break,
+  .wo-close-clock-break:focus,
+  .wo-close-time.wo-close-time-error,
+  .wo-close-time.wo-close-time-error:focus,
+  .wo-close-duration.wo-close-time-error,
+  .wo-close-duration.wo-close-time-error:focus {
+    border-color: #ea5455 !important;
+    background-image: none !important;
+    box-shadow: 0 0 0 0.2rem rgba(234, 84, 85, 0.15) !important;
+  }
+  .wo-material-quantity-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 150px;
+  }
+  .wo-material-quantity-input {
+    min-width: 0;
+  }
+  .wo-meta-shell {
+    border: 1px solid #ebe9f1;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(245, 247, 250, 0.6) 0%, rgba(255, 255, 255, 1) 100%);
+    padding: 1rem;
+    margin-top: 0.25rem;
+    margin-bottom: 1rem;
+  }
+  .wo-meta-chip-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  .wo-meta-chip-row > * {
+    flex: 0 0 auto;
+  }
+  .wo-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    padding: 0.3rem 0.65rem;
+    border: 1px solid #ebe9f1;
+    background-color: #fff;
+    font-size: 0.78rem;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .wo-meta-chip-label {
+    color: #6e6b7b;
+    font-weight: 500;
+  }
+  .wo-meta-chip-value {
+    color: #5e5873;
+    font-weight: 600;
+  }
+  .wo-chip-success { border-color: rgba(40, 199, 111, 0.45); background-color: rgba(40, 199, 111, 0.1); }
+  .wo-chip-danger { border-color: rgba(234, 84, 85, 0.45); background-color: rgba(234, 84, 85, 0.1); }
+  .wo-chip-warning { border-color: rgba(255, 159, 67, 0.45); background-color: rgba(255, 159, 67, 0.1); }
+  .wo-chip-info { border-color: rgba(0, 207, 232, 0.45); background-color: rgba(0, 207, 232, 0.1); }
+  .wo-chip-primary { border-color: rgba(115, 103, 240, 0.45); background-color: rgba(115, 103, 240, 0.1); }
+  .wo-chip-secondary,
+  .wo-chip-slate,
+  .wo-chip-orange { border-color: rgba(110, 107, 123, 0.35); background-color: rgba(110, 107, 123, 0.08); }
+  .wo-header-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.95rem;
+  }
+  .wo-header-brand-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .invoice-preview-wrapper .wo-header-brand-row .logo-wrapper {
+    margin-bottom: 0;
+  }
+  .invoice-preview-wrapper .wo-header-brand-row .wo-header-qr-block {
+    margin-left: auto;
+  }
+  .wo-header-details-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .wo-header-company-block {
+    flex: 1 1 320px;
+    min-width: 0;
+  }
+  .wo-header-right-column {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    margin-left: auto;
+    text-align: right;
+    flex: 0 1 auto;
+  }
+  .wo-header-main-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: 0.75rem;
+  }
+  .wo-header-meta {
+    text-align: right;
+  }
+  .wo-header-meta .invoice-title {
+    text-align: right;
+  }
+  .wo-header-meta .invoice-title > span {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    word-break: keep-all;
+  }
+  .wo-header-meta .invoice-title .invoice-title-stack > span:first-child {
+    font-size: 1.85rem;
+    line-height: 1.05;
+  }
+  .wo-header-meta .invoice-date-wrapper {
+    justify-content: flex-end;
+  }
+  .wo-header-meta .invoice-date-title {
+    min-width: 8rem;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .wo-header-meta .invoice-date {
+    white-space: nowrap;
+  }
+  .wo-header-qr-block {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+  }
+  .wo-preview-qr-image {
+    width: 120px;
+    height: 120px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 8px;
+    background: #fff;
+  }
+  .wo-sidebar-qr-block {
+    display: none;
+    justify-content: center;
+    padding-bottom: 1.5rem;
+  }
+  .wo-sidebar-qr-divider {
+    display: none;
+    margin: 0 0 1.5rem;
+  }
+  .wo-header-chip-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    align-items: stretch;
+    width: 100%;
+    min-width: 210px;
+    margin-top: 0.55rem;
+  }
+  .wo-header-chip-stack .wo-meta-chip {
+    justify-content: space-between;
+    width: 100%;
+    background-color: rgba(115, 103, 240, 0.06);
+  }
+  .wo-mobile-priority {
+    display: none;
+  }
+  .wo-mobile-priority-dot {
+    flex: 0 0 0.5rem;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--wo-priority-dot, #6e6b7b);
+  }
+  .wo-mobile-priority.wo-priority-danger { --wo-priority-dot: #ea5455; }
+  .wo-mobile-priority.wo-priority-warning { --wo-priority-dot: #ff9f43; }
+  .wo-mobile-priority.wo-priority-info { --wo-priority-dot: #00cfe8; }
+
+  .wo-meta-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1fr;
+    gap: 0.75rem;
+  }
+  .wo-section-shell {
+    border: 1px solid #ebe9f1;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(245, 247, 250, 0.6) 0%, rgba(255, 255, 255, 1) 100%);
+    padding: 1rem;
+    margin-top: 0.25rem;
+    margin-bottom: 1rem;
+  }
+  .wo-progress-shell {
+    border: 1px solid #ebe9f1;
+    border-radius: 10px;
+    background: transparent;
+    padding: 0.85rem 1rem;
+    margin-top: 0.25rem;
+    margin-bottom: 0.85rem;
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap {
+    position: relative;
+    scrollbar-width: thin;
+    scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
+    scrollbar-gutter: stable;
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap > .table {
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap::-webkit-scrollbar-track {
+    background: var(--wo-table-scroll-track);
+    border-radius: 999px;
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap::-webkit-scrollbar-thumb {
+    background: var(--wo-table-scroll-thumb);
+    border-radius: 999px;
+    border: 1px solid var(--wo-table-scroll-thumb-border);
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap::-webkit-scrollbar-thumb:hover {
+    background: var(--wo-table-scroll-thumb-hover);
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap::-webkit-scrollbar-thumb:active {
+    background: var(--wo-table-scroll-thumb-active);
+  }
+  .invoice-preview-wrapper .wo-sastavnica-table-wrap::-webkit-scrollbar-corner {
+    background: var(--wo-table-scroll-track);
+  }
+  .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background-color: #ffffff;
+    box-shadow: none;
+    border-left: 1px solid var(--wo-divider-color);
+  }
+  .invoice-preview-wrapper #sastavnica-table thead .wo-sastavnica-action-col {
+    z-index: 3;
+    background-color: #f8f8fa;
+  }
+  .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-toggle {
+    border: 0;
+    padding: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .invoice-preview-wrapper #sastavnica-table .wo-action-collapsed-label { display: none; }
+  body.dark-layout .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col,
+  body.semi-dark-layout .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col,
+  .dark-layout .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col,
+  .semi-dark-layout .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col {
+    background-color: #283046;
+  }
+  body.dark-layout .invoice-preview-wrapper #sastavnica-table thead .wo-sastavnica-action-col,
+  body.semi-dark-layout .invoice-preview-wrapper #sastavnica-table thead .wo-sastavnica-action-col,
+  .dark-layout .invoice-preview-wrapper #sastavnica-table thead .wo-sastavnica-action-col,
+  .semi-dark-layout .invoice-preview-wrapper #sastavnica-table thead .wo-sastavnica-action-col {
+    background-color: #2f3854;
+  }
+  .invoice-preview-wrapper #operacija-table .wo-operation-action-col {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    width: 4.5rem;
+    min-width: 4.5rem;
+    padding-left: 0;
+    padding-right: 0;
+    vertical-align: middle;
+    background-color: #ffffff;
+    border-left: 1px solid var(--wo-divider-color);
+  }
+  .invoice-preview-wrapper #operacija-table thead .wo-operation-action-col {
+    z-index: 3;
+    background-color: #f8f8fa;
+  }
+  .invoice-preview-wrapper .wo-operation-complete-btn {
+    width: 3rem;
+    height: 3rem;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    margin-right: auto;
+    border: 0 !important;
+    border-radius: 0;
+    color: transparent;
+    background: transparent !important;
+    box-shadow: none !important;
+    -webkit-appearance: none;
+    appearance: none;
+    line-height: 1;
+  }
+  .invoice-preview-wrapper .wo-operation-complete-btn::after {
+    content: '\2713';
+    width: 22px;
+    height: 22px;
+    display: inline-grid;
+    place-items: center;
+    border: 2px solid #b9b7c1;
+    border-radius: .25rem;
+    color: transparent;
+    font-size: .9rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .invoice-preview-wrapper .wo-operation-complete-btn[data-finished="1"]::after {
+    color: #fff;
+    background: #28c76f;
+    border-color: #28c76f;
+  }
+  .invoice-preview-wrapper .wo-operation-complete-btn.is-saving::after { display: none; }
+  .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > td {
+    background-color: rgba(40, 199, 111, .08);
+    color: #6e6b7b;
+  }
+  .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > .wo-operation-action-col {
+    background-color: #effbf4;
+  }
+  .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-locked-row > td {
+    color: #9a97a5;
+    background-color: #f8f8f8;
+  }
+  .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-locked-row > .wo-operation-action-col {
+    background-color: #f8f8f8;
+  }
+  .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-row > td {
+    background-color: #ffffff;
+  }
+  .invoice-preview-wrapper .wo-operation-complete-btn.is-role-locked { cursor: not-allowed; opacity: .55; }
+  .invoice-preview-wrapper .wo-mobile-column-label { display: none; }
+  body.dark-layout .invoice-preview-wrapper #operacija-table .wo-operation-action-col,
+  body.semi-dark-layout .invoice-preview-wrapper #operacija-table .wo-operation-action-col,
+  .dark-layout .invoice-preview-wrapper #operacija-table .wo-operation-action-col,
+  .semi-dark-layout .invoice-preview-wrapper #operacija-table .wo-operation-action-col { background-color: #283046; }
+  body.dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > td,
+  body.semi-dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > td,
+  .dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > td,
+  .semi-dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-finished-row > td {
+    color: #aab3c6;
+    background-color: rgba(40, 199, 111, .12);
+  }
+  body.dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-locked-row > td,
+  body.semi-dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-locked-row > td,
+  .dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-locked-row > td,
+  .semi-dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-locked-row > td {
+    color: #747d92;
+    background-color: #202533;
+  }
+  body.dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-row > td,
+  body.semi-dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-row > td,
+  .dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-row > td,
+  .semi-dark-layout .invoice-preview-wrapper #operacija-table tbody tr.wo-operation-role-row > td { background-color: #283046; }
+  @media (max-width: 767.98px) {
+    .invoice-preview-wrapper .wo-desktop-column-label { display: none; }
+    .invoice-preview-wrapper .wo-mobile-column-label { display: inline; }
+    .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-toggle {
+      width: 100%;
+    }
+    .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col {
+      box-sizing: border-box;
+      width: 7.25rem;
+      min-width: 7.25rem;
+      max-width: 7.25rem;
+      overflow: hidden;
+      white-space: nowrap;
+      padding-left: .35rem;
+      padding-right: .35rem;
+      transition: width .3s ease, min-width .3s ease, max-width .3s ease, padding .3s ease;
+    }
+    .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col > .d-inline-flex {
+      max-width: 6.5rem;
+      overflow: hidden;
+      opacity: 1;
+      transition: max-width .3s ease, opacity .2s ease;
+    }
+    .invoice-preview-wrapper #sastavnica-table.wo-actions-collapsed .wo-sastavnica-action-col {
+      width: 2.5rem;
+      min-width: 2.5rem;
+      max-width: 2.5rem;
+      padding-left: .25rem;
+      padding-right: .25rem;
+    }
+    .invoice-preview-wrapper #sastavnica-table.wo-actions-collapsed .wo-sastavnica-action-col > .d-inline-flex {
+      max-width: 0;
+      opacity: 0;
+      pointer-events: none;
+      visibility: hidden;
+      transition: max-width .3s ease, opacity .2s ease, visibility 0s linear .3s;
+    }
+    .invoice-preview-wrapper #sastavnica-table.wo-actions-collapsed .wo-action-expanded-label { display: none; }
+    .invoice-preview-wrapper #sastavnica-table.wo-actions-collapsed .wo-action-collapsed-label { display: inline; }
+  }
+  @media (max-width: 767.98px) and (prefers-reduced-motion: reduce) {
+    .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col,
+    .invoice-preview-wrapper #sastavnica-table .wo-sastavnica-action-col > .d-inline-flex { transition: none; }
+  }
+  body.dark-layout .invoice-preview-wrapper .wo-operation-complete-btn::after,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-operation-complete-btn::after,
+  .dark-layout .invoice-preview-wrapper .wo-operation-complete-btn::after,
+  .semi-dark-layout .invoice-preview-wrapper .wo-operation-complete-btn::after { border-color: #6d7486; }
+  body.dark-layout .invoice-preview-wrapper .wo-operation-complete-btn[data-finished="1"]::after,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-operation-complete-btn[data-finished="1"]::after,
+  .dark-layout .invoice-preview-wrapper .wo-operation-complete-btn[data-finished="1"]::after,
+  .semi-dark-layout .invoice-preview-wrapper .wo-operation-complete-btn[data-finished="1"]::after { border-color: #28c76f; }
+  body.dark-layout .invoice-preview-wrapper #operacija-table thead .wo-operation-action-col,
+  body.semi-dark-layout .invoice-preview-wrapper #operacija-table thead .wo-operation-action-col,
+  .dark-layout .invoice-preview-wrapper #operacija-table thead .wo-operation-action-col,
+  .semi-dark-layout .invoice-preview-wrapper #operacija-table thead .wo-operation-action-col { background-color: #2f3854; }
+  .wo-progress-shell .wo-progress-head {
+    align-items: baseline;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #5e5873;
+    margin-bottom: 0.45rem;
+  }
+  .wo-progress-shell .wo-progress-head span:last-child {
+    font-size: 1.1rem;
+  }
+  .wo-progress-shell .wo-progress {
+    height: 9px;
+    background-color: #e9edf3;
+  }
+  .wo-product-hero {
+    border: 1px solid #ebe9f1;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(115, 103, 240, 0.08) 0%, rgba(255, 255, 255, 1) 100%);
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.85rem;
+  }
+  .wo-product-hero-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+  }
+  .wo-product-hero-main {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .wo-product-kicker {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6e6b7b;
+    margin-bottom: 0.3rem;
+    font-weight: 600;
+  }
+  .wo-product-title {
+    display: block;
+    font-size: 1.15rem;
+    line-height: 1.3;
+    font-weight: 700;
+    color: #5e5873;
+  }
+  .wo-product-code-accent {
+    margin-top: 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border-radius: 9px;
+    padding: 0.36rem 0.72rem 0.36rem 0.56rem;
+    background: linear-gradient(90deg, rgba(40, 199, 111, 0.2) 0%, rgba(40, 199, 111, 0.06) 68%, rgba(40, 199, 111, 0) 100%);
+    box-shadow: inset 0 0 0 1px rgba(40, 199, 111, 0.34);
+  }
+  .wo-product-code-accent::before {
+    content: '';
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: #28c76f;
+    box-shadow: 0 0 0 4px rgba(40, 199, 111, 0.2);
+    flex: 0 0 auto;
+  }
+  .wo-product-code-label {
+    font-size: 0.64rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+    color: #1b8f4c;
+    line-height: 1;
+  }
+  .wo-product-code-value {
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    color: #28c76f;
+  }
+  .wo-product-qty {
+    margin-left: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: flex-start;
+    text-align: right;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .wo-product-qty-label {
+    font-size: 0.64rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: #6e6b7b;
+    line-height: 1;
+    margin-bottom: 0.3rem;
+  }
+  .wo-product-qty-metric {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 0.35rem;
+  }
+  .wo-product-qty-value {
+    font-size: 1.35rem;
+    line-height: 1;
+    font-weight: 800;
+    color: #5e5873;
+    letter-spacing: 0.01em;
+  }
+  .wo-product-qty-unit {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #6e6b7b;
+    letter-spacing: 0.04em;
+  }
+  .wo-chip-shell {
+    border: 1px solid #ebe9f1;
+    border-radius: 10px;
+    background: #fff;
+    padding: 0.7rem 0.85rem;
+    margin-bottom: 0.9rem;
+    padding-left: 0!important;
+  
+  }
+  .wo-kpi-shell {
+    border: 1px solid #ebe9f1;
+    border-radius: 10px;
+    background: #fff;
+    padding: 0.9rem 1rem 1rem;
+    margin-bottom: 1rem;
+  }
+  .wo-kpi-shell .wo-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .wo-subtle-tabs-pane {
+    border: 1px solid #ebe9f1;
+    border-top: 0;
+    border-radius: 0 0 10px 10px;
+    padding: 0.85rem 1rem;
+    background: #fff;
+    padding-top: 0!important;
+  }
+  .wo-timeline-pane .timeline {
+    margin-bottom: 0;
+  }
+  .wo-note-pane {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+  .wo-note-readonly {
+    min-height: 220px;
+    border: 1px solid var(--wo-divider-color);
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(245, 247, 250, 0.9) 0%, #fff 100%);
+    padding: 1rem 1.1rem;
+    color: #5e5873;
+    font-size: 0.95rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .wo-note-editor {
+    min-height: 220px;
+    resize: vertical;
+    white-space: pre-wrap;
+  }
+  .wo-note-empty {
+    border: 1px dashed var(--wo-divider-color);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    color: #6e6b7b;
+    font-size: 0.95rem;
+    background: rgba(245, 247, 250, 0.55);
+  }
+  .wo-timeline-pane .timeline .timeline-item .timeline-event {
+    min-height: 3rem;
+    padding-bottom: 0.75rem;
+  }
+  .wo-timeline-pane .timeline .timeline-item .timeline-event h6 {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+  }
+  .wo-timeline-pane .timeline .timeline-item .timeline-event .timeline-event-time {
+    font-weight: 600;
+  }
+  .wo-links-pane {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+  .wo-links-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  .wo-link-card {
+    position: relative;
+    border: 1px solid var(--wo-divider-color);
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(245, 247, 250, 0.8) 0%, #fff 100%);
+    padding: 0.72rem 0.8rem 0.78rem;
+    overflow: hidden;
+  }
+  .wo-link-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: #7367f0;
+  }
+  .wo-link-head {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.45rem;
+  }
+  .wo-link-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(115, 103, 240, 0.14);
+    color: #7367f0;
+    font-size: 0.8rem;
+    flex: 0 0 auto;
+  }
+  .wo-link-label {
+    font-size: 0.86rem;
+    color: #6e6b7b;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .wo-link-value {
+    font-size: 1.05rem;
+    color: #5e5873;
+    font-weight: 700;
+    line-height: 1.25;
+    word-break: break-word;
+    letter-spacing: 0.01em;
+  }
+  .wo-link-value.wo-link-empty {
+    color: #b9b7c4;
+    font-weight: 600;
+  }
+  .wo-link-tone-primary::before { background: #7367f0; }
+  .wo-link-tone-primary .wo-link-icon { background: rgba(115, 103, 240, 0.14); color: #7367f0; }
+  .wo-link-tone-info::before { background: #00cfe8; }
+  .wo-link-tone-info .wo-link-icon { background: rgba(0, 207, 232, 0.14); color: #00cfe8; }
+  .wo-link-tone-success::before { background: #28c76f; }
+  .wo-link-tone-success .wo-link-icon { background: rgba(40, 199, 111, 0.14); color: #28c76f; }
+  .wo-link-tone-warning::before { background: #ff9f43; }
+  .wo-link-tone-warning .wo-link-icon { background: rgba(255, 159, 67, 0.14); color: #ff9f43; }
+  .wo-link-tone-danger::before { background: #ea5455; }
+  .wo-link-tone-danger .wo-link-icon { background: rgba(234, 84, 85, 0.14); color: #ea5455; }
+  .wo-link-tone-secondary::before { background: #82868b; }
+  .wo-link-tone-secondary .wo-link-icon { background: rgba(130, 134, 139, 0.16); color: #82868b; }
+  .wo-links-empty {
+    border: 1px solid var(--wo-divider-color);
+    border-radius: 10px;
+    padding: 0.95rem 1rem;
+    color: #6e6b7b;
+    font-size: 0.92rem;
+  }
+  .wo-meta-card {
+    border: 1px solid #ebe9f1;
+    border-radius: 8px;
+    background-color: #fff;
+    padding: 0.85rem;
+  }
+  .wo-meta-card-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+    margin-bottom: 0.7rem;
+    color: #5e5873;
+  }
+  .wo-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem 0.75rem;
+  }
+  .wo-kpi-item {
+    border: 1px solid var(--wo-divider-color);
+    border-radius: 7px;
+    padding: 0.5rem 0.55rem;
+    background-color: rgba(115, 103, 240, 0.03);
+  }
+  .wo-kpi-label {
+    display: block;
+    font-size: 0.7rem;
+    color: #6e6b7b;
+    margin-bottom: 0.2rem;
+  }
+  .wo-kpi-value {
+    display: flex;
+    align-items: baseline;
+    gap: 0.22rem;
+    color: #5e5873;
+    font-size: 0.94rem;
+    font-weight: 600;
+  }
+  .wo-kpi-unit {
+    color: #6e6b7b;
+    font-size: 0.72rem;
+    font-weight: 500;
+  }
+  .wo-progress-wrap {
+    margin-top: 0.75rem;
+    border-top: 1px solid #ebe9f1;
+    padding-top: 0.6rem;
+  }
+  .wo-progress-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: #6e6b7b;
+    margin-bottom: 0.35rem;
+  }
+  .wo-progress {
+    height: 6px;
+    width: 100%;
+    border-radius: 999px;
+    background-color: #f1f1f5;
+    overflow: hidden;
+    position: relative;
+  }
+  .wo-progress-bar {
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #00cfe8 0%, #28c76f 100%);
+    transition: width 1.25s cubic-bezier(0.22, 1, 0.36, 1), filter 0.2s ease;
+    position: relative;
+    will-change: width;
+  }
+  .wo-progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 34%;
+    min-width: 36px;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.65) 50%, transparent 100%);
+    transform: translateX(-150%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .wo-progress.wo-progress-charging .wo-progress-bar {
+    filter: brightness(1.04) saturate(1.15);
+  }
+  .wo-progress.wo-progress-live .wo-progress-bar::after {
+    opacity: 0.8;
+    animation: wo-progress-sheen 2.8s linear infinite;
+  }
+  @keyframes wo-progress-sheen {
+    0% {
+      transform: translateX(-150%);
+    }
+    100% {
+      transform: translateX(320%);
+    }
+  }
+  .wo-meta-list {
+    display: grid;
+    gap: 0.42rem;
+  }
+  .wo-meta-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.65rem;
+    border-bottom: 1px dashed #ebe9f1;
+    padding-bottom: 0.3rem;
+  }
+  .wo-meta-row:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+  .wo-meta-key {
+    color: #6e6b7b;
+    font-size: 0.74rem;
+  }
+  .wo-meta-value {
+    color: #5e5873;
+    font-size: 0.78rem;
+    text-align: right;
+    font-weight: 600;
+    word-break: break-word;
+  }
+  .wo-meta-flag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.75rem;
+  }
+  .wo-flag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border-radius: 999px;
+    padding: 0.3rem 0.65rem;
+    border: 1px solid rgba(110, 107, 123, 0.35);
+    background-color: rgba(110, 107, 123, 0.08);
+    font-size: 0.78rem;
+    line-height: 1;
+    color: #5e5873;
+    white-space: nowrap;
+  }
+  .wo-flag-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: #6e6b7b;
+  }
+  .wo-flag-success .wo-flag-dot { background: #28c76f; }
+  .wo-flag-danger .wo-flag-dot { background: #ea5455; }
+  .wo-flag-secondary .wo-flag-dot { background: #6e6b7b; }
+  .wo-flag-info .wo-flag-dot { background: #00cfe8; }
+
+  body:not(.dark-layout):not(.semi-dark-layout) .invoice-preview-wrapper .nav.nav-tabs .nav-link:not(.active):not([aria-selected='true']) {
+    color: #9aa0b5;
+  }
+  body:not(.dark-layout):not(.semi-dark-layout) .invoice-preview-wrapper .nav.nav-tabs .nav-link:hover:not(.active):not([aria-selected='true']) {
+    color: #8b92aa;
+  }
+
+  body.dark-layout .invoice-preview-wrapper .invoice-actions.invoice-actions-scrolled .card {
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  }
+  body.dark-layout .invoice-actions-divider {
+    border-top-color: var(--wo-divider-color);
+  }
+  body.dark-layout .invoice-preview-wrapper .logo-wrapper .invoice-logo,
+  body.semi-dark-layout .invoice-preview-wrapper .logo-wrapper .invoice-logo,
+  .dark-layout .invoice-preview-wrapper .logo-wrapper .invoice-logo,
+  .semi-dark-layout .invoice-preview-wrapper .logo-wrapper .invoice-logo {
+    color: #eaf0ff !important;
+  }
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary,
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary {
+    border-color: rgba(255, 255, 255, 0.9) !important;
+    color: #ffffff !important;
+    background-color: transparent !important;
+  }
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary i,
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary i,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary i,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary i,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary i,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary i,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary i,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary i {
+    color: #ffffff !important;
+  }
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:hover,
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:focus,
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:hover,
+  body.dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:focus,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:hover,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:focus,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:hover,
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:focus,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:hover,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:focus,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:hover,
+  .dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:focus,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:hover,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-primary:focus,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:hover,
+  .semi-dark-layout .invoice-preview-wrapper .invoice-actions .btn.btn-outline-secondary:focus {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    color: #ffffff !important;
+    border-color: #ffffff !important;
+  }
+  body.dark-layout .invoice-preview-wrapper .logo-wrapper .wo-brand-logo,
+  body.semi-dark-layout .invoice-preview-wrapper .logo-wrapper .wo-brand-logo,
+  .dark-layout .invoice-preview-wrapper .logo-wrapper .wo-brand-logo,
+  .semi-dark-layout .invoice-preview-wrapper .logo-wrapper .wo-brand-logo {
+    box-shadow: none !important;
+    filter: brightness(1.1) contrast(1.05);
+  }
+  body.dark-layout .wo-product-hero {
+    border-color: #444e6e;
+    background: linear-gradient(180deg, rgba(115, 103, 240, 0.26) 0%, rgba(40, 48, 70, 0.96) 100%);
+  }
+  body.dark-layout .wo-product-kicker {
+    color: #c1c5d8;
+  }
+  body.dark-layout .wo-product-title {
+    color: #f1f3f9;
+  }
+  body.dark-layout .wo-product-code-accent {
+    background: linear-gradient(90deg, rgba(40, 199, 111, 0.28) 0%, rgba(40, 199, 111, 0.09) 68%, rgba(40, 199, 111, 0) 100%);
+    box-shadow: inset 0 0 0 1px rgba(40, 199, 111, 0.4);
+  }
+  body.dark-layout .wo-product-code-label {
+    color: #91eeb8;
+  }
+  body.dark-layout .wo-product-code-value {
+    color: #28c76f;
+    text-shadow: 0 0 10px rgba(40, 199, 111, 0.18);
+  }
+  body.dark-layout .wo-product-qty-label,
+  body.semi-dark-layout .wo-product-qty-label,
+  .dark-layout .invoice-preview-wrapper .wo-product-qty-label,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-qty-label {
+    color: #c1c5d8;
+  }
+  body.dark-layout .wo-product-qty-value,
+  body.semi-dark-layout .wo-product-qty-value,
+  .dark-layout .invoice-preview-wrapper .wo-product-qty-value,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-qty-value {
+    color: #f1f3f9;
+  }
+  body.dark-layout .wo-product-qty-unit,
+  body.semi-dark-layout .wo-product-qty-unit,
+  .dark-layout .invoice-preview-wrapper .wo-product-qty-unit,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-qty-unit {
+    color: #c1c5d8;
+  }
+  body.dark-layout .wo-note-readonly,
+  body.semi-dark-layout .wo-note-readonly,
+  .dark-layout .invoice-preview-wrapper .wo-note-readonly,
+  .semi-dark-layout .invoice-preview-wrapper .wo-note-readonly {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: #444e6e;
+    color: #f1f3f9;
+  }
+  body.dark-layout .wo-note-empty,
+  body.semi-dark-layout .wo-note-empty,
+  .dark-layout .invoice-preview-wrapper .wo-note-empty,
+  .semi-dark-layout .invoice-preview-wrapper .wo-note-empty {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: #444e6e;
+    color: #c1c5d8;
+  }
+  body.dark-layout .wo-progress-shell {
+    background: transparent;
+    border-color: #444e6e;
+  }
+  body.dark-layout .wo-progress-shell .wo-progress-head {
+    color: #e1e4ef;
+  }
+  body.dark-layout .wo-progress-shell .wo-progress-head span:first-child,
+  body.semi-dark-layout .wo-progress-shell .wo-progress-head span:first-child,
+  .dark-layout .invoice-preview-wrapper .wo-progress-shell .wo-progress-head span:first-child,
+  .semi-dark-layout .invoice-preview-wrapper .wo-progress-shell .wo-progress-head span:first-child {
+    color: #ffffff !important;
+  }
+  body.dark-layout .wo-progress-shell .wo-progress-head span:last-child,
+  body.semi-dark-layout .wo-progress-shell .wo-progress-head span:last-child,
+  .dark-layout .invoice-preview-wrapper .wo-progress-shell .wo-progress-head span:last-child,
+  .semi-dark-layout .invoice-preview-wrapper .wo-progress-shell .wo-progress-head span:last-child {
+    color: #ffffff !important;
+  }
+  body.dark-layout .wo-progress-shell .wo-progress {
+    background-color: #3a4461;
+  }
+  body.dark-layout .wo-chip-shell {
+    background: #1f2940;
+    border-color: #444e6e;
+  }
+  body.dark-layout .wo-meta-chip {
+    border-color: #4a5373;
+    background-color: #283454;
+  }
+  body.dark-layout .wo-meta-chip-label {
+    color: #bdc2d6;
+  }
+  body.dark-layout .wo-meta-chip-value {
+    color: #eef1fa;
+  }
+  body.dark-layout .wo-flag-pill {
+    border-color: #4a5373;
+    background: #283454;
+    color: #d7dced;
+  }
+  body.dark-layout .wo-subtle-tabs-pane {
+    border-color: #444e6e;
+    background: #1f2940;
+  }
+  body.dark-layout .wo-kpi-shell {
+    border-color: #445071;
+    background: #252f49;
+  }
+  body.dark-layout .wo-kpi-item {
+    border-color: var(--wo-divider-color);
+    background-color: rgba(115, 103, 240, 0.12);
+  }
+  body.dark-layout .wo-kpi-label {
+    color: #b9bfd4;
+  }
+  body.dark-layout .wo-kpi-value {
+    color: #edf1fa;
+  }
+  body.dark-layout .wo-kpi-unit {
+    color: #c3c9db;
+  }
+  body.dark-layout .wo-timeline-pane .timeline .timeline-item {
+    border-left-color: #4b5678;
+  }
+  body.dark-layout .wo-timeline-pane .timeline .timeline-item .timeline-event h6 {
+    color: #e7ebf7;
+  }
+  body.dark-layout .wo-timeline-pane .timeline .timeline-item .timeline-event .timeline-event-time {
+    color: #c6ccde;
+  }
+  body.dark-layout .wo-link-card {
+    border-color: #465274;
+    background: linear-gradient(180deg, rgba(48, 61, 92, 0.95) 0%, rgba(34, 44, 69, 0.98) 100%);
+  }
+  body.dark-layout .wo-link-label {
+    color: #c7cce0;
+  }
+  body.dark-layout .wo-link-value {
+    color: #f2f5fb;
+  }
+  body.dark-layout .wo-link-value.wo-link-empty {
+    color: #8f96b0;
+  }
+  body.dark-layout .wo-links-empty {
+    border-color: #4a5474;
+    background: #283454;
+    color: #c7cce0;
+  }
+  body.dark-layout .wo-meta-row {
+    border-bottom-color: rgba(184, 190, 220, 0.22);
+  }
+  body.dark-layout .wo-meta-key {
+    color: #c2c8db;
+  }
+  body.dark-layout .wo-meta-value {
+    color: #eef1fa;
+  }
+  body.dark-layout .nav-tabs .nav-link {
+    color: #c0c6da;
+  }
+  body.dark-layout .nav-tabs .nav-link.active {
+    color: #f2f5fb;
+  }
+
+  /* Force transparent surfaces in dark variants to avoid white panels */
+  body.dark-layout .invoice-preview-wrapper .tab-content,
+  body.dark-layout .invoice-preview-wrapper .tab-pane,
+  body.dark-layout .invoice-preview-wrapper .wo-product-hero,
+  body.dark-layout .invoice-preview-wrapper .wo-progress-shell,
+  body.dark-layout .invoice-preview-wrapper .wo-chip-shell,
+  body.dark-layout .invoice-preview-wrapper .wo-subtle-tabs-pane,
+  body.dark-layout .invoice-preview-wrapper .wo-kpi-shell,
+  body.dark-layout .invoice-preview-wrapper .wo-kpi-item,
+  body.dark-layout .invoice-preview-wrapper .wo-meta-chip,
+  body.dark-layout .invoice-preview-wrapper .wo-link-card,
+  body.dark-layout .invoice-preview-wrapper .wo-links-empty,
+  body.semi-dark-layout .invoice-preview-wrapper .tab-content,
+  body.semi-dark-layout .invoice-preview-wrapper .tab-pane,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-hero,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-progress-shell,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-chip-shell,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-subtle-tabs-pane,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-kpi-shell,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-kpi-item,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-chip,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-link-card,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-links-empty {
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+
+  body.semi-dark-layout .invoice-preview-wrapper .invoice-actions-divider,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-row {
+    border-color: var(--wo-divider-color) !important;
+  }
+  body.semi-dark-layout .invoice-preview-wrapper .wo-progress-shell,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-chip-shell,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-subtle-tabs-pane,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-kpi-shell,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-link-card,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-links-empty,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-chip,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-flag-pill {
+    border-color: #465274 !important;
+  }
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-kicker,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-sub,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-kpi-label,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-key,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-link-label,
+  body.semi-dark-layout .invoice-preview-wrapper .timeline-event-time,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-chip-label {
+    color: #c4cade !important;
+  }
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-title,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-kpi-value,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-value,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-link-value,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-meta-chip-value,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-flag-pill,
+  body.semi-dark-layout .invoice-preview-wrapper .timeline-event h6 {
+    color: #eef2fb !important;
+  }
+
+  /* Generic dark selectors in case dark class is not on body */
+  .dark-layout .invoice-preview-wrapper .tab-content,
+  .dark-layout .invoice-preview-wrapper .tab-pane,
+  .dark-layout .invoice-preview-wrapper .wo-product-hero,
+  .dark-layout .invoice-preview-wrapper .wo-progress-shell,
+  .dark-layout .invoice-preview-wrapper .wo-chip-shell,
+  .dark-layout .invoice-preview-wrapper .wo-subtle-tabs-pane,
+  .dark-layout .invoice-preview-wrapper .wo-kpi-shell,
+  .dark-layout .invoice-preview-wrapper .wo-kpi-item,
+  .dark-layout .invoice-preview-wrapper .wo-meta-chip,
+  .dark-layout .invoice-preview-wrapper .wo-link-card,
+  .dark-layout .invoice-preview-wrapper .wo-links-empty,
+  .semi-dark-layout .invoice-preview-wrapper .tab-content,
+  .semi-dark-layout .invoice-preview-wrapper .tab-pane,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-hero,
+  .semi-dark-layout .invoice-preview-wrapper .wo-progress-shell,
+  .semi-dark-layout .invoice-preview-wrapper .wo-chip-shell,
+  .semi-dark-layout .invoice-preview-wrapper .wo-subtle-tabs-pane,
+  .semi-dark-layout .invoice-preview-wrapper .wo-kpi-shell,
+  .semi-dark-layout .invoice-preview-wrapper .wo-kpi-item,
+  .semi-dark-layout .invoice-preview-wrapper .wo-meta-chip,
+  .semi-dark-layout .invoice-preview-wrapper .wo-link-card,
+  .semi-dark-layout .invoice-preview-wrapper .wo-links-empty {
+    background: transparent !important;
+    background-image: none !important;
+    background-color: transparent !important;
+  }
+  .dark-layout .invoice-preview-wrapper .wo-product-kicker,
+  .dark-layout .invoice-preview-wrapper .wo-product-sub,
+  .dark-layout .invoice-preview-wrapper .wo-kpi-label,
+  .dark-layout .invoice-preview-wrapper .wo-meta-key,
+  .dark-layout .invoice-preview-wrapper .wo-link-label,
+  .dark-layout .invoice-preview-wrapper .timeline-event-time,
+  .dark-layout .invoice-preview-wrapper .wo-meta-chip-label,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-kicker,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-sub,
+  .semi-dark-layout .invoice-preview-wrapper .wo-kpi-label,
+  .semi-dark-layout .invoice-preview-wrapper .wo-meta-key,
+  .semi-dark-layout .invoice-preview-wrapper .wo-link-label,
+  .semi-dark-layout .invoice-preview-wrapper .timeline-event-time,
+  .semi-dark-layout .invoice-preview-wrapper .wo-meta-chip-label {
+    color: #c4cade !important;
+  }
+  .dark-layout .invoice-preview-wrapper .wo-product-title,
+  .dark-layout .invoice-preview-wrapper .wo-kpi-value,
+  .dark-layout .invoice-preview-wrapper .wo-meta-value,
+  .dark-layout .invoice-preview-wrapper .wo-link-value,
+  .dark-layout .invoice-preview-wrapper .wo-meta-chip-value,
+  .dark-layout .invoice-preview-wrapper .wo-flag-pill,
+  .dark-layout .invoice-preview-wrapper .timeline-event h6,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-title,
+  .semi-dark-layout .invoice-preview-wrapper .wo-kpi-value,
+  .semi-dark-layout .invoice-preview-wrapper .wo-meta-value,
+  .semi-dark-layout .invoice-preview-wrapper .wo-link-value,
+  .semi-dark-layout .invoice-preview-wrapper .wo-meta-chip-value,
+  .semi-dark-layout .invoice-preview-wrapper .wo-flag-pill,
+  .semi-dark-layout .invoice-preview-wrapper .timeline-event h6 {
+    color: #eef2fb !important;
+  }
+  body.dark-layout .invoice-preview-wrapper .wo-product-code-label,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-code-label,
+  .dark-layout .invoice-preview-wrapper .wo-product-code-label,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-code-label {
+    color: #91eeb8 !important;
+  }
+  body.dark-layout .invoice-preview-wrapper .wo-product-code-value,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-code-value,
+  .dark-layout .invoice-preview-wrapper .wo-product-code-value,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-code-value {
+    color: #28c76f !important;
+    text-shadow: 0 0 10px rgba(40, 199, 111, 0.18);
+  }
+  .swal2-popup.wo-swal-dark {
+    background: #283046 !important;
+    color: #d0d2d6 !important;
+  }
+  .swal2-popup.wo-swal-dark .swal2-title,
+  .swal2-popup.wo-swal-dark .swal2-html-container,
+  .swal2-popup.wo-swal-dark .swal2-content {
+    color: #d0d2d6 !important;
+  }
+  .swal2-popup.wo-scan-swal-popup {
+    overflow: hidden;
+    --wo-scan-progress-duration: 3000ms;
+  }
+  .swal2-popup .wo-scan-swal-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.12);
+    pointer-events: none;
+  }
+  .swal2-popup .wo-scan-swal-progress-fill {
+    width: 0;
+    height: 100%;
+    background: #28c76f;
+    transition: width var(--wo-scan-progress-duration) linear;
+  }
+  .swal2-popup.wo-swal-dark .wo-scan-swal-progress {
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .swal2-popup.wo-swal-dark .wo-scan-swal-progress-fill {
+    background: #28c76f;
+  }
+  .dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,
+  .semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,
+  body.dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link,
+  body.semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link {
+    color: #9aa2be !important;
+  }
+  .dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link:hover:not(.active),
+  .semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link:hover:not(.active),
+  body.dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link:hover:not(.active),
+  body.semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link:hover:not(.active) {
+    color: #b3bbd4 !important;
+  }
+  .dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link.active,
+  .semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link.active,
+  body.dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link.active,
+  body.semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link.active,
+  .dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link[aria-selected='true'],
+  .semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link[aria-selected='true'],
+  body.dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link[aria-selected='true'],
+  body.semi-dark-layout .invoice-preview-wrapper .nav.nav-tabs .nav-link[aria-selected='true'] {
+    color: #ffffff !important;
+  }
+
+  /* Restore visible hero gradient in dark variants */
+  body.dark-layout .invoice-preview-wrapper .wo-product-hero,
+  body.semi-dark-layout .invoice-preview-wrapper .wo-product-hero,
+  .dark-layout .invoice-preview-wrapper .wo-product-hero,
+  .semi-dark-layout .invoice-preview-wrapper .wo-product-hero {
+    background-image: linear-gradient(180deg, rgba(112, 134, 166, 0.24) 0%, rgba(74, 90, 114, 0.14) 56%, rgba(17, 19, 25, 0) 100%) !important;
+    background-color: transparent !important;
+  }
+
+  /* No outer borders on new section wrappers */
+  .invoice-preview-wrapper .wo-product-hero,
+  .invoice-preview-wrapper .wo-chip-shell,
+  .invoice-preview-wrapper .wo-kpi-shell,
+  .invoice-preview-wrapper .wo-subtle-tabs-pane {
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  .invoice-preview-wrapper .wo-progress-shell {
+    border: 1px solid var(--wo-divider-color) !important;
+    box-shadow: none !important;
+  }
+
+  @media (max-width: 1200px) {
+    .wo-meta-grid {
+      grid-template-columns: 1fr;
+    }
+    .wo-kpi-shell .wo-kpi-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .wo-links-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 1200px) {
+    .wo-preview-qr-image {
+      width: 108px;
+      height: 108px;
+    }
+  }
+  @media (min-width: 1440px) {
+    .wo-header-meta .invoice-title .invoice-order-number,
+    .wo-header-meta .invoice-date-title,
+    .wo-header-meta .invoice-date {
+      font-size: 1.2rem;
+    }
+  }
+  @media (min-width: 768px) and (max-width: 1199.98px) {
+    .invoice-actions .btn {
+      font-size: 0.7rem;
+    }
+    .invoice-preview-wrapper .logo-wrapper .invoice-logo {
+      font-size: 1.25rem;
+    }
+    .wo-header-details-row {
+      flex-direction: row;
+      flex-wrap: nowrap;
+      gap: 0.9rem;
+    }
+    .wo-header-company-block {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .wo-header-right-column {
+      flex: 0 0 auto;
+    }
+    .wo-header-meta .invoice-date-title {
+      min-width: 7rem;
+    }
+    .wo-header-qr-block {
+      display: none;
+    }
+    .wo-sidebar-qr-block {
+      display: flex;
+    }
+    .wo-sidebar-qr-divider {
+      display: block;
+    }
+  }
+  @media (max-width: 767.98px) {
+    .invoice-preview-wrapper .invoice-actions {
+      position: static;
+      top: auto;
+    }
+    .wo-header-details-row {
+      gap: 0.75rem;
+    }
+    .wo-header-right-column {
+      width: 100%;
+    }
+    .wo-header-main-row {
+      justify-content: flex-end;
+    }
+    .wo-header-chip-stack {
+      min-width: 0;
+      width: 100%;
+    }
+    .wo-product-hero-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .wo-product-qty {
+      width: 100%;
+      align-items: flex-end;
+    }
+    .wo-kpi-shell .wo-kpi-grid {
+      grid-template-columns: 1fr;
+    }
+    .wo-links-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  /* Compact portrait tuning for 480x774-class screens */
+  @media (max-width: 480px) {
+    .invoice-preview-wrapper {
+      padding-bottom: calc(2.4rem + env(safe-area-inset-bottom));
+    }
+    .invoice-preview .invoice-padding {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+    .invoice-preview .table th:first-child,
+    .invoice-preview .table td:first-child {
+      padding-left: 1rem;
+    }
+    .wo-mobile-top-actions {
+      display: block;
+      position: fixed;
+      left: max(0.75rem, env(safe-area-inset-left));
+      right: max(0.75rem, env(safe-area-inset-right));
+      bottom: max(0.75rem, env(safe-area-inset-bottom));
+      z-index: 1035;
+      margin-bottom: 0;
+    }
+    .wo-mobile-top-actions .card {
+      margin: 0;
+      border: 1px solid rgba(113, 130, 163, 0.18);
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 12px 28px rgba(34, 41, 47, 0.16);
+      backdrop-filter: blur(10px);
+    }
+    .wo-mobile-top-actions .card-body {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.55rem;
+      padding: 0.55rem;
+    }
+    .wo-mobile-meta-row {
+      display: flex;
+      grid-column: 1 / -1;
+      min-width: 0;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.15rem 0.2rem 0.35rem;
+      border-bottom: 1px solid var(--wo-divider-color);
+    }
+    .wo-mobile-top-actions .wo-mobile-priority,
+    .wo-mobile-top-actions .wo-mobile-protection {
+      display: flex;
+      flex: 1 1 0;
+      min-width: 0;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+      overflow: hidden;
+      white-space: nowrap;
+      font-size: 0.78rem;
+      line-height: 1.2;
+      text-align: center;
+    }
+    .wo-mobile-top-actions .wo-mobile-priority {
+      padding-right: 0.4rem;
+      border-right: 1px solid var(--wo-divider-color);
+    }
+    .wo-mobile-meta-row .wo-meta-chip-label {
+      flex: 0 0 auto;
+    }
+    .wo-mobile-priority-current {
+      display: inline-flex;
+      min-width: 0;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .wo-mobile-priority-current strong,
+    .wo-mobile-protection-value {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .wo-mobile-top-actions .btn {
+      width: 100%;
+      height: 44px;
+      margin-bottom: 0 !important;
+      padding: 0.5rem 0.3rem;
+      font-size: 0.92rem;
+      font-weight: 600;
+      line-height: 1.12;
+      white-space: nowrap;
+    }
+    .wo-mobile-top-actions .btn i {
+      font-size: 1.05rem !important;
+    }
+    body.vertical-overlay-menu .sidenav-overlay.show {
+      z-index: 1036 !important;
+    }
+    body.vertical-overlay-menu .main-menu,
+    body.vertical-overlay-menu .main-menu.menu-fixed,
+    body.vertical-overlay-menu.menu-open .main-menu,
+    body.vertical-overlay-menu.menu-open .main-menu.menu-fixed {
+      z-index: 1037 !important;
+    }
+    .scroll-top {
+      display: none !important;
+    }
+    .invoice-preview-wrapper .wo-preview-actions-col {
+      order: 0;
+    }
+    .invoice-preview-wrapper .wo-preview-main-col {
+      order: 0;
+    }
+    .invoice-preview-wrapper .invoice-actions {
+      position: static;
+      top: auto;
+    }
+    .invoice-preview-wrapper .invoice-actions .wo-action-primary-pair,
+    .invoice-preview-wrapper .invoice-actions .wo-action-primary-divider {
+      display: none !important;
+    }
+    .invoice-preview-wrapper .invoice-actions .card {
+      margin-bottom: 0.75rem;
+    }
+    .invoice-preview-wrapper .wo-sidebar-qr-block,
+    .invoice-preview-wrapper .wo-sidebar-qr-divider {
+      display: none !important;
+    }
+    .wo-header-brand-row {
+      align-items: center;
+      gap: 0.95rem;
+    }
+    .invoice-preview-wrapper .wo-header-brand-row .logo-wrapper {
+      flex: 0 1 54%;
+      min-width: 0;
+      margin-bottom: 0;
+    }
+    .invoice-preview-wrapper .logo-wrapper .wo-brand-logo {
+      width: 62px;
+      height: 62px;
+      min-width: 62px;
+      min-height: 62px;
+      flex: 0 0 62px;
+      object-fit: contain;
+      object-position: center;
+    }
+    .invoice-preview-wrapper .logo-wrapper .invoice-logo {
+      margin-left: 0.82rem;
+      font-size: 1.62rem;
+      line-height: 1.02;
+      white-space: nowrap;
+    }
+    .wo-preview-qr-image {
+      width: 96px;
+      height: 96px;
+      padding: 6px;
+    }
+    .wo-header-details-row {
+      flex-wrap: nowrap;
+      align-items: flex-start;
+      gap: 0.8rem;
+    }
+    .wo-header-company-block {
+      flex: 0 1 43%;
+      font-size: 0.73rem;
+      line-height: 1.32;
+      word-break: break-word;
+    }
+    .wo-header-company-block .card-text {
+      font-size: inherit;
+      line-height: inherit;
+      margin-bottom: 0.2rem !important;
+    }
+    .wo-header-company-block .card-text:first-child {
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-bottom: 0.32rem !important;
+    }
+    .wo-header-right-column {
+      flex: 0 1 57%;
+      width: auto;
+      min-width: 0;
+    }
+    .wo-header-main-row {
+      width: 100%;
+      justify-content: flex-end;
+    }
+    .wo-header-meta {
+      width: 100%;
+    }
+    .wo-header-meta .invoice-title {
+      margin-top: 0;
+      margin-bottom: 0.42rem !important;
+    }
+    .wo-header-meta .invoice-title .invoice-title-stack {
+      gap: 0.4rem;
+      align-items: flex-end;
+      width: 100%;
+    }
+    .wo-header-meta .invoice-title .invoice-title-stack > span:first-child {
+      font-size: 1.22rem;
+      line-height: 1.03;
+    }
+    .invoice-preview .invoice-title .invoice-order-number {
+      font-size: 0.86rem;
+      line-height: 1.12;
+    }
+    .wo-header-meta .invoice-date-title {
+      min-width: 5.35rem;
+      font-size: 0.74rem;
+    }
+    .wo-header-meta .invoice-date {
+      font-size: 0.74rem;
+      margin-left: 0.3rem;
+      white-space: nowrap;
+    }
+    .invoice-preview .invoice-date-wrapper {
+      margin-bottom: 0rem !important;
+    }
+    .wo-contact-row {
+      --bs-gutter-x: 0;
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 0.7rem;
+      margin-left: 0;
+      margin-right: 0;
+    }
+    .wo-contact-col {
+      flex: 1 1 0;
+      max-width: calc(50% - 0.35rem);
+      min-width: 0;
+    }
+    .wo-contact-col h6 {
+      font-size: 0.78rem;
+      line-height: 1.28;
+      word-break: break-word;
+    }
+    .wo-product-hero {
+      padding: 0.8rem 0.9rem;
+    }
+    .wo-product-hero-row {
+      flex-direction: row;
+      align-items: center;
+      gap: 0.7rem;
+    }
+    .wo-product-kicker {
+      font-size: 0.62rem;
+      margin-bottom: 0.22rem;
+    }
+    .wo-product-title {
+      font-size: 1.06rem;
+      line-height: 1.18;
+    }
+    .wo-product-code-accent {
+      margin-top: 0.38rem;
+      gap: 0.32rem;
+      padding: 0.26rem 0.52rem 0.26rem 0.42rem;
+    }
+    .wo-product-code-accent::before {
+      width: 0.36rem;
+      height: 0.36rem;
+      box-shadow: 0 0 0 3px rgba(40, 199, 111, 0.2);
+    }
+    .wo-product-code-label {
+      font-size: 0.56rem;
+    }
+    .wo-product-code-value {
+      font-size: 0.72rem;
+    }
+    .wo-product-qty {
+      width: auto;
+      margin-left: auto;
+      align-items: flex-end;
+    }
+    .wo-product-qty-label {
+      font-size: 0.6rem;
+      margin-bottom: 0.18rem;
+    }
+    .wo-product-qty-value {
+      font-size: 1.16rem;
+    }
+    .wo-product-qty-unit {
+      font-size: 0.74rem;
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 0.2rem;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs::-webkit-scrollbar {
+      height: 6px;
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs::-webkit-scrollbar-track {
+      background: var(--wo-table-scroll-track);
+      border-radius: 999px;
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs::-webkit-scrollbar-thumb {
+      background: var(--wo-table-scroll-thumb);
+      border-radius: 999px;
+      border: 1px solid var(--wo-table-scroll-thumb-border);
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs .nav-item {
+      flex: 0 0 auto;
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs .nav-link {
+      white-space: nowrap;
+      font-size: 1.04rem;
+      padding-left: 0.95rem;
+      padding-right: 0.95rem;
+    }
+    .invoice-preview-wrapper .nav-align-top > .nav.nav-tabs .nav-link i {
+      font-size: 1.04rem;
+    }
+  }
+  @media (max-width: 767.98px) {
+    .wo-other-options-toggle {
+      display: flex !important;
+      margin-bottom: 0 !important;
+      font-weight: 600;
+    }
+    .invoice-preview-wrapper .wo-other-options-collapse.collapse:not(.show) {
+      display: none;
+    }
+    .wo-other-options-shell .invoice-actions-divider {
+      display: none;
+    }
+    .wo-other-options-collapse {
+      padding-top: 0.75rem;
+    }
+  }
+
+
+</style>
+</head>
+<body class="vertical-layout vertical-overlay-menu menu-hide navbar-floating footer-static default">
+
+<nav class="header-navbar navbar navbar-expand-lg align-items-center floating-nav navbar-light navbar-shadow">
+  <div class="navbar-container d-flex content">
+    <div class="bookmark-wrapper d-flex align-items-center">
+      <ul class="nav navbar-nav d-xl-none align-items-center">
+        <li class="nav-item"><a class="nav-link menu-toggle" href="#"><i class="ficon" data-feather="menu"></i></a></li>
+        <li class="nav-item d-md-none"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+      <ul class="nav navbar-nav bookmark-icons">
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="home"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="calendar"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+    </div>
+    <ul class="nav navbar-nav align-items-center ms-auto">
+      <li class="nav-item">
+        <a class="nav-link navbar-ai-token-link" href="#">
+          <span class="navbar-ai-token-pill">
+            <span class="navbar-ai-token-pill__label">Tokeni</span>
+            <span class="navbar-ai-token-pill__icon"><span class="navbar-ai-token-coin navbar-ai-token-coin--top"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--mid"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--bottom"></span></span>
+            <span class="navbar-ai-token-pill__divider">|</span>
+            <span class="navbar-ai-token-pill__value">12.480</span>
+          </span>
+        </a>
+      </li>
+      
+      <li class="nav-item nav-search"><a class="nav-link nav-link-search"><i class="ficon" data-feather="search"></i></a></li>
+      <li class="nav-item dropdown dropdown-user">
+        <a class="nav-link dropdown-toggle dropdown-user-link" href="#">
+          <div class="user-nav d-sm-flex d-none"><span class="user-name fw-bolder">Admin</span><span class="user-status">ADMIN</span></div>
+          <span class="avatar"><img class="round" src="../images/portrait/avatar-s-22.jpg" alt="avatar" height="40" width="40"><span class="avatar-status-online"></span></span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="app-content content">
+  <div class="content-overlay"></div>
+  <div class="header-navbar-shadow"></div>
+  <div class="content-wrapper container-xxxl p-0">
+    
+    <div class="content-body">
+<section class="invoice-preview-wrapper">
+  <!-- fixed bottom bar on phones (<=480px) -->
+  <div class="wo-mobile-top-actions">
+    <div class="card"><div class="card-body">
+      <div class="wo-mobile-meta-row">
+        <div id="wo-mobile-priority" class="wo-mobile-priority wo-priority-warning">
+          <span class="wo-meta-chip-label">Prioritet RN:</span>
+          <span class="wo-mobile-priority-current wo-meta-chip-value"><span class="wo-mobile-priority-dot" aria-hidden="true"></span><strong id="wo-mobile-priority-value">5 - Uobičajeni prioritet</strong></span>
+        </div>
+        <div class="wo-mobile-protection">
+          <span class="wo-meta-chip-label">Zaštita:</span>
+          <strong class="wo-mobile-protection-value wo-meta-chip-value">PLASTIFIKACIJA RAL 7016</strong><!-- plausible -->
+        </div>
+      </div>
+      <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center"><i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog</button>
+      <button class="btn btn-primary w-100 d-flex justify-content-center align-items-center"><i class="fa fa-barcode me-50" style="font-size: 20px;"></i> Pripremi materijal</button>
+    </div></div>
+  </div>
+
+  <div class="row invoice-preview">
+    <div class="col-xl-9 col-md-8 col-12 wo-preview-main-col">
+      <div class="card invoice-preview-card">
+        <div class="card-body invoice-padding pb-0">
+          <div class="wo-header-shell invoice-spacing mt-0">
+            <div class="wo-header-brand-row">
+              <div class="logo-wrapper">
+                <img src="../images/logo/TrendyCNC.png" alt="Trendy d.o.o." width="50" height="auto" class="wo-brand-logo">
+                <h3 class="text-primary invoice-logo">eNalog.app</h3>
+              </div>
+              <div class="wo-header-qr-block">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=250110000308%3B1%3BTR-NOS-200" alt="QR Code" class="wo-preview-qr-image">
+              </div>
+            </div>
+            <div class="wo-header-details-row">
+              <div class="wo-header-company-block">
+                <p class="card-text mb-25">Trendy d.o.o.</p>
+                <p class="card-text mb-25">Bratstvo 11, 72290</p>
+                <p class="card-text mb-25">Novi Travnik, BiH</p>
+                <p class="card-text mb-0">+387 30 525 252</p>
+                <p class="card-text mb-0">info@trendy.ba</p>
+              </div>
+              <div class="wo-header-right-column"><div class="wo-header-main-row"><div class="wo-header-meta">
+                <h4 class="invoice-title"><span class="invoice-title-stack">
+                  <span><span class="invoice-key">RN</span><span class="invoice-number">26-6000-0001687</span></span>
+                  <span class="invoice-order-number">Narudžba:<span class="invoice-number">25-0110-0003084;1</span></span>
+                </span></h4>
+                <div class="invoice-date-wrapper"><p class="invoice-date-title">Datum izdavanja:</p><p class="invoice-date">07.10.2026</p></div>
+                <div class="invoice-date-wrapper"><p class="invoice-date-title">Planirani start:</p><p class="invoice-date">09.10.2026</p></div>
+              </div></div></div>
+            </div>
+          </div>
+        </div>
+        <hr class="invoice-spacing" />
+        <div class="card-body invoice-padding pt-0 pb-0">
+          <div class="row invoice-spacing wo-contact-row">
+            <div class="col-xl-4 col-md-6 p-0 wo-contact-col"><h6 class="mb-2">Pošiljatelj:</h6><h6 class="mb-25">Trendy d.o.o.</h6></div>
+            <div class="col-xl-4 d-none d-xl-block"></div>
+            <div class="col-xl-4 col-md-6 p-0 wo-contact-col"><h6 class="mb-2">Primatelj:</h6><h6 class="mb-25">Hidraulika Flex d.o.o.</h6></div><!-- plausible -->
+          </div>
+        </div>
+        <hr class="invoice-spacing" />
+        <div class="card-body invoice-padding pt-2 pb-0">
+          <div class="wo-product-hero"><div class="wo-product-hero-row">
+            <div class="wo-product-hero-main">
+              <span class="wo-product-kicker">Naziv proizvoda</span>
+              <span class="wo-product-title">NOSAČ MOTORA 200x120</span><!-- plausible -->
+              <span class="wo-product-code-accent" aria-label="Šifra proizvoda">
+                <span class="wo-product-code-label">Šifra proizvoda</span>
+                <span class="wo-product-code-value">TR-NOS-200</span>
+              </span>
+            </div>
+            <div class="wo-product-qty" aria-label="Količina proizvoda">
+              <span class="wo-product-qty-label">Količina</span>
+              <span class="wo-product-qty-metric"><span class="wo-product-qty-value">120</span><span class="wo-product-qty-unit">KOM</span></span>
+            </div>
+          </div></div>
+        </div>
+        <div class="card-body invoice-padding pt-0 pb-0">
+          <div class="wo-progress-shell">
+            <div class="wo-progress-head"><span>Realizacija po količini</span><span>45 %</span></div>
+            <div class="wo-progress wo-progress-live"><div class="wo-progress-bar" style="width: 45%;"></div></div>
+          </div>
+        </div>
+        <div class="card-body invoice-padding pt-0 pb-0">
+          <div class="wo-chip-shell"><div class="wo-meta-chip-row mb-0">
+            <div class="wo-meta-chip wo-chip-slate"><span class="wo-meta-chip-label">Tip dokumento</span><span class="wo-meta-chip-value">6000</span></div>
+            <div class="wo-meta-chip wo-chip-slate"><span class="wo-meta-chip-label">Varijanta</span><span class="wo-meta-chip-value">1</span></div>
+            <div class="wo-meta-chip wo-chip-slate"><span class="wo-meta-chip-label">Lokacija</span><span class="wo-meta-chip-value">CNC</span></div>
+            <span class="wo-flag-pill wo-flag-danger"><span class="wo-flag-dot"></span><span>Povrat: <strong>Ne</strong></span></span>
+            <span class="wo-flag-pill wo-flag-danger"><span class="wo-flag-dot"></span><span>Prijem završen: <strong>Ne</strong></span></span>
+            <span class="wo-flag-pill wo-flag-secondary"><span class="wo-flag-dot"></span><span>SN transfer: <strong>-</strong></span></span>
+          </div></div>
+        </div>
+        <hr class="invoice-spacing mb-0" />
+        <div class="nav-align-top">
+          <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item"><button type="button" class="nav-link active"><i class="fa fa-list me-50"></i> Sastavnica</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-shield me-50"></i> Zaštita</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-cube me-50"></i> Materijali</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-cog me-50"></i> Operacija</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-sticky-note-o me-50"></i> Napomena</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-line-chart me-50"></i> KPI</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-clock-o me-50"></i> Timeline</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-link me-50"></i> Poveznice</button></li>
+          </ul>
+          <div class="tab-content">
+            <div class="tab-pane fade show active" id="tab-sastavnica">
+              <div class="table-responsive wo-sastavnica-table-wrap">
+                <table class="table" id="sastavnica-table">
+                  <thead><tr>
+                    <th class="py-1 text-center"><span class="wo-desktop-column-label">Alternat...</span><span class="wo-mobile-column-label">alt.</span></th>
+                    <th class="py-1 text-center"><span class="wo-desktop-column-label">Pozicija</span><span class="wo-mobile-column-label">poz</span></th>
+                    <th class="py-1 text-center">Artikal</th><th class="py-1 text-center">Opis</th><th class="py-1 text-center">Slika</th>
+                    <th class="py-1 text-center">Napo...</th><th class="py-1 text-center">Količina</th><th class="py-1 text-center">MJ</th>
+                    <th class="py-1 text-center">Serija</th><th class="py-1 text-center">nor.os.</th><th class="py-1 text-center">Aktivno</th>
+                    <th class="py-1 text-center">Završ...</th><th class="py-1 text-center">VA</th><th class="py-1 text-center">Prim.klas</th><th class="py-1 text-center">Sek.klas</th>
+                    <th class="py-1 text-center wo-sastavnica-action-col"><span class="wo-desktop-column-label">Akcija</span><button type="button" class="wo-mobile-column-label wo-sastavnica-action-toggle" aria-expanded="true"><span class="wo-action-expanded-label">AKCIJA</span><span class="wo-action-collapsed-label"><i class="fa fa-angle-left"></i></span></button></th>
+                  </tr></thead>
+                  <tbody>
+                    <tr><td class="py-1">1</td><td class="py-1">10</td><td class="py-1">LIM-S235-5</td><td class="py-1">Lim S235 5mm</td><td class="py-1 text-center"><span class="text-muted">-</span></td><td class="py-1" title="">-</td><td class="py-1">2,4</td><td class="py-1">KG</td><td class="py-1">1</td><td class="py-1">-</td><td class="py-1">D</td><td class="py-1">N</td><td class="py-1">M</td><td class="py-1">-</td><td class="py-1">-</td>
+                      <td class="py-1 text-center wo-sastavnica-action-col"><div class="d-inline-flex align-items-center gap-50"><button type="button" class="btn btn-sm btn-outline-primary wo-edit-sastavnica-btn" title="Uredi stavku"><i class="fa fa-pencil"></i></button><button type="button" class="btn btn-sm btn-outline-danger wo-remove-sastavnica-btn" title="Ukloni iz radnog naloga"><i class="fa fa-trash"></i></button></div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <!-- Operacija tab (role kontrola/bravarija or admin gets the ✓ column) -->
+            <div class="tab-pane fade" id="tab-operacija">
+              <div class="table-responsive wo-sastavnica-table-wrap">
+                <table class="table" id="operacija-table">
+                  <thead><tr>
+                    <th class="py-1 text-center"><span class="wo-desktop-column-label">Alternativa</span><span class="wo-mobile-column-label">Alt.</span></th>
+                    <th class="py-1 text-center"><span class="wo-desktop-column-label">Pozicija</span><span class="wo-mobile-column-label">Pos.</span></th>
+                    <th class="py-1 text-center">Operacija</th><th class="py-1 text-center">Naziv</th><th class="py-1 text-center">Napo...</th><th class="py-1 text-center">MJ</th><th class="py-1 text-center">MJ/vrij.</th><th class="py-1 text-center">nor.os.</th><th class="py-1 text-center">VA</th><th class="py-1 text-center">Prim.klas.</th><th class="py-1 text-center">Sek.klas.</th>
+                    <th class="py-1 text-center wo-operation-action-col">&#10003;</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr class="wo-operation-finished-row"><td class="py-1">1</td><td class="py-1">20</td><td class="py-1">OP10</td><td class="py-1">Laserko rezanje</td><td class="py-1">-</td><td class="py-1">MIN</td><td class="py-1">4</td><td class="py-1">-</td><td class="py-1">O</td><td class="py-1">-</td><td class="py-1">-</td><td class="py-1 text-center wo-operation-action-col"><button type="button" class="btn btn-sm btn-flat-success wo-operation-complete-btn" data-finished="1"></button></td></tr>
+                    <tr><td class="py-1">1</td><td class="py-1">30</td><td class="py-1">OP20</td><td class="py-1">CNC savijanje</td><td class="py-1">-</td><td class="py-1">MIN</td><td class="py-1">6</td><td class="py-1">-</td><td class="py-1">O</td><td class="py-1">-</td><td class="py-1">-</td><td class="py-1 text-center wo-operation-action-col"><button type="button" class="btn btn-sm btn-flat-secondary wo-operation-complete-btn" data-finished="0"></button></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <!-- Materijali tab headers: Pozicija | Materijal | Naziv | Količina (input.form-control.form-control-sm.wo-material-quantity-input + btn btn-outline-primary btn-sm wo-material-save-quantity-btn <i class="fa fa-check">) | Napomena -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- action column (below main card on phones; primary pair hidden, collapse shown) -->
+    <div class="col-xl-3 col-md-4 col-12 invoice-actions mt-md-0 mt-2 wo-preview-actions-col">
+      <div class="card"><div class="card-body">
+        <div class="wo-other-options-shell">
+          <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center wo-other-options-toggle collapsed" type="button" aria-expanded="false"><i class="fa fa-chevron-down me-50 wo-other-options-chevron" style="font-size: 12px;"></i> Ostale opcije</button>
+          <div class="collapse wo-other-options-collapse" id="wo-other-options-collapse">
+            <button id="wo-close-order-btn" class="btn btn-outline-success w-100 mb-75 d-flex justify-content-center align-items-center"><i class="fa fa-check-circle me-50"></i><span class="wo-close-order-label">Zatvori nalog</span></button>
+            <button id="wo-status-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-success"><i class="fa fa-circle-notch me-50"></i> Status: <span id="wo-status-label" class="ms-25">Otvoren</span></button>
+            <button id="wo-priority-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-warning"><span id="wo-priority-label">5 - Uobičajeni prioritet</span></button>
+            <button id="wo-protection-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-secondary"><i class="fa fa-shield me-50" style="margin-top: 1px;"></i> Zaštita: <span class="ms-25">PLASTIFIKACIJA RAL 7016</span></button>
+            <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center"><i class="fa fa-building me-50"></i> Dodaj odjel</button>
+            <button class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center"><i class="fa fa-cube me-50"></i> Dodaj materijal</button>
+            <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center"><i class="fa fa-cog me-50"></i> Dodaj operaciju</button>
+            <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center"><i class="fa fa-paper-plane me-50" style="margin-top: 2px; font-size: 12px;"></i> Pošalji</button>
+            <a class="btn btn-outline-secondary w-100 d-flex justify-content-center align-items-center"><i class="fa fa-print me-50"></i> Isprintaj</a>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+    </div>
+  </div>
+</div>
+<script src="../vendors/js/vendors.min.js"></script>
+<script>feather.replace({width: 14, height: 14});</script>
+</body>
+</html>

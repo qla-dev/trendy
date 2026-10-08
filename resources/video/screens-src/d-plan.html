@@ -1,0 +1,133 @@
+<!--{"title":"Plan proizvodnje","active":"plan","blade":["apps/production/app-production-plan.blade.php"],"css":["vendors/css/tables/datatable/dataTables.bootstrap5.min.css"],"noHeader":true}-->
+<style>
+  .production-plan-table .plan-expand-cell { width: 28px; padding: .25rem; }
+  .plan-expand-button { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 0; border-radius: .35rem; background: transparent; color: inherit; }
+  .plan-expand-button:hover { background: rgba(94, 88, 115, .12); }
+  .plan-expand-button i { transition: transform .15s ease; font-size: .7rem; }
+  .plan-expand-button[aria-expanded='true'] i { transform: rotate(90deg); }
+  .production-plan-table .plan-detail-row > td { padding: 0; background: #f8f8f8; border-bottom: 1px solid #d8d6de; }
+  .plan-expanded-details { box-sizing: border-box; width: min(100%, var(--production-plan-visible-width, 80vw)); padding: .75rem 1rem; white-space: normal; }
+  .plan-expanded-details h6 { font-size: .75rem; margin-bottom: .5rem; }
+  .plan-detail-scroll { max-width: 100%; overflow-x: auto; }
+  .plan-operations-flow { display: flex; flex-wrap: nowrap; list-style: none; padding: 0; margin: 0; width: max-content; }
+  .plan-operations-flow li { display: flex; align-items: center; flex: 0 0 auto; }
+  .plan-operations-flow li:not(:last-child)::after { content: ''; width: 2rem; height: 1px; margin: 0 .75rem; background: #d8d6de; }
+  .plan-operation-circle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 26px; height: 26px; border: 2px solid currentColor; border-radius: 50%; margin-right: .5rem; }
+  .plan-operation-circle--finished { color: #28a745; background: rgba(40, 167, 69, .12); }
+  .plan-operation-circle--unfinished { color: #e69a19; background: rgba(230, 154, 25, .12); }
+  .plan-operations-flow strong { font-size: .8rem; }
+  .plan-operations-flow small { display: block; font-size: .7rem; color: inherit; }
+  .production-plan-table { width: max-content !important; min-width: 100%; }
+  .production-plan-table > :not(caption) > * > * { padding: .42rem .5rem; font-size: .8rem; white-space: nowrap; }
+  .production-plan-table thead th { max-width: 7rem; white-space: normal; line-height: 1.2; }
+  table.production-plan-table.dataTable > thead > tr > th[class*="sorting"]::before { top: calc(50% - .5rem); right: .45em; bottom: auto; transform: translateY(-50%); }
+  table.production-plan-table.dataTable > thead > tr > th[class*="sorting"]::after { top: calc(50% + .5rem); right: .45em; bottom: auto; transform: translateY(-50%); }
+  .production-plan-table thead th:nth-child(9):not(.sorting_disabled),
+  .production-plan-table thead th:nth-child(13):not(.sorting_disabled) { padding-right: 20px; }
+  .production-plan-table .editable-cell { cursor: pointer; }
+  .production-plan-table .production-plan-note-preview { display: inline-block; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+  .production-plan-table tr.production-plan-row--red > td { background-color: #ffd6dc !important; color: #7a0014; }
+  .production-plan-table tr.production-plan-row--yellow > td { background-color: #fff0a3 !important; color: #5f4500; }
+  .production-plan-table tr.production-plan-row--orange > td { background-color: #ffd1aa !important; color: #792b00; }
+  .production-plan-table tr.production-plan-row--purple > td { background-color: #e8d4ff !important; color: #4f167f; }
+  .production-plan-table tr.production-plan-row--teal > td { background-color: #bcefe5 !important; color: #005c4c; }
+  .production-plan-table tr.production-plan-row--green > td { background-color: #c5f1d2 !important; color: #075e2a; }
+  .production-plan-table tr.production-plan-row--grey > td { background-color: #dde2e8 !important; color: #39424e; }
+  .production-plan-table tr[class*='production-plan-row--'] > td:first-child { box-shadow: inset 4px 0 0 currentColor; }
+  .production-plan-table-overlay-host { position: relative; isolation: isolate; }
+  .production-plan-table-loading-overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; min-height: 220px; background: rgba(255, 255, 255, .74); backdrop-filter: blur(1px); z-index: 30; pointer-events: none; }
+  .production-plan-table-loading-overlay.is-visible { display: flex; }
+  #btn-izvoz-plana { color: #5e5873; border-color: currentColor; cursor: pointer; }
+  #btn-izvoz-plana:hover, #btn-izvoz-plana:focus-visible { background-color: rgba(94, 88, 115, .12); }
+  .production-plan-wrapper .card-datatable.table-responsive { overflow: visible; }
+  .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child,
+  .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:last-child { margin-right: 0; margin-left: 0; padding: 1rem; }
+  .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-'],
+  .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:last-child > [class*='col-'] { padding-right: 0; padding-left: 0; }
+  .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) { margin-right: 0; margin-left: 0; overflow-x: auto; }
+  .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-'] { min-width: max-content; padding-right: 0; padding-left: 0; }
+  @media (min-width: 768px) {
+    .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-']:first-child { flex: 1 1 auto; width: auto; max-width: none; }
+    .production-plan-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-']:last-child { flex: 0 0 auto; width: auto; max-width: none; margin-left: auto; }
+  }
+  .production-plan-fullscreen-toolbar { display: none; }
+</style>
+
+<section id="rn-plan">
+  <div class="content-header row"><div class="col-12 mb-2 d-flex justify-content-between align-items-center flex-wrap gap-1">
+    <h2 class="mb-0">Plan proizvodnje — Radni nalozi</h2>
+    <div class="d-flex flex-wrap gap-1">
+      <button type="button" class="btn btn-outline-secondary" id="btn-fullscreen-plana"><i data-feather="maximize" class="me-50"></i>Prikaz preko cijelog ekrana</button>
+      <button type="button" class="btn" id="btn-izvoz-plana"><i data-feather="download" class="me-50"></i>Izvoz u Excel</button>
+    </div>
+  </div></div>
+
+  <div class="card mb-2">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h4 class="mb-0">Filter plana proizvodnje</h4>
+      <div class="d-flex align-items-center flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-kolone-plana"><i data-feather="columns" class="me-50"></i>Filter kolona</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-prikazi-filtere"><i data-feather="filter" class="me-50"></i>Prikaži filtere</button>
+        <button class="btn btn-outline-danger btn-sm" id="btn-obrisi-filter"><i data-feather="trash-2" class="me-50"></i>Obriši filter</button>
+      </div>
+    </div>
+    <!-- #tijelo-filtera and #tijelo-kolona-plana are d-none by default -->
+  </div>
+
+  <div class="card production-plan-wrapper production-plan-table-overlay-host" id="production-plan-list">
+    <div class="card-datatable table-responsive">
+      <div class="dataTables_wrapper dt-bootstrap5 no-footer">
+        <div class="row">
+          <div class="col-sm-12 col-md-6"><div class="dataTables_length"><label>Prikaži <select class="form-select form-select-sm"><option>25</option></select> redova</label></div></div>
+          <div class="col-sm-12 col-md-6"><div class="dataTables_filter"><label>Pretraga:<input type="search" class="form-control form-control-sm"></label></div></div>
+        </div>
+        <div class="row dt-row"><div class="col-sm-12">
+          <table class="table production-plan-table dataTable" id="plan-proizvodnje-tabela">
+            <thead><tr>
+              <th aria-label="Detalji" class="plan-expand-cell sorting_disabled"></th><th class="sorting_disabled">%</th><th class="sorting">RN</th><th class="sorting">Naručitelj</th><th class="sorting">Prioritet</th><th class="sorting">Datum</th><th class="sorting">Narudžba</th><th class="sorting">Br. narudžbe <br>kupca</th><th class="sorting">Br. <br>poz.</th><th class="sorting sorting_desc">Poč. <br>termin</th><th class="sorting">Kraj <br>termin</th><th class="sorting">Datum <br>isporuke</th><th class="sorting">Proizvod</th><th class="sorting">Plan. <br>kol.</th><th class="sorting">Naziv</th><th class="sorting">Nositelj troška</th><th class="sorting">Napomena</th>
+            </tr></thead>
+            <tbody>
+              <tr class="production-plan-row--red">
+                <td class="plan-expand-cell"><button type="button" class="plan-expand-button" aria-expanded="false"><i class="fa fa-chevron-right"></i></button></td>
+                <td><b>35%</b></td><td>26-6000-0001284</td><td><span class="editable-cell"><span title="GROB-WERKE">GW</span></span></td><td>Visoki prioritet</td><td><span class="editable-cell">01.10.2026</span></td><td><span class="editable-cell">26-0100-0000412</span></td><td>4500123456</td><td><span class="editable-cell">10</span></td><td><span class="editable-cell">06.10.2026</span></td><td><span class="editable-cell">09.10.2026</span></td><td>14.10.2026</td><td><span class="editable-cell">PR-080-16</span></td><td><span class="editable-cell">120</span></td><td><span class="editable-cell">Prirubnica DN80 PN16</span></td><td><span class="editable-cell">CNC-1</span></td><td><span class="editable-cell"><span class="production-plan-note-preview" title="Hitno – kupac čeka">Hitno – kupac čeka</span></span></td>
+              </tr>
+              <tr class="production-plan-row--yellow">
+                <td class="plan-expand-cell"><button type="button" class="plan-expand-button" aria-expanded="false"><i class="fa fa-chevron-right"></i></button></td>
+                <td><b>60%</b></td><td>26-6000-0001283</td><td><span class="editable-cell"><span title="TRENDY GERMANY GMBH 2">TG GmbH 2</span></span></td><td>Uobičajeni prioritet</td><td><span class="editable-cell">30.09.2026</span></td><td><span class="editable-cell">26-0100-0000411</span></td><td>PO-88213</td><td><span class="editable-cell">20</span></td><td><span class="editable-cell">05.10.2026</span></td><td><span class="editable-cell">08.10.2026</span></td><td>16.10.2026</td><td><span class="editable-cell">OV-040-220</span></td><td><span class="editable-cell">48</span></td><td><span class="editable-cell">Osovina vratila Ø40</span></td><td><span class="editable-cell">TOK-2</span></td><td><span class="editable-cell"><span class="production-plan-note-preview" title=""></span></span></td>
+              </tr>
+              <tr class="production-plan-row--teal">
+                <td class="plan-expand-cell"><button type="button" class="plan-expand-button" aria-expanded="false"><i class="fa fa-chevron-right"></i></button></td>
+                <td><b>80%</b></td><td>26-6000-0001281</td><td><span class="editable-cell"><span title="GROB-WERKE">GW</span></span></td><td>Materijal razdužen</td><td><span class="editable-cell">28.09.2026</span></td><td><span class="editable-cell">26-0100-0000405</span></td><td>4500122987</td><td><span class="editable-cell">30</span></td><td><span class="editable-cell">03.10.2026</span></td><td><span class="editable-cell">07.10.2026</span></td><td>12.10.2026</td><td><span class="editable-cell">KL-6205</span></td><td><span class="editable-cell">300</span></td><td><span class="editable-cell">Kućište ležaja</span></td><td><span class="editable-cell">CNC-3</span></td><td><span class="editable-cell"><span class="production-plan-note-preview" title="Materijal izdan">Materijal izdan</span></span></td>
+              </tr>
+              <tr class="production-plan-row--green">
+                <td class="plan-expand-cell"><button type="button" class="plan-expand-button" aria-expanded="false"><i class="fa fa-chevron-right"></i></button></td>
+                <td><b>10%</b></td><td>26-6000-0001282</td><td><span class="editable-cell"><span title="KOVIS Hidraulika">KOVIS Hidraulika</span></span></td><td>Niski prioritet</td><td><span class="editable-cell">29.09.2026</span></td><td><span class="editable-cell">26-0100-0000409</span></td><td>N-2026/118</td><td><span class="editable-cell">10</span></td><td><span class="editable-cell">02.10.2026</span></td><td><span class="editable-cell">10.10.2026</span></td><td>23.10.2026</td><td><span class="editable-cell">NM-300-A</span></td><td><span class="editable-cell">2,5</span></td><td><span class="editable-cell">Nosač motora 3mm</span></td><td><span class="editable-cell">LAS-1</span></td><td><span class="editable-cell"><span class="production-plan-note-preview" title=""></span></span></td>
+              </tr>
+              <tr class="production-plan-row--purple">
+                <td class="plan-expand-cell"><button type="button" class="plan-expand-button" aria-expanded="false"><i class="fa fa-chevron-right"></i></button></td>
+                <td><b>0%</b></td><td>26-6000-0001286</td><td><span class="editable-cell"><span title="TRENDY GERMANY GMBH 1">TG GmbH 1</span></span></td><td>Uzorci</td><td><span class="editable-cell">01.10.2026</span></td><td><span class="editable-cell">26-0100-0000415</span></td><td>PO-88240</td><td><span class="editable-cell">10</span></td><td><span class="editable-cell">01.10.2026</span></td><td><span class="editable-cell">03.10.2026</span></td><td>09.10.2026</td><td><span class="editable-cell">UZ-DC-12</span></td><td><span class="editable-cell">5</span></td><td><span class="editable-cell">Uzorak distantne čahure</span></td><td><span class="editable-cell">TOK-1</span></td><td><span class="editable-cell"><span class="production-plan-note-preview" title="Uzorak za odobrenje">Uzorak za odobrenje</span></span></td>
+              </tr>
+              <tr class="production-plan-row--yellow">
+                <td class="plan-expand-cell"><button type="button" class="plan-expand-button" aria-expanded="false"><i class="fa fa-chevron-right"></i></button></td>
+                <td><b>100%</b></td><td>26-6000-0001279</td><td><span class="editable-cell"><span title="TRENDY GERMANY GMBH 2">TG GmbH 2</span></span></td><td>Uobičajeni prioritet</td><td><span class="editable-cell">25.09.2026</span></td><td><span class="editable-cell">26-0100-0000398</span></td><td>PO-88177</td><td><span class="editable-cell">40</span></td><td><span class="editable-cell">29.09.2026</span></td><td><span class="editable-cell">02.10.2026</span></td><td>07.10.2026</td><td><span class="editable-cell">DC-12-30</span></td><td><span class="editable-cell">1.000</span></td><td><span class="editable-cell">Distantna čahura</span></td><td><span class="editable-cell">TOK-2</span></td><td><span class="editable-cell"><span class="production-plan-note-preview" title=""></span></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div></div>
+        <div class="row">
+          <div class="col-sm-12 col-md-5"><div class="dataTables_info">Prikaz 1 do 25 od 312 radnih naloga</div></div>
+          <div class="col-sm-12 col-md-7"><div class="dataTables_paginate paging_simple_numbers"><ul class="pagination">
+            <li class="paginate_button page-item previous disabled"><a class="page-link" href="#">Prethodna</a></li>
+            <li class="paginate_button page-item active"><a class="page-link" href="#">1</a></li>
+            <li class="paginate_button page-item"><a class="page-link" href="#">2</a></li>
+            <li class="paginate_button page-item"><a class="page-link" href="#">3</a></li>
+            <li class="paginate_button page-item disabled"><a class="page-link" href="#">…</a></li>
+            <li class="paginate_button page-item"><a class="page-link" href="#">13</a></li>
+            <li class="paginate_button page-item next"><a class="page-link" href="#">Sljedeća</a></li>
+          </ul></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

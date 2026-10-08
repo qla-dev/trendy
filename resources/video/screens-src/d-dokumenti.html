@@ -1,0 +1,53 @@
+<!--{"title":"Razduženi materijali","active":"razduzeni","blade":["apps/documents/released-materials.blade.php"],"css":["vendors/css/tables/datatable/dataTables.bootstrap5.min.css"],"noHeader":true}-->
+<style>
+  /* copy lines 28–382 verbatim; key parts: */
+  .released-doc-filter-actions { row-gap: 8px; }
+  .released-doc-active-filter-chip { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border:1px solid #d8d6de; border-radius:999px; background-color:#f8f8f8; font-size:12px; line-height:1; }
+  .released-doc-active-filter-label { color:#6e6b7b; font-weight:500; }
+  .released-doc-active-filter-value { color:#5e5873; font-weight:600; }
+  .released-doc-document-number { display:inline-flex; align-items:center; gap:0.45rem; font-weight:700; letter-spacing:0.01em; }
+  .released-doc-note-cell, .released-doc-name-cell { min-width:220px; }
+  .released-doc-action-btn { display:inline-flex; align-items:center; justify-content:center; width:38px; min-width:38px; height:38px; padding:0.45rem; white-space:nowrap; }
+  .released-doc-wrapper .dataTables_wrapper > .row:first-child, .released-doc-wrapper .dataTables_wrapper > .row:last-child { margin-left:0; margin-right:0; padding:1rem 1rem 0.95rem; }
+  @media (max-width: 767.98px) { .released-doc-filter-actions { align-items: flex-start !important; } }
+</style>
+<section class="released-material-documents-wrapper">
+  <div class="content-header row"><div class="content-header-left col-12 mb-2"><div class="row breadcrumbs-top"><div class="col-12"><h2 class="content-header-title float-start mb-0">Razduženi materijali</h2></div></div></div></div>
+  <div class="card mb-2">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <div><h4 class="mb-0">Filter dokumenata</h4><small class="text-muted">Dokumenti tipa 6400 - RN Rasknjiženje materijala</small></div>
+      <div class="d-flex align-items-center flex-wrap gap-2 released-doc-filter-actions">
+        <div id="released-doc-active-filters" class="released-doc-active-filters d-none"></div>
+        <button type="button" class="btn btn-outline-primary btn-sm"><i data-feather="filter" class="me-50"></i> Prikaži filtere</button>
+        <button type="button" class="btn btn-outline-danger btn-sm"><i data-feather="trash-2" class="me-50"></i> Obriši filter</button>
+      </div>
+    </div>
+    <!-- hidden filter body: Dokument (file-text, placeholder "26-6400-..."), RN (search, "26-6000-0001687"), Narudžba (briefcase, "25-0110-0003084"), Šifra (hash, "Šifra materijala"), Naziv (search), Datum od / Datum do (calendar, "dd.mm.gggg"), Napomena (message-square), button "Filter" -->
+  </div>
+  <div class="card released-doc-wrapper">
+    <div class="card-datatable table-responsive"><div class="dataTables_wrapper dt-bootstrap5">
+      <div class="row"><div class="col-sm-12 col-md-6"><div class="dataTables_length"><label>Prikaži <select class="form-select form-select-sm"><option>10</option></select> zapisa</label></div></div>
+        <div class="col-sm-12 col-md-6"><div class="dataTables_filter"><label>Brza pretraga:<input type="search" class="form-control form-control-sm" placeholder="Dokument, RN, narudžba, šifra ili naziv"></label></div></div></div>
+      <div class="row"><div class="col-sm-12 released-doc-table-body-cell"><div class="released-doc-table-body-scroll">
+        <table class="table released-doc-table" id="released-doc-table">
+          <thead><tr><th>Dokument</th><th>Datum</th><th>RN</th><th>Narudžba</th><th>Pozicija</th><th>Šifra</th><th>Naziv</th><th>Količina</th><th>JM</th><th>Cijena RN</th><th>Napomena</th><th class="released-doc-action-cell">Akcija</th></tr></thead>
+          <tbody>
+            <tr><td class="released-doc-document-cell"><span class="released-doc-document-number">26-6400-0000412</span></td><td class="released-doc-date-cell">07.10.2026</td><td class="released-doc-work-order-cell">26-6000-0001687</td><td class="released-doc-order-cell">25-0110-0003084</td><td class="released-doc-position-cell text-end">10</td><td class="released-doc-code-cell">LIM-S235-5</td><td class="released-doc-name-cell">Lim S235 5mm 1500x3000</td><td class="released-doc-quantity-cell text-end">2,4</td><td class="released-doc-unit-cell">KG</td><td class="released-doc-price-cell text-end">12,48 KM</td><td class="released-doc-note-cell"><span class="text-muted">-</span></td>
+              <td class="released-doc-action-cell text-end"><div class="released-doc-actions-group"><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger released-doc-action-btn released-doc-delete-btn" title="Izbriši dokument"><i data-feather="trash-2"></i></button></div></td></tr>
+<tr><td class="released-doc-document-cell"><span class="released-doc-document-number">26-6400-0000411</span></td><td class="released-doc-date-cell">07.10.2026</td><td class="released-doc-work-order-cell">26-6000-0001684</td><td class="released-doc-order-cell">25-0110-0003079</td><td class="released-doc-position-cell text-end">10</td><td class="released-doc-code-cell">SIP-S355-40</td><td class="released-doc-name-cell">Šipka S355 Ø40</td><td class="released-doc-quantity-cell text-end">18,6</td><td class="released-doc-unit-cell">M</td><td class="released-doc-price-cell text-end">96,72 KM</td><td class="released-doc-note-cell"><span class="text-muted">-</span></td>
+              <td class="released-doc-action-cell text-end"><div class="released-doc-actions-group"><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger released-doc-action-btn released-doc-delete-btn" title="Izbriši dokument"><i data-feather="trash-2"></i></button></div></td></tr>
+<tr><td class="released-doc-document-cell"><span class="released-doc-document-number">26-6400-0000410</span></td><td class="released-doc-date-cell">07.10.2026</td><td class="released-doc-work-order-cell">26-6000-0001684</td><td class="released-doc-order-cell">25-0110-0003079</td><td class="released-doc-position-cell text-end">20</td><td class="released-doc-code-cell">VIJ-M10-35</td><td class="released-doc-name-cell">Vijak M10x35 DIN 933 8.8</td><td class="released-doc-quantity-cell text-end">240</td><td class="released-doc-unit-cell">KOM</td><td class="released-doc-price-cell text-end">28,80 KM</td><td class="released-doc-note-cell"><span class="text-muted">-</span></td>
+              <td class="released-doc-action-cell text-end"><div class="released-doc-actions-group"><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger released-doc-action-btn released-doc-delete-btn" title="Izbriši dokument"><i data-feather="trash-2"></i></button></div></td></tr>
+<tr><td class="released-doc-document-cell"><span class="released-doc-document-number">26-6400-0000409</span></td><td class="released-doc-date-cell">07.10.2026</td><td class="released-doc-work-order-cell">26-6000-0001681</td><td class="released-doc-order-cell">25-0110-0003071</td><td class="released-doc-position-cell text-end">10</td><td class="released-doc-code-cell">AL-6082-20</td><td class="released-doc-name-cell">Aluminij EN AW-6082 20mm</td><td class="released-doc-quantity-cell text-end">31,25</td><td class="released-doc-unit-cell">KG</td><td class="released-doc-price-cell text-end">143,75 KM</td><td class="released-doc-note-cell"><span class="text-muted">-</span></td>
+              <td class="released-doc-action-cell text-end"><div class="released-doc-actions-group"><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger released-doc-action-btn released-doc-delete-btn" title="Izbriši dokument"><i data-feather="trash-2"></i></button></div></td></tr>
+<tr><td class="released-doc-document-cell"><span class="released-doc-document-number">26-6400-0000408</span></td><td class="released-doc-date-cell">07.10.2026</td><td class="released-doc-work-order-cell">26-6000-0001679</td><td class="released-doc-order-cell">25-0110-0003068</td><td class="released-doc-position-cell text-end">10</td><td class="released-doc-code-cell">INOX-304-2</td><td class="released-doc-name-cell">Inox lim 1.4301 2mm</td><td class="released-doc-quantity-cell text-end">12,8</td><td class="released-doc-unit-cell">KG</td><td class="released-doc-price-cell text-end">70,40 KM</td><td class="released-doc-note-cell"><span class="text-muted">-</span></td>
+              <td class="released-doc-action-cell text-end"><div class="released-doc-actions-group"><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger released-doc-action-btn released-doc-delete-btn" title="Izbriši dokument"><i data-feather="trash-2"></i></button></div></td></tr>
+<tr><td class="released-doc-document-cell"><span class="released-doc-document-number">26-6400-0000407</span></td><td class="released-doc-date-cell">07.10.2026</td><td class="released-doc-work-order-cell">26-6000-0001676</td><td class="released-doc-order-cell">25-0110-0003060</td><td class="released-doc-position-cell text-end">30</td><td class="released-doc-code-cell">PRA-RAL7016</td><td class="released-doc-name-cell">Prah RAL 7016</td><td class="released-doc-quantity-cell text-end">4,5</td><td class="released-doc-unit-cell">KG</td><td class="released-doc-price-cell text-end">40,50 KM</td><td class="released-doc-note-cell"><span class="text-muted">-</span></td>
+              <td class="released-doc-action-cell text-end"><div class="released-doc-actions-group"><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger released-doc-action-btn released-doc-delete-btn" title="Izbriši dokument"><i data-feather="trash-2"></i></button></div></td></tr>
+          </tbody>
+        </table>
+      </div></div></div>
+      <div class="row"><div class="col-sm-12 col-md-5"><div class="dataTables_info">Prikaz 1 do 10 od 214 zapisa</div></div><div class="col-sm-12 col-md-7"><!-- pagination Prethodna / Sljedeća --></div></div>
+    </div></div>
+  </div>
+</section>

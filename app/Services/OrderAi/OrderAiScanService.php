@@ -600,6 +600,38 @@ class OrderAiScanService
         array $preparedDocument,
         string $documentProfile
     ): array {
+        if ($this->normalizeDocumentProfileKey($documentProfile) !== 'trendy_de') {
+            return $parsedResult;
+        }
+
+        $parserItems = is_array($parsedResult['normalized_payload']['items'] ?? null)
+            ? $parsedResult['normalized_payload']['items']
+            : [];
+        $sourceNotesByPosition = app(OrderAiDigitalPdfRulesParser::class)
+            ->recoverTrendyDePositionNotes($preparedDocument, $parserItems);
+        $sourceAppliedCount = 0;
+
+        foreach ($parserItems as $index => $item) {
+            if (!is_array($item) || trim((string) ($item['note'] ?? '')) !== '') {
+                continue;
+            }
+
+            $lineNumber = (int) ($item['line_number'] ?? 0);
+            $note = $this->sanitizeTrendyDeItemNote((string) ($sourceNotesByPosition[$lineNumber] ?? ''), $lineNumber);
+
+            if ($lineNumber > 0 && $note !== '') {
+                $parserItems[$index]['note'] = $note;
+                $sourceAppliedCount++;
+            }
+        }
+
+        if ($sourceAppliedCount > 0) {
+            $parsedResult['normalized_payload']['items'] = $parserItems;
+            $rawResponse = is_array($parsedResult['raw_response'] ?? null) ? $parsedResult['raw_response'] : [];
+            $rawResponse['source_note_recovery'] = ['applied_count' => $sourceAppliedCount];
+            $parsedResult['raw_response'] = $rawResponse;
+        }
+
         if (!$this->shouldUseTrendyDeMatchedParserNoteFallback($parsedResult, $preparedDocument, $documentProfile)) {
             return $parsedResult;
         }
@@ -607,7 +639,10 @@ class OrderAiScanService
         $fallbackMeta = [
             'attempted' => true,
             'applied_count' => 0,
-            'source_note_count' => count($this->extractLikelyTrendyDeSourcePositionNotes($preparedDocument)),
+            'source_note_count' => count($this->extractLikelyTrendyDeSourcePositionNotes(
+                $preparedDocument,
+                is_array($parsedResult['normalized_payload']['items'] ?? null) ? $parsedResult['normalized_payload']['items'] : []
+            )),
             'reason' => 'matched_parser_missing_position_notes',
         ];
 
@@ -683,21 +718,26 @@ class OrderAiScanService
                 continue;
             }
 
-            $note = $this->normalizeTrendyDeNoteForComparison((string) ($item['note'] ?? ''));
+            $noteParts = $this->splitTrendyDeNoteParts((string) ($item['note'] ?? ''));
 
-            if ($note === '') {
+            if ($noteParts === []) {
                 $hasMissingNote = true;
                 continue;
             }
 
-            $parsedNoteCounts[$note] = ($parsedNoteCounts[$note] ?? 0) + 1;
+            foreach ($noteParts as $notePart) {
+                $note = $this->normalizeTrendyDeNoteForComparison($notePart);
+                if ($note !== '') {
+                    $parsedNoteCounts[$note] = ($parsedNoteCounts[$note] ?? 0) + 1;
+                }
+            }
         }
 
         if (!$hasMissingNote) {
             return false;
         }
 
-        $sourceNotes = $this->extractLikelyTrendyDeSourcePositionNotes($preparedDocument);
+        $sourceNotes = $this->extractLikelyTrendyDeSourcePositionNotes($preparedDocument, $items);
 
         if ($sourceNotes === []) {
             return false;
@@ -801,10 +841,17 @@ class OrderAiScanService
         return $parsedResult;
     }
 
-    private function extractLikelyTrendyDeSourcePositionNotes(array $preparedDocument): array
+    private function extractLikelyTrendyDeSourcePositionNotes(array $preparedDocument, array $knownItems = []): array
     {
         $notes = [];
         $expectingNote = false;
+        $knownCodes = [];
+
+        foreach ($knownItems as $item) {
+            if (is_array($item) && trim((string) ($item['product_code'] ?? '')) !== '') {
+                $knownCodes[strtoupper(trim((string) $item['product_code']))] = true;
+            }
+        }
 
         foreach ($this->preparedDocumentVisibleLines($preparedDocument) as $line) {
             $line = trim((string) $line);
@@ -813,8 +860,21 @@ class OrderAiScanService
                 continue;
             }
 
-            if ($this->isLikelyTrendyDeAmountFirstItemLine($line)) {
+            $codeFirstItem = preg_match(
+                '/^(' . $this->trendyDeProductCodePattern() . ')\s+.*\b(?:STU|ST|PCS|PIECE|KO)\b/u',
+                $line,
+                $codeMatches
+            ) === 1 && isset($knownCodes[strtoupper(trim((string) ($codeMatches[1] ?? '')))]);
+
+            if ($this->isTrendyDeItemStartText($line) || $codeFirstItem) {
                 $expectingNote = true;
+                continue;
+            }
+
+            $normalizedLine = $this->normalizeKeywordText($line);
+
+            if (preg_match('/^(?:total|steuer|gesamtpreis|nettowert|gesamtbetrag)\b/u', $normalizedLine) === 1) {
+                $expectingNote = false;
                 continue;
             }
 
@@ -822,19 +882,16 @@ class OrderAiScanService
                 continue;
             }
 
-            if ($this->containsTrendyDeDeliveryLabel($line)) {
+            if ($this->containsTrendyDeDeliveryLabel($line)
+                || $this->isTrendyDeTableHeaderText($normalizedLine)
+                || preg_match('/^page\s*\d+(?:\s*\/\s*\d+)?$/iu', $line) === 1) {
                 continue;
             }
 
-            if ($this->isLikelyTrendyDeStandalonePositionNote($line)) {
-                $notes[] = trim((string) (preg_replace('/\s+/u', ' ', $line) ?? $line));
-                continue;
-            }
-
-            $expectingNote = false;
+            $notes[] = trim((string) (preg_replace('/\s+/u', ' ', $line) ?? $line));
         }
 
-        return array_values(array_unique(array_filter($notes)));
+        return array_values(array_filter($notes));
     }
 
     private function preparedDocumentVisibleLines(array $preparedDocument): array
@@ -875,35 +932,6 @@ class OrderAiScanService
         $digitalPages = data_get($preparedDocument, 'digital_extraction.pages');
 
         return is_array($digitalPages) ? array_values($digitalPages) : [];
-    }
-
-    private function isLikelyTrendyDeAmountFirstItemLine(string $line): bool
-    {
-        $amount = '(?:\d{1,3}(?:[.\s]\d{3})+|\d+),\s*\d{2}';
-        $productCodePattern = $this->trendyDeProductCodePattern();
-
-        return preg_match(
-            '/^\s*' . $amount . '\s+' . $amount . '\s*(?:STU|ST|PCS|PIECE|KO)\b.*' . $productCodePattern . '\s+.+\d{1,3}\s*$/iu',
-            $line
-        ) === 1;
-    }
-
-    private function isLikelyTrendyDeStandalonePositionNote(string $line): bool
-    {
-        $line = trim((string) (preg_replace('/\s+/u', ' ', $line) ?? $line));
-
-        if ($line === '') {
-            return false;
-        }
-
-        if (preg_match('/^(?:' . $this->trendyDeProcessOrFinishPattern() . ')\b.*$/iu', $line) === 1) {
-            return true;
-        }
-
-        return preg_match(
-            '/^(?:ALUMINIUM|ALUMINUM|WARM\s+BROWNED|NICKEL(?:\s+\d+\s*MY)?(?:\s*\+\s*POLISH)?|NICKEL\s+PLATED|GALVANIZED\s+BLUE|BRASS|ANODIZED|PAINT(?:\s+ACC\.?\s+DRAWING)?|UNTREATED|CHEM\.?\s*NICKEL\s+PLATED|VERNICKELT(?:\s+AUF\s+\d+\s+Y?M\s+UND\s+POLIERT)?)$/iu',
-            $line
-        ) === 1;
     }
 
     private function normalizeTrendyDeNoteForComparison(string $note): string
@@ -948,6 +976,10 @@ class OrderAiScanService
             $scan,
             is_array($result['normalized_payload'] ?? null) ? $result['normalized_payload'] : []
         );
+
+        if ($resultDocumentProfile === 'trendy_de') {
+            $profilePayload = $this->recoverTrendyDeMissingNotesFromPreparedDocument($profilePayload, $preparedDocument);
+        }
 
         $scan->setAttribute('document_profile', $originalDocumentProfile);
 
@@ -1003,6 +1035,32 @@ class OrderAiScanService
             ),
             'ai_duration_ms' => max(0, (int) ($result['ai_duration_ms'] ?? 0)),
         ];
+    }
+
+    private function recoverTrendyDeMissingNotesFromPreparedDocument(array $payload, array $preparedDocument): array
+    {
+        $items = is_array($payload['items'] ?? null) ? $payload['items'] : [];
+        if ($items === []) {
+            return $payload;
+        }
+
+        $sourceNotes = app(OrderAiDigitalPdfRulesParser::class)
+            ->recoverTrendyDePositionNotes($preparedDocument, $items);
+
+        foreach ($items as $index => $item) {
+            if (!is_array($item) || trim((string) ($item['note'] ?? '')) !== '') {
+                continue;
+            }
+
+            $lineNumber = (int) ($item['line_number'] ?? 0);
+            $note = $this->sanitizeTrendyDeItemNote((string) ($sourceNotes[$lineNumber] ?? ''), $lineNumber);
+
+            if ($lineNumber > 0 && $note !== '') {
+                $payload['items'][$index]['note'] = $note;
+            }
+        }
+
+        return $payload;
     }
 
     public function buildStatusPayload(OrderAiScan $scan): array
@@ -1361,32 +1419,88 @@ class OrderAiScanService
 
         $sourceText = $this->resolveStoredScanSourceText($scan);
 
-        if ($sourceText === '' || !$this->storedPayloadLooksLikeTrendyDe($scan, $payload, $sourceText)) {
+        if (!$this->storedPayloadLooksLikeTrendyDe($scan, $payload, $sourceText)) {
             return $payload;
         }
 
-        $externalDocumentDate = $this->extractTrendyDeDocumentDate([], $sourceText);
-
-        if ($externalDocumentDate === '') {
-            return $payload;
-        }
-
+        $externalDocumentDate = $sourceText !== ''
+            ? $this->extractTrendyDeDocumentDate([], $sourceText)
+            : '';
         $currentExternalDocumentDate = trim((string) ($payload['order']['external_document_date'] ?? ''));
+        $documentDate = $externalDocumentDate !== '' ? $externalDocumentDate : $currentExternalDocumentDate;
+        $documentDateKey = $this->normalizeVisibleDateKey($documentDate);
+        $headerDeadline = trim((string) ($payload['order']['delivery_deadline'] ?? ''));
+        $headerDeadlineKey = $this->normalizeVisibleDateKey($headerDeadline);
+        $itemDeadlines = $sourceText !== ''
+            ? $this->extractTrendyDeItemDeliveryDeadlines([], $sourceText)
+            : [];
+        $itemDeadlinesRepaired = false;
 
-        if (
-            $this->normalizeVisibleDateKey($currentExternalDocumentDate)
-            === $this->normalizeVisibleDateKey($externalDocumentDate)
-        ) {
+        foreach ($payload['items'] ?? [] as $index => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            if (!empty($item['_delivery_deadline_explicit'])) {
+                continue;
+            }
+
+            $currentDeadline = trim((string) ($item['delivery_deadline'] ?? ''));
+            if (
+                $currentDeadline !== ''
+                && ($documentDateKey === '' || $this->normalizeVisibleDateKey($currentDeadline) !== $documentDateKey || $documentDateKey === $headerDeadlineKey)
+            ) {
+                continue;
+            }
+
+            $sourceDeadline = $this->resolveTrendyDeItemDeliveryDeadline(
+                (int) ($item['line_number'] ?? 0),
+                $this->normalizeScannedProductCode((string) ($item['product_code'] ?? '')),
+                $itemDeadlines,
+                ''
+            );
+            $resolvedDeadline = $sourceDeadline !== '' ? $sourceDeadline : $headerDeadline;
+
+            if ($resolvedDeadline !== $currentDeadline) {
+                $payload['items'][$index]['delivery_deadline'] = $resolvedDeadline;
+                $itemDeadlinesRepaired = true;
+            }
+        }
+
+        $originalItemNotes = array_map(
+            static fn (mixed $item): string => is_array($item) ? trim((string) ($item['note'] ?? '')) : '',
+            is_array($payload['items'] ?? null) ? $payload['items'] : []
+        );
+        if ($sourceText !== '') {
+            $payload = $this->recoverTrendyDeMissingNotesFromPreparedDocument($payload, [
+                'searchable_text' => $sourceText,
+            ]);
+        }
+        $repairedItemNotes = array_map(
+            static fn (mixed $item): string => is_array($item) ? trim((string) ($item['note'] ?? '')) : '',
+            is_array($payload['items'] ?? null) ? $payload['items'] : []
+        );
+        $itemNotesRepaired = $originalItemNotes !== $repairedItemNotes;
+
+        $externalDateRepaired = $externalDocumentDate !== ''
+            && $this->normalizeVisibleDateKey($currentExternalDocumentDate)
+                !== $this->normalizeVisibleDateKey($externalDocumentDate);
+
+        if (!$externalDateRepaired && !$itemDeadlinesRepaired && !$itemNotesRepaired) {
             return $payload;
         }
 
-        $payload['order']['external_document_date'] = $externalDocumentDate;
+        if ($externalDateRepaired) {
+            $payload['order']['external_document_date'] = $externalDocumentDate;
+        }
 
-        Log::info('Order AI stored trendy_de external_document_date repaired from source text.', [
+        Log::info('Order AI stored trendy_de item data repaired from source text.', [
             'scan_id' => $scan->id,
             'source_file_name' => (string) ($scan->source_file_name ?? ''),
             'old_external_document_date' => $currentExternalDocumentDate,
-            'new_external_document_date' => $externalDocumentDate,
+            'new_external_document_date' => $payload['order']['external_document_date'] ?? '',
+            'item_deadlines_repaired' => $itemDeadlinesRepaired,
+            'item_notes_repaired' => $itemNotesRepaired,
         ]);
 
         if ($persist && !$this->hasPersistedPantheonOrder($scan)) {
@@ -1394,10 +1508,9 @@ class OrderAiScanService
                 'normalized_payload' => $payload,
             ];
             $transferPreview = is_array($scan->pantheon_transfer_payload) ? $scan->pantheon_transfer_payload : [];
-            $repairedTransferPreview = $this->repairTrendyDeTransferPreviewExternalDocumentDate(
-                $transferPreview,
-                $externalDocumentDate
-            );
+            $repairedTransferPreview = $externalDateRepaired
+                ? $this->repairTrendyDeTransferPreviewExternalDocumentDate($transferPreview, $externalDocumentDate)
+                : $transferPreview;
 
             if ($repairedTransferPreview !== $transferPreview) {
                 $fill['pantheon_transfer_payload'] = $repairedTransferPreview;
@@ -2269,6 +2382,7 @@ class OrderAiScanService
                         : (string) config('ai-order-scan.default_unit', 'KO')
                 ),
                 'delivery_deadline' => trim((string) ($item['delivery_deadline'] ?? '')),
+                '_delivery_deadline_explicit' => !empty($item['_delivery_deadline_explicit']),
                 'unit_price' => (float) ($item['unit_price'] ?? 0),
                 'line_total' => (float) ($item['line_total'] ?? 0),
                 'vat_rate' => (float) ($item['vat_rate'] ?? config('ai-order-scan.default_vat_rate', 17)),
@@ -2279,6 +2393,34 @@ class OrderAiScanService
             ];
         }, $items, array_keys($items))));
         $normalizedItems = $this->normalizeTrendyDeItemLineNumbers($normalizedItems, $order);
+        $headerDeliveryDeadline = trim((string) ($order['delivery_deadline'] ?? ''));
+        $documentDateKey = $this->normalizeVisibleDateKey((string) ($order['external_document_date'] ?? ''));
+        $headerDeadlineKey = $this->normalizeVisibleDateKey($headerDeliveryDeadline);
+        $isTrendyDeOrder = $this->isTrendyGermanyOrder($order);
+        if ($headerDeliveryDeadline !== '') {
+            foreach ($normalizedItems as &$normalizedItem) {
+                $itemDeadline = trim((string) ($normalizedItem['delivery_deadline'] ?? ''));
+                if (
+                    $itemDeadline === ''
+                    || (
+                        $isTrendyDeOrder
+                        && empty($normalizedItem['_delivery_deadline_explicit'])
+                        && $documentDateKey !== ''
+                        && $documentDateKey !== $headerDeadlineKey
+                        && $this->normalizeVisibleDateKey($itemDeadline) === $documentDateKey
+                    )
+                ) {
+                    $normalizedItem['delivery_deadline'] = $headerDeliveryDeadline;
+                }
+            }
+            unset($normalizedItem);
+        }
+        foreach ($normalizedItems as &$normalizedItem) {
+            if (empty($normalizedItem['_delivery_deadline_explicit'])) {
+                unset($normalizedItem['_delivery_deadline_explicit']);
+            }
+        }
+        unset($normalizedItem);
         $warnings = array_values(array_filter(array_map(function ($warning) {
             return trim((string) $warning);
         }, is_array($order['warnings'] ?? null) ? $order['warnings'] : [])));
@@ -3573,17 +3715,18 @@ class OrderAiScanService
         $hasSourceContext = $this->hasTrendyDeSourceContext($context);
         $rejectedItemDeliveryDeadlines = [];
 
-        if ($deliveryDeadline === '' && $hasSourceContext) {
+        if ($hasSourceContext) {
             foreach ([
                 $this->extractTrendyDeLeadingDocumentDate(
                     is_array($context['processed_pages'] ?? null) ? $context['processed_pages'] : [],
                     $searchableText
                 ),
-                $sourceOrderDeliveryDeadline,
+                (string) ($order['external_document_date'] ?? ''),
+                $deliveryDeadline === '' ? $sourceOrderDeliveryDeadline : '',
             ] as $rejectedDeadline) {
                 $rejectedDeadline = trim((string) $rejectedDeadline);
 
-                if ($rejectedDeadline !== '') {
+                if ($rejectedDeadline !== '' && $this->normalizeVisibleDateKey($rejectedDeadline) !== $this->normalizeVisibleDateKey($deliveryDeadline)) {
                     $rejectedItemDeliveryDeadlines[] = $rejectedDeadline;
                 }
             }
@@ -3599,7 +3742,7 @@ class OrderAiScanService
             is_array($payload['items'] ?? null) ? $payload['items'] : [],
             $deliveryDeadline,
             $itemDeliveryDeadlines,
-            $deliveryDeadline !== '' || !$hasSourceContext,
+            !$hasSourceContext,
             $rejectedItemDeliveryDeadlines
         );
 
@@ -3633,6 +3776,7 @@ class OrderAiScanService
                 ? $existingDeliveryDeadline
                 : '';
             $pendingDeliveryLabel = false;
+            $deliveryLabelDeadline = '';
             $lineNumber = (int) ($item['line_number'] ?? 0);
             $productCode = $this->normalizeScannedProductCode((string) ($item['product_code'] ?? ''));
             $keepDeliveryLabelInNote = $this->isTrendyDeSpacedNumericArticleCode($productCode);
@@ -3645,6 +3789,9 @@ class OrderAiScanService
                 if ($this->containsTrendyDeDeliveryLabel($line)) {
                     if ($deliveryDeadline === '' && $lineDeliveryDeadline !== '') {
                         $deliveryDeadline = $lineDeliveryDeadline;
+                    }
+                    if ($lineDeliveryDeadline !== '') {
+                        $deliveryLabelDeadline = $lineDeliveryDeadline;
                     }
 
                     if ($keepDeliveryLabelInNote) {
@@ -3659,6 +3806,7 @@ class OrderAiScanService
                     $deliveryDeadline = $lineDeliveryDeadline;
 
                     if ($deliveryDeadline !== '') {
+                        $deliveryLabelDeadline = $deliveryDeadline;
                         $pendingDeliveryLabel = false;
                         continue;
                     }
@@ -3678,6 +3826,15 @@ class OrderAiScanService
                 $lineNumber
             );
 
+            $sourceItemDeadline = $this->resolveTrendyDeItemDeliveryDeadline(
+                $lineNumber,
+                $productCode,
+                $itemDeliveryDeadlines,
+                ''
+            );
+            $item['_delivery_deadline_explicit'] = !empty($item['_delivery_deadline_explicit'])
+                || $sourceItemDeadline !== ''
+                || $deliveryLabelDeadline !== '';
             $item['delivery_deadline'] = $this->resolveTrendyDeItemDeliveryDeadline(
                 $lineNumber,
                 $productCode,
@@ -3782,6 +3939,20 @@ class OrderAiScanService
     private function sanitizeTrendyDeItemNote(string $note, int $lineNumber): string
     {
         $parts = $this->splitTrendyDeNoteParts($note);
+
+        $parts = array_values(array_map(static function (string $part): string {
+            // Some PDF extractors repeat a standalone drawing/article number
+            // inside the same description row and again as a separate row.
+            if (preg_match('/^(\d{6,})(?:\s+\1)+$/u', $part, $matches) === 1) {
+                $part = $matches[1];
+            }
+
+            return $part;
+        }, $parts));
+
+        if ($parts !== [] && count(array_filter($parts, static fn (string $part): bool => preg_match('/^\d{6,}$/u', $part) === 1)) === count($parts)) {
+            $parts = array_values(array_unique($parts));
+        }
 
         if ($lineNumber > 0) {
             $lineNumberText = (string) $lineNumber;

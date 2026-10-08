@@ -1,0 +1,73 @@
+<!--{"title":"Sirovine","mobile":true,"bare":true,"blade":["new-components/sirovina-scan.blade.php"],"css":[]}-->
+<style>body{background:#05070a!important}.modal-backdrop{opacity:.992!important;background:#000}</style>
+<div class="modal-backdrop fade show"></div><div class="modal fade show d-block" id="sirovina-scanner-modal" data-compact-layout="0"><div class="modal-dialog modal-dialog-centered modal-xl mt-0"><div class="modal-content wo-bom-modal-content">
+ <div class="modal-header wo-bom-modal-header wo-bom-content-header"><div class="w-100 text-center">
+  <h4 class="mb-0 text-white">Planiraj novu potrošnju za RN <span id="sirovina-rn-number">26-6000-0001687</span></h4>
+  <p class="mb-0 wo-bom-modal-subtitle">Izaberite materijal i operacije za privremenu sastavnicu</p>
+ </div></div>
+ <div class="modal-body p-0"><div class="wo-bom-modal-shell"><div class="row g-4 align-items-stretch">
+  <div class="col-12 col-lg-4 wo-bom-scanner-col"><div class="wo-bom-card wo-bom-dummy-qr-card">
+   <h5 class="text-white mb-1">Skenirajte BARCODE ili QR kod artikla</h5>
+   <div class="qr-scanner-container position-relative wo-bom-dummy-qr-wrap">
+    <div id="sirovina-qr-scanner-frame" class="qr-scanner-frame position-relative">
+     <div id="sirovina-qr-scanner-region" class="position-absolute" style="inset: 0;"><img src="../images/qr-label.svg" style="position:absolute;inset:14%;width:72%;height:72%;transform:rotate(-4deg);border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.6)"></div>
+     <div class="qr-corner qr-corner-top-left"></div><div class="qr-corner qr-corner-top-right"></div>
+     <div class="qr-corner qr-corner-bottom-left"></div><div class="qr-corner qr-corner-bottom-right"></div>
+     <div class="qr-barcode-window"></div>
+     <div class="qr-barcode-window-label">Barcode ili QR kod može biti bilo gdje u okviru</div>
+     <div class="qr-scan-line"></div><div class="qr-grid"></div>
+    </div>
+   </div>
+   <div class="wo-qr-controls-wrap wo-bom-dummy-qr-controls">
+    <div class="wo-qr-controls-panel mt-2 mb-1">
+     <div class="wo-qr-controls-row wo-qr-display-row">
+      <div class="wo-qr-control-block"><span class="wo-qr-control-kicker">Prikaz</span><div class="form-check form-switch mb-0 d-flex align-items-center"><input class="form-check-input me-50" type="checkbox"><label class="form-check-label mb-0">Mirror</label></div></div>
+      <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-subtle"><i class="fa fa-refresh me-50"></i> Ponovo pokrenite</button>
+     </div>
+     <div class="wo-qr-controls-row wo-qr-camera-controls-row">
+      <span class="wo-qr-camera-icon"><i class="fa fa-camera"></i></span>
+      <div class="wo-qr-camera-row"><select class="form-select form-select-sm"><option>Automatski odabir</option></select><button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-primary">Primijenite</button></div>
+     </div>
+     <div class="wo-qr-controls-row wo-qr-enhance-row">
+      <div class="wo-qr-zoom-control"><label class="wo-qr-control-kicker mb-0">Zoom <span>1.0x</span></label><input type="range" class="form-range wo-qr-range" min="1" max="1" step="0.1" value="1" disabled></div>
+      <button type="button" class="btn btn-sm wo-qr-btn wo-qr-btn-subtle" disabled><i class="fa fa-lightbulb-o me-50"></i> Uključite svjetlo</button>
+     </div>
+    </div>
+    <div class="wo-qr-feedback-wrap"><div class="small wo-qr-status">Dozvoli pristup kameri za barcode / QR skeniranje.</div></div>
+   </div>
+  </div></div>
+
+  <div class="col-12 col-lg-4 d-flex wo-bom-ipad-hidden-col"><div class="wo-bom-card wo-bom-quick-card h-100 w-100 d-flex flex-column">
+   <div class="wo-bom-field wo-bom-quick-last wo-bom-quick-persistent d-flex flex-column flex-grow-1">
+    <div class="wo-bom-quick-head"><label class="form-label wo-bom-section-title mb-50">Privremena sastavnica</label><span class="wo-bom-quick-selected">Odabrano: <strong>2</strong></span></div>
+    <div class="table-responsive wo-bom-quick-table-wrap"><table class="table table-sm mb-0 wo-bom-table wo-bom-quick-table">
+     <thead><tr><th style="width: 80px;">Poz</th><th style="width: 200px;">Komponenta</th><th>Opis</th><th style="width: 120px;" class="text-end">Zaliha</th><th style="width: 120px;" class="text-center">Tip</th></tr></thead>
+     <tbody>
+      <tr><td>10</td><td class="fw-semibold">LIM-S235-5</td><td class="wo-opis-cell"><span class="wo-opis-two-line is-single"><span>Lim S235 5mm</span></span></td><td class="text-end">1.250</td><td class="text-center">M</td></tr>
+      <tr class="wo-bom-quick-operation-row"><td>20</td><td class="fw-semibold">OP10</td><td class="wo-opis-cell"><span class="wo-opis-two-line is-single"><span>Lasersko rezanje</span></span></td><td class="text-end">-</td><td class="text-center">O</td></tr>
+     </tbody>
+    </table></div>
+   </div>
+  </div></div>
+
+  <div class="col-12 col-lg-4 wo-bom-right-col d-flex"><div class="wo-bom-card wo-bom-main-card h-100 w-100 d-flex flex-column">
+   <div class="wo-bom-mode-panel wo-panel-active">
+    <div class="wo-bom-head-block"><div class="wo-bom-grid"><div class="wo-bom-field"><label class="form-label wo-bom-section-title mb-50">Proizvod</label><select class="form-select form-select-sm"><option>Izaberite proizvod</option></select></div></div>
+     <p class="small mb-0 text-white-50">Sastavnica se automatski učitava nakon odabira proizvoda.</p></div>
+    <div class="wo-bom-table-section">
+     <div class="wo-bom-table-head mt-1"><h6 class="wo-bom-section-title mb-0">Sastavnice proizvoda</h6><button type="button" class="btn btn-sm wo-bom-inline-action-btn wo-bom-inline-action-btn-danger" disabled>Resetuj</button><span class="wo-bom-table-found">Pronađeno: <strong>4</strong></span></div>
+     <div class="table-responsive wo-bom-table-wrap"><table class="table table-sm mb-0 wo-bom-table">
+      <thead><tr><th class="text-center" style="width: 46px;">#</th><th style="width: 80px;">Poz</th><th style="width: 200px;">Komponenta</th><th>Opis</th><th style="width: 130px;" class="text-end">Planirano</th><th style="width: 120px;" class="text-center">Tip</th></tr></thead>
+      <tbody><tr><td class="text-center"><input type="checkbox" class="form-check-input bom-component-checkbox" checked></td><td>10</td><td class="fw-semibold">LIM-S235-5</td><td class="wo-opis-cell"><span class="wo-opis-two-line is-single"><span>Lim S235 5mm</span></span></td><td class="text-end">2.4</td><td class="text-center">M</td></tr></tbody>
+     </table></div>
+    </div>
+   </div>
+  </div>
+  <div class="wo-bom-bottom-mode-switch"><button type="button" class="wo-bom-bottom-mode-btn is-active">Pretraga po proizvodu</button><button type="button" class="wo-bom-bottom-mode-btn">Svi materijali</button><button type="button" class="wo-bom-bottom-mode-btn">Sve operacije</button></div>
+  </div>
+ </div>
+ <div class="wo-bom-modal-footer">
+  <button type="button" class="btn btn-secondary wo-scanner-close-fab"><i class="fa fa-times me-50"></i> Zatvori</button>
+  <button type="button" class="btn btn-success wo-scanner-open-fab"><i class="fa fa-check me-50"></i> Nastavite</button>
+ </div>
+</div></div></div></div></div>

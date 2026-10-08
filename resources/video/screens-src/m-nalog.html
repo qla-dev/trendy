@@ -1,0 +1,170 @@
+<!--{"title":"Radni nalog","active":"skeniraj","mobile":true,"blade":["apps/invoice/app-invoice-preview.blade.php"],"css":[],"noHeader":true}-->
+<section class="invoice-preview-wrapper">
+  <!-- fixed bottom bar on phones (<=480px) -->
+  <div class="wo-mobile-top-actions">
+    <div class="card"><div class="card-body">
+      <div class="wo-mobile-meta-row">
+        <div id="wo-mobile-priority" class="wo-mobile-priority wo-priority-warning">
+          <span class="wo-meta-chip-label">Prioritet RN:</span>
+          <span class="wo-mobile-priority-current wo-meta-chip-value"><span class="wo-mobile-priority-dot" aria-hidden="true"></span><strong id="wo-mobile-priority-value">5 - Uobičajeni prioritet</strong></span>
+        </div>
+        <div class="wo-mobile-protection">
+          <span class="wo-meta-chip-label">Zaštita:</span>
+          <strong class="wo-mobile-protection-value wo-meta-chip-value">PLASTIFIKACIJA RAL 7016</strong><!-- plausible -->
+        </div>
+      </div>
+      <button class="btn btn-success w-100 mb-75 d-flex justify-content-center align-items-center"><i class="fa fa-qrcode me-50" style="font-size: 20px;"></i> Skeniraj radni nalog</button>
+      <button class="btn btn-primary w-100 d-flex justify-content-center align-items-center"><i class="fa fa-barcode me-50" style="font-size: 20px;"></i> Pripremi materijal</button>
+    </div></div>
+  </div>
+
+  <div class="row invoice-preview">
+    <div class="col-xl-9 col-md-8 col-12 wo-preview-main-col">
+      <div class="card invoice-preview-card">
+        <div class="card-body invoice-padding pb-0">
+          <div class="wo-header-shell invoice-spacing mt-0">
+            <div class="wo-header-brand-row">
+              <div class="logo-wrapper">
+                <img src="/images/logo/TrendyCNC.png" alt="Trendy d.o.o." width="50" height="auto" class="wo-brand-logo">
+                <h3 class="text-primary invoice-logo">eNalog.app</h3>
+              </div>
+              <div class="wo-header-qr-block">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=250110000308%3B1%3BTR-NOS-200" alt="QR Code" class="wo-preview-qr-image">
+              </div>
+            </div>
+            <div class="wo-header-details-row">
+              <div class="wo-header-company-block">
+                <p class="card-text mb-25">Trendy d.o.o.</p>
+                <p class="card-text mb-25">Bratstvo 11, 72290</p>
+                <p class="card-text mb-25">Novi Travnik, BiH</p>
+                <p class="card-text mb-0">+387 30 525 252</p>
+                <p class="card-text mb-0">info@trendy.ba</p>
+              </div>
+              <div class="wo-header-right-column"><div class="wo-header-main-row"><div class="wo-header-meta">
+                <h4 class="invoice-title"><span class="invoice-title-stack">
+                  <span><span class="invoice-key">RN</span><span class="invoice-number">26-6000-0001687</span></span>
+                  <span class="invoice-order-number">Narudžba:<span class="invoice-number">25-0110-0003084;1</span></span>
+                </span></h4>
+                <div class="invoice-date-wrapper"><p class="invoice-date-title">Datum izdavanja:</p><p class="invoice-date">07.10.2026</p></div>
+                <div class="invoice-date-wrapper"><p class="invoice-date-title">Planirani start:</p><p class="invoice-date">09.10.2026</p></div>
+              </div></div></div>
+            </div>
+          </div>
+        </div>
+        <hr class="invoice-spacing" />
+        <div class="card-body invoice-padding pt-0 pb-0">
+          <div class="row invoice-spacing wo-contact-row">
+            <div class="col-xl-4 col-md-6 p-0 wo-contact-col"><h6 class="mb-2">Pošiljatelj:</h6><h6 class="mb-25">Trendy d.o.o.</h6></div>
+            <div class="col-xl-4 d-none d-xl-block"></div>
+            <div class="col-xl-4 col-md-6 p-0 wo-contact-col"><h6 class="mb-2">Primatelj:</h6><h6 class="mb-25">Hidraulika Flex d.o.o.</h6></div><!-- plausible -->
+          </div>
+        </div>
+        <hr class="invoice-spacing" />
+        <div class="card-body invoice-padding pt-2 pb-0">
+          <div class="wo-product-hero"><div class="wo-product-hero-row">
+            <div class="wo-product-hero-main">
+              <span class="wo-product-kicker">Naziv proizvoda</span>
+              <span class="wo-product-title">NOSAČ MOTORA 200x120</span><!-- plausible -->
+              <span class="wo-product-code-accent" aria-label="Šifra proizvoda">
+                <span class="wo-product-code-label">Šifra proizvoda</span>
+                <span class="wo-product-code-value">TR-NOS-200</span>
+              </span>
+            </div>
+            <div class="wo-product-qty" aria-label="Količina proizvoda">
+              <span class="wo-product-qty-label">Količina</span>
+              <span class="wo-product-qty-metric"><span class="wo-product-qty-value">120</span><span class="wo-product-qty-unit">KOM</span></span>
+            </div>
+          </div></div>
+        </div>
+        <div class="card-body invoice-padding pt-0 pb-0">
+          <div class="wo-progress-shell">
+            <div class="wo-progress-head"><span>Realizacija po količini</span><span>45 %</span></div>
+            <div class="wo-progress wo-progress-live"><div class="wo-progress-bar" style="width: 45%;"></div></div>
+          </div>
+        </div>
+        <div class="card-body invoice-padding pt-0 pb-0">
+          <div class="wo-chip-shell"><div class="wo-meta-chip-row mb-0">
+            <div class="wo-meta-chip wo-chip-slate"><span class="wo-meta-chip-label">Tip dokumento</span><span class="wo-meta-chip-value">6000</span></div>
+            <div class="wo-meta-chip wo-chip-slate"><span class="wo-meta-chip-label">Varijanta</span><span class="wo-meta-chip-value">1</span></div>
+            <div class="wo-meta-chip wo-chip-slate"><span class="wo-meta-chip-label">Lokacija</span><span class="wo-meta-chip-value">CNC</span></div>
+            <span class="wo-flag-pill wo-flag-danger"><span class="wo-flag-dot"></span><span>Povrat: <strong>Ne</strong></span></span>
+            <span class="wo-flag-pill wo-flag-danger"><span class="wo-flag-dot"></span><span>Prijem završen: <strong>Ne</strong></span></span>
+            <span class="wo-flag-pill wo-flag-secondary"><span class="wo-flag-dot"></span><span>SN transfer: <strong>-</strong></span></span>
+          </div></div>
+        </div>
+        <hr class="invoice-spacing mb-0" />
+        <div class="nav-align-top">
+          <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item"><button type="button" class="nav-link active"><i class="fa fa-list me-50"></i> Sastavnica</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-shield me-50"></i> Zaštita</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-cube me-50"></i> Materijali</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-cog me-50"></i> Operacija</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-sticky-note-o me-50"></i> Napomena</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-line-chart me-50"></i> KPI</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-clock-o me-50"></i> Timeline</button></li>
+            <li class="nav-item"><button type="button" class="nav-link"><i class="fa fa-link me-50"></i> Poveznice</button></li>
+          </ul>
+          <div class="tab-content">
+            <div class="tab-pane fade show active" id="tab-sastavnica">
+              <div class="table-responsive wo-sastavnica-table-wrap">
+                <table class="table" id="sastavnica-table">
+                  <thead><tr>
+                    <th class="py-1 text-center"><span class="wo-desktop-column-label">Alternat...</span><span class="wo-mobile-column-label">alt.</span></th>
+                    <th class="py-1 text-center"><span class="wo-desktop-column-label">Pozicija</span><span class="wo-mobile-column-label">poz</span></th>
+                    <th class="py-1 text-center">Artikal</th><th class="py-1 text-center">Opis</th><th class="py-1 text-center">Slika</th>
+                    <th class="py-1 text-center">Napo...</th><th class="py-1 text-center">Količina</th><th class="py-1 text-center">MJ</th>
+                    <th class="py-1 text-center">Serija</th><th class="py-1 text-center">nor.os.</th><th class="py-1 text-center">Aktivno</th>
+                    <th class="py-1 text-center">Završ...</th><th class="py-1 text-center">VA</th><th class="py-1 text-center">Prim.klas</th><th class="py-1 text-center">Sek.klas</th>
+                    <th class="py-1 text-center wo-sastavnica-action-col"><span class="wo-desktop-column-label">Akcija</span><button type="button" class="wo-mobile-column-label wo-sastavnica-action-toggle" aria-expanded="true"><span class="wo-action-expanded-label">AKCIJA</span><span class="wo-action-collapsed-label"><i class="fa fa-angle-left"></i></span></button></th>
+                  </tr></thead>
+                  <tbody>
+                    <tr><td class="py-1">1</td><td class="py-1">10</td><td class="py-1">LIM-S235-5</td><td class="py-1">Lim S235 5mm</td><td class="py-1 text-center"><span class="text-muted">-</span></td><td class="py-1" title="">-</td><td class="py-1">2,4</td><td class="py-1">KG</td><td class="py-1">1</td><td class="py-1">-</td><td class="py-1">D</td><td class="py-1">N</td><td class="py-1">M</td><td class="py-1">-</td><td class="py-1">-</td>
+                      <td class="py-1 text-center wo-sastavnica-action-col"><div class="d-inline-flex align-items-center gap-50"><button type="button" class="btn btn-sm btn-outline-primary wo-edit-sastavnica-btn" title="Uredi stavku"><i class="fa fa-pencil"></i></button><button type="button" class="btn btn-sm btn-outline-danger wo-remove-sastavnica-btn" title="Ukloni iz radnog naloga"><i class="fa fa-trash"></i></button></div></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <!-- Operacija tab (role kontrola/bravarija or admin gets the ✓ column) -->
+            <div class="tab-pane fade" id="tab-operacija">
+              <div class="table-responsive wo-sastavnica-table-wrap">
+                <table class="table" id="operacija-table">
+                  <thead><tr>
+                    <th class="py-1 text-center"><span class="wo-desktop-column-label">Alternativa</span><span class="wo-mobile-column-label">Alt.</span></th>
+                    <th class="py-1 text-center"><span class="wo-desktop-column-label">Pozicija</span><span class="wo-mobile-column-label">Pos.</span></th>
+                    <th class="py-1 text-center">Operacija</th><th class="py-1 text-center">Naziv</th><th class="py-1 text-center">Napo...</th><th class="py-1 text-center">MJ</th><th class="py-1 text-center">MJ/vrij.</th><th class="py-1 text-center">nor.os.</th><th class="py-1 text-center">VA</th><th class="py-1 text-center">Prim.klas.</th><th class="py-1 text-center">Sek.klas.</th>
+                    <th class="py-1 text-center wo-operation-action-col">&#10003;</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr class="wo-operation-finished-row"><td class="py-1">1</td><td class="py-1">20</td><td class="py-1">OP10</td><td class="py-1">Laserko rezanje</td><td class="py-1">-</td><td class="py-1">MIN</td><td class="py-1">4</td><td class="py-1">-</td><td class="py-1">O</td><td class="py-1">-</td><td class="py-1">-</td><td class="py-1 text-center wo-operation-action-col"><button type="button" class="btn btn-sm btn-flat-success wo-operation-complete-btn" data-finished="1"></button></td></tr>
+                    <tr><td class="py-1">1</td><td class="py-1">30</td><td class="py-1">OP20</td><td class="py-1">CNC savijanje</td><td class="py-1">-</td><td class="py-1">MIN</td><td class="py-1">6</td><td class="py-1">-</td><td class="py-1">O</td><td class="py-1">-</td><td class="py-1">-</td><td class="py-1 text-center wo-operation-action-col"><button type="button" class="btn btn-sm btn-flat-secondary wo-operation-complete-btn" data-finished="0"></button></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <!-- Materijali tab headers: Pozicija | Materijal | Naziv | Količina (input.form-control.form-control-sm.wo-material-quantity-input + btn btn-outline-primary btn-sm wo-material-save-quantity-btn <i class="fa fa-check">) | Napomena -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- action column (below main card on phones; primary pair hidden, collapse shown) -->
+    <div class="col-xl-3 col-md-4 col-12 invoice-actions mt-md-0 mt-2 wo-preview-actions-col">
+      <div class="card"><div class="card-body">
+        <div class="wo-other-options-shell">
+          <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center wo-other-options-toggle collapsed" type="button" aria-expanded="false"><i class="fa fa-chevron-down me-50 wo-other-options-chevron" style="font-size: 12px;"></i> Ostale opcije</button>
+          <div class="collapse wo-other-options-collapse" id="wo-other-options-collapse">
+            <button id="wo-close-order-btn" class="btn btn-outline-success w-100 mb-75 d-flex justify-content-center align-items-center"><i class="fa fa-check-circle me-50"></i><span class="wo-close-order-label">Zatvori nalog</span></button>
+            <button id="wo-status-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-success"><i class="fa fa-circle-notch me-50"></i> Status: <span id="wo-status-label" class="ms-25">Otvoren</span></button>
+            <button id="wo-priority-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-warning"><span id="wo-priority-label">5 - Uobičajeni prioritet</span></button>
+            <button id="wo-protection-trigger-btn" class="btn w-100 mb-75 d-flex justify-content-center align-items-center wo-side-meta-btn wo-side-meta-btn-secondary"><i class="fa fa-shield me-50" style="margin-top: 1px;"></i> Zaštita: <span class="ms-25">PLASTIFIKACIJA RAL 7016</span></button>
+            <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center"><i class="fa fa-building me-50"></i> Dodaj odjel</button>
+            <button class="btn btn-outline-primary w-100 mb-75 d-flex justify-content-center align-items-center"><i class="fa fa-cube me-50"></i> Dodaj materijal</button>
+            <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center"><i class="fa fa-cog me-50"></i> Dodaj operaciju</button>
+            <button class="btn btn-outline-secondary w-100 mb-75 d-flex justify-content-center align-items-center"><i class="fa fa-paper-plane me-50" style="margin-top: 2px; font-size: 12px;"></i> Pošalji</button>
+            <a class="btn btn-outline-secondary w-100 d-flex justify-content-center align-items-center"><i class="fa fa-print me-50"></i> Isprintaj</a>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</section>

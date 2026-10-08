@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html class="loaded light-layout" lang="bs" data-textdirection="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Razduženi materijali</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=block" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="../vendors/css/vendors.min.css">
+<link rel="stylesheet" href="../css/core.css">
+<link rel="stylesheet" href="../css/base/core/menu/menu-types/vertical-menu.css">
+<link rel="stylesheet" href="../vendors/css/tables/datatable/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="../css/overrides.css">
+<style>html .content .content-wrapper .content-header-title{border-right:0!important;padding-right:0!important;margin-right:0!important}</style>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+.navbar-ai-token-link{padding-left:.2rem!important;padding-right:.2rem!important}
+.navbar-ai-token-pill{position:relative;display:inline-flex;align-items:center;gap:.45rem;min-height:2.7rem;padding:.38rem .8rem;border-radius:1rem;background:rgba(255,255,255,.95);box-shadow:0 10px 24px rgba(34,41,47,.08)}
+.navbar-ai-token-pill__icon{position:relative;display:inline-grid;width:1.3rem;height:1.35rem;place-items:center;flex:0 0 auto}
+.navbar-ai-token-pill__label,.navbar-ai-token-pill__divider{display:inline-flex;align-items:center;line-height:1;color:#6e7f91;font-size:.92rem;font-weight:600}
+.navbar-ai-token-pill__divider{opacity:.7}
+.navbar-ai-token-pill__value{display:inline-flex;align-items:center;justify-content:center;min-width:2.2rem;font-size:1rem;font-weight:700;line-height:1;color:#4b5d78}
+.navbar-ai-token-coin{position:absolute;width:.95rem;height:.42rem;border-radius:999px;background:linear-gradient(180deg,#ffd86f 0%,#f5b301 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 2px 4px rgba(196,140,0,.2)}
+.navbar-ai-token-coin--top{transform:translateY(-.34rem)}
+.navbar-ai-token-coin--mid{width:1.05rem}
+.navbar-ai-token-coin--bottom{transform:translateY(.34rem)}
+html,body{overflow:hidden}
+.pace,.pace-progress{display:none!important}
+*,*::before,*::after{animation-duration:.001s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important}
+
+  .released-material-documents-wrapper {
+    --released-doc-scroll-track: var(--app-scroll-track);
+    --released-doc-scroll-thumb: var(--app-scroll-thumb-flat);
+    --released-doc-scroll-thumb-hover: var(--app-scroll-thumb-flat-hover);
+    --released-doc-scroll-thumb-active: var(--app-scroll-thumb-flat-active);
+    --released-doc-scroll-thumb-border: var(--app-scroll-thumb-border);
+  }
+
+  .released-material-documents-wrapper .content-header {
+    margin-top: -6px;
+    margin-bottom: 4px;
+  }
+
+  .released-doc-filter-actions {
+    row-gap: 8px;
+  }
+
+  .released-doc-filter-input {
+    font-size: 14px;
+  }
+
+  .released-doc-filter-date,
+  .released-doc-filter-date.flatpickr-input,
+  .released-doc-filter-date + .flatpickr-input,
+  .released-doc-filter-date[readonly],
+  .flatpickr-input[readonly] {
+    cursor: pointer;
+  }
+
+  .released-doc-active-filters {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .released-doc-active-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid #d8d6de;
+    border-radius: 999px;
+    background-color: #f8f8f8;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .released-doc-active-filter-label {
+    color: #6e6b7b;
+    font-weight: 500;
+  }
+
+  .released-doc-active-filter-value {
+    color: #5e5873;
+    font-weight: 600;
+  }
+
+  .released-doc-table {
+    min-width: 1620px;
+  }
+
+  .released-doc-wrapper .card-datatable.table-responsive {
+    overflow-x: hidden;
+  }
+
+  .released-doc-wrapper .card-datatable.released-doc-initial-loading .dataTables_wrapper > .row:last-child {
+    display: none;
+  }
+
+  .released-doc-loading-overlay-host {
+    position: relative;
+  }
+
+  .released-doc-loading-overlay {
+    position: absolute;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.74);
+    backdrop-filter: blur(1px);
+    z-index: 9;
+    pointer-events: none;
+  }
+
+  .released-doc-loading-overlay.is-visible {
+    display: flex;
+  }
+
+  .released-doc-loading-overlay-content {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    min-width: 220px;
+    padding: 0.95rem 1.35rem;
+    border-radius: 0.5rem;
+    background: #fff;
+    box-shadow: 0 6px 20px rgba(34, 41, 47, 0.16);
+    text-align: center;
+  }
+
+  .released-doc-loading-spinner {
+    width: 1.85rem;
+    height: 1.85rem;
+    border-width: 0.2em;
+    color: #495b73;
+  }
+
+  .released-doc-loading-message {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #5e5873;
+    letter-spacing: 0.01em;
+  }
+
+  .released-doc-wrapper .dataTables_wrapper > .row:first-child,
+  .released-doc-wrapper .dataTables_wrapper > .row:last-child {
+    margin-left: 0;
+    margin-right: 0;
+    padding: 1rem 1rem 0.95rem;
+  }
+
+  .released-doc-wrapper .dataTables_wrapper > .row:first-child > [class*='col-'],
+  .released-doc-wrapper .dataTables_wrapper > .row:last-child > [class*='col-'] {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .released-doc-wrapper .dataTables_wrapper > .row:nth-child(2) {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .released-doc-wrapper .dataTables_wrapper > .row:nth-child(2) > [class*='col-'] {
+    padding-left: 0;
+    padding-right: 0;
+    overflow: visible;
+  }
+
+  .released-doc-wrapper .released-doc-table-body-scroll {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--released-doc-scroll-thumb) var(--released-doc-scroll-track);
+    scrollbar-gutter: stable;
+  }
+
+  .released-doc-wrapper .released-doc-table-body-cell {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    overflow: visible !important;
+  }
+
+  .released-doc-wrapper .released-doc-table-body-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .released-doc-wrapper .released-doc-table-body-scroll::-webkit-scrollbar-track {
+    background: var(--released-doc-scroll-track);
+    border-radius: 999px;
+  }
+
+  .released-doc-wrapper .released-doc-table-body-scroll::-webkit-scrollbar-thumb {
+    background: var(--released-doc-scroll-thumb);
+    border-radius: 999px;
+    border: 1px solid var(--released-doc-scroll-thumb-border);
+  }
+
+  .released-doc-wrapper .released-doc-table-body-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--released-doc-scroll-thumb-hover);
+  }
+
+  .released-doc-wrapper .released-doc-table-body-scroll::-webkit-scrollbar-thumb:active {
+    background: var(--released-doc-scroll-thumb-active);
+  }
+
+  .released-doc-table tbody tr {
+    transition: background-color 0.2s ease;
+  }
+
+  .released-doc-table.table tbody tr:hover > * {
+    background-color: #f8f8fc;
+  }
+
+  body.dark-layout .released-doc-table.table tbody tr:hover > *,
+  body.semi-dark-layout .released-doc-table.table tbody tr:hover > *,
+  .dark-layout .released-doc-table.table tbody tr:hover > *,
+  .semi-dark-layout .released-doc-table.table tbody tr:hover > * {
+    background-color: #36405a !important;
+  }
+
+  .released-doc-document-cell,
+  .released-doc-work-order-cell,
+  .released-doc-order-cell,
+  .released-doc-position-cell,
+  .released-doc-quantity-cell,
+  .released-doc-price-cell,
+  .released-doc-action-cell {
+    white-space: nowrap;
+  }
+
+  .released-doc-document-number {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+
+  .released-doc-note-cell,
+  .released-doc-name-cell {
+    min-width: 220px;
+  }
+
+  .released-doc-action-cell {
+    width: 1% !important;
+    position: sticky !important;
+    right: 0 !important;
+    z-index: 10 !important;
+    text-align: center;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-clip: border-box !important;
+    opacity: 1 !important;
+    isolation: isolate !important;
+    box-shadow: none !important;
+    border-left: 1px solid #ebe9f1 !important;
+  }
+
+  .released-doc-table thead .released-doc-action-cell {
+    z-index: 11 !important;
+    background: #f8f8fa !important;
+    background-color: #f8f8fa !important;
+    box-shadow: none !important;
+  }
+
+  .released-doc-table.table tbody tr:hover > .released-doc-action-cell {
+    background: #f8f8fc !important;
+    background-color: #f8f8fc !important;
+    box-shadow: none !important;
+  }
+
+  body.dark-layout .released-doc-table .released-doc-action-cell,
+  body.semi-dark-layout .released-doc-table .released-doc-action-cell,
+  .dark-layout .released-doc-table .released-doc-action-cell,
+  .semi-dark-layout .released-doc-table .released-doc-action-cell {
+    background: #283046 !important;
+    background-color: #283046 !important;
+    box-shadow: none !important;
+    border-left-color: rgba(184, 190, 220, 0.22) !important;
+  }
+
+  body.dark-layout .released-doc-table thead .released-doc-action-cell,
+  body.semi-dark-layout .released-doc-table thead .released-doc-action-cell,
+  .dark-layout .released-doc-table thead .released-doc-action-cell,
+  .semi-dark-layout .released-doc-table thead .released-doc-action-cell {
+    background: #2f3854 !important;
+    background-color: #2f3854 !important;
+    box-shadow: none !important;
+  }
+
+  body.dark-layout .released-doc-table.table tbody tr:hover > .released-doc-action-cell,
+  body.semi-dark-layout .released-doc-table.table tbody tr:hover > .released-doc-action-cell,
+  .dark-layout .released-doc-table.table tbody tr:hover > .released-doc-action-cell,
+  .semi-dark-layout .released-doc-table.table tbody tr:hover > .released-doc-action-cell {
+    background: #36405a !important;
+    background-color: #36405a !important;
+    box-shadow: none !important;
+  }
+
+  .released-doc-actions-group {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+  }
+
+  .released-doc-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    padding: 0.45rem;
+    white-space: nowrap;
+  }
+
+  .released-doc-action-btn svg,
+  .released-doc-action-btn i {
+    width: 16px;
+    height: 16px;
+  }
+
+  .released-doc-loading-spacer-row > td {
+    height: 220px;
+    padding: 0 !important;
+    border-top: 0 !important;
+    border-bottom: 0 !important;
+    background: transparent !important;
+  }
+
+  .released-doc-wrapper .dataTables_processing {
+    display: none !important;
+  }
+
+  body.dark-layout .released-doc-loading-overlay,
+  body.semi-dark-layout .released-doc-loading-overlay,
+  .dark-layout .released-doc-loading-overlay,
+  .semi-dark-layout .released-doc-loading-overlay {
+    background: rgba(34, 41, 47, 0.58);
+  }
+
+  body.dark-layout .released-doc-loading-overlay-content,
+  body.semi-dark-layout .released-doc-loading-overlay-content,
+  .dark-layout .released-doc-loading-overlay-content,
+  .semi-dark-layout .released-doc-loading-overlay-content {
+    background: #283046;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+  }
+
+  body.dark-layout .released-doc-loading-spinner,
+  body.semi-dark-layout .released-doc-loading-spinner,
+  .dark-layout .released-doc-loading-spinner,
+  .semi-dark-layout .released-doc-loading-spinner {
+    color: #d0d4f2;
+  }
+
+  body.dark-layout .released-doc-loading-message,
+  body.semi-dark-layout .released-doc-loading-message,
+  .dark-layout .released-doc-loading-message,
+  .semi-dark-layout .released-doc-loading-message {
+    color: #f0f0f0;
+  }
+
+  @media (max-width: 767.98px) {
+    .released-doc-filter-actions {
+      align-items: flex-start !important;
+    }
+  }
+
+
+  /* copy lines 28–382 verbatim; key parts: */
+  .released-doc-filter-actions { row-gap: 8px; }
+  .released-doc-active-filter-chip { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border:1px solid #d8d6de; border-radius:999px; background-color:#f8f8f8; font-size:12px; line-height:1; }
+  .released-doc-active-filter-label { color:#6e6b7b; font-weight:500; }
+  .released-doc-active-filter-value { color:#5e5873; font-weight:600; }
+  .released-doc-document-number { display:inline-flex; align-items:center; gap:0.45rem; font-weight:700; letter-spacing:0.01em; }
+  .released-doc-note-cell, .released-doc-name-cell { min-width:220px; }
+  .released-doc-action-btn { display:inline-flex; align-items:center; justify-content:center; width:38px; min-width:38px; height:38px; padding:0.45rem; white-space:nowrap; }
+  .released-doc-wrapper .dataTables_wrapper > .row:first-child, .released-doc-wrapper .dataTables_wrapper > .row:last-child { margin-left:0; margin-right:0; padding:1rem 1rem 0.95rem; }
+  @media (max-width: 767.98px) { .released-doc-filter-actions { align-items: flex-start !important; } }
+
+
+</style>
+</head>
+<body class="vertical-layout vertical-menu-modern menu-expanded navbar-floating footer-static default">
+
+<nav class="header-navbar navbar navbar-expand-lg align-items-center floating-nav navbar-light navbar-shadow">
+  <div class="navbar-container d-flex content">
+    <div class="bookmark-wrapper d-flex align-items-center">
+      <ul class="nav navbar-nav d-xl-none align-items-center">
+        <li class="nav-item"><a class="nav-link menu-toggle" href="#"><i class="ficon" data-feather="menu"></i></a></li>
+        <li class="nav-item d-md-none"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+      <ul class="nav navbar-nav bookmark-icons">
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="home"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="calendar"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+    </div>
+    <ul class="nav navbar-nav align-items-center ms-auto">
+      <li class="nav-item">
+        <a class="nav-link navbar-ai-token-link" href="#">
+          <span class="navbar-ai-token-pill">
+            <span class="navbar-ai-token-pill__label">Tokeni</span>
+            <span class="navbar-ai-token-pill__icon"><span class="navbar-ai-token-coin navbar-ai-token-coin--top"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--mid"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--bottom"></span></span>
+            <span class="navbar-ai-token-pill__divider">|</span>
+            <span class="navbar-ai-token-pill__value">12.480</span>
+          </span>
+        </a>
+      </li>
+      <li class="nav-item d-none d-md-block"><a class="nav-link nav-link-style"><i class="ficon" data-feather="moon"></i></a></li>
+      <li class="nav-item nav-search"><a class="nav-link nav-link-search"><i class="ficon" data-feather="search"></i></a></li>
+      <li class="nav-item dropdown dropdown-user">
+        <a class="nav-link dropdown-toggle dropdown-user-link" href="#">
+          <div class="user-nav d-sm-flex d-none"><span class="user-name fw-bolder">Admin</span><span class="user-status">ADMIN</span></div>
+          <span class="avatar"><img class="round" src="../images/portrait/avatar-s-22.jpg" alt="avatar" height="40" width="40"><span class="avatar-status-online"></span></span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="main-menu menu-fixed menu-light menu-accordion menu-shadow">
+  <div class="navbar-header">
+    <ul class="nav navbar-nav flex-row">
+      <li class="nav-item me-auto">
+        <a class="navbar-brand d-flex align-items-center" href="#">
+          <span class="brand-logo"><img src="../images/logo/TrendyCNC.png" alt="eNalog.app" width="36"></span>
+          <h2 class="brand-text mb-0 ms-50">eNalog.app</h2>
+        </a>
+      </li>
+      <li class="nav-item nav-toggle"><a class="nav-link modern-nav-toggle pe-0"><i class="d-none d-xl-block collapse-toggle-icon font-medium-4 text-primary" data-feather="disc"></i></a></li>
+    </ul>
+  </div>
+  <div class="shadow-bottom"></div>
+  <div class="main-menu-content">
+    <ul class="navigation navigation-main">
+      <li class="navigation-header"><span>Radni nalozi</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="file-text"></i><span class="menu-title text-truncate">Upravljanje nalozima</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="camera"></i><span class="menu-title text-truncate">Skeniraj nalog</span></a></li>
+      <li class="navigation-header"><span>Narudžbe</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="briefcase"></i><span class="menu-title text-truncate">Upravljanje narudžbama</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i class="fa fa-magic fa-fw"></i><span class="menu-title text-truncate">AI narudžba</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="inbox"></i><span class="menu-title text-truncate">AI Inbox</span></a></li>
+      <li class="navigation-header"><span>Proizvodnja</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="clipboard"></i><span class="menu-title text-truncate">Plan proizvodnje</span></a></li>
+      <li class="navigation-header"><span>AI asistent</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="activity"></i><span class="menu-title text-truncate">Historija AI skeniranja</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Dozvoljeni pošiljaoci</span></a></li>
+      <li class="navigation-header"><span>Dokumenti</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item active"><a href="#" class="d-flex align-items-center"><i data-feather="archive"></i><span class="menu-title text-truncate">Razduženi materijali</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="box"></i><span class="menu-title text-truncate">Razduživanje WIP</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="tool"></i><span class="menu-title text-truncate">Razdužene operacije</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="package"></i><span class="menu-title text-truncate">Prijem VP skladište</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="package"></i><span class="menu-title text-truncate">Prijem škarta</span></a></li>
+      <li class="navigation-header"><span>Administracija</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="user"></i><span class="menu-title text-truncate">Korisnici</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="credit-card"></i><span class="menu-title text-truncate">Moja NFC kartica</span></a></li>
+      <li class="navigation-header"><span>Skladišni alati</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="layers"></i><span class="menu-title text-truncate">Pregled zaliha</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Površinske zaštite</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Kreiranje rezervi</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="map"></i><span class="menu-title text-truncate">Mapa skladišta</span></a></li>
+    </ul>
+  </div>
+</div>
+<div class="app-content content">
+  <div class="content-overlay"></div>
+  <div class="header-navbar-shadow"></div>
+  <div class="content-wrapper container-xxxl p-0">
+    
+    <div class="content-body">
+
+<section class="released-material-documents-wrapper">
+  <div class="content-header row"><div class="content-header-left col-12 mb-2"><div class="row breadcrumbs-top"><div class="col-12"><h2 class="content-header-title float-start mb-0">Razduženi materijali</h2></div></div></div></div>
+  <div class="card mb-2">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <div><h4 class="mb-0">Filter dokumenata</h4><small class="text-muted">Dokumenti tipa 6400 - RN Rasknjiženje materijala</small></div>
+      <div class="d-flex align-items-center flex-wrap gap-2 released-doc-filter-actions">
+        <div id="released-doc-active-filters" class="released-doc-active-filters d-none"></div>
+        <button type="button" class="btn btn-outline-primary btn-sm"><i data-feather="filter" class="me-50"></i> Prikaži filtere</button>
+        <button type="button" class="btn btn-outline-danger btn-sm"><i data-feather="trash-2" class="me-50"></i> Obriši filter</button>
+      </div>
+    </div>
+    <!-- hidden filter body: Dokument (file-text, placeholder "26-6400-..."), RN (search, "26-6000-0001687"), Narudžba (briefcase, "25-0110-0003084"), Šifra (hash, "Šifra materijala"), Naziv (search), Datum od / Datum do (calendar, "dd.mm.gggg"), Napomena (message-square), button "Filter" -->
+  </div>
+  <div class="card released-doc-wrapper">
+    <div class="card-datatable table-responsive"><div class="dataTables_wrapper dt-bootstrap5">
+      <div class="row"><div class="col-sm-12 col-md-6"><div class="dataTables_length"><label>Prikaži <select class="form-select form-select-sm"><option>10</option></select> zapisa</label></div></div>
+        <div class="col-sm-12 col-md-6"><div class="dataTables_filter"><label>Brza pretraga:<input type="search" class="form-control form-control-sm" placeholder="Dokument, RN, narudžba, šifra ili naziv"></label></div></div></div>
+      <div class="row"><div class="col-sm-12 released-doc-table-body-cell"><div class="released-doc-table-body-scroll">
+        <table class="table released-doc-table" id="released-doc-table">
+          <thead><tr><th>Dokument</th><th>Datum</th><th>RN</th><th>Narudžba</th><th>Pozicija</th><th>Šifra</th><th>Naziv</th><th>Količina</th><th>JM</th><th>Cijena RN</th><th>Napomena</th><th class="released-doc-action-cell">Akcija</th></tr></thead>
+          <tbody>
+            <tr><td class="released-doc-document-cell"><span class="released-doc-document-number">26-6400-0000412</span></td><td class="released-doc-date-cell">07.10.2026</td><td class="released-doc-work-order-cell">26-6000-0001687</td><td class="released-doc-order-cell">25-0110-0003084</td><td class="released-doc-position-cell text-end">10</td><td class="released-doc-code-cell">LIM-S235-5</td><td class="released-doc-name-cell">Lim S235 5mm 1500x3000</td><td class="released-doc-quantity-cell text-end">2,4</td><td class="released-doc-unit-cell">KG</td><td class="released-doc-price-cell text-end">12,48 KM</td><td class="released-doc-note-cell"><span class="text-muted">-</span></td>
+              <td class="released-doc-action-cell text-end"><div class="released-doc-actions-group"><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger released-doc-action-btn released-doc-delete-btn" title="Izbriši dokument"><i data-feather="trash-2"></i></button></div></td></tr>
+<tr><td class="released-doc-document-cell"><span class="released-doc-document-number">26-6400-0000411</span></td><td class="released-doc-date-cell">07.10.2026</td><td class="released-doc-work-order-cell">26-6000-0001684</td><td class="released-doc-order-cell">25-0110-0003079</td><td class="released-doc-position-cell text-end">10</td><td class="released-doc-code-cell">SIP-S355-40</td><td class="released-doc-name-cell">Šipka S355 Ø40</td><td class="released-doc-quantity-cell text-end">18,6</td><td class="released-doc-unit-cell">M</td><td class="released-doc-price-cell text-end">96,72 KM</td><td class="released-doc-note-cell"><span class="text-muted">-</span></td>
+              <td class="released-doc-action-cell text-end"><div class="released-doc-actions-group"><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger released-doc-action-btn released-doc-delete-btn" title="Izbriši dokument"><i data-feather="trash-2"></i></button></div></td></tr>
+<tr><td class="released-doc-document-cell"><span class="released-doc-document-number">26-6400-0000410</span></td><td class="released-doc-date-cell">07.10.2026</td><td class="released-doc-work-order-cell">26-6000-0001684</td><td class="released-doc-order-cell">25-0110-0003079</td><td class="released-doc-position-cell text-end">20</td><td class="released-doc-code-cell">VIJ-M10-35</td><td class="released-doc-name-cell">Vijak M10x35 DIN 933 8.8</td><td class="released-doc-quantity-cell text-end">240</td><td class="released-doc-unit-cell">KOM</td><td class="released-doc-price-cell text-end">28,80 KM</td><td class="released-doc-note-cell"><span class="text-muted">-</span></td>
+              <td class="released-doc-action-cell text-end"><div class="released-doc-actions-group"><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger released-doc-action-btn released-doc-delete-btn" title="Izbriši dokument"><i data-feather="trash-2"></i></button></div></td></tr>
+<tr><td class="released-doc-document-cell"><span class="released-doc-document-number">26-6400-0000409</span></td><td class="released-doc-date-cell">07.10.2026</td><td class="released-doc-work-order-cell">26-6000-0001681</td><td class="released-doc-order-cell">25-0110-0003071</td><td class="released-doc-position-cell text-end">10</td><td class="released-doc-code-cell">AL-6082-20</td><td class="released-doc-name-cell">Aluminij EN AW-6082 20mm</td><td class="released-doc-quantity-cell text-end">31,25</td><td class="released-doc-unit-cell">KG</td><td class="released-doc-price-cell text-end">143,75 KM</td><td class="released-doc-note-cell"><span class="text-muted">-</span></td>
+              <td class="released-doc-action-cell text-end"><div class="released-doc-actions-group"><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger released-doc-action-btn released-doc-delete-btn" title="Izbriši dokument"><i data-feather="trash-2"></i></button></div></td></tr>
+<tr><td class="released-doc-document-cell"><span class="released-doc-document-number">26-6400-0000408</span></td><td class="released-doc-date-cell">07.10.2026</td><td class="released-doc-work-order-cell">26-6000-0001679</td><td class="released-doc-order-cell">25-0110-0003068</td><td class="released-doc-position-cell text-end">10</td><td class="released-doc-code-cell">INOX-304-2</td><td class="released-doc-name-cell">Inox lim 1.4301 2mm</td><td class="released-doc-quantity-cell text-end">12,8</td><td class="released-doc-unit-cell">KG</td><td class="released-doc-price-cell text-end">70,40 KM</td><td class="released-doc-note-cell"><span class="text-muted">-</span></td>
+              <td class="released-doc-action-cell text-end"><div class="released-doc-actions-group"><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger released-doc-action-btn released-doc-delete-btn" title="Izbriši dokument"><i data-feather="trash-2"></i></button></div></td></tr>
+<tr><td class="released-doc-document-cell"><span class="released-doc-document-number">26-6400-0000407</span></td><td class="released-doc-date-cell">07.10.2026</td><td class="released-doc-work-order-cell">26-6000-0001676</td><td class="released-doc-order-cell">25-0110-0003060</td><td class="released-doc-position-cell text-end">30</td><td class="released-doc-code-cell">PRA-RAL7016</td><td class="released-doc-name-cell">Prah RAL 7016</td><td class="released-doc-quantity-cell text-end">4,5</td><td class="released-doc-unit-cell">KG</td><td class="released-doc-price-cell text-end">40,50 KM</td><td class="released-doc-note-cell"><span class="text-muted">-</span></td>
+              <td class="released-doc-action-cell text-end"><div class="released-doc-actions-group"><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger released-doc-action-btn released-doc-delete-btn" title="Izbriši dokument"><i data-feather="trash-2"></i></button></div></td></tr>
+          </tbody>
+        </table>
+      </div></div></div>
+      <div class="row"><div class="col-sm-12 col-md-5"><div class="dataTables_info">Prikaz 1 do 10 od 214 zapisa</div></div><div class="col-sm-12 col-md-7"><!-- pagination Prethodna / Sljedeća --></div></div>
+    </div></div>
+  </div>
+</section>
+
+    </div>
+  </div>
+</div>
+<script src="../vendors/js/vendors.min.js"></script>
+<script>feather.replace({width: 14, height: 14});</script>
+</body>
+</html>

@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html class="loaded light-layout" lang="bs" data-textdirection="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Pregled zaliha</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=block" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="../vendors/css/vendors.min.css">
+<link rel="stylesheet" href="../css/core.css">
+<link rel="stylesheet" href="../css/base/core/menu/menu-types/vertical-menu.css">
+<link rel="stylesheet" href="../vendors/css/tables/datatable/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" href="../css/overrides.css">
+<style>html .content .content-wrapper .content-header-title{border-right:0!important;padding-right:0!important;margin-right:0!important}</style>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+.navbar-ai-token-link{padding-left:.2rem!important;padding-right:.2rem!important}
+.navbar-ai-token-pill{position:relative;display:inline-flex;align-items:center;gap:.45rem;min-height:2.7rem;padding:.38rem .8rem;border-radius:1rem;background:rgba(255,255,255,.95);box-shadow:0 10px 24px rgba(34,41,47,.08)}
+.navbar-ai-token-pill__icon{position:relative;display:inline-grid;width:1.3rem;height:1.35rem;place-items:center;flex:0 0 auto}
+.navbar-ai-token-pill__label,.navbar-ai-token-pill__divider{display:inline-flex;align-items:center;line-height:1;color:#6e7f91;font-size:.92rem;font-weight:600}
+.navbar-ai-token-pill__divider{opacity:.7}
+.navbar-ai-token-pill__value{display:inline-flex;align-items:center;justify-content:center;min-width:2.2rem;font-size:1rem;font-weight:700;line-height:1;color:#4b5d78}
+.navbar-ai-token-coin{position:absolute;width:.95rem;height:.42rem;border-radius:999px;background:linear-gradient(180deg,#ffd86f 0%,#f5b301 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 2px 4px rgba(196,140,0,.2)}
+.navbar-ai-token-coin--top{transform:translateY(-.34rem)}
+.navbar-ai-token-coin--mid{width:1.05rem}
+.navbar-ai-token-coin--bottom{transform:translateY(.34rem)}
+html,body{overflow:hidden}
+.pace,.pace-progress{display:none!important}
+*,*::before,*::after{animation-duration:.001s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important}
+
+  .content-header {
+    margin-top: -6px;
+    margin-bottom: 4px;
+  }
+
+  .content-header-title {
+    margin-top: 5px;
+  }
+
+  .material-header-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+
+  .material-warehouse-filter {
+    min-width: 260px;
+    flex: 1 1 260px;
+  }
+
+  .material-table-inline-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: nowrap;
+  }
+
+  .material-table-inline-controls .dataTables_length {
+    margin-bottom: 0;
+  }
+
+  .material-bulk-download-btn {
+    white-space: nowrap;
+    margin-top: 5px!important;
+  }
+
+  .material-bulk-download-btn.material-barcode-preview-btn {
+    border-color: #1e88e5 !important;
+    color: #1e88e5 !important;
+    background-color: transparent !important;
+  }
+
+  .material-bulk-download-btn.material-barcode-preview-btn:hover,
+  .material-bulk-download-btn.material-barcode-preview-btn:focus {
+    background-color: rgba(30, 136, 229, 0.1) !important;
+  }
+
+  .material-bulk-download-btn.material-qr-preview-btn {
+    border-color: #f59e0b !important;
+    color: #f59e0b !important;
+    background-color: transparent !important;
+  }
+
+  .material-bulk-download-btn.material-qr-preview-btn:hover,
+  .material-bulk-download-btn.material-qr-preview-btn:focus {
+    background-color: rgba(245, 158, 11, 0.12) !important;
+  }
+
+  .material-bulk-download-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  .material-bulk-download-toolbar .material-bulk-download-btn {
+    margin-top: 0 !important;
+  }
+
+  .material-barcode-generator-wrapper {
+    --wo-table-scroll-track: var(--app-scroll-track);
+    --wo-table-scroll-thumb: var(--app-scroll-thumb-flat);
+    --wo-table-scroll-thumb-hover: var(--app-scroll-thumb-flat-hover);
+    --wo-table-scroll-thumb-active: var(--app-scroll-thumb-flat-active);
+    --wo-table-scroll-thumb-border: var(--app-scroll-thumb-border);
+  }
+
+  body.dark-layout .material-barcode-generator-wrapper,
+  body.semi-dark-layout .material-barcode-generator-wrapper,
+  .dark-layout .material-barcode-generator-wrapper,
+  .semi-dark-layout .material-barcode-generator-wrapper {
+    --wo-table-scroll-track: var(--app-scroll-track);
+    --wo-table-scroll-thumb: var(--app-scroll-thumb-flat);
+    --wo-table-scroll-thumb-hover: var(--app-scroll-thumb-flat-hover);
+    --wo-table-scroll-thumb-active: var(--app-scroll-thumb-flat-active);
+    --wo-table-scroll-thumb-border: var(--app-scroll-thumb-border);
+  }
+
+  .material-barcode-table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+
+  .material-barcode-table.table tbody tr:hover > * {
+    background-color: #f8f8fc;
+  }
+
+  .material-barcode-generator-wrapper .material-barcode-table {
+    min-width: 1140px;
+  }
+
+  .material-barcode-table tbody .material-barcode-loading-spacer-row > td {
+    height: 180px;
+    padding: 0 !important;
+    border-top: 0 !important;
+    border-bottom: 0 !important;
+    background: transparent !important;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable.table-responsive {
+    overflow-x: visible;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child,
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:last-child {
+    margin-left: 0;
+    margin-right: 0;
+    padding: 1rem 1rem 0.95rem;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable.material-barcode-initial-loading .dataTables_wrapper > .row:last-child {
+    display: none;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-'],
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:last-child > [class*='col-'] {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  @media (min-width: 768px) {
+    .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      column-gap: 1rem;
+      row-gap: 0.75rem;
+    }
+
+    .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-']:first-child {
+      flex: 1 1 auto;
+      width: auto;
+      max-width: none;
+    }
+
+    .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child > [class*='col-']:last-child {
+      flex: 0 0 auto;
+      width: auto;
+      max-width: none;
+      margin-left: auto;
+    }
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-'] {
+    padding-left: 0;
+    padding-right: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
+    scrollbar-gutter: stable;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-track {
+    background: var(--wo-table-scroll-track);
+    border-radius: 999px;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-thumb {
+    background: var(--wo-table-scroll-thumb);
+    border-radius: 999px;
+    border: 1px solid var(--wo-table-scroll-thumb-border);
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-thumb:hover {
+    background: var(--wo-table-scroll-thumb-hover);
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-thumb:active {
+    background: var(--wo-table-scroll-thumb-active);
+  }
+
+  .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:nth-child(2) > [class*='col-']::-webkit-scrollbar-corner {
+    background: var(--wo-table-scroll-track);
+  }
+
+  .material-barcode-generator-modal {
+    --barcode-modal-preview-bg: #ffffff;
+    --barcode-modal-preview-border: rgba(71, 95, 123, 0.12);
+    --barcode-modal-text-muted: #6e6b7b;
+  }
+
+  body.dark-layout .material-barcode-generator-modal,
+  body.semi-dark-layout .material-barcode-generator-modal,
+  .dark-layout .material-barcode-generator-modal,
+  .semi-dark-layout .material-barcode-generator-modal {
+    --barcode-modal-preview-border: rgba(214, 220, 236, 0.14);
+    --barcode-modal-text-muted: #b4bdd3;
+  }
+
+  body.dark-layout .material-barcode-table.table tbody tr:hover > *,
+  body.semi-dark-layout .material-barcode-table.table tbody tr:hover > *,
+  .dark-layout .material-barcode-table.table tbody tr:hover > *,
+  .semi-dark-layout .material-barcode-table.table tbody tr:hover > * {
+    background-color: #36405a !important;
+  }
+
+  .material-barcode-modal-name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+  }
+
+  .material-barcode-modal-code {
+    font-size: 0.92rem;
+    color: var(--barcode-modal-text-muted);
+    margin-bottom: 1rem;
+  }
+
+  .material-barcode-modal-preview {
+    min-height: 260px;
+    padding: 1rem;
+    border-radius: 0.85rem;
+    border: 1px solid var(--barcode-modal-preview-border);
+    background: var(--barcode-modal-preview-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .material-barcode-modal-preview svg {
+    width: 100%;
+    height: auto;
+    max-width: 760px;
+    display: block;
+  }
+
+  .material-barcode-modal-preview img {
+    width: min(100%, 320px);
+    height: auto;
+    display: block;
+  }
+
+  .material-barcode-modal-empty {
+    text-align: center;
+    color: var(--barcode-modal-text-muted);
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+
+  .material-barcode-modal-loading {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    text-align: center;
+    color: var(--barcode-modal-text-muted);
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+
+  .material-barcode-table .material-code-cell {
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+
+  .material-barcode-table .material-stock-cell,
+  .material-barcode-table .material-unit-cell,
+  .material-barcode-table .material-warehouse-cell,
+  .material-barcode-table .material-actions-cell {
+    white-space: nowrap;
+  }
+
+  .material-barcode-table .material-actions-cell {
+    width: 1% !important;
+    position: sticky !important;
+    right: 0 !important;
+    z-index: 10 !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-clip: border-box !important;
+    opacity: 1 !important;
+    isolation: isolate !important;
+    box-shadow: none !important;
+    border-left: 1px solid #ebe9f1 !important;
+  }
+
+  .material-actions-group {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+  }
+
+  .material-barcode-table thead .material-actions-cell {
+    z-index: 11 !important;
+    background: #f8f8fa !important;
+    background-color: #f8f8fa !important;
+    box-shadow: none !important;
+  }
+
+  .material-barcode-table.table tbody tr:hover > .material-actions-cell {
+    background: #f8f8fc !important;
+    background-color: #f8f8fc !important;
+    box-shadow: none !important;
+  }
+
+  body.dark-layout .material-barcode-table .material-actions-cell,
+  body.semi-dark-layout .material-barcode-table .material-actions-cell,
+  .dark-layout .material-barcode-table .material-actions-cell,
+  .semi-dark-layout .material-barcode-table .material-actions-cell {
+    background: #283046 !important;
+    background-color: #283046 !important;
+    box-shadow: none !important;
+    border-left-color: rgba(184, 190, 220, 0.22) !important;
+  }
+
+  body.dark-layout .material-barcode-table thead .material-actions-cell,
+  body.semi-dark-layout .material-barcode-table thead .material-actions-cell,
+  .dark-layout .material-barcode-table thead .material-actions-cell,
+  .semi-dark-layout .material-barcode-table thead .material-actions-cell {
+    background: #2f3854 !important;
+    background-color: #2f3854 !important;
+    box-shadow: none !important;
+  }
+
+  body.dark-layout .material-barcode-table.table tbody tr:hover > .material-actions-cell,
+  body.semi-dark-layout .material-barcode-table.table tbody tr:hover > .material-actions-cell,
+  .dark-layout .material-barcode-table.table tbody tr:hover > .material-actions-cell,
+  .semi-dark-layout .material-barcode-table.table tbody tr:hover > .material-actions-cell {
+    background: #36405a !important;
+    background-color: #36405a !important;
+    box-shadow: none !important;
+  }
+
+  .material-stock-modal .modal-content {
+    border-radius: 1rem;
+  }
+
+  .material-stock-surface-card,
+  .material-create-field-card {
+    padding: 0.95rem 1rem;
+    border-radius: 0.85rem;
+    border: 1px solid rgba(71, 95, 123, 0.12);
+    background: rgba(71, 95, 123, 0.04);
+  }
+
+  .material-stock-modal-subtitle {
+    margin-top: 0.2rem;
+    font-size: 0.9rem;
+    color: #6e6b7b;
+  }
+
+  .material-stock-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1rem;
+  }
+
+  .material-stock-meta-item {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .material-stock-meta-label {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6e6b7b;
+  }
+
+  .material-stock-meta-value {
+    display: block;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+
+  .material-stock-form-block {
+    border-top: 1px solid rgba(71, 95, 123, 0.12);
+    padding-top: 1rem;
+  }
+
+  .material-create-modal .modal-content {
+    border-radius: 1rem;
+  }
+
+  .material-create-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+  }
+
+  .material-create-field-card .form-label {
+    margin-bottom: 0.45rem;
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #6e6b7b;
+  }
+
+  .material-create-field-card .form-control {
+    background-color: transparent;
+  }
+
+  .material-create-field-card .form-select {
+    background-color: transparent;
+    background-repeat: no-repeat;
+    background-position: right 0.9rem center;
+    background-size: 16px 12px;
+    cursor: pointer;
+  }
+
+  .material-create-field-card .form-select option {
+    cursor: pointer;
+  }
+
+  .material-create-help {
+    margin-top: 0.9rem;
+    font-size: 0.88rem;
+    color: #6e6b7b;
+  }
+
+  .material-stock-form-help {
+    margin-top: 0.45rem;
+    font-size: 0.88rem;
+    color: #6e6b7b;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable {
+    position: relative;
+    scrollbar-width: thin;
+    scrollbar-color: var(--wo-table-scroll-thumb) var(--wo-table-scroll-track);
+    scrollbar-gutter: stable;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable::-webkit-scrollbar-track {
+    background: var(--wo-table-scroll-track);
+    border-radius: 999px;
+  }
+
+  .material-barcode-generator-wrapper .card-datatable::-webkit-scrollbar-thumb {
+    background: var(--wo-table-scroll-thumb);
+    border-radius: 999px;
+    border: 1px solid var(--wo-table-scroll-thumb-border);
+  }
+
+  .material-barcode-generator-wrapper .card-datatable::-webkit-scrollbar-thumb:hover {
+    background: var(--wo-table-scroll-thumb-hover);
+  }
+
+  .material-barcode-generator-wrapper .card-datatable::-webkit-scrollbar-thumb:active {
+    background: var(--wo-table-scroll-thumb-active);
+  }
+
+  .material-barcode-generator-wrapper .card-datatable::-webkit-scrollbar-corner {
+    background: var(--wo-table-scroll-track);
+  }
+
+  .material-barcode-generator-wrapper .invoice-table-overlay-host {
+    position: relative;
+  }
+
+  .material-barcode-generator-wrapper .invoice-table-loading-overlay {
+    position: absolute;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.74);
+    backdrop-filter: blur(1px);
+    z-index: 9;
+    pointer-events: all;
+  }
+
+  .material-barcode-generator-wrapper .invoice-table-loading-overlay.is-visible {
+    display: flex;
+  }
+
+  .material-barcode-generator-wrapper .invoice-table-loading-overlay-content {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    text-align: center;
+  }
+
+  .material-barcode-generator-wrapper .invoice-table-loading-spinner {
+    width: 2rem;
+    height: 2rem;
+    border-width: 0.2em;
+    color: #495b73;
+  }
+
+  .material-barcode-generator-wrapper .invoice-table-loading-message {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #5e5873;
+    letter-spacing: 0.01em;
+  }
+
+  body.dark-layout .material-barcode-generator-wrapper .invoice-table-loading-overlay,
+  body.semi-dark-layout .material-barcode-generator-wrapper .invoice-table-loading-overlay,
+  .dark-layout .material-barcode-generator-wrapper .invoice-table-loading-overlay,
+  .semi-dark-layout .material-barcode-generator-wrapper .invoice-table-loading-overlay {
+    background: rgba(20, 28, 48, 0.68);
+  }
+
+  body.dark-layout .material-barcode-generator-wrapper .invoice-table-loading-spinner,
+  body.semi-dark-layout .material-barcode-generator-wrapper .invoice-table-loading-spinner,
+  .dark-layout .material-barcode-generator-wrapper .invoice-table-loading-spinner,
+  .semi-dark-layout .material-barcode-generator-wrapper .invoice-table-loading-spinner {
+    color: #d6dcec;
+  }
+
+  body.dark-layout .material-barcode-generator-wrapper .invoice-table-loading-message,
+  body.semi-dark-layout .material-barcode-generator-wrapper .invoice-table-loading-message,
+  .dark-layout .material-barcode-generator-wrapper .invoice-table-loading-message,
+  .semi-dark-layout .material-barcode-generator-wrapper .invoice-table-loading-message {
+    color: #f4f5fb;
+  }
+
+  body.dark-layout .material-stock-modal-subtitle,
+  body.semi-dark-layout .material-stock-modal-subtitle,
+  .dark-layout .material-stock-modal-subtitle,
+  .semi-dark-layout .material-stock-modal-subtitle,
+  body.dark-layout .material-stock-meta-label,
+  body.semi-dark-layout .material-stock-meta-label,
+  .dark-layout .material-stock-meta-label,
+  .semi-dark-layout .material-stock-meta-label,
+  body.dark-layout .material-stock-form-help,
+  body.semi-dark-layout .material-stock-form-help,
+  .dark-layout .material-stock-form-help,
+  .semi-dark-layout .material-stock-form-help {
+    color: #b4bdd3;
+  }
+
+  body.dark-layout .material-stock-meta-item,
+  body.semi-dark-layout .material-stock-meta-item,
+  .dark-layout .material-stock-meta-item,
+  .semi-dark-layout .material-stock-meta-item {
+    background: transparent;
+  }
+
+  body.dark-layout .material-stock-form-block,
+  body.semi-dark-layout .material-stock-form-block,
+  .dark-layout .material-stock-form-block,
+  .semi-dark-layout .material-stock-form-block {
+    border-top-color: rgba(214, 220, 236, 0.14);
+  }
+
+  body.dark-layout .material-stock-surface-card,
+  body.semi-dark-layout .material-stock-surface-card,
+  .dark-layout .material-stock-surface-card,
+  .semi-dark-layout .material-stock-surface-card,
+  body.dark-layout .material-create-field-card,
+  body.semi-dark-layout .material-create-field-card,
+  .dark-layout .material-create-field-card,
+  .semi-dark-layout .material-create-field-card {
+    border-color: rgba(214, 220, 236, 0.12);
+    background: rgba(214, 220, 236, 0.05);
+  }
+
+  body.dark-layout .material-create-field-card .form-label,
+  body.semi-dark-layout .material-create-field-card .form-label,
+  .dark-layout .material-create-field-card .form-label,
+  .semi-dark-layout .material-create-field-card .form-label,
+  body.dark-layout .material-create-help,
+  body.semi-dark-layout .material-create-help,
+  .dark-layout .material-create-help,
+  .semi-dark-layout .material-create-help {
+    color: #b4bdd3;
+  }
+
+  @media (max-width: 1199.98px) {
+    .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child {
+      row-gap: 0.75rem;
+    }
+
+    .material-table-inline-controls {
+      align-items: center;
+      width: auto;
+    }
+
+    .material-bulk-download-toolbar-row {
+      margin-top: 0;
+    }
+
+    .material-bulk-download-toolbar {
+      justify-content: center;
+    }
+  }
+
+  @media (min-width: 768px) and (max-width: 991.98px) {
+    .material-bulk-download-toolbar .material-bulk-download-btn {
+      flex: 1 1 0;
+      justify-content: center;
+      margin-top: 0 !important;
+    }
+  }
+
+  @media (max-width: 767.98px) {
+    .material-header-actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .material-warehouse-filter {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:first-child,
+    .material-barcode-generator-wrapper .card-datatable .dataTables_wrapper > .row:last-child {
+      padding: 0.85rem 0.85rem 0.8rem;
+    }
+
+    .material-barcode-modal-preview {
+      min-height: 210px;
+      padding: 0.8rem;
+    }
+
+    .material-stock-meta-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .material-create-form-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .material-table-inline-controls {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .material-table-inline-controls .dataTables_length {
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .material-table-inline-controls .dataTables_length label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .material-bulk-download-toolbar {
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .material-bulk-download-toolbar .material-bulk-download-btn {
+      width: 100%;
+    }
+  }
+
+
+</style>
+</head>
+<body class="vertical-layout vertical-menu-modern menu-expanded navbar-floating footer-static default">
+
+<nav class="header-navbar navbar navbar-expand-lg align-items-center floating-nav navbar-light navbar-shadow">
+  <div class="navbar-container d-flex content">
+    <div class="bookmark-wrapper d-flex align-items-center">
+      <ul class="nav navbar-nav d-xl-none align-items-center">
+        <li class="nav-item"><a class="nav-link menu-toggle" href="#"><i class="ficon" data-feather="menu"></i></a></li>
+        <li class="nav-item d-md-none"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+      <ul class="nav navbar-nav bookmark-icons">
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="home"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="calendar"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+    </div>
+    <ul class="nav navbar-nav align-items-center ms-auto">
+      <li class="nav-item">
+        <a class="nav-link navbar-ai-token-link" href="#">
+          <span class="navbar-ai-token-pill">
+            <span class="navbar-ai-token-pill__label">Tokeni</span>
+            <span class="navbar-ai-token-pill__icon"><span class="navbar-ai-token-coin navbar-ai-token-coin--top"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--mid"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--bottom"></span></span>
+            <span class="navbar-ai-token-pill__divider">|</span>
+            <span class="navbar-ai-token-pill__value">12.480</span>
+          </span>
+        </a>
+      </li>
+      <li class="nav-item d-none d-md-block"><a class="nav-link nav-link-style"><i class="ficon" data-feather="moon"></i></a></li>
+      <li class="nav-item nav-search"><a class="nav-link nav-link-search"><i class="ficon" data-feather="search"></i></a></li>
+      <li class="nav-item dropdown dropdown-user">
+        <a class="nav-link dropdown-toggle dropdown-user-link" href="#">
+          <div class="user-nav d-sm-flex d-none"><span class="user-name fw-bolder">Admin</span><span class="user-status">ADMIN</span></div>
+          <span class="avatar"><img class="round" src="../images/portrait/avatar-s-22.jpg" alt="avatar" height="40" width="40"><span class="avatar-status-online"></span></span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="main-menu menu-fixed menu-light menu-accordion menu-shadow">
+  <div class="navbar-header">
+    <ul class="nav navbar-nav flex-row">
+      <li class="nav-item me-auto">
+        <a class="navbar-brand d-flex align-items-center" href="#">
+          <span class="brand-logo"><img src="../images/logo/TrendyCNC.png" alt="eNalog.app" width="36"></span>
+          <h2 class="brand-text mb-0 ms-50">eNalog.app</h2>
+        </a>
+      </li>
+      <li class="nav-item nav-toggle"><a class="nav-link modern-nav-toggle pe-0"><i class="d-none d-xl-block collapse-toggle-icon font-medium-4 text-primary" data-feather="disc"></i></a></li>
+    </ul>
+  </div>
+  <div class="shadow-bottom"></div>
+  <div class="main-menu-content">
+    <ul class="navigation navigation-main">
+      <li class="navigation-header"><span>Radni nalozi</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="file-text"></i><span class="menu-title text-truncate">Upravljanje nalozima</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="camera"></i><span class="menu-title text-truncate">Skeniraj nalog</span></a></li>
+      <li class="navigation-header"><span>Narudžbe</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="briefcase"></i><span class="menu-title text-truncate">Upravljanje narudžbama</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i class="fa fa-magic fa-fw"></i><span class="menu-title text-truncate">AI narudžba</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="inbox"></i><span class="menu-title text-truncate">AI Inbox</span></a></li>
+      <li class="navigation-header"><span>Proizvodnja</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="clipboard"></i><span class="menu-title text-truncate">Plan proizvodnje</span></a></li>
+      <li class="navigation-header"><span>AI asistent</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="activity"></i><span class="menu-title text-truncate">Historija AI skeniranja</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Dozvoljeni pošiljaoci</span></a></li>
+      <li class="navigation-header"><span>Dokumenti</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="archive"></i><span class="menu-title text-truncate">Razduženi materijali</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="box"></i><span class="menu-title text-truncate">Razduživanje WIP</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="tool"></i><span class="menu-title text-truncate">Razdužene operacije</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="package"></i><span class="menu-title text-truncate">Prijem VP skladište</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="package"></i><span class="menu-title text-truncate">Prijem škarta</span></a></li>
+      <li class="navigation-header"><span>Administracija</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="user"></i><span class="menu-title text-truncate">Korisnici</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="credit-card"></i><span class="menu-title text-truncate">Moja NFC kartica</span></a></li>
+      <li class="navigation-header"><span>Skladišni alati</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item active"><a href="#" class="d-flex align-items-center"><i data-feather="layers"></i><span class="menu-title text-truncate">Pregled zaliha</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Površinske zaštite</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Kreiranje rezervi</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="map"></i><span class="menu-title text-truncate">Mapa skladišta</span></a></li>
+    </ul>
+  </div>
+</div>
+<div class="app-content content">
+  <div class="content-overlay"></div>
+  <div class="header-navbar-shadow"></div>
+  <div class="content-wrapper container-xxxl p-0">
+    
+    <div class="content-body">
+<section class="material-barcode-generator-wrapper">
+  <div class="content-header row">
+    <div class="content-header-left col-md-3 col-lg-6 col-12 mb-2"><div class="row breadcrumbs-top"><div class="col-12"><h2 class="content-header-title float-start mb-0">Pregled zaliha</h2></div></div></div>
+    <div class="content-header-right text-md-end col-md-9 col-lg-6 col-12"><div class="mb-1 breadcrumb-right"><div class="material-header-actions">
+      <div class="material-warehouse-filter"><select class="form-select" id="material-warehouse-filter"><option value="">Sva skladišta</option><option>Skladište sirovina</option></select></div>
+      <button type="button" class="btn btn-primary" id="material-create-open-btn"><i data-feather="plus" class="me-50"></i> Dodaj novi materijal</button>
+    </div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-datatable table-responsive">
+      <div class="dataTables_wrapper dt-bootstrap5">
+        <div class="row">
+          <div class="col-sm-12 col-md-6"><div class="material-table-inline-controls"><div class="dataTables_length"><label>Prikaži <select class="form-select form-select-sm"><option>25</option></select> materijala</label></div></div></div>
+          <div class="col-sm-12 col-md-6"><div class="dataTables_filter"><label>Pretraga:<input type="search" class="form-control form-control-sm"></label></div></div>
+        </div>
+        <div class="row material-bulk-download-toolbar-row"><div class="col-12"><div class="material-bulk-download-toolbar">
+          <button type="button" class="btn material-action-btn material-barcode-preview-btn material-bulk-download-btn"><i class="fa fa-download me-50"></i> Preuzmi sve etikete</button>
+          <button type="button" class="btn material-action-btn material-qr-preview-btn material-bulk-download-btn"><i class="fa fa-qrcode me-50"></i> Preuzmi sve QR etikete</button>
+        </div></div></div>
+        <div class="row"><div class="col-sm-12">
+          <table class="table material-barcode-table" id="material-barcode-table">
+            <thead><tr><th>Šifra</th><th>Naziv</th><th>MJ</th><th>Skladište</th><th>Zaliha</th><th class="material-actions-cell">Akcija</th></tr></thead>
+            <tbody>
+              <tr><td class="material-code-cell">LIM-S235-5</td><td>Lim S235 5mm 1500x3000</td><td class="material-unit-cell">KG</td><td class="material-warehouse-cell">Skladište sirovina</td><td class="text-end material-stock-cell">1.250,5</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">SIP-S355-40</td><td>Šipka S355 Ø40</td><td class="material-unit-cell">M</td><td class="material-warehouse-cell">Skladište sirovina</td><td class="text-end material-stock-cell">386,2</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">AL-6082-20</td><td>Aluminij EN AW-6082 20mm</td><td class="material-unit-cell">KG</td><td class="material-warehouse-cell">Skladište sirovina</td><td class="text-end material-stock-cell">742</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">INOX-304-2</td><td>Inox lim 1.4301 2mm</td><td class="material-unit-cell">KG</td><td class="material-warehouse-cell">Skladište sirovina</td><td class="text-end material-stock-cell">518,75</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">CIJ-60x40</td><td>Cijev pravougaona 60x40x3</td><td class="material-unit-cell">M</td><td class="material-warehouse-cell">Skladište sirovina</td><td class="text-end material-stock-cell">214</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">VIJ-M10-35</td><td>Vijak M10x35 DIN 933 8.8</td><td class="material-unit-cell">KOM</td><td class="material-warehouse-cell">Skladište repromaterijala</td><td class="text-end material-stock-cell">6.400</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">MAT-M10</td><td>Matica M10 DIN 934</td><td class="material-unit-cell">KOM</td><td class="material-warehouse-cell">Skladište repromaterijala</td><td class="text-end material-stock-cell">9.850</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+<tr><td class="material-code-cell">PRA-RAL7016</td><td>Prah RAL 7016</td><td class="material-unit-cell">KG</td><td class="material-warehouse-cell">Skladište boja</td><td class="text-end material-stock-cell">96,5</td>
+                <td class="text-end material-actions-cell"><div class="material-actions-group">
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--primary material-action-btn material-barcode-preview-btn" title="Barcode"><i class="fa fa-barcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--warning material-action-btn material-qr-preview-btn" title="QR code"><i class="fa fa-qrcode"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success material-action-btn material-stock-adjust-btn" title="Korekcija zalihe"><i class="fa fa-database"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--accent material-action-btn material-copy-btn" title="Kopiraj materijal"><i class="fa fa-copy"></i></button>
+                  <button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger material-action-btn material-delete-btn" title="Izbriši materijal"><i class="fa fa-trash"></i></button>
+                </div></td></tr>
+            </tbody>
+          </table>
+        </div></div>
+        <div class="row"><div class="col-sm-12 col-md-5"><div class="dataTables_info">Prikaz 1 do 25 od 1.482 materijala</div></div><div class="col-sm-12 col-md-7"><div class="dataTables_paginate paging_simple_numbers"><ul class="pagination"><li class="paginate_button page-item previous disabled"><a class="page-link">Prethodna</a></li><li class="paginate_button page-item active"><a class="page-link">1</a></li><li class="paginate_button page-item"><a class="page-link">2</a></li><li class="paginate_button page-item next"><a class="page-link">Sljedeća</a></li></ul></div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+    </div>
+  </div>
+</div>
+<script src="../vendors/js/vendors.min.js"></script>
+<script>feather.replace({width: 14, height: 14});</script>
+</body>
+</html>

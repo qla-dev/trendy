@@ -1,0 +1,303 @@
+<!--{"title":"AI narudžba","active":"ai","blade":["apps/orders/app-order-ai-scan.blade.php"],"css":[],"noHeader":true}-->
+<style>
+  .order-ai-shell { --order-ai-ink:#16344d; --order-ai-subtle:#607385; --order-ai-accent:#0e7a6b; --order-ai-border:rgba(18,52,77,.12); --order-ai-brand-a:#18cbb7; --order-ai-brand-b:#347cf7; --order-ai-brand-c:#31c46d; --order-ai-card-surface:#fff; --order-ai-card-soft:#fbfcfd; --order-ai-card-muted:#f8fafc; --order-ai-card-strong:#eef3f7; --order-ai-chip-bg:rgba(22,52,77,.08); --order-ai-panel-shadow:0 16px 32px rgba(16,31,48,.06); }
+  .order-ai-initial-loader { display:none; }
+  .order-ai-hero { position:relative; overflow:hidden; border:0; border-radius:1.25rem; background: radial-gradient(circle at top right, rgba(255,207,107,.3), transparent 32%), linear-gradient(135deg,#fdf7eb 0%,#fffefe 42%,#eef8f7 100%); box-shadow:0 20px 42px rgba(16,31,48,.08); }
+  .order-ai-hero::after { content:""; position:absolute; inset:auto -6rem -5rem auto; width:14rem; height:14rem; border-radius:999px; background:rgba(14,122,107,.08); filter:blur(12px); }
+  .order-ai-hero-grid { display:grid; grid-template-columns:minmax(0,1.12fr) minmax(320px,.88fr); gap:1rem; align-items:stretch; }
+  .order-ai-hero-story { position:relative; overflow:hidden; min-height:194px; padding:1.15rem 1.35rem; border-radius:1.15rem; border:1px solid rgba(18,52,77,.08); background: linear-gradient(135deg, rgba(255,255,255,.96), rgba(241,250,247,.88)), linear-gradient(135deg, rgba(24,203,183,.08), rgba(52,124,247,.05)); box-shadow: inset 0 1px 0 rgba(255,255,255,.7); }
+  .order-ai-hero-story::after { content:""; position:absolute; inset:auto auto -2rem -2rem; width:14rem; height:14rem; border-radius:999px; background: radial-gradient(circle, rgba(24,203,183,.2), rgba(52,124,247,.04) 68%, transparent 72%); filter:blur(8px); pointer-events:none; }
+  .order-ai-hero-story-inner { position:relative; z-index:1; display:flex; align-items:center; min-height:100%; }
+  .order-ai-hero-story.has-hero-visual .order-ai-hero-story-inner { padding-right:11.75rem; }
+  .order-ai-hero-visual { position:absolute; right:.85rem; bottom:.25rem; z-index:1; width:10.75rem; height:10.75rem; display:flex; align-items:flex-end; justify-content:center; pointer-events:none; }
+  .order-ai-hero-copy { max-width:28rem; padding-left:.15rem; }
+  .order-ai-hero-aside { display:grid; gap:.75rem; grid-template-rows:repeat(3,minmax(0,1fr)); min-height:100%; }
+  .order-ai-stat { position:relative; overflow:hidden; display:flex; flex-direction:column; justify-content:center; padding:.85rem 1rem; border-radius:1rem; border:1px solid rgba(18,52,77,.08); background:rgba(255,255,255,.8); box-shadow:0 14px 30px rgba(16,31,48,.06); }
+  .order-ai-stat::after { content:""; position:absolute; inset:0 auto 0 0; width:.35rem; background:linear-gradient(180deg,var(--order-ai-brand-a),var(--order-ai-brand-b)); opacity:.7; }
+  .order-ai-stat--model { background:linear-gradient(135deg, rgba(24,203,183,.14), rgba(52,124,247,.08)); border-color:rgba(24,203,183,.18); }
+  .order-ai-stat-label { display:block; margin-bottom:.2rem; color:var(--order-ai-subtle); font-size:.72rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+  .order-ai-stat-value { display:block; color:var(--order-ai-ink); font-size:.96rem; font-weight:700; line-height:1.25; }
+  .order-ai-chip { display:inline-flex; align-items:center; gap:.45rem; padding:.55rem .85rem; border-radius:999px; background:var(--order-ai-chip-bg); color:var(--order-ai-ink); font-size:.9rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+  .order-ai-dropzone { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1 1 auto; width:100%; height:100%; min-height:330px; padding:2rem; border:2px dashed rgba(14,122,107,.32); border-radius:1.25rem; background: linear-gradient(180deg, rgba(14,122,107,.06), rgba(14,122,107,.02)), var(--order-ai-card-surface); text-align:center; cursor:pointer; }
+  .order-ai-dropzone.is-dragover { border-color:var(--order-ai-accent); transform:translateY(-2px); box-shadow:0 18px 32px rgba(14,122,107,.12); }
+  .order-ai-upload-stage-row { align-items:stretch; }
+  #order-ai-dropzone-shell, .order-ai-progress-shell { display:flex; }
+  #order-ai-dropzone-shell > .card, .order-ai-progress-shell > .card { width:100%; height:100%; }
+  #order-ai-dropzone-shell > .card > .card-body { display:flex; height:100%; }
+  .order-ai-dropzone-icon { width:5rem; height:5rem; border-radius:1.4rem; display:inline-flex; align-items:center; justify-content:center; margin-bottom:1.15rem; background:linear-gradient(135deg, rgba(14,122,107,.16), rgba(255,207,107,.18)); color:var(--order-ai-accent); }
+  .order-ai-dropzone-icon svg { width:2.25rem; height:2.25rem; }
+  .order-ai-subtle { color:var(--order-ai-subtle); }
+  .order-ai-title, .order-ai-shell h3, .order-ai-shell h4, .order-ai-shell h5 { color:var(--order-ai-ink); }
+  .order-ai-progress-card, .order-ai-result-card { background:var(--order-ai-card-surface); border-radius:1.1rem; border:1px solid var(--order-ai-border); box-shadow:var(--order-ai-panel-shadow); }
+  .order-ai-progress-head { display:flex; align-items:flex-start; gap:.9rem; flex-wrap:nowrap; }
+  .order-ai-progress-copy { flex:1 1 auto; min-width:0; }
+  .order-ai-progress-status { flex:0 0 auto; align-self:center; }
+  .order-ai-progress-meta { flex:0 0 auto; min-width:5rem; text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:.3rem; }
+  .order-ai-progress-runtime { display:inline-flex; align-items:center; justify-content:flex-end; gap:.45rem; margin-top:.2rem; white-space:nowrap; }
+  .order-ai-progress-runtime-label { color:var(--order-ai-subtle); font-size:.72rem; font-weight:700; }
+  .order-ai-progress-runtime-value { color:var(--order-ai-ink); font-size:.82rem; font-weight:700; line-height:1; }
+  .order-ai-activity { display:inline-flex; align-items:center; gap:.55rem; padding:.55rem .8rem; border-radius:999px; background:rgba(14,122,107,.1); color:var(--order-ai-accent); font-size:.85rem; font-weight:700; }
+  .order-ai-activity .spinner-border { width:.95rem; height:.95rem; border-width:.14em; }
+  .order-ai-progress-track { height:.9rem; border-radius:999px; background:var(--order-ai-card-strong); overflow:hidden; }
+  .order-ai-progress-bar { height:100%; width:100%; border-radius:999px; background:linear-gradient(90deg,#0e7a6b 0%,#1ca28f 100%); transform:scaleX(0); transform-origin:left center; }
+  .order-ai-stage-list { display:grid; gap:.6rem; }
+  .order-ai-stage { --order-ai-stage-accent:#0e7a6b; --order-ai-stage-accent-rgb:14,122,107; position:relative; overflow:hidden; padding:.78rem .95rem; border-radius:1rem; background:var(--order-ai-card-soft); border:1px solid rgba(22,52,77,.08); }
+  .order-ai-stage-fill { position:absolute; top:0; left:0; bottom:0; width:100%; background:linear-gradient(90deg, rgba(var(--order-ai-stage-accent-rgb),.24), rgba(var(--order-ai-stage-accent-rgb),.08)); transform:scaleX(0); transform-origin:left center; pointer-events:none; }
+  .order-ai-stage-content { position:relative; z-index:1; display:flex; align-items:flex-start; gap:.85rem; width:100%; }
+  .order-ai-stage-main { flex:1 1 auto; min-width:0; }
+  .order-ai-stage-side { flex:0 0 auto; align-self:center; margin-left:auto; display:flex; justify-content:flex-end; }
+  .order-ai-stage-bullet { width:.8rem; height:.8rem; border-radius:999px; background:#c5d0da; flex:0 0 auto; }
+  .order-ai-stage.is-active .order-ai-stage-bullet, .order-ai-stage.is-done .order-ai-stage-bullet { background:var(--order-ai-stage-accent); box-shadow:0 0 0 .25rem rgba(var(--order-ai-stage-accent-rgb),.14); }
+  .order-ai-stage.is-active { background:rgba(var(--order-ai-stage-accent-rgb),.1); border-color:rgba(var(--order-ai-stage-accent-rgb),.24); }
+  .order-ai-stage.is-done { background:rgba(var(--order-ai-stage-accent-rgb),.08); border-color:rgba(var(--order-ai-stage-accent-rgb),.2); }
+  .order-ai-stage.is-active[data-stage="extract"] .order-ai-stage-fill { background:linear-gradient(90deg, rgba(var(--order-ai-stage-accent-rgb),.28), rgba(var(--order-ai-stage-accent-rgb),.18), rgba(var(--order-ai-stage-accent-rgb),.08)); background-size:200% 100%; animation:order-ai-flow 2s linear infinite; }
+  @keyframes order-ai-flow { 0% { background-position:200% 0; } 100% { background-position:0 0; } }
+  .order-ai-extract-live { --order-ai-phase-accent:#e0585d; --order-ai-phase-accent-rgb:224,88,93; display:grid; gap:.7rem; padding:0; }
+  .order-ai-extract-live[data-phase-index="1"] { --order-ai-phase-accent:#ea8f1f; --order-ai-phase-accent-rgb:234,143,31; }
+  .order-ai-extract-live[data-phase-index="2"] { --order-ai-phase-accent:#d6bb25; --order-ai-phase-accent-rgb:214,187,37; }
+  .order-ai-extract-live[data-phase-index="3"] { --order-ai-phase-accent:#347cf7; --order-ai-phase-accent-rgb:52,124,247; }
+  .order-ai-extract-live[data-phase-index="4"] { --order-ai-phase-accent:#18a957; --order-ai-phase-accent-rgb:24,169,87; }
+  .order-ai-extract-live-header { display:flex; justify-content:flex-start; align-items:center; margin-bottom:.65rem; width:100%; gap:.65rem; flex-wrap:wrap; }
+  .order-ai-extract-live-meta { color:var(--order-ai-subtle); font-size:.78rem; font-weight:600; }
+  .order-ai-extract-global-progress { height:.55rem; border-radius:999px; background:rgba(18,52,77,.08); overflow:hidden; }
+  .order-ai-extract-global-progress-bar { display:block; width:0; height:100%; border-radius:inherit; background:linear-gradient(90deg, rgba(var(--order-ai-phase-accent-rgb),.98), rgba(var(--order-ai-phase-accent-rgb),.72)); }
+  .order-ai-extract-focus { display:grid; gap:.1rem; }
+  .order-ai-extract-focus-label { color:var(--order-ai-subtle); font-size:.71rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+  .order-ai-extract-focus-value { color:var(--order-ai-ink); font-size:.96rem; font-weight:700; line-height:1.2; }
+  .order-ai-extract-live-grid { display:grid !important; grid-template-columns:minmax(0,1fr) !important; gap:.5rem; width:100%; }
+  .order-ai-extract-live-row { --order-ai-row-columns:8; display:grid; grid-template-columns:repeat(var(--order-ai-row-columns), minmax(0,1fr)); gap:.5rem; width:100%; }
+  .order-ai-extract-page-chip { --order-ai-phase-accent:#e0585d; --order-ai-phase-accent-rgb:224,88,93; width:100%; height:2.15rem; padding:0 .45rem; display:grid; grid-template-columns:.82rem 1fr; align-items:center; justify-items:center; gap:.2rem; box-sizing:border-box; border-radius:999px; border:1px solid rgba(18,52,77,.1); background:rgba(255,255,255,.88); color:var(--order-ai-subtle); font-size:.8rem; font-weight:700; line-height:1; white-space:nowrap; }
+  .order-ai-extract-page-chip.is-tone-1 { --order-ai-phase-accent:#ea8f1f; --order-ai-phase-accent-rgb:234,143,31; }
+  .order-ai-extract-page-chip.is-tone-2 { --order-ai-phase-accent:#d6bb25; --order-ai-phase-accent-rgb:214,187,37; }
+  .order-ai-extract-page-chip.is-tone-3 { --order-ai-phase-accent:#347cf7; --order-ai-phase-accent-rgb:52,124,247; }
+  .order-ai-extract-page-chip.is-tone-4 { --order-ai-phase-accent:#18a957; --order-ai-phase-accent-rgb:24,169,87; }
+  .order-ai-extract-page-chip.is-pending { border-color:rgba(var(--order-ai-phase-accent-rgb),.18); background:rgba(var(--order-ai-phase-accent-rgb),.08); color:var(--order-ai-phase-accent); }
+  .order-ai-extract-page-chip.is-done { border-color:rgba(var(--order-ai-phase-accent-rgb),.24); background:rgba(var(--order-ai-phase-accent-rgb),.12); color:var(--order-ai-phase-accent); }
+  .order-ai-extract-page-chip.is-active { border-color:rgba(var(--order-ai-phase-accent-rgb),.28); background:linear-gradient(135deg, rgba(var(--order-ai-phase-accent-rgb),.18), rgba(255,255,255,.96)); color:var(--order-ai-phase-accent); box-shadow:0 10px 18px rgba(var(--order-ai-phase-accent-rgb),.16); }
+  .order-ai-extract-page-chip-state { width:.82rem; min-width:.82rem; display:inline-flex; align-items:center; justify-content:center; font-size:.72rem; line-height:1; border-radius:999px; }
+  .order-ai-extract-page-chip-state.is-empty { visibility:hidden; }
+  .order-ai-extract-page-chip-number { min-width:0; text-align:center; font-variant-numeric:tabular-nums; }
+  .order-ai-extract-phase-list { display:flex; flex-wrap:wrap; gap:.5rem; }
+  .order-ai-extract-phase { --order-ai-phase-rgb:224,88,93; --order-ai-phase-color:#e0585d; display:inline-flex; align-items:center; gap:.45rem; padding:.42rem .68rem; border-radius:999px; border:1px solid rgba(var(--order-ai-phase-rgb),.18); background:rgba(var(--order-ai-phase-rgb),.08); color:var(--order-ai-phase-color); font-size:.72rem; font-weight:700; line-height:1.2; white-space:nowrap; }
+  .order-ai-extract-phase.is-tone-1 { --order-ai-phase-rgb:234,143,31; --order-ai-phase-color:#ea8f1f; }
+  .order-ai-extract-phase.is-tone-2 { --order-ai-phase-rgb:214,187,37; --order-ai-phase-color:#c89f17; }
+  .order-ai-extract-phase.is-tone-3 { --order-ai-phase-rgb:52,124,247; --order-ai-phase-color:#347cf7; }
+  .order-ai-extract-phase.is-tone-4 { --order-ai-phase-rgb:24,169,87; --order-ai-phase-color:#18a957; }
+  .order-ai-extract-phase-name { font-weight:700; }
+  .order-ai-extract-phase-state { display:inline-flex; align-items:center; justify-content:center; min-width:1.15rem; height:1.15rem; padding:0 .22rem; border-radius:999px; background:rgba(var(--order-ai-phase-rgb),.14); font-size:.7rem; white-space:nowrap; }
+  .order-ai-extract-phase.is-done { border-color:rgba(var(--order-ai-phase-rgb),.28); background:rgba(var(--order-ai-phase-rgb),.14); box-shadow:0 8px 16px rgba(var(--order-ai-phase-rgb),.12); }
+  .order-ai-extract-phase.is-active { border-color:rgba(var(--order-ai-phase-rgb),.32); background:linear-gradient(135deg, rgba(var(--order-ai-phase-rgb),.18), rgba(255,255,255,.96)); box-shadow:0 10px 18px rgba(var(--order-ai-phase-rgb),.14); transform:translateY(-1px); }
+  .order-ai-extract-phase.is-pending { opacity:.78; }
+  .order-ai-primary-action { min-width:170px; min-height:3.15rem; display:inline-flex; align-items:center; justify-content:center; padding:.8rem 1.2rem; border:1px solid rgba(14,122,107,.16); border-radius:.9rem; background:rgba(14,122,107,.08); color:#166458; font-weight:700; line-height:1.15; white-space:nowrap; box-shadow:0 12px 24px rgba(14,122,107,.08); }
+  .order-ai-primary-action:disabled { background:rgba(133,148,163,.16); border-color:rgba(133,148,163,.18); color:#8da0b0; box-shadow:none; }
+  .order-ai-transfer-cta { min-width:170px; min-height:3.15rem; display:inline-flex; align-items:center; justify-content:center; padding:.8rem 1.35rem; border-radius:.9rem; font-weight:700; line-height:1.15; white-space:nowrap; background:linear-gradient(180deg,#4aa075 0%,#397f62 100%); border-color:#397f62; box-shadow:0 14px 28px rgba(57,127,98,.18); }
+  .order-ai-bottom-actions { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:-1rem; padding-top:.7rem; padding-bottom:.7rem; border-top:1px solid rgba(22,52,77,.08); }
+  .order-ai-bottom-actions-secondary { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
+  .order-ai-bottom-action-primary { margin-left:auto; flex:0 0 auto; }
+  .order-ai-secondary-action { min-height:3.15rem; display:inline-flex; align-items:center; justify-content:center; padding:.8rem 1.35rem; border-radius:.9rem; border:1px solid rgba(74,160,117,.24); background:transparent; color:var(--order-ai-ink); font-weight:600; line-height:1.15; white-space:nowrap; }
+  .order-ai-secondary-action--accent { background:linear-gradient(135deg, rgba(14,122,107,.16), rgba(28,162,143,.24)); border-color:rgba(14,122,107,.42); box-shadow:0 12px 24px rgba(14,122,107,.12); }
+  #order-ai-lines-shell { margin-bottom:.5rem !important; }
+  .order-ai-facts { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:.85rem; }
+  .order-ai-fact { padding:1rem; border-radius:1rem; background:linear-gradient(180deg,var(--order-ai-card-surface) 0%, var(--order-ai-card-muted) 100%); border:1px solid rgba(22,52,77,.08); }
+  .order-ai-fact.is-match { border-color:rgba(22,163,74,.24); background:rgba(22,163,74,.08); color:#17683b; }
+  .order-ai-lines-table td, .order-ai-lines-table th { white-space:nowrap; vertical-align:middle; }
+  .order-ai-lines-table td.order-ai-wrap, .order-ai-lines-table th.order-ai-wrap { white-space:normal; }
+  .order-ai-lines-table td.order-ai-weight-cell, .order-ai-lines-table th.order-ai-weight-cell { min-width:7rem; width:7rem; }
+  .order-ai-weight-input { min-width:6.5rem; max-width:7rem; padding-inline:.55rem; text-align:right; }
+  .order-ai-line-code-stack { display:flex; flex-direction:column; align-items:flex-start; gap:.35rem; }
+  .order-ai-line-badge { display:inline-flex; align-items:center; gap:.35rem; padding:.2rem .55rem; border:1px solid transparent; border-radius:999px; font-size:.72rem; font-weight:700; line-height:1.15; letter-spacing:.02em; white-space:nowrap; }
+  .order-ai-line-badge.is-missing { background:rgba(255,159,67,.14); border-color:rgba(245,158,11,.28); color:#b45309; }
+  .order-ai-line-row.is-catalog-missing > td { background:rgba(255,159,67,.1); }
+  .order-ai-line-name { font-weight:600; }
+  .order-ai-line-edit-trigger { width:100%; padding:0; border:0; background:transparent; color:inherit; text-align:left; font:inherit; line-height:inherit; cursor:pointer; }
+  .order-ai-line-edit-trigger--compact { white-space:nowrap; }
+  .order-ai-line-total-trigger { width:100%; border:1px solid rgba(22,52,77,.12); border-radius:.9rem; background:var(--order-ai-card-muted); padding:.7rem .8rem; text-align:left; }
+  .order-ai-line-total-trigger.is-match { border-color:rgba(22,163,74,.28); background:rgba(22,163,74,.08); color:#17683b; }
+  .order-ai-line-total-trigger.is-mismatch { border-color:rgba(220,38,38,.25); background:rgba(220,38,38,.08); color:#8b1e1e; }
+  .order-ai-line-total-meta { display:grid; gap:.15rem; }
+  .order-ai-line-total-computed { font-size:.78rem; opacity:.8; }
+  .order-ai-line-total-source { font-size:.94rem; font-weight:700; }
+  .order-ai-line-total-diff { font-size:.76rem; font-weight:700; letter-spacing:.01em; }
+  .order-ai-shell .table thead th { color:#607385; background:rgba(238,243,247,.8); }
+  .order-ai-shell .text-muted { color:var(--order-ai-subtle) !important; }
+  #order-ai-result-status { background:rgba(115,103,240,.12) !important; color:#7367f0 !important; border:1px solid rgba(115,103,240,.18); }
+  .order-ai-hidden { display:none !important; }
+</style>
+
+<section class="order-ai-shell" id="order-ai-app">
+  <div class="row">
+    <div class="col-12">
+      <div class="card order-ai-hero mb-2">
+        <div class="card-body p-2 p-md-3">
+          <div class="order-ai-hero-grid">
+            <div class="order-ai-hero-story has-hero-visual">
+              <div class="order-ai-hero-story-inner">
+                <div class="order-ai-hero-copy">
+                  <span class="order-ai-chip mb-1"><i class="fa fa-magic" aria-hidden="true"></i> Skeniraj narudžbu sa AI</span>
+                  <h2 class="mb-75 order-ai-title">Skeniraj narudžbu sa AI</h2>
+                  <p class="mb-0 order-ai-subtle" style="max-width:720px;">Ubaci PDF, sliku ili izvoz dokumenta. Dokument se zadržava na istoj stranici, AI obrada se izvršava, a upis u bazu se pokreće tek nakon ručne potvrde transfera.</p>
+                </div>
+                <div class="order-ai-hero-visual" aria-hidden="true"><!-- robot lottie / image --></div>
+              </div>
+            </div>
+            <div class="order-ai-hero-aside">
+              <div class="order-ai-stat"><span class="order-ai-stat-label">Provider</span><span class="order-ai-stat-value">qla.dev</span></div>
+              <div class="order-ai-stat order-ai-stat--model"><span class="order-ai-stat-label">Model</span><span class="order-ai-stat-value">TrendyGPT 1.0</span></div>
+              <div class="order-ai-stat"><span class="order-ai-stat-label">Status transfera</span><span class="order-ai-stat-value">Ručni transfer aktivan</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="row g-2 order-ai-upload-stage-row mb-2">
+        <div class="col-lg-7 col-12" id="order-ai-dropzone-shell">
+          <div class="card border-0 shadow-sm h-100"><div class="card-body p-2 p-md-3">
+            <div class="order-ai-dropzone" id="order-ai-dropzone" role="button">
+              <div class="order-ai-dropzone-icon"><i data-feather="upload-cloud"></i></div>
+              <h3 class="mb-75">Prevuci dokument ovdje</h3>
+              <p class="order-ai-subtle mb-1">ili se klikom odabire fajl za AI obradu narudžbe</p>
+              <small class="text-muted">PDF i Word dokumenti (.doc, .docx) do 50 MB</small>
+            </div>
+          </div></div>
+        </div>
+
+        <div class="col-lg-5 col-12 order-ai-progress-shell" id="order-ai-progress-shell">
+          <div class="card order-ai-progress-card"><div class="card-body p-2">
+            <div class="order-ai-progress-head mb-1">
+              <div class="order-ai-progress-copy">
+                <h4 class="mb-25">Status obrade</h4>
+                <p class="mb-0 order-ai-subtle" id="order-ai-progress-label">Ekstrakcija podataka</p>
+              </div>
+              <div class="order-ai-progress-status">
+                <span class="order-ai-activity"><span class="spinner-border spinner-border-sm" role="status"></span><span>AI ekstrakcija radi...</span></span>
+              </div>
+              <div class="order-ai-progress-meta">
+                <div class="fw-bolder">68%</div>
+                <small class="text-muted">Bestellung_4500123456.pdf</small>
+                <span class="order-ai-progress-runtime"><span class="order-ai-progress-runtime-label">Proteklo vrijeme:</span><span class="order-ai-progress-runtime-value">42s</span></span>
+              </div>
+            </div>
+            <div class="order-ai-progress-track mb-2"><div class="order-ai-progress-bar" style="transform:scaleX(.68)"></div></div>
+            <div class="order-ai-stage-list">
+              <div class="order-ai-stage is-done" data-stage="upload">
+                <div class="order-ai-stage-fill" style="transform:scaleX(1)"></div>
+                <div class="order-ai-stage-content"><span class="order-ai-stage-bullet"></span>
+                  <div class="order-ai-stage-main"><strong>Upload</strong><div class="small text-muted">Fajl se šalje u lokalni prihvat.</div></div></div>
+              </div>
+              <div class="order-ai-stage is-active" data-stage="extract">
+                <div class="order-ai-stage-fill" style="transform:scaleX(.62)"></div>
+                <div class="order-ai-stage-content"><span class="order-ai-stage-bullet"></span>
+                  <div class="order-ai-stage-main"><strong>AI ekstrakcija</strong><div class="small text-muted">Dokument se čita i pretvara se u preglednu narudžbu za provjeru.</div></div></div>
+              </div>
+              <div class="order-ai-stage" data-stage="transfer">
+                <div class="order-ai-stage-fill"></div>
+                <div class="order-ai-stage-content"><span class="order-ai-stage-bullet"></span>
+                  <div class="order-ai-stage-main"><strong>Transfer u bazu</strong><div class="small text-muted">Akcije su na dnu stranice. Nakon završetka obrade omogućava se upis u bazu.</div></div>
+                  <div class="order-ai-stage-side"><button type="button" class="btn order-ai-primary-action" disabled>Poduzmi akciju</button></div></div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+      </div>
+
+      <!-- live extraction panel (shown while status is extracting) -->
+      <div class="row g-2 mb-2" id="order-ai-extract-live-shell">
+        <div class="col-12"><div class="card order-ai-progress-card"><div class="card-body p-2 p-md-3">
+          <div class="order-ai-extract-live" data-phase-index="3">
+            <div class="order-ai-extract-live-header"><span class="order-ai-extract-live-meta">Korak 4/5 - Ekstrakcija podataka - Stranica 2/3</span></div>
+            <div class="order-ai-extract-global-progress"><span class="order-ai-extract-global-progress-bar" style="width:46%"></span></div>
+            <div class="order-ai-extract-focus"><span class="order-ai-extract-focus-label">Tok obrade</span><strong class="order-ai-extract-focus-value">Ekstrakcija podataka</strong></div>
+            <div class="order-ai-extract-live-grid">
+              <div class="order-ai-extract-live-row" style="--order-ai-row-columns:3;">
+                <span class="order-ai-extract-page-chip is-tone-3 is-done" title="Stranica 1"><span class="order-ai-extract-page-chip-state">✓</span><span class="order-ai-extract-page-chip-number">1</span></span>
+                <span class="order-ai-extract-page-chip is-tone-3 is-active" title="Stranica 2"><span class="order-ai-extract-page-chip-state">⟳</span><span class="order-ai-extract-page-chip-number">2</span></span>
+                <span class="order-ai-extract-page-chip is-tone-2 is-pending" title="Stranica 3"><span class="order-ai-extract-page-chip-state is-empty">.</span><span class="order-ai-extract-page-chip-number">3</span></span>
+              </div>
+            </div>
+            <div class="order-ai-extract-phase-list">
+              <div class="order-ai-extract-phase is-tone-0 is-done"><span class="order-ai-extract-phase-name">Priprema dokumenta</span><span class="order-ai-extract-phase-state">✓</span></div>
+              <div class="order-ai-extract-phase is-tone-1 is-done"><span class="order-ai-extract-phase-name">Prepoznavanje sadržaja</span><span class="order-ai-extract-phase-state">✓</span></div>
+              <div class="order-ai-extract-phase is-tone-2 is-done"><span class="order-ai-extract-phase-name">Klasifikacija stavki</span><span class="order-ai-extract-phase-state">✓</span></div>
+              <div class="order-ai-extract-phase is-tone-3 is-active"><span class="order-ai-extract-phase-name">Ekstrakcija podataka</span><span class="order-ai-extract-phase-state">U toku</span></div>
+              <div class="order-ai-extract-phase is-tone-4 is-pending"><span class="order-ai-extract-phase-name">Provjera rezultata</span><span class="order-ai-extract-phase-state">Čeka</span></div>
+            </div>
+          </div>
+        </div></div></div>
+      </div>
+
+      <!-- result card (shown after extraction) -->
+      <div class="row g-2"><div class="col-12">
+        <div class="card order-ai-result-card" id="order-ai-result-card"><div class="card-body p-2">
+          <div class="d-flex flex-wrap align-items-start justify-content-between gap-1 mb-2">
+            <div><h4 class="mb-25">Rezultat AI skena</h4><p class="mb-0 order-ai-subtle">Ekstrakcija završena. Provjerite stavke prije transfera.</p></div>
+            <span class="badge rounded-pill bg-light-primary text-primary" id="order-ai-result-status">Spremno za transfer</span>
+          </div>
+          <div class="order-ai-facts mb-2">
+            <div class="order-ai-fact"><div class="text-muted small mb-50">Kupac</div><div class="fw-bolder">GROB-WERKE</div></div>
+            <div class="order-ai-fact"><div class="text-muted small mb-50">Naručilac</div><div class="fw-bolder">GROB-WERKE GmbH &amp; Co. KG</div></div>
+            <div class="order-ai-fact"><div class="text-muted small mb-50">Referenca</div><div class="fw-bolder">4500123456</div></div>
+            <div class="order-ai-fact"><div class="text-muted small mb-50">Vrsta dokumenta</div><div class="fw-bolder">Bestellung</div></div>
+            <div class="order-ai-fact"><div class="text-muted small mb-50">Valuta</div><div class="fw-bolder">EUR</div></div>
+            <div class="order-ai-fact is-match"><div class="text-muted small mb-50">Iznos</div><div class="fw-bolder">4820.00</div></div>
+            <div class="order-ai-fact"><div class="text-muted small mb-50">AI tokeni</div><div class="fw-bolder">18342</div></div>
+            <div class="order-ai-fact"><div class="text-muted small mb-50">Pantheon ključ</div><div class="fw-bolder">-</div></div>
+          </div>
+          <div class="table-responsive mb-2" id="order-ai-lines-shell">
+            <table class="table table-sm order-ai-lines-table mb-0">
+              <thead><tr><th>#</th><th>Šifra</th><th class="order-ai-wrap">Naziv</th><th>Količina</th><th>JM</th><th>Jed. cijena</th><th>Rok isporuke</th><th class="order-ai-wrap">Total provjera</th><th class="order-ai-weight-cell">Težina</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>10</td>
+                  <td><button type="button" class="order-ai-line-edit-trigger"><div class="order-ai-line-code-stack"><span>0001234567</span></div></button></td>
+                  <td class="order-ai-wrap"><button type="button" class="order-ai-line-edit-trigger"><div class="order-ai-line-name">Flansch DN80 PN16</div></button></td>
+                  <td><button type="button" class="order-ai-line-edit-trigger order-ai-line-edit-trigger--compact"><span>120.00</span></button></td>
+                  <td><button type="button" class="order-ai-line-edit-trigger order-ai-line-edit-trigger--compact"><span>ST</span></button></td>
+                  <td><button type="button" class="order-ai-line-edit-trigger order-ai-line-edit-trigger--compact"><span>18.50</span></button></td>
+                  <td>14.11.2026</td>
+                  <td class="order-ai-wrap"><button type="button" class="order-ai-line-total-trigger is-match"><span class="order-ai-line-total-meta"><span class="order-ai-line-total-source">Skenirani total: 2220.00 EUR</span><span class="order-ai-line-total-computed">18.50 x 120.00 = 2220.00 EUR</span><span class="order-ai-line-total-diff">Razlika: 0.00 EUR</span></span></button></td>
+                  <td class="order-ai-weight-cell"><input type="text" class="form-control form-control-sm order-ai-weight-input" value="1,250"></td>
+                </tr>
+                <tr>
+                  <td>20</td>
+                  <td><button type="button" class="order-ai-line-edit-trigger"><div class="order-ai-line-code-stack"><span>0001234590</span></div></button></td>
+                  <td class="order-ai-wrap"><button type="button" class="order-ai-line-edit-trigger"><div class="order-ai-line-name">Welle Ø40 x 220</div></button></td>
+                  <td><button type="button" class="order-ai-line-edit-trigger order-ai-line-edit-trigger--compact"><span>48.00</span></button></td>
+                  <td><button type="button" class="order-ai-line-edit-trigger order-ai-line-edit-trigger--compact"><span>ST</span></button></td>
+                  <td><button type="button" class="order-ai-line-edit-trigger order-ai-line-edit-trigger--compact"><span>35.00</span></button></td>
+                  <td>21.11.2026</td>
+                  <td class="order-ai-wrap"><button type="button" class="order-ai-line-total-trigger is-match"><span class="order-ai-line-total-meta"><span class="order-ai-line-total-source">Skenirani total: 1680.00 EUR</span><span class="order-ai-line-total-computed">35.00 x 48.00 = 1680.00 EUR</span><span class="order-ai-line-total-diff">Razlika: 0.00 EUR</span></span></button></td>
+                  <td class="order-ai-weight-cell"><input type="text" class="form-control form-control-sm order-ai-weight-input" value="2,700"></td>
+                </tr>
+                <tr class="order-ai-line-row is-catalog-missing">
+                  <td>30</td>
+                  <td><button type="button" class="order-ai-line-edit-trigger"><div class="order-ai-line-code-stack"><span>0001239011</span><span class="order-ai-line-badge is-missing">Nije u bazi</span></div></button></td>
+                  <td class="order-ai-wrap"><button type="button" class="order-ai-line-edit-trigger"><div class="order-ai-line-name">Distanzhülse 12x30</div><div class="order-ai-line-note">Primarna klasifikacija: Tokarenje</div></button></td>
+                  <td><button type="button" class="order-ai-line-edit-trigger order-ai-line-edit-trigger--compact"><span>400.00</span></button></td>
+                  <td><button type="button" class="order-ai-line-edit-trigger order-ai-line-edit-trigger--compact"><span>ST</span></button></td>
+                  <td><button type="button" class="order-ai-line-edit-trigger order-ai-line-edit-trigger--compact"><span>2.30</span></button></td>
+                  <td>28.11.2026</td>
+                  <td class="order-ai-wrap"><button type="button" class="order-ai-line-total-trigger is-match"><span class="order-ai-line-total-meta"><span class="order-ai-line-total-source">Skenirani total: 920.00 EUR</span><span class="order-ai-line-total-computed">2.30 x 400.00 = 920.00 EUR</span><span class="order-ai-line-total-diff">Razlika: 0.00 EUR</span></span></button></td>
+                  <td class="order-ai-weight-cell"><input type="text" class="form-control form-control-sm order-ai-weight-input" value=""></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="order-ai-bottom-actions" id="order-ai-actions">
+            <div class="order-ai-bottom-actions-secondary">
+              <a href="#" class="btn order-ai-secondary-action">Vidi PDF</a>
+              <button type="button" class="btn order-ai-secondary-action order-ai-secondary-action--accent">Nova narudžba</button>
+              <a href="#" class="btn order-ai-secondary-action">Historija AI skeniranja</a>
+              <a href="#" class="btn order-ai-secondary-action">Moje narudžbe</a>
+              <button type="button" class="btn order-ai-secondary-action">Ponovi scan</button>
+            </div>
+            <div class="order-ai-bottom-action-primary">
+              <button type="button" class="btn btn-success order-ai-transfer-cta is-ready">Transfer u bazu</button>
+            </div>
+          </div>
+        </div></div>
+      </div></div>
+    </div>
+  </div>
+</section>

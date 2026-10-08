@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html class="loaded light-layout" lang="bs" data-textdirection="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Kontrolna ploča</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=block" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="../vendors/css/vendors.min.css">
+<link rel="stylesheet" href="../css/core.css">
+<link rel="stylesheet" href="../css/base/core/menu/menu-types/vertical-menu.css">
+<link rel="stylesheet" href="../vendors/css/charts/apexcharts.css">
+<link rel="stylesheet" href="../css/base/pages/dashboard-ecommerce.css">
+<link rel="stylesheet" href="../css/base/plugins/charts/chart-apex.css">
+<link rel="stylesheet" href="../css/overrides.css">
+<style>html .content .content-wrapper .content-header-title{border-right:0!important;padding-right:0!important;margin-right:0!important}</style>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+.navbar-ai-token-link{padding-left:.2rem!important;padding-right:.2rem!important}
+.navbar-ai-token-pill{position:relative;display:inline-flex;align-items:center;gap:.45rem;min-height:2.7rem;padding:.38rem .8rem;border-radius:1rem;background:rgba(255,255,255,.95);box-shadow:0 10px 24px rgba(34,41,47,.08)}
+.navbar-ai-token-pill__icon{position:relative;display:inline-grid;width:1.3rem;height:1.35rem;place-items:center;flex:0 0 auto}
+.navbar-ai-token-pill__label,.navbar-ai-token-pill__divider{display:inline-flex;align-items:center;line-height:1;color:#6e7f91;font-size:.92rem;font-weight:600}
+.navbar-ai-token-pill__divider{opacity:.7}
+.navbar-ai-token-pill__value{display:inline-flex;align-items:center;justify-content:center;min-width:2.2rem;font-size:1rem;font-weight:700;line-height:1;color:#4b5d78}
+.navbar-ai-token-coin{position:absolute;width:.95rem;height:.42rem;border-radius:999px;background:linear-gradient(180deg,#ffd86f 0%,#f5b301 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 2px 4px rgba(196,140,0,.2)}
+.navbar-ai-token-coin--top{transform:translateY(-.34rem)}
+.navbar-ai-token-coin--mid{width:1.05rem}
+.navbar-ai-token-coin--bottom{transform:translateY(.34rem)}
+html,body{overflow:hidden}
+.pace,.pace-progress{display:none!important}
+*,*::before,*::after{animation-duration:.001s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important}
+
+
+    .dark-layout a:hover {
+      color: unset!important;
+    }
+    .dashboard-workorders-card .table {
+      margin-bottom: 0;
+    }
+
+    .dashboard-workorders-scroll {
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: var(--app-scroll-thumb-flat) var(--app-scroll-track);
+      scrollbar-gutter: stable;
+    }
+
+    .dashboard-workorders-scroll::-webkit-scrollbar {
+      height: 11px;
+    }
+
+    .dashboard-workorders-scroll::-webkit-scrollbar-track {
+      background: var(--app-scroll-track);
+      border-radius: 999px;
+    }
+
+    .dashboard-workorders-scroll::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, var(--app-scroll-thumb-start) 0%, var(--app-scroll-thumb-end) 100%);
+      border-radius: 999px;
+      border: 2px solid var(--app-scroll-thumb-border);
+      min-width: 28px;
+    }
+
+    .dashboard-workorders-scroll::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, var(--app-scroll-thumb-hover-start) 0%, var(--app-scroll-thumb-hover-end) 100%);
+    }
+
+    .dashboard-workorders-table thead th {
+      background-color: #f8f8fc;
+      border-bottom: 1px solid #ebe9f1;
+      color: #6e6b7b;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .dashboard-workorders-table > :not(caption) > * > * {
+      box-shadow: none !important;
+    }
+
+    .dashboard-report-chart-shell {
+      position: relative;
+      min-height: 230px;
+    }
+
+    .dashboard-report-loader {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(1px);
+      transition: opacity 0.18s ease, visibility 0.18s ease;
+    }
+
+    .dashboard-report-loader.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .dashboard-report-chart-shell #revenue-report-chart .apexcharts-tooltip {
+      display: none !important;
+    }
+
+    .dashboard-report-hover-box {
+      position: absolute;
+      z-index: 7;
+      min-width: 176px;
+      max-width: 240px;
+      padding: 0.55rem 0.65rem;
+      border-radius: 10px;
+      border: 1px solid #ebe9f1;
+      background: rgba(255, 255, 255, 0.97);
+      color: #5e5873;
+      box-shadow: 0 10px 24px rgba(34, 41, 47, 0.22);
+      pointer-events: none;
+      transition: opacity 0.12s ease, visibility 0.12s ease;
+    }
+
+    .dashboard-report-hover-box.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .dashboard-report-hover-title {
+      font-size: 0.86rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+      color: inherit;
+    }
+
+    .dashboard-ai-credits-avatar {
+      width: 48px;
+      height: 48px;
+      min-width: 48px;
+      border-radius: 50%;
+      flex: 0 0 48px;
+      background: linear-gradient(135deg, rgba(255, 245, 205, 0.96) 0%, rgba(255, 232, 166, 0.72) 100%) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+
+    .dashboard-ai-credits-avatar .avatar-content {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dashboard-ai-coin-stack {
+      position: relative;
+      width: 1.56rem;
+      height: 1.56rem;
+      display: inline-block;
+    }
+
+    .dashboard-ai-coin {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 28%, #fff4be 0%, #ffd95e 38%, #f3b114 72%, #d98800 100%);
+      border: 1px solid rgba(180, 122, 0, 0.28);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.88),
+        inset 0 -2px 0 rgba(166, 102, 0, 0.18),
+        0 0.24rem 0.4rem rgba(240, 161, 0, 0.18);
+    }
+
+    .dashboard-ai-coin::before,
+    .dashboard-ai-coin::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+    }
+
+    .dashboard-ai-coin::before {
+      inset: 0.14rem;
+      border: 1px solid rgba(160, 100, 0, 0.24);
+      background: radial-gradient(circle at 30% 28%, rgba(255, 249, 214, 0.72) 0%, rgba(255, 230, 133, 0.4) 42%, rgba(246, 179, 21, 0.08) 100%);
+    }
+
+    .dashboard-ai-coin::after {
+      inset: 0.04rem;
+      border: 1px solid rgba(255, 247, 205, 0.5);
+      opacity: 0.6;
+    }
+
+    .dashboard-ai-coin-front {
+      width: 1.48rem;
+      height: 1.48rem;
+      top: 0.04rem;
+      left: 0.04rem;
+      z-index: 1;
+    }
+
+    .dashboard-ai-coin-inner {
+      position: relative;
+      z-index: 3;
+      font-size: 0.5rem;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: 0.06em;
+      color: #a36400;
+      text-shadow: 0 1px 0 rgba(255, 247, 208, 0.72);
+    }
+
+    .dark-layout .dashboard-ai-credits-avatar,
+    .semi-dark-layout .dashboard-ai-credits-avatar {
+      background: linear-gradient(135deg, rgba(255, 214, 102, 0.18) 0%, rgba(214, 165, 44, 0.14) 100%) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .dashboard-report-hover-row {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.78rem;
+      line-height: 1.35;
+    }
+
+    .dashboard-report-hover-row + .dashboard-report-hover-row {
+      margin-top: 0.22rem;
+    }
+
+    .dashboard-report-hover-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+    }
+
+    .dashboard-report-hover-dot-current {
+      background: #ff9f43;
+    }
+
+    .dashboard-report-hover-dot-compare {
+      background: #b9b9c3;
+    }
+
+    .dashboard-report-hover-label {
+      color: #6e6b7b;
+      font-weight: 600;
+    }
+
+    .dashboard-report-hover-value {
+      margin-left: auto;
+      color: inherit;
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .dashboard-workorders-table > :not(:first-child) {
+      border-top: 0 !important;
+    }
+
+    .dashboard-workorders-table tbody td {
+      border-top: 1px solid #ebe9f1;
+      vertical-align: middle;
+      color: #5e5873;
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+
+    .dashboard-workorders-table tbody tr:first-child td {
+      border-top: 0;
+    }
+
+    .dashboard-workorders-table.table-hover tbody tr:hover > * {
+      background-color: #f8f8fc;
+    }
+
+    .dashboard-workorders-table tbody tr.dashboard-workorder-row {
+      cursor: pointer;
+    }
+
+    .dashboard-workorder-id {
+      color: #42526e;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .dashboard-client-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      min-width: 0;
+    }
+
+    .dashboard-product-name {
+      font-weight: 500;
+      color: #5e5873;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 260px;
+    }
+
+    .dashboard-client-avatar {
+      width: 2.1rem;
+      height: 2.1rem;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1rem;
+      flex: 0 0 auto;
+    }
+
+    .dashboard-client-name {
+      font-weight: 500;
+      color: #5e5873;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .dashboard-status-badge {
+      font-weight: 500;
+    }
+
+    .dashboard-status-default {
+      background-color: rgba(110, 107, 123, 0.12) !important;
+      color: #6e6b7b !important;
+    }
+
+    .dashboard-status-planiran {
+      background-color: rgba(0, 207, 232, 0.12) !important;
+      color: #00cfe8 !important;
+    }
+
+    .dashboard-status-otvoren {
+      background-color: rgba(40, 199, 111, 0.12) !important;
+      color: #28c76f !important;
+    }
+
+    .dashboard-status-rezerviran {
+      background-color: rgba(255, 159, 67, 0.12) !important;
+      color: #ff9f43 !important;
+    }
+
+    .dashboard-status-u-radu {
+      background-color: rgba(255, 193, 7, 0.16) !important;
+      color: #b38600 !important;
+    }
+
+    .dashboard-status-djelimicno {
+      background-color: rgba(253, 126, 20, 0.12) !important;
+      color: #fd7e14 !important;
+    }
+
+    .dashboard-status-zakljucen {
+      background-color: rgba(234, 84, 85, 0.12) !important;
+      color: #ea5455 !important;
+    }
+
+    .wo-eye-action {
+      width: 32px;
+      height: 32px;
+      border: 1px solid #96a0b5;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #6e6b7b;
+      background-color: transparent;
+      transition: all 0.2s ease;
+    }
+
+    .wo-eye-action svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .wo-eye-action svg * {
+      stroke: currentColor;
+    }
+
+    .wo-eye-action:hover,
+    .wo-eye-action:focus {
+      color: #42526e;
+      border-color: #42526e;
+      background-color: rgba(66, 82, 110, 0.08);
+    }
+
+    .dark-layout .dashboard-workorders-table thead th,
+    .semi-dark-layout .dashboard-workorders-table thead th {
+      background-color: #303a52;
+      border-bottom-color: rgba(186, 191, 221, 0.18);
+      color: #c7cbda;
+    }
+
+    .dark-layout .dashboard-workorders-table tbody td,
+    .semi-dark-layout .dashboard-workorders-table tbody td {
+      border-top-color: rgba(186, 191, 221, 0.16);
+      color: #d7dbeb;
+    }
+
+    .dark-layout .dashboard-workorders-table,
+    .semi-dark-layout .dashboard-workorders-table {
+      --bs-table-bg: transparent;
+      --bs-table-accent-bg: transparent;
+      --bs-table-hover-bg: #36405a;
+      --bs-table-hover-color: #ffffff;
+    }
+
+    .dark-layout .dashboard-workorders-scroll,
+    .semi-dark-layout .dashboard-workorders-scroll {
+      scrollbar-color: var(--app-scroll-thumb-flat) var(--app-scroll-track);
+    }
+
+    .dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-track,
+    .semi-dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-track {
+      background: var(--app-scroll-track);
+      border-radius: 999px;
+    }
+
+    .dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-thumb,
+    .semi-dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, var(--app-scroll-thumb-start) 0%, var(--app-scroll-thumb-end) 100%);
+      border-radius: 999px;
+      border: 2px solid var(--app-scroll-thumb-border);
+    }
+
+    .dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-thumb:hover,
+    .semi-dark-layout .dashboard-workorders-scroll::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, var(--app-scroll-thumb-hover-start) 0%, var(--app-scroll-thumb-hover-end) 100%);
+    }
+
+    .dark-layout .dashboard-workorders-table > :not(caption) > * > *,
+    .semi-dark-layout .dashboard-workorders-table > :not(caption) > * > * {
+      box-shadow: none !important;
+    }
+
+    .dark-layout .dashboard-report-loader,
+    .semi-dark-layout .dashboard-report-loader {
+      background: rgba(40, 48, 70, 0.92);
+      backdrop-filter: none;
+    }
+
+    .dark-layout .dashboard-report-hover-box,
+    .semi-dark-layout .dashboard-report-hover-box {
+      border-color: rgba(186, 191, 221, 0.24);
+      background: rgba(40, 48, 70, 0.98);
+      color: #d7dbeb;
+      box-shadow: 0 10px 24px rgba(10, 14, 22, 0.45);
+    }
+
+    .dark-layout .dashboard-report-hover-label,
+    .semi-dark-layout .dashboard-report-hover-label {
+      color: #b4b7bd;
+    }
+
+    .dark-layout .dashboard-report-hover-dot-compare,
+    .semi-dark-layout .dashboard-report-hover-dot-compare {
+      background: #959cb2;
+    }
+
+    .dark-layout .dashboard-workorders-table.table-hover tbody tr:hover > *,
+    .semi-dark-layout .dashboard-workorders-table.table-hover tbody tr:hover > * {
+      background-color: #36405a !important;
+      color: #fff !important;
+    }
+
+    .dark-layout .dashboard-workorder-id,
+    .semi-dark-layout .dashboard-workorder-id {
+      color: #dce2f2;
+    }
+
+    .dark-layout .dashboard-client-name,
+    .semi-dark-layout .dashboard-client-name {
+      color: #d7dbeb;
+    }
+
+    .dark-layout .dashboard-product-name,
+    .semi-dark-layout .dashboard-product-name {
+      color: #d7dbeb;
+    }
+
+    .dark-layout .wo-eye-action,
+    .semi-dark-layout .wo-eye-action {
+      color: #d6dcec;
+      border-color: rgba(214, 220, 236, 0.45);
+      background-color: transparent;
+    }
+
+    .dark-layout .wo-eye-action:hover,
+    .dark-layout .wo-eye-action:focus,
+    .semi-dark-layout .wo-eye-action:hover,
+    .semi-dark-layout .wo-eye-action:focus {
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.7);
+      background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .dark-layout #dashboard-report-year-toggle,
+    .semi-dark-layout #dashboard-report-year-toggle {
+      border-color: rgba(255, 255, 255, 0.8) !important;
+      color: #ffffff !important;
+    }
+
+    .dark-layout #dashboard-report-year-toggle:hover,
+    .dark-layout #dashboard-report-year-toggle:focus,
+    .dark-layout #dashboard-report-year-toggle:active,
+    .dark-layout #dashboard-report-year-toggle.show,
+    .semi-dark-layout #dashboard-report-year-toggle:hover,
+    .semi-dark-layout #dashboard-report-year-toggle:focus,
+    .semi-dark-layout #dashboard-report-year-toggle:active,
+    .semi-dark-layout #dashboard-report-year-toggle.show {
+      border-color: #ffffff !important;
+      color: #ffffff !important;
+      background-color: rgba(255, 255, 255, 0.08) !important;
+    }
+  
+
+  .dark-layout a:hover { color: unset!important; }
+  .dashboard-workorders-card .table { margin-bottom: 0; }
+  .dashboard-workorders-scroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--app-scroll-thumb-flat) var(--app-scroll-track); scrollbar-gutter: stable; }
+  .dashboard-workorders-table thead th { background-color: #f8f8fc; border-bottom: 1px solid #ebe9f1; color: #6e6b7b; font-size: 1rem; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; white-space: nowrap; }
+  .dashboard-workorders-table > :not(caption) > * > * { box-shadow: none !important; }
+  .dashboard-report-chart-shell { position: relative; min-height: 230px; }
+  .dashboard-report-loader { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.78); backdrop-filter: blur(1px); transition: opacity 0.18s ease, visibility 0.18s ease; }
+  .dashboard-report-loader.is-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  .dashboard-report-hover-box.is-hidden { opacity: 0; visibility: hidden; }
+  .dashboard-workorders-table > :not(:first-child) { border-top: 0 !important; }
+  .dashboard-workorders-table tbody td { border-top: 1px solid #ebe9f1; vertical-align: middle; color: #5e5873; font-size: 1.1rem; font-weight: 500; }
+  .dashboard-workorders-table tbody tr:first-child td { border-top: 0; }
+  .dashboard-workorders-table.table-hover tbody tr:hover > * { background-color: #f8f8fc; }
+  .dashboard-workorders-table tbody tr.dashboard-workorder-row { cursor: pointer; }
+  .dashboard-workorder-id { color: #42526e; font-weight: 700; white-space: nowrap; }
+  .dashboard-client-wrap { display: flex; align-items: center; gap: 0.8rem; min-width: 0; }
+  .dashboard-product-name { font-weight: 500; color: #5e5873; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+  .dashboard-client-avatar { width: 2.1rem; height: 2.1rem; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1rem; flex: 0 0 auto; }
+  .dashboard-client-name { font-weight: 500; color: #5e5873; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dashboard-status-badge { font-weight: 500; }
+  .dashboard-status-default { background-color: rgba(110, 107, 123, 0.12) !important; color: #6e6b7b !important; }
+  .dashboard-status-planiran { background-color: rgba(0, 207, 232, 0.12) !important; color: #00cfe8 !important; }
+  .dashboard-status-otvoren { background-color: rgba(40, 199, 111, 0.12) !important; color: #28c76f !important; }
+  .dashboard-status-rezerviran { background-color: rgba(255, 159, 67, 0.12) !important; color: #ff9f43 !important; }
+  .dashboard-status-u-radu { background-color: rgba(255, 193, 7, 0.16) !important; color: #b38600 !important; }
+  .dashboard-status-djelimicno { background-color: rgba(253, 126, 20, 0.12) !important; color: #fd7e14 !important; }
+  .dashboard-status-zakljucen { background-color: rgba(234, 84, 85, 0.12) !important; color: #ea5455 !important; }
+
+
+</style>
+</head>
+<body class="vertical-layout vertical-menu-modern menu-expanded navbar-floating footer-static default">
+
+<nav class="header-navbar navbar navbar-expand-lg align-items-center floating-nav navbar-light navbar-shadow">
+  <div class="navbar-container d-flex content">
+    <div class="bookmark-wrapper d-flex align-items-center">
+      <ul class="nav navbar-nav d-xl-none align-items-center">
+        <li class="nav-item"><a class="nav-link menu-toggle" href="#"><i class="ficon" data-feather="menu"></i></a></li>
+        <li class="nav-item d-md-none"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+      <ul class="nav navbar-nav bookmark-icons">
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="home"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="calendar"></i></a></li>
+        <li class="nav-item d-none d-md-block"><a class="nav-link" href="#"><i class="ficon" data-feather="camera"></i></a></li>
+      </ul>
+    </div>
+    <ul class="nav navbar-nav align-items-center ms-auto">
+      <li class="nav-item">
+        <a class="nav-link navbar-ai-token-link" href="#">
+          <span class="navbar-ai-token-pill">
+            <span class="navbar-ai-token-pill__label">Tokeni</span>
+            <span class="navbar-ai-token-pill__icon"><span class="navbar-ai-token-coin navbar-ai-token-coin--top"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--mid"></span><span class="navbar-ai-token-coin navbar-ai-token-coin--bottom"></span></span>
+            <span class="navbar-ai-token-pill__divider">|</span>
+            <span class="navbar-ai-token-pill__value">12.480</span>
+          </span>
+        </a>
+      </li>
+      <li class="nav-item d-none d-md-block"><a class="nav-link nav-link-style"><i class="ficon" data-feather="moon"></i></a></li>
+      <li class="nav-item nav-search"><a class="nav-link nav-link-search"><i class="ficon" data-feather="search"></i></a></li>
+      <li class="nav-item dropdown dropdown-user">
+        <a class="nav-link dropdown-toggle dropdown-user-link" href="#">
+          <div class="user-nav d-sm-flex d-none"><span class="user-name fw-bolder">Admin</span><span class="user-status">ADMIN</span></div>
+          <span class="avatar"><img class="round" src="../images/portrait/avatar-s-22.jpg" alt="avatar" height="40" width="40"><span class="avatar-status-online"></span></span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</nav>
+
+<div class="main-menu menu-fixed menu-light menu-accordion menu-shadow">
+  <div class="navbar-header">
+    <ul class="nav navbar-nav flex-row">
+      <li class="nav-item me-auto">
+        <a class="navbar-brand d-flex align-items-center" href="#">
+          <span class="brand-logo"><img src="../images/logo/TrendyCNC.png" alt="eNalog.app" width="36"></span>
+          <h2 class="brand-text mb-0 ms-50">eNalog.app</h2>
+        </a>
+      </li>
+      <li class="nav-item nav-toggle"><a class="nav-link modern-nav-toggle pe-0"><i class="d-none d-xl-block collapse-toggle-icon font-medium-4 text-primary" data-feather="disc"></i></a></li>
+    </ul>
+  </div>
+  <div class="shadow-bottom"></div>
+  <div class="main-menu-content">
+    <ul class="navigation navigation-main">
+      <li class="navigation-header"><span>Radni nalozi</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="file-text"></i><span class="menu-title text-truncate">Upravljanje nalozima</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="camera"></i><span class="menu-title text-truncate">Skeniraj nalog</span></a></li>
+      <li class="navigation-header"><span>Narudžbe</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="briefcase"></i><span class="menu-title text-truncate">Upravljanje narudžbama</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i class="fa fa-magic fa-fw"></i><span class="menu-title text-truncate">AI narudžba</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="inbox"></i><span class="menu-title text-truncate">AI Inbox</span></a></li>
+      <li class="navigation-header"><span>Proizvodnja</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="clipboard"></i><span class="menu-title text-truncate">Plan proizvodnje</span></a></li>
+      <li class="navigation-header"><span>AI asistent</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="activity"></i><span class="menu-title text-truncate">Historija AI skeniranja</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Dozvoljeni pošiljaoci</span></a></li>
+      <li class="navigation-header"><span>Dokumenti</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="archive"></i><span class="menu-title text-truncate">Razduženi materijali</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="box"></i><span class="menu-title text-truncate">Razduživanje WIP</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="tool"></i><span class="menu-title text-truncate">Razdužene operacije</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="package"></i><span class="menu-title text-truncate">Prijem VP skladište</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="package"></i><span class="menu-title text-truncate">Prijem škarta</span></a></li>
+      <li class="navigation-header"><span>Administracija</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="user"></i><span class="menu-title text-truncate">Korisnici</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="credit-card"></i><span class="menu-title text-truncate">Moja NFC kartica</span></a></li>
+      <li class="navigation-header"><span>Skladišni alati</span><i data-feather="more-horizontal"></i></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="layers"></i><span class="menu-title text-truncate">Pregled zaliha</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Površinske zaštite</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="shield"></i><span class="menu-title text-truncate">Kreiranje rezervi</span></a></li>
+      <li class="nav-item"><a href="#" class="d-flex align-items-center"><i data-feather="map"></i><span class="menu-title text-truncate">Mapa skladišta</span></a></li>
+    </ul>
+  </div>
+</div>
+<div class="app-content content">
+  <div class="content-overlay"></div>
+  <div class="header-navbar-shadow"></div>
+  <div class="content-wrapper container-xxxl p-0">
+    
+    <div class="content-body">
+
+
+<section id="dashboard-ecommerce">
+  <div class="row match-height">
+    <div class="col-lg-4 col-md-4 col-12">
+      <div class="card card-developer-meetup">
+        <div class="meetup-img-wrapper rounded-top text-center">
+          <img src="../images/illustration/email.svg" alt="CNC proizvodnja" height="170" />
+        </div>
+        <div class="card-body">
+          <div class="meetup-header d-flex align-items-center">
+            <div class="meetup-day"><h6 class="mb-0">ČET</h6><h3 class="mb-0">24</h3></div>
+            <div class="my-auto">
+              <h4 class="card-title mb-25">GROB-WERKE </h4>
+              <p class="card-text mb-0">Sastanak o saradnji vezanoj za CNC obradu metala – kapaciteti i rokovi.</p>
+            </div>
+          </div>
+          <div class="mt-0">
+            <div class="avatar float-start bg-light-primary rounded me-1"><div class="avatar-content"><i data-feather="calendar" class="avatar-icon font-medium-3"></i></div></div>
+            <div class="more-info"><h6 class="mb-0">Četvrtak, 24. decembar 2025.</h6><small>09:00 – 10:30</small></div>
+          </div>
+          <div class="mt-2">
+            <div class="avatar float-start bg-light-primary rounded me-1"><div class="avatar-content"><i data-feather="map-pin" class="avatar-icon font-medium-3"></i></div></div>
+            <div class="more-info"><h6 class="mb-0">Online sastanak (Teams / Zoom)</h6>
+              <small>Predstavljanje mašina (CNC glodanje i tokarenje), tipičnih serija, tolerancija, površinske obrade.</small></div>
+          </div>
+          <div class="avatar-group mt-1">
+            <div class="avatar pull-up" title="Direktor proizvodnje – Trendy d.o.o."><img src="../images/portrait/small/avatar-s-9.jpg" alt="Avatar" width="33" height="33" /></div>
+            <div class="avatar pull-up" title="Tehnički inženjer – Trendy d.o.o."><img src="../images/portrait/small/avatar-s-6.jpg" alt="Avatar" width="33" height="33" /></div>
+            <div class="avatar pull-up" title="Predstavnik nabavke vašeg preduzeća"><img src="../images/portrait/small/avatar-s-8.jpg" alt="Avatar" width="33" height="33" /></div>
+            <h6 class="align-self-center cursor-pointer ms-50 mb-0">+ još učesnika po potrebi</h6>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-8 col-md-8 col-12">
+      <div class="card card-statistics">
+        <div class="card-body statistics-body">
+          <div class="row">
+            <div class="col-xl-4 col-sm-6 col-12 mb-2 mb-xl-0"><div class="d-flex flex-row">
+              <div class="avatar bg-light-warning me-2"><div class="avatar-content"><i data-feather="clipboard" class="avatar-icon"></i></div></div>
+              <div class="my-auto"><h4 class="fw-bolder mb-0">12.486</h4><p class="card-text font-small-3 mb-0">Radni nalozi</p></div>
+            </div></div>
+            <div class="col-xl-4 col-sm-6 col-12 mb-2 mb-xl-0"><div class="d-flex flex-row">
+              <div class="avatar bg-light-info me-2"><div class="avatar-content"><i data-feather="user" class="avatar-icon"></i></div></div>
+              <div class="my-auto"><h4 class="fw-bolder mb-0">214</h4><p class="card-text font-small-3 mb-0">Kupci</p></div>
+            </div></div>
+            <div class="col-xl-4 col-sm-6 col-12 mb-2 mb-sm-0"><div class="d-flex flex-row">
+              <div class="avatar bg-light-danger me-2"><div class="avatar-content"><i data-feather="box" class="avatar-icon"></i></div></div>
+              <div class="my-auto"><h4 class="fw-bolder mb-0">3.972</h4><p class="card-text font-small-3 mb-0">Proizvodi</p></div>
+            </div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-revenue-budget">
+        <div class="row mx-0">
+          <div class="col-md-8 col-12 revenue-report-wrapper">
+            <div class="d-sm-flex justify-content-between align-items-center mb-3">
+              <h4 class="card-title mb-50 mb-sm-0">Izvještaj o radnim nalozima</h4>
+              <div class="d-flex align-items-center">
+                <div class="d-flex align-items-center me-2"><span class="bullet bullet-warning font-small-3 me-50 cursor-pointer"></span><span id="revenue-current-label">2026</span></div>
+                <div class="d-flex align-items-center ms-75"><span class="bullet bullet-secondary font-small-3 me-50 cursor-pointer"></span><span id="revenue-compare-label">2025</span></div>
+              </div>
+            </div>
+            <div class="dashboard-report-chart-shell">
+              <div id="dashboard-report-loader" class="dashboard-report-loader is-hidden"></div>
+              <div id="revenue-report-chart"><!-- stacked bar chart, 230px --></div>
+            </div>
+          </div>
+          <div class="col-md-4 col-12 budget-wrapper pb-2 pb-md-0">
+            <div class="btn-group">
+              <button type="button" id="dashboard-report-year-toggle" class="btn btn-outline-primary btn-sm dropdown-toggle budget-dropdown">2025</button>
+            </div>
+            <p class="text-center text mb-50" id="work-orders-total-subtitle">Tekuća godina: 2026</p>
+            <h2 class="mb-25" id="work-orders-total-primary">1.284 naloga</h2>
+            <div class="d-flex justify-content-center">
+              <span class="fw-bolder me-25" id="work-orders-total-compare-label">Poređenje sa 2025:</span>
+              <span id="work-orders-total-compare">1.102 naloga</span>
+            </div>
+            <div class="d-flex justify-content-center mb-1">
+              <span class="badge rounded-pill badge-light-success" id="work-orders-delta">Razlika: +182 (+16,5%)</span>
+            </div>
+            <div id="budget-chart"><!-- sparkline line, 80px --></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row match-height">
+    <div class="col-lg-4 col-12">
+      <div class="row match-height">
+        <div class="col-lg-6 col-md-3 col-6"><div class="card"><div class="card-body pb-50">
+          <h6>Narudžbe</h6><h2 class="fw-bolder mb-1">2,76k</h2><div id="statistics-order-chart"></div>
+        </div></div></div>
+        <div class="col-lg-6 col-md-3 col-6"><div class="card card-tiny-line-stats"><div class="card-body pb-50">
+          <h6>Dobit</h6><h2 class="fw-bolder mb-1">6,24k</h2><div id="statistics-profit-chart"></div>
+        </div></div></div>
+        <div class="col-lg-12 col-md-6 col-12"><div class="card earnings-card"><div class="card-body"><div class="row">
+          <div class="col-6">
+            <h4 class="card-title mb-1">Zarada</h4>
+            <div class="font-small-2">Ovaj mjesec</div>
+            <h5 class="mb-1">4055,56 KM</h5>
+            <p class="card-text text-muted font-small-2"><span class="fw-bolder">68.2%</span><span> više zarade nego prošlog mjeseca.</span></p>
+          </div>
+          <div class="col-6"><div id="earnings-chart"><!-- donut --></div></div>
+        </div></div></div></div>
+      </div>
+    </div>
+
+    <div class="col-lg-8 col-12">
+      <div class="card card-company-table dashboard-workorders-card">
+        <div class="card-body p-0">
+          <div class="table-responsive dashboard-workorders-scroll">
+            <table class="table table-hover borderless mb-0 dashboard-workorders-table">
+              <thead><tr><th>#</th><th>Narudžba</th><th>Naziv</th><th>Šifra</th><th>Klijent</th><th>Datum kreiranja</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr class="dashboard-workorder-row">
+                  <td class="text-nowrap"><span class="dashboard-workorder-id">26-6000-0001284</span></td>
+                  <td class="text-nowrap"><span>26-0100-0000412</span></td>
+                  <td><span class="dashboard-product-name" title="Prirubnica DN80 PN16">Prirubnica..</span></td>
+                  <td class="text-nowrap"><span>PR-080-16</span></td>
+                  <td><div class="dashboard-client-wrap"><span class="dashboard-client-avatar" style="background-color: hsla(212, 72%, 52%, 0.18); color: hsl(212, 82%, 30%); border: 1px solid hsla(212, 72%, 52%, 0.35);">GW</span><span class="dashboard-client-name">GROB-WERKE</span></div></td>
+                  <td>06 Oct 2026</td>
+                  <td><span class="badge rounded-pill dashboard-status-badge dashboard-status-u-radu">U radu</span></td>
+                </tr>
+                <tr class="dashboard-workorder-row">
+                  <td class="text-nowrap"><span class="dashboard-workorder-id">26-6000-0001283</span></td>
+                  <td class="text-nowrap"><span>26-0100-0000411</span></td>
+                  <td><span class="dashboard-product-name" title="Osovina vratila Ø40">Osovina vr..</span></td>
+                  <td class="text-nowrap"><span>OV-040-220</span></td>
+                  <td><div class="dashboard-client-wrap"><span class="dashboard-client-avatar" style="background-color: hsla(28, 72%, 52%, 0.18); color: hsl(28, 82%, 30%); border: 1px solid hsla(28, 72%, 52%, 0.35);">TG</span><span class="dashboard-client-name">TRENDY GERMANY GMBH</span></div></td>
+                  <td>06 Oct 2026</td>
+                  <td><span class="badge rounded-pill dashboard-status-badge dashboard-status-otvoren">Otvoren</span></td>
+                </tr>
+                <tr class="dashboard-workorder-row">
+                  <td class="text-nowrap"><span class="dashboard-workorder-id">26-6000-0001282</span></td>
+                  <td class="text-nowrap"><span>26-0100-0000409</span></td>
+                  <td><span class="dashboard-product-name" title="Nosač motora 3mm">Nosač moto..</span></td>
+                  <td class="text-nowrap"><span>NM-300-A</span></td>
+                  <td><div class="dashboard-client-wrap"><span class="dashboard-client-avatar" style="background-color: hsla(140, 72%, 52%, 0.18); color: hsl(140, 82%, 30%); border: 1px solid hsla(140, 72%, 52%, 0.35);">KH</span><span class="dashboard-client-name">KOVIS Hidraulika</span></div></td>
+                  <td>05 Oct 2026</td>
+                  <td><span class="badge rounded-pill dashboard-status-badge dashboard-status-planiran">Planiran</span></td>
+                </tr>
+                <tr class="dashboard-workorder-row">
+                  <td class="text-nowrap"><span class="dashboard-workorder-id">26-6000-0001281</span></td>
+                  <td class="text-nowrap"><span>26-0100-0000405</span></td>
+                  <td><span class="dashboard-product-name" title="Kućište ležaja">Kućište le..</span></td>
+                  <td class="text-nowrap"><span>KL-6205</span></td>
+                  <td><div class="dashboard-client-wrap"><span class="dashboard-client-avatar" style="background-color: hsla(212, 72%, 52%, 0.18); color: hsl(212, 82%, 30%); border: 1px solid hsla(212, 72%, 52%, 0.35);">GW</span><span class="dashboard-client-name">GROB-WERKE</span></div></td>
+                  <td>03 Oct 2026</td>
+                  <td><span class="badge rounded-pill dashboard-status-badge dashboard-status-rezerviran">Rezerviran</span></td>
+                </tr>
+                <tr class="dashboard-workorder-row">
+                  <td class="text-nowrap"><span class="dashboard-workorder-id">26-6000-0001279</span></td>
+                  <td class="text-nowrap"><span>26-0100-0000398</span></td>
+                  <td><span class="dashboard-product-name" title="Distantna čahura">Distantna ..</span></td>
+                  <td class="text-nowrap"><span>DC-12-30</span></td>
+                  <td><div class="dashboard-client-wrap"><span class="dashboard-client-avatar" style="background-color: hsla(28, 72%, 52%, 0.18); color: hsl(28, 82%, 30%); border: 1px solid hsla(28, 72%, 52%, 0.35);">TG</span><span class="dashboard-client-name">TRENDY GERMANY GMBH</span></div></td>
+                  <td>02 Oct 2026</td>
+                  <td><span class="badge rounded-pill dashboard-status-badge dashboard-status-djelimicno">Djelomično zaključen</span></td>
+                </tr>
+                <tr class="dashboard-workorder-row">
+                  <td class="text-nowrap"><span class="dashboard-workorder-id">26-6000-0001275</span></td>
+                  <td class="text-nowrap"><span>26-0100-0000390</span></td>
+                  <td><span class="dashboard-product-name" title="Ploča adaptera">Ploča adap..</span></td>
+                  <td class="text-nowrap"><span>PA-200-10</span></td>
+                  <td><div class="dashboard-client-wrap"><span class="dashboard-client-avatar" style="background-color: hsla(300, 72%, 52%, 0.18); color: hsl(300, 82%, 30%); border: 1px solid hsla(300, 72%, 52%, 0.35);">MS</span><span class="dashboard-client-name">Metalac Sarajevo</span></div></td>
+                  <td>30 Sep 2026</td>
+                  <td><span class="badge rounded-pill dashboard-status-badge dashboard-status-zakljucen">Zaključen</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="../vendors/js/charts/apexcharts.min.js"></script>
+<script>
+var M=['Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'],cur=[86,94,112,108,121,117,126,98,132,140,0,0],cmp=[-72,-80,-91,-88,-95,-101,-99,-84,-103,-109,-97,-92];
+var off={enabled:false};
+new ApexCharts(document.querySelector('#revenue-report-chart'),{chart:{height:230,stacked:true,type:'bar',toolbar:{show:false},animations:off},plotOptions:{bar:{columnWidth:'17%',endingShape:'rounded'},distributed:true},colors:['#ff9f43','#dcdae3'],series:[{name:'2026',data:cur},{name:'2025',data:cmp}],dataLabels:{enabled:false},legend:{show:false},grid:{padding:{top:-20,bottom:-10},yaxis:{lines:{show:false}}},xaxis:{categories:M,labels:{style:{colors:'#b9b9c3',fontSize:'0.86rem'}},axisTicks:{show:false},axisBorder:{show:false}},yaxis:{labels:{style:{colors:'#b9b9c3',fontSize:'0.86rem'}}},tooltip:{enabled:false}}).render();
+new ApexCharts(document.querySelector('#budget-chart'),{chart:{height:80,toolbar:{show:false},zoom:{enabled:false},type:'line',sparkline:{enabled:true},animations:off},stroke:{curve:'smooth',dashArray:[0,5],width:[2]},colors:['#ff9f43','#dcdae3'],series:[{name:'2026',data:cur.slice(0,10)},{name:'2025',data:cmp.slice(0,10).map(Math.abs)}],tooltip:{enabled:false}}).render();
+new ApexCharts(document.querySelector('#earnings-chart'),{chart:{type:'donut',height:120,toolbar:{show:false},animations:off},dataLabels:{enabled:false},series:[53,16,31],legend:{show:false},labels:['Proizvodnja','Usluge','Mašine'],stroke:{width:0},colors:['#28c76f66','#28c76f33','#28c76f'],grid:{padding:{right:-20,bottom:-8,left:-20}},plotOptions:{pie:{startAngle:-10,donut:{labels:{show:true,name:{offsetY:15},value:{offsetY:-15},total:{show:true,offsetY:15,label:'Proizvodnja',formatter:function(){return '53%'}}}}}}}).render();
+new ApexCharts(document.querySelector('#statistics-order-chart'),{chart:{height:70,type:'bar',stacked:true,toolbar:{show:false},animations:off},grid:{show:false,padding:{left:0,right:0,top:-15,bottom:-15}},plotOptions:{bar:{horizontal:false,columnWidth:'20%',colors:{backgroundBarColors:['#f3f3f3','#f3f3f3','#f3f3f3','#f3f3f3','#f3f3f3'],backgroundBarRadius:5}}},legend:{show:false},dataLabels:{enabled:false},colors:['#ff9f43'],series:[{name:'2026',data:[45,85,65,45,65]}],xaxis:{labels:{show:false},axisBorder:{show:false},axisTicks:{show:false}},yaxis:{show:false},tooltip:{enabled:false}}).render();
+new ApexCharts(document.querySelector('#statistics-profit-chart'),{chart:{height:70,type:'line',toolbar:{show:false},zoom:{enabled:false},animations:off},grid:{borderColor:'#EBEBEB',strokeDashArray:5,xaxis:{lines:{show:true}},yaxis:{lines:{show:false}},padding:{top:-30,bottom:-10}},stroke:{width:3},colors:['#00cfe8'],series:[{data:[0,20,5,30,15,45]}],markers:{size:2,colors:'#00cfe8',strokeColors:'#00cfe8',strokeWidth:2},xaxis:{labels:{show:true,style:{fontSize:'0px'}},axisBorder:{show:false},axisTicks:{show:false}},yaxis:{show:false},tooltip:{enabled:false}}).render();
+</script>
+    </div>
+  </div>
+</div>
+<script src="../vendors/js/vendors.min.js"></script>
+<script>feather.replace({width: 14, height: 14});</script>
+</body>
+</html>
