@@ -159,6 +159,14 @@ class OrderAiDigitalPdfRulesParser
             'searchable_text' => $searchableLines,
         ], $noteSourceLines, $expectedTotal);
 
+        $sourceNotes = $this->recoverTrendyDePositionNotes($preparedDocument, $items);
+        foreach ($items as $index => $item) {
+            $lineNumber = (int) ($item['line_number'] ?? 0);
+            if ($lineNumber > 0 && trim((string) ($item['note'] ?? '')) === '' && trim((string) ($sourceNotes[$lineNumber] ?? '')) !== '') {
+                $items[$index]['note'] = $sourceNotes[$lineNumber];
+            }
+        }
+
         if ($items === []) {
             Log::warning('Order AI Trendy DE digital PDF rules parser found no items.', [
                 'scan_id' => $scan->id,
@@ -182,15 +190,6 @@ class OrderAiDigitalPdfRulesParser
             );
         $supplierName = $this->resolveTrendyDeSupplierName($searchableText);
         $deliveryDeadline = $header['delivery_deadline'];
-        if ($deliveryDeadline !== '') {
-            $items = array_values(array_map(function (array $item) use ($deliveryDeadline): array {
-                if (trim((string) ($item['delivery_deadline'] ?? '')) === '') {
-                    $item['delivery_deadline'] = $deliveryDeadline;
-                }
-
-                return $item;
-            }, $items));
-        }
         $contactName = $header['contact_name'];
         $receiverName = $header['receiver_name'];
         $currency = $this->extractCurrency($searchableText);
@@ -239,7 +238,13 @@ class OrderAiDigitalPdfRulesParser
                 'confidence' => $this->resolveTrendyDeConfidence($items, $documentNumber, $receiverName),
                 'warnings' => [],
             ],
-            'items' => $items,
+            'items' => array_values(array_map(function (array $item) use ($deliveryDeadline): array {
+                $itemDeadline = trim((string) ($item['delivery_deadline'] ?? ''));
+                $item['_delivery_deadline_explicit'] = $itemDeadline !== '';
+                $item['delivery_deadline'] = $itemDeadline !== '' ? $itemDeadline : $deliveryDeadline;
+
+                return $item;
+            }, $items)),
             'summary' => [
                 'subtotal' => $netTotal,
                 'vat_total' => 0.0,
@@ -305,16 +310,6 @@ class OrderAiDigitalPdfRulesParser
         // next item row. Read that sequence from one source at a time instead
         // of merging sources, which duplicates note lines and loses text that
         // is not on a hard-coded material/finishing list.
-        $positionNoteMap = $this->extractTrendyDePositionNoteMap($lines);
-        if ($noteSourceLines !== []) {
-            $fallbackPositionNoteMap = $this->extractTrendyDePositionNoteMap($noteSourceLines);
-
-            foreach ($fallbackPositionNoteMap as $lineNumber => $note) {
-                if (!array_key_exists($lineNumber, $positionNoteMap)) {
-                    $positionNoteMap[$lineNumber] = $note;
-                }
-            }
-        }
         $items = [];
         $openItem = null;
         $queuedItem = null;
@@ -368,6 +363,23 @@ class OrderAiDigitalPdfRulesParser
                 }
 
                 break;
+            }
+
+            if (is_array($openItem)
+                && (int) ($openItem['line_number'] ?? 0) > 0
+                && preg_match('/^' . preg_quote((string) $openItem['line_number'], '/') . '\s+(\d{6,})$/u', $line, $continuationMatches) === 1) {
+                $this->appendTrendyDeParsedItemNote($openItem, (string) $continuationMatches[1]);
+                continue;
+            }
+
+            if (is_array($openItem)
+                && (int) ($openItem['line_number'] ?? 0) <= 0
+                && $this->isTrendyDeItemReady($openItem)
+                && preg_match('/^(\d{1,3})\s+(\d{6,})$/u', $line, $continuationMatches) === 1
+                && (int) $continuationMatches[1] === count($items) + 1) {
+                $openItem['line_number'] = (int) $continuationMatches[1];
+                $this->appendTrendyDeParsedItemNote($openItem, (string) $continuationMatches[2]);
+                continue;
             }
 
             $codeAmountItem = $this->parseTrendyDeCodeAmountRow($line);
@@ -471,6 +483,17 @@ class OrderAiDigitalPdfRulesParser
 
         $items = $this->normalizeTrendyDeParsedLineNumbers($items);
 
+        $positionNoteMap = $this->extractTrendyDePositionNoteMap($lines, $items);
+        if ($noteSourceLines !== []) {
+            $fallbackPositionNoteMap = $this->extractTrendyDePositionNoteMap($noteSourceLines, $items);
+
+            foreach ($fallbackPositionNoteMap as $lineNumber => $note) {
+                if (!array_key_exists($lineNumber, $positionNoteMap)) {
+                    $positionNoteMap[$lineNumber] = $note;
+                }
+            }
+        }
+
         return $this->applyTrendyDePositionNoteMap($items, $positionNoteMap);
     }
 
@@ -542,6 +565,120 @@ class OrderAiDigitalPdfRulesParser
         ]);
 
         return [$bestItems, $bestSource, $candidates];
+    }
+
+    public function recoverTrendyDePositionNotes(array $preparedDocument, array $items): array
+    {
+        if ($items === []) {
+            return [];
+        }
+
+        $sources = [
+            $this->flattenPreparedTableRowLines($preparedDocument),
+            $this->flattenPreparedLines($preparedDocument),
+            $this->splitVisibleTextLines($this->resolvePreparedSearchableText($preparedDocument)),
+        ];
+        $recovered = [];
+        $itemNamesByLine = [];
+
+        foreach ($items as $item) {
+            if (is_array($item) && (int) ($item['line_number'] ?? 0) > 0) {
+                $itemNamesByLine[(int) $item['line_number']] = trim((string) ($item['product_name'] ?? ''));
+            }
+        }
+
+        foreach ($sources as $lines) {
+            if ($lines === []) {
+                continue;
+            }
+
+            foreach ($this->extractTrendyDePositionNoteMap($lines, $items) as $lineNumber => $note) {
+                $lineNumber = (int) $lineNumber;
+                $note = trim((string) $note);
+
+                if ($lineNumber > 0 && isset($itemNamesByLine[$lineNumber])
+                    && $note !== '' && $note !== $itemNamesByLine[$lineNumber]
+                    && !isset($recovered[$lineNumber])) {
+                    $recovered[$lineNumber] = $note;
+                }
+            }
+        }
+
+        foreach ($this->extractTrendyDeCarriedDescriptionNotes($preparedDocument, $items) as $lineNumber => $note) {
+            $existingLines = preg_split('/\R/u', (string) ($recovered[$lineNumber] ?? '')) ?: [];
+            foreach (preg_split('/\R/u', $note) ?: [] as $noteLine) {
+                $noteLine = trim($noteLine);
+                if ($noteLine !== '' && !in_array($noteLine, $existingLines, true)) {
+                    $existingLines[] = $noteLine;
+                }
+            }
+            $recovered[$lineNumber] = implode("\n", array_values(array_filter($existingLines)));
+        }
+
+        return $recovered;
+    }
+
+    private function extractTrendyDeCarriedDescriptionNotes(array $preparedDocument, array $items): array
+    {
+        $orderedItems = array_values(array_filter($items, static fn (mixed $item): bool => is_array($item)
+            && (int) ($item['line_number'] ?? 0) > 0
+            && trim((string) ($item['product_code'] ?? '')) !== ''));
+        $itemIndexByCode = [];
+
+        foreach ($orderedItems as $index => $item) {
+            $code = strtoupper(trim((string) $item['product_code']));
+            if (!isset($itemIndexByCode[$code])) {
+                $itemIndexByCode[$code] = $index;
+            }
+        }
+
+        $notes = [];
+        foreach ($this->extractPreparedPages($preparedDocument) as $page) {
+            $rows = array_values((array) ($page['items'] ?? []));
+            foreach ($rows as $rowIndex => $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                $currentItem = $this->parseTrendyDeCodeAmountRow((string) ($row['text'] ?? ''));
+                if ($currentItem === null || (int) ($currentItem['line_number'] ?? 0) > 0) {
+                    continue;
+                }
+
+                $code = strtoupper(trim((string) ($currentItem['product_code'] ?? '')));
+                $currentIndex = $itemIndexByCode[$code] ?? null;
+                if (!is_int($currentIndex) || $currentIndex <= 0) {
+                    continue;
+                }
+
+                $currentName = trim((string) ($orderedItems[$currentIndex]['product_name'] ?? ''));
+                $followingRow = trim((string) ($rows[$rowIndex + 1]['text'] ?? ''));
+                if ($currentName === '' || !str_starts_with(mb_strtolower($followingRow), mb_strtolower($currentName))) {
+                    continue;
+                }
+
+                $previousLineNumber = (int) ($orderedItems[$currentIndex - 1]['line_number'] ?? 0);
+                if ($previousLineNumber <= 0) {
+                    continue;
+                }
+
+                foreach ((array) ($row['cells'] ?? []) as $cell) {
+                    $text = is_array($cell) ? trim((string) ($cell['text'] ?? '')) : '';
+                    if ($text === '' || $text === (string) ($currentItem['product_code'] ?? '')
+                        || preg_match('/^' . $this->germanAmountPattern(true) . '$/u', $text) === 1
+                        || preg_match('/^(?:STU|ST|PCS|PIECE|KO|Betrag|VAT\s*%)$/iu', $text) === 1) {
+                        continue;
+                    }
+
+                    $notes[$previousLineNumber] = $this->appendTrendyDeBoundaryNoteLine(
+                        (string) ($notes[$previousLineNumber] ?? ''),
+                        $text
+                    );
+                }
+            }
+        }
+
+        return $notes;
     }
 
     private function isBetterTrendyDeItemSourceScore(array $candidateScore, array $bestScore): bool
@@ -857,16 +994,45 @@ class OrderAiDigitalPdfRulesParser
         }, $items, array_keys($items)));
     }
 
-    private function extractTrendyDePositionNoteMap(array $lines): array
+    private function extractTrendyDePositionNoteMap(array $lines, array $knownItems = []): array
     {
         $notesByLineNumber = [];
         $currentLineNumber = 0;
         $currentItemKeepsDeliveryLabelInNote = false;
+        $lineNumbersByCode = [];
+        $productNamesByLineNumber = [];
+        $codeFirstRowNeedsName = false;
+
+        foreach ($knownItems as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $code = strtoupper(trim((string) ($item['product_code'] ?? '')));
+            $lineNumber = (int) ($item['line_number'] ?? 0);
+
+            if ($code !== '' && $lineNumber > 0) {
+                $lineNumbersByCode[$code][] = $lineNumber;
+                $productName = trim((string) ($item['product_name'] ?? ''));
+                if ($productName !== '' && !isset($productNamesByLineNumber[$lineNumber])) {
+                    $productNamesByLineNumber[$lineNumber] = $productName;
+                }
+            }
+        }
 
         foreach (array_values($lines) as $line) {
             $line = trim((string) $line);
 
             if ($line === '') {
+                continue;
+            }
+
+            if ($currentLineNumber > 0
+                && preg_match('/^' . preg_quote((string) $currentLineNumber, '/') . '\s+(\d{6,})$/u', $line, $continuationMatches) === 1) {
+                $notesByLineNumber[$currentLineNumber] = $this->appendTrendyDeBoundaryNoteLine(
+                    (string) ($notesByLineNumber[$currentLineNumber] ?? ''),
+                    (string) $continuationMatches[1]
+                );
                 continue;
             }
 
@@ -882,6 +1048,7 @@ class OrderAiDigitalPdfRulesParser
                         $note
                     );
                     $currentLineNumber = $lineNumber;
+                    $codeFirstRowNeedsName = false;
                 }
 
                 continue;
@@ -889,11 +1056,34 @@ class OrderAiDigitalPdfRulesParser
 
             $codeAmountItem = $this->parseTrendyDeCodeAmountRow($line);
 
-            if ($codeAmountItem !== null && (int) ($codeAmountItem['line_number'] ?? 0) > 0) {
+            if ($codeAmountItem !== null) {
                 $currentLineNumber = (int) ($codeAmountItem['line_number'] ?? 0);
+                $codeFirstRowNeedsName = $currentLineNumber <= 0;
+                if ($currentLineNumber <= 0) {
+                    $matchingPositions = $lineNumbersByCode[strtoupper(trim((string) ($codeAmountItem['product_code'] ?? '')))] ?? [];
+                    $currentLineNumber = count($matchingPositions) === 1 ? (int) $matchingPositions[0] : 0;
+                }
                 $currentItemKeepsDeliveryLabelInNote = $this->isTrendyDeSpacedNumericArticleCode(
                     (string) ($codeAmountItem['product_code'] ?? '')
                 );
+                continue;
+            }
+
+            if ($currentLineNumber > 0 && $line === (string) $currentLineNumber) {
+                continue;
+            }
+
+            $productName = $productNamesByLineNumber[$currentLineNumber] ?? '';
+            if ($codeFirstRowNeedsName && $productName !== ''
+                && preg_match('/^' . preg_quote($productName, '/') . '(?:\s+' . preg_quote((string) $currentLineNumber, '/') . ')?(?:\s+(.*))?$/iu', $line, $nameMatches) === 1) {
+                $codeFirstRowNeedsName = false;
+                $inlineNote = trim((string) ($nameMatches[1] ?? ''));
+                if ($inlineNote !== '') {
+                    $notesByLineNumber[$currentLineNumber] = $this->appendTrendyDeBoundaryNoteLine(
+                        (string) ($notesByLineNumber[$currentLineNumber] ?? ''),
+                        $inlineNote
+                    );
+                }
                 continue;
             }
 
@@ -901,6 +1091,7 @@ class OrderAiDigitalPdfRulesParser
 
             if ($detectedNextItem !== null && (int) ($detectedNextItem['line_number'] ?? 0) > 0) {
                 $currentLineNumber = (int) ($detectedNextItem['line_number'] ?? 0);
+                $codeFirstRowNeedsName = false;
                 $currentItemKeepsDeliveryLabelInNote = $this->isTrendyDeSpacedNumericArticleCode(
                     (string) ($detectedNextItem['product_code'] ?? '')
                 );
@@ -910,6 +1101,7 @@ class OrderAiDigitalPdfRulesParser
             if ($this->isTrendyDeSummaryLine($this->normalizeKeywordText($line))) {
                 $currentLineNumber = 0;
                 $currentItemKeepsDeliveryLabelInNote = false;
+                $codeFirstRowNeedsName = false;
                 continue;
             }
 

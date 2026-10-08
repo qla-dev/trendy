@@ -109,6 +109,7 @@ $trendyDePromptRules = <<<'PROMPT'
 - Artikel Nr. -> product_code
 - Beschreibung first visible line -> product_name
 - Additional Beschreibung lines before Liefertermin/Lieferdatum -> note, including Crtež/Crtez rows and their following drawing/code value.
+- Treat each new Pos. + Artikel Nr. + first Beschreibung name row as the start of an item. Put every subsequent row in that item's Beschreibung column into its note, in order, until the next item's name row or the table footer. Do not require any particular words or labels in those rows. For example, the rows "Materijal: C45 K" and "Dimenzije: A12 x 8 x 30" below position 1 belong to position 1's note; a standalone drawing number or finish instruction follows the same rule.
 - In amount-first extracted text, a standalone finish/material line immediately after the product description plus trailing Pos. number belongs to that same position's note. Example: if "... Saugkopf links1" is followed by "ALUMINIUM", item 1 note is "ALUMINIUM".
 - Liefertermin/Lieferdatum value inside the line-item block -> delivery_deadline for that item; otherwise use the header Liefertermin/Lieferdatum
 - Menge -> quantity

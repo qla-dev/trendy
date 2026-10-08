@@ -18,6 +18,130 @@ use Tests\TestCase;
 
 class OrderAiScanServiceTest extends TestCase
 {
+    public function test_normalized_ai_items_inherit_header_deadline_only_when_item_deadline_is_blank(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $method = (new ReflectionClass($service))->getMethod('normalizePayload');
+        $method->setAccessible(true);
+        $payload = $method->invoke($service, [
+            'order' => ['customer_name' => 'Customer', 'supplier_name' => 'Supplier', 'delivery_deadline' => '2. 11. 2026.'],
+            'items' => [
+                ['line_number' => 1, 'product_code' => 'A12345', 'product_name' => 'Part A', 'quantity' => 1, 'unit_price' => 10, 'line_total' => 10, 'delivery_deadline' => ''],
+                ['line_number' => 2, 'product_code' => 'B12345', 'product_name' => 'Part B', 'quantity' => 1, 'unit_price' => 10, 'line_total' => 10, 'delivery_deadline' => '9. 11. 2026.'],
+            ],
+            'summary' => [],
+        ]);
+
+        $this->assertSame(['2. 11. 2026.', '9. 11. 2026.'], array_column($payload['items'], 'delivery_deadline'));
+    }
+
+    public function test_fresh_trendy_de_scan_replaces_datum_on_all_items_before_preview(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $method = (new ReflectionClass($service))->getMethod('normalizePayload');
+        $method->setAccessible(true);
+        $payload = $method->invoke($service, [
+            'order' => [
+                'customer_name' => 'Trendy Germany GmbH',
+                'supplier_name' => 'Trendy Germany GmbH-52',
+                'external_document_date' => '7. 10. 2026.',
+                'delivery_deadline' => '2. 11. 2026.',
+            ],
+            'items' => array_map(static fn (string $code, int $index): array => [
+                'line_number' => $index + 1,
+                'product_code' => $code,
+                'product_name' => 'Passfeder',
+                'quantity' => 1,
+                'unit_price' => 10,
+                'line_total' => 10,
+                'delivery_deadline' => '07.10.2026',
+            ], ['10400847', '10400859', 'ZM-1.02903/027', '10515266'], [0, 1, 2, 3]),
+            'summary' => [],
+        ]);
+
+        $this->assertSame(
+            array_fill(0, 4, '2. 11. 2026.'),
+            array_column($payload['items'], 'delivery_deadline')
+        );
+    }
+
+    public function test_fresh_trendy_de_scan_preserves_a_confirmed_item_date_even_if_it_equals_datum(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $method = (new ReflectionClass($service))->getMethod('normalizePayload');
+        $method->setAccessible(true);
+        $payload = $method->invoke($service, [
+            'order' => [
+                'customer_name' => 'Trendy Germany GmbH',
+                'external_document_date' => '7. 10. 2026.',
+                'delivery_deadline' => '2. 11. 2026.',
+            ],
+            'items' => [[
+                'line_number' => 1,
+                'product_code' => '10400847',
+                'product_name' => 'Passfeder',
+                'quantity' => 1,
+                'unit_price' => 10,
+                'line_total' => 10,
+                'delivery_deadline' => '7. 10. 2026.',
+                '_delivery_deadline_explicit' => true,
+            ]],
+            'summary' => [],
+        ]);
+
+        $this->assertSame('7. 10. 2026.', data_get($payload, 'items.0.delivery_deadline'));
+        $this->assertTrue($payload['items'][0]['_delivery_deadline_explicit']);
+    }
+
+    public function test_trendy_de_items_inherit_header_deadline_when_ai_uses_document_date(): void
+    {
+        $lines = [
+            '7. 10. 2026.',
+            '2. 11. 2026.',
+            'Trendy Germany GmbH',
+            'Bestellung 26-020-001408',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '1 10400847 Passfeder A 12 x 8 x 30 1,00 STU 20,30 0,00 20,30',
+            '2 10400859 Passfeder A 12 k9 x 8 x 45 4,00 STU 15,60 0,00 62,40',
+            'Liefertermin: 9. 11. 2026.',
+            'Total 82,70',
+        ];
+        $text = implode("\n", $lines);
+        $payload = [
+            'order' => [
+                'customer_name' => 'Trendy Germany GmbH',
+                'external_document_date' => '7. 10. 2026.',
+                'delivery_deadline' => '2. 11. 2026.',
+            ],
+            'items' => [
+                ['line_number' => 1, 'product_code' => '10400847', 'product_name' => 'Passfeder', 'quantity' => 1, 'unit_price' => 20.3, 'line_total' => 20.3, 'delivery_deadline' => '7. 10. 2026.'],
+                ['line_number' => 2, 'product_code' => '10400859', 'product_name' => 'Passfeder', 'quantity' => 4, 'unit_price' => 15.6, 'line_total' => 62.4, 'delivery_deadline' => '7. 10. 2026.'],
+            ],
+        ];
+
+        $service = app(OrderAiScanService::class);
+        $method = (new ReflectionClass($service))->getMethod('postProcessTrendyDePayload');
+        $method->setAccessible(true);
+        $processed = $method->invoke($service, $payload, [
+            'searchable_text' => $text,
+            'processed_pages' => [['lines' => $lines, 'text' => $text]],
+        ]);
+
+        $this->assertSame('2. 11. 2026.', data_get($processed, 'order.delivery_deadline'));
+        $this->assertSame(['2. 11. 2026.', '9. 11. 2026.'], array_column($processed['items'], 'delivery_deadline'));
+
+        $scan = new OrderAiScan(['document_profile' => 'trendy_de', 'source_file_name' => 'Bestellung_26-020-001408.pdf']);
+        $parsed = app(OrderAiDigitalPdfRulesParser::class)->parse($scan, [
+            'pdf_type' => 'digital',
+            'provider_input_mode' => 'text',
+            'searchable_text' => $text,
+            'processed_pages' => [['page' => 1, 'lines' => $lines, 'text' => $text]],
+        ]);
+        $this->assertSame('2. 11. 2026.', data_get($parsed, 'normalized_payload.order.delivery_deadline'));
+        $this->assertSame('2. 11. 2026.', data_get($parsed, 'normalized_payload.items.0.delivery_deadline'));
+        $this->assertSame('9. 11. 2026.', data_get($parsed, 'normalized_payload.items.1.delivery_deadline'));
+    }
+
     public function test_trendy_de_position_dates_survive_blank_or_conflicting_header_dates(): void
     {
         $codes = ['2155039500', '2155046000', 'DS12A16340', 'DS12A16840', '2158075200', 'EXC110A090030'];
@@ -227,6 +351,267 @@ class OrderAiScanServiceTest extends TestCase
             $notes[1]
         );
         $this->assertSame("- Graviranje\nNitrocarburiert + Nachoxidiert.\nMaterijal: S355JO", $notes[2]);
+    }
+
+    public function test_trendy_de_position_notes_use_known_item_code_when_row_omits_position_number(): void
+    {
+        $parser = app(OrderAiDigitalPdfRulesParser::class);
+        $method = (new ReflectionClass($parser))->getMethod('extractTrendyDePositionNoteMap');
+        $method->setAccessible(true);
+
+        $notes = $method->invoke($parser, [
+            '10400847 20,30 0,00 1,00 STU 20,30',
+            'Passfeder A 12 x 8 x 30 1',
+            'Custom instruction without a label',
+            'Drawing 10000662938',
+            '10400859 62,40 0,00 4,00 STU 15,60',
+            'Passfeder A 12 k9 x 8 x 45 2',
+            'Another instruction',
+        ], [
+            ['line_number' => 1, 'product_code' => '10400847', 'product_name' => 'Passfeder A 12 x 8 x 30'],
+            ['line_number' => 2, 'product_code' => '10400859', 'product_name' => 'Passfeder A 12 k9 x 8 x 45'],
+        ]);
+
+        $this->assertSame("Custom instruction without a label\nDrawing 10000662938", $notes[1]);
+        $this->assertSame('Another instruction', $notes[2]);
+    }
+
+    public function test_trendy_de_material_and_dimensions_lines_become_each_positions_note(): void
+    {
+        $parser = app(OrderAiDigitalPdfRulesParser::class);
+        $method = (new ReflectionClass($parser))->getMethod('parseTrendyDeItems');
+        $method->setAccessible(true);
+
+        $items = $method->invoke($parser, [
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '1,00 20,30STU 20,300,0010400847 Passfeder A 12 x 8 x 30 1',
+            'Materijal: C45 K',
+            'Dimenzije: A12 x 8 x 30',
+            '4,00 15,60STU 62,400,0010400859 Passfeder A 12 k9 x 8 x 45 2',
+            'Materijal: C45 K',
+            'Dimenzije: A12 k9 x 8 x 45',
+            '2,00 33,50STU 67,000,00ZM-1.02903/027 Passfeder 3',
+            'Materijal: St 50-2k',
+            'Dimenzije: A16 x 10 x 110',
+            '2,00 94,15STU 188,300,0010515266 Beilage CP100 WS 2tlg 4',
+            '10000662938',
+            'Total 338,00',
+        ]);
+
+        $this->assertCount(4, $items);
+        $this->assertSame("Materijal: C45 K\nDimenzije: A12 x 8 x 30", $items[0]['note']);
+        $this->assertSame("Materijal: C45 K\nDimenzije: A12 k9 x 8 x 45", $items[1]['note']);
+        $this->assertSame("Materijal: St 50-2k\nDimenzije: A16 x 10 x 110", $items[2]['note']);
+        $this->assertSame('10000662938', $items[3]['note']);
+    }
+
+    public function test_trendy_de_ai_note_fallback_collects_any_description_rows_until_next_item(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $method = (new ReflectionClass($service))->getMethod('extractLikelyTrendyDeSourcePositionNotes');
+        $method->setAccessible(true);
+
+        $notes = $method->invoke($service, [
+            'processed_pages' => [[
+                'lines' => [
+                    '1 10400847 Passfeder A 12 x 8 x 30 1,00 STU 20,30 0,00 20,30',
+                    'Materijal: C45 K',
+                    'Dimenzije: A12 x 8 x 30',
+                    'Special surface finish',
+                    '2 10400859 Passfeder A 12 k9 x 8 x 45 4,00 STU 15,60 0,00 62,40',
+                    'Drawing 10000662938',
+                    'Liefertermin: 2. 11. 2026.',
+                    'Total 82,70',
+                    'Footer text',
+                ],
+            ]],
+        ]);
+
+        $this->assertSame([
+            'Materijal: C45 K',
+            'Dimenzije: A12 x 8 x 30',
+            'Special surface finish',
+            'Drawing 10000662938',
+        ], $notes);
+    }
+
+    public function test_trendy_de_ai_note_fallback_handles_code_first_rows_without_position_numbers(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $method = (new ReflectionClass($service))->getMethod('extractLikelyTrendyDeSourcePositionNotes');
+        $method->setAccessible(true);
+
+        $notes = $method->invoke($service, [
+            'processed_pages' => [[
+                'lines' => [
+                    '10400847 20,30 0,00 1,00 STU 20,30',
+                    'Freeform instruction for first item',
+                    '10400859 62,40 0,00 4,00 STU 15,60',
+                    'Drawing 10000662938',
+                ],
+            ]],
+        ], [
+            ['line_number' => 1, 'product_code' => '10400847'],
+            ['line_number' => 2, 'product_code' => '10400859'],
+        ]);
+
+        $this->assertSame([
+            'Freeform instruction for first item',
+            'Drawing 10000662938',
+        ], $notes);
+    }
+
+    public function test_trendy_de_source_recovery_fills_only_missing_item_notes(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $method = (new ReflectionClass($service))->getMethod('recoverTrendyDeMissingNotesFromPreparedDocument');
+        $method->setAccessible(true);
+
+        $payload = $method->invoke($service, [
+            'items' => [
+                ['line_number' => 1, 'product_code' => '10400847', 'product_name' => 'Passfeder A 12 x 8 x 30', 'note' => ''],
+                ['line_number' => 2, 'product_code' => '10400859', 'product_name' => 'Passfeder A 12 k9 x 8 x 45', 'note' => ''],
+                ['line_number' => 3, 'product_code' => 'ZM-1.02903/027', 'product_name' => 'Passfeder', 'note' => 'Existing note'],
+            ],
+        ], [
+            'pages' => [[
+                'lines' => [
+                    'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+                    '1 10400847 Passfeder A 12 x 8 x 30 1,00 STU 20,30 0,00 20,30',
+                    'Materijal: C45 K',
+                    'Dimenzije: A12 x 8 x 30',
+                    '2 10400859 Passfeder A 12 k9 x 8 x 45 4,00 STU 15,60 0,00 62,40',
+                    'Special surface finish',
+                    '3 ZM-1.02903/027 Passfeder 2,00 STU 33,50 0,00 67,00',
+                    'Replacement text from source',
+                    'Total 149,70',
+                ],
+            ]],
+        ]);
+
+        $this->assertSame("Materijal: C45 K\nDimenzije: A12 x 8 x 30", $payload['items'][0]['note']);
+        $this->assertSame('Special surface finish', $payload['items'][1]['note']);
+        $this->assertSame('Existing note', $payload['items'][2]['note']);
+    }
+
+    public function test_trendy_de_carried_description_cells_belong_to_previous_article(): void
+    {
+        $parser = app(OrderAiDigitalPdfRulesParser::class);
+        $items = [
+            ['line_number' => 1, 'product_code' => '10400847', 'product_name' => 'Passfeder A 12 x 8 x 30'],
+            ['line_number' => 2, 'product_code' => '10400859', 'product_name' => 'Passfeder A 12 k9 x 8 x 45'],
+            ['line_number' => 3, 'product_code' => 'ZM-1.02903/027', 'product_name' => 'Passfeder'],
+            ['line_number' => 4, 'product_code' => '10515266', 'product_name' => 'Beilage CP100 WS 2tlg'],
+        ];
+        $preparedDocument = [
+            'pages' => [[
+                'items' => [
+                    ['text' => '10400847 20,30 0,00 Betrag 1,00 VAT % STU 20,30', 'cells' => []],
+                    ['text' => 'Passfeder A 12 x 8 x 30', 'cells' => []],
+                    ['text' => '10400859 62,40 0,00 Materijal: C45 K 4,00 Dimenzije: A12 x 8 x 30 STU 15,60', 'cells' => [
+                        ['text' => '10400859'], ['text' => '62,40'], ['text' => '0,00'],
+                        ['text' => 'Materijal: C45 K'], ['text' => '4,00'], ['text' => 'Dimenzije: A12 x 8 x 30'],
+                        ['text' => 'STU'], ['text' => '15,60'],
+                    ]],
+                    ['text' => 'Passfeder A 12 k9 x 8 x 45', 'cells' => []],
+                    ['text' => 'ZM-1.02903/027 67,00 0,00 Materijal: C45 K 2,00 Dimenzije: A12 k9 x 8 x 45 STU 33,50', 'cells' => [
+                        ['text' => 'ZM-1.02903/027'], ['text' => '67,00'], ['text' => '0,00'],
+                        ['text' => 'Materijal: C45 K'], ['text' => '2,00'], ['text' => 'Dimenzije: A12 k9 x 8 x 45'],
+                        ['text' => 'STU'], ['text' => '33,50'],
+                    ]],
+                    ['text' => 'Passfeder', 'cells' => []],
+                    ['text' => '10515266 188,30 0,00 Custom finish 2,00 Reference 10000662938 STU 94,15', 'cells' => [
+                        ['text' => '10515266'], ['text' => '188,30'], ['text' => '0,00'],
+                        ['text' => 'Custom finish'], ['text' => '2,00'], ['text' => 'Reference 10000662938'],
+                        ['text' => 'STU'], ['text' => '94,15'],
+                    ]],
+                    ['text' => 'Beilage CP100 WS 2tlg', 'cells' => []],
+                ],
+            ]],
+        ];
+
+        $notes = $parser->recoverTrendyDePositionNotes($preparedDocument, $items);
+
+        $this->assertSame("Materijal: C45 K\nDimenzije: A12 x 8 x 30", $notes[1]);
+        $this->assertSame("Materijal: C45 K\nDimenzije: A12 k9 x 8 x 45", $notes[2]);
+        $this->assertSame("Custom finish\nReference 10000662938", $notes[3]);
+    }
+
+    public function test_trendy_de_position_plus_numeric_description_does_not_create_duplicate_item(): void
+    {
+        $parser = app(OrderAiDigitalPdfRulesParser::class);
+        $method = (new ReflectionClass($parser))->getMethod('parseTrendyDeItems');
+        $method->setAccessible(true);
+
+        $items = $method->invoke($parser, [
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '10400847 20,30 0,00 Betrag 1,00 VAT % STU 20,30',
+            'Passfeder A 12 x 8 x 30',
+            '1',
+            '10515266 188,30 0,00 Betrag 2,00 VAT % STU 94,15',
+            'Beilage CP100 WS 2tlg',
+            '2 10000662938',
+            'Total 208,60',
+        ]);
+
+        $this->assertCount(2, $items);
+        $this->assertSame('10515266', $items[1]['product_code']);
+        $this->assertSame('10000662938', $items[1]['note']);
+    }
+
+    public function test_stored_trendy_de_scan_recovers_missing_notes_from_saved_source_text(): void
+    {
+        $sourceText = implode("\n", [
+            '7. 10. 2026.',
+            '2. 11. 2026.',
+            'Trendy Germany GmbH',
+            'Bestellung 26-020-001408',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '1 10400847 Passfeder A 12 x 8 x 30 1,00 STU 20,30 0,00 20,30',
+            'Materijal: C45 K',
+            'Dimenzije: A12 x 8 x 30',
+            '2 10400859 Passfeder A 12 k9 x 8 x 45 4,00 STU 15,60 0,00 62,40',
+            'Unlabelled finish instruction',
+            'Total 82,70',
+        ]);
+        $payload = [
+            'order' => [
+                'customer_name' => 'Trendy Germany GmbH',
+                'external_document_date' => '7. 10. 2026.',
+                'delivery_deadline' => '2. 11. 2026.',
+            ],
+            'items' => [
+                ['line_number' => 1, 'product_code' => '10400847', 'product_name' => 'Passfeder A 12 x 8 x 30', 'delivery_deadline' => '2. 11. 2026.', 'note' => ''],
+                ['line_number' => 2, 'product_code' => '10400859', 'product_name' => 'Passfeder A 12 k9 x 8 x 45', 'delivery_deadline' => '2. 11. 2026.', 'note' => ''],
+            ],
+        ];
+        $scan = $this->makeInMemoryScan([
+            'id' => 1408,
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-001408.pdf',
+            'raw_extracted_text' => $sourceText,
+            'normalized_payload' => $payload,
+            'pantheon_order_key' => '2601100001724',
+        ]);
+
+        $repaired = app(OrderAiScanService::class)->preparePayloadForTransfer($scan, $payload);
+
+        $this->assertSame("Materijal: C45 K\nDimenzije: A12 x 8 x 30", $repaired['items'][0]['note']);
+        $this->assertSame('Unlabelled finish instruction', $repaired['items'][1]['note']);
+        $this->assertSame([], $scan->capturedForceFill);
+    }
+
+    public function test_trendy_de_repeated_standalone_numeric_note_is_collapsed(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $method = (new ReflectionClass($service))->getMethod('sanitizeTrendyDeItemNote');
+        $method->setAccessible(true);
+
+        $this->assertSame('10000662938', $method->invoke(
+            $service,
+            '10000662938 | 10000662938 10000662938',
+            4
+        ));
     }
 
     public function test_trendy_de_parser_reads_spaced_numeric_article_code_rows_with_delivery_note(): void
@@ -532,6 +917,56 @@ class OrderAiScanServiceTest extends TestCase
             '2026-07-02 00:00:00',
             data_get($scan->capturedForceFill, 'pantheon_transfer_payload.header_payload.adDateDoc1')
         );
+    }
+
+    public function test_stored_trendy_de_items_are_repaired_even_when_document_date_is_already_correct(): void
+    {
+        $sourceText = implode("\n", [
+            '7. 10. 2026.',
+            '2. 11. 2026.',
+            'Trendy Germany GmbH',
+            'Bestellung 26-020-001408',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '1 10400847 Passfeder A 12 x 8 x 30 1,00 STU 20,30 0,00 20,30',
+            '2 10400859 Passfeder A 12 k9 x 8 x 45 4,00 STU 15,60 0,00 62,40',
+            'Liefertermin: 9. 11. 2026.',
+        ]);
+        $payload = [
+            'order' => [
+                'customer_name' => 'Trendy Germany GmbH',
+                'external_document_date' => '7. 10. 2026.',
+                'delivery_deadline' => '2. 11. 2026.',
+            ],
+            'items' => [
+                ['line_number' => 1, 'product_code' => '10400847', 'delivery_deadline' => '7. 10. 2026.'],
+                ['line_number' => 2, 'product_code' => '10400859', 'delivery_deadline' => '7. 10. 2026.'],
+            ],
+        ];
+        $scan = $this->makeInMemoryScan([
+            'id' => 1408,
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-001408.pdf',
+            'raw_extracted_text' => $sourceText,
+            'normalized_payload' => $payload,
+        ]);
+        $service = app(OrderAiScanService::class);
+        $repaired = $service->preparePayloadForTransfer($scan, $payload);
+
+        $this->assertSame(['2. 11. 2026.', '9. 11. 2026.'], array_column($repaired['items'], 'delivery_deadline'));
+        $this->assertSame('2. 11. 2026.', data_get($scan->capturedForceFill, 'normalized_payload.items.0.delivery_deadline'));
+
+        $reflection = new ReflectionClass($service);
+        $overlay = $reflection->getMethod('overlayTransferPreview');
+        $overlay->setAccessible(true);
+        $repair = $reflection->getMethod('repairStoredTrendyDePayloadFromSourceText');
+        $repair->setAccessible(true);
+        $stalePreview = ['payload' => [
+            'delivery_deadline' => '2. 11. 2026.',
+            'items' => $payload['items'],
+        ]];
+        $display = $repair->invoke($service, $scan, $overlay->invoke($service, $repaired, $stalePreview), false);
+
+        $this->assertSame(['2. 11. 2026.', '9. 11. 2026.'], array_column($display['items'], 'delivery_deadline'));
     }
 
     public function test_prepare_payload_for_transfer_repairs_stale_trendy_de_date_from_stored_file_fallback(): void
@@ -3061,6 +3496,48 @@ class OrderAiScanServiceTest extends TestCase
         ], array_column($items, 'note'));
     }
 
+    public function test_execute_extraction_keeps_trendy_de_material_and_dimension_notes(): void
+    {
+        Storage::fake('local');
+        config([
+            'ai-order-scan.provider' => 'mock',
+            'ai-order-scan.storage_disk' => 'local',
+            'ai-order-scan.digital_pdf.rules_first' => true,
+        ]);
+
+        $sourcePath = 'order-ai-scans/Bestellung_26-020-001408.pdf';
+        Storage::disk('local')->put($sourcePath, $this->buildSyntheticPdf([[
+            '7. 10. 2026.',
+            '2. 11. 2026.',
+            'Trendy Germany GmbH',
+            'Bestellung 26-020-001408',
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '1,00 20,30STU 20,300,0010400847 Passfeder A 12 x 8 x 30 1',
+            'Materijal: C45 K',
+            'Dimenzije: A12 x 8 x 30',
+            '4,00 15,60STU 62,400,0010400859 Passfeder A 12 k9 x 8 x 45 2',
+            'Materijal: C45 K',
+            'Dimenzije: A12 k9 x 8 x 45',
+            'Total 82,70',
+        ]]));
+
+        $scan = new OrderAiScan([
+            'provider' => 'mock',
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-001408.pdf',
+            'source_mime_type' => 'application/pdf',
+            'source_file_path' => $sourcePath,
+        ]);
+
+        $result = app(OrderAiScanService::class)->executeExtraction($scan);
+        $items = data_get($result, 'normalized_payload.items');
+
+        $this->assertSame('digital_pdf_rules', $result['provider']);
+        $this->assertCount(2, $items);
+        $this->assertSame("Materijal: C45 K\nDimenzije: A12 x 8 x 30", $items[0]['note']);
+        $this->assertSame("Materijal: C45 K\nDimenzije: A12 k9 x 8 x 45", $items[1]['note']);
+    }
+
     public function test_trendy_de_parser_uses_searchable_text_when_prepared_lines_only_contain_last_compact_position(): void
     {
         $searchableLines = [
@@ -3470,7 +3947,7 @@ class OrderAiScanServiceTest extends TestCase
         ], array_column($items, 'note'));
     }
 
-    public function test_matched_trendy_de_parser_uses_ai_only_to_fill_missing_position_notes(): void
+    public function test_matched_trendy_de_parser_recovers_missing_position_notes_from_source_rows(): void
     {
         Storage::fake('local');
         config([
@@ -3487,9 +3964,11 @@ class OrderAiScanServiceTest extends TestCase
             'Bestellung26-020-000986',
             "Artikel Nr.Pos.\tBeschreibung\tMengeEinheit EK-Preis\tBetragVAT %",
             "1,00 206,90STU\t206,900,002158279700 Saugkopf links1",
-            'ALUMINIUM',
+            'Materijal: C45 K',
+            'Dimenzije: A12 x 8 x 30',
             "1,00\t84,90STU\t84,900,00EVRB10A461050 Quertrager unten2",
-            'WARM BROWNED',
+            'Surface according to drawing',
+            'Reference 10000662938',
         ]]));
 
         app()->instance(OrderAiDigitalPdfRulesParser::class, new class extends OrderAiDigitalPdfRulesParser {
@@ -3605,13 +4084,12 @@ class OrderAiScanServiceTest extends TestCase
 
         $result = app(OrderAiScanService::class)->executeExtraction($scan);
 
-        $this->assertSame(1, $provider->calls);
-        $this->assertSame('ALUMINIUM', data_get($result, 'normalized_payload.items.0.note'));
-        $this->assertSame('WARM BROWNED', data_get($result, 'normalized_payload.items.1.note'));
+        $this->assertSame(0, $provider->calls);
+        $this->assertSame("Materijal: C45 K\nDimenzije: A12 x 8 x 30", data_get($result, 'normalized_payload.items.0.note'));
+        $this->assertSame("Surface according to drawing\nReference 10000662938", data_get($result, 'normalized_payload.items.1.note'));
         $this->assertSame('Saugkopf links', data_get($result, 'normalized_payload.items.0.product_name'));
         $this->assertSame(206.9, data_get($result, 'normalized_payload.items.0.unit_price'));
-        $this->assertSame(2, data_get($result, 'raw_response.ai_note_fallback.applied_count'));
-        $this->assertSame('test-note-fallback', data_get($result, 'raw_response.ai_note_fallback.model'));
+        $this->assertSame(2, data_get($result, 'raw_response.source_note_recovery.applied_count'));
     }
 
     public function test_execute_extraction_splits_trendy_de_underscore_codes_and_keeps_crtez_notes(): void
