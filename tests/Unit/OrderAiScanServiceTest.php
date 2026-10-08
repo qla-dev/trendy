@@ -142,6 +142,109 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('9. 11. 2026.', data_get($parsed, 'normalized_payload.items.1.delivery_deadline'));
     }
 
+    public function test_trendy_de_parses_spaced_article_code_when_pdf_text_reorders_amounts_and_dates(): void
+    {
+        $positionedLines = [
+            'Trendy Germany GmbH',
+            'Trendy Germany GmbH-50 6. 10. 2026. Liefertermin',
+            'Datum 14. 12. 2026. Deliver via Bestellung',
+            'Anlieferadresse: Lieferant: Artikel Nr. Pos. Beschreibung Menge EK-Preis Einheit',
+            'S 257109 00 4.448,00 0,00 Betrag 16,00 VAT % STU 278,00',
+            'ANSCHLUSSPLATTE 1',
+            '4.448,00 Total',
+        ];
+        $searchableText = implode("\n", [
+            '6. 10. 2026.',
+            '14. 12. 2026.',
+            'Trendy Germany GmbH',
+            'Bestellung26-020-001392',
+            'Artikel Nr.Pos. Beschreibung MengeEinheit EK-Preis BetragVAT %',
+            '16,00 278,00STU 4.448,000,00S 257109 00 ANSCHLUSSPLATTE1',
+            'Total 4.448,00',
+        ]);
+        $positionedRows = array_map(static fn (string $line): array => ['text' => $line], $positionedLines);
+        $positionedRows[4]['cells'] = [
+            ['x' => 484.87, 'text' => 'STU'],
+            ['x' => 89.79, 'text' => '4.448,00'],
+            ['x' => 61.44, 'text' => 'S 257109 00'],
+            ['x' => 533.12, 'text' => '278,00'],
+            ['x' => 162.07, 'text' => '0,00'],
+            ['x' => 397.35, 'text' => '16,00'],
+            ['x' => 369.95, 'text' => 'Betrag'],
+            ['x' => 442.12, 'text' => 'VAT %'],
+        ];
+        $preparedDocument = [
+            'pdf_type' => 'digital',
+            'searchable_text' => $searchableText,
+            'processed_pages' => [[
+                'page' => 1,
+                'lines' => $positionedLines,
+                'items' => $positionedRows,
+            ]],
+        ];
+        $scan = new OrderAiScan([
+            'document_profile' => 'trendy_de',
+            'source_file_name' => 'Bestellung_26-020-001392.pdf',
+        ]);
+        $parsed = app(OrderAiDigitalPdfRulesParser::class)->parse($scan, $preparedDocument);
+
+        $this->assertSame('positioned_cells', data_get($parsed, 'raw_response.item_source'));
+        $this->assertSame(4448.0, data_get($parsed, 'raw_response.line_total_sum'));
+        $this->assertSame(4448.0, data_get($parsed, 'raw_response.expected_total'));
+        $this->assertSame('S 257109 00', data_get($parsed, 'normalized_payload.items.0.product_code'));
+        $this->assertSame('ANSCHLUSSPLATTE', data_get($parsed, 'normalized_payload.items.0.product_name'));
+        $this->assertSame(16.0, data_get($parsed, 'normalized_payload.items.0.quantity'));
+        $this->assertSame(278.0, data_get($parsed, 'normalized_payload.items.0.unit_price'));
+        $this->assertSame('6. 10. 2026.', data_get($parsed, 'normalized_payload.order.external_document_date'));
+        $this->assertSame('14. 12. 2026.', data_get($parsed, 'normalized_payload.order.delivery_deadline'));
+
+        $service = app(OrderAiScanService::class);
+        $method = (new ReflectionClass($service))->getMethod('postProcessTrendyDePayload');
+        $method->setAccessible(true);
+        $processed = $method->invoke($service, $parsed['normalized_payload'], [
+            'searchable_text' => $searchableText,
+            'processed_pages' => $preparedDocument['processed_pages'],
+        ]);
+
+        $this->assertSame('6. 10. 2026.', data_get($processed, 'order.external_document_date'));
+        $this->assertSame('14. 12. 2026.', data_get($processed, 'items.0.delivery_deadline'));
+    }
+
+    public function test_trendy_de_prefers_total_matching_source_over_extra_phantom_rows(): void
+    {
+        $header = 'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag';
+        $preparedLines = [
+            'Trendy Germany GmbH',
+            $header,
+            '1 A12345 Part A 1,00 STU 10,00 0,00 10,00',
+            '1 B12345 Phantom 0,00 STU 0,00 0,00 0,00',
+            '2 D12345 Phantom 0,00 STU 0,00 0,00 0,00',
+            'Total 15,00',
+        ];
+        $searchableLines = [
+            'Trendy Germany GmbH',
+            $header,
+            '1 A12345 Part A 1,00 STU 10,00 0,00 10,00',
+            '2 C12345 Part C 1,00 STU 5,00 0,00 5,00',
+            'Total 15,00',
+        ];
+        $scan = new OrderAiScan(['document_profile' => 'trendy_de']);
+        $parsed = app(OrderAiDigitalPdfRulesParser::class)->parse($scan, [
+            'pdf_type' => 'digital',
+            'searchable_text' => implode("\n", $searchableLines),
+            'processed_pages' => [[
+                'page' => 1,
+                'lines' => $preparedLines,
+                'text' => implode("\n", $preparedLines),
+            ]],
+        ]);
+
+        $this->assertSame('searchable_text', data_get($parsed, 'raw_response.item_source'));
+        $this->assertSame(15.0, data_get($parsed, 'raw_response.expected_total'));
+        $this->assertSame(15.0, data_get($parsed, 'raw_response.line_total_sum'));
+        $this->assertSame(['A12345', 'C12345'], array_column(data_get($parsed, 'normalized_payload.items'), 'product_code'));
+    }
+
     public function test_trendy_de_position_dates_survive_blank_or_conflicting_header_dates(): void
     {
         $codes = ['2155039500', '2155046000', 'DS12A16340', 'DS12A16840', '2158075200', 'EXC110A090030'];
