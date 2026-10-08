@@ -3663,6 +3663,16 @@ class OrderAiScanService
             is_array($context['processed_pages'] ?? null) ? $context['processed_pages'] : [],
             $searchableText
         );
+        $leadingTextDates = $this->resolveTrendyDeHeaderDeadlineFromLeadingLines(
+            $this->splitVisibleTextLines($searchableText)
+        );
+        if ((bool) ($leadingTextDates['resolved'] ?? false) && ($leadingTextDates['value'] ?? '') !== '') {
+            $externalDocumentDate = $this->extractTrendyDeLeadingDocumentDate([], $searchableText);
+            $headerDeliveryDeadline = [
+                'value' => trim((string) $leadingTextDates['value']),
+                'label_seen' => true,
+            ];
+        }
         $deliveryDeadline = '';
 
         if (($headerDeliveryDeadline['value'] ?? '') !== '' || ($headerDeliveryDeadline['label_seen'] ?? false)) {

@@ -157,7 +157,7 @@ class OrderAiDigitalPdfRulesParser
             'prepared_lines' => $lines,
             'table_rows' => $tableRowLines,
             'searchable_text' => $searchableLines,
-        ], $noteSourceLines, $expectedTotal);
+        ], $noteSourceLines, $expectedTotal, $this->parseTrendyDePositionedItems($preparedDocument));
 
         $sourceNotes = $this->recoverTrendyDePositionNotes($preparedDocument, $items);
         foreach ($items as $index => $item) {
@@ -500,7 +500,8 @@ class OrderAiDigitalPdfRulesParser
     private function parseTrendyDeItemsFromBestSource(
         array $sourceLinesByName,
         array $noteSourceLines,
-        float $expectedTotal
+        float $expectedTotal,
+        array $positionedItems = []
     ): array {
         $bestItems = [];
         $bestSource = '';
@@ -537,6 +538,7 @@ class OrderAiDigitalPdfRulesParser
                 : PHP_FLOAT_MAX;
             $score = [
                 'item_count' => count($items),
+                'distinct_position_count' => count(array_unique(array_filter(array_column($items, 'line_number')))),
                 'total_delta' => $totalDelta,
                 'line_total_sum' => $lineTotalSum,
             ];
@@ -556,6 +558,31 @@ class OrderAiDigitalPdfRulesParser
             }
         }
 
+        if ($positionedItems !== []) {
+            $lineTotalSum = round(array_reduce($positionedItems, static function (float $carry, array $item): float {
+                return $carry + max(0, (float) ($item['line_total'] ?? 0));
+            }, 0.0), 4);
+            $totalDelta = $expectedTotal > 0 ? abs($lineTotalSum - $expectedTotal) : PHP_FLOAT_MAX;
+            $score = [
+                'item_count' => count($positionedItems),
+                'distinct_position_count' => count(array_unique(array_filter(array_column($positionedItems, 'line_number')))),
+                'total_delta' => $totalDelta,
+                'line_total_sum' => $lineTotalSum,
+            ];
+            $candidates[] = [
+                'source' => 'positioned_cells',
+                'item_count' => $score['item_count'],
+                'line_total_sum' => $lineTotalSum,
+                'total_delta' => is_finite($totalDelta) ? round($totalDelta, 4) : null,
+            ];
+
+            if ($this->isBetterTrendyDeItemSourceScore($score, $bestScore)) {
+                $bestItems = $positionedItems;
+                $bestSource = 'positioned_cells';
+                $bestScore = $score;
+            }
+        }
+
         Log::info('Order AI Trendy DE item source selected.', [
             'selected_source' => $bestSource,
             'selected_item_count' => count($bestItems),
@@ -565,6 +592,87 @@ class OrderAiDigitalPdfRulesParser
         ]);
 
         return [$bestItems, $bestSource, $candidates];
+    }
+
+    private function parseTrendyDePositionedItems(array $preparedDocument): array
+    {
+        $items = [];
+
+        foreach ($this->extractPreparedPages($preparedDocument) as $page) {
+            $tableStarted = false;
+            $openItem = null;
+
+            foreach ((array) ($page['items'] ?? []) as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                $text = trim((string) ($row['text'] ?? ''));
+                $normalized = $this->normalizeKeywordText($text);
+
+                if ($this->isTrendyDeTableHeaderLine($normalized)) {
+                    $tableStarted = true;
+                    continue;
+                }
+
+                if (!$tableStarted) {
+                    continue;
+                }
+
+                if ($this->isTrendyDeSummaryLine($normalized)) {
+                    break;
+                }
+
+                $cells = array_values(array_filter(
+                    is_array($row['cells'] ?? null) ? $row['cells'] : [],
+                    static fn ($cell): bool => is_array($cell) && is_numeric($cell['x'] ?? null)
+                ));
+                usort($cells, static fn (array $left, array $right): int => (float) $left['x'] <=> (float) $right['x']);
+                $code = trim((string) ($cells[0]['text'] ?? ''));
+                $amounts = [];
+
+                foreach (array_slice($cells, 1) as $cell) {
+                    $cellText = trim((string) ($cell['text'] ?? ''));
+                    if (preg_match('/^' . $this->compactGermanAmountPattern() . '$/u', $cellText) === 1) {
+                        $amounts[] = $this->parseGermanNumber($cellText);
+                    }
+                }
+
+                if (
+                    preg_match('/^(?=.*\d)[\pL\pN._\/\-]+(?:\s+[\pL\pN._\/\-]+)+$/u', $code) === 1
+                    && str_contains($normalized, 'betrag')
+                    && str_contains($normalized, 'vat %')
+                    && count($amounts) === 4
+                    && $this->extractTrendyDeUnitToken($text) !== ''
+                    && $amounts[2] > 0
+                    && $amounts[3] > 0
+                    && abs($amounts[2] * $amounts[3] - $amounts[0]) <= 0.02
+                ) {
+                    if ($this->isTrendyDeItemReady($openItem)) {
+                        $items[] = $this->finalizeTrendyDeItem($openItem);
+                    }
+
+                    $openItem = $this->initializeTrendyDeParsedItem(0, $code);
+                    $openItem['line_total'] = $amounts[0];
+                    $openItem['vat_rate'] = $amounts[1];
+                    $openItem['quantity'] = $amounts[2];
+                    $openItem['unit_price'] = $amounts[3];
+                    $openItem['unit'] = $this->extractTrendyDeUnitToken($text);
+                    $openItem['has_explicit_amounts'] = true;
+                    continue;
+                }
+
+                if (is_array($openItem) && $text !== '') {
+                    $this->applyTrendyDeLineToItem($openItem, $text);
+                }
+            }
+
+            if ($this->isTrendyDeItemReady($openItem)) {
+                $items[] = $this->finalizeTrendyDeItem($openItem);
+            }
+        }
+
+        return $this->normalizeTrendyDeParsedLineNumbers($items);
     }
 
     public function recoverTrendyDePositionNotes(array $preparedDocument, array $items): array
@@ -683,18 +791,31 @@ class OrderAiDigitalPdfRulesParser
 
     private function isBetterTrendyDeItemSourceScore(array $candidateScore, array $bestScore): bool
     {
+        $candidateDelta = (float) ($candidateScore['total_delta'] ?? PHP_FLOAT_MAX);
+        $bestDelta = (float) ($bestScore['total_delta'] ?? PHP_FLOAT_MAX);
+
+        // A source can invent extra zero-value rows while omitting a real
+        // position; reconcile the document total before comparing row counts.
+        if (is_finite($candidateDelta) && !is_finite($bestDelta)) {
+            return true;
+        }
+
+        if (is_finite($candidateDelta) && is_finite($bestDelta) && abs($candidateDelta - $bestDelta) > 0.0001) {
+            return $candidateDelta < $bestDelta;
+        }
+
+        $candidateDistinctPositions = (int) ($candidateScore['distinct_position_count'] ?? 0);
+        $bestDistinctPositions = (int) ($bestScore['distinct_position_count'] ?? 0);
+
+        if ($candidateDistinctPositions !== $bestDistinctPositions) {
+            return $candidateDistinctPositions > $bestDistinctPositions;
+        }
+
         $candidateItemCount = (int) ($candidateScore['item_count'] ?? 0);
         $bestItemCount = (int) ($bestScore['item_count'] ?? 0);
 
         if ($candidateItemCount !== $bestItemCount) {
             return $candidateItemCount > $bestItemCount;
-        }
-
-        $candidateDelta = (float) ($candidateScore['total_delta'] ?? PHP_FLOAT_MAX);
-        $bestDelta = (float) ($bestScore['total_delta'] ?? PHP_FLOAT_MAX);
-
-        if (abs($candidateDelta - $bestDelta) > 0.0001) {
-            return $candidateDelta < $bestDelta;
         }
 
         return (float) ($candidateScore['line_total_sum'] ?? 0) > (float) ($bestScore['line_total_sum'] ?? 0);
@@ -1978,10 +2099,17 @@ class OrderAiDigitalPdfRulesParser
         $documentNumber = '';
         $tableStarted = false;
         $headerDeadlineResolved = false;
+        $leadingTextDates = $this->resolveTrendyDeHeaderDeadlineFromLeadingLines(
+            $this->splitVisibleTextLines($searchableText)
+        );
         $positionedHeaderDeadline = $this->extractTrendyDePositionedHeaderDeadline($partyLineTexts);
         $leadingHeaderDeadline = $this->resolveTrendyDeHeaderDeadlineFromLeadingLines($partyLineTexts);
 
-        if ($positionedHeaderDeadline !== '') {
+        if ((bool) ($leadingTextDates['resolved'] ?? false) && ($leadingTextDates['value'] ?? '') !== '') {
+            $documentDate = trim((string) ($leadingTextDates['document_date'] ?? ''));
+            $deliveryDeadline = trim((string) $leadingTextDates['value']);
+            $headerDeadlineResolved = true;
+        } elseif ($positionedHeaderDeadline !== '') {
             $deliveryDeadline = $positionedHeaderDeadline;
             $headerDeadlineResolved = true;
         } elseif ((bool) ($leadingHeaderDeadline['resolved'] ?? false)) {
