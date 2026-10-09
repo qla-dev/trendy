@@ -7,6 +7,7 @@
     "dev": "remotion studio",
     "screens": "node scripts/prep-sources.cjs && node scripts/build-screens.mjs && bash scripts/capture.sh",
     "sfx": "node scripts/make-sfx.mjs",
+    "voice": "node scripts/make-voice.mjs",
     "render": "remotion render eNalogPromo out/enalog-promo-vertical.mp4",
     "lint": "tsc --noEmit"
   },

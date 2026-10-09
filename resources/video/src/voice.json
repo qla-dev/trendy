@@ -1,0 +1,32 @@
+[
+  {"key": "intro-1", "scene": 0, "at": 30, "text": "Ovo je eNalog."},
+
+  {"key": "hook-1", "scene": 1, "at": 4, "text": "Papirni nalozi, ručni unos, izgubljeni podaci?"},
+  {"key": "hook-2", "scene": 1, "at": 84, "text": "Od danas, sve je digitalno."},
+
+  {"key": "ai-1", "scene": 2, "at": 6, "text": "Kupac pošalje narudžbu na bilo kojem jeziku?"},
+  {"key": "ai-2", "scene": 2, "at": 46, "text": "Samo je ubacite."},
+  {"key": "ai-3", "scene": 2, "at": 84, "text": "Vještačka inteligencija pročita svaku poziciju,"},
+  {"key": "ai-4", "scene": 2, "at": 232, "text": "i sama je upiše u Pantheon."},
+
+  {"key": "plan-1", "scene": 3, "at": 8, "text": "Šef pita dokle je nalog?"},
+  {"key": "plan-2", "scene": 3, "at": 56, "text": "Ukucate. Kliknete."},
+  {"key": "plan-3", "scene": 3, "at": 158, "text": "I tačno vidite koja je operacija gotova, a koja tek čeka."},
+
+  {"key": "teren-1", "scene": 4, "at": 26, "text": "Radnik samo skenira nalog."},
+  {"key": "teren-2", "scene": 4, "at": 160, "text": "Štiklira operaciju."},
+  {"key": "teren-3", "scene": 4, "at": 244, "text": "A materijal se razduži istog trenutka."},
+
+  {"key": "skladiste-1", "scene": 5, "at": 14, "text": "Trebate provjeriti stanje lima?"},
+  {"key": "skladiste-2", "scene": 5, "at": 104, "text": "Ili brzo ispraviti zalihu?"},
+  {"key": "skladiste-3", "scene": 5, "at": 160, "text": "Nema problema. Svako kretanje je zapisano, s dokumentom."},
+
+  {"key": "operacije-1", "scene": 6, "at": 14, "text": "Sve operacije u toku, uživo."},
+  {"key": "operacije-2", "scene": 6, "at": 112, "text": "Bez poziva, i bez obilaska hale."},
+
+  {"key": "nfc-1", "scene": 7, "at": 4, "text": "A prijava radnika?"},
+  {"key": "nfc-2", "scene": 7, "at": 40, "text": "Jedan dodir kartice."},
+  {"key": "nfc-3", "scene": 7, "at": 130, "text": "Bez lozinki, bez čekanja."},
+
+  {"key": "outro-1", "scene": 8, "at": 14, "text": "eNalog. Vaša proizvodnja, pod punom kontrolom."}
+]
