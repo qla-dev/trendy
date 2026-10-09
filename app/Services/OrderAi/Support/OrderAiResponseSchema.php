@@ -108,7 +108,7 @@ class OrderAiResponseSchema
                             'unit' => ['type' => 'string'],
                             'delivery_deadline' => [
                                 'type' => 'string',
-                                'description' => 'Pantheon delivery deadline (rok isporuke). Never use Datum. For GROB use row-level Lieferdatum. For Trendy Germany use the second standalone date before Trendy Germany GmbH as the header delivery date only when it exists; if only one standalone date appears before the company name, leave the header blank and use item-level Liefertermin/Lieferdatum values. This is not a dispatch date.',
+                                'description' => 'Pantheon item delivery deadline (rok isporuke). Use an explicit delivery date for this item when present. Otherwise copy order.delivery_deadline from the header. Never use Datum or the document date as an item deadline. For GROB use row-level Lieferdatum. This is not a dispatch date.',
                             ],
                             'unit_price' => [
                                 'type' => 'number',
@@ -124,7 +124,7 @@ class OrderAiResponseSchema
                             'priority' => ['type' => 'string'],
                             'note' => [
                                 'type' => 'string',
-                                'description' => 'Optional extra note that belongs to the item, such as delivery/date notes that continue the same line.',
+                                'description' => 'Every continuation row in this item\'s Beschreibung column after its first name row and before the next item\'s name row or table footer. Preserve all text and row order regardless of labels; keep it separate from product_name.',
                             ],
                         ],
                     ],

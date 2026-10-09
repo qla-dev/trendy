@@ -1142,6 +1142,7 @@
       font-weight: 600;
       line-height: 1.45;
       opacity: 0.92;
+      white-space: pre-line;
     }
 
     .order-ai-line-edit-trigger {
@@ -4757,7 +4758,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             <tr>
               <td>${escapeHtml(item.line_number || '')}</td>
               <td>${escapeHtml(item.product_code || '-')}</td>
-              <td class="order-ai-wrap">${escapeHtml(item.product_name || '-')}</td>
+              <td class="order-ai-wrap">
+                ${escapeHtml(item.product_name || '-')}
+                ${item.note ? `<div class="order-ai-line-note"><strong>Napomena:</strong> ${escapeHtml(item.note)}</div>` : ''}
+              </td>
               <td>${escapeHtml(formatAmount(item.quantity || 0))}</td>
               <td>${escapeHtml(item.unit || '-')}</td>
               <td>${escapeHtml(formatAmount(item.unit_price || 0))}</td>
@@ -4840,7 +4844,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             <tr>
               <td>${escapeHtml(item.line_number || '')}</td>
               <td>${escapeHtml(item.product_code || '-')}</td>
-              <td class="order-ai-wrap">${escapeHtml(item.product_name || '-')}</td>
+              <td class="order-ai-wrap">
+                ${escapeHtml(item.product_name || '-')}
+                ${item.note ? `<div class="order-ai-line-note"><strong>Napomena:</strong> ${escapeHtml(item.note)}</div>` : ''}
+              </td>
               <td>${escapeHtml(formatAmount(item.quantity || 0))}</td>
               <td>${escapeHtml(item.unit || '-')}</td>
             </tr>
@@ -5931,7 +5938,10 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
             <tr>
               <td>${escapeHtml(item.line_number || '')}</td>
               <td>${escapeHtml(item.product_code || '-')}</td>
-              <td class="order-ai-wrap">${escapeHtml(item.product_name || '-')}</td>
+              <td class="order-ai-wrap">
+                ${escapeHtml(item.product_name || '-')}
+                ${item.note ? `<div class="order-ai-line-note"><strong>Napomena:</strong> ${escapeHtml(item.note)}</div>` : ''}
+              </td>
               <td>${escapeHtml(formatAmount(item.quantity || 0))}</td>
               <td>${escapeHtml(item.unit || '-')}</td>
               <td>${escapeHtml(formatAmount(item.unit_price || 0))}</td>
@@ -7127,6 +7137,7 @@ if (is_file($heroRobotLottiePath) && is_readable($heroRobotLottiePath)) {
               <td>${productCodeMarkup}</td>
               <td class="order-ai-wrap">
                 ${productNameMarkup}
+                ${item.note ? `<div class="order-ai-line-note"><strong>Napomena:</strong> ${escapeHtml(item.note)}</div>` : ''}
               </td>
               <td>${quantityMarkup}</td>
               <td>${unitMarkup}</td>
