@@ -11,6 +11,7 @@ return [
     "Apps" => "Aplikacije",
     "Glavna navigacija" => "Glavna navigacija",
     "Administracija" => "Administracija",
+    "Uloge" => "Uloge",
     "Narudžbe" => "Narudžbe",
     "Skladišni alati" => "Skladišni alati",
     "TRENDY DRIVE" => "TRENDY DRIVE",

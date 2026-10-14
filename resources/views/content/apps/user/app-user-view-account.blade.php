@@ -38,7 +38,7 @@
               />
               <div class="user-info text-center">
                 <h4>{{ $user->name }}</h4>
-                <span class="badge bg-light-{{ $user->role === 'admin' ? 'danger' : 'primary' }}">{{ ucfirst($user->role) }}</span>
+                <span class="badge bg-light-{{ $user->role === 'admin' ? 'danger' : 'primary' }}">{{ $roleOptions[$user->role] ?? $user->role }}</span>
               </div>
             </div>
           </div>
@@ -90,13 +90,15 @@
               </div>
               <div class="mb-3">
                 <label class="form-label fw-bolder">Uloga:</label>
-                <select class="form-select" name="role" required>
-                  <option value="admin" {{ old('role', $user->role) === 'admin' ? 'selected' : '' }}>Admin</option>
-                  <option value="user" {{ old('role', $user->role) === 'user' ? 'selected' : '' }}>Korisnik</option>
-                  <option value="kontrola" {{ old('role', $user->role) === 'kontrola' ? 'selected' : '' }}>Kontrola</option>
-                  <option value="proizvodnja" {{ old('role', $user->role) === 'proizvodnja' ? 'selected' : '' }}>Proizvodnja</option>
-                  <option value="bravarija" {{ old('role', $user->role) === 'bravarija' ? 'selected' : '' }}>Bravarija</option>
-                </select>
+                @if($canManageRoles)
+                  <select class="form-select" name="role" required>
+                    @foreach($roleOptions as $value => $label)
+                      <option value="{{ $value }}" {{ old('role', $user->role) === $value ? 'selected' : '' }}>{{ $label }}</option>
+                    @endforeach
+                  </select>
+                @else
+                  <input type="text" class="form-control" value="{{ $roleOptions[$user->role] ?? $user->role }}" disabled>
+                @endif
                 @error('role')
                   <div class="text-danger small">{{ $message }}</div>
                 @enderror

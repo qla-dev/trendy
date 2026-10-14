@@ -41,14 +41,16 @@
         <div class="row">
           <div class="col-md-12 mb-1">
             <label class="form-label" for="role">Uloga</label>
-            <select class="form-select @error('role') is-invalid @enderror" id="role" name="role" required>
-              <option value="">Odaberite ulogu</option>
-              <option value="admin" {{ old('role', $user->role) == 'admin' ? 'selected' : '' }}>Admin</option>
-              <option value="user" {{ old('role', $user->role) == 'user' ? 'selected' : '' }}>Korisnik</option>
-              <option value="kontrola" {{ old('role', $user->role) == 'kontrola' ? 'selected' : '' }}>Kontrola</option>
-              <option value="proizvodnja" {{ old('role', $user->role) == 'proizvodnja' ? 'selected' : '' }}>Proizvodnja</option>
-              <option value="bravarija" {{ old('role', $user->role) == 'bravarija' ? 'selected' : '' }}>Bravarija</option>
-            </select>
+            @if($canManageRoles)
+              <select class="form-select @error('role') is-invalid @enderror" id="role" name="role" required>
+                <option value="">Odaberite ulogu</option>
+                @foreach($roleOptions as $value => $label)
+                  <option value="{{ $value }}" {{ old('role', $user->role) === $value ? 'selected' : '' }}>{{ $label }}</option>
+                @endforeach
+              </select>
+            @else
+              <input type="text" class="form-control" value="{{ $roleOptions[$user->role] ?? $user->role }}" disabled>
+            @endif
             @error('role')
               <div class="invalid-feedback">{{ $message }}</div>
             @enderror
