@@ -127,9 +127,17 @@ $(function () {
               kontrola: 'Kontrola',
               proizvodnja: 'Proizvodnja',
               bravarija: 'Bravarija'
-            }[$role] || $role;
+            }[$role] || (window.userRoleLabels || {})[$role] || $role;
 
-            return "<span class='text-truncate align-middle'>" + (roleBadgeObj[$role] || roleBadgeObj.user) + roleText + '</span>';
+            var roleContent = (roleBadgeObj[$role] || roleBadgeObj.user) + $('<span>').text(roleText).html();
+            if (type !== 'display' || !window.canManageRoles) {
+              return "<span class='text-truncate align-middle'>" + roleContent + '</span>';
+            }
+
+            return '<button type="button" class="btn btn-link p-0 text-body text-start user-role-change" data-bs-toggle="modal" data-bs-target="#changeUserRoleModal" data-user-id="' +
+              full[5] + '" data-user-name="' + $('<span>').text(full[0] || '').html().replace(/"/g, '&quot;') + '" data-current-role="' +
+              $('<span>').text($role || '').html().replace(/"/g, '&quot;') + '" title="Promijeni ulogu" aria-label="Promijeni ulogu korisnika ' +
+              $('<span>').text(full[0] || '').html().replace(/"/g, '&quot;') + '">' + roleContent + '</button>';
           }
         },
         {

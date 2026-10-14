@@ -109,6 +109,12 @@
       "url": "app/user/list"
     },
     {
+      "name": "Uloge",
+      "icon": "shield",
+      "slug": "app-role-list",
+      "url": "app/roles"
+    },
+    {
       "name": "Moja NFC kartica",
       "icon": "credit-card",
       "url": "app/nfc-card",

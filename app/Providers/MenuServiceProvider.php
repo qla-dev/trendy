@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Support\AiTokenNavbarCounter;
+use App\Support\CustomRoles;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Auth;
 
@@ -40,8 +41,30 @@ class MenuServiceProvider extends ServiceProvider
             static $aiTokenNavbarCountCache = [];
 
             $verticalMenuCopy = json_decode(json_encode($verticalMenuData));
-            $verticalMenuCopy = $self->filterAdminOnlyMenuItems($verticalMenuCopy);
-            $verticalMenuCopy = $self->filterAiOrderModuleMenuItems($verticalMenuCopy);
+            $customRole = Auth::check() ? app(CustomRoles::class)->find((string) Auth::user()->role) : null;
+            if ($customRole !== null) {
+                $allowed = $customRole['slugs'] ?? [];
+                $selectedMenu = [];
+                $header = null;
+                foreach ($verticalMenuCopy->menu as $item) {
+                    if (isset($item->navheader)) {
+                        $header = $item;
+                        continue;
+                    }
+                    $key = CustomRoles::menuItemKey($item);
+                    if (in_array($key, $allowed, true)) {
+                        if ($header !== null) {
+                            $selectedMenu[] = $header;
+                            $header = null;
+                        }
+                        $selectedMenu[] = $item;
+                    }
+                }
+                $verticalMenuCopy->menu = $selectedMenu;
+            } else {
+                $verticalMenuCopy = $self->filterAdminOnlyMenuItems($verticalMenuCopy);
+                $verticalMenuCopy = $self->filterAiOrderModuleMenuItems($verticalMenuCopy);
+            }
             $canAccessAiOrderModule = $self->canAccessAiOrderModule(Auth::user());
             $userCacheKey = Auth::check() ? (string) (Auth::id() ?? 'auth') : 'guest';
 
@@ -53,13 +76,27 @@ class MenuServiceProvider extends ServiceProvider
 
             $aiTokenNavbarCount = (int) $aiTokenNavbarCountCache[$userCacheKey];
 
-            if (Auth::check() && $self->hasRegularUserJurisdiction(Auth::user())) {
+            if ($customRole === null && Auth::check() && $self->hasRegularUserJurisdiction(Auth::user())) {
                 $verticalMenuCopy = $self->filterMenuForUserRole($verticalMenuCopy);
             }
 
-            if (Auth::check() && Auth::user()->hasRole(\App\Models\User::ROLE_PROIZVODNJA)) {
+            if ($customRole === null && Auth::check() && Auth::user()->hasRole(\App\Models\User::ROLE_PROIZVODNJA)) {
                 $verticalMenuCopy->menu = array_values(array_filter($verticalMenuCopy->menu,
                     fn ($menu) => ($menu->slug ?? '') === 'app-production-plan'));
+            }
+
+            if (Auth::check() && Auth::user()->canManageRoles()) {
+                $visibleSlugs = array_map(fn ($item) => $item->slug ?? '', $verticalMenuCopy->menu);
+                $administrationItems = array_values(array_filter($verticalMenuData->menu,
+                    fn ($item) => in_array($item->slug ?? '', ['app-user-list', 'app-role-list'], true)
+                        && !in_array($item->slug, $visibleSlugs, true)));
+                if ($administrationItems !== []) {
+                    $verticalMenuCopy->menu[] = (object) ['navheader' => 'Administracija', 'slug' => ''];
+                    array_push($verticalMenuCopy->menu, ...$administrationItems);
+                }
+            } else {
+                $verticalMenuCopy->menu = array_values(array_filter($verticalMenuCopy->menu,
+                    fn ($item) => ($item->slug ?? '') !== 'app-role-list'));
             }
 
             $view->with([

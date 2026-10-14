@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\CustomRoles;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -78,6 +79,16 @@ class User extends Authenticatable
         return $this->hasRole(self::ROLE_ADMIN);
     }
 
+    public function canManageRoles(): bool
+    {
+        return self::isRoleManagerUsername($this->username);
+    }
+
+    public static function isRoleManagerUsername(?string $username): bool
+    {
+        return in_array($username, ['Admin', 'admin', 'qla.dev'], true);
+    }
+
     /**
      * Check if user is manager
      */
@@ -126,7 +137,19 @@ class User extends Authenticatable
     {
         return $this->isAdmin()
             || $this->isManager()
-            || $this->isEmployee();
+            || $this->isEmployee()
+            || $this->customRoleCanSeeAny([
+                'app-order-ai-scan',
+                'app-order-ai-inbox',
+                'app-ai-token-history',
+                'app-ai-whitelist',
+            ]);
+    }
+
+    public function customRoleCanSeeAny(array $slugs): bool
+    {
+        $role = app(CustomRoles::class)->find((string) $this->role);
+        return $role !== null && count(array_intersect($role['slugs'] ?? [], $slugs)) > 0;
     }
 
     public function isQlaDevUser(): bool

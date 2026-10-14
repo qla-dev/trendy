@@ -1412,6 +1412,10 @@ class OrderController extends WorkOrderController
 
     private function canAccessOrdersList(mixed $user = null): bool
     {
+        if (is_object($user) && method_exists($user, 'customRoleCanSeeAny')
+            && $user->customRoleCanSeeAny(['app-orders'])) {
+            return true;
+        }
         if (is_object($user) && method_exists($user, 'isAdmin')) {
             return (bool) $user->isAdmin();
         }

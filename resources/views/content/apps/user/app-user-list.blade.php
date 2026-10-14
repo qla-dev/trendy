@@ -85,6 +85,11 @@
       background: #36405a !important;
       background-color: #36405a !important;
     }
+
+    .user-role-change:hover,
+    .user-role-change:focus-visible {
+      text-decoration: underline;
+    }
   </style>
 @endsection
 
@@ -240,14 +245,16 @@
           <div class="row">
             <div class="col-md-12 mb-1">
               <label class="form-label" for="role">Uloga</label>
-              <select class="form-select @error('role') is-invalid @enderror" id="role" name="role" required>
-                <option value="">Odaberite ulogu</option>
-                <option value="admin" {{ old('role') == 'admin' ? 'selected' : '' }}>Admin</option>
-                <option value="user" {{ old('role') == 'user' ? 'selected' : '' }}>Korisnik</option>
-                <option value="kontrola" {{ old('role') == 'kontrola' ? 'selected' : '' }}>Kontrola</option>
-                <option value="proizvodnja" {{ old('role') == 'proizvodnja' ? 'selected' : '' }}>Proizvodnja</option>
-                <option value="bravarija" {{ old('role') == 'bravarija' ? 'selected' : '' }}>Bravarija</option>
-              </select>
+              @if($canManageRoles)
+                <select class="form-select @error('role') is-invalid @enderror" id="role" name="role" required>
+                  <option value="">Odaberite ulogu</option>
+                  @foreach($roleOptions as $value => $label)
+                    <option value="{{ $value }}" {{ old('role') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                  @endforeach
+                </select>
+              @else
+                <input type="text" class="form-control" value="Korisnik" disabled>
+              @endif
               @error('role')
                 <div class="invalid-feedback">{{ $message }}</div>
               @enderror
@@ -262,6 +269,36 @@
     </div>
   </div>
 </div>
+
+@if($canManageRoles)
+<div class="modal fade" id="changeUserRoleModal" tabindex="-1" aria-labelledby="changeUserRoleModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="changeUserRoleModalLabel">Promijeni ulogu korisnika</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button>
+      </div>
+      <form id="changeUserRoleForm" method="POST">
+        @csrf
+        @method('PATCH')
+        <div class="modal-body">
+          <p class="mb-1">Korisnik: <strong id="changeUserRoleName"></strong></p>
+          <label class="form-label" for="changeUserRoleSelect">Uloga</label>
+          <select class="form-select" id="changeUserRoleSelect" name="role" required>
+            @foreach($roleOptions as $value => $label)
+              <option value="{{ $value }}">{{ $label }}</option>
+            @endforeach
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Odustani</button>
+          <button type="submit" class="btn btn-primary">Sačuvaj ulogu</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+@endif
 
 <!-- Delete User Form -->
 <form id="deleteUserForm" method="POST" style="display: none;">
@@ -288,7 +325,7 @@
 
 @section('page-script')
   {{-- Page js files --}}
-  <script src="{{ asset(mix('js/scripts/pages/app-user-list.js')) }}?v=3"></script>
+  <script src="{{ asset(mix('js/scripts/pages/app-user-list.js')) }}?v=5"></script>
   <script>
     function deleteUser(userId) {
       if (confirm('Da li ste sigurni da želite obrisati ovog korisnika? Ova akcija se ne može poništiti.')) {
@@ -305,7 +342,19 @@
       });
     @endif
 
+    @if($canManageRoles)
+      document.getElementById('changeUserRoleModal').addEventListener('show.bs.modal', function(event) {
+        const button = event.relatedTarget;
+        if (!button) return;
+        document.getElementById('changeUserRoleName').textContent = button.dataset.userName || '';
+        document.getElementById('changeUserRoleSelect').value = button.dataset.currentRole || '';
+        document.getElementById('changeUserRoleForm').action = @json(url('app/user')) + '/' + encodeURIComponent(button.dataset.userId) + '/role';
+      });
+    @endif
+
     // Pass users data from Blade to JavaScript
     window.usersData = @json($usersData);
+    window.userRoleLabels = @json($roleOptions);
+    window.canManageRoles = @json($canManageRoles);
   </script>
 @endsection

@@ -34,6 +34,7 @@ use App\Http\Controllers\MiscellaneousController;
 use App\Http\Controllers\AuthenticationController;
 use App\Http\Controllers\ChartsController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\CustomRoleController;
 use App\Http\Controllers\ProductionPlanController;
 use App\Http\Controllers\NfcCardController;
 
@@ -176,8 +177,13 @@ Route::middleware('auth:web')->group(function () {
         Route::get('access-roles', [AppsController::class, 'access_roles'])->name('app-access-roles');
         Route::get('access-permission', [AppsController::class, 'access_permission'])->name('app-access-permission');
         Route::get('user/list', [UserController::class, 'index'])->name('app-user-list');
+        Route::get('roles', [CustomRoleController::class, 'index'])->name('app-role-list');
+        Route::post('user/roles', [CustomRoleController::class, 'store'])->name('app-user-roles-store');
+        Route::put('roles/{key}', [CustomRoleController::class, 'update'])->name('app-role-update');
+        Route::delete('roles/{key}', [CustomRoleController::class, 'destroy'])->name('app-role-destroy');
         Route::get('user/create', [UserController::class, 'create'])->name('app-user-create');
         Route::post('user/store', [UserController::class, 'store'])->name('app-user-store');
+        Route::patch('user/{id}/role', [UserController::class, 'updateRole'])->name('app-user-update-role');
         Route::get('user/{id}', [UserController::class, 'show'])->name('app-user-show');
         Route::get('user/{id}/edit', [UserController::class, 'edit'])->name('app-user-edit');
         Route::put('user/{id}', [UserController::class, 'update'])->name('app-user-update');
