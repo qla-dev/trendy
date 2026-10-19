@@ -278,10 +278,10 @@ export default function App() {
   const predracunPdfUrl = new URL('../assets/predracun-qla-dev_trendy.pdf', import.meta.url).href;
 
   const steps = [
-    { icon: ShieldCheck, label: "Ulazna kontrola", status: "Ulazna kontrola", detail: "Provjera materijala prije početka operacija" },
-    { icon: Wrench, label: "Dorada", status: "Dorada po potrebi", detail: "Otklanjanje nedostataka utvrđenih ulaznom kontrolom" },
-    { icon: QrCode, label: "Operacije", status: "Skeniranje RN-a", detail: "Početak, Zastoj, Kraj operacije" },
-    { icon: CheckCircle2, label: "Zatvaranje", status: "Završen ciklus", detail: "Automatsko zatvaranje RN-a" }
+    { icon: IdCardLanyard, label: "Kartica", status: "RFID identifikacija", detail: "Trendy kartica povezana s radnikom iz Pantheona" },
+    { icon: Nfc, label: "Prijava", status: "Prijava dodirom", detail: "Radnik se prijavljuje bez korisničkog imena i lozinke" },
+    { icon: QrCode, label: "Operacija", status: "Rad na RN-u", detail: "Radnik i vrijeme automatski se bilježe uz operaciju" },
+    { icon: ShieldCheck, label: "Sigurnost", status: "Zaštićen pristup", detail: "PIN i ovlaštenja štite rad na dijeljenim uređajima" }
   ];
 
   React.useEffect(() => {
@@ -396,7 +396,7 @@ export default function App() {
               <div className="flex items-center justify-between mb-10">
                 <div>
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Faza II</p>
-                  <h4 className="text-lg font-bold text-slate-900">Tok radnog naloga</h4>
+                  <h4 className="text-lg font-bold text-slate-900">RFID prijava radnika</h4>
                 </div>
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -463,9 +463,9 @@ export default function App() {
               className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3"
             >
               {[
-                { label: "Faza II", value: "Automatizacija" },
-                { label: "Faza III", value: "Analitika" },
-                { label: "Faza IV", value: "RFID prijava" },
+                { label: "Faza II", value: "RFID prijava" },
+                { label: "Faza III", value: "Operativni tok" },
+                { label: "Faza IV", value: "Admin dashboard" },
                 { label: "Native app", value: "Besplatno", highlight: true }
               ].map((item) => (
                 <div
@@ -493,209 +493,83 @@ export default function App() {
       {/* Process Section: one flow per phase */}
       <section id="proces" className="py-32 bg-white overflow-hidden">
         <div className="max-w-7xl mx-auto px-6">
+          <div className="mb-12 grid md:grid-cols-2 items-center gap-8 rounded-[2rem] border border-slate-200 bg-slate-50 p-6 sm:p-10">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                <Nfc className="h-4 w-4" /> Faza II · Postojeće Trendy kartice
+              </span>
+              <h3 className="mt-5 text-2xl sm:text-3xl font-bold text-slate-900">Vaša kartica, centralna prijava</h3>
+              <p className="mt-4 text-slate-500 leading-relaxed">Postojeće Trendy kartice povezujemo s radnicima iz Pantheona. Identitet radnika prati svaki radni nalog, operaciju, pauzu i potvrdu rada.</p>
+              <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-emerald-700"><CheckCircle2 className="h-4 w-4 shrink-0" /> Bez izdavanja novih kartica</p>
+            </div>
+            <img src={trendyCardsUrl} alt="Postojeće Trendy CNC kartice za identifikaciju radnika u Fazi II" className="mx-auto w-full max-w-md object-contain" loading="lazy" width="1536" height="1024" />
+          </div>
+
           <FlowBlock
             phase="Faza II"
-            eyebrow="Operativni Model"
-            title="Digitalni Tok Proizvodnje"
-            subtitle="Od prenosa materijala do zatvaranja radnog naloga, svaki korak se skenira, kontroliše i vidi u realnom vremenu."
+            eyebrow="RFID Model"
+            title="Prijava Jednim Dodirom"
+            subtitle="RFID identifikacija povezuje osobu, uređaj i radni nalog — bez korisničkog imena i lozinke na svakom mjestu rada."
             steps={[
-              {
-                title: "Ulazna kontrola",
-                desc: "Odluka „dozvoljava / ne dozvoljava“ prije početka operacije.",
-                icon: ShieldCheck,
-                badge: { icon: ClipboardCheck, label: "Kontrola" }
-              },
-              {
-                title: "Procesna kontrola",
-                desc: "Neispravni komadi se vraćaju ili idu na doradu.",
-                icon: ClipboardCheck,
-                badge: { icon: RotateCcw, label: "Dorada" }
-              },
-              {
-                title: "Operacije",
-                desc: "Skeniranjem RN-a: Početak, Zastoj, Kraj i Kraj operacije.",
-                icon: QrCode,
-                active: true,
-                badge: { icon: QrCode, label: "QR" }
-              },
-              {
-                title: "Evidencija radnika",
-                desc: "Pregled radnika i evidencija njihovog rada u proizvodnji.",
-                icon: Users,
-                tags: ["Evidencija"]
-              },
-              {
-                title: "Detekcija kašnjenja",
-                desc: "Automatsko praćenje kašnjenja radnih naloga.",
-                icon: ArrowRightLeft,
-                badge: { icon: FileText, label: "RN" }
-              },
-              {
-                title: "Zatvaranje",
-                desc: "Izdavanje materijala i automatsko zatvaranje RN-a.",
-                icon: CheckCircle2,
-                success: true,
-                badge: { icon: FileText, label: "Dokument" }
-              }
+              { title: "Kartica i radnik", desc: "Trendy kartica povezuje se s aktivnim radnikom iz Pantheona.", icon: IdCardLanyard, badge: { icon: Users, label: "Radnik" } },
+              { title: "Čitači i NFC", desc: "RFID čitač na tabletu ili računaru, NFC u native aplikaciji.", icon: Nfc, badge: { icon: Smartphone, label: "USB / NFC" } },
+              { title: "Dolazak i pauza", desc: "Dolazak, pauza i odlazak bilježe se jednim prislanjanjem.", icon: LogIn, badge: { icon: Clock, label: "Evidencija" } },
+              { title: "Ovlaštenja", desc: "Radnik vidi samo dozvoljene operacije, uz upravljanje ulogama.", icon: ShieldCheck, active: true, badge: { icon: KeyRound, label: "Pristup" } },
+              { title: "Rad na RN-u", desc: "Početak, zastoj i kraj operacije automatski se vežu za radnika.", icon: QrCode, badge: { icon: FileText, label: "RN" } },
+              { title: "Sigurna potvrda", desc: "Kontrola, dorada i materijal potvrđuju se karticom i ostavljaju trag.", icon: ClipboardCheck, success: true, badge: { icon: Nfc, label: "RFID" } }
             ]}
-            note={{
-              tone: "amber",
-              icon: RotateCcw,
-              label: "Ne dozvoljava",
-              text: "komad se vraća na operaciju ili ide na doradu, uz evidenciju naplate i prateću dokumentaciju."
-            }}
-            live={{
-              eyebrow: "Kroz cijeli tok",
-              title: "Uživo za menadžment",
-              items: [
-                { icon: Users, title: "Panel resursa", desc: "Radnici, mašine, kapaciteti i efikasnost." },
-                { icon: BellRing, title: "Kašnjenja RN-a", desc: "Automatsko praćenje i operativne notifikacije." },
-                { icon: Gauge, title: "Live Manager Analytics", desc: "Stanje proizvodnje u realnom vremenu." }
-              ]
-            }}
+            note={{ tone: "slate", icon: KeyRound, label: "Zaštita identiteta", text: "neaktivan uređaj se zaključava i traži 4-cifreni PIN, pa niko ne može raditi na tuđe ime." }}
+            live={{ eyebrow: "Bez lozinki", title: "RFID kroz cijeli pogon", items: [
+              { icon: Smartphone, title: "Dijeljeni tableti", desc: "Brza promjena radnika bez odjave i ponovne prijave." },
+              { icon: Users, title: "Stvarni učinak", desc: "Vrijeme i rad vežu se za osobu koja je izvršila operaciju." },
+              { icon: ShieldCheck, title: "Kontrolisan pristup", desc: "Osjetljive radnje imaju dodatnu potvrdu i trag." }
+            ]}}
           />
 
           <div className="my-32 h-px bg-slate-100" />
 
           <FlowBlock
             phase="Faza III"
-            eyebrow="Analitički Model"
-            title="Od Podataka do Odluke"
-            subtitle="Podaci iz proizvodnje, skladišta i rada se pretvaraju u analize, prognoze i jasne poslovne odluke."
+            eyebrow="Operativni Tok"
+            title="Kontrola Proizvodnje od RN-a do Izvoza"
+            subtitle="Kompletan proces iz upita: operacije, kontrola kvaliteta, dorada, škart, površinske zaštite, izmjene količina i plan izvoza."
             steps={[
-              {
-                title: "Inventura",
-                desc: "QR evidencija i usklađivanje stvarnih količina.",
-                icon: Package,
-                badge: { icon: QrCode, label: "QR" }
-              },
-              {
-                title: "Prijava radnika",
-                desc: "Stvarno vrijeme rada i učinak po radniku.",
-                icon: Users,
-                badge: { icon: Clock, label: "Evidencija" }
-              },
-              {
-                title: "Uska grla",
-                desc: "Čekanja, zastoji i uzroci gubitaka u proizvodnji.",
-                icon: Gauge,
-                badge: { icon: BarChart3, label: "Analiza" }
-              },
-              {
-                title: "Profitabilnost",
-                desc: "Po proizvodu, kupcu, RN-u i proizvodnom satu.",
-                icon: BarChart3,
-                active: true,
-                badge: { icon: TrendingUp, label: "Miks" }
-              },
-              {
-                title: "Mašine i ulaganja",
-                desc: "KPI, kvarovi, održavanje, remont i povrat investicije.",
-                icon: Wrench,
-                badge: { icon: BarChart3, label: "ROI" }
-              },
-              {
-                title: "Planiranje",
-                desc: "Prediktivne potrebe za materijalom i buduća potražnja.",
-                icon: Target,
-                success: true,
-                badge: { icon: TrendingUp, label: "Prognoza" }
-              }
+              { title: "Skeniranje RN-a", desc: "Početak, zastoj, kraj i zatvaranje operacije uz dokument 6600 i utrošeno vrijeme.", icon: QrCode, badge: { icon: Clock, label: "6600" } },
+              { title: "Zastoji", desc: "Unaprijed definisani uzroci plus slobodan unos razloga zastoja.", icon: Clock, badge: { icon: Wrench, label: "Uzroci" } },
+              { title: "Kontrola kvaliteta", desc: "Status zadovoljava, dorada ili škart uz količinu i kontrolni trag.", icon: ClipboardCheck, active: true, badge: { icon: ShieldCheck, label: "Kvalitet" } },
+              { title: "Dorada i škart", desc: "Vrijeme, trošak i dokumenti; otvaranje rada ili prijem škarta po pravilima.", icon: RotateCcw, badge: { icon: FileText, label: "Evidencija" } },
+              { title: "Površinske zaštite", desc: "Liste, statusi preuzimanja i povrata te datumi odlaska i povratka.", icon: Truck, badge: { icon: Package, label: "Praćenje" } },
+              { title: "Izmjene i izvoz", desc: "Promjena količina, povrat sirovine i plan izvoza sa filtrima i upozorenjima.", icon: ArrowRightLeft, success: true, badge: { icon: Target, label: "Plan" } }
             ]}
-            note={{
-              tone: "emerald",
-              icon: RotateCcw,
-              label: "Povratna veza",
-              text: "zaključci analize se vraćaju u plan materijala, raspored mašina i radnika iz Faze II."
-            }}
-            live={{
-              eyebrow: "Šira slika",
-              title: "Kontekst za odluke",
-              items: [
-                { icon: Target, title: "Industrijski benchmark", desc: "Ključni pokazatelji naspram referentnih vrijednosti." },
-                { icon: Lightbulb, title: "Podrška odlučivanju", desc: "Preporuke na osnovu stvarnih podataka iz pogona." },
-                { icon: BarChart3, title: "Detaljna analiza", desc: "Uska grla, profitabilnost i isplativost ulaganja." }
-              ]
-            }}
+            note={{ tone: "amber", icon: BellRing, label: "Kontrolisan završetak", text: "zatvaranje operacije traži potvrdu, a ponovno otvaranje dostupno je samo osobama s posebnim odobrenjem." }}
+            live={{ eyebrow: "Jedan operativni tok", title: "Šta se vidi odmah", items: [
+              { icon: RotateCcw, title: "Otvorene dorade", desc: "Dorada se veže uz postojeći RN ili posebnu evidenciju." },
+              { icon: Truck, title: "Status zaštite", desc: "Crveno, žuto i zeleno kroz slanje i povrat pozicije." },
+              { icon: Target, title: "Rokovi izvoza", desc: "Pozicije koje kasne jasno su označene za pakovanje." }
+            ]}}
           />
-          <div className="my-32 h-px bg-slate-100" />
 
-          <div className="mb-12 grid md:grid-cols-2 items-center gap-8 rounded-[2rem] border border-slate-200 bg-slate-50 p-6 sm:p-10">
-            <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                <Nfc className="h-4 w-4" /> Faza IV · Postojeće Trendy kartice
-              </span>
-              <h3 className="mt-5 text-2xl sm:text-3xl font-bold text-slate-900">Vaša kartica, nova namjena</h3>
-              <p className="mt-4 text-slate-500 leading-relaxed">
-                Koristimo Trendy kartice koje radnici već imaju. Povezujemo ih s evidencijom radnika iz Pantheona za prijavu, evidenciju dolaska i odlaska te potvrdu rada na operacijama.
-              </p>
-              <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-emerald-700">
-                <CheckCircle2 className="h-4 w-4 shrink-0" /> Bez izdavanja novih kartica
-              </p>
-            </div>
-            <img src={trendyCardsUrl} alt="Postojeće Trendy CNC kartice za identifikaciju radnika u Fazi IV" className="mx-auto w-full max-w-md object-contain" loading="lazy" width="1536" height="1024" />
-          </div>
+          <div className="my-32 h-px bg-slate-100" />
 
           <FlowBlock
             phase="Faza IV"
-            eyebrow="RFID Model"
-            title="Prijava Jednim Dodirom"
-            subtitle="Radnik prisloni postojeću RFID karticu i sistem zna ko radi, bez korisničkog imena i lozinke, na svakom uređaju u pogonu."
+            eyebrow="Admin Dashboard"
+            title="Komandni Centar Proizvodnje"
+            subtitle="Kompleksan administratorski dashboard objedinjuje stanje pogona, rokove, ljude, troškove, kontrolu pristupa i poslovne odluke."
             steps={[
-              {
-                title: "Postojeće kartice",
-                desc: "Postojeće Trendy kartice povezuju se s radnikom iz Pantheona.",
-                icon: IdCardLanyard,
-                badge: { icon: Users, label: "Radnik" }
-              },
-              {
-                title: "Čitač na mjestu rada",
-                desc: "RFID čitač na tabletu ili računaru, NFC u native aplikaciji.",
-                icon: Nfc,
-                badge: { icon: Smartphone, label: "USB / NFC" }
-              },
-              {
-                title: "Dolazak i odlazak",
-                desc: "Dolazak, pauza i odlazak bilježe se jednim prislanjanjem.",
-                icon: LogIn,
-                badge: { icon: Clock, label: "Evidencija" }
-              },
-              {
-                title: "Operacije",
-                desc: "Kartica i RN: Početak, Zastoj i Kraj na ime radnika.",
-                icon: QrCode,
-                active: true,
-                badge: { icon: Nfc, label: "RFID" }
-              },
-              {
-                title: "Potvrde",
-                desc: "Izdavanje materijala, kontrola i dorada potvrđeni karticom.",
-                icon: ClipboardCheck,
-                badge: { icon: FileText, label: "Potpis" }
-              },
-              {
-                title: "Industrijski newsletter",
-                desc: "Praćenje trendova u mašinskoj industriji kroz sedmični pregled tehnologija i poslovnih prilika.",
-                icon: Mail,
-                success: true,
-                badge: { icon: Globe, label: "Trendovi" }
-              }
+              { title: "Live pregled", desc: "Radni nalozi, operacije, zastoji i kapaciteti u realnom vremenu.", icon: LayoutDashboard, badge: { icon: Gauge, label: "Uživo" } },
+              { title: "Plan i rokovi", desc: "Plan izvoza, kašnjenja, prioriteti i filteri po kupcu, dobavljaču i dokumentu.", icon: Target, badge: { icon: BellRing, label: "Rokovi" } },
+              { title: "Ljudi i ovlaštenja", desc: "Radnici, dozvoljene operacije, trošak minute i administrativna odobrenja.", icon: Users, active: true, badge: { icon: KeyRound, label: "Kontrola" } },
+              { title: "Troškovi i učinak", desc: "Radni sati, dorada, škart, profitabilnost i proizvodni miks.", icon: TrendingUp, badge: { icon: BarChart3, label: "KPI" } },
+              { title: "Mašine i resursi", desc: "Zastoji, opterećenje, održavanje i iskorištenost kapaciteta.", icon: Wrench, badge: { icon: Factory, label: "Resursi" } },
+              { title: "Izvještaji i odluke", desc: "Dashboardi, upozorenja, izvozi i jasne preporuke za upravljanje pogonom.", icon: FileText, success: true, badge: { icon: Lightbulb, label: "Odluke" } }
             ]}
-            note={{
-              tone: "slate",
-              icon: KeyRound,
-              label: "Sigurnost",
-              text: "ako prijavljen uređaj ostane neaktivan, zaključava se i traži 4-cifreni PIN, pa niko ne može raditi na tuđe ime."
-            }}
-            live={{
-              eyebrow: "Bez lozinki",
-              title: "Gdje kartica mijenja prijavu",
-              items: [
-                { icon: Smartphone, title: "Dijeljeni tableti", desc: "Više radnika na jednom uređaju, bez odjave i ponovne prijave." },
-                { icon: Package, title: "Inventura", desc: "Svako brojanje vezano je za radnika koji ga je uradio." },
-                { icon: BarChart3, title: "Tačan učinak", desc: "Vrijeme i rad po osobi, a ne po odjeljenju." }
-              ]
-            }}
+            note={{ tone: "emerald", icon: BarChart3, label: "Jedan izvor istine", text: "administracija vidi cijeli proces — od prijave radnika i kvaliteta do realizacije izvoza i troška." }}
+            live={{ eyebrow: "Za upravljanje", title: "Dashboard koji povezuje faze", items: [
+              { icon: Gauge, title: "Operativni alarmi", desc: "Kašnjenja, zastoji i otvorene stavke bez čekanja na ručne izvještaje." },
+              { icon: Users, title: "Administracija rada", desc: "Uloge, ovlaštenja, radnici i dozvoljene operacije na jednom mjestu." },
+              { icon: TrendingUp, title: "Poslovna slika", desc: "Učinak, trošak i profitabilnost za brže odluke." }
+            ]}}
           />
         </div>
       </section>
@@ -706,62 +580,62 @@ export default function App() {
           <div className="text-center mb-20">
             <h2 className="text-4xl font-bold text-slate-900 mb-4">Struktura Nadogradnje</h2>
             <p className="text-slate-500 max-w-2xl mx-auto">
-              Faze II, III i IV povezuju automatizaciju proizvodnog toka, analitiku za poslovno odlučivanje i prijavu radnika RFID karticama.
+              Tri jednako obimne faze povezuju RFID identifikaciju, kontrolisan operativni tok i administratorski dashboard za upravljanje pogonom.
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 xl:gap-8">
             <PhaseCard 
               number="Faza II"
-              title="Automatizacija proizvodnog toka i kontrola operacija"
+              title="RFID identifikacija radnika i prijava bez lozinke"
               duration="1.5 mj."
               price="4.900"
               items={[
-                "Digitalni tok radnih naloga kroz proizvodne operacije",
-                "Ulazna i procesna kontrola sa opcijama „dozvoljava / ne dozvoljava“ i vraćanjem neispravnih komada",
-                "Digitalno upravljanje radom operatera kroz „Početak“, „Zastoj“, „Kraj“ i „Kraj operacije“, uz preuzimanje operacije skeniranjem RN-a",
-                "Panel resursa sa pregledom radnika i mašina",
-                "Postavljanje finansijskih ciljeva",
-                "Proces dorade sa kontrolom, evidencijom naplate i pratećom dokumentacijom",
-                "Automatsko praćenje kašnjenja radnih naloga i operativne notifikacije",
-                "Automatsko zatvaranje radnog naloga nakon završetka proizvodnog ciklusa",
-                "Live Manager Analytics Dashboard"
+                "Integracija postojećih Trendy RFID kartica i povezivanje s aktivnim radnicima iz Pantheona",
+                "Prijava prislanjanjem kartice, bez korisničkog imena i lozinke",
+                "Podrška za RFID čitače na tabletima i računarima te NFC u native aplikaciji",
+                "Evidencija dolaska, pauze i odlaska karticom",
+                "Radnik i vrijeme automatski se vežu za radni nalog i izvršenu operaciju",
+                "Pregled radnika s dozvoljenim operacijama i upravljanje ovlaštenjima",
+                "Potvrda kontrole, dorade i izdavanja materijala karticom",
+                "Automatsko zaključavanje neaktivnog uređaja i otključavanje PIN-om",
+                "Blokada izgubljenih kartica i dodatni PIN za osjetljive radnje"
               ]}
               delay={0.2}
             />
             <PhaseCard
               number="Faza III"
-              title="Analitika, optimizacija i podrška poslovnom odlučivanju"
+              title="Operativni tok, kontrola kvaliteta i realizacija izvoza"
               duration="1.5 mj."
               price="4.900"
               items={[
-                "Implementacija inventure sa QR evidencijom i usklađivanjem količina",
-                "Evidencija prijave radnika i praćenje stvarnog vremena rada i učinka",
-                "Prediktivno planiranje potreba za materijalom i buduće potražnje",
-                "Analiza uskih grla, čekanja i uzroka gubitaka u proizvodnji",
-                "Analiza profitabilnosti i proizvodnog miksa po proizvodu, kupcu, RN-u i proizvodnom satu",
-                "Analiza stanja mašina i isplativosti ulaganja — KPI pokazatelji, kvarovi, zastoji, troškovi održavanja, remont, zamjena i povrat investicije",
-                "Poređenje ključnih proizvodnih pokazatelja sa industrijskim referentnim vrijednostima",
-                "Detaljan prikaz radnika sa učinkovitosti, efikasnosti, radnim vremenom i urađenim operacijama"
+                "Skeniranje RN-a i rad operatera: Početak, Zastoj, Kraj i Zatvori operaciju",
+                "Dokument 6600 s operaterom i ukupno utrošenim vremenom pri završetku rada",
+                "Definisani i slobodno uneseni uzroci zastoja",
+                "Statusi kontrole: zadovoljava, dorada i škart, uz unos količine",
+                "Dorada na postojećem RN-u ili posebna evidencija sa vremenom i cijenom minute",
+                "Evidencija škarta, prijem na skladište i ponovno otvaranje potrebnih operacija",
+                "Površinske zaštite: liste, preuzimanje, povrat, statusi i datumi",
+                "Izmjena količina, povrat izrezanog materijala i upozorenje za nepotpun RN",
+                "Plan izvoza s filtrima, označenim kašnjenjima i zatvaranjem nakon pakovanja"
               ]}
               delay={0.3}
             />
             <PhaseCard
               number="Faza IV"
-              title="RFID identifikacija radnika i prijava bez lozinke"
+              title="Kompleksni administratorski dashboard"
               duration="1.5 mj."
               price="4.900"
               items={[
-                "Integracija postojećih Trendy RFID kartica i povezivanje s radnicima iz Pantheona",
-                "Prijava radnika prislanjanjem kartice, bez korisničkog imena i lozinke",
-                "Podrška za RFID čitače na tabletima i računarima te NFC u native aplikaciji",
-                "Evidencija dolaska, pauze i odlaska karticom",
-                "Početak, Zastoj i Kraj operacije bilježe se na ime radnika koji je prislonio karticu",
-                "Potvrda izdavanja materijala, kontrole i dorade karticom",
-                "Automatsko popunjavanje radnika i vremena pri zatvaranju radnog naloga",
-                "Automatsko zaključavanje neaktivnog uređaja i brzo otključavanje 4-cifrenim PIN-om, kao zaštita od rada na tuđe ime",
-                "Blokada izgubljenih kartica i dodatni PIN za osjetljive radnje",
-                "Sedmični pregled industrijskih trendova, tehnologija, materijala i poslovnih prilika"
+                "Live pregled radnih naloga, operacija, zastoja, kvaliteta i kapaciteta",
+                "Centralni plan izvoza s prioritetima, rokovima i filterima po svim parametrima",
+                "Administracija radnika, dozvoljenih operacija, uloga, ovlaštenja i troška minute",
+                "Panel resursa za radnike, mašine, opterećenje i raspoložive kapacitete",
+                "Operativna upozorenja za kašnjenja, otvorene dorade, škart i stavke na zaštiti",
+                "KPI dashboard: učinak, radno vrijeme, zastoji, dorada, škart i realizacija",
+                "Analiza profitabilnosti i proizvodnog miksa po proizvodu, kupcu, RN-u i proizvodnom satu",
+                "Pregled mašina, kvarova, održavanja, troškova i povrata ulaganja",
+                "Izvještaji, izvozi podataka i pregled svih administrativnih odluka"
               ]}
               delay={0.4}
             />
