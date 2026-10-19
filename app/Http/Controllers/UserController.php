@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Support\CustomRoles;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -16,6 +17,8 @@ class UserController extends Controller
     public function index()
     {
         $users = User::all();
+        $roleOptions = $this->roleOptions();
+        $canManageRoles = auth()->user()->canManageRoles();
         
         // Prepare data for DataTables
         $usersData = $users->map(function($user) {
@@ -29,7 +32,7 @@ class UserController extends Controller
             ];
         });
         
-        return view('content.apps.user.app-user-list', compact('users', 'usersData'));
+        return view('content.apps.user.app-user-list', compact('users', 'usersData', 'roleOptions', 'canManageRoles'));
     }
 
 
@@ -46,6 +49,7 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
+        $canManageRoles = $request->user()->canManageRoles();
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'username' => [
@@ -62,7 +66,7 @@ class UserController extends Controller
                 Rule::unique($this->usersTableForValidation(), 'email'),
             ],
             'password' => 'required|string|min:6|confirmed',
-            'role' => ['required', Rule::in($this->availableRoles())],
+            'role' => $canManageRoles ? ['required', Rule::in($this->availableRoles())] : ['nullable', Rule::in([User::ROLE_USER])],
         ]);
 
         if ($validator->fails()) {
@@ -71,13 +75,17 @@ class UserController extends Controller
                 ->withInput();
         }
 
+        if (User::isRoleManagerUsername($request->username)) {
+            return back()->withErrors(['username' => 'Ovo korisničko ime je rezervisano.'])->withInput();
+        }
+
         try {
             User::create([
                 'name' => $request->name,
                 'username' => $request->username,
                 'email' => $request->input('email'),
                 'password' => Hash::make($request->password),
-                'role' => $request->role,
+                'role' => $canManageRoles ? $request->role : User::ROLE_USER,
             ]);
 
             return redirect()->route('app-user-list')
@@ -95,7 +103,9 @@ class UserController extends Controller
     public function show(string $id)
     {
         $user = User::findOrFail($id);
-        return view('content.apps.user.app-user-view-account', compact('user'));
+        $roleOptions = $this->roleOptions();
+        $canManageRoles = auth()->user()->canManageRoles();
+        return view('content.apps.user.app-user-view-account', compact('user', 'roleOptions', 'canManageRoles'));
     }
 
     /**
@@ -104,7 +114,9 @@ class UserController extends Controller
     public function edit(string $id)
     {
         $user = User::findOrFail($id);
-        return view('content.apps.user.app-user-edit', compact('user'));
+        $roleOptions = $this->roleOptions();
+        $canManageRoles = auth()->user()->canManageRoles();
+        return view('content.apps.user.app-user-edit', compact('user', 'roleOptions', 'canManageRoles'));
     }
 
     /**
@@ -113,6 +125,16 @@ class UserController extends Controller
     public function update(Request $request, string $id)
     {
         $user = User::findOrFail($id);
+        $canManageRoles = $request->user()->canManageRoles();
+        if ($user->canManageRoles() && (!$canManageRoles || $request->name !== $user->name || $request->username !== $user->username)) {
+            abort(403);
+        }
+        if (User::isRoleManagerUsername($request->username) && $request->username !== $user->username) {
+            return back()->withErrors(['username' => 'Ovo korisničko ime je rezervisano.'])->withInput();
+        }
+        if (!$canManageRoles && $request->has('role') && $request->role !== $user->role) {
+            abort(403);
+        }
 
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
@@ -129,7 +151,7 @@ class UserController extends Controller
                 'max:255',
                 Rule::unique($this->usersTableForValidation(), 'email')->ignore($id),
             ],
-            'role' => ['required', Rule::in($this->availableRoles())],
+            'role' => $canManageRoles ? ['required', Rule::in($this->availableRoles())] : ['nullable'],
         ]);
 
         if ($validator->fails()) {
@@ -143,7 +165,7 @@ class UserController extends Controller
                 'name' => $request->name,
                 'username' => $request->username,
                 'email' => $request->input('email'),
-                'role' => $request->role,
+                'role' => $canManageRoles ? $request->role : $user->role,
             ]);
 
             return redirect()->route('app-user-list')
@@ -155,13 +177,29 @@ class UserController extends Controller
         }
     }
 
+    public function updateRole(Request $request, string $id)
+    {
+        abort_unless($request->user()->canManageRoles(), 403);
+
+        $user = User::findOrFail($id);
+        $data = $request->validate([
+            'role' => ['required', Rule::in($this->availableRoles())],
+        ]);
+
+        $user->update(['role' => $data['role']]);
+
+        return redirect()->route('app-user-list')
+            ->with('success', 'Uloga korisnika je uspješno promijenjena.');
+    }
+
     /**
      * Remove the specified resource from storage.
      */
     public function destroy(string $id)
     {
+        $user = User::findOrFail($id);
+        abort_if($user->canManageRoles(), 403);
         try {
-            $user = User::findOrFail($id);
             $user->delete();
 
             return redirect()->route('app-user-list')
@@ -178,7 +216,9 @@ class UserController extends Controller
     public function viewAccount(string $id)
     {
         $user = User::findOrFail($id);
-        return view('content.apps.user.app-user-view-account', compact('user'));
+        $roleOptions = $this->roleOptions();
+        $canManageRoles = auth()->user()->canManageRoles();
+        return view('content.apps.user.app-user-view-account', compact('user', 'roleOptions', 'canManageRoles'));
     }
 
     private function usersTableForValidation(): string
@@ -196,12 +236,25 @@ class UserController extends Controller
 
     private function availableRoles(): array
     {
-        return [
-            User::ROLE_ADMIN,
-            User::ROLE_USER,
-            User::ROLE_KONTROLA,
-            User::ROLE_BRAVARIJA,
-            User::ROLE_PROIZVODNJA,
-        ];
+        return array_keys($this->roleOptions());
+    }
+
+    private function roleOptions(): array
+    {
+        $known = array_merge([
+            User::ROLE_ADMIN => 'Admin',
+            User::ROLE_USER => 'Korisnik',
+            User::ROLE_KONTROLA => 'Kontrola',
+            User::ROLE_BRAVARIJA => 'Bravarija',
+            User::ROLE_PROIZVODNJA => 'Proizvodnja',
+        ], array_map(fn (array $role) => $role['name'], app(CustomRoles::class)->all()));
+
+        foreach (User::whereNotNull('role')->distinct()->pluck('role') as $role) {
+            if ($role !== '' && !isset($known[$role])) {
+                $known[$role] = ucfirst($role);
+            }
+        }
+
+        return $known;
     }
 }

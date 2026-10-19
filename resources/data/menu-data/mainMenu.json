@@ -109,6 +109,12 @@
       "url": "app/user/list"
     },
     {
+      "name": "Uloge",
+      "icon": "shield",
+      "slug": "app-role-list",
+      "url": "app/roles"
+    },
+    {
       "name": "Pošiljatelji",
       "icon": "send",
       "url": "inventory/soon",
