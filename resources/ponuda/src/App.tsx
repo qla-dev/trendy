@@ -514,7 +514,7 @@ export default function App() {
               { title: "Kartica i radnik", desc: "Trendy kartica povezuje se s aktivnim radnikom iz Pantheona.", icon: IdCardLanyard, badge: { icon: Users, label: "Radnik" } },
               { title: "Čitači i NFC", desc: "RFID čitač na tabletu ili računaru, NFC u native aplikaciji.", icon: Nfc, badge: { icon: Smartphone, label: "USB / NFC" } },
               { title: "Dolazak i pauza", desc: "Dolazak, pauza i odlazak bilježe se jednim prislanjanjem.", icon: LogIn, badge: { icon: Clock, label: "Evidencija" } },
-              { title: "Ovlaštenja", desc: "Radnik vidi samo dozvoljene operacije, uz upravljanje ulogama.", icon: ShieldCheck, active: true, badge: { icon: KeyRound, label: "Pristup" } },
+              { title: "Ovlaštenja i trošak", desc: "Dozvoljene operacije, upravljanje ulogama i kolone za cijenu radne minute po radniku.", icon: ShieldCheck, active: true, badge: { icon: TrendingUp, label: "Trošak rada" } },
               { title: "Rad na RN-u", desc: "Početak, zastoj i kraj operacije automatski se vežu za radnika.", icon: QrCode, badge: { icon: FileText, label: "RN" } },
               { title: "Sigurna potvrda", desc: "Kontrola, dorada i materijal potvrđuju se karticom i ostavljaju trag.", icon: ClipboardCheck, success: true, badge: { icon: Nfc, label: "RFID" } }
             ]}
@@ -522,7 +522,7 @@ export default function App() {
             live={{ eyebrow: "Bez lozinki", title: "RFID kroz cijeli pogon", items: [
               { icon: Smartphone, title: "Dijeljeni tableti", desc: "Brza promjena radnika bez odjave i ponovne prijave." },
               { icon: Users, title: "Stvarni učinak", desc: "Vrijeme i rad vežu se za osobu koja je izvršila operaciju." },
-              { icon: ShieldCheck, title: "Kontrolisan pristup", desc: "Osjetljive radnje imaju dodatnu potvrdu i trag." }
+              { icon: TrendingUp, title: "Cijena radne minute", desc: "U prvoj fazi dodaju se kolone za definisanje troška rada po radniku." }
             ]}}
           />
 
@@ -534,10 +534,10 @@ export default function App() {
             title="Kontrola Proizvodnje od RN-a do Izvoza"
             subtitle="Kompletan proces iz upita: operacije, kontrola kvaliteta, dorada, škart, površinske zaštite, izmjene količina i plan izvoza."
             steps={[
-              { title: "Skeniranje RN-a", desc: "Početak, zastoj, kraj i zatvaranje operacije uz dokument 6600 i utrošeno vrijeme.", icon: QrCode, badge: { icon: Clock, label: "6600" } },
-              { title: "Zastoji", desc: "Unaprijed definisani uzroci plus slobodan unos razloga zastoja.", icon: Clock, badge: { icon: Wrench, label: "Uzroci" } },
+              { title: "RN i zastoji", desc: "Početak, zastoj, kraj i zatvaranje operacije uz dokument 6600, vrijeme i razlog zastoja.", icon: QrCode, badge: { icon: Clock, label: "6600" } },
               { title: "Kontrola kvaliteta", desc: "Status zadovoljava, dorada ili škart uz količinu i kontrolni trag.", icon: ClipboardCheck, active: true, badge: { icon: ShieldCheck, label: "Kvalitet" } },
-              { title: "Dorada i škart", desc: "Vrijeme, trošak i dokumenti; otvaranje rada ili prijem škarta po pravilima.", icon: RotateCcw, badge: { icon: FileText, label: "Evidencija" } },
+              { title: "Dorada", desc: "Dorada se bilježi na postojećem RN-u ili u posebnoj evidenciji, s vremenom, troškom minute i dokumentom 6600.", icon: RotateCcw, badge: { icon: FileText, label: "Dorada" } },
+              { title: "Škart", desc: "Unos količine, prijem na skladište škarta, izračun troška i ponovno otvaranje potrebnih operacija.", icon: Package, badge: { icon: RotateCcw, label: "Škart" } },
               { title: "Površinske zaštite", desc: "Liste, statusi preuzimanja i povrata te datumi odlaska i povratka.", icon: Truck, badge: { icon: Package, label: "Praćenje" } },
               { title: "Izmjene i izvoz", desc: "Promjena količina, povrat sirovine i plan izvoza sa filtrima i upozorenjima.", icon: ArrowRightLeft, success: true, badge: { icon: Target, label: "Plan" } }
             ]}
@@ -596,7 +596,8 @@ export default function App() {
                 "Podrška za RFID čitače na tabletima i računarima te NFC u native aplikaciji",
                 "Evidencija dolaska, pauze i odlaska karticom",
                 "Radnik i vrijeme automatski se vežu za radni nalog i izvršenu operaciju",
-                "Pregled radnika s dozvoljenim operacijama i upravljanje ovlaštenjima",
+                "U Fazi II (prvoj fazi nadogradnje) dodaju se kolone za definisanje cijene koštanja radne minute svakog radnika",
+                "Pregled radnika s dozvoljenim operacijama, upravljanje ovlaštenjima i troškom rada",
                 "Potvrda kontrole, dorade i izdavanja materijala karticom",
                 "Automatsko zaključavanje neaktivnog uređaja i otključavanje PIN-om",
                 "Blokada izgubljenih kartica i dodatni PIN za osjetljive radnje"
@@ -615,6 +616,7 @@ export default function App() {
                 "Statusi kontrole: zadovoljava, dorada i škart, uz unos količine",
                 "Dorada na postojećem RN-u ili posebna evidencija sa vremenom i cijenom minute",
                 "Evidencija škarta, prijem na skladište i ponovno otvaranje potrebnih operacija",
+                "Posebni troškovni trag za doradu i škart, s vremenom rada, materijalom i pratećim dokumentima",
                 "Površinske zaštite: liste, preuzimanje, povrat, statusi i datumi",
                 "Izmjena količina, povrat izrezanog materijala i upozorenje za nepotpun RN",
                 "Plan izvoza s filtrima, označenim kašnjenjima i zatvaranjem nakon pakovanja"
