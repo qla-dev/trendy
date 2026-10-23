@@ -1048,14 +1048,21 @@ class OrderAiScanService
             ->recoverTrendyDePositionNotes($preparedDocument, $items);
 
         foreach ($items as $index => $item) {
-            if (!is_array($item) || trim((string) ($item['note'] ?? '')) !== '') {
+            if (!is_array($item)) {
                 continue;
             }
 
             $lineNumber = (int) ($item['line_number'] ?? 0);
             $note = $this->sanitizeTrendyDeItemNote((string) ($sourceNotes[$lineNumber] ?? ''), $lineNumber);
+            $existingNote = trim((string) ($item['note'] ?? ''));
 
-            if ($lineNumber > 0 && $note !== '') {
+            $sourceParts = $this->splitTrendyDeNoteParts($note);
+            $existingParts = $this->splitTrendyDeNoteParts($existingNote);
+            if ($lineNumber > 0 && $note !== '' && (
+                $existingParts === []
+                || (count($sourceParts) > count($existingParts)
+                    && array_diff($existingParts, $sourceParts) === [])
+            )) {
                 $payload['items'][$index]['note'] = $note;
             }
         }
@@ -3103,9 +3110,9 @@ class OrderAiScanService
     }
 
     /**
-     * Pantheon positions for Trendy Germany orders are consecutive item rows.
-     * Some PDF layouts make the parser read the final digit of a product name
-     * (for example "Grundplatte 01") as every item's source position.
+     * Keep distinct, ordered PDF positions, including gaps left by a source
+     * placeholder. Renumber only when extracted positions are unusable, such
+     * as repeated digits from product names (for example "Grundplatte 01").
      */
     private function normalizeTrendyDeItemLineNumbers(array $items, array $order): array
     {
@@ -3113,9 +3120,19 @@ class OrderAiScanService
             return $items;
         }
 
-        return array_values(array_map(function ($item, int $index): array {
+        $sourcePositions = array_map(static fn (array $item): int => (int) ($item['line_number'] ?? 0), $items);
+        $sortedPositions = $sourcePositions;
+        sort($sortedPositions, SORT_NUMERIC);
+        $hasReliableSourcePositions = $sourcePositions !== []
+            && min($sourcePositions) > 0
+            && $sourcePositions === array_values(array_unique($sourcePositions))
+            && $sourcePositions === $sortedPositions;
+
+        return array_values(array_map(function ($item, int $index) use ($hasReliableSourcePositions): array {
             $item = is_array($item) ? $item : [];
-            $item['line_number'] = $index + 1;
+            if (!$hasReliableSourcePositions) {
+                $item['line_number'] = $index + 1;
+            }
 
             return $item;
         }, $items, array_keys($items)));
@@ -3835,6 +3852,10 @@ class OrderAiScanService
                 implode("\n", array_values(array_filter($noteLines))),
                 $lineNumber
             );
+            $item['note'] = implode("\n", array_values(array_filter(
+                $this->splitTrendyDeNoteParts($item['note']),
+                static fn (string $part): bool => mb_strtolower(trim($part)) !== mb_strtolower($productName)
+            )));
 
             $sourceItemDeadline = $this->resolveTrendyDeItemDeliveryDeadline(
                 $lineNumber,
@@ -5026,7 +5047,7 @@ class OrderAiScanService
 
     private function trendyDeProductCodePattern(): string
     {
-        return '(?:[A-Za-z]?\d{3,4}(?:\s+\d{2,4}){2,3}|[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24})';
+        return '(?:EMPTY|[A-Za-z]?\d{3,4}(?:\s+\d{2,4}){2,3}|[A-Za-z]{1,6}\s+\d{1,4}\s+\d{1,6}|(?=[A-Za-z0-9._\-\/]*\d)[A-Za-z0-9][A-Za-z0-9._\-\/]{4,24})';
     }
 
     private function trendyDeProcessOrFinishPattern(): string
