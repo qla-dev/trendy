@@ -1541,13 +1541,10 @@ class PantheonOrderTransferService
 
     private function resolvePantheonOrderItemLineNumber(array $item, int $fallback, array $order = []): int
     {
-        // GROB PDF positions are source labels (typically 10, 20, 30, ...),
-        // while Pantheon order items must be numbered consecutively.
-        // Trendy Germany PDFs frequently contain a visual Pos. column but no
-        // usable value for each row. The PDF rules parser then reports every
-        // item as position 1, which violates Pantheon's unique (acKey, anNo)
-        // index. The scan item order is the reliable position for both formats.
-        if ($this->isGrobOrder($order) || $this->isTrendyGermanyOrder($order)) {
+        // GROB source labels (10, 20, 30, ...) are renumbered for Pantheon.
+        // Trendy DE source positions are retained, including a gap when an
+        // EMPTY / PRAZNO POLJE row occupies an earlier position.
+        if ($this->isGrobOrder($order)) {
             return max(1, $fallback);
         }
 

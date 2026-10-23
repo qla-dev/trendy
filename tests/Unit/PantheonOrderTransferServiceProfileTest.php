@@ -360,6 +360,13 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
         $this->assertTrue($method->invoke($service, $zeroValuePosition, [
             'supplier_name' => 'Trendy Germany GmbH-13',
         ], 0.0));
+        $this->assertTrue($method->invoke($service, [
+            'product_code' => 'EMPTY',
+            'product_name' => 'PRAZNO POLJE',
+            'quantity' => 1,
+            'unit_price' => 0,
+            'line_total' => 0,
+        ], ['supplier_name' => 'Trendy Germany GmbH-52'], 1.0));
         $this->assertFalse($method->invoke($service, $zeroValuePosition, [
             'supplier_name' => 'GROB-WERKE GmbH & Co. KG',
         ], 0.0));
@@ -374,6 +381,17 @@ class PantheonOrderTransferServiceProfileTest extends TestCase
 
         $this->assertSame(2, $method->invoke($service, ['line_number' => 2], 1));
         $this->assertSame(7, $method->invoke($service, ['line_number' => 0], 7));
+    }
+
+    public function test_trendy_de_transfer_keeps_source_position_after_empty_row(): void
+    {
+        $service = new PantheonOrderTransferService();
+        $method = (new ReflectionClass($service))->getMethod('resolvePantheonOrderItemLineNumber');
+        $method->setAccessible(true);
+        $order = ['supplier_name' => 'Trendy Germany GmbH-52'];
+
+        $this->assertSame(2, $method->invoke($service, ['line_number' => 2], 1, $order));
+        $this->assertSame(4, $method->invoke($service, ['line_number' => 4], 3, $order));
     }
 
     public function test_grob_pantheon_order_items_use_consecutive_positions(): void

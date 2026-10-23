@@ -508,6 +508,79 @@ class OrderAiScanServiceTest extends TestCase
         $this->assertSame('10000662938', $items[3]['note']);
     }
 
+    public function test_trendy_de_empty_first_position_and_complete_notes_keep_source_numbers(): void
+    {
+        $parser = app(OrderAiDigitalPdfRulesParser::class);
+        $method = (new ReflectionClass($parser))->getMethod('parseTrendyDeItems');
+        $method->setAccessible(true);
+
+        $items = $method->invoke($parser, [
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '1,00 0,00STU 0,000,00EMPTY PRAZNO POLJE 1',
+            '2,00 34,35STU 68,700,00200001823 Passfeder 2',
+            'Materijal: C 45 K (St 50-2K)',
+            'Dimenzije: A 25 x 14 x 130',
+            '2,00 67,80STU 135,600,0011065816 Passfeder 3',
+            'Materijal: C 45 K',
+            '10002117597',
+            '1,00 33,85STU 33,850,0012072038 Passfeder 4',
+            'Materijal: 1.0503+C (C45+C)',
+            'Dimenzije: AB 22 k9 14 x 90',
+            'Total 238,15',
+        ]);
+
+        $this->assertSame([1, 2, 3, 4], array_column($items, 'line_number'));
+        $this->assertSame('EMPTY', $items[0]['product_code']);
+        $this->assertSame('PRAZNO POLJE', $items[0]['product_name']);
+        $this->assertSame('', $items[0]['note']);
+        $this->assertSame("Materijal: C 45 K (St 50-2K)\nDimenzije: A 25 x 14 x 130", $items[1]['note']);
+        $this->assertSame("Materijal: 1.0503+C (C45+C)\nDimenzije: AB 22 k9 14 x 90", $items[3]['note']);
+    }
+
+    public function test_trendy_de_source_recovery_completes_a_partial_note_without_crossing_next_position(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $method = (new ReflectionClass($service))->getMethod('recoverTrendyDeMissingNotesFromPreparedDocument');
+        $method->setAccessible(true);
+
+        $payload = $method->invoke($service, ['items' => [
+            ['line_number' => 2, 'product_code' => '200001823', 'product_name' => 'Passfeder', 'note' => 'Materijal: C 45 K (St 50-2K)'],
+            ['line_number' => 3, 'product_code' => '11065816', 'product_name' => 'Passfeder', 'note' => 'Existing custom note'],
+        ]], ['searchable_text' => implode("\n", [
+            'Pos. Artikel Nr. Beschreibung Menge Einheit EK-Preis VAT % Betrag',
+            '2 200001823 Passfeder 2,00 STU 34,35 0,00 68,70',
+            'Materijal: C 45 K (St 50-2K)',
+            'Dimenzije: A 25 x 14 x 130',
+            '3 11065816 Passfeder 2,00 STU 67,80 0,00 135,60',
+            'Materijal: C 45 K',
+            'Total 204,30',
+        ])]);
+
+        $this->assertSame("Materijal: C 45 K (St 50-2K)\nDimenzije: A 25 x 14 x 130", $payload['items'][0]['note']);
+        $this->assertSame('Existing custom note', $payload['items'][1]['note']);
+    }
+
+    public function test_trendy_de_normalization_preserves_ordered_source_positions_with_a_gap(): void
+    {
+        $service = app(OrderAiScanService::class);
+        $method = (new ReflectionClass($service))->getMethod('normalizeTrendyDeItemLineNumbers');
+        $method->setAccessible(true);
+        $order = ['supplier_name' => 'Trendy Germany GmbH-52'];
+
+        $items = $method->invoke($service, [
+            ['line_number' => 2, 'product_code' => '200001823'],
+            ['line_number' => 3, 'product_code' => '11065816'],
+            ['line_number' => 4, 'product_code' => '12072038'],
+        ], $order);
+        $this->assertSame([2, 3, 4], array_column($items, 'line_number'));
+
+        $ambiguous = $method->invoke($service, [
+            ['line_number' => 1],
+            ['line_number' => 1],
+        ], $order);
+        $this->assertSame([1, 2], array_column($ambiguous, 'line_number'));
+    }
+
     public function test_trendy_de_ai_note_fallback_collects_any_description_rows_until_next_item(): void
     {
         $service = app(OrderAiScanService::class);
