@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Services\OrderAi\OrderAiScanService;
 use App\Services\OrderAi\PantheonOrderTransferService;
 use App\Support\AiScanLog;
+use App\Support\AiScanFailureMessage;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -511,11 +512,17 @@ class OrderController extends WorkOrderController
                 ? 'product_code_too_long'
                 : $this->detectTransferFailureType($rawReason);
 
-            AiScanLog::error('Manual order transfer failed.', [
+            $failureContext = [
                 'scan_id' => $scan?->id,
                 'error_type' => $errorType,
                 'message' => $rawReason,
-            ]);
+                'exception' => $exception,
+            ];
+            if ($scan !== null) {
+                AiScanLog::failed('Manual AI scan transfer failed.', $failureContext);
+            } else {
+                AiScanLog::error('Manual order transfer failed.', $failureContext);
+            }
 
             if ($scan !== null && $this->isDuplicateExternalDocumentReferenceFailure($rawReason)) {
                 $this->markScanTransferAsDuplicateReference($scan, $rawReason);
@@ -665,6 +672,10 @@ class OrderController extends WorkOrderController
 
         if ($failureType === 'database_query_error') {
             return 'Transfer trenutno nije moguć zbog interne greške pri upisu u bazu. Pokušajte ponovo ili kontaktirajte administratora.';
+        }
+
+        if (($friendlyMessage = AiScanFailureMessage::transfer($message)) !== null) {
+            return $friendlyMessage;
         }
 
         return $message;
