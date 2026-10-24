@@ -136,6 +136,8 @@ class Product extends Model
             throw new \RuntimeException('Catalog item columns could not be resolved.');
         }
 
+        $productClassif = self::resolveCatalogClassification($connection, $productClassif);
+
         // acIdent is the catalog identifier every later lookup uses. Storing a
         // truncated ident would silently create a different article than the
         // one that was requested, so refuse instead of shortening it.
@@ -629,6 +631,35 @@ class Product extends Model
     private static function itemsTable(): string
     {
         return (string) config('workorders.catalog_items_table', 'tHE_SetItem');
+    }
+
+    private static function resolveCatalogClassification($connection, string $classification): string
+    {
+        $classification = trim($classification);
+        if ($classification === '') {
+            return '';
+        }
+
+        $candidates = [$classification];
+        if (in_array(mb_strtoupper($classification), ['ČELIK', 'CELIK'], true)) {
+            $candidates = ['ČELIK', 'CELIK'];
+        }
+
+        $categoriesTable = self::sourceSchema() . '.tHE_SetItemCateg';
+        foreach ($candidates as $candidate) {
+            $row = $connection->table($categoriesTable)
+                ->where('acClassif', $candidate)
+                ->first(['acClassif']);
+            if ($row !== null) {
+                return trim((string) $row->acClassif);
+            }
+        }
+
+        throw new \RuntimeException(sprintf(
+            'Pantheon classification "%s" is not present in %s.',
+            $classification,
+            $categoriesTable
+        ));
     }
 
     private static function buildCatalogPreferredValues(

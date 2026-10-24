@@ -66,6 +66,12 @@ return [
             'level' => env('AI_SCAN_LOG_LEVEL', env('LOG_LEVEL', 'debug')),
         ],
 
+        'failed-ai-scan' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/failed_ai_scan.log'),
+            'level' => 'error',
+        ],
+
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),

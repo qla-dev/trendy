@@ -13,6 +13,7 @@ use App\Services\OrderAi\Support\OrderAiExtractionValidationService;
 use App\Services\OrderAi\Support\OrderAiDocumentPreparationService;
 use App\Services\OrderAi\Support\OrderAiDocumentMetrics;
 use App\Support\AiScanLog as Log;
+use App\Support\AiScanFailureMessage;
 use App\Support\Utf8Sanitizer;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
@@ -1837,6 +1838,12 @@ class OrderAiScanService
                     'error_message' => $this->humanizeExtractionFailureReason($exception),
                     'completed_at' => now(),
                 ]))->save();
+                Log::failed('Order AI extraction failed.', [
+                    'scan_id' => $scan->id,
+                    'provider' => $failureAttributes['provider'],
+                    'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+                    'exception' => $exception,
+                ]);
             }
         }
 
@@ -2042,6 +2049,11 @@ class OrderAiScanService
             $scan->forceFill($attributes)->save();
         } catch (\Throwable $exception) {
             $failureReason = $this->humanizeTransferFailureReason($exception);
+            Log::failed('Order AI automatic transfer failed.', [
+                'scan_id' => $scan->id,
+                'message' => Utf8Sanitizer::cleanExceptionMessage($exception),
+                'exception' => $exception,
+            ]);
             $attributes = [
                 'status' => 'failed',
                 'processing_step' => 'Transfer u bazu nije uspio.',
@@ -2118,6 +2130,10 @@ class OrderAiScanService
             return 'AI obrada narudzbe je bila neuspjesna. AI provider je prekinuo obradu dokumenta.';
         }
 
+        if (AiScanFailureMessage::isTechnical($message)) {
+            return 'AI obrada narudžbe nije uspjela zbog interne greške. Pokušajte ponovo ili kontaktirajte administratora.';
+        }
+
         return 'AI obrada narudzbe je bila neuspjesna. ' . $message;
     }
 
@@ -2143,6 +2159,10 @@ class OrderAiScanService
 
         if (!$looksLikeTransferFailure && $looksLikeLegacyProviderFailure) {
             return $this->humanizeExtractionFailureMessage($message);
+        }
+
+        if (AiScanFailureMessage::isTechnical($message)) {
+            return 'AI sken nije uspio zbog interne greške. Pokušajte ponovo ili kontaktirajte administratora.';
         }
 
         return $message;
@@ -2175,6 +2195,10 @@ class OrderAiScanService
 
         if (str_contains($normalized, 'sqlstate') || str_contains($normalized, 'column not found')) {
             return 'Transfer trenutno nije moguć zbog interne greške pri upisu u bazu. Pokušajte ponovo ili kontaktirajte administratora.';
+        }
+
+        if (($friendlyMessage = AiScanFailureMessage::transfer($message)) !== null) {
+            return $friendlyMessage;
         }
 
         return $message;
@@ -2255,7 +2279,7 @@ class OrderAiScanService
     {
         $payload = [
             'preview_version' => self::TRANSFER_PREVIEW_VERSION,
-            'preview_error' => $message,
+            'preview_error' => AiScanFailureMessage::transfer($message) ?? $message,
         ];
 
         if ($this->isDuplicateReferencePreviewError($message)) {

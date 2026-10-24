@@ -8,6 +8,33 @@ use Tests\TestCase;
 
 class ProductCatalogDefaultsTest extends TestCase
 {
+    public function test_catalog_classification_uses_the_code_present_in_pantheon(): void
+    {
+        $method = (new ReflectionClass(Product::class))->getMethod('resolveCatalogClassification');
+        $method->setAccessible(true);
+        $connection = new class {
+            private string $candidate = '';
+
+            public function table(string $table): self
+            {
+                return $this;
+            }
+
+            public function where(string $column, string $value): self
+            {
+                $this->candidate = $value;
+                return $this;
+            }
+
+            public function first(array $columns): ?object
+            {
+                return $this->candidate === 'CELIK' ? (object) ['acClassif' => 'CELIK'] : null;
+            }
+        };
+
+        $this->assertSame('CELIK', $method->invoke(null, $connection, 'ČELIK'));
+    }
+
     public function test_build_catalog_preferred_values_applies_expected_enalog_defaults(): void
     {
         $reflection = new ReflectionClass(Product::class);
