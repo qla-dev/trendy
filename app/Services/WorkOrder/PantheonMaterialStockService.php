@@ -11,6 +11,56 @@ class PantheonMaterialStockService
     public function transfer(ConnectionInterface $db, string $from, string $to, array $items, Carbon $now, int $userId): void { foreach ($items as $item) { if (!$this->hasPositiveQuantity($item)) continue; $this->change($db, $from, $item['code'], '-' . $item['quantity'], $now, $userId, false); $this->change($db, $to, $item['code'], $item['quantity'], $now, $userId, true); } }
     public function issue(ConnectionInterface $db, string $warehouse, array $items, Carbon $now, int $userId): void { foreach ($items as $item) { if (!$this->hasPositiveQuantity($item)) continue; $this->change($db, $warehouse, $item['code'], '-' . $item['quantity'], $now, $userId, false); } }
 
+    /** Limit a dedicated excess-stock issue to stock that is physically present. */
+    public function limitIssueToAvailable(ConnectionInterface $db, string $warehouse, array $items): array
+    {
+        $remaining = [];
+        $issuable = [];
+        $shortages = [];
+
+        foreach ($items as $item) {
+            if (!$this->hasPositiveQuantity($item)) continue;
+            $code = trim((string) ($item['code'] ?? ''));
+            if ($code === '') throw new RuntimeException('Šifra dodatnog materijala nije pronađena.');
+            $key = mb_strtolower($code);
+            if (!array_key_exists($key, $remaining)) {
+                $row = $db->selectOne(
+                    "SELECT TOP 1 anStock FROM dbo.tHE_Stock WITH (UPDLOCK, HOLDLOCK) WHERE LTRIM(RTRIM(acWarehouse)) = ? AND LTRIM(RTRIM(acIdent)) = ?",
+                    [$warehouse, $code]
+                );
+                $stock = WorkOrderClosingCalculator::decimal($row->anStock ?? 0);
+                $remaining[$key] = bccomp($stock, '0', WorkOrderClosingCalculator::SCALE) > 0 ? $stock : '0';
+            }
+
+            $requested = WorkOrderClosingCalculator::decimal($item['quantity']);
+            $issued = bccomp($remaining[$key], $requested, WorkOrderClosingCalculator::SCALE) < 0
+                ? $remaining[$key] : $requested;
+            $missing = bcsub($requested, $issued, WorkOrderClosingCalculator::SCALE);
+            $remaining[$key] = bcsub($remaining[$key], $issued, WorkOrderClosingCalculator::SCALE);
+
+            if (bccomp($issued, '0', WorkOrderClosingCalculator::SCALE) > 0) {
+                $issuedItem = $item;
+                $issuedItem['quantity'] = $issued;
+                if (array_key_exists('total', $issuedItem)) {
+                    $issuedItem['total'] = bcmul($issued, WorkOrderClosingCalculator::decimal($item['price'] ?? 0), WorkOrderClosingCalculator::SCALE);
+                }
+                $issuable[] = $issuedItem;
+            }
+            if (bccomp($missing, '0', WorkOrderClosingCalculator::SCALE) > 0) {
+                $shortages[] = [
+                    'code' => $code,
+                    'name' => (string) ($item['name'] ?? ''),
+                    'unit' => (string) ($item['unit'] ?? ''),
+                    'requested' => $requested,
+                    'issued' => $issued,
+                    'missing' => $missing,
+                ];
+            }
+        }
+
+        return ['items' => $issuable, 'shortages' => $shortages];
+    }
+
     /** Locks the relevant rows so the following issue uses the same stock view. */
     public function canIssue(ConnectionInterface $db, string $warehouse, array $items): bool
     {

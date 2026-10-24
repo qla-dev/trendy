@@ -90,6 +90,14 @@ class WorkOrderClosingService
             $materialFlow = $this->resolveMaterialFlow($workOrder, $submittedMaterials, $producedQuantity);
             $materials = $materialFlow['materials'];
             $excessMaterials = $materialFlow['excess_materials'];
+            $hadExcessMaterials = $excessMaterials !== [];
+            $excessIssue = $this->materialStock->limitIssueToAvailable(
+                $this->connection,
+                $this->excessStock->warehouse(),
+                $excessMaterials
+            );
+            $excessMaterials = $excessIssue['items'];
+            $excessShortages = $excessIssue['shortages'];
             $sourceWarehouse = $materialFlow['source_warehouse'];
             $destinationWarehouse = (string) config('work_order_closing.receipt_warehouse', 'Veleprodajno skladište');
 
@@ -98,7 +106,7 @@ class WorkOrderClosingService
             // no materials; retain only the partial-close state instead. An
             // existing 6400 is the one valid retry case because its material
             // issue was already completed in an earlier transaction.
-            if ($materials === [] && $excessMaterials === [] && !isset($existing['6400']) && !$hasPendingMaterials) {
+            if ($materials === [] && !$hadExcessMaterials && !isset($existing['6400']) && !$hasPendingMaterials) {
                 $this->markPartiallyClosed($workOrder, $now, $userId);
 
                 Log::info('Work order partially closed because no materials were submitted.', [
@@ -212,10 +220,6 @@ class WorkOrderClosingService
 
             if ($consignee === '') {
                 throw new RuntimeException('Pantheon primalac radnog naloga nije pronađen.');
-            }
-
-            if ($excessMaterials !== [] && !$this->materialStock->canIssue($this->connection, $this->excessStock->warehouse(), $excessMaterials)) {
-                throw new RuntimeException('Nema dovoljno zalihe u skladištu dodatnih sirovina za zatvaranje radnog naloga.');
             }
 
             $materialResult = $materialNumber === null ? null : $this->materialDocuments->create(
@@ -338,8 +342,23 @@ class WorkOrderClosingService
                 'operation_document' => $operationResult['document_number'],
                 'receipt_documents' => array_column($receiptResults, 'document_number'),
                 'created_work_order_items' => $closingItems['created_items'],
+                'excess_stock_shortages' => $excessShortages,
                 'user_id' => $userId,
             ]);
+            if ($excessShortages !== []) {
+                Log::warning('Work order closed with an excess-stock issue shortfall.', [
+                    'work_order_key' => $workOrder['acKey'],
+                    'shortages' => $excessShortages,
+                    'excess_material_document' => $excessMaterialResult['document_number'] ?? null,
+                ]);
+            }
+
+            $excessShortageNotices = array_map(static function (array $shortage): string {
+                $unit = trim($shortage['unit']);
+                return 'Dodatni materijal ' . $shortage['code'] . ': planirano ' . $shortage['requested']
+                    . ', razduženo ' . $shortage['issued'] . ', nerazduženo ' . $shortage['missing']
+                    . ($unit === '' ? '' : ' ' . $unit) . ' zbog nedovoljne zalihe.';
+            }, $excessShortages);
 
             $createdDocumentsMessage = 'kreirani dokumenti ' . implode(' i ', array_filter([
                 ($preparationResult['created'] ?? false) ? $preparationResult['document_number'] : null,
@@ -358,9 +377,10 @@ class WorkOrderClosingService
                 'message' => implode(' ', array_filter([
                     $hasPendingMaterials ? 'Radni nalog je djelomično zaključen jer materijal nema unesenu količinu.' : null,
                     $materialFallbackNotice,
+                    $excessShortageNotices === [] ? null : 'Dio dodatnog materijala nije razdužen zbog nedovoljne zalihe.',
                     $createdDocumentsMessage,
                 ])),
-                'notices' => $materialFallbackNotice === null ? [] : [$materialFallbackNotice],
+                'notices' => array_merge($materialFallbackNotice === null ? [] : [$materialFallbackNotice], $excessShortageNotices),
                 'documents' => array_values(array_filter([
                     ($preparationResult['created'] ?? false) ? $preparationResult : null,
                     $materialResult,
@@ -370,6 +390,7 @@ class WorkOrderClosingService
                 ])),
                 'costs' => $receiptCalculation,
                 'pending_materials' => $missingNamedMaterials,
+                'excess_stock_shortages' => $excessShortages,
             ];
         }, 3);
     }

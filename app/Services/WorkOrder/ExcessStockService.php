@@ -61,7 +61,10 @@ class ExcessStockService
             })
             ->whereRaw("UPPER(LTRIM(RTRIM(ISNULL(wo.acStatusMF, '')))) <> 'Z'")
             ->groupBy('wi.acIdent')
-            ->selectRaw('wi.acIdent, SUM(CAST(ISNULL(wi.anQty, 0) AS decimal(18,6))) AS reserved_qty')
+            // Closing issues the planned quantity when it is positive. Use
+            // the same quantity here so availability and closing agree even
+            // when Pantheon or the UI has changed anQty on a flagged row.
+            ->selectRaw('wi.acIdent, SUM(CASE WHEN ISNULL(wi.anPlanQty, 0) > 0 THEN CAST(wi.anPlanQty AS decimal(18,6)) ELSE CAST(ISNULL(wi.anQty, 0) AS decimal(18,6)) END) AS reserved_qty')
             ->pluck('reserved_qty', 'acIdent')
             ->mapWithKeys(fn ($qty, $code) => [strtoupper(trim((string) $code)) => (string) $qty])
             ->all();
