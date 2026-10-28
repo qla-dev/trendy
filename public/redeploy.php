@@ -33,7 +33,7 @@ while (ob_get_level() > 0) {
     }
 }
 ob_implicit_flush(true);
-echo "eNalog redeploy revision 2026-09-17.5 (frontend only)\n";
+echo "eNalog redeploy revision 2026-10-28.1 (frontend only)\n";
 flush();
 
 if (filter_var($_GET['diagnostics'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
@@ -146,6 +146,57 @@ $run = static function (string $command, string $cwd, callable $write): int {
     return is_int($exitCode) && $exitCode >= 0 ? $exitCode : $closeCode;
 };
 
+// Mix changes this tracked build output on the server. Preserve it privately,
+// then restore only this file to HEAD so the next fast-forward pull can run.
+$prepareGeneratedManifest = static function (string $baseDir, callable $write, callable $run): ?array {
+    $manifest = $baseDir . '/public/mix-manifest.json';
+    if (is_link($manifest) || !is_file($manifest)) {
+        throw new RuntimeException('Expected a regular public/mix-manifest.json file.');
+    }
+
+    $temporary = tempnam(sys_get_temp_dir(), 'trendy-manifest-');
+    if ($temporary === false) {
+        throw new RuntimeException('Could not allocate a temporary manifest file.');
+    }
+
+    try {
+        $exitCode = $run('git show HEAD:public/mix-manifest.json > ' . escapeshellarg($temporary), $baseDir, $write);
+        if ($exitCode !== 0) {
+            throw new RuntimeException('Could not read the Git manifest; no files were overwritten.');
+        }
+
+        $tracked = file_get_contents($temporary);
+        $current = file_get_contents($manifest);
+        if ($tracked === false || $current === false || !is_array(json_decode($tracked, true))) {
+            throw new RuntimeException('Could not read a valid manifest; no files were overwritten.');
+        }
+        if (str_replace("\r\n", "\n", $tracked) === str_replace("\r\n", "\n", $current)) {
+            return null;
+        }
+
+        $backupDir = $baseDir . '/storage/app/deploy-backups';
+        if (!is_dir($backupDir) && !mkdir($backupDir, 0700, true) && !is_dir($backupDir)) {
+            throw new RuntimeException('Could not create the private manifest backup directory.');
+        }
+        $backup = $backupDir . '/mix-manifest-' . gmdate('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.json';
+        if (file_put_contents($backup, $current, LOCK_EX) !== strlen($current)) {
+            throw new RuntimeException('Could not back up the manifest; the original was not overwritten.');
+        }
+        // Let Git apply its checkout filters and line endings, too.
+        if ($run('git restore --source=HEAD --worktree -- public/mix-manifest.json', $baseDir, $write) !== 0) {
+            copy($backup, $manifest);
+            throw new RuntimeException('Could not restore the Git manifest. Backup: ' . basename($backup));
+        }
+
+        $write("Generated manifest backed up in storage/app/deploy-backups/" . basename($backup) . ".\n");
+        $write("Restored only public/mix-manifest.json to HEAD for the pull.\n");
+
+        return ['path' => $backup, 'restored_hash' => hash_file('sha256', $manifest)];
+    } finally {
+        unlink($temporary);
+    }
+};
+
 $findExecutable = static function (array $candidates): ?string {
     $pathCommands = [];
 
@@ -233,13 +284,24 @@ if ($ponudaOnly) {
 }
 
 $startedAt = time();
+$manifestBackup = $prepareGeneratedManifest($baseDir, $write, $run);
 
-foreach ($commands as $step) {
+foreach ($commands as $stepNumber => $step) {
     $write("\n=== {$step['label']} ===\n");
     $write("Command: {$step['command']}\n");
     $exitCode = $run($step['command'], $baseDir, $write);
 
     if ($exitCode !== 0) {
+        // A refused pull leaves the old application running: put its original
+        // build manifest back, provided Git has not changed that file itself.
+        if ($stepNumber === 0 && $manifestBackup !== null
+            && hash_file('sha256', $baseDir . '/public/mix-manifest.json') === $manifestBackup['restored_hash']) {
+            if (!copy($manifestBackup['path'], $baseDir . '/public/mix-manifest.json')) {
+                $write("Could not restore the previous build manifest; its private backup is retained.\n");
+            } else {
+                $write("Pull failed; restored the previous build manifest from its private backup.\n");
+            }
+        }
         if (PHP_SAPI !== 'cli') {
             http_response_code(500);
         }
