@@ -41,6 +41,7 @@ class MenuServiceProvider extends ServiceProvider
             static $aiTokenNavbarCountCache = [];
 
             $verticalMenuCopy = json_decode(json_encode($verticalMenuData));
+            if (Auth::check() && Auth::user()->getRole() === \App\Models\User::ROLE_SUPPLIER) $verticalMenuCopy->menu = [];
             $customRole = Auth::check() ? app(CustomRoles::class)->find((string) Auth::user()->role) : null;
             if ($customRole !== null) {
                 $allowed = $customRole['slugs'] ?? [];
@@ -186,6 +187,11 @@ class MenuServiceProvider extends ServiceProvider
         }
 
         $adminOnlySlugs = [
+            'app-procurement-navheader',
+            'app-procurement-materials',
+            'app-procurement',
+            'app-procurement-receive',
+            'app-procurement-manage',
             'app-barcode-generator',
             'app-orders',
             'app-documents-navheader',
