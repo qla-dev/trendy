@@ -2583,6 +2583,15 @@
     }
 
     function handleBarcodeScanSuccess(decodedText) {
+      // Procurement QR opens the authenticated receipt form; scanning never books stock.
+      try {
+        var procurementTarget = new URL(String(decodedText), window.location.origin);
+        if (procurementTarget.origin === window.location.origin && /\/app\/procurement\/[0-9a-f-]{36}\/receive-form$/i.test(procurementTarget.pathname)) {
+          stopBarcodeScanner();
+          window.location.assign(procurementTarget.href);
+          return;
+        }
+      } catch (procurementQrError) { /* Existing raw material barcode flow continues. */ }
       if (barcodeScannerBusy) {
         return;
       }

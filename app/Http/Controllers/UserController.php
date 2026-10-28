@@ -247,6 +247,7 @@ class UserController extends Controller
             User::ROLE_KONTROLA => 'Kontrola',
             User::ROLE_BRAVARIJA => 'Bravarija',
             User::ROLE_PROIZVODNJA => 'Proizvodnja',
+            User::ROLE_SUPPLIER => 'Dobavljač',
         ], array_map(fn (array $role) => $role['name'], app(CustomRoles::class)->all()));
 
         foreach (User::whereNotNull('role')->distinct()->pluck('role') as $role) {

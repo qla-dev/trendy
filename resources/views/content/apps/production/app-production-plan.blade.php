@@ -183,5 +183,5 @@
       }
     });
   </script>
-  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=151') }}"></script>
+  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=152') }}"></script>
 @endsection
