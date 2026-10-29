@@ -71,11 +71,6 @@ class AuthenticationController extends Controller
 
             $user = Auth::user();
 
-            if ($user && $user->hasRole(User::ROLE_SUPPLIER)) {
-                $request->session()->forget('url.intended');
-                return redirect()->route('supplier.index');
-            }
-
             $existingTokenId = $request->session()->get('auth_token_id');
             if ($existingTokenId) {
                 PersonalAccessToken::whereKey($existingTokenId)->delete();

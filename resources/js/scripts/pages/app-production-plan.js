@@ -160,7 +160,7 @@ $(function () {
   }
   function rowColour(data) {
     var mode = rowColourFilter.val() || 'all';
-    if (data && (data.is_late || data.is_previous_week_open_order)) return mode === 'none' ? '' : 'red';
+    if (data && data.is_previous_week_open_order) return mode === 'none' ? '' : 'red';
     var colour = String((data && data.priority_row_color) || '').toLowerCase();
     if (mode === 'none') return '';
     if (mode === 'basic' && ['green', 'yellow', 'teal', 'grey'].indexOf(colour) === -1) return '';

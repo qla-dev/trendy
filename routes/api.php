@@ -16,18 +16,18 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware(['auth:sanctum', \App\Http\Middleware\RestrictSupplier::class])->get('/user', function (Request $request) {
+Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
 if (app()->environment('local')) {
-    Route::get('/__codex/orders/inspect', [OrderController::class, 'inspectMaintenance'])->middleware(['auth:sanctum', \App\Http\Middleware\RestrictSupplier::class])
+    Route::get('/__codex/orders/inspect', [OrderController::class, 'inspectMaintenance'])
         ->name('api.__codex.orders.inspect');
-    Route::post('/__codex/orders/by-key-delete', [OrderController::class, 'destroyByKeyMaintenance'])->middleware(['auth:sanctum', \App\Http\Middleware\RestrictSupplier::class])
+    Route::post('/__codex/orders/by-key-delete', [OrderController::class, 'destroyByKeyMaintenance'])
         ->name('api.__codex.orders.by-key-delete');
 }
 
-Route::middleware(['auth:sanctum', \App\Http\Middleware\RestrictSupplier::class])->group(function () {
+Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders', [OrderController::class, 'store'])->name('api.orders.store');
     Route::delete('/orders', [OrderController::class, 'destroyLinkedOrder'])->name('api.orders.destroy');
     Route::get('/work-orders', [WorkOrderController::class, 'index'])->name('api.work-orders.index');

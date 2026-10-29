@@ -50,11 +50,6 @@ use App\Http\Controllers\NfcCardController;
 */
 
 Route::middleware('auth:web')->group(function () {
-    Route::get('supplier/procurement', [\App\Http\Controllers\SupplierProcurementController::class,'index'])->name('supplier.index');
-    Route::get('supplier/procurement/{id}', [\App\Http\Controllers\SupplierProcurementController::class,'show'])->name('supplier.show');
-    Route::post('supplier/procurement/{id}/event', [\App\Http\Controllers\SupplierProcurementController::class,'event'])->name('supplier.event');
-    Route::post('supplier/procurement/{id}/documents', [\App\Http\Controllers\SupplierProcurementController::class,'upload'])->name('supplier.upload');
-    Route::get('supplier/procurement/{id}/documents/{documentId}', [\App\Http\Controllers\SupplierProcurementController::class,'download'])->name('supplier.download');
     // Main Page Route
     Route::get('/', [DashboardController::class, 'home'])->name('dashboard-ecommerce');
 
@@ -78,29 +73,6 @@ Route::middleware('auth:web')->group(function () {
 
     /* Route Apps */
     Route::group(['prefix' => 'app'], function () {
-        Route::get('procurement/materials', [\App\Http\Controllers\ProcurementController::class, 'materials'])->name('app-procurement-materials');
-        Route::post('procurement/selection', [\App\Http\Controllers\ProcurementController::class,'selection'])->name('app-procurement-selection');
-        Route::get('procurement/settings', [\App\Http\Controllers\ProcurementController::class,'settings'])->name('app-procurement-settings');
-        Route::post('procurement/settings/accounts', [\App\Http\Controllers\ProcurementController::class,'bindSupplier'])->name('app-procurement-bind');
-        Route::get('procurement/labels', [\App\Http\Controllers\ProcurementController::class,'labels'])->name('app-procurement-labels');
-        Route::get('procurement/warehouse', [\App\Http\Controllers\ProcurementController::class,'index'])->name('app-procurement-warehouse');
-        Route::post('procurement/create', [\App\Http\Controllers\ProcurementController::class, 'create'])->name('app-procurement-create');
-        Route::get('procurement/create', [\App\Http\Controllers\ProcurementController::class, 'create'])->name('app-procurement-create-form');
-        Route::get('procurement', [\App\Http\Controllers\ProcurementController::class, 'index'])->name('app-procurement');
-        Route::post('procurement', [\App\Http\Controllers\ProcurementController::class, 'store'])->name('app-procurement-store');
-        Route::get('procurement/{id}', [\App\Http\Controllers\ProcurementController::class, 'show'])->name('app-procurement-show');
-        Route::get('procurement/{id}/edit', [\App\Http\Controllers\ProcurementController::class,'edit'])->name('app-procurement-edit');
-        Route::post('procurement/{id}/edit', [\App\Http\Controllers\ProcurementController::class,'update'])->name('app-procurement-update');
-        Route::get('procurement/{id}/receive-form', [\App\Http\Controllers\ProcurementController::class,'receiveForm'])->name('app-procurement-receive-form');
-        Route::post('procurement/{id}/documents', [\App\Http\Controllers\ProcurementController::class,'upload'])->name('app-procurement-upload');
-        Route::get('procurement/{id}/documents/{documentId}', [\App\Http\Controllers\ProcurementController::class,'download'])->name('app-procurement-download');
-        Route::post('procurement/{id}/complaints', [\App\Http\Controllers\ProcurementController::class,'complaint'])->name('app-procurement-complaint');
-        Route::post('procurement/{id}/complaints/{complaintId}', [\App\Http\Controllers\ProcurementController::class,'resolveComplaint'])->name('app-procurement-complaint-status');
-        Route::get('procurement/{id}/draft', [\App\Http\Controllers\ProcurementController::class,'draft'])->name('app-procurement-draft');
-        Route::post('procurement/{id}/notices/read', [\App\Http\Controllers\ProcurementController::class,'acknowledge'])->name('app-procurement-notices-read');
-        Route::post('procurement/{id}/receive', [\App\Http\Controllers\ProcurementController::class, 'receive'])->name('app-procurement-receive');
-        Route::post('procurement/{id}/cancel', [\App\Http\Controllers\ProcurementController::class, 'cancel'])->name('app-procurement-cancel');
-        Route::post('procurement/{id}/sync', [\App\Http\Controllers\ProcurementController::class, 'sync'])->name('app-procurement-sync');
         Route::get('email', [AppsController::class, 'emailApp'])->name('app-email');
         Route::get('chat', [AppsController::class, 'chatApp'])->name('app-chat');
         Route::get('todo', [AppsController::class, 'todoApp'])->name('app-todo');

@@ -14,7 +14,6 @@ class CustomRoles
         User::ROLE_KONTROLA => 'Kontrola',
         User::ROLE_BRAVARIJA => 'Bravarija',
         User::ROLE_PROIZVODNJA => 'Proizvodnja',
-        User::ROLE_SUPPLIER => 'Dobavljač',
     ];
 
     private function path(): string

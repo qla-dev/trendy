@@ -15,7 +15,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        $this->app->bind(\App\Services\Procurement\ProcurementGateway::class, \App\Services\Procurement\UnconfiguredPantheonProcurementGateway::class);
+        //
     }
 
     /**

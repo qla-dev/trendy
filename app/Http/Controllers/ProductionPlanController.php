@@ -235,7 +235,12 @@ class ProductionPlanController extends Controller
                 }
             }
 
-            $this->applyDeliveryRange($query, $deliveryDate, trim((string)($filters['isporuka_od'] ?? '')), trim((string)($filters['isporuka_do'] ?? '')));
+            foreach ([['isporuka_od', '>='], ['isporuka_do', '<=']] as [$key, $operator]) {
+                $value = trim((string) ($filters[$key] ?? ''));
+                if ($value !== '') {
+                    $query->whereRaw("CAST($deliveryDate AS date) $operator ?", [$value]);
+                }
+            }
 
             $week = (int) ($filters['kw'] ?? 0);
             $year = (int) ($filters['year'] ?? now()->year);
@@ -249,8 +254,6 @@ class ProductionPlanController extends Controller
                 $query->whereYear('wo.adSchedStartTime', $year);
             }
 
-            $carryOverStart = $this->carryOverStart($weekRange ?? null);
-
             $total = (clone $query)->count();
             $sorts = [
                 'sifra_crtez' => 'wo.acIdent', 'cijena_eur' => 'cijena_eur', 'ukupno_eur' => 'ukupno_eur',
@@ -262,7 +265,12 @@ class ProductionPlanController extends Controller
             ];
             $sort = $sorts[$request->input('sort', 'pocetak')] ?? 'wo.adSchedStartTime';
             $direction = $request->input('dir') === 'asc' ? 'asc' : 'desc';
-            $this->applyCarryOverOrdering($query, $carryOverStart, $sort, $direction, $filters);
+            if (isset($weekRange) && $sort === 'wo.adSchedStartTime' && $direction === 'desc') {
+                $query->orderByRaw(
+                    "CASE WHEN CAST(wo.adSchedStartTime AS date) < ? AND UPPER(LTRIM(RTRIM(wo.acStatusMF))) NOT IN ('F', 'I', 'Z') THEN 0 ELSE 1 END",
+                    [$weekRange['start']->toDateString()]
+                );
+            }
 
             $rows = $query->orderBy($sort, $direction)
                 ->orderBy('wo.acKey', $direction)
@@ -286,9 +294,9 @@ class ProductionPlanController extends Controller
                 ->pluck('n', 'acKey');
 
             foreach ($rows as $row) {
-                $row->is_previous_week_open_order = $this->isLateOrder($row, $carryOverStart, $filters);
-                $row->is_late = $this->isLateForDisplay($row, $carryOverStart, $filters);
-                $row->plan_row_color = $row->is_late
+                $row->is_previous_week_open_order = isset($weekRange)
+                    && $this->isEarlierWeekOpenOrder($row, $weekRange['start']);
+                $row->plan_row_color = $row->is_previous_week_open_order
                     ? 'red'
                     : $row->priority_row_color;
                 $row->progress = ($totalOperations[$row->id] ?? 0)
@@ -329,9 +337,7 @@ class ProductionPlanController extends Controller
             })->orWhere(function ($previousWeekQuery) use ($yearStart, $weekStart, $status) {
                 $previousWeekQuery->whereDate('wo.adSchedStartTime', '>=', $yearStart)
                     ->whereDate('wo.adSchedStartTime', '<', $weekStart)
-                    ->where(function ($active) use ($status) {
-                        $active->whereNull('wo.acStatusMF')->orWhereNotIn($status, ['F', 'I', 'Z']);
-                    });
+                    ->whereNotIn($status, ['F', 'I', 'Z']);
             });
         });
 
@@ -347,90 +353,6 @@ class ProductionPlanController extends Controller
         $scheduledStart = Carbon::parse($row->pocetak);
 
         return $scheduledStart->lessThan($weekStart);
-    }
-
-    private function applyCarryOverOrdering($query, Carbon $start, mixed $sort, string $direction, array $filters = []): void
-    {
-        $ranges = $this->activeDeliveryRanges($filters);
-        if (($sort !== 'wo.adSchedStartTime' || $direction !== 'desc') && !$ranges) return;
-        if ($ranges) {
-            $deliveryDate = 'CAST(' . $this->deliveryDateExpression() . ' AS date)';
-            $customer = "UPPER(LTRIM(RTRIM(ISNULL(wo.acConsignee, wo.acReceiver))))";
-            $conditions = [];
-            $bindings = [];
-            foreach ($ranges as $group=>$boundary) {
-                $scope = $group === 'all' ? '1 = 1' : ($group === 'trendy_germany' ? "$customer LIKE 'TRENDY GERMANY%'" : "$customer NOT LIKE 'TRENDY GERMANY%'");
-                $conditions[] = "($scope AND $deliveryDate < ?)";
-                $bindings[] = $boundary;
-            }
-            // Customer groups without an active delivery range keep the existing schedule rule.
-            if (!isset($ranges['all'])) {
-                $unfiltered = [];
-                if (!isset($ranges['trendy_germany'])) $unfiltered[] = "$customer LIKE 'TRENDY GERMANY%'";
-                if (!isset($ranges['grob'])) $unfiltered[] = "$customer NOT LIKE 'TRENDY GERMANY%'";
-                if ($unfiltered) {
-                    $conditions[] = '((' . implode(' OR ', $unfiltered) . ') AND CAST(wo.adSchedStartTime AS date) < ?)';
-                    $bindings[] = $start->toDateString();
-                }
-            }
-            $query->orderByRaw("CASE WHEN COALESCE(UPPER(LTRIM(RTRIM(wo.acStatusMF))), '') NOT IN ('F', 'I', 'Z') AND (" . implode(' OR ', $conditions) . ') THEN 0 ELSE 1 END', $bindings);
-            return;
-        }
-        $query->orderByRaw(
-            "CASE WHEN CAST(wo.adSchedStartTime AS date) < ? AND COALESCE(UPPER(LTRIM(RTRIM(wo.acStatusMF))), '') NOT IN ('F', 'I', 'Z') THEN 0 ELSE 1 END",
-            [$start->toDateString()]
-        );
-    }
-
-    private function carryOverStart(?array $weekRange): Carbon
-    {
-        return ($weekRange['start'] ?? Carbon::now()->startOfWeek())->copy()->startOfDay();
-    }
-
-    private function activeDeliveryRanges(array $filters): array
-    {
-        $ranges = [];
-        foreach (['all'=>['isporuka_od','isporuka_do'], 'trendy_germany'=>['trendy_germany_date_from','trendy_germany_date_to'], 'grob'=>['grob_date_from','grob_date_to']] as $group=>[$fromKey,$toKey]) {
-            $from = trim((string)($filters[$fromKey] ?? ''));
-            $to = trim((string)($filters[$toKey] ?? ''));
-            if ($from !== '' || $to !== '') $ranges[$group] = $from !== '' ? $from : Carbon::now()->toDateString();
-        }
-        return $ranges;
-    }
-
-    private function isLateOrder($row, Carbon $scheduleStart, array $filters, bool $respectStatus = true): bool
-    {
-        if ($respectStatus && in_array(strtoupper(trim((string)($row->status_code ?? ''))), ['F','I','Z'],true)) return false;
-        $ranges = $this->activeDeliveryRanges($filters);
-        $group = str_starts_with(strtoupper(trim((string)($row->narucitelj ?? ''))),'TRENDY GERMANY') ? 'trendy_germany' : 'grob';
-        $boundaries = array_filter([$ranges['all'] ?? null, $ranges[$group] ?? null]);
-        if (!$boundaries) return $respectStatus ? $this->isEarlierWeekOpenOrder($row,$scheduleStart) : (!empty($row->pocetak) && Carbon::parse($row->pocetak)->lt($scheduleStart));
-        if (empty($row->datum_isporuke)) return false;
-        $delivery = Carbon::parse($row->datum_isporuke)->startOfDay();
-        foreach ($boundaries as $boundary) if ($delivery->lt(Carbon::parse($boundary)->startOfDay())) return true;
-        return false;
-    }
-
-    private function isLateForDisplay($row, Carbon $scheduleStart, array $filters): bool
-    {
-        // Colour is a date warning, independent of status/priority and of SQL grouping.
-        if (!empty($row->datum_isporuke) && Carbon::parse($row->datum_isporuke)->startOfDay()->lt(Carbon::now()->startOfDay())) return true;
-        return $this->isLateOrder($row,$scheduleStart,$filters,false);
-    }
-
-    private function applyDeliveryRange($query, string $expression, string $from, string $to): void
-    {
-        if ($from === '' && $to === '') return;
-        $query->where(function($range) use ($expression,$from,$to) {
-            $range->where(function($period) use ($expression,$from,$to) {
-                if ($from !== '') $period->whereRaw("CAST($expression AS date) >= ?",[$from]);
-                if ($to !== '') $period->whereRaw("CAST($expression AS date) <= ?",[$to]);
-            });
-            if ($from !== '') $range->orWhere(function($earlier) use ($expression,$from) {
-                $earlier->whereRaw("CAST($expression AS date) < ?",[$from])
-                    ->whereRaw("COALESCE(UPPER(LTRIM(RTRIM(wo.acStatusMF))), '') NOT IN ('F', 'I', 'Z')");
-            });
-        });
     }
 
     private function applyStatusFilter($query, array $filters): void
@@ -571,7 +493,12 @@ class ProductionPlanController extends Controller
                             }
                         });
                     }
-                    $this->applyDeliveryRange($rowQuery,$deliveryDate,$range['from'],$range['to']);
+                    if ($range['from'] !== '') {
+                        $rowQuery->whereRaw("CAST($deliveryDate AS date) >= ?", [$range['from']]);
+                    }
+                    if ($range['to'] !== '') {
+                        $rowQuery->whereRaw("CAST($deliveryDate AS date) <= ?", [$range['to']]);
+                    }
                 });
             }
         });
@@ -626,7 +553,12 @@ class ProductionPlanController extends Controller
                     }
                 }
 
-                $this->applyDeliveryRange($query, $deliveryDate, trim((string)($filters['isporuka_od'] ?? '')), trim((string)($filters['isporuka_do'] ?? '')));
+                foreach ([['isporuka_od', '>='], ['isporuka_do', '<=']] as [$key, $operator]) {
+                    $value = trim((string) ($filters[$key] ?? ''));
+                    if ($value !== '') {
+                        $query->whereRaw("CAST($deliveryDate AS date) $operator ?", [$value]);
+                    }
+                }
 
                 $year = (int) ($filters['year'] ?? now()->year);
                 if ($year <= 0) {
@@ -645,8 +577,12 @@ class ProductionPlanController extends Controller
                 'rn' => 'wo.acKeyView', 'narucitelj' => 'wo.acConsignee', 'prioritet' => 'wo.anPriority', 'datum' => 'wo.adDate', 'narudzba' => 'wo.acLnkKeyView', 'broj_narudzbe_kupca' => 'sales_order.acDoc1', 'pozicija' => 'wo.anLnkNo', 'pocetak' => 'wo.adSchedStartTime', 'kraj' => 'wo.adSchedEndTime', 'datum_isporuke' => DB::raw($deliveryDate), 'proizvod' => 'wo.acIdent', 'plan_kol' => 'wo.anPlanQty', 'izr_kol' => 'wo.anProducedQty', 'naziv' => 'wo.acName', 'napomena' => 'wo.acNote', 'nositelj_troska' => 'wo.acCostDrv'];
             $sort = $sorts[$request->input('sort', 'pocetak')] ?? 'wo.adSchedStartTime';
             $direction = $request->input('dir') === 'asc' ? 'asc' : 'desc';
-            $carryOverStart = $this->carryOverStart($weekRange ?? null);
-            $this->applyCarryOverOrdering($query, $carryOverStart, $sort, $direction, $filters);
+            if (isset($weekRange) && $sort === 'wo.adSchedStartTime' && $direction === 'desc') {
+                $query->orderByRaw(
+                    "CASE WHEN CAST(wo.adSchedStartTime AS date) < ? AND UPPER(LTRIM(RTRIM(wo.acStatusMF))) NOT IN ('F', 'I', 'Z') THEN 0 ELSE 1 END",
+                    [$weekRange['start']->toDateString()]
+                );
+            }
             $rows = $query->orderBy($sort, $direction)
                 ->orderBy('wo.acKey', $direction)->get();
 
@@ -665,8 +601,8 @@ class ProductionPlanController extends Controller
                 );
             }
             foreach ($rows as $row) {
-                $row->is_previous_week_open_order = $this->isLateOrder($row, $carryOverStart, $filters);
-                $row->is_late = $this->isLateForDisplay($row, $carryOverStart, $filters);
+                $row->is_previous_week_open_order = isset($weekRange)
+                    && $this->isEarlierWeekOpenOrder($row, $weekRange['start']);
                 $row->progress = ($totalOperations[$row->id] ?? 0) ? min(100, round(($finishedOperations[$row->id] ?? 0) / $totalOperations[$row->id] * 100)) : 0;
             }
 
@@ -702,7 +638,7 @@ class ProductionPlanController extends Controller
         $xml .= '<Row>' . implode('', array_map(fn ($header) => $cell($header, 'Header'), $headers)) . '</Row>';
         foreach ($rows as $row) {
             $style = $includeColours
-                ? (($row->is_late ?? $row->is_previous_week_open_order ?? false) ? 'red' : (string) $row->priority_row_color)
+                ? ($row->is_previous_week_open_order ?? false ? 'red' : (string) $row->priority_row_color)
                 : '';
             $values = [$row->progress . '%', $row->rn, $row->narucitelj, $row->prioritet, $this->europeanDate($row->datum), $row->narudzba, $row->broj_narudzbe_kupca, $row->pozicija, $this->europeanDate($row->pocetak), $this->europeanDate($row->kraj), $this->europeanDate($row->datum_isporuke), $row->proizvod, $this->displayQuantity($row->plan_kol), $this->displayQuantity($row->izr_kol), $row->naziv, $row->nositelj_troska, $row->napomena, $row->status_code, ($row->sifra_crtez ?? $row->proizvod), $this->europeanDate(($row->datum_zavarivanja ?? null)), $this->displayQuantity(($row->utroseno_vrijeme ?? null)), $this->europeanDate(($row->materijal_narucen ?? null)), ($row->zavarivac ?? ''), $this->displayQuantity(($row->cijena_eur ?? null)), $this->displayQuantity(($row->ukupno_eur ?? null)), ($row->kreirao ?? '')];
             $xml .= '<Row>' . implode('', array_map(fn ($value) => $cell($value, $style), $values)) . '</Row>';

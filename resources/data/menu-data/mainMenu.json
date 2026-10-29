@@ -39,34 +39,6 @@
       "slug": "app-order-ai-inbox"
     },
     {
-      "navheader": "Nabavka",
-      "slug": "app-procurement-navheader"
-    },
-    {
-      "name": "Materijali za nabavku",
-      "icon": "list",
-      "url": "app/procurement/materials",
-      "slug": "app-procurement-materials"
-    },
-    {
-      "name": "Nabavke sirovina",
-      "icon": "shopping-cart",
-      "url": "app/procurement",
-      "slug": "app-procurement"
-    },
-    {
-      "name": "Prijem sirovina",
-      "icon": "package",
-      "url": "app/procurement/warehouse",
-      "slug": "app-procurement-receive"
-    },
-    {
-      "name": "Dobavljači i postavke",
-      "icon": "settings",
-      "url": "app/procurement/settings",
-      "slug": "app-procurement-manage"
-    },
-    {
       "navheader": "Proizvodnja",
       "slug": "app-production-navheader"
     },

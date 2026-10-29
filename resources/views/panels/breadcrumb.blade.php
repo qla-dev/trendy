@@ -28,7 +28,7 @@
     <div class="mb-1 breadcrumb-right">
       @hasSection('content_header_right')
         @yield('content_header_right')
-      @elseif (!request()->routeIs('app-procurement*'))
+      @else
         <div class="dropdown">
           <button class="btn-icon btn btn-primary btn-round btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
             <i data-feather="grid"></i>
