@@ -33,7 +33,7 @@ while (ob_get_level() > 0) {
     }
 }
 ob_implicit_flush(true);
-echo "eNalog redeploy revision 2026-10-28.1 (frontend only)\n";
+echo "eNalog redeploy revision 2026-10-29.1 (frontend only)\n";
 flush();
 
 if (filter_var($_GET['diagnostics'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
@@ -197,6 +197,66 @@ $prepareGeneratedManifest = static function (string $baseDir, callable $write, c
     }
 };
 
+// A newer redeploy.php may have been uploaded through cPanel to repair a
+// blocked deployment. Back up that copy before restoring the tracked version,
+// so a fast-forward pull can replace the script safely.
+$prepareDeployedScript = static function (string $baseDir, callable $write, callable $run): ?array {
+    $script = $baseDir . '/public/redeploy.php';
+    if (is_link($script) || !is_file($script)) {
+        throw new RuntimeException('Expected a regular public/redeploy.php file.');
+    }
+
+    $temporary = tempnam(sys_get_temp_dir(), 'trendy-redeploy-head-');
+    if ($temporary === false) {
+        throw new RuntimeException('Could not allocate a temporary redeploy script file.');
+    }
+
+    try {
+        if ($run('git show HEAD:public/redeploy.php > ' . escapeshellarg($temporary), $baseDir, $write) !== 0) {
+            throw new RuntimeException('Could not read the tracked redeploy script; no script was overwritten.');
+        }
+        $tracked = file_get_contents($temporary);
+        $current = file_get_contents($script);
+        if ($tracked === false || $current === false || !str_contains($tracked, 'eNalog redeploy revision')) {
+            throw new RuntimeException('Could not read a valid tracked redeploy script; no script was overwritten.');
+        }
+        if (str_replace("\r\n", "\n", $tracked) === str_replace("\r\n", "\n", $current)) {
+            return null;
+        }
+
+        $backupDir = $baseDir . '/storage/app/deploy-backups';
+        if (!is_dir($backupDir) && !mkdir($backupDir, 0700, true) && !is_dir($backupDir)) {
+            throw new RuntimeException('Could not create the private redeploy backup directory.');
+        }
+        $backup = $backupDir . '/redeploy-' . gmdate('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.php';
+        if (file_put_contents($backup, $current, LOCK_EX) !== strlen($current)) {
+            throw new RuntimeException('Could not back up the redeploy script; the original was not overwritten.');
+        }
+        if ($run('git restore --source=HEAD --worktree -- public/redeploy.php', $baseDir, $write) !== 0) {
+            copy($backup, $script);
+            throw new RuntimeException('Could not restore the tracked redeploy script. Backup: ' . basename($backup));
+        }
+
+        $write("Uploaded redeploy script backed up in storage/app/deploy-backups/" . basename($backup) . ".\n");
+        $write("Restored only public/redeploy.php to HEAD for the pull.\n");
+
+        return ['path' => $backup, 'restored_hash' => hash_file('sha256', $script)];
+    } finally {
+        unlink($temporary);
+    }
+};
+
+$restorePreparedFile = static function (?array $backup, string $target, string $label, callable $write): void {
+    if ($backup === null || hash_file('sha256', $target) !== $backup['restored_hash']) {
+        return;
+    }
+    if (!copy($backup['path'], $target)) {
+        $write("Could not restore the previous {$label}; its private backup is retained.\n");
+    } else {
+        $write("Pull failed; restored the previous {$label} from its private backup.\n");
+    }
+};
+
 $findExecutable = static function (array $candidates): ?string {
     $pathCommands = [];
 
@@ -285,6 +345,12 @@ if ($ponudaOnly) {
 
 $startedAt = time();
 $manifestBackup = $prepareGeneratedManifest($baseDir, $write, $run);
+try {
+    $scriptBackup = $prepareDeployedScript($baseDir, $write, $run);
+} catch (Throwable $error) {
+    $restorePreparedFile($manifestBackup, $baseDir . '/public/mix-manifest.json', 'build manifest', $write);
+    throw $error;
+}
 
 foreach ($commands as $stepNumber => $step) {
     $write("\n=== {$step['label']} ===\n");
@@ -294,13 +360,9 @@ foreach ($commands as $stepNumber => $step) {
     if ($exitCode !== 0) {
         // A refused pull leaves the old application running: put its original
         // build manifest back, provided Git has not changed that file itself.
-        if ($stepNumber === 0 && $manifestBackup !== null
-            && hash_file('sha256', $baseDir . '/public/mix-manifest.json') === $manifestBackup['restored_hash']) {
-            if (!copy($manifestBackup['path'], $baseDir . '/public/mix-manifest.json')) {
-                $write("Could not restore the previous build manifest; its private backup is retained.\n");
-            } else {
-                $write("Pull failed; restored the previous build manifest from its private backup.\n");
-            }
+        if ($stepNumber === 0) {
+            $restorePreparedFile($scriptBackup, $baseDir . '/public/redeploy.php', 'redeploy script', $write);
+            $restorePreparedFile($manifestBackup, $baseDir . '/public/mix-manifest.json', 'build manifest', $write);
         }
         if (PHP_SAPI !== 'cli') {
             http_response_code(500);
