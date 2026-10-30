@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict');
+const {fitsA4,availableSlots}=require('../../resources/js/scripts/pages/procurement-labels.js');
+const sheet={columns:3,rows:8,width:63.5,height:33.9,gap_x:2.5,gap_y:0,margin_x:7.25,margin_y:12.9,offset_x:0,offset_y:0};
+assert.equal(fitsA4(sheet),true);
+assert.equal(fitsA4({...sheet,width:80}),false);
+assert.equal(fitsA4({...sheet,offset_y:25}),false);
+assert.equal(fitsA4({...sheet,offset_x:-20}),false);
+assert.equal(fitsA4({...sheet,columns:3.5}),false);
+assert.equal(fitsA4({...sheet,height:20}),false);
+assert.deepEqual(availableSlots(sheet,0,[0,1,3],3),[2,4,5]);
+assert.deepEqual(availableSlots(sheet,22,[23],2),[22]);
+assert.deepEqual(availableSlots(sheet,10,[],2),[10,11]);
+console.log('Procurement A4 geometry and occupied-slot tests passed.');
