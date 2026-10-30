@@ -45,7 +45,7 @@ class ProcurementSource
                 $query->whereRaw("UPPER(COALESCE(i.$noteColumn, '')) NOT LIKE ? ESCAPE '!'", ['%REZERVACIJA!_DODATNIH!_SIROVINA%']);
             }
         }
-        foreach (array_unique(['acKeyView','acRefNo1','acLnkKey','acLnkKeyView','anLnkNo','acStatusMF', config('procurement.schedule_field', 'adSchedStartTime')]) as $column) {
+        foreach (array_unique(['acKeyView','acRefNo1','acLnkKey','acLnkKeyView','anLnkNo','acStatusMF','anPlanQty','adDate','adDateIns','adTimeIns', config('procurement.schedule_field', 'adSchedStartTime')]) as $column) {
             if (in_array($column, $this->columns($headers), true)) $query->addSelect('w.' . $column . ' as header_' . $column);
         }
         foreach (['acSetOfItem','anVAT','acSupplier','acName','acUM','acCurrency','anPriceSupp','anPrice','anBuyPrice'] as $column) {
@@ -79,6 +79,13 @@ class ProcurementSource
     {
         $result = [];
         foreach (array_unique($ids) as $id) {
+            if (str_starts_with($id, 'catalog_')) {
+                $code = base64_decode(substr($id, 8), true);
+                $catalog = $code === false ? [] : $this->catalog($code, true);
+                if (count($catalog) !== 1 || $catalog[0]['id'] !== $id) throw new InvalidArgumentException('Materijal nije dostupan u katalogu.');
+                $result[$id] = $catalog[0];
+                continue;
+            }
             if (!preg_match('/^[A-Za-z0-9_-]{1,1000}$/D', $id)) throw new InvalidArgumentException('Neispravna stavka sastavnice.');
             $identity = json_decode(base64_decode(strtr($id, '-_', '+/'), true) ?: '', true);
             if (!is_array($identity) || array_keys($identity) !== [0, 1, 2, 3] || !is_string($identity[0])) throw new InvalidArgumentException('Neispravna stavka sastavnice.');
@@ -107,7 +114,8 @@ class ProcurementSource
     {
         $identity = [trim((string) $row['acKey']), isset($row['anQId']) ? (string) $row['anQId'] : null,
             isset($row['anNo']) ? (string) $row['anNo'] : null, isset($row['anVariant']) ? (string) $row['anVariant'] : null];
-        $note = trim((string) ($row['acNote'] ?? $row['acFieldSE'] ?? ''));
+        $note = trim((string) ($row['acNote'] ?? ''));
+        if ($note === '') $note = trim((string) ($row['acFieldSE'] ?? ''));
         $note = preg_replace('/^PLANNED_(?:BOM|RAW)\|/', '', $note);
         $quantity = '0';
         foreach (['anQty1','anQty','anPlanQty','anNormQty'] as $field) {
@@ -118,16 +126,19 @@ class ProcurementSource
         }
         $schedule = $row['header_' . config('procurement.schedule_field', 'adSchedStartTime')] ?? null;
         $requiredDate = $schedule ? CarbonImmutable::parse($schedule, config('app.timezone'))->subDays(max(0, (int) config('procurement.lead_days', 7)))->format('Y-m-d') : null;
+        $created = $row['header_adDate'] ?? $row['header_adDateIns'] ?? $row['header_adTimeIns'] ?? null;
         return [
             'id' => rtrim(strtr(base64_encode(json_encode($identity)), '+/', '-_'), '='),
             'work_order_key' => $identity[0], 'item_qid' => $identity[1], 'item_no' => $identity[2], 'variant' => $identity[3],
             'work_order' => trim((string) ($row['header_acKeyView'] ?? $row['header_acRefNo1'] ?? $row['acKey'])),
             'material' => trim((string) $row['acIdent']), 'name' => trim((string) ($row['acDescr'] ?? $row['catalog_acName'] ?? '')),
-            'dimensions' => $note, 'required' => $quantity, 'unit' => trim((string) ($row['acUM'] ?? '')),
+            'dimensions' => $note, 'pieces' => isset($row['header_anPlanQty']) ? WorkOrderClosingCalculator::decimal($row['header_anPlanQty']) : null,
+            'required' => $quantity, 'unit' => trim((string) ($row['acUM'] ?? '')),
             'vat_rate' => (string) ($row['catalog_anVAT'] ?? config('workorders.catalog_product_defaults.vat_rate', 17)),
             'supplier' => trim((string) ($row['catalog_acSupplier'] ?? '')),
             'price' => $this->suggestedPrice($row),
             'required_date' => $requiredDate,
+            'created_date' => $created ? CarbonImmutable::parse($created, config('app.timezone'))->format('Y-m-d') : null,
             'links' => $this->links($row),
         ];
     }
@@ -185,6 +196,8 @@ class ProcurementSource
                 && (empty($filters['work_order']) || str_contains(mb_strtolower($row['work_order']), mb_strtolower($filters['work_order'])))
                 && (empty($filters['from']) || ($row['required_date'] && $row['required_date'] >= $filters['from']))
                 && (empty($filters['to']) || ($row['required_date'] && $row['required_date'] <= $filters['to']))
+                && (empty($filters['created_from']) || ($row['created_date'] && $row['created_date'] >= $filters['created_from']))
+                && (empty($filters['created_to']) || ($row['created_date'] && $row['created_date'] <= $filters['created_to']))
                 && ($status === '' || ($status === 'late' ? $row['late'] : ($status === 'soon' ? ($row['required_date'] && $row['required_date'] >= $today && $row['required_date'] <= $soon && $row['state'] !== 'received') : $row['state'] === $status)))
                 && (empty($filters['selected_only']) || in_array($row['id'], $filters['selected_ids'] ?? [], true));
         });
@@ -196,7 +209,56 @@ class ProcurementSource
             return $direction * strnatcasecmp((string) $field($a), (string) $field($b)) ?: strcmp($a['id'], $b['id']);
         })->values();
         $page = max(1, (int) ($filters['page'] ?? 1));
-        return new LengthAwarePaginator($rows->forPage($page, 40)->values(), $rows->count(), 40, $page, ['path'=>request()->url(), 'query'=>request()->query()]);
+        $length = (int) ($filters['per_page'] ?? 10);
+        $perPage = !empty($filters['_all']) ? max(1, $rows->count()) : (in_array($length,[10,25,50,100],true) ? $length : 10);
+        return new LengthAwarePaginator($rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page, ['path'=>request()->url(), 'query'=>request()->query()]);
+    }
+
+    public function stock(array $codes): array
+    {
+        $table = $this->table('stock_table', 'tHE_Stock');
+        if ($this->columns($table) === []) return [];
+        $stock = [];
+        foreach (array_chunk(array_values(array_unique($codes)), 500) as $chunk) {
+            foreach ($this->db()->table($table)->where('acWarehouse', config('procurement.warehouse'))->whereIn('acIdent', $chunk)
+                ->select('acIdent')->selectRaw('SUM(anStock) as quantity')->groupBy('acIdent')->get() as $row) {
+                $stock[trim($row->acIdent)] = WorkOrderClosingCalculator::decimal($row->quantity);
+            }
+        }
+        return $stock;
+    }
+
+    public function catalog(string $search = '', bool $exact = false): array
+    {
+        $this->linkCache['catalog'] = [];
+        $query = $this->db()->table($this->table('catalog_items_table', 'tHE_SetItem'))->whereIn('acSetOfItem', self::MATERIAL_SETS);
+        if ($exact) $query->where('acIdent', $search);
+        elseif ($search !== '') $query->where(fn ($q) => $q->where('acIdent', 'like', '%'.$search.'%')->orWhere('acName', 'like', '%'.$search.'%'));
+        return $query->orderBy('acIdent')->limit(100)->get()->map(function ($row) {
+            $raw = (array) $row;
+            $mapped = $this->map(['acKey'=>'catalog','anNo'=>0,'acIdent'=>$row->acIdent,'acDescr'=>$row->acName,'acUM'=>$row->acUM ?? '']
+                + collect($raw)->mapWithKeys(fn ($v,$k) => ['catalog_'.$k=>$v])->all());
+            $mapped['id'] = 'catalog_'.base64_encode(trim($row->acIdent));
+            $mapped['stock_order'] = true;
+            return $mapped;
+        })->all();
+    }
+
+    public function releases(array $purchase): array
+    {
+        $qids = [];
+        foreach ($purchase['items'] as $item) foreach ($item['allocations'] ?? [['source'=>$item['source']]] as $allocation) {
+            if (empty($allocation['source']['stock_order']) && !empty($allocation['source']['item_qid'])) $qids[] = $allocation['source']['item_qid'];
+        }
+        if (!$qids) return [];
+        $schema = config('workorders.schema','dbo');
+        $links = $schema.'.tHF_LinkMoveItemWOExItem';
+        if ($this->columns($links) === []) return [];
+        return $this->db()->table($links.' as l')->join($schema.'.tHE_Move as m','m.acKey','=','l.acKey')
+            ->join($this->table('move_items_table','tHE_MoveItem').' as i',fn($j)=>$j->on('i.acKey','=','l.acKey')->on('i.anNo','=','l.anNo'))
+            ->whereIn('l.anWOExItemQid',array_unique($qids))->where('m.acDocType','6400')->where('m.adDate','>=',substr($purchase['created_at'],0,10))
+            ->select('m.acKey','m.adDate','i.anNo','i.acIdent','i.anQty','i.acUM','l.anWOExItemQid')->distinct()->orderBy('m.adDate')->get()
+            ->map(fn($row)=>(array)$row)->all();
     }
 
     protected function links(array $row): array
@@ -238,6 +300,26 @@ class ProcurementSource
     public function validSupplier(string $supplier): bool
     {
         return $this->db()->table(config('workorders.schema', 'dbo') . '.tHE_SetSubj')->where('acSubject', $supplier)->exists();
+    }
+
+    public function supplierDetails(string $supplier): array
+    {
+        $table = config('workorders.schema','dbo').'.tHE_SetSubj';
+        $fields = array_values(array_intersect($this->columns($table), ['acSubject','acName2','acAddress','acPost','acCity','acCountry','acCode','acJIBCode','acRegNo','acPhone']));
+        if (!$fields) return [];
+        $row = (array) ($this->db()->table($table)->where('acSubject',$supplier)->first($fields) ?? []);
+        if (!$row) return [];
+        $value = fn ($field) => trim((string) ($row[$field] ?? ''));
+        $post = $value('acPost');
+        $city = $value('acCity');
+        $posts = config('workorders.schema','dbo').'.tHE_SetPostCode';
+        if ($post !== '' && $city === '' && in_array('acName',$this->columns($posts),true)) {
+            $city = trim((string) $this->db()->table($posts)->where('acPost',$post)->value('acName'));
+        }
+        $postal = trim($post.' '.$city);
+        if ($city !== '' && str_contains(mb_strtolower($value('acAddress')),mb_strtolower($city))) $postal = '';
+        return ['name'=>$value('acName2'),'address'=>$value('acAddress'),'postal_line'=>$postal,'country'=>$value('acCountry'),
+            'jib'=>$value('acJIBCode'),'vat'=>$value('acCode'),'registration'=>$value('acRegNo'),'phone'=>$value('acPhone')];
     }
 
     public function warehouses(): array

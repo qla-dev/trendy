@@ -13,7 +13,7 @@ class ProcurementService
 
     public function __construct(private ProcurementStore $store, private ProcurementSource $source, private ProcurementCalculator $calculator, private ?ProcurementGateway $gateway = null) {}
 
-    public function all(): array { return array_map(fn ($purchase) => $this->normalize($purchase), $this->store->all()); }
+    public function all(): array { return array_map(fn ($purchase) => $this->normalize($purchase), array_values(array_filter($this->store->all(), fn ($purchase) => empty($purchase['deleted_at'])))); }
 
     private function normalize(array $purchase): array
     {
@@ -34,7 +34,7 @@ class ProcurementService
     {
         $reserved = [];
         foreach ($rows ?? $this->all() as $purchase) {
-            if ($this->calculator->deliveryStatus($purchase) === 'cancelled') continue;
+            if (!empty($purchase['deleted_at']) || $this->calculator->deliveryStatus($purchase) === 'cancelled') continue;
             foreach ($purchase['items'] as $item) $reserved[$item['source']['id']] = $purchase['id'];
         }
         return $reserved;
@@ -44,7 +44,7 @@ class ProcurementService
     {
         $result = [];
         foreach ($rows ?? $this->all() as $purchase) {
-            if (!empty($purchase['cancelled_at'])) continue;
+            if (!empty($purchase['deleted_at']) || !empty($purchase['cancelled_at'])) continue;
             foreach ($purchase['items'] as $line) {
                 $receivedLeft = $line['received'] ?? '0';
                 $allocations = $line['allocations'] ?? [['source'=>$line['source'], 'quantity'=>$line['quantity']]];
@@ -76,7 +76,8 @@ class ProcurementService
     {
         $ids = [];
         foreach ($data['items'] as $item) foreach ($item['allocations'] ?? [['source_id'=>$item['source_id'] ?? '', 'quantity'=>$item['quantity']]] as $allocation) $ids[] = $allocation['source_id'];
-        if (count($ids) === 0 || count(array_unique($ids)) !== count($ids)) throw new InvalidArgumentException('Izvorne stavke moraju biti različite.');
+        $workOrderIds = array_values(array_filter($ids, fn ($id) => !str_starts_with($id,'catalog_')));
+        if (count($ids) === 0 || count($ids) > 100 || count(array_unique($workOrderIds)) !== count($workOrderIds)) throw new InvalidArgumentException('Izaberite najviše 100 različitih izvornih potreba.');
         $sources = $this->source->selected($ids);
         $progress = $this->progress($rows);
         $items = [];
@@ -88,25 +89,31 @@ class ProcurementService
             foreach ($item['allocations'] ?? [['source_id'=>$item['source_id'], 'quantity'=>$item['quantity']]] as $allocation) {
                 $source = $sources[$allocation['source_id']] ?? null;
                 if (!$source) throw new InvalidArgumentException('Izvorna stavka nije dostupna.');
-                $key = $this->compatibility($source);
+                $key = !empty($item['ordered_dimensions'])
+                    ? hash('sha256', json_encode([$source['material'],strtoupper($source['unit']),$source['vat_rate']]))
+                    : $this->compatibility($source);
                 if ($compatibility !== null && $key !== $compatibility) throw new InvalidArgumentException('Različite materijale, dimenzije, jedinice ili porezne profile nije moguće spojiti.');
                 $compatibility = $key;
                 $quantity = $this->calculator->decimal($allocation['quantity'], true);
-                if (bccomp($source['required'], '0', 6) <= 0) throw new InvalidArgumentException('Zahtjev bez potrebne količine nije moguće nabaviti.');
+                if (empty($source['stock_order']) && bccomp($source['required'], '0', 6) <= 0) throw new InvalidArgumentException('Zahtjev bez potrebne količine nije moguće nabaviti.');
                 $ordered = $progress[$source['id']]['ordered'] ?? '0';
-                if (bccomp(bcadd($ordered, $quantity, 6), $source['required'], 6) > 0 && (empty($data['_allow_overorder']) || trim($data['override_reason'] ?? '') === '')) {
+                if (empty($source['stock_order']) && bccomp(bcadd($ordered, $quantity, 6), $source['required'], 6) > 0 && (empty($data['_allow_overorder']) || trim($data['override_reason'] ?? '') === '')) {
                     throw new InvalidArgumentException('Količina prelazi preostalu potrebu. Ovlašteno prekoračenje zahtijeva potvrdu i obrazloženje.');
                 }
                 $total = bcadd($total, $quantity, 6);
                 if (!empty($source['required_date'])) $deadlines[] = $source['required_date'];
                 $allocations[] = ['source'=>$source,'quantity'=>$quantity];
             }
-            if (bccomp($total, $this->calculator->decimal($item['quantity'], true), 6) !== 0) throw new InvalidArgumentException('Zbir raspodjela mora biti jednak količini stavke.');
+            $orderedQuantity = $this->calculator->decimal($item['quantity'], true);
+            if (bccomp($total, $orderedQuantity, 6) !== 0 && empty($item['ordered_dimensions'])) throw new InvalidArgumentException('Zbir raspodjela mora biti jednak količini stavke.');
+            if (bccomp($total, $orderedQuantity, 6) > 0) throw new InvalidArgumentException('Naručena količina ne može biti manja od raspodijeljene potrebe.');
             sort($deadlines);
             $deadline = $item['deadline'] ?? $data['deadline'];
             $this->validDate($deadline);
-            $line = $this->calculator->line($total, $item['price'], $item['vat_rate'], $item['discount_rate'] ?? '0');
+            $line = $this->calculator->line($orderedQuantity, $item['price'], $item['vat_rate'], $item['discount_rate'] ?? '0');
             $items[] = $line + ['id'=>(string) Str::uuid(), 'source'=>$allocations[0]['source'], 'allocations'=>$allocations,
+                'ordered_dimensions'=>trim($item['ordered_dimensions'] ?? $allocations[0]['source']['dimensions']),
+                'pieces'=>isset($item['pieces']) && $item['pieces'] !== '' ? $this->calculator->decimal($item['pieces'], true) : null,
                 'unit'=>$allocations[0]['source']['unit'], 'weight'=>isset($item['weight']) && $item['weight'] !== '' ? $this->calculator->decimal($item['weight']) : null,
                 'deadline'=>$deadline, 'required_date'=>$deadlines[0] ?? null, 'received'=>'0.000000'];
         }
@@ -154,7 +161,7 @@ class ProcurementService
     private function auditItems(array $items): array
     {
         return array_map(function($item) {
-            return array_intersect_key($item,array_flip(['id','quantity','price','vatRate','discountRate','unit','weight','deadline'])) + ['allocations'=>array_map(fn($allocation)=>['source_id'=>$allocation['source']['id'],'quantity'=>$allocation['quantity']],$item['allocations'] ?? [['source'=>$item['source'],'quantity'=>$item['quantity']]])];
+            return array_intersect_key($item,array_flip(['id','quantity','price','vatRate','discountRate','unit','weight','deadline','ordered_dimensions','pieces'])) + ['allocations'=>array_map(fn($allocation)=>['source_id'=>$allocation['source']['id'],'quantity'=>$allocation['quantity']],$item['allocations'] ?? [['source'=>$item['source'],'quantity'=>$item['quantity']]])];
         },$items);
     }
 
@@ -163,18 +170,25 @@ class ProcurementService
         return $this->store->update(function (&$rows) use ($id, $data, $userId) {
             foreach ($rows as &$purchase) {
                 if ($purchase['id'] !== $id) continue;
+                if (!empty($purchase['deleted_at'])) abort(404);
+                $purchase = $this->normalize($purchase);
                 if (!empty($purchase['pantheon_key']) || $purchase['cancelled_at'] || $purchase['receipts']) throw new InvalidArgumentException('Izmjena nije dozvoljena nakon prijema, otkazivanja ili ERP prijenosa.');
                 foreach ($purchase['items'] as $line) if (strtoupper($line['unit'] ?? 'KG') !== strtoupper($line['source']['unit'])) throw new InvalidArgumentException('Starija nabavka ima drugačiju jedinicu od izvora. Potrebna je ručna provjera prije izmjene.');
                 if (!$this->source->validSupplier($data['supplier'])) throw new InvalidArgumentException('Dobavljač ne postoji.');
                 $others = array_values(array_filter($rows, fn ($r) => $r['id'] !== $id));
                 $items = $this->prepareItems($data, $others);
+                $usedIds = [];
                 foreach ($items as &$newLine) {
+                    $matches = [];
                     foreach ($purchase['items'] as $oldLine) {
+                        if (isset($usedIds[$oldLine['id']])) continue;
                         $oldIds = array_column(array_column($oldLine['allocations'] ?? [['source'=>$oldLine['source']]], 'source'), 'id');
                         $newIds = array_column(array_column($newLine['allocations'], 'source'), 'id');
                         sort($oldIds); sort($newIds);
-                        if ($oldIds === $newIds && $this->compatibility($oldLine['source']) === $this->compatibility($newLine['source'])) $newLine['id'] = $oldLine['id'];
+                        if ($oldIds === $newIds && $this->compatibility($oldLine['source']) === $this->compatibility($newLine['source'])) $matches[] = $oldLine;
                     }
+                    usort($matches, fn ($a,$b) => (int)(($b['ordered_dimensions'] ?? $b['source']['dimensions']) === $newLine['ordered_dimensions']) <=> (int)(($a['ordered_dimensions'] ?? $a['source']['dimensions']) === $newLine['ordered_dimensions']));
+                    if ($matches) { $newLine['id'] = $matches[0]['id']; $usedIds[$newLine['id']] = true; }
                 }
                 unset($newLine);
                 $before = ['supplier'=>$purchase['supplier'],'deadline'=>$purchase['deadline'],'totals'=>$purchase['totals'],'items'=>$this->auditItems($purchase['items']),'header'=>$purchase['header'] ?? []];
@@ -221,6 +235,24 @@ class ProcurementService
         });
     }
 
+    public function canDelete(array $purchase): bool
+    {
+        return empty($purchase['deleted_at']) && empty($purchase['pantheon_key']) && empty($purchase['receipts']) && empty($purchase['sync_attempts'])
+            && !array_filter($purchase['items'], fn ($item) => bccomp($item['received'] ?? '0','0',6)>0);
+    }
+
+    public function delete(string $id, int $userId): void
+    {
+        $this->change($id, function (&$purchase) use ($userId) {
+            if (!$this->canDelete($purchase)) {
+                throw new InvalidArgumentException('Brisanje nije dozvoljeno nakon prijema ili pokušaja ERP prijenosa.');
+            }
+            $purchase['deleted_at'] = $this->now();
+            $purchase['deleted_by'] = $userId;
+            $purchase['audit'][] = ['action'=>'deleted','user_id'=>$userId,'at'=>$this->now()];
+        });
+    }
+
     public function sync(string $id, int $userId): array
     {
         return $this->change($id, function (array &$purchase) use ($userId) {
@@ -254,6 +286,7 @@ class ProcurementService
         return $this->store->update(function (array &$rows) use ($id, $callback) {
             foreach ($rows as &$purchase) {
                 if ($purchase['id'] !== $id) continue;
+                if (!empty($purchase['deleted_at'])) abort(404);
                 $purchase = $this->normalize($purchase);
                 $callback($purchase);
                 return $purchase;
@@ -311,6 +344,24 @@ class ProcurementService
             $purchase['receipts'][] = $event;
             $purchase['audit'][] = ['action'=>'received','user_id'=>$userId,'at'=>$this->now(),'event_id'=>$event['id'],'accepted'=>$accepted,'rejected'=>$rejected];
         });
+    }
+
+    public function receiveScan(string $id, ?string $lineId, int $userId): array
+    {
+        $purchase = $this->find($id);
+        if ($lineId !== null && !in_array($lineId, array_column($purchase['items'], 'id'), true)) abort(404);
+        if ($purchase['cancelled_at']) throw new InvalidArgumentException('Narudžbenica je otkazana.');
+        if (empty($purchase['pantheon_key'])) {
+            $purchase = $this->sync($id, $userId);
+            if (empty($purchase['pantheon_key'])) throw new InvalidArgumentException('Pantheon nije potvrdio narudžbenicu. Materijal nije zaprimljen.');
+        }
+        $quantities = [];
+        foreach ($purchase['items'] as $item) $quantities[] = $lineId === null || $lineId === $item['id'] ? bcsub($item['quantity'],$item['received'],6) : '0';
+        if (!array_filter($quantities, fn ($q) => bccomp($q,'0',6)>0)) return $purchase;
+        $token = (string) \Ramsey\Uuid\Uuid::uuid5(\Ramsey\Uuid\Uuid::NAMESPACE_URL, 'procurement-scan:'.$id.':'.($lineId ?? 'all'));
+        return $this->receiveEvent($id, ['submission'=>$token,'reference'=>'QR-'.$purchase['number'].'-'.($lineId ?? 'all'),
+            'received_date'=>substr($this->now(),0,10),'warehouse'=>config('procurement.warehouse'), 'quantities'=>$quantities,
+            'notes'=>'Materijal stigao — QR skeniranje'], $userId);
     }
 
     public function addDocument(string $id, array $document, int $userId): array

@@ -55,12 +55,6 @@
       "slug": "app-procurement"
     },
     {
-      "name": "Prijem sirovina",
-      "icon": "package",
-      "url": "app/procurement/warehouse",
-      "slug": "app-procurement-receive"
-    },
-    {
       "name": "Dobavljači i postavke",
       "icon": "settings",
       "url": "app/procurement/settings",

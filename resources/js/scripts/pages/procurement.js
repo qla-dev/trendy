@@ -51,6 +51,7 @@
     function submit() { selectionQueue.then(() => { filter.classList.add('procurement-loading'); filter.submit(); }).catch(() => {}); }
     filter.addEventListener('submit', event => { event.preventDefault(); clearTimeout(timer); submit(); });
     filter.addEventListener('change', event => { if (event.target.tagName === 'SELECT' || event.target.type === 'checkbox' || event.target.type === 'date') { clearTimeout(timer); submit(); } });
+    Array.from(filter.elements).filter(input => !filter.contains(input) && input.type === 'date').forEach(input => input.addEventListener('change', () => { clearTimeout(timer); submit(); }));
     Array.from(filter.elements).filter(input => input.tagName === 'INPUT' && !['hidden','checkbox','date'].includes(input.type)).forEach(input => input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(submit, 450); }));
   });
   document.querySelectorAll('[data-filter-toggle]').forEach(button => button.addEventListener('click', () => {
@@ -82,7 +83,7 @@
         const singleAllocation = row.querySelector('[data-single-allocation]');
         if (singleAllocation) singleAllocation.value = value('quantity');
         const allocations = row.querySelectorAll('[data-allocation]');
-        if (allocations.length) {
+        if (allocations.length && !row.hasAttribute('data-ordered-specification')) {
           let quantity = 0n;
           allocations.forEach(input => { quantity += decimal(input.value); });
           row.querySelector('[data-field="quantity"]').value = format(quantity, 6);

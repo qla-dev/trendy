@@ -2583,10 +2583,10 @@
     }
 
     function handleBarcodeScanSuccess(decodedText) {
-      // Procurement QR opens the authenticated receipt form; scanning never books stock.
+      // Procurement QR opens an authenticated, CSRF-protected scan receipt.
       try {
         var procurementTarget = new URL(String(decodedText), window.location.origin);
-        if (procurementTarget.origin === window.location.origin && /\/app\/procurement\/[0-9a-f-]{36}\/receive-form$/i.test(procurementTarget.pathname)) {
+        if (procurementTarget.origin === window.location.origin && /\/app\/procurement\/[0-9a-f-]{36}\/(?:receive-form|scan)$/i.test(procurementTarget.pathname)) {
           stopBarcodeScanner();
           window.location.assign(procurementTarget.href);
           return;

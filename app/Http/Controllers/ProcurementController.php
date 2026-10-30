@@ -20,9 +20,9 @@ class ProcurementController extends Controller
             $user = $request->user();
             $action = $request->route()?->getActionMethod();
             $permission = match ($action) {
-                'receive','receiveForm' => 'receive',
+                'receive','receiveForm','scan','scanReceive' => 'receive',
                 'store','create','edit','update','selection','upload','complaint' => 'edit',
-                'cancel','sync','resolveComplaint','settings','bindSupplier','draft' => 'manage',
+                'destroy','cancel','sync','resolveComplaint','settings','bindSupplier','draft' => 'manage',
                 default => 'view',
             };
             abort_unless(app(ProcurementAccess::class)->can($user, $permission), 403);
@@ -34,17 +34,32 @@ class ProcurementController extends Controller
     {
         $filters = $request->validate(['q'=>'nullable|string|max:255', 'sort'=>'nullable|in:work_order,material,order,position,required_date,required', 'direction'=>'nullable|in:asc,desc', 'unit'=>'nullable|string|max:16',
             'status'=>'nullable|in:not_ordered,part_ordered,ordered,partial,received,late,soon,zero','supplier'=>'nullable|string|max:255','work_order'=>'nullable|string|max:255',
-            'from'=>'nullable|date_format:Y-m-d','to'=>'nullable|date_format:Y-m-d','selected_only'=>'nullable|boolean','page'=>'nullable|integer|min:1']);
+            'from'=>'nullable|date_format:Y-m-d','to'=>'nullable|date_format:Y-m-d','created_from'=>'nullable|date_format:Y-m-d','created_to'=>'nullable|date_format:Y-m-d','per_page'=>'nullable|integer|in:10,25,50,100','selected_only'=>'nullable|boolean','page'=>'nullable|integer|min:1']);
         $selected = $request->session()->get('procurement_selected', []);
         $filters['selected_ids'] = $selected;
         $rows = $this->source->requirements($filters, $this->service->progress());
+        $stock = $this->source->stock($rows->pluck('material')->all());
         foreach ($rows as $row) {
             if (bccomp($row['remaining'], '0', 6) <= 0 || bccomp($row['required'], '0', 6) <= 0) {
                 $selected = array_values(array_diff($selected, [$row['id']]));
             }
         }
         $request->session()->put('procurement_selected', $selected);
-        return view('content.apps.procurement.materials', compact('rows', 'selected'));
+        return view('content.apps.procurement.materials', compact('rows', 'selected', 'stock'));
+    }
+
+    public function orderingOptions(Request $request)
+    {
+        abort_unless(app(ProcurementAccess::class)->can($request->user(), 'edit'), 403);
+        $request->validate(['q'=>'nullable|string|max:255','catalog_only'=>'nullable|boolean']);
+        $requirements = [];
+        if (!$request->boolean('catalog_only')) {
+            $requirements = $this->source->requirements(['_all'=>true], $this->service->progress())->items();
+            $requirements = array_values(array_filter($requirements, fn ($r) => bccomp($r['remaining'],'0',6)>0));
+        }
+        $catalog = $this->source->catalog((string) $request->query('q',''));
+        $stock = $this->source->stock(array_merge(array_column($requirements,'material'),array_column($catalog,'material')));
+        return response()->json(compact('requirements','catalog','stock'));
     }
 
     public function create(Request $request)
@@ -121,9 +136,10 @@ class ProcurementController extends Controller
         $decimal = ['required', 'string', 'max:30', 'regex:/^\d{1,12}(?:[.,]\d{1,6})?$/D'];
         $data = $request->validate([
             'submission' => 'required|uuid', 'supplier' => 'required|string|max:255', 'deadline' => 'required|date_format:Y-m-d',
-            'items' => 'required|array|min:1|max:100', 'items.*.source_id' => 'nullable|string|max:1000|distinct',
+            'items' => 'required|array|min:1|max:100', 'items.*.source_id' => 'nullable|string|max:1000',
             'items.*.quantity' => $decimal, 'items.*.price' => $decimal, 'items.*.vat_rate' => $decimal,
             'items.*.discount_rate'=>'nullable|string|max:30','items.*.weight'=>'nullable|string|max:30','items.*.deadline'=>'nullable|date_format:Y-m-d',
+            'items.*.ordered_dimensions'=>'nullable|string|max:1000','items.*.pieces'=>'nullable|string|max:30',
             'items.*.allocations'=>'nullable|array|min:1|max:100','items.*.allocations.*.source_id'=>'required|string|max:1000', 'items.*.allocations.*.quantity'=>$decimal,
             'document_date'=>'nullable|date_format:Y-m-d','valid_until'=>'nullable|date_format:Y-m-d','exchange_rate'=>'nullable|string|max:30',
             'carrier'=>'nullable|string|max:255','department'=>'nullable|string|max:255','procurement_type'=>'nullable|string|max:255','responsible_person'=>'nullable|string|max:255','reference_person'=>'nullable|string|max:255','notes'=>'nullable|string|max:4000',
@@ -155,7 +171,7 @@ class ProcurementController extends Controller
             'direction'=>'nullable|in:asc,desc', 'page'=>'nullable|integer|min:1','supplier'=>'nullable|string|max:255','from'=>'nullable|date_format:Y-m-d','to'=>'nullable|date_format:Y-m-d','soon'=>'nullable|boolean','notices'=>'nullable|boolean','active'=>'nullable|boolean']);
         $rows = collect($this->service->all())->map(function ($row) {
             $workOrders = [];
-            foreach ($row['items'] as $line) foreach ($line['allocations'] ?? [['source'=>$line['source']]] as $allocation) $workOrders[$allocation['source']['work_order_key']] = $allocation['source']['work_order'];
+            foreach ($row['items'] as $line) foreach ($line['allocations'] ?? [['source'=>$line['source']]] as $allocation) if (empty($allocation['source']['stock_order'])) $workOrders[$allocation['source']['work_order_key']] = $allocation['source']['work_order'];
             return $row + ['work_orders'=>$workOrders,'delivery_status' => $this->calculator->deliveryStatus($row), 'due' => $this->calculator->deadline($row)];
         });
         $metrics = ['active'=>0,'late'=>0,'partial'=>0,'soon'=>0,'complaints'=>0,'notices'=>0,'late_items'=>0,'outstanding'=>[],'value'=>[],'awaiting_value'=>[]];
@@ -204,6 +220,27 @@ class ProcurementController extends Controller
         return view('content.apps.procurement.show', ['purchase' => $purchase, 'due' => $this->calculator->deadline($purchase), 'status' => $this->calculator->deliveryStatus($purchase)]);
     }
 
+    public function printOrder(Request $request, string $id)
+    {
+        $purchase = $this->service->find($id);
+        return view('content.apps.procurement.print', ['purchase'=>$purchase,'supplierDetails'=>$this->source->supplierDetails($purchase['supplier']),'itemSheets'=>$request->boolean('items')]);
+    }
+
+    public function scan(Request $request, string $id)
+    {
+        $purchase = $this->service->find($id);
+        $line = $request->query('line');
+        if ($line !== null) abort_unless(in_array($line, array_column($purchase['items'],'id'), true),404);
+        return view('content.apps.procurement.scan', compact('purchase','line'));
+    }
+
+    public function scanReceive(Request $request, string $id)
+    {
+        $data = $request->validate(['line'=>'nullable|uuid']);
+        $purchase = $this->business(fn () => $this->service->receiveScan($id, $data['line'] ?? null, (int) $request->user()->id));
+        return redirect()->route('app-procurement-show',$id)->with('success','Materijal stigao — QR prijem je evidentiran.');
+    }
+
     public function receive(Request $request, string $id)
     {
         $data = $request->validate(['submission'=>'required|uuid','reference'=>'required|string|max:255','received_date'=>'required|date_format:Y-m-d','warehouse'=>'required|string|max:255',
@@ -225,6 +262,12 @@ class ProcurementController extends Controller
     {
         $this->business(fn () => $this->service->cancel($id, (int) $request->user()->id));
         return back()->with('success', 'Nabavka je otkazana.');
+    }
+
+    public function destroy(Request $request, string $id)
+    {
+        $this->business(fn () => $this->service->delete($id, (int) $request->user()->id));
+        return redirect()->route('app-procurement')->with('success','Narudžbenica je obrisana.');
     }
 
     public function sync(Request $request, string $id)
@@ -276,12 +319,20 @@ class ProcurementController extends Controller
 
     public function labels(Request $request)
     {
+        if (!$request->filled('orders')) return redirect()->route('app-procurement')->with('warning','Označite barem jednu nabavku za štampu naljepnica.');
         $data = $request->validate(['orders'=>'required|array|min:1|max:20','orders.*'=>'required|uuid']);
         $labels = [];
         foreach (array_unique($data['orders']) as $id) {
             $purchase = $this->service->find($id);
-            $labels[] = ['title'=>$purchase['number'],'code'=>$purchase['number'],'url'=>route('app-procurement-receive-form',$id)];
-            foreach ($purchase['items'] as $index=>$line) $labels[] = ['title'=>$line['source']['name'],'code'=>$line['source']['material'] . ' · ' . $purchase['number'] . '/' . ($index+1),'url'=>route('app-procurement-receive-form',['id'=>$id,'line'=>$line['id'] ?? ''])];
+            $date = \Carbon\Carbon::parse($purchase['header']['document_date'] ?? $purchase['created_at'])->format('d.m.Y.');
+            foreach ($purchase['items'] as $index=>$line) {
+                $dates = [];
+                foreach ($purchase['receipts'] as $receipt) if (bccomp($receipt['accepted'][$index] ?? $receipt['quantities'][$index] ?? '0','0',6)>0) $dates[] = \Carbon\Carbon::parse($receipt['received_date'] ?? $receipt['at'])->format('d.m.Y.');
+                $labels[] = ['title'=>$line['source']['name'],'dimensions'=>trim($line['ordered_dimensions'] ?? '') ?: $line['source']['dimensions'],
+                    'code'=>$line['source']['material'], 'order'=>($purchase['pantheon_number'] ?: $purchase['number']).'/'.($index+1),
+                    'details'=>'Narudžba: '.$date.' · Prijem: '.($dates ? implode(', ',array_unique($dates)):'čeka prijem'),
+                    'url'=>route('app-procurement-scan',['id'=>$id,'line'=>$line['id']])];
+            }
         }
         return view('content.apps.procurement.labels', ['labels'=>$labels]);
     }
