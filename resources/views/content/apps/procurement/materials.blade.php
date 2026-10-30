@@ -21,7 +21,7 @@
 </form></div></div>
 <div class="card" id="requirement-selection" data-url="{{ route('app-procurement-selection') }}" data-csrf="{{ csrf_token() }}"><div class="card-header d-flex gap-1 flex-wrap"><h4 class="mb-0 me-auto">Materijali za nabavku</h4>
 <span role="status" id="selection-count">Odabrano: {{ count($selected) }}</span><button type="button" id="clear-selection" class="btn btn-outline-secondary btn-sm" @disabled(!$selected || !$canSelect)>Poništi odabir</button>
-<form method="post" action="{{ route('app-procurement-create') }}" id="create-from-selection">@csrf<input type="hidden" name="from_session" value="1"><label class="me-1"><input type="checkbox" name="combine" value="1"> Spoji kompatibilne potrebe</label>@if(app(\App\Services\Procurement\ProcurementAccess::class)->can(auth()->user(),'manage'))<label class="me-1"><input type="checkbox" name="overorder_prepare" value="1"> Pripremi i dodatnu nabavku</label>@endif <button class="btn btn-primary btn-sm" @disabled(!$selected || !$canSelect)>Kreiraj nabavku</button></form></div>
+<form method="post" action="{{ route('app-procurement-create') }}" id="create-from-selection">@csrf<input type="hidden" name="from_session" value="1"><button class="btn btn-primary btn-sm" @disabled(!$selected || !$canSelect)>Kreiraj nabavku</button></form></div>
 <div class="table-responsive"><table class="table table-striped procurement-compact"><thead><tr>
  <th aria-label="Odabir"></th>
  @foreach(['order'=>'Narudžba','position'=>'Poz.','work_order'=>'Radni nalog','material'=>'Materijal'] as $key=>$label)<th><a href="{{ request()->fullUrlWithQuery(['sort'=>$key,'direction'=>request('sort')===$key && request('direction')==='asc' ? 'desc':'asc','page'=>1]) }}">{{ $label }}</a></th>@endforeach
@@ -31,7 +31,7 @@
 @php($orders = implode(', ', array_unique(array_column($row['links'],'order_number'))))
 @php($positions = implode(', ', array_column($row['links'],'position')))
 <tr class="{{ $row['late'] ? 'table-danger' : '' }}">
-<td><input type="checkbox" class="requirement-select" value="{{ $row['id'] }}" aria-label="Odaberi {{ $row['material'] }} za {{ $row['work_order'] }}" @checked(in_array($row['id'],$selected,true)) @disabled(!$canSelect || $row['state']==='zero' || (bccomp($row['remaining'],'0',6)<=0 && !app(\App\Services\Procurement\ProcurementAccess::class)->can(auth()->user(),'manage')))></td>
+<td><input type="checkbox" class="requirement-select" value="{{ $row['id'] }}" aria-label="Odaberi {{ $row['material'] }} za {{ $row['work_order'] }}" @checked(in_array($row['id'],$selected,true)) @disabled(!$canSelect || $row['state']==='zero' || bccomp($row['remaining'],'0',6)<=0)></td>
 <td title="{{ $orders }}">{{ $orders ?: '—' }}</td><td title="{{ $positions }}">{{ $positions ?: '—' }}</td><td title="{{ $row['work_order'] }}"><a href="{{ route('app-invoice-preview', $row['work_order_key']) }}">{{ $row['work_order'] }}</a></td>
 <td class="material-description" title="{{ $row['material'] }} — {{ $row['name'] }}">{{ $row['material'] }} — {{ $row['name'] }}</td><td class="material-description" title="{{ $row['dimensions'] }}">{{ $row['dimensions'] ?: '—' }}</td>
 @foreach(['required','ordered','received','remaining'] as $field)<td class="text-end" title="{{ $row[$field] }} {{ $row['unit'] }}">{{ $fmt::quantity($row[$field],$row['unit']) }} {{ $row['unit'] }}</td>@endforeach

@@ -12,7 +12,7 @@ Rad je na grani `cherry-2`. Postojeći Laravel 9 / Blade / Bootstrap 5 modul je 
 - `app-material.js` i štampa RN-a već koriste QRServer za generisanje QR-a; skeniranje koristi Html5Qrcode. Novi kod ponovo koristi taj servis i proširuje postojeći skener prepoznavanjem URL-a prijema. Postojeći materijalni QR i barcode tok ostaju dostupni.
 - `User`, `CustomRoles`, `UserController`, postojeća prijava i Sanctum: dodana je uloga Dobavljač i odvojena serverska provjera pregleda, izmjene, upravljanja i prijema.
 - BCMath se već koristi u proizvodnim obračunima. Finansije nabavke koriste decimalne stringove i isti postojeći izvor podrazumijevanog PDV-a/valute.
-- Postojeći ERP servisi pišu narudžbe kupaca i proizvodne/skladišne dokumente. SELECT provjera u ciljnoj bazi nije našla primjer dokumenta `0205` u konfiguriranoj tabeli narudžbi. Dostavljeni naziv 0205 nije dovoljan za pretpostavljanje sigurnog upisa.
+- ERP audit 30.10.2026: `0205` ne postoji ni u `BA_TRENDY_TESTNA` ni u `BA_TRENDY`. Korisnik je potvrdio ispravne šifre: `020S` (slovo S) za narudžbenicu i `1005` za prijem sirovina. Primjeri i veze potvrđeni su SELECT upitima; produkcijska baza nije mijenjana.
 
 Izvedeni redoslijed: UI i odabir → količinske raspodjele i finansije → rokovi i prijem → QR/etikete/dokumenti/reklamacije → adapter ERP-a → portal dobavljača → KPI i nacrti poruka → testovi.
 
@@ -64,16 +64,22 @@ KPI: aktivne, zakašnjele i djelimične nabavke, rok u sedam dana, najave dobavl
 
 ## DJELIMIČNO IMPLEMENTIRANO
 
-- Prijem je vezan za postojeće korisnike, skladišne šifre, skener i materijale. Stvarno ERP knjiženje prijema i povećanje zaliha nisu uključeni; time se ne pravi drugi autoritativni sistem skladišnih zaliha.
+- ERP prijem `1005` i povećanje zaliha povezani su 30.10.2026. za prethodno prenesene narudžbenice `020S`. Prijemi prije ERP prijenosa ostaju lokalni i zahtijevaju usklađivanje; automatsko naknadno knjiženje stare evidencije nije uključeno.
 - A4 geometrija je operativno podesiva, ali originalni `prazno - naljepnice za skladiste.docx` nije pronađen. Podrazumijevani raspored je početni profil, ne potvrđena kopija Word predloška. Fizička štampa, kalibracija konkretnog štampača i skeniranje odštampanog QR-a zahtijevaju stvarni papir/uređaj.
 - Nacrti poruka i kontakt postoje; automatsko slanje, eskalacije i praćenje email odgovora nisu uključeni.
 - Evidencija ostaje u postojećem privatnom JSON spremištu, proširenom za novi domen. Nema relacijske šeme/tabela nabavke i nije pokretana migracija. Za više aplikacijskih servera ili veći obim potreban je naknadno odobren zajednički transakcijski storage; trenutni dizajn koristi lokalni trajni disk i flock.
 
-## BLOKIRANO / ZAHTIJEVA VANJSKI PRISTUP
+## ERP povezivanje — 30.10.2026.
 
-Stvarni upis Pantheon `0205` i prijemnih dokumenata. `ProcurementGateway` je odvojen ugovor s trajnim ključem idempotentnosti, a podrazumijevani `UnconfiguredPantheonProcurementGateway` blokira prijenos. Za uključivanje su potrebni potvrđeni primjer 0205, smjer/identifikatori subjekata, obavezna polja i statusi, porezni profil, način numeracije, ERP veza raspodjela i prijema te sigurna provjera već kreiranog dokumenta nakon prekida. Testni adapteri pokrivaju potvrdu, grešku, ponovni pokušaj s istim ključem i izostanak duplikata; to nisu produkcijski ERP upisi.
+Korisnik je potvrdio dokumente `020S` i `1005`. Aktivni `PantheonProcurementGateway` koristi postojeću ciljanu SQL Server konekciju. Zaglavlja kreiraju postojeće Pantheon procedure `pHE_OrderCreAll` i `pHE_MoveCreAll`; stavke i sume upisuju se prema provjerenim primjerima istih tipova dokumenata. Nabavka koristi `acConsignee`/`acReceiver` za dobavljača i `acWarehouse` za Skladište sirovina. Prijem koristi dobavljača kao `acIssuer`, skladište kao `acReceiver`, te veze `tHE_LinkMoveItemOrderItem` i količinu `anQtyDispDoc` narudžbenice.
 
-Stvarna sinhronizacija se ne smatra uspješnom bez potvrde i trajnog ERP ključa/broja. Lokalni dokument ostaje sačuvan nakon greške. Puko mijenjanje konfigurirane šifre ne uključuje neprovjereni upis.
+Svaki potvrđeni prijem prenesene narudžbenice kreira `1005` samo za prihvaćene količine. Postojeći servis `PantheonFinishedGoodsStockService` povećava količinu i neto vrijednost zalihe unutar iste SQL transakcije; odbijene količine ne povećavaju zalihu. Potpuno odbijena isporuka ostaje evidentirana bez praznog ERP dokumenta. ERP prijem trenutno ne dopušta količinu iznad preostale ERP narudžbenice. Nema automatske promjene jedinice ili izmišljene konverzije. Prijenos podržava KM/kurs 1 i stopu PDV-a koja odgovara poreznom kodu materijala u ERP-u; druga valuta ili profil traže dodatno potvrđeno mapiranje.
+
+`sp_getapplock` zaključava narudžbenicu tokom transakcije. Stabilne reference u `acInternalNote` omogućavaju oporavak kada je ERP prihvatio dokument, ali lokalno zapisivanje nije uspjelo. Ponovljeni prijem s istim tokenom i drugim sadržajem se odbija. Narudžbenica se pri oporavku provjerava prema dobavljaču, valuti, stavkama, jedinici, količinama, cijenama, rabatu i PDV-u. ERP izmijenjene stavke blokiraju prijem. Lokalni prijem ne ostaje evidentiran ako ERP prijem zakaže.
+
+ERP audit prvo koristi izričitu mapu `workorders.pantheon_user_map`, zatim tačno podudaranje korisničkog naziva, zatim jednoznačno puno ime. Po korisnikovoj potvrdi, ako nema podudaranja koristi se aktivni Pantheon korisnik **57**, podešen kroz `procurement.fallback_pantheon_user_id`. Lokalna historija i dalje čuva stvarni ID e-Nalog korisnika.
+
+Integracijske provjere pokreću se samo izričito, sa `PROCUREMENT_ERP_TESTS=1`, i odbijaju bilo koju bazu osim `BA_TRENDY_TESTNA`. Sve probne ERP izmjene su unutar vanjske transakcije koja se vraća. Nijedan test ne radi migracije. Produkcijski upis i redeploy nisu izvršeni.
 
 ## Fajlovi i konfiguracija
 
@@ -85,7 +91,7 @@ Spremište: `storage/app/procurement/<hash ciljane konekcije/servera/baze>/ledge
 
 Deployment ostaje pull → npm dependencies → frontend build. Bez Composer instalacije, Artisan komandi i migracija. U cPanel File Manageru provjeriti storage dozvole i backup. Nisu kreirani lažni produkcijski zapisi ni slani vanjski emailovi.
 
-Potrebna poslovna potvrda: datum RN-a i sedmodnevni pomak, FIFO raspodjela prijema, dozvoljena prekoračenja, konačna geometrija etiketa i ERP mapiranje. Konfiguracija preciznosti i pravila je u `config/procurement.php`; `PROCUREMENT_SCHEDULE_FIELD` i `PROCUREMENT_LEAD_DAYS` su podesivi bez promjene koda.
+Poslovna pravila potvrđena 30.10.2026: planirani početak RN-a minus 7 kalendarskih dana, FIFO prema sačuvanom redoslijedu raspodjela i dodatna nabavna količina samo upravitelju uz izričitu potvrdu i obrazloženje. Fizička geometrija etiketa i skeniranje na uređaju još zahtijevaju provjeru. Konfiguracija preciznosti i pravila je u `config/procurement.php`; `PROCUREMENT_SCHEDULE_FIELD` i `PROCUREMENT_LEAD_DAYS` su podesivi bez promjene koda.
 
 ## Provjere
 
@@ -123,3 +129,23 @@ Provjere proširenja: 78 PHP testova / 423 provjere prolazi; Node sedmice/datumi
 Bojanje sada ima poseban `is_late` indikator: prošli datum isporuke uvijek označava kašnjenje, uz zadržavanje postojećih oznaka ranije sedmice/raspona. Status i prioritet ne poništavaju crvenu oznaku, uključujući zaključene statuse ako ih korisnik izričito uključi u prikaz. Nedostajući datum se ne izmišlja, a današnji ili budući rok sam po sebi nije zakašnjeli. Postojeći filter Bez boje i opcija izvoza bez boja ostaju dostupni.
 
 Sortiranje, uključivanje ranijih nezaključenih RN-ova i statusni filteri ostaju nepromijenjeni; samo prikaz i Excel dobivaju prioritetnu crvenu oznaku. Frontend verzija JS-a je povećana da preglednik učita novo pravilo. Provjere: 25 PHP testova / 270 provjera i tri Node testa (boje, sedmice/datumi, live osvježavanje) prolaze. Read-only provjera 100 stavki plana sedmice 42 našla je 99 s prošlim datumom isporuke i nijednu koja nije crvena.
+
+## Završna provjera 30.10.2026.
+
+- Polling plana proizvodnje je 5 minuta i u izvornom i u izgrađenom JS-u. Skriveni tab, zahtjev u toku i aktivno uređivanje ćelije preskaču taj ciklus.
+- Dobavljački portal sada koristi postojeći layout sa sekcijom Nabavka: Moje narudžbenice i Neisporučene narudžbenice. Interne nabavke i administracija ostaju zabranjene. Nepovezani dobavljač ostaje blokiran.
+- Testni dobavljač `dobavljac.test` kreiran je samo u lokalnoj MySQL bazi `trendy2`, povezan s EURO-METALI u testnom ERP kontekstu. Lozinka nije pohranjena u repozitoriju.
+- Lokalna demo narudžbenica `TEST-NS-000001` nije prenesena u ERP niti poslana emailom. Služi za ručnu provjeru dobavljačkog portala i etiketa.
+- Ciljani PHP skup: 62 testa / 350 provjera; ERP integracija: 2 testa / 24 provjere. Prolaze Node provjere pollinga, finansija i A4 geometrije. Stvarna HTTP prijava dobavljača i zabrane internih ruta su provjerene odvojenom sesijom.
+- Fizička štampa i skeniranje nisu potvrđeni. Otvoriti etikete demo narudžbenice, izabrati početno mjesto, štampati A4 pri 100% bez dodatnih margina i zaglavlja/podnožja. Prvo probni otisak na običnom papiru, uporediti s listom naljepnica i prilagoditi pomake u mm. Skenirati izabranim uređajem: treba otvoriti obrazac tačne narudžbenice/stavke, bez automatskog prijema. Telefon mora imati mrežni pristup URL-u aplikacije; njegov localhost nije ovaj računar.
+
+## Završne dorade 30.10.2026. prije objave
+
+- Uklonjena je sekcija Aktivne postavke iz korisničkog interfejsa.
+- Uklonjeni su checkboxi za spajanje kompatibilnih potreba i dodatnu nabavku s pregleda materijala. Postojeća servisna logika za ranije zapise ostaje dostupna backendu.
+- Greške se na internim ekranima nabavke prikazuju samo u postojećoj donjoj obavijesti.
+- Potpuno naručeni materijal se više ne može označiti ni administratoru; stari odabir se čisti i greška navodi tačnu stavku. Lokalna demo narudžbenica TEST-NS-000001 je otkazana, bez ERP upisa, radi oslobađanja količine za korisničku probu.
+- Cijena se predlaže iz kataloga ciljane Pantheon baze: anPriceSupp → anPrice → anBuyPrice. Predlaže se samo pozitivna cijena za istu jedinicu i valutu; prazna/neodgovarajuća cijena ostaje za ručni unos. Decimalni zapis zaokružuje se na šest decimala. Ručno promijenjena cijena se čuva.
+- Raspodjela jedne potrebe je skrivena, a količina uređiva direktno u tabeli. Interna veza s izvorom ostaje sačuvana. Uklonjen je tekst uputstva o raspodjeli ispod tabele.
+- Pregled i kreiranje nabavke još polaze iz potreba RN-a. Učitavanje postojećih Pantheon 020S/1005 dokumenata, samostalno dodavanje artikala bez RN-a i stavka transporta nisu implementirani.
+- Lokalna Sanctum ispravka uključuje localhost:8000 u dozvoljene sesijske domene.

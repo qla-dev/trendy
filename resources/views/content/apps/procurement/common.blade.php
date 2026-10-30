@@ -8,6 +8,3 @@
 @foreach (['success', 'warning'] as $message)
   @if(session($message))<div class="alert alert-{{ $message }} p-1" role="status">{{ session($message) }}</div>@endif
 @endforeach
-@if($errors->any())
-  <div class="alert alert-danger p-1" role="alert"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
-@endif

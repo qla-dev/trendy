@@ -48,6 +48,7 @@ class ProcurementTest extends TestCase
         $this->app->instance(ProcurementStore::class, $this->store);
         $this->service = new ProcurementService($this->store, $source, new ProcurementCalculator());
         $this->app->instance(ProcurementService::class, $this->service);
+        $this->app->instance(\App\Services\Procurement\ProcurementGateway::class, new \App\Services\Procurement\UnconfiguredPantheonProcurementGateway());
         $this->mock(AiTokenNavbarCounter::class)->shouldReceive('currentMonthTotal')->andReturn(0);
         // Any unexpected database use in this suite fails rather than reaching an ERP.
         DB::shouldReceive('connection')->andThrow(new \RuntimeException('Database access is forbidden in procurement workflow tests.'));
@@ -121,7 +122,7 @@ class ProcurementTest extends TestCase
         $completed = $this->service->receive($purchase['id'], ['10','3'], 'PR-2', 77);
         $this->assertSame('delivered', (new ProcurementCalculator())->deliveryStatus($completed));
         $this->assertSame(0, (new ProcurementCalculator())->deadline($completed)['days']);
-        $this->assertSame('blocked', $completed['sync_status']);
+        $this->assertSame('pending', $completed['sync_status']);
     }
 
     public function test_invalid_receipts_are_atomic_and_do_not_allow_reduction_overreceipt_or_reused_reference(): void
@@ -193,7 +194,7 @@ class ProcurementTest extends TestCase
     {
         $this->login();
         $purchase = $this->service->create($this->payload(false), 77);
-        $this->get('/app/procurement?q=RN-1&late=1&sync=blocked')->assertOk()->assertSee($purchase['number']);
+        $this->get('/app/procurement?q=RN-1&late=1&sync=pending')->assertOk()->assertSee($purchase['number']);
         $this->get('/app/procurement?q=missing')->assertOk()->assertDontSee($purchase['number']);
         $this->get('/app/procurement?status=delivered')->assertOk()->assertDontSee($purchase['number']);
         $this->service->receive($purchase['id'], ['10'], 'PR-1', 77);
@@ -208,6 +209,23 @@ class ProcurementTest extends TestCase
         $this->get('/app/procurement/create')->assertOk()->assertSee('20x30x40')->assertSee('50x60x70');
         $this->from('/app/procurement/create')->post('/app/procurement', array_replace($this->payload(), ['supplier'=>'missing']))->assertRedirect('/app/procurement/create')->assertSessionHasErrors('procurement');
         $this->get('/app/procurement/create')->assertOk()->assertSee('missing');
+    }
+
+    public function test_creation_suggests_editable_price_without_single_allocation_details_and_keeps_manual_changes(): void
+    {
+        $this->sources['source-a']['price']='2.450000';
+        $this->login();
+        $this->post('/app/procurement/create',['selected'=>['source-a']])->assertRedirect();
+        $response=$this->get('/app/procurement/create');
+        $response->assertOk()->assertDontSee('Raspodjela:')->assertDontSee('Količina se mijenja kroz raspodjelu');
+        $dom=new \DOMDocument();@$dom->loadHTML($response->getContent());$xpath=new \DOMXPath($dom);
+        $this->assertSame(1,$xpath->query('//input[@data-field="price" and @value="2.450000" and not(@readonly)]')->length);
+        $this->assertSame(1,$xpath->query('//input[@data-field="quantity" and not(@readonly)]')->length);
+        $this->assertSame(1,$xpath->query('//input[@type="hidden" and @data-single-allocation]')->length);
+        $data=$this->payload(false);$data['items'][0]['price']='7.25';$data['items'][0]['quantity']='4';
+        $this->post('/app/procurement',$data)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('7.250000',$this->service->all()[0]['items'][0]['price']);
+        $this->assertSame('4.000000',$this->service->all()[0]['items'][0]['quantity']);
     }
 
     public function test_custom_role_requires_explicit_procurement_permission(): void
@@ -228,6 +246,28 @@ class ProcurementTest extends TestCase
         $this->post('/app/procurement/create', ['selected'=>['source-a']]);
         $this->service->create($this->payload(false), 77);
         $this->get('/app/procurement/create')->assertRedirect(route('app-procurement-materials'))->assertSessionHasErrors('selected');
+    }
+
+    public function test_covered_selection_is_removed_and_remaining_selection_can_open_form(): void
+    {
+        $this->login();
+        $this->service->create($this->payload(false),77);
+        $this->post('/app/procurement/create',['selected'=>['source-a','source-b']])->assertRedirect();
+        $this->get('/app/procurement/create')->assertRedirect(route('app-procurement-materials'))
+            ->assertSessionHasErrors('selected')->assertSessionHas('procurement_selected',['source-b']);
+        $this->post('/app/procurement/create',['from_session'=>1])->assertRedirect();
+        $this->get('/app/procurement/create')->assertOk()->assertSee('50x60x70')->assertDontSee('20x30x40');
+    }
+
+    public function test_even_admin_cannot_select_fully_ordered_material_and_stale_selection_is_cleared(): void
+    {
+        $this->login();
+        $row=$this->sources['source-a']+['required_date'=>'2026-10-27','ordered'=>'10','received'=>'0','remaining'=>'0','missing'=>'10','purchases'=>[],'suppliers'=>[],'late'=>false,'state'=>'ordered'];
+        app(ProcurementSource::class)->shouldReceive('requirements')->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([$row]),1,40));
+        $response=$this->withSession(['procurement_selected'=>['source-a','source-b']])->get('/app/procurement/materials');
+        $response->assertOk()->assertSessionHas('procurement_selected',['source-b'])->assertSee('Odabrano: 1');
+        $dom=new \DOMDocument();@$dom->loadHTML($response->getContent());$xpath=new \DOMXPath($dom);
+        $this->assertSame(1,$xpath->query('//input[@class="requirement-select" and @value="source-a" and @disabled and not(@checked)]')->length);
     }
 
     public function test_partial_procurement_preserves_remaining_requirement_and_blocks_overordering(): void
@@ -313,7 +353,10 @@ class ProcurementTest extends TestCase
         $other=$this->service->create($otherData,77);$this->service->change($other['id'],function(&$row){$row['supplier']='Other';});
         $access=app(\App\Services\Procurement\ProcurementAccess::class);$access->bind(77,'Dobavljač','contact@example.test',1);
         $this->login('supplier');
-        $this->get('/supplier/procurement')->assertOk()->assertSee($purchase['number'])->assertDontSee($other['number']);
+        $this->get('/supplier/procurement')->assertOk()->assertSee($purchase['number'])->assertDontSee($other['number'])
+            ->assertSee('main-menu-navigation')->assertSee('Moje narudžbenice')->assertSee('Neisporučene narudžbenice')
+            ->assertDontSee('href="http://localhost/app/procurement/materials"', false)
+            ->assertDontSee('href="http://localhost/app/procurement/settings"', false);
         $this->get('/supplier/procurement/'.$purchase['id'])->assertOk()->assertDontSee('RN-1')->assertDontSee('key-1')->assertDontSee('2.500000');
         $this->get('/supplier/procurement/'.$other['id'])->assertNotFound();
         $this->get('/app/procurement')->assertForbidden();$this->get('/app/orders')->assertForbidden();$this->get('/app/user/list')->assertForbidden();
@@ -354,6 +397,58 @@ class ProcurementTest extends TestCase
         $this->assertSame('synced',$synced['sync_status']);$this->assertSame('TEST-0205',$synced['pantheon_key']);$this->assertSame($adapter->keys[0],$adapter->keys[1]);
         $service->sync($purchase['id'],77);$this->assertCount(2,$adapter->keys);
         $this->expectException(InvalidArgumentException::class);$service->edit($purchase['id'],$this->payload(false),77);
+    }
+
+    public function test_full_http_workflow_from_creation_through_supplier_and_receiving(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $this->login();
+        $this->post('/app/procurement',$this->payload(false))->assertRedirect();
+        $purchase=$this->service->all()[0];$id=$purchase['id'];
+        app(\App\Services\Procurement\ProcurementAccess::class)->bind(77,'Dobavljač','contact@example.test',1);
+        $this->get('/app/procurement/'.$id)->assertOk()->assertSee($purchase['number']);
+        $this->get('/app/procurement/labels?orders[]='.$id)->assertOk()->assertSee($purchase['items'][0]['id']);
+        $this->login('supplier');
+        $this->post('/supplier/procurement/'.$id.'/event',['action'=>'confirm'])->assertRedirect();
+        $this->post('/supplier/procurement/'.$id.'/event',['action'=>'delay','line_id'=>$purchase['items'][0]['id'],
+            'expected_date'=>'2026-11-01','reason'=>'Test najava'])->assertRedirect();
+        $this->post('/supplier/procurement/'.$id.'/documents',['type'=>'certificate',
+            'file'=>\Illuminate\Http\UploadedFile::fake()->create('test-atest.pdf',10,'application/pdf')])->assertRedirect();
+        $this->assertNotEmpty($this->service->find($id)['supplier_confirmed_at']);
+        $this->login();
+        $receipt=$this->receivingPayload();
+        $this->get('/app/procurement/'.$id.'/receive-form?line='.$purchase['items'][0]['id'])->assertOk();
+        $this->post('/app/procurement/'.$id.'/receive',$receipt)->assertRedirect()->assertSessionHasNoErrors();
+        $this->post('/app/procurement/'.$id.'/receive',$receipt)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertCount(1,$this->service->find($id)['receipts']);
+        $receipt['submission']=(string)Str::uuid();$receipt['reference']='PR-FINAL';$receipt['quantities']=['6'];$receipt['rejected']=['0'];
+        $this->post('/app/procurement/'.$id.'/receive',$receipt)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('delivered',(new ProcurementCalculator())->deliveryStatus($this->service->find($id)));
+        $this->login('supplier');
+        $this->get('/supplier/procurement/'.$id)->assertOk()->assertSee('test-atest.pdf')->assertSee('10 KG')->assertDontSee('RN-1');
+        $this->get('/supplier/procurement?open=1')->assertOk()->assertDontSee($purchase['number']);
+    }
+
+    public function test_erp_receipt_failure_keeps_ledger_and_retry_uses_the_same_token(): void
+    {
+        $purchase=$this->service->create($this->payload(false),77);
+        $this->service->change($purchase['id'],function(&$row){$row['pantheon_key']='TEST-ORDER';});
+        $gateway=new class implements \App\Services\Procurement\ProcurementGateway, \App\Services\Procurement\ProcurementReceiptGateway {
+            public array $keys=[];
+            public function transfer(array $purchase,string $key):array{return [];}
+            public function receive(array $purchase,array $receipt,string $key):array {
+                $this->keys[]=$key;if(count($this->keys)===1)throw new \RuntimeException('Connection lost');
+                return ['confirmed'=>true,'key'=>'TEST-RECEIPT','number'=>'TEST-1005'];
+            }
+        };
+        $service=new ProcurementService($this->store,app(ProcurementSource::class),new ProcurementCalculator(),$gateway);
+        $data=$this->receivingPayload();
+        try{$service->receiveEvent($purchase['id'],$data,77);$this->fail('Unconfirmed receipt accepted.');}
+        catch(InvalidArgumentException $expected){$this->assertSame([],$service->find($purchase['id'])['receipts']);$this->assertSame('0.000000',$service->find($purchase['id'])['items'][0]['received']);}
+        $saved=$service->receiveEvent($purchase['id'],$data,77);
+        $service->receiveEvent($purchase['id'],$data,77);
+        $this->assertCount(2,$gateway->keys);$this->assertSame($gateway->keys[0],$gateway->keys[1]);
+        $this->assertSame('TEST-1005',$saved['receipts'][0]['pantheon_number']);
     }
 
     public function test_selection_persists_in_session_and_can_be_cleared(): void

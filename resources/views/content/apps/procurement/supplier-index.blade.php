@@ -1,4 +1,4 @@
-@extends('layouts/fullLayoutMaster')
+@extends('layouts/contentLayoutMaster')
 @section('title','Portal dobavljača')
 @section('content')
 <main class="container py-3"><div class="d-flex justify-content-between mb-2"><h2>Portal dobavljača</h2><form method="post" action="{{ route('auth.logout') }}">@csrf<button class="btn btn-outline-secondary">Odjava</button></form></div>

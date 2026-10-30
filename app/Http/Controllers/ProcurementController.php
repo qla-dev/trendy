@@ -38,6 +38,12 @@ class ProcurementController extends Controller
         $selected = $request->session()->get('procurement_selected', []);
         $filters['selected_ids'] = $selected;
         $rows = $this->source->requirements($filters, $this->service->progress());
+        foreach ($rows as $row) {
+            if (bccomp($row['remaining'], '0', 6) <= 0 || bccomp($row['required'], '0', 6) <= 0) {
+                $selected = array_values(array_diff($selected, [$row['id']]));
+            }
+        }
+        $request->session()->put('procurement_selected', $selected);
         return view('content.apps.procurement.materials', compact('rows', 'selected'));
     }
 
@@ -64,15 +70,22 @@ class ProcurementController extends Controller
             return redirect()->route('app-procurement-materials')->withErrors(['selected' => $exception->getMessage()]);
         }
         $progress = $this->service->progress();
+        $unavailable = [];
         foreach ($items as $id => $item) {
-            if (bccomp($item['required'],'0',6)<=0 || (bccomp($item['required'], $progress[$id]['ordered'] ?? '0', 6) <= 0 && !$request->session()->get('procurement_overorder_prepare'))) return redirect()->route('app-procurement-materials')->withErrors(['selected' => 'Odabrana potreba je već naručena ili nema potrebne količine. Dodatnu nabavku može pripremiti upravitelj uz izričito odobrenje prekoračenja.']);
+            if (bccomp($item['required'],'0',6)<=0 || (bccomp($item['required'], $progress[$id]['ordered'] ?? '0', 6) <= 0 && !$request->session()->get('procurement_overorder_prepare'))) {
+                $unavailable[$id] = $item['material'] . ' (' . $item['work_order'] . ')';
+            }
+        }
+        if ($unavailable) {
+            $request->session()->put('procurement_selected', array_values(array_diff($selected, array_keys($unavailable))));
+            return redirect()->route('app-procurement-materials')->withErrors(['selected' => 'Nema preostale količine za nabavku: ' . implode(', ', $unavailable) . '. Te stavke su uklonjene iz odabira.']);
         }
         $groups = [];
         foreach ($items as $id=>$item) {
             $key = $request->session()->get('procurement_combine') ? $this->service->compatibility($item) : $id;
             $quantity = bcsub($item['required'], $progress[$id]['ordered'] ?? '0', 6);
             if (bccomp($quantity,'0',6)<0) $quantity = '0.000000';
-            $groups[$key] ??= ['source'=>$item,'quantity'=>'0','price'=>'','vatRate'=>$item['vat_rate'],'discountRate'=>'0','deadline'=>$item['required_date'] ?? '', 'allocations'=>[]];
+            $groups[$key] ??= ['source'=>$item,'quantity'=>'0','price'=>$item['price'] ?? '','vatRate'=>$item['vat_rate'],'discountRate'=>'0','deadline'=>$item['required_date'] ?? '', 'allocations'=>[]];
             $groups[$key]['quantity'] = bcadd($groups[$key]['quantity'], $quantity, 6);
             $groups[$key]['allocations'][] = ['source'=>$item,'quantity'=>$quantity];
             if (!empty($item['required_date']) && (!$groups[$key]['deadline'] || $item['required_date'] < $groups[$key]['deadline'])) $groups[$key]['deadline'] = $item['required_date'];

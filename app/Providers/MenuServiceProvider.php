@@ -41,7 +41,13 @@ class MenuServiceProvider extends ServiceProvider
             static $aiTokenNavbarCountCache = [];
 
             $verticalMenuCopy = json_decode(json_encode($verticalMenuData));
-            if (Auth::check() && Auth::user()->getRole() === \App\Models\User::ROLE_SUPPLIER) $verticalMenuCopy->menu = [];
+            if (Auth::check() && Auth::user()->getRole() === \App\Models\User::ROLE_SUPPLIER) {
+                $verticalMenuCopy->menu = [
+                    (object) ['navheader' => 'Nabavka', 'slug' => 'supplier-navheader'],
+                    (object) ['name' => 'Moje narudžbenice', 'slug' => 'supplier.index', 'url' => 'supplier/procurement', 'icon' => 'shopping-cart'],
+                    (object) ['name' => 'Neisporučene narudžbenice', 'slug' => 'supplier-open', 'url' => 'supplier/procurement?open=1', 'icon' => 'truck'],
+                ];
+            }
             $customRole = Auth::check() ? app(CustomRoles::class)->find((string) Auth::user()->role) : null;
             if ($customRole !== null) {
                 $allowed = $customRole['slugs'] ?? [];
@@ -101,7 +107,7 @@ class MenuServiceProvider extends ServiceProvider
             }
 
             $view->with([
-                'menuData' => [$verticalMenuCopy, $horizontalMenuData],
+                'menuData' => [$verticalMenuCopy, Auth::check() && Auth::user()->getRole() === \App\Models\User::ROLE_SUPPLIER ? $verticalMenuCopy : $horizontalMenuData],
                 'aiTokenNavbarCount' => $aiTokenNavbarCount,
                 'aiTokenNavbarCountDisplay' => number_format($aiTokenNavbarCount, 0, ',', '.'),
             ]);

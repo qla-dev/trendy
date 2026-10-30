@@ -79,6 +79,8 @@
     form.querySelectorAll('[data-calculation-row]').forEach(row => {
       try {
         const value = field => row.querySelector('[data-field="' + field + '"]').value;
+        const singleAllocation = row.querySelector('[data-single-allocation]');
+        if (singleAllocation) singleAllocation.value = value('quantity');
         const allocations = row.querySelectorAll('[data-allocation]');
         if (allocations.length) {
           let quantity = 0n;

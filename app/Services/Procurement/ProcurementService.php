@@ -9,7 +9,7 @@ use InvalidArgumentException;
 
 class ProcurementService
 {
-    public const SYNC_BLOCKER = 'Nije potvrđeno Pantheon mapiranje nabavke sirovina i prijema. Lokalna nabavka je sačuvana.';
+    public const SYNC_BLOCKER = 'Nabavka je sačuvana lokalno. Prenesite narudžbenicu u Pantheon prije ERP prijema.';
 
     public function __construct(private ProcurementStore $store, private ProcurementSource $source, private ProcurementCalculator $calculator, private ?ProcurementGateway $gateway = null) {}
 
@@ -135,7 +135,7 @@ class ProcurementService
                 'supplier' => trim($data['supplier']), 'deadline' => $date, 'schema_version'=>2,
                 'currency' => config('workorders.catalog_product_defaults.purchase_currency', 'KM'),
                 'items' => $items, 'totals' => $this->calculator->totals($items), 'receipts' => [],
-                'cancelled_at' => null, 'sync_status' => 'blocked', 'sync_message' => self::SYNC_BLOCKER,
+                'cancelled_at' => null, 'sync_status' => 'pending', 'sync_message' => self::SYNC_BLOCKER,
                 'sync_attempts' => 0, 'pantheon_key' => null, 'pantheon_number' => null,
                 'header'=>$this->header($data), 'documents'=>[], 'complaints'=>[], 'communication'=>[],
                 'audit'=>[['action'=>'created','user_id'=>$userId,'at'=>$this->now()]],
@@ -230,7 +230,8 @@ class ProcurementService
             $purchase['sync_attempted_at'] = $this->now();
             try {
                 $purchase['sync_status'] = 'pending';
-                $confirmation = ($this->gateway ?? new UnconfiguredPantheonProcurementGateway())->transfer($purchase, 'enalog-procurement-' . $purchase['id']);
+                if ($purchase['receipts']) throw new \LogicException('Postoje lokalni prijemi prije ERP prijenosa. Potrebno je uskladiti ih prije kreiranja ERP narudžbenice.');
+                $confirmation = ($this->gateway ?? app(ProcurementGateway::class))->transfer($purchase + ['erp_actor_id'=>$userId], 'enalog-procurement-' . $purchase['id']);
                 if (($confirmation['confirmed'] ?? false) !== true || empty($confirmation['key']) || empty($confirmation['number'])) throw new \RuntimeException('ERP nije potvrdio dokument.');
                 $purchase['pantheon_key'] = $confirmation['key'];
                 $purchase['pantheon_number'] = $confirmation['number'];
@@ -289,6 +290,24 @@ class ProcurementService
             if (!$hasQuantity) throw new InvalidArgumentException('Unesite primljenu ili odbijenu količinu.');
             $event = ['id'=>(string) Str::uuid(),'submission'=>$data['submission'],'reference'=>$data['reference'],'user_id'=>$userId,'at'=>$this->now(),
                 'received_date'=>$date,'warehouse'=>$data['warehouse'],'notes'=>$data['notes'] ?? '', 'accepted'=>$accepted,'rejected'=>$rejected,'quantities'=>array_column($purchase['items'], 'received')];
+            if (!empty($purchase['pantheon_key'])) {
+                $gateway = $this->gateway ?? app(ProcurementGateway::class);
+                if (!$gateway instanceof ProcurementReceiptGateway) throw new InvalidArgumentException('ERP adapter ne podržava prijem.');
+                try {
+                    $confirmation = $gateway->receive($purchase, $event, 'enalog-receipt-' . $data['submission']);
+                } catch (\Throwable $exception) {
+                    Log::warning('Procurement ERP receipt failed.', ['purchase_id'=>$purchase['id'],'user_id'=>$userId,'error'=>$exception->getMessage()]);
+                    throw new InvalidArgumentException('Pantheon nije potvrdio prijem. Podaci nisu lokalno evidentirani. Ponovite isti obrazac; ako je ERP već prihvatio prijem, postojeći dokument će biti prepoznat bez dupliranja.');
+                }
+                if (($confirmation['confirmed'] ?? false) !== true || (empty($confirmation['key']) && empty($confirmation['rejected_only']))) {
+                    throw new InvalidArgumentException('ERP nije potvrdio prijem. Lokalni prijem nije sačuvan.');
+                }
+                $event['pantheon_key'] = $confirmation['key'];
+                $event['pantheon_number'] = $confirmation['number'];
+                $event['sync_status'] = 'synced';
+            } else {
+                $event['sync_status'] = 'local';
+            }
             $purchase['receipts'][] = $event;
             $purchase['audit'][] = ['action'=>'received','user_id'=>$userId,'at'=>$this->now(),'event_id'=>$event['id'],'accepted'=>$accepted,'rejected'=>$rejected];
         });

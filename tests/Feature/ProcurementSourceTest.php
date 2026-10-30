@@ -21,7 +21,7 @@ class ProcurementSourceTest extends TestCase
         $db = DB::connection('procurement_fixture');
         $db->statement('CREATE TABLE tHF_WOEx (acKey TEXT, acKeyView TEXT, acLnkKey TEXT, anLnkNo INTEGER, acStatusMF TEXT, adSchedStartTime TEXT)');
         $db->statement('CREATE TABLE tHF_WOExItem (acKey TEXT, anQId INTEGER, anNo INTEGER, anVariant INTEGER, acIdent TEXT, acDescr TEXT, acNote TEXT, acUM TEXT, acOperationType TEXT, anQty1 TEXT, anQty TEXT, anPlanQty TEXT)');
-        $db->statement('CREATE TABLE tHE_SetItem (acIdent TEXT, acName TEXT, acSetOfItem TEXT, anVAT TEXT, acSupplier TEXT)');
+        $db->statement('CREATE TABLE tHE_SetItem (acIdent TEXT, acName TEXT, acSetOfItem TEXT, anVAT TEXT, acSupplier TEXT, acUM TEXT, acCurrency TEXT, anPriceSupp TEXT, anPrice TEXT, anBuyPrice TEXT)');
         $db->statement('CREATE TABLE tHF_LinkWOExOrderItem (acKey TEXT, acLnkKey TEXT, acLnkKeyView TEXT, anLnkNo INTEGER)');
         $db->statement('CREATE TABLE tHE_SetSubj (acSubject TEXT)');
         $db->table('tHF_WOEx')->insert([
@@ -89,6 +89,25 @@ class ProcurementSourceTest extends TestCase
         DB::connection('procurement_fixture')->table('tHF_WOEx')->where('acKey', 'WO1')->update(['acStatusMF'=>'Z']);
         $this->expectException(InvalidArgumentException::class);
         $this->source->selected([$rows[0]['id']]);
+    }
+
+    public function test_price_is_suggested_from_catalog_with_currency_unit_and_purchase_price_fallback(): void
+    {
+        $db=DB::connection('procurement_fixture');
+        $catalog=$db->table('tHE_SetItem')->where('acIdent','STEEL');
+        $catalog->update(['acUM'=>'KG','acCurrency'=>'KM','anPriceSupp'=>'2.4500000000000002','anPrice'=>'3','anBuyPrice'=>'4']);
+        $row=$this->source->materials('STEEL','position','asc','KG')[0];
+        $this->assertSame('2.450000',$row['price']);
+        $this->assertSame('2.450000',$this->source->selected([$row['id']])[$row['id']]['price']);
+        $this->assertSame('', $this->source->materials('STEEL','position','asc','KOM')[0]['price']);
+        $catalog->update(['anPriceSupp'=>null]);
+        $this->assertSame('3.000000',$this->source->materials('STEEL','position','asc','KG')[0]['price']);
+        $catalog->update(['anPrice'=>'0','anBuyPrice'=>'1.88161715319039']);
+        $this->assertSame('1.881617',$this->source->materials('STEEL','position','asc','KG')[0]['price']);
+        $catalog->update(['acCurrency'=>'EUR']);
+        $this->assertSame('',$this->source->materials('STEEL','position','asc','KG')[0]['price']);
+        $catalog->update(['acCurrency'=>'KM','anBuyPrice'=>null]);
+        $this->assertSame('',$this->source->materials('STEEL','position','asc','KG')[0]['price']);
     }
 
     public function test_malformed_source_identifier_is_rejected(): void

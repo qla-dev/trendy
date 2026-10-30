@@ -48,7 +48,7 @@ class ProcurementSource
         foreach (array_unique(['acKeyView','acRefNo1','acLnkKey','acLnkKeyView','anLnkNo','acStatusMF', config('procurement.schedule_field', 'adSchedStartTime')]) as $column) {
             if (in_array($column, $this->columns($headers), true)) $query->addSelect('w.' . $column . ' as header_' . $column);
         }
-        foreach (['acSetOfItem','anVAT','acSupplier','acName'] as $column) {
+        foreach (['acSetOfItem','anVAT','acSupplier','acName','acUM','acCurrency','anPriceSupp','anPrice','anBuyPrice'] as $column) {
             if (in_array($column, $this->columns($catalog), true)) $query->addSelect('c.' . $column . ' as catalog_' . $column);
         }
         // Same precedence as WorkOrderController::resolveItemKindForPreview.
@@ -126,9 +126,26 @@ class ProcurementSource
             'dimensions' => $note, 'required' => $quantity, 'unit' => trim((string) ($row['acUM'] ?? '')),
             'vat_rate' => (string) ($row['catalog_anVAT'] ?? config('workorders.catalog_product_defaults.vat_rate', 17)),
             'supplier' => trim((string) ($row['catalog_acSupplier'] ?? '')),
+            'price' => $this->suggestedPrice($row),
             'required_date' => $requiredDate,
             'links' => $this->links($row),
         ];
+    }
+
+    private function suggestedPrice(array $row): string
+    {
+        $unit = strtoupper(trim((string) ($row['acUM'] ?? '')));
+        $currency = strtoupper((string) config('workorders.catalog_product_defaults.purchase_currency', 'KM'));
+        if ($unit === '' || $unit !== strtoupper(trim((string) ($row['catalog_acUM'] ?? '')))
+            || $currency !== strtoupper(trim((string) ($row['catalog_acCurrency'] ?? '')))) return '';
+        foreach (['anPriceSupp','anPrice','anBuyPrice'] as $field) {
+            $raw = $row['catalog_' . $field] ?? null;
+            if (!is_numeric($raw)) continue;
+            $price = WorkOrderClosingCalculator::decimal($raw);
+            if (bccomp($price, '0', 12) <= 0 || bccomp($price, '999999999999.999999', 12) > 0) continue;
+            return bcadd($price, '0.0000005', 6);
+        }
+        return '';
     }
 
     public function requirements(array $filters, array $progress = []): LengthAwarePaginator

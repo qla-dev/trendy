@@ -253,14 +253,16 @@
             data-bs-toggle="tooltip" data-bs-placement="bottom" title="Dashboard"><i class="ficon"
               data-feather="home"></i></a></li>
       @endif
-      @if (!(Auth::check() && Auth::user()->hasRegularUserJurisdiction()))
+      @if (!(Auth::check() && (Auth::user()->hasRegularUserJurisdiction() || Auth::user()->hasRole(\App\Models\User::ROLE_SUPPLIER))))
         <li class="nav-item d-none d-md-block"><a class="nav-link" href="{{ url('app/calendar') }}"
             data-bs-toggle="tooltip" data-bs-placement="bottom" title="Kalendar"><i class="ficon"
               data-feather="calendar"></i></a></li>
       @endif
+      @if (!Auth::check() || !Auth::user()->hasRole(\App\Models\User::ROLE_SUPPLIER))
       <li class="nav-item d-none d-md-block"><a class="nav-link" href="{{ url('app/invoice/preview') }}"
           data-bs-toggle="tooltip" data-bs-placement="bottom" title="Skeniraj nalog"><i class="ficon"
             data-feather="camera"></i></a></li>
+      @endif
     </ul>
   </div>
   <ul class="nav navbar-nav align-items-center ms-auto">
@@ -291,7 +293,7 @@
     @endif
     <li class="nav-item d-none d-md-block"><a class="nav-link nav-link-style"><i class="ficon"
           data-feather="{{ $configData['theme'] === 'dark' ? 'sun' : 'moon' }}"></i></a></li>
-    @if (!(Auth::check() && Auth::user()->hasRegularUserJurisdiction()))
+    @if (!(Auth::check() && (Auth::user()->hasRegularUserJurisdiction() || Auth::user()->hasRole(\App\Models\User::ROLE_SUPPLIER))))
       <li class="nav-item nav-search"><a class="nav-link nav-link-search"><i class="ficon"
           data-feather="search"></i></a>
       <div class="search-input">

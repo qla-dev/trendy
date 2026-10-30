@@ -1,4 +1,4 @@
-@extends('layouts/fullLayoutMaster')
+@extends('layouts/contentLayoutMaster')
 @section('title','Narudžbenica dobavljača')
 @section('content')
 @php($fmt = \App\Services\Procurement\ProcurementFormat::class)
