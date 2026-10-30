@@ -155,6 +155,7 @@
     "/js/scripts/pages/page-pricing.js": "/js/scripts/pages/page-pricing.js",
     "/js/scripts/pages/page-profile.js": "/js/scripts/pages/page-profile.js",
     "/js/scripts/pages/procurement-labels.js": "/js/scripts/pages/procurement-labels.js",
+    "/js/scripts/pages/procurement-ordering.js": "/js/scripts/pages/procurement-ordering.js",
     "/js/scripts/pages/procurement.js": "/js/scripts/pages/procurement.js",
     "/js/scripts/pagination/components-pagination.js": "/js/scripts/pagination/components-pagination.js",
     "/js/scripts/tables/table-datatables-advanced.js": "/js/scripts/tables/table-datatables-advanced.js",

@@ -203,7 +203,7 @@ class PantheonProcurementGateway implements ProcurementGateway, ProcurementRecei
         return ['acIdent'=>trim($catalog->acIdent),'acName'=>$catalog->acName,'anIdentQId'=>$catalog->anQId,
                 'acUM'=>$line['unit'],'acUMConverted'=>$line['unit'],'anQty'=>$line['quantity'],'anQtyConverted'=>$line['quantity'],
             'anPrice'=>$line['price'],'anPriceCurrency'=>$line['price'],'anRebate'=>$line['discountRate'],'anRebate1'=>$line['discountRate'],
-            'acVATCode'=>trim($catalog->acVATCode),'anVAT'=>$line['vatRate'],'acNote'=>$line['source']['dimensions'],
+            'acVATCode'=>trim($catalog->acVATCode),'anVAT'=>$line['vatRate'],'acNote'=>$line['ordered_dimensions'] ?? $line['source']['dimensions'],
         ];
     }
 
@@ -234,7 +234,7 @@ class PantheonProcurementGateway implements ProcurementGateway, ProcurementRecei
             $expected = $purchase['items'][$index];
             if ((int)$line->anNo!==$index+1 || trim($line->acIdent)!==$expected['source']['material'] || trim($line->acUM)!==$expected['unit']
                 || bccomp((string)$line->anQty,$expected['quantity'],6)!==0 || substr((string)$line->adDeliveryDeadline,0,10)!==$expected['deadline']
-                || trim((string)$line->acNote)!==trim($expected['source']['dimensions']) || abs((float)$line->anPrice-(float)$expected['price'])>0.000001
+                || trim((string)$line->acNote)!==trim($expected['ordered_dimensions'] ?? $expected['source']['dimensions']) || abs((float)$line->anPrice-(float)$expected['price'])>0.000001
                 || abs((float)$line->anVAT-(float)$expected['vatRate'])>0.000001 || abs((float)$line->anRebate-(float)$expected['discountRate'])>0.000001) {
                 throw new RuntimeException('ERP stavka je izmijenjena; potrebna je provjera.');
             }

@@ -10,5 +10,6 @@ return [
     'receipt_document_type' => '1005',
     'warehouse' => 'Skladište sirovina',
     'fallback_pantheon_user_id' => 57,
-    'labels' => ['columns'=>3, 'rows'=>8, 'width'=>63.5, 'height'=>33.9, 'gap_x'=>2.5, 'gap_y'=>0, 'margin_x'=>7.25, 'margin_y'=>12.9, 'offset_x'=>0, 'offset_y'=>0],
+    // Word template: prazno - naljepnice za skladiste.docx (5952 × 3231 twips per cell).
+    'labels' => ['columns'=>2, 'rows'=>5, 'width'=>104.9867, 'height'=>56.9912, 'gap_x'=>0, 'gap_y'=>0, 'margin_x'=>0.0133, 'margin_y'=>6.014, 'offset_x'=>0, 'offset_y'=>0],
 ];

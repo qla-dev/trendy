@@ -142,4 +142,76 @@ class ProcurementSourceTest extends TestCase
         DB::connection('procurement_fixture')->table('tHF_WOExItem')->where('anQId',101)->update(['acNote'=>'REZERVACIJAXDODATNIHYSIROVINA']);
         $this->assertSame(3,$this->source->requirements([])->total());
     }
+    public function test_empty_primary_note_uses_work_order_fallback_and_raw_stock_is_warehouse_specific(): void
+    {
+        $row=$this->source->map(['acKey'=>'WO1','anNo'=>1,'acIdent'=>'STEEL','acNote'=>' ','acFieldSE'=>'PLANNED_BOM|40x25x40','header_anPlanQty'=>'20']);
+        $this->assertSame('40x25x40',$row['dimensions']);$this->assertSame('20',$row['pieces']);
+        $db=DB::connection('procurement_fixture');
+        $db->statement('CREATE TABLE tHE_Stock (acIdent TEXT, acWarehouse TEXT, anStock TEXT)');
+        $db->table('tHE_Stock')->insert([['acIdent'=>'STEEL','acWarehouse'=>'Skladište sirovina','anStock'=>'12.5'],['acIdent'=>'STEEL','acWarehouse'=>'Other','anStock'=>'100']]);
+        $this->assertSame(['STEEL'=>'12.5'],$this->source->stock(['STEEL']));
+        $catalog=$this->source->catalog('STEEL',true);
+        $this->assertCount(1,$catalog);$this->assertTrue($catalog[0]['stock_order']);
+        $this->assertSame($catalog[0],$this->source->selected([$catalog[0]['id']])[$catalog[0]['id']]);
+    }
+
+    public function test_release_history_uses_linked_bom_rows_and_actual_issue_documents(): void
+    {
+        $db=DB::connection('procurement_fixture');
+        $db->statement('CREATE TABLE tHE_Move (acKey TEXT, adDate TEXT, acDocType TEXT)');
+        $db->statement('CREATE TABLE tHE_MoveItem (acKey TEXT, anNo INTEGER, acIdent TEXT, anQty TEXT, acUM TEXT)');
+        $db->statement('CREATE TABLE tHF_LinkMoveItemWOExItem (acKey TEXT, anNo INTEGER, anWOExItemQid INTEGER)');
+        foreach ([['ISSUE','2026-10-25','6400',101],['OLD','2026-10-01','6400',101],['RECEIPT','2026-10-25','1005',101],['OTHER','2026-10-25','6400',102]] as [$key,$date,$type,$qid]) {
+            $db->table('tHE_Move')->insert(['acKey'=>$key,'adDate'=>$date,'acDocType'=>$type]);
+            $db->table('tHE_MoveItem')->insert(['acKey'=>$key,'anNo'=>1,'acIdent'=>'STEEL','anQty'=>'2','acUM'=>'KG']);
+            $db->table('tHF_LinkMoveItemWOExItem')->insert(['acKey'=>$key,'anNo'=>1,'anWOExItemQid'=>$qid]);
+        }
+        $source=$this->source->materials('STEEL','position','asc','KG')[0];
+        $events=$this->source->releases(['created_at'=>'2026-10-20T12:00:00','items'=>[['source'=>$source]]]);
+        $this->assertSame(['ISSUE'],array_column($events,'acKey'));
+        $this->assertSame('2',$events[0]['anQty']);
+        $source['stock_order']=true;
+        $this->assertSame([],$this->source->releases(['created_at'=>'2026-10-20','items'=>[['source'=>$source]]]));
+    }
+
+    public function test_creation_date_range_is_independent_of_required_receipt_range(): void
+    {
+        $db=DB::connection('procurement_fixture');
+        $db->statement('ALTER TABLE tHF_WOEx ADD COLUMN adDate TEXT');
+        $db->table('tHF_WOEx')->where('acKey','WO1')->update(['adDate'=>'2026-10-20 23:55:00']);
+        $this->assertSame(3,$this->source->requirements(['created_from'=>'2026-10-20','created_to'=>'2026-10-20'])->total());
+        $this->assertSame(0,$this->source->requirements(['created_from'=>'2026-10-21'])->total());
+        $this->assertSame(0,$this->source->requirements(['created_to'=>'2026-10-19'])->total());
+        $this->assertSame(3,$this->source->requirements(['created_from'=>'2026-10-20','from'=>'2026-10-27','to'=>'2026-10-27'])->total());
+        $this->assertSame(0,$this->source->requirements(['created_from'=>'2026-10-20','from'=>'2026-10-28'])->total());
+    }
+
+    public function test_material_page_lengths_preserve_filters_and_all_requirements_for_ordering(): void
+    {
+        $db=DB::connection('procurement_fixture');
+        for($i=0;$i<52;$i++)$db->table('tHF_WOExItem')->insert(['acKey'=>'WO1','anQId'=>1000+$i,'anNo'=>20+$i,'anVariant'=>0,'acIdent'=>'STEEL','acDescr'=>'STEEL','acNote'=>'20x30x40','acUM'=>'KG','acOperationType'=>'M','anQty1'=>'1']);
+        foreach([10,25,50,100] as $length){
+            $rows=$this->source->requirements(['per_page'=>$length]);
+            $this->assertSame($length,$rows->perPage());$this->assertCount(min(55,$length),$rows->items());$this->assertSame(55,$rows->total());
+        }
+        $first=$this->source->requirements(['per_page'=>10,'page'=>1,'sort'=>'position','direction'=>'asc']);
+        $second=$this->source->requirements(['per_page'=>10,'page'=>2,'sort'=>'position','direction'=>'asc']);
+        $this->assertSame([],array_values(array_intersect(array_column($first->items(),'id'),array_column($second->items(),'id'))));
+        $this->assertSame(54,$this->source->requirements(['per_page'=>25,'unit'=>'KG'])->total());
+        $this->assertCount(55,$this->source->requirements(['per_page'=>10,'_all'=>true])->items());
+    }
+
+    public function test_supplier_details_use_actual_jib_vat_and_postal_catalog_fields(): void
+    {
+        $db=DB::connection('procurement_fixture');
+        foreach(['acName2','acAddress','acPost','acCountry','acCode','acJIBCode','acRegNo','acPhone'] as $column)$db->statement('ALTER TABLE tHE_SetSubj ADD COLUMN '.$column.' TEXT');
+        $db->statement('CREATE TABLE tHE_SetPostCode (acPost TEXT, acName TEXT)');
+        $db->table('tHE_SetPostCode')->insert(['acPost'=>'BA-74203','acName'=>'Doboj Jug']);
+        $db->table('tHE_SetSubj')->where('acSubject','Supplier')->update(['acAddress'=>'Sarajevska 17','acPost'=>'BA-74203','acCode'=>'218466780006','acJIBCode'=>'4218466780006','acRegNo'=>'Reg-42']);
+        $details=$this->source->supplierDetails('Supplier');
+        $this->assertSame('4218466780006',$details['jib']);$this->assertSame('218466780006',$details['vat']);
+        $this->assertSame('BA-74203 Doboj Jug',$details['postal_line']);$this->assertSame('Reg-42',$details['registration']);
+        $this->assertSame([],$this->source->supplierDetails('Unknown'));
+    }
+
 }

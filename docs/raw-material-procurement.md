@@ -149,3 +149,59 @@ Sortiranje, uključivanje ranijih nezaključenih RN-ova i statusni filteri ostaj
 - Raspodjela jedne potrebe je skrivena, a količina uređiva direktno u tabeli. Interna veza s izvorom ostaje sačuvana. Uklonjen je tekst uputstva o raspodjeli ispod tabele.
 - Pregled i kreiranje nabavke još polaze iz potreba RN-a. Učitavanje postojećih Pantheon 020S/1005 dokumenata, samostalno dodavanje artikala bez RN-a i stavka transporta nisu implementirani.
 - Lokalna Sanctum ispravka uključuje localhost:8000 u dozvoljene sesijske domene.
+
+
+## Dopuna 30.10.2026. — tabelarno naručivanje, štampa i QR dolazak
+
+- Lista potreba koristi jedno dugme **Naruči materijal**, bez checkboxa po redovima. Datum potrebanog prijema Od/Do stalno je vidljiv; postojeća serverska provjera raspona i filtriranje ostaju aktivni. Umjesto akcija prikazuje se stanje u konfiguriranom skladištu sirovina, grupisano po materijalu.
+- Novi modal koristi postojeći Bootstrap/Select2 izgled. Novi redovi dodaju se na vrh. Materijal se traži u ERP katalogu; RN-ovi nude samo preostale potrebe istog materijala, jedinice i poreznog profila. Moguće je naručiti za skladište bez RN-a i isti materijal u više dimenzija.
+- Napomena slijedi prioritet RN-a: prvi neprazan acNote/acFieldSE, bez PLANNED prefiksa. Za jasan zapis tri dimenzije i poznatu planiranu količinu RN-a prikazuje se ukupna preostala dužina po presjeku. Nepoznat broj komada se ne izmišlja. Dimenzije za dobavljača, broj komada i ERP količina su zasebni podaci; RN izvor i njegove raspodjele ostaju sačuvani. Dodatna nabavna količina predstavlja zalihu iznad raspodijeljene potrebe, ne povećava naručenu potrebu RN-a.
+- Štampa narudžbenice koristi Trendy logo, dobavljača, datum, rok, status, dimenzije, komade, količine i finansijske sume. QR vodi na listu naručenih sirovina filtriranu po narudžbenici. Opcija QR artikala pravi zasebnu A4 stranicu za svaku stavku sa stabilnim QR identitetom, brojem narudžbe, datumom narudžbe i stvarnim datumima prijema (ili Čeka prijem).
+- Korisnik je potvrdio postojeći A4 raspored naljepnica. Raspored, margine, pomaci i zauzeta mjesta ostaju podesivi i sačuvani. QR je uz tekst sa datumima i brojem; štampa čeka uspješno učitavanje svih QR slika. Ako etikete ne stanu na jedan papir, broj preostalih je vidljiv; nakon potvrđene štampe odštampane etikete se isključuju iz narednog papira.
+- Stavka Prijem sirovina uklonjena je iz navigacije, a narudžbenice prikazuju U transportu / Materijal stigao. Novi QR otvara prijavljenom ovlaštenom korisniku stranicu koja automatski šalje CSRF-zaštićen POST za dolazak. GET ne knjiži. QR stavke prima samo tu stavku, QR narudžbenice sve preostale stavke. Ponovni scan ne duplira prijem. Prije dolaska traži se stvarna ERP potvrda narudžbenice; neuspješan ERP prijem ne označava materijal stiglim. Stare rute za detaljni/djelimični prijem ostaju radi kompatibilnosti.
+- Tok materijala prikazuje kreiranje, stvarne prijeme i ERP 6400 razduženja vezana na izvorne RN sastavnice. Postojeća ERP zaliha nije evidencija fizičkih lotova: povezan RN dokument se ne predstavlja kao dokaz da je baš taj fizički komad utrošen. Narudžbe za skladište bez RN-a nemaju izmišljena razduženja.
+- Nema migracija, novih zavisnosti ili promjena deployment postupka. Produkcijski redeploy i živa knjiženja nisu izvršeni. Lokalni browser QA koristi izolovane fixture podatke, sa provjerom svijetle/tamne teme, proširenih dropdowna, tastature, redova, 390px prikaza i jedne A4 stranice po ispisu uzorka.
+
+Završna provjera ove dopune: 75 PHP testova / 448 provjera prolazi; tri Node provjere (finansije, A4 raspored, dužine) prolaze. Production build prolazi sa četiri postojeća webpack upozorenja. Browser QA nad izgrađenim JS datotekama nema pageerror događaja. Stvarni izvor je provjeren samo čitanjem: 461 potreba, 288 sa napomenom/dimenzijama, 460 sa planiranim brojem komada i stanje za 165 materijala; upit stvarnih RN razduženja je izvršiv. Fizička štampa i produkcijsko knjiženje nisu izvršeni.
+
+
+### Dorada 30.10.2026. — stabilan modal i odabir po presjeku
+
+Filteri Kreiranje RN od/do koriste isti izvor kao datum RN-a (adDate, zatim adDateIns/adTimeIns kada prethodna kolona nije dostupna), ne datum planiranog prijema. Oba raspona mogu se kombinovati.
+
+Modal je centriran i kompaktan. Desna sticky kolona Akcije sadrži postojeći stil ikonica za dodavanje i brisanje. Količina i JM su u jednoj flex grupi; stanje skladišta i pripadajuća JM ne prelamaju se. Izbor RN-ova je pretraživa lista sa checkboxima u overlayu fiksnog položaja i dugmetom Završi odabir. Klik izvan liste/Escape završava odabir bez zatvaranja modala. Dok se bira, tabela i visina modala se ne mijenjaju. Nakon završetka, RN-ovi se dijele prema prve dvije dimenzije, jedinici i poreznom profilu, svaki presjek u svoj red. Ponovno otvaranje liste bez izmjene izbora čuva ručno unesene dimenzije i količine.
+
+Pretraga kataloga šalje catalog_only=1: ne učitava ponovo sve RN potrebe niti ledger/progress. Početni podaci i ponovljene pretrage se čuvaju tokom otvorene stranice; prethodni zahtjev se prekida pri novom upitu. Katalog ne traži veze fiktivnog RN-a catalog.
+
+PDF čita narudžbenicu po njenom ID-u iz sačuvane evidencije. Količine, komadi i cijene zadržavaju do šest sačuvanih decimala; finansijske sume su preuzete iz sačuvane narudžbenice. Provjera je uključila stvarnu lokalnu NS-000002 (3 stavke, 7,32 KM), bez izmjene narudžbe. Raniji primjer PDF-a bio je testni fixture. QR identitet nastaje čuvanjem narudžbenice/stavke, a SVG slika se renderuje otvaranjem ispisa ili naljepnica preko QRServer-a. Sadržaj je URL, ne kopija promjenjivih datuma: glavni ispis vodi na filtriranu listu, naljepnice na /scan uz UUID narudžbenice i opcioni UUID stavke.
+
+Provjera dorade: 78 PHP testova / 465 provjera prolazi; Node testovi potvrđuju grupisanje presjeka i dužine, finansije i A4 geometriju. Production build uspijeva (četiri postojeća upozorenja). Browser provjera izgrađenih datoteka potvrđuje centriranje, nepromjenjivu visinu tokom checkbox odabira, razdvajanje presjeka nakon završetka, očuvanje ručnih izmjena kada izbor nije promijenjen, ikonice akcija, JM uz količinu, tamnu temu i 390px prikaz. PDF stvarne NS-000002 je renderovan na jednu A4 stranicu i sadrži njen broj i sačuvani ukupan iznos. Nije bilo redeploya, migracija ili upisa u ERP.
+
+
+### Filter paneli, početni red i brisanje lokalnih narudžbenica
+
+Na ekranima Materijali za nabavku i Nabavke sirovina pretraga i sva filter polja nalaze se unutar panela Pokaži filtere. Primijeni filtere šalje cijeli obrazac; unos i promjena pojedinačnih polja ne osvježavaju listu automatski. Položaj naslova, prikaza/skrivanja i čišćenja prati ostale filter kartice aplikacije.
+
+Modal odmah otvara jedan prazan red, i tokom učitavanja opcija. Plus je uklonjen iz zaglavlja Akcije; ikonice za dodavanje i brisanje ostaju na redovima. Nakon brisanja posljednjeg reda ostaje novi prazan red.
+
+Na listi nabavki kolona Akcije sadrži pregled i brisanje. Brisanje traži manage ovlaštenje i potvrdu, te je blokirano nakon prijema, pozitivno evidentirane primljene količine ili pokušaja ERP prijenosa. Server provjerava ista pravila kao UI. Lokalno brisanje zadržava privatni audit zapis/tombstone, uklanja narudžbenicu iz prikaza i obračuna, oslobađa vezane potrebe i onemogućava stare QR/link pristupe. Brojevi se ne koriste ponovo. Nema ERP brisanja, migracija ni brisanja stvarnih narudžbenica tokom implementacije; testovi koriste izolovanu evidenciju.
+
+
+### Bosanski datumi i desno poravnanje Akcija
+
+Datumska polja nabavke (filteri RN/prijema i nabavki, modal naručivanja, izmjena narudžbenice, prijem i najava dobavljača) koriste zajednički Flatpickr sa istim bosanskim mjesecima i danima kao postojeći ekrani naloga/dokumenata. Prikaz i ručni unos su dd.mm.gggg; imenovano skriveno polje i dalje šalje YYYY-MM-DD postojećoj serverskoj validaciji. Sedmica počinje ponedjeljkom, a akcije su Danas/Obriši. Mobilni pregled koristi isti lokalizovani kalendar. U modalu se kalendar nalazi unutar modalnog sadržaja, iznad tabele i uz pomjeranje u granicama ekrana; Escape zatvara kalendar uz očuvan modal. Filteri se i dalje primjenjuju izričitim dugmetom.
+
+Zaglavlje i ikonice kolone Akcije u modalu su desno poravnati; isto važi za Akcije na listi nabavki. Nove zavisnosti, migracije, živi poslovni upisi i redeploy nisu korišteni.
+
+
+### Pojednostavljen detalj, Word naljepnice i podaci dobavljača
+
+Iz detalja su uklonjeni prikazi Tok materijala, Historija prijema, Dokumenti i atesti, Reklamacije te Obavijesti dobavljača i historija promjena. Postojeća evidencija i serverski prijem/QR provjere ostaju sačuvani; detalj više ne učitava ERP upit razduženja samo radi uklonjenog prikaza.
+
+Originalni predložak je pronađen: C:/Users/DT User/Downloads/prazno - naljepnice za skladiste.docx. XML potvrđuje 2 kolone širine 5952 twips i 5 redova visine 3231 twips. Raspored koristi približno 104,9867 × 56,9912 mm po ćeliji, s tabelom centriranom na A4 i početkom oko 6 mm od vrha. Naziv i dimenzije su iznad QR-a, šifra ispod, uz broj narudžbenice i stvarne datume. Štampaju se naljepnice stavki; uklonjena je dodatna narudžbena naljepnica. Nema širokog izbora geometrije, naljepnica i zauzetih mjesta. Stari lokalno sačuvani raspored 3×8 se ne primjenjuje. Sve naljepnice se raspoređuju automatski na potreban broj A4 stranica; neuspješno učitavanje QR slike blokira štampu.
+
+Dugme Etikete označenih nabavki prikazuje broj označenih, aktivno je za 1–20 nabavki i šalje njihove UUID-eve kao orders[]. Dostupan je izbor do 20 nabavki na stranici. Prazan zahtjev vraća razumljivu poruku na listu umjesto sirove validacije Polje orders je obavezno.
+
+PDF dobavljača koristi potvrđena Pantheon polja: acJIBCode za JIB, acCode za PDV, acAddress, acPost i tHE_SetPostCode.acName za poštansko mjesto, uz dostupni puni naziv, državu, reg. broj i telefon. Prazni podaci se ne izmišljaju. Stvarna provjera samo čitanjem potvrđuje JIB 4218466780006 i PDV 218466780006 za EURO-METALI; EURO KARTON u trenutnom ERP izvoru nema popunjene identifikatore i adresu. Uklonjen je vidljivi tekst Naručene sirovine ispod glavnog QR-a; URL/identitet QR-a ostaje isti.
+
+Provjere: 85 PHP testova / 540 provjera, tri Node provjere i production build prolaze (četiri postojeća webpack upozorenja). Browser provjerava uklonjene sekcije, slanje stvarno označenih UUID-eva, automatske 2×5 stranice, centriranje i blokadu štampe bez učitanog QR-a. Renderovani PDF-ovi stvarne lokalne NS-000003, podatkovnog primjera dobavljača i 23 naljepnice na tri stranice vizuelno su pregledani preko Popplera. Živi poslovni podaci nisu mijenjani; nema migracija niti redeploya.

@@ -43,6 +43,10 @@ class ProcurementTest extends TestCase
             return $rows;
         });
         $source->shouldReceive('suppliers')->andReturn(['Dobavljač']);
+        $source->shouldReceive('supplierDetails')->andReturn(['name'=>'Dobavljač','jib'=>'4218466780006','vat'=>'218466780006','address'=>'Sarajevska 17','postal_line'=>'74203 Doboj Jug','country'=>'Bosna i Hercegovina','phone'=>'+387 32 123 456']);
+        $source->shouldReceive('stock')->andReturn(['STEEL'=>'24.500000']);
+        $source->shouldReceive('catalog')->andReturn([]);
+        $source->shouldReceive('releases')->andReturn([]);
         $source->shouldReceive('warehouses')->andReturn(['Sirovine']);
         $source->shouldReceive('validWarehouse')->andReturnUsing(fn($name)=>$name==='Sirovine');
         $this->app->instance(ProcurementStore::class, $this->store);
@@ -265,9 +269,9 @@ class ProcurementTest extends TestCase
         $row=$this->sources['source-a']+['required_date'=>'2026-10-27','ordered'=>'10','received'=>'0','remaining'=>'0','missing'=>'10','purchases'=>[],'suppliers'=>[],'late'=>false,'state'=>'ordered'];
         app(ProcurementSource::class)->shouldReceive('requirements')->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([$row]),1,40));
         $response=$this->withSession(['procurement_selected'=>['source-a','source-b']])->get('/app/procurement/materials');
-        $response->assertOk()->assertSessionHas('procurement_selected',['source-b'])->assertSee('Odabrano: 1');
+        $response->assertOk()->assertSessionHas('procurement_selected',['source-b'])->assertSee('Naruči materijal');
         $dom=new \DOMDocument();@$dom->loadHTML($response->getContent());$xpath=new \DOMXPath($dom);
-        $this->assertSame(1,$xpath->query('//input[@class="requirement-select" and @value="source-a" and @disabled and not(@checked)]')->length);
+        $this->assertSame(0,$xpath->query('//input[@class="requirement-select"]')->length);
     }
 
     public function test_partial_procurement_preserves_remaining_requirement_and_blocks_overordering(): void
@@ -342,7 +346,7 @@ class ProcurementTest extends TestCase
         $this->login();$purchase=$this->service->create($this->payload(),77);
         $this->get(route('app-procurement-receive-form',['id'=>$purchase['id'],'line'=>$purchase['items'][0]['id']]))->assertOk()->assertSee('Potvrdi stvarni prijem');
         $this->assertSame([],$this->service->find($purchase['id'])['receipts']);
-        $this->get(route('app-procurement-labels',['orders'=>[$purchase['id']]]))->assertOk()->assertSee($purchase['items'][0]['id'])->assertSee($purchase['items'][1]['id'])->assertSee('Početno mjesto');
+        $labels=$this->get(route('app-procurement-labels',['orders'=>[$purchase['id']]]));$labels->assertOk()->assertSee($purchase['items'][0]['id'])->assertSee($purchase['items'][1]['id'])->assertSee('2 kolone × 5 redova')->assertDontSee('Početno mjesto')->assertDontSee('Širina etikete');if(getenv('PROCUREMENT_PREVIEW_DIR')) file_put_contents(getenv('PROCUREMENT_PREVIEW_DIR').'/labels.html',$labels->getContent());
         $this->get(route('app-procurement-receive-form',['id'=>$purchase['id'],'line'=>(string)Str::uuid()]))->assertNotFound();
     }
 
@@ -463,20 +467,25 @@ class ProcurementTest extends TestCase
     {
         $this->login();$row=$this->sources['source-a']+['required_date'=>'2026-10-27','ordered'=>'0','received'=>'0','remaining'=>'10','missing'=>'10','purchases'=>[],'suppliers'=>[],'late'=>false,'state'=>'not_ordered'];
         app(ProcurementSource::class)->shouldReceive('requirements')->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([$row]),1,40));
-        $response=$this->get('/app/procurement/materials');$response->assertOk()->assertSee('Poništi odabir')->assertDontSee('varijanta')->assertDontSee('Radni nalog /');
+        $response=$this->get('/app/procurement/materials');if(getenv('PROCUREMENT_PREVIEW_DIR')) file_put_contents(getenv('PROCUREMENT_PREVIEW_DIR').'/materials.html',$response->getContent());$response->assertOk()->assertSee('Naruči materijal')->assertSee('24,5')->assertSee('Skladište sirovina')->assertDontSee('requirement-select')->assertDontSee('varijanta')->assertDontSee('Radni nalog /')->assertSee('Primijeni filtere')->assertDontSee('id="add-material-order-row"',false);
         $dom=new \DOMDocument();@$dom->loadHTML($response->getContent());$xpath=new \DOMXPath($dom);
         $this->assertSame(0,$xpath->query('//table[contains(@class,"procurement-compact")]/thead//input[@type="checkbox"]')->length);
         $this->assertSame(1,$xpath->query('//th/a[normalize-space(.)="Poz."]')->length);
         $this->assertSame(1,$xpath->query('//th/a[normalize-space(.)="Radni nalog"]')->length);
         $this->assertGreaterThan(0,$xpath->query('//td[@title="20x30x40"]')->length);
         $this->assertSame(1,$xpath->query('//*[@id="procurement-material-filter-panel" and contains(@class,"d-none")]')->length);
-        $this->assertSame(1,$xpath->query('//input[@name="q" and @form="procurement-material-filters" and not(ancestor::*[@id="procurement-material-filter-panel"])]')->length);
+        $this->assertSame(1,$xpath->query('//input[@name="q" and ancestor::*[@id="procurement-material-filter-panel"]]')->length);
         $this->assertSame(1,$xpath->query('//button[@data-filter-toggle="procurement-material-filter-panel" and @aria-expanded="false"]')->length);
         $this->assertSame(0,$xpath->query('//div[@class="d-flex gap-1 mb-2 flex-wrap"]/a[normalize-space(.)="Dobavljači i postavke"]')->length);
         $this->assertSame(1,$xpath->query('//*[@id="main-menu-navigation"]//a[normalize-space(.)="Dobavljači i postavke"]')->length);
         $this->assertStringNotContainsString('padding:.55rem',$response->getContent());
         $this->assertSame(0,$xpath->query('//*[contains(@class,"breadcrumb-right")]//button[@data-bs-toggle="dropdown"]')->length);
         $this->assertStringNotContainsString('>Todo<',$response->getContent());
+        $this->assertSame(1,$xpath->query('//*[@id="material-page-actions"]//button[@data-bs-target="#order-material-modal"]')->length);
+        $this->assertSame(0,$xpath->query('//*[@id="procurement-material-list"]//button[@data-bs-target="#order-material-modal"]')->length);
+        $this->assertSame(1,$xpath->query('//*[@id="material-table-controls"]//input[@name="q" and @type="search"]')->length);
+        $this->assertSame(4,$xpath->query('//*[@id="material-page-length"]/option')->length);
+
     }
 
     public function test_all_procurement_templates_compile_as_valid_php(): void
@@ -491,6 +500,9 @@ class ProcurementTest extends TestCase
     {
         $roles=$this->mock(\App\Support\CustomRoles::class);$roles->shouldReceive('find')->with('viewer')->andReturn(['slugs'=>['app-procurement']]);$roles->shouldReceive('find')->with('receiver')->andReturn(['slugs'=>['app-procurement-receive']]);
         $purchase=$this->service->create($this->payload(false),77);$this->login('viewer');
+        $this->get('/app/procurement/ordering-options')->assertForbidden();
+        $this->get(route('app-procurement-scan',$purchase['id']))->assertForbidden();
+        $this->post(route('app-procurement-scan-receive',$purchase['id']))->assertForbidden();
         $this->post('/app/procurement',$this->payload(false))->assertForbidden();$this->get('/app/procurement/'.$purchase['id'].'/receive-form')->assertForbidden();
         $this->login('receiver');$this->get('/app/procurement/'.$purchase['id'].'/receive-form')->assertOk();$this->post('/app/procurement/'.$purchase['id'].'/cancel')->assertForbidden();
     }
@@ -522,4 +534,143 @@ class ProcurementTest extends TestCase
         $this->post('/app/procurement/'.$purchase['id'].'/receive',$this->receivingPayload())->assertRedirect(route('app-procurement-show',$purchase['id']));
         $this->assertCount(1,$this->service->find($purchase['id'])['receipts']);
     }
+    public function test_ordered_dimensions_and_extra_stock_do_not_change_bom_allocations(): void
+    {
+        $data=$this->payload(false);
+        $data['items'][0]=['quantity'=>'15','price'=>'2','vat_rate'=>'17','ordered_dimensions'=>'20x30x1500','pieces'=>'1',
+            'allocations'=>[['source_id'=>'source-a','quantity'=>'10']]];
+        $purchase=$this->service->create($data,77);
+        $this->assertSame('20x30x40',$purchase['items'][0]['source']['dimensions']);
+        $this->assertSame('20x30x1500',$purchase['items'][0]['ordered_dimensions']);
+        $this->assertSame('15.000000',$purchase['items'][0]['quantity']);
+        $this->assertSame('10.000000',$this->service->progress()['source-a']['ordered']);
+        $this->assertSame('35.10',$purchase['totals']['gross']);
+        $this->login();
+        $preview=$this->get(route('app-procurement-print',$purchase['id']));$preview->assertOk()->assertSee('20x30x1500')->assertSee('TrendyCNC.png')->assertSee('4218466780006')->assertSee('218466780006')->assertSee('Sarajevska 17')->assertDontSee('<div class="notice">Naručene sirovine</div>',false);if(getenv('PROCUREMENT_PREVIEW_DIR')) file_put_contents(getenv('PROCUREMENT_PREVIEW_DIR').'/order.html',$preview->getContent());
+        $response=$this->get(route('app-procurement-print',['id'=>$purchase['id'],'items'=>1]));
+        $response->assertOk()->assertSee('Datum narudžbe')->assertSee('Čeka prijem')->assertSee($purchase['items'][0]['id']);if(getenv('PROCUREMENT_PREVIEW_DIR')) file_put_contents(getenv('PROCUREMENT_PREVIEW_DIR').'/items.html',$response->getContent());
+    }
+
+    public function test_catalog_material_can_be_ordered_in_multiple_dimensions_without_a_work_order(): void
+    {
+        $id='catalog_'.base64_encode('STEEL');
+        $this->sources[$id]=$this->sources['source-a'];
+        $this->sources[$id]['id']=$id;$this->sources[$id]['required']='0';$this->sources[$id]['stock_order']=true;
+        $data=$this->payload(false);
+        $data['items']=[['source_id'=>$id,'quantity'=>'5','price'=>'1','vat_rate'=>'17','ordered_dimensions'=>'10x20x100','pieces'=>'4'],
+            ['source_id'=>$id,'quantity'=>'7','price'=>'1','vat_rate'=>'17','ordered_dimensions'=>'10x20x200','pieces'=>'6']];
+        $purchase=$this->service->create($data,77);
+        $this->assertCount(2,$purchase['items']);
+        $this->assertNotSame($purchase['items'][0]['id'],$purchase['items'][1]['id']);
+        $edited=$this->service->edit($purchase['id'],$data,77);
+        $this->assertSame(array_column($purchase['items'],'id'),array_column($edited['items'],'id'));
+    }
+
+    public function test_scanned_line_and_order_receive_once_and_update_printed_dates(): void
+    {
+        config(['procurement.warehouse'=>'Sirovine']);
+        $gateway=new class implements \App\Services\Procurement\ProcurementGateway, \App\Services\Procurement\ProcurementReceiptGateway {
+            public function transfer(array $purchase,string $idempotencyKey): array { return ['confirmed'=>true,'key'=>'ERP-order','number'=>'020S-1']; }
+            public function receive(array $purchase,array $receipt,string $idempotencyKey): array { return ['confirmed'=>true,'key'=>'ERP-receipt','number'=>'1005-1']; }
+        };
+        $this->app->instance(\App\Services\Procurement\ProcurementGateway::class,$gateway);
+        $purchase=$this->service->create($this->payload(),77);$this->login();
+        $line=$purchase['items'][0]['id'];
+        $this->get(route('app-procurement-scan',['id'=>$purchase['id'],'line'=>$line]))->assertOk();
+        $this->assertCount(0,$this->service->find($purchase['id'])['receipts']);
+        $this->post(route('app-procurement-scan-receive',$purchase['id']),['line'=>$line])->assertRedirect();
+        $first=$this->service->find($purchase['id']);
+        $this->assertSame('10.000000',$first['items'][0]['received']);$this->assertSame('0.000000',$first['items'][1]['received']);
+        $this->post(route('app-procurement-scan-receive',$purchase['id']),['line'=>$line])->assertRedirect();
+        $this->assertCount(1,$this->service->find($purchase['id'])['receipts']);
+        $this->post(route('app-procurement-scan-receive',$purchase['id']))->assertRedirect();
+        $complete=$this->service->find($purchase['id']);
+        $this->assertSame('delivered',(new ProcurementCalculator())->deliveryStatus($complete));$this->assertCount(2,$complete['receipts']);
+        $this->post(route('app-procurement-scan-receive',$purchase['id']))->assertRedirect();
+        $this->assertCount(2,$this->service->find($purchase['id'])['receipts']);
+        $this->get(route('app-procurement-print',['id'=>$purchase['id'],'items'=>1]))->assertOk()->assertSee('27.10.2026.')->assertDontSee('Čeka prijem');
+        $this->get(route('app-procurement-show',$purchase['id']))->assertOk()->assertSee('Materijal stigao')->assertDontSee('Tok materijala')->assertDontSee('Historija prijema');
+    }
+
+    public function test_scan_failure_does_not_record_arrival_or_allow_unknown_line(): void
+    {
+        $purchase=$this->service->create($this->payload(false),77);$this->login();
+        $this->post(route('app-procurement-scan-receive',$purchase['id']))->assertSessionHasErrors('procurement');
+        $this->assertCount(0,$this->service->find($purchase['id'])['receipts']);
+        $this->get(route('app-procurement-scan',['id'=>$purchase['id'],'line'=>(string)Str::uuid()]))->assertNotFound();
+    }
+
+    public function test_catalog_search_does_not_reload_requirements_or_progress(): void
+    {
+        $this->login();
+        app(ProcurementSource::class)->shouldReceive('requirements')->never();
+        $this->getJson('/app/procurement/ordering-options?catalog_only=1&q=STEEL')->assertOk()->assertJson(['requirements'=>[]]);
+    }
+
+    public function test_print_uses_saved_order_values_with_full_input_precision(): void
+    {
+        $this->login();$data=$this->payload(false);
+        $data['document_date']='2026-10-21';$data['notes']='Stvarna napomena narudžbenice';
+        $data['items'][0]=['quantity'=>'10.123456','price'=>'2.123456','vat_rate'=>'17','ordered_dimensions'=>'30x55x1500','pieces'=>'4',
+            'allocations'=>[['source_id'=>'source-a','quantity'=>'10']]];
+        $purchase=$this->service->create($data,77);
+        $response=$this->get(route('app-procurement-print',$purchase['id']));
+        $response->assertOk()->assertSee($purchase['number'])->assertSee('Dobavljač')->assertSee('21.10.2026.')
+            ->assertSee('30x55x1500')->assertSee('10,123456')->assertSee('2,123456')->assertSee('Stvarna napomena narudžbenice')
+            ->assertSee(\App\Services\Procurement\ProcurementFormat::number($purchase['totals']['gross']));
+    }
+
+    public function test_delete_removes_local_order_releases_requirements_and_keeps_numbers_unique(): void
+    {
+        $this->login();$data=$this->payload(false);$purchase=$this->service->create($data,77);
+        $index=$this->get('/app/procurement');$index->assertOk()->assertSee('Obriši narudžbenicu '.$purchase['number']);
+        if(getenv('PROCUREMENT_PREVIEW_DIR')) file_put_contents(getenv('PROCUREMENT_PREVIEW_DIR').'/orders.html',$index->getContent());
+        $this->delete(route('app-procurement-destroy',$purchase['id']))->assertRedirect(route('app-procurement'));
+        $this->assertSame([],$this->service->all());$this->assertSame([],$this->service->progress());
+        $this->get(route('app-procurement-show',$purchase['id']))->assertNotFound();
+        $this->assertSame(77,$this->store->all()[0]['deleted_by']);
+        $data['submission']=(string)Str::uuid();$next=$this->service->create($data,77);
+        $this->assertNotSame($purchase['number'],$next['number']);
+        $this->assertSame('10.000000',$this->service->progress()['source-a']['ordered']);
+    }
+
+    public function test_delete_requires_manage_permission_and_rejects_receipts_and_erp_attempts(): void
+    {
+        $purchase=$this->service->create($this->payload(false),77);
+        $roles=$this->mock(\App\Support\CustomRoles::class);$roles->shouldReceive('find')->with('viewer')->andReturn(['slugs'=>['app-procurement']]);
+        $this->login('viewer');$this->delete(route('app-procurement-destroy',$purchase['id']))->assertForbidden();
+        $this->login();
+        foreach(['erp','receipt','attempt','received_quantity'] as $state){
+            $this->service->change($purchase['id'],function(&$row)use($state){$row['pantheon_key']=$state==='erp'?'ERP-1':null;$row['receipts']=$state==='receipt'?[['reference'=>'PR-1']]:[];$row['sync_attempts']=$state==='attempt'?1:0;$row['items'][0]['received']=$state==='received_quantity'?'10':'0';});
+            $this->delete(route('app-procurement-destroy',$purchase['id']))->assertSessionHasErrors('procurement');
+            $this->assertCount(1,$this->service->all());
+        }
+    }
+
+    public function test_procurement_filter_panels_use_explicit_apply_buttons(): void
+    {
+        $this->login();
+        $response=$this->get('/app/procurement');$response->assertOk()->assertSee('Primijeni filtere')->assertDontSee('data-auto-filter',false);
+        $dom=new \DOMDocument();@$dom->loadHTML($response->getContent());$xpath=new \DOMXPath($dom);
+        $this->assertSame(1,$xpath->query('//*[@id="procurement-order-filter-panel"]//input[@name="q"]')->length);
+        $this->assertSame(1,$xpath->query('//*[@id="procurement-order-filters"]//button[@type="submit"]')->length);
+    }
+
+    public function test_material_page_length_validation_rejects_unsupported_sizes(): void
+    {
+        $this->login();
+        $this->getJson('/app/procurement/materials?per_page=11')->assertUnprocessable()->assertJsonValidationErrors('per_page');
+    }
+
+    public function test_missing_label_selection_has_a_clear_message_and_selected_orders_render_item_labels(): void
+    {
+        $this->login();
+        $this->get(route('app-procurement-labels'))->assertRedirect(route('app-procurement'))->assertSessionHas('warning');
+        $purchase=$this->service->create($this->payload(),77);
+        $response=$this->get(route('app-procurement-labels',['orders'=>[$purchase['id']]]));
+        $response->assertOk()->assertViewHas('labels',fn($labels)=>count($labels)===2 && $labels[0]['code']==='STEEL' && $labels[1]['code']==='STEEL');
+        $show=$this->get(route('app-procurement-show',$purchase['id']));if(getenv('PROCUREMENT_PREVIEW_DIR')) file_put_contents(getenv('PROCUREMENT_PREVIEW_DIR').'/show.html',$show->getContent());$show->assertOk()->assertDontSee('Tok materijala')->assertDontSee('Historija prijema')
+            ->assertDontSee('Dokumenti i atesti')->assertDontSee('Reklamacije')->assertDontSee('Obavijesti dobavljača i historija promjena');
+    }
+
 }

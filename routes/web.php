@@ -79,6 +79,7 @@ Route::middleware('auth:web')->group(function () {
     /* Route Apps */
     Route::group(['prefix' => 'app'], function () {
         Route::get('procurement/materials', [\App\Http\Controllers\ProcurementController::class, 'materials'])->name('app-procurement-materials');
+        Route::get('procurement/ordering-options', [\App\Http\Controllers\ProcurementController::class, 'orderingOptions'])->name('app-procurement-ordering-options');
         Route::post('procurement/selection', [\App\Http\Controllers\ProcurementController::class,'selection'])->name('app-procurement-selection');
         Route::get('procurement/settings', [\App\Http\Controllers\ProcurementController::class,'settings'])->name('app-procurement-settings');
         Route::post('procurement/settings/accounts', [\App\Http\Controllers\ProcurementController::class,'bindSupplier'])->name('app-procurement-bind');
@@ -89,6 +90,9 @@ Route::middleware('auth:web')->group(function () {
         Route::get('procurement', [\App\Http\Controllers\ProcurementController::class, 'index'])->name('app-procurement');
         Route::post('procurement', [\App\Http\Controllers\ProcurementController::class, 'store'])->name('app-procurement-store');
         Route::get('procurement/{id}', [\App\Http\Controllers\ProcurementController::class, 'show'])->name('app-procurement-show');
+        Route::get('procurement/{id}/print', [\App\Http\Controllers\ProcurementController::class, 'printOrder'])->name('app-procurement-print');
+        Route::get('procurement/{id}/scan', [\App\Http\Controllers\ProcurementController::class, 'scan'])->name('app-procurement-scan');
+        Route::post('procurement/{id}/scan', [\App\Http\Controllers\ProcurementController::class, 'scanReceive'])->name('app-procurement-scan-receive');
         Route::get('procurement/{id}/edit', [\App\Http\Controllers\ProcurementController::class,'edit'])->name('app-procurement-edit');
         Route::post('procurement/{id}/edit', [\App\Http\Controllers\ProcurementController::class,'update'])->name('app-procurement-update');
         Route::get('procurement/{id}/receive-form', [\App\Http\Controllers\ProcurementController::class,'receiveForm'])->name('app-procurement-receive-form');
@@ -100,6 +104,7 @@ Route::middleware('auth:web')->group(function () {
         Route::post('procurement/{id}/notices/read', [\App\Http\Controllers\ProcurementController::class,'acknowledge'])->name('app-procurement-notices-read');
         Route::post('procurement/{id}/receive', [\App\Http\Controllers\ProcurementController::class, 'receive'])->name('app-procurement-receive');
         Route::post('procurement/{id}/cancel', [\App\Http\Controllers\ProcurementController::class, 'cancel'])->name('app-procurement-cancel');
+        Route::delete('procurement/{id}', [\App\Http\Controllers\ProcurementController::class, 'destroy'])->name('app-procurement-destroy');
         Route::post('procurement/{id}/sync', [\App\Http\Controllers\ProcurementController::class, 'sync'])->name('app-procurement-sync');
         Route::get('email', [AppsController::class, 'emailApp'])->name('app-email');
         Route::get('chat', [AppsController::class, 'chatApp'])->name('app-chat');
