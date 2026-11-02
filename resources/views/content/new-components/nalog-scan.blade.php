@@ -1826,10 +1826,6 @@
       if (!response.ok) {
         var errorMessage = data && data.message ? data.message : 'Neuspješan odgovor servera.';
 
-        if (data && data.debug && Array.isArray(data.debug.messages) && data.debug.messages.length > 0) {
-          errorMessage += ' [' + data.debug.messages[0] + ']';
-        }
-
         var error = new Error(errorMessage);
         error.response = data;
         throw error;
@@ -1906,6 +1902,9 @@
     }
 
     async function showScanError(message) {
+      if (/sqlstate|queryexception|\bforeign\s+key\b|\bconstraint\b|\bdbo\.|\bstack\s+trace\b|\bSQL\s*:/i.test(message || '')) {
+        message = 'Skenirani QR kod trenutno nije moguće obraditi. Pokušajte ponovo ili kontaktirajte administratora.';
+      }
       if (window.Swal && typeof window.Swal.fire === 'function') {
         await Swal.fire(swalWithProjectTheme({
           title: 'Skeniranje nije uspjelo',

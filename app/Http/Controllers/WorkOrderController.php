@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exceptions\InsufficientRawMaterialStockException;
 use App\Models\Material;
 use App\Models\Product;
+use App\Support\AiScanFailureMessage;
 use App\Services\WorkOrder\ProjectedProductionDateCalculator;
 use App\Services\WorkOrder\ExcessStockService;
 use App\Services\WorkOrder\DeliveryPriorityOptions;
@@ -1184,20 +1185,12 @@ class WorkOrderController extends Controller
                 'debug_context' => $debugContext,
             ]);
 
-            $normalizedExceptionMessage = strtolower(Str::ascii($exception->getMessage()));
-            $statusCode = str_contains($normalizedExceptionMessage, 'narudzba') ? 404 : 500;
+            $statusCode = $exception->getMessage() === 'Narudžba za skenirane parametre nije pronađena.' ? 404 : 500;
             $response = [
                 'message' => $statusCode === 404
                     ? 'Narudžba za skenirane parametre nije pronađena.'
-                    : 'Greška pri kreiranju radnog naloga iz narudžbe.',
+                    : AiScanFailureMessage::workOrderCreate($exception->getMessage()),
             ];
-
-            if (config('app.debug')) {
-                $response['debug'] = [
-                    'messages' => $exceptionMessages,
-                    'context' => $debugContext,
-                ];
-            }
 
             return response()->json($response, $statusCode);
         }
@@ -8971,7 +8964,12 @@ class WorkOrderController extends Controller
 
         $now = Carbon::now();
         $priorityLabel = (string) ($this->deliveryPriorityMap()[5] ?? '5 - Uobičajeni prioritet');
-        $productCode = trim((string) ($orderContext['product_code'] ?? ''));
+        // Matching QR codes ignores outer whitespace, but Pantheon foreign keys
+        // must use the original catalogue identifier, including leading spaces.
+        $catalogIdent = (string) ($orderContext['catalog']['acIdent'] ?? '');
+        $productCode = trim($catalogIdent) !== ''
+            ? $catalogIdent
+            : trim((string) ($orderContext['product_code'] ?? ''));
         $productName = trim((string) ($orderContext['product_name'] ?? ''));
         $orderNumber = trim((string) ($orderContext['order_number'] ?? ''));
         $orderKey = trim((string) ($orderContext['order_key'] ?? ''));
@@ -8982,7 +8980,7 @@ class WorkOrderController extends Controller
         $resolvedQuantity = $requestedQuantity !== null && $requestedQuantity > 0
             ? $requestedQuantity
             : $this->resolveScanCreateWorkOrderQuantity($orderRow, $orderContext);
-        $protectionCode = trim((string) ($orderContext['protection']['code'] ?? ''));
+        $protectionCode = (string) ($orderContext['protection']['code'] ?? '');
         $datePlan = $this->resolveScanCreateDatePlan($orderRow, $orderContext);
         $dayStart = $now->copy()->startOfDay();
         $plannedStart = $datePlan['scheduled_start'] instanceof Carbon
