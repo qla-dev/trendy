@@ -683,26 +683,16 @@ class ProcurementTest extends TestCase
     }
 
 
-    public function test_inquiry_preview_uses_explicit_selection_and_renders_rns_before_pdf(): void
+    public function test_legacy_inquiry_create_url_returns_to_materials_modal_without_loading_another_form(): void
     {
         $this->login();
-        $this->sources['source-a']['inquiry_deadline']='2026-10-20';
-        $this->sources['source-b']['inquiry_deadline']='2026-10-19';
-        $this->sources['source-b']['work_order']='RN-2';
-        $this->sources['source-b']['required']='0';
-        $source=$this->app->make(ProcurementSource::class);
-        $source->shouldReceive('requirements')->once()->with(['selected_only'=>true,'selected_ids'=>['source-a','source-b'],'_all'=>true],[])
-            ->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(array_values($this->sources),2,2));
+        app(ProcurementSource::class)->shouldNotReceive('requirements');
         $this->withSession(['procurement_selected'=>['stale']])->post('/app/procurement/create',[
             'document_type'=>'inquiry','selected_json'=>json_encode(['source-a','source-b'])
-        ])->assertRedirect(route('app-procurement-create-form',['document_type'=>'inquiry']));
-        $preview=$this->get('/app/procurement/create?document_type=inquiry');
-        $preview->assertOk()->assertSee('Pregled upita')->assertSee('RN-1')->assertSee('RN-2')
-            ->assertSee('source-a')->assertSee('source-b')->assertSee('2026-10-19')->assertSee('Sačuvaj upit');
-        if(getenv('PROCUREMENT_PREVIEW_DIR')) file_put_contents(getenv('PROCUREMENT_PREVIEW_DIR').'/inquiry-create.html',$preview->getContent());
-        $data=$this->inquiryPayload();
-        $data['items']=[$data['items'][0]];
-        $this->post('/app/procurement',$data)->assertSessionHasNoErrors()->assertRedirect('/app/procurement/'.$this->service->all()[0]['id']);
+        ])->assertRedirect(route('app-procurement-create-form',['document_type'=>'inquiry']))
+            ->assertSessionHas('procurement_selected',['source-a','source-b']);
+        $this->get('/app/procurement/create?document_type=inquiry')
+            ->assertRedirect(route('app-procurement-materials',['open_inquiry'=>1]));
     }
 
     public function test_inquiry_modal_pdf_action_saves_selected_rns_and_opens_bilingual_pdf(): void

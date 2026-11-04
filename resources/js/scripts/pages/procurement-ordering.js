@@ -4,12 +4,12 @@
     const groups = new Map(), unknown = [];
     for (const source of sources) {
       const match = String(source.dimensions).match(/^\s*(\d+(?:[.,]\d+)?)\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*$/i);
-      if (!match || !source.pieces || Number(source.pieces) <= 0) { unknown.push(source.work_order + ': ' + (source.dimensions || 'Bez dimenzija') + ' (broj komada nije potvrđen)'); continue; }
+      if (!match || !source.pieces || Number(source.pieces) <= 0) { unknown.push(String(source.dimensions || '').trim() || '—'); continue; }
       const profile = match[1] + ' × ' + match[2];
       const fraction = source.remaining != null && Number(source.required)>0 ? Number(source.remaining)/Number(source.required) : 1;
       groups.set(profile, (groups.get(profile) || 0) + Number(match[3].replace(',', '.')) * Number(source.pieces) * fraction);
     }
-    return [...groups].map(([profile, length]) => profile + ' × ' + String(Number(length.toFixed(6))).replace('.', ',')).concat(unknown).join('\n');
+    return [...groups].map(([profile, length]) => profile + ' × ' + String(Number(length.toFixed(6))).replace('.', ',')).concat([...new Set(unknown)]).join('\n');
   }
   function groupSources(sources) {
     const groups = new Map();
@@ -63,7 +63,7 @@
     if(reset){
       const quantity=sources.reduce((sum,s)=>sum+Number(s.remaining),0);
       row.querySelector('[data-quantity]').value=quantity?Number(quantity.toFixed(6)):'';
-      row.querySelector('[data-dimensions]').value=sources.length && !need.includes('(') && !need.includes('\n') ? need:'';
+      row.querySelector('[data-dimensions]').value=sources.length && need!=='—' && !need.includes('(') && !need.includes('\n') ? need:'';
       row.querySelector('[data-pieces]').value=sources.length?'1':'';
       row.querySelector('[data-price]').value=inquiry?'':(actual?.price || '');
       row.querySelector('[data-vat]').value=actual?.vat_rate || '0';
@@ -256,5 +256,16 @@
       window.location.assign(response.url);
     }catch(e){error.textContent=e.message;submit.disabled=false;pdfButton.disabled=false;loading.hidden=true;}
   });
-  if((window.procurementOldItems || []).length)window.bootstrap.Modal.getOrCreateInstance(modal).show();
+  const inquiryButton=document.querySelector('#material-page-actions [data-document-type="inquiry"]');
+  if(inquiryButton)inquiryButton.addEventListener('click',event=>{
+    // Also handles an already-open materials page with the previous navigation markup.
+    event.preventDefault();event.stopImmediatePropagation();
+    window.bootstrap.Modal.getOrCreateInstance(modal).show(inquiryButton);
+  },true);
+  const params=new URLSearchParams(window.location.search);
+  if(params.get('open_inquiry')==='1' && inquiryButton && !inquiryButton.disabled){
+    const open=()=>window.bootstrap.Modal.getOrCreateInstance(modal).show(inquiryButton);
+    params.delete('open_inquiry');window.history.replaceState(null,'',window.location.pathname+(params.size?'?'+params:'')+window.location.hash);
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',open,{once:true});else open();
+  }else if((window.procurementOldItems || []).length)window.bootstrap.Modal.getOrCreateInstance(modal).show();
 }());

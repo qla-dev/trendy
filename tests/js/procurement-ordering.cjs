@@ -5,7 +5,9 @@ assert.equal(dimensions([source]), '20 × 30 × 1000');
 assert.equal(dimensions([source,{...source,pieces:'10',work_order:'RN-2'}]), '20 × 30 × 1500');
 assert.equal(dimensions([{...source,remaining:'5'}]), '20 × 30 × 500');
 assert.equal(dimensions([{...source,dimensions:'20,5×30×50,5'}]), '20,5 × 30 × 1010');
-assert.match(dimensions([{...source,pieces:null}]), /broj komada nije potvrđen/);
+assert.equal(dimensions([{...source,pieces:null}]), '20x30x50');
+assert.equal(dimensions([{...source,dimensions:'',pieces:null}]), '—');
+assert.equal(dimensions([{...source,dimensions:'   ',pieces:null}]), '—');
 assert.equal(dimensions([source,{...source,dimensions:'40x30x100'}]), '20 × 30 × 1000\n40 × 30 × 2000');
 console.log('Procurement length calculations passed');
 const grouped=groupSources([{...source,id:'a',material:'STEEL',unit:'KG',vat_rate:'17'},
