@@ -101,6 +101,7 @@ class ProcurementController extends Controller
         }
         $documentType = $request->validate(['document_type'=>'nullable|in:order,inquiry'])['document_type'] ?? $request->session()->get('procurement_document_type','order');
         $inquiry = $documentType === 'inquiry';
+        if ($inquiry) return redirect()->route('app-procurement-materials',['open_inquiry'=>1]);
         $progress = $this->service->progress();
         $selected = $request->session()->get('procurement_selected', []);
         if ($request->old('items')) {
