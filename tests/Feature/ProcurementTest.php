@@ -485,8 +485,9 @@ class ProcurementTest extends TestCase
         $this->assertStringNotContainsString('padding:.55rem',$response->getContent());
         $this->assertSame(0,$xpath->query('//*[contains(@class,"breadcrumb-right")]//button[@data-bs-toggle="dropdown"]')->length);
         $this->assertStringNotContainsString('>Todo<',$response->getContent());
-        $this->assertSame(1,$xpath->query('//*[@id="material-page-actions"]//button[@data-bs-target="#order-material-modal"]')->length);
-        $this->assertSame(1,$xpath->query('//*[@id="material-page-actions"]//button[@data-inquiry-preview-url]')->length);
+        $this->assertSame(2,$xpath->query('//*[@id="material-page-actions"]//button[@data-bs-target="#order-material-modal"]')->length);
+        $this->assertSame(0,$xpath->query('//*[@id="material-page-actions"]//button[@data-inquiry-preview-url]')->length);
+        $response->assertSee('id="preview-material-pdf"',false)->assertSee('Vidi PDF');
         $this->assertSame(0,$xpath->query('//*[@id="procurement-material-list"]//button[@data-bs-target="#order-material-modal"]')->length);
         $this->assertSame(1,$xpath->query('//*[@id="material-table-controls"]//input[@name="q" and @type="search"]')->length);
         $this->assertSame(1,$xpath->query('//*[@id="material-table-controls"]//*[@id="selection-count"]')->length);
@@ -702,6 +703,28 @@ class ProcurementTest extends TestCase
         $data=$this->inquiryPayload();
         $data['items']=[$data['items'][0]];
         $this->post('/app/procurement',$data)->assertSessionHasNoErrors()->assertRedirect('/app/procurement/'.$this->service->all()[0]['id']);
+    }
+
+    public function test_inquiry_modal_pdf_action_saves_selected_rns_and_opens_bilingual_pdf(): void
+    {
+        $this->login();
+        $data=$this->inquiryPayload();$data['open_pdf']='1';
+        $response=$this->post('/app/procurement',$data)->assertSessionHasNoErrors();
+        $purchase=$this->service->all()[0];
+        $response->assertRedirect(route('app-procurement-print',$purchase['id']));
+        $this->assertCount(2,$purchase['items']);
+        $this->assertSame('source-a',$purchase['items'][0]['allocations'][0]['source']['id']);
+        $this->get('/app/procurement/'.$purchase['id'].'/print')->assertOk()->assertSee('Anfrage')->assertSee('Upit');
+    }
+
+    public function test_modal_options_use_explicit_selection_instead_of_stale_session(): void
+    {
+        $this->login();
+        app(ProcurementSource::class)->shouldReceive('requirements')->once()
+            ->withArgs(fn($filters,$progress)=>$filters['selected_ids']===['source-a','source-b'] && $filters['selected_only'] && $filters['_all'])
+            ->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(array_values($this->sources),2,2));
+        $this->withSession(['procurement_selected'=>['stale']])->postJson('/app/procurement/ordering-options',['selected'=>['source-a','source-b']])
+            ->assertOk()->assertJsonPath('selected',['source-a','source-b'])->assertJsonCount(2,'requirements')->assertJsonPath('catalog',[]);
     }
 
     private function inquiryPayload(): array

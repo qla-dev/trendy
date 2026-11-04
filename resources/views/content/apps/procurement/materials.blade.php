@@ -2,11 +2,10 @@
 @section('title', 'Materijali za nabavku')
 @php($canSelect = app(\App\Services\Procurement\ProcurementAccess::class)->can(auth()->user(),'edit'))
 @section('content_header_right')
-<div class="d-flex justify-content-end gap-1 flex-wrap" id="material-page-actions"><button type="button" class="btn btn-primary" data-inquiry-preview-url="{{ route('app-procurement-create') }}" data-document-type="inquiry" @disabled(!$canSelect)>Upit</button><button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#order-material-modal" @disabled(!$canSelect)><i data-feather="plus" class="me-50"></i>Naruči materijal</button></div>
+<div class="d-flex justify-content-end gap-1 flex-wrap" id="material-page-actions"><button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#order-material-modal" data-document-type="inquiry" @disabled(!$canSelect)>Upit</button><button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#order-material-modal" @disabled(!$canSelect)><i data-feather="plus" class="me-50"></i>Naruči materijal</button></div>
 @endsection
 @section('content')
 @include('content.apps.procurement.common')
-<div id="inquiry-preparing" class="p-1 mb-1 border rounded d-none" role="status" aria-live="polite"></div>
 @php($fmt = \App\Services\Procurement\ProcurementFormat::class)
 <div class="card"><div class="card-header d-flex justify-content-between align-items-center gap-1 flex-wrap"><h4 class="mb-0">Filter materijala</h4><div class="d-flex gap-1 flex-wrap"><button type="button" class="btn btn-outline-primary btn-sm" data-filter-toggle="procurement-material-filter-panel" aria-controls="procurement-material-filter-panel" aria-expanded="{{ request()->boolean('filters_open') ? 'true':'false' }}"><i data-feather="filter" class="me-50"></i><span data-filter-toggle-label>{{ request()->boolean('filters_open') ? 'Sakrij filtere':'Pokaži filtere' }}</span></button><a class="btn btn-outline-danger btn-sm" href="{{ route('app-procurement-materials') }}"><i data-feather="trash-2" class="me-50"></i>Obriši filter</a></div></div>
 <div class="card-body {{ request()->boolean('filters_open') ? '':'d-none' }}" id="procurement-material-filter-panel"><form method="get" id="procurement-material-filters" data-manual-filter class="row g-2">

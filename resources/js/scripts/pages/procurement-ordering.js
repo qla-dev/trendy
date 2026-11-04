@@ -180,21 +180,22 @@
     return row;
   }
   $('#order-supplier').select2({dropdownParent:$(modal),width:'100%',placeholder:'Dobavljač',allowClear:true});
-  const loading=document.getElementById('order-material-loading'),retry=document.getElementById('order-material-retry');
+  const loading=document.getElementById('order-material-loading'),retry=document.getElementById('order-material-retry'),pdfButton=document.getElementById('preview-material-pdf');
   let lastTrigger=null,loadController=null,loadVersion=0;
   async function loadModal(event){
     lastTrigger=event.relatedTarget || lastTrigger;
     const version=++loadVersion;loadController?.abort();loadController=new AbortController();
     const controller=loadController,timeout=setTimeout(()=>controller.abort(),20000);
-    loading.hidden=false;retry.hidden=true;body.hidden=true;modal.setAttribute('aria-busy','true');
-    const submit=document.getElementById('submit-material-order');submit.disabled=true;error.textContent='';
+    loading.hidden=false;loading.lastChild.textContent='Učitavanje odabranih radnih naloga i materijala…';retry.hidden=true;body.hidden=true;modal.setAttribute('aria-busy','true');
+    const submit=document.getElementById('submit-material-order');submit.disabled=true;pdfButton.disabled=true;error.textContent='';
     inquiry=(lastTrigger?.dataset.documentType || (restored?'order':window.procurementOldType))==='inquiry';
     document.getElementById('order-document-type').value=inquiry?'inquiry':'order';
     document.getElementById('order-material-title').textContent=inquiry?'Upit za materijal':'Naruči materijal';
     document.getElementById('order-date-label').textContent=inquiry?'Datum upita':'Datum narudžbe';
-    submit.textContent=inquiry?'Sačuvaj upit i otvori PDF':'Sačuvaj narudžbenicu';
+    submit.textContent=inquiry?'Sačuvaj upit':'Sačuvaj narudžbenicu';pdfButton.hidden=!inquiry;
     try{
       await window.procurementSelection?.ready();
+      if(controller.signal.aborted || version!==loadVersion)throw new DOMException('Učitavanje je prekinuto','AbortError');
       const selected=window.procurementSelection?.ids() || [];
       const oldItems=restored?[]:(window.procurementOldItems || []);
       const restoreIds=oldItems.flatMap(item=>(item.allocations || [{source_id:item.source_id}]).map(a=>a.source_id)).filter(Boolean);
@@ -215,15 +216,20 @@
         else{
           const chosen=options.requirements.filter(s=>selected.includes(s.id));
           if(selected.length && !chosen.length)throw new Error('Odabrani radni nalozi nisu učitani. Pokušajte ponovo.');
-          groupSources(chosen).reverse().forEach(group=>addRow({materialCode:group[0].material,ids:group.map(s=>s.id)}));
+          const groups=groupSources(chosen).reverse();
+          for(let i=0;i<groups.length;i++){
+            if(i && i%8===0)await new Promise(resolve=>requestAnimationFrame(resolve));
+            if(controller.signal.aborted || version!==loadVersion)throw new DOMException('Učitavanje je prekinuto','AbortError');
+            const group=groups[i];addRow({materialCode:group[0].material,ids:group.map(s=>s.id)});
+          }
           if(!body.children.length)addRow();
           if(selected.length && chosen.length!==selected.length)error.textContent='Dio odabranih potreba više nije dostupan za nabavku.';
         }
         signature=currentSignature;buildingRows=false;
       }
       if(inquiry)setDeadline();
-      submit.disabled=false;
-    }catch(e){if(version===loadVersion){buildingRows=false;error.textContent=e.name==='AbortError'?'Učitavanje nije završeno. Pokušajte ponovo.':e.message;retry.hidden=false;}}
+      submit.disabled=false;pdfButton.disabled=false;
+    }catch(e){if(version===loadVersion){buildingRows=false;error.textContent=e.name==='AbortError'?'Učitavanje nije završeno. Pokušajte ponovo.':e instanceof SyntaxError?'Server je vratio prazan ili neispravan odgovor. Pokušajte ponovo.':e.message;retry.hidden=false;}}
     finally{clearTimeout(timeout);if(version===loadVersion){loading.hidden=true;body.hidden=false;modal.removeAttribute('aria-busy');}}
   }
   modal.addEventListener('show.bs.modal',loadModal);
@@ -233,7 +239,8 @@
     closePicker();
     const form=event.target,submit=document.getElementById('submit-material-order');
     if(!body.children.length || !form.checkValidity()){event.preventDefault();form.reportValidity();error.textContent='Dodajte materijal i popunite obavezna polja.';return;}
-    submit.disabled=true;
+    document.getElementById('order-open-pdf').value=event.submitter?.hasAttribute('data-open-pdf')?'1':'0';
+    submit.disabled=true;pdfButton.disabled=true;loading.hidden=false;loading.lastChild.textContent=document.getElementById('order-open-pdf').value==='1'?'Priprema PDF-a…':'Spremanje dokumenta…';
     // Large filtered selections can exceed PHP's form-input limit. JSON preserves every RN allocation.
     if(form.elements.length<900)return;
     event.preventDefault();
@@ -247,7 +254,7 @@
       const response=await fetch(form.action,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json','X-CSRF-TOKEN':payload._token},body:JSON.stringify(payload)});
       if(!response.ok){const data=await response.json();throw new Error(Object.values(data.errors || {}).flat().join(' ') || 'Dokument nije sačuvan. Pokušajte ponovo.');}
       window.location.assign(response.url);
-    }catch(e){error.textContent=e.message;submit.disabled=false;}
+    }catch(e){error.textContent=e.message;submit.disabled=false;pdfButton.disabled=false;loading.hidden=true;}
   });
   if((window.procurementOldItems || []).length)window.bootstrap.Modal.getOrCreateInstance(modal).show();
 }());

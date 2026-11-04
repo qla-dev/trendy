@@ -20,6 +20,7 @@
 .dark-layout #order-material-modal .select2-selection__choice{background:#4a5c75!important;color:#fff!important}.dark-layout #order-material-modal .select2-selection__choice__remove{color:#fff!important}</style>
 <div class="modal fade" id="order-material-modal" tabindex="-1" aria-labelledby="order-material-title" aria-hidden="true" data-options-url="{{ route('app-procurement-ordering-options') }}">
  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><form method="post" action="{{ route('app-procurement-store') }}" class="modal-content" id="material-order-form">@csrf
+ <input type="hidden" name="open_pdf" id="order-open-pdf" value="0">
  <input type="hidden" name="document_type" id="order-document-type" value="{{ old('document_type','order') }}">
  <input type="hidden" name="submission" value="{{ old('submission',(string) \Illuminate\Support\Str::uuid()) }}">
  <div class="modal-header"><h4 class="modal-title" id="order-material-title">Naruči materijal</h4><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button></div>
@@ -31,7 +32,7 @@
  <p id="order-material-error" class="text-danger" role="alert"></p>
  <div class="table-responsive"><table class="table"><thead><tr><th>Materijal</th><th>Radni nalozi</th><th>Tačna potreba RN</th><th>Dimenzije za narudžbu</th><th>Komada</th><th>Skladište sirovina</th><th>Količina / JM</th><th>Cijena / JM</th><th>PDV %</th><th class="order-actions">Akcije</th></tr></thead><tbody id="material-order-rows"></tbody></table></div>
  <label class="form-label mt-1" for="order-notes">Napomena</label><textarea id="order-notes" name="notes" class="form-control" maxlength="4000">{{ old('notes') }}</textarea>
- </div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zatvori</button><button class="btn btn-primary" id="submit-material-order">Sačuvaj narudžbenicu</button></div>
+ </div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zatvori</button><button type="submit" class="btn btn-outline-primary" id="preview-material-pdf" data-open-pdf hidden disabled>Vidi PDF</button><button class="btn btn-primary" id="submit-material-order">Sačuvaj narudžbenicu</button></div>
  </form></div>
 </div>
 <script>window.procurementOldType = @json(old('document_type', 'order')); window.procurementOldItems = @json(array_values(old('items', [])));</script>

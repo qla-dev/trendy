@@ -178,6 +178,7 @@ class ProcurementController extends Controller
         $data = $this->validatedPurchase($request);
         $purchase = $this->business(fn () => $this->service->create($data, (int) $request->user()->id));
         $request->session()->forget('procurement_selected');
+        if ($purchase['document_type'] === 'inquiry' && $request->boolean('open_pdf')) return redirect()->route('app-procurement-print', $purchase['id']);
         if ($purchase['document_type'] === 'inquiry') return redirect()->route('app-procurement-show', $purchase['id'])->with('success','Upit je sačuvan. Pregledajte ga prije otvaranja PDF-a.');
         return redirect()->route('app-procurement-show', $purchase['id'])->with('success', 'Nabavka je sačuvana.');
     }
