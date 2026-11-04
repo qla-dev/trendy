@@ -72,4 +72,4 @@
  try{const saved=JSON.parse(sessionStorage.getItem('procurement-material-search-focus') || 'null');sessionStorage.removeItem('procurement-material-search-focus');if(saved && saved.q===search.value && Date.now()-saved.at<30000){search.focus();search.setSelectionRange(saved.position,saved.position);}}catch(e){}
 })();
 </script>@endsection
-@section('page-script')<script src="{{ asset('js/scripts/pages/procurement.js') }}?v=9"></script><script src="{{ asset('js/scripts/pages/procurement-ordering.js') }}?v=6"></script>@endsection
+@section('page-script')<script src="{{ asset('js/scripts/pages/procurement.js') }}?v=9"></script><script src="{{ asset('js/scripts/pages/procurement-ordering.js') }}?v=7"></script>@endsection
