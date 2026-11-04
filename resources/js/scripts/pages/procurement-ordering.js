@@ -104,7 +104,7 @@
       const label=document.createElement('label'),input=document.createElement('input'),text=document.createElement('span'),details=document.createElement('small');
       input.type='checkbox';input.className='form-check-input';input.value=source.id;input.checked=ids.has(source.id);input.disabled=used.has(source.id);
       text.append(document.createTextNode(source.work_order));details.textContent=(source.dimensions || 'Bez dimenzija')+' · '+number(source.remaining)+'\u00a0'+source.unit+(input.disabled?' · već odabrano':'');text.append(details);label.append(input,text);list.append(label);
-      input.addEventListener('change',()=>{if(input.checked && ids.size+used.size>=100){input.checked=false;error.textContent='Najviše 100 potreba može biti odabrano.';return;}if(input.checked)ids.add(source.id);else ids.delete(source.id);count();});
+      input.addEventListener('change',()=>{if(input.checked)ids.add(source.id);else ids.delete(source.id);count();});
     }
     if(!rows.length)list.textContent='Nema preostalih potreba za ovaj materijal. Možete naručiti za skladište.';
     panel.querySelector('[data-rn-search]').addEventListener('input',event=>{const q=event.target.value.toLowerCase();list.querySelectorAll('label').forEach(label=>{label.style.display=label.textContent.toLowerCase().includes(q)?'':'none';});});
@@ -119,7 +119,6 @@
   },true);
   modal.addEventListener('hide.bs.modal',()=>closePicker());
   function addRow(old,after){
-    if(body.children.length>=100){error.textContent='Najviše 100 redova je dozvoljeno.';return null;}
     const row=document.createElement('tr');row.orderIndex=next++;row.orderIds=[];
     row.innerHTML='<td style="min-width:230px"><select data-material aria-label="Materijal" required></select></td><td><button type="button" class="btn btn-outline-secondary rn-picker-trigger" data-orders aria-haspopup="dialog" aria-expanded="false">Odaberite RN</button><div data-allocations></div></td><td style="min-width:200px;white-space:pre-line" data-need></td><td><input class="form-control" style="min-width:165px" data-dimensions required maxlength="1000" aria-label="Dimenzije za narudžbu"></td><td><input class="form-control" style="width:90px" data-pieces inputmode="decimal" aria-label="Komada"></td><td data-stock></td><td><div class="order-quantity"><input class="form-control" style="width:110px" data-quantity required inputmode="decimal" aria-label="Količina"><span data-unit></span></div></td><td><input class="form-control" style="width:100px" data-price required inputmode="decimal" aria-label="Cijena"></td><td><input class="form-control" style="width:80px" data-vat required inputmode="decimal" aria-label="PDV"></td><td class="order-actions"><div class="d-flex gap-50"><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--success" data-add title="Dodaj red" aria-label="Dodaj red">'+icon('plus')+'</button><button type="button" class="btn btn-sm app-table-action-btn app-table-action-btn--danger" data-remove title="Obriši red" aria-label="Obriši red">'+icon('trash-2')+'</button></div></td>';
     for(const [field,key] of Object.entries({dimensions:'ordered_dimensions',pieces:'pieces',quantity:'quantity',price:'price',vat:'vat_rate'}))row.querySelector('[data-'+field+']').name='items['+row.orderIndex+']['+key+']';
@@ -186,10 +185,25 @@
       submit.disabled=false;
     }catch(e){error.textContent=e.message;}
   });
-  document.getElementById('material-order-form').addEventListener('submit',event=>{
+  document.getElementById('material-order-form').addEventListener('submit',async event=>{
     closePicker();
-    if(!body.children.length || !event.target.checkValidity()){event.preventDefault();event.target.reportValidity();error.textContent='Dodajte materijal i popunite obavezna polja.';return;}
-    document.getElementById('submit-material-order').disabled=true;
+    const form=event.target,submit=document.getElementById('submit-material-order');
+    if(!body.children.length || !form.checkValidity()){event.preventDefault();form.reportValidity();error.textContent='Dodajte materijal i popunite obavezna polja.';return;}
+    submit.disabled=true;
+    // Large filtered selections can exceed PHP's form-input limit. JSON preserves every RN allocation.
+    if(form.elements.length<900)return;
+    event.preventDefault();
+    try{
+      const payload={};
+      for(const [name,value] of new FormData(form)){
+        const keys=name.match(/[^\[\]]+/g);let node=payload;
+        keys.forEach((key,index)=>{if(index===keys.length-1)node[key]=value;else node=node[key]??=(/^\d+$/.test(keys[index+1])?[]:{});});
+      }
+      payload.items=payload.items.filter(Boolean);
+      const response=await fetch(form.action,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json','X-CSRF-TOKEN':payload._token},body:JSON.stringify(payload)});
+      if(!response.ok){const data=await response.json();throw new Error(Object.values(data.errors || {}).flat().join(' ') || 'Dokument nije sačuvan. Pokušajte ponovo.');}
+      window.location.assign(response.url);
+    }catch(e){error.textContent=e.message;submit.disabled=false;}
   });
   if((window.procurementOldItems || []).length)window.bootstrap.Modal.getOrCreateInstance(modal).show();
 }());
