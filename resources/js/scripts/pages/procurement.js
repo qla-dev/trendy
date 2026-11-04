@@ -32,7 +32,7 @@
   let filteredTotal=Number(selection?.dataset.filteredTotal ?? filteredIds.length);
   let filteredComplete=filteredIds.length===filteredTotal;
   let filteredSelected=Number(selection?.dataset.filteredSelected ?? selectedIds.filter(id=>filteredIds.includes(id)).length);
-  let confirmedFilteredSelected=filteredSelected,bulkPending=false,displayCount=null;
+  let confirmedFilteredSelected=filteredSelected,inquiryPreparing=false,bulkPending=false,displayCount=null;
   const selectAll = document.getElementById('select-filtered-requirements');
   function updateSelectAll(){
     if(!selectAll)return;
@@ -44,9 +44,9 @@
   function renderSelection(){
     const count=displayCount ?? selectedIds.length,ids=new Set(selectedIds);
     document.getElementById('selection-count').textContent='Odabrano: '+count;
-    document.getElementById('clear-selection').disabled=!count || bulkPending;
-    document.querySelectorAll('.requirement-select').forEach(input=>{input.checked=ids.has(input.value);input.disabled=bulkPending;});
-    updateSelectAll();if(selectAll)selectAll.disabled=bulkPending || !filteredTotal;
+    document.getElementById('clear-selection').disabled=!count || bulkPending || inquiryPreparing;
+    document.querySelectorAll('.requirement-select').forEach(input=>{input.checked=ids.has(input.value);input.disabled=bulkPending || inquiryPreparing;});
+    updateSelectAll();if(selectAll)selectAll.disabled=bulkPending || inquiryPreparing || !filteredTotal;
   }
   window.procurementSelection = {ready:()=>selectionQueue, ids:()=>selectedIds};
   function saveSelection(change) {
@@ -87,6 +87,28 @@
     document.getElementById('clear-selection').addEventListener('click', () => saveSelection({clear:true}).then(() => { if (new URLSearchParams(window.location.search).has('selected_only')) window.location.reload(); }).catch(() => {}));
     document.getElementById('create-from-selection')?.addEventListener('submit', function (event) { event.preventDefault(); selectionQueue.then(() => this.submit()).catch(() => {}); });
     document.querySelectorAll('.pagination a, .procurement-compact th a').forEach(link => link.addEventListener('click', event => { event.preventDefault(); selectionQueue.then(() => { window.location.href=link.href; }).catch(() => {}); }));
+  }
+  const inquiryButton=document.querySelector('[data-inquiry-preview-url]');
+  if(inquiryButton && !inquiryButton.disabled) {
+    const status=document.getElementById('inquiry-preparing');
+    inquiryButton.addEventListener('click',async()=>{
+      if(inquiryPreparing)return;
+      inquiryPreparing=true;inquiryButton.disabled=true;inquiryButton.setAttribute('aria-busy','true');renderSelection();
+      status.className='p-1 mb-1 border rounded';status.innerHTML='<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Učitavanje pregleda upita…';
+      await selectionQueue;
+      if(!selectedIds.length){
+        status.className='p-1 mb-1 border rounded text-warning';status.textContent='Odaberite najmanje jedan radni nalog za upit.';
+        inquiryPreparing=false;inquiryButton.disabled=false;inquiryButton.removeAttribute('aria-busy');renderSelection();return;
+      }
+      // Submit explicit identities. Never reconstruct an inquiry from a stale server selection.
+      const form=document.createElement('form');form.method='POST';form.action=inquiryButton.dataset.inquiryPreviewUrl;
+      const add=(name,value)=>{const input=document.createElement('input');input.type='hidden';input.name=name;input.value=value;form.append(input);};
+      add('_token',selection.dataset.csrf);add('document_type','inquiry');
+      // JSON identities avoid PHP max_input_vars when selecting all matching rows.
+      add('selected_json',JSON.stringify(selectedIds));
+      document.body.append(form);await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));form.submit();
+    });
+    window.addEventListener('pageshow',()=>{inquiryPreparing=false;inquiryButton.disabled=false;inquiryButton.removeAttribute('aria-busy');status.classList.add('d-none');renderSelection();});
   }
   document.querySelectorAll('[data-auto-filter]').forEach(filter => {
     let timer;
@@ -142,6 +164,21 @@
     for (const key of Object.keys(totals)) { const target = form.querySelector('[data-total="' + key + '"]'); if (target) target.textContent = valid ? format(totals[key], key === 'quantity' ? 6 : 2).replace('.', ',') : '—'; }
   }
   form.addEventListener('input', recalculate);
-  form.addEventListener('submit', () => { document.getElementById('save-procurement').disabled = true; });
+  form.addEventListener('submit', async event => {
+    const button=document.getElementById('save-procurement'),status=document.getElementById('procurement-save-status');
+    button.disabled=true;if(status){status.hidden=false;status.textContent='Spremanje dokumenta…';}
+    if(form.elements.length<900)return;
+    event.preventDefault();
+    try {
+      const payload={};
+      for(const [name,value] of new FormData(form)){
+        const keys=name.match(/[^\[\]]+/g);let node=payload;
+        keys.forEach((key,index)=>{if(index===keys.length-1)node[key]=value;else node=node[key]??=(/^\d+$/.test(keys[index+1])?[]:{});});
+      }
+      const response=await fetch(form.action,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json','X-CSRF-TOKEN':payload._token},body:JSON.stringify(payload)});
+      if(!response.ok){const data=await response.json();throw new Error(Object.values(data.errors || {}).flat().join(' ') || 'Dokument nije sačuvan.');}
+      window.location.assign(response.url);
+    }catch(error){if(status)status.textContent=error.message;button.disabled=false;}
+  });
   recalculate();
 }());
