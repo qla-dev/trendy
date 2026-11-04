@@ -43,4 +43,4 @@
 @endsection
 @section('vendor-style')<link rel="stylesheet" href="{{ asset('vendors/css/forms/select/select2.min.css') }}">@endsection
 @section('vendor-script')<script src="{{ asset('vendors/js/forms/select/select2.full.min.js') }}"></script>@endsection
-@section('page-script')<script>jQuery(function($){$('#supplier').select2({width:'100%',placeholder:'Dobavljač',allowClear:true});});</script><script src="{{ asset('js/scripts/pages/procurement.js') }}?v=10"></script>@endsection
+@section('page-script')<script>jQuery(function($){$('#supplier').select2({width:'100%',placeholder:'Dobavljač',allowClear:true});});</script><script src="{{ asset('js/scripts/pages/procurement.js') }}?v={{ filemtime(public_path('js/scripts/pages/procurement.js')) }}"></script>@endsection
