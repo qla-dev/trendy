@@ -485,7 +485,8 @@ class ProcurementTest extends TestCase
         $this->assertStringNotContainsString('padding:.55rem',$response->getContent());
         $this->assertSame(0,$xpath->query('//*[contains(@class,"breadcrumb-right")]//button[@data-bs-toggle="dropdown"]')->length);
         $this->assertStringNotContainsString('>Todo<',$response->getContent());
-        $this->assertSame(2,$xpath->query('//*[@id="material-page-actions"]//button[@data-bs-target="#order-material-modal"]')->length);
+        $this->assertSame(1,$xpath->query('//*[@id="material-page-actions"]//button[@data-bs-target="#order-material-modal"]')->length);
+        $this->assertSame(1,$xpath->query('//*[@id="material-page-actions"]//button[@data-inquiry-preview-url]')->length);
         $this->assertSame(0,$xpath->query('//*[@id="procurement-material-list"]//button[@data-bs-target="#order-material-modal"]')->length);
         $this->assertSame(1,$xpath->query('//*[@id="material-table-controls"]//input[@name="q" and @type="search"]')->length);
         $this->assertSame(1,$xpath->query('//*[@id="material-table-controls"]//*[@id="selection-count"]')->length);
@@ -680,6 +681,28 @@ class ProcurementTest extends TestCase
             ->assertDontSee('Dokumenti i atesti')->assertDontSee('Reklamacije')->assertDontSee('Obavijesti dobavljača i historija promjena');
     }
 
+
+    public function test_inquiry_preview_uses_explicit_selection_and_renders_rns_before_pdf(): void
+    {
+        $this->login();
+        $this->sources['source-a']['inquiry_deadline']='2026-10-20';
+        $this->sources['source-b']['inquiry_deadline']='2026-10-19';
+        $this->sources['source-b']['work_order']='RN-2';
+        $this->sources['source-b']['required']='0';
+        $source=$this->app->make(ProcurementSource::class);
+        $source->shouldReceive('requirements')->once()->with(['selected_only'=>true,'selected_ids'=>['source-a','source-b'],'_all'=>true],[])
+            ->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(array_values($this->sources),2,2));
+        $this->withSession(['procurement_selected'=>['stale']])->post('/app/procurement/create',[
+            'document_type'=>'inquiry','selected_json'=>json_encode(['source-a','source-b'])
+        ])->assertRedirect(route('app-procurement-create-form',['document_type'=>'inquiry']));
+        $preview=$this->get('/app/procurement/create?document_type=inquiry');
+        $preview->assertOk()->assertSee('Pregled upita')->assertSee('RN-1')->assertSee('RN-2')
+            ->assertSee('source-a')->assertSee('source-b')->assertSee('2026-10-19')->assertSee('Sačuvaj upit');
+        if(getenv('PROCUREMENT_PREVIEW_DIR')) file_put_contents(getenv('PROCUREMENT_PREVIEW_DIR').'/inquiry-create.html',$preview->getContent());
+        $data=$this->inquiryPayload();
+        $data['items']=[$data['items'][0]];
+        $this->post('/app/procurement',$data)->assertSessionHasNoErrors()->assertRedirect('/app/procurement/'.$this->service->all()[0]['id']);
+    }
 
     private function inquiryPayload(): array
     {

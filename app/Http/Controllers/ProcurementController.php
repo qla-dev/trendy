@@ -58,8 +58,8 @@ class ProcurementController extends Controller
     public function orderingOptions(Request $request)
     {
         abort_unless(app(ProcurementAccess::class)->can($request->user(), 'edit'), 403);
-        $data = $request->validate(['q'=>'nullable|string|max:255','catalog_only'=>'nullable|boolean','material'=>'nullable|string|max:255','page'=>'nullable|integer|min:1','source_ids'=>'nullable|array','source_ids.*'=>'string|max:1000']);
-        $selected = $request->session()->get('procurement_selected', []);
+        $data = $request->validate(['q'=>'nullable|string|max:255','catalog_only'=>'nullable|boolean','material'=>'nullable|string|max:255','page'=>'nullable|integer|min:1','selected'=>'nullable|array','selected.*'=>'string|max:1000','source_ids'=>'nullable|array','source_ids.*'=>'string|max:1000']);
+        $selected = $data['selected'] ?? $request->session()->get('procurement_selected', []);
         $requirements = $catalog = $stock = [];
         $nextPage = null;
         if ($request->boolean('catalog_only')) {
@@ -85,14 +85,23 @@ class ProcurementController extends Controller
     public function create(Request $request)
     {
         if ($request->isMethod('post')) {
+            if ($request->has('selected_json')) {
+                $decoded = json_decode((string) $request->input('selected_json'), true);
+                $request->merge(['selected'=>is_array($decoded) ? $decoded : null]);
+            }
             if (!$request->boolean('from_session')) {
-                $data = $request->validate(['selected' => 'required|array|min:1|max:100', 'selected.*' => 'required|string|max:1000|distinct']);
+                $data = $request->validate(['selected' => 'required|array|min:1', 'document_type'=>'nullable|in:order,inquiry', 'selected.*' => 'required|string|max:1000|distinct']);
                 $request->session()->put('procurement_selected', $data['selected']);
             }
+            $request->session()->put('procurement_document_type', $request->input('document_type','order'));
+            $request->session()->forget('_old_input');
             $request->session()->put('procurement_combine', $request->boolean('combine'));
             $request->session()->put('procurement_overorder_prepare', $request->boolean('overorder_prepare') && app(ProcurementAccess::class)->can($request->user(),'manage'));
-            return redirect()->route('app-procurement-create-form');
+            return redirect()->route('app-procurement-create-form', $request->input('document_type') === 'inquiry' ? ['document_type'=>'inquiry'] : []);
         }
+        $documentType = $request->validate(['document_type'=>'nullable|in:order,inquiry'])['document_type'] ?? $request->session()->get('procurement_document_type','order');
+        $inquiry = $documentType === 'inquiry';
+        $progress = $this->service->progress();
         $selected = $request->session()->get('procurement_selected', []);
         if ($request->old('items')) {
             $selected = [];
@@ -100,14 +109,16 @@ class ProcurementController extends Controller
         }
         if ($selected === []) return redirect()->route('app-procurement-materials');
         try {
-            $items = $this->source->selected($selected);
+            if ($inquiry) {
+                $items = collect($this->source->requirements(['selected_only'=>true,'selected_ids'=>$selected,'_all'=>true], $progress)->items())->keyBy('id')->all();
+                if (array_diff($selected,array_keys($items))) throw new InvalidArgumentException('Dio odabranih RN-ova više nije dostupan. Ponovite odabir.');
+            } else $items = $this->source->selected($selected);
         } catch (InvalidArgumentException $exception) {
             return redirect()->route('app-procurement-materials')->withErrors(['selected' => $exception->getMessage()]);
         }
-        $progress = $this->service->progress();
         $unavailable = [];
         foreach ($items as $id => $item) {
-            if (bccomp($item['required'],'0',6)<=0 || (bccomp($item['required'], $progress[$id]['ordered'] ?? '0', 6) <= 0 && !$request->session()->get('procurement_overorder_prepare'))) {
+            if (!$inquiry && (bccomp($item['required'],'0',6)<=0 || (bccomp($item['required'], $progress[$id]['ordered'] ?? '0', 6) <= 0 && !$request->session()->get('procurement_overorder_prepare')))) {
                 $unavailable[$id] = $item['material'] . ' (' . $item['work_order'] . ')';
             }
         }
@@ -117,20 +128,27 @@ class ProcurementController extends Controller
         }
         $groups = [];
         foreach ($items as $id=>$item) {
-            $key = $request->session()->get('procurement_combine') ? $this->service->compatibility($item) : $id;
+            $key = !$inquiry && $request->session()->get('procurement_combine') ? $this->service->compatibility($item) : $id;
             $quantity = bcsub($item['required'], $progress[$id]['ordered'] ?? '0', 6);
             if (bccomp($quantity,'0',6)<0) $quantity = '0.000000';
             $groups[$key] ??= ['source'=>$item,'quantity'=>'0','price'=>$item['price'] ?? '','vatRate'=>$item['vat_rate'],'discountRate'=>'0','deadline'=>$item['required_date'] ?? '', 'allocations'=>[]];
+            if ($inquiry) {
+                $groups[$key]['deadline'] = $item['inquiry_deadline'] ?? '';
+                $groups[$key]['price'] = '';
+                $groups[$key]['price_pending'] = true;
+                $groups[$key]['ordered_dimensions'] = $item['dimensions'];
+                $groups[$key]['pieces'] = $item['pieces'] ?? '';
+            }
             $groups[$key]['quantity'] = bcadd($groups[$key]['quantity'], $quantity, 6);
             $groups[$key]['allocations'][] = ['source'=>$item,'quantity'=>$quantity];
-            if (!empty($item['required_date']) && (!$groups[$key]['deadline'] || $item['required_date'] < $groups[$key]['deadline'])) $groups[$key]['deadline'] = $item['required_date'];
+            if (!$inquiry && !empty($item['required_date']) && (!$groups[$key]['deadline'] || $item['required_date'] < $groups[$key]['deadline'])) $groups[$key]['deadline'] = $item['required_date'];
         }
-        return $this->form(array_values($groups));
+        return $this->form(array_values($groups), null, $documentType);
     }
 
-    private function form(array $lines, ?array $purchase = null)
+    private function form(array $lines, ?array $purchase = null, ?string $documentType = null)
     {
-        return view('content.apps.procurement.create', ['lines'=>$lines,'purchase'=>$purchase,'suppliers'=>$this->source->suppliers(),'submission'=>(string) Str::uuid()]);
+        return view('content.apps.procurement.create', ['documentType'=>$documentType ?? ($purchase['document_type'] ?? 'order'),'lines'=>$lines,'purchase'=>$purchase,'suppliers'=>$this->source->suppliers(),'submission'=>(string) Str::uuid()]);
     }
 
     public function selection(Request $request)
@@ -160,7 +178,7 @@ class ProcurementController extends Controller
         $data = $this->validatedPurchase($request);
         $purchase = $this->business(fn () => $this->service->create($data, (int) $request->user()->id));
         $request->session()->forget('procurement_selected');
-        if ($purchase['document_type'] === 'inquiry') return redirect()->route('app-procurement-print', $purchase['id']);
+        if ($purchase['document_type'] === 'inquiry') return redirect()->route('app-procurement-show', $purchase['id'])->with('success','Upit je sačuvan. Pregledajte ga prije otvaranja PDF-a.');
         return redirect()->route('app-procurement-show', $purchase['id'])->with('success', 'Nabavka je sačuvana.');
     }
 

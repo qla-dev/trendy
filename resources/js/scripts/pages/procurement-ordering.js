@@ -180,9 +180,15 @@
     return row;
   }
   $('#order-supplier').select2({dropdownParent:$(modal),width:'100%',placeholder:'Dobavljač',allowClear:true});
-  modal.addEventListener('show.bs.modal',async event=>{
+  const loading=document.getElementById('order-material-loading'),retry=document.getElementById('order-material-retry');
+  let lastTrigger=null,loadController=null,loadVersion=0;
+  async function loadModal(event){
+    lastTrigger=event.relatedTarget || lastTrigger;
+    const version=++loadVersion;loadController?.abort();loadController=new AbortController();
+    const controller=loadController,timeout=setTimeout(()=>controller.abort(),20000);
+    loading.hidden=false;retry.hidden=true;body.hidden=true;modal.setAttribute('aria-busy','true');
     const submit=document.getElementById('submit-material-order');submit.disabled=true;error.textContent='';
-    inquiry=(event.relatedTarget?.dataset.documentType || (restored?'order':window.procurementOldType))==='inquiry';
+    inquiry=(lastTrigger?.dataset.documentType || (restored?'order':window.procurementOldType))==='inquiry';
     document.getElementById('order-document-type').value=inquiry?'inquiry':'order';
     document.getElementById('order-material-title').textContent=inquiry?'Upit za materijal':'Naruči materijal';
     document.getElementById('order-date-label').textContent=inquiry?'Datum upita':'Datum narudžbe';
@@ -193,9 +199,12 @@
       const oldItems=restored?[]:(window.procurementOldItems || []);
       const restoreIds=oldItems.flatMap(item=>(item.allocations || [{source_id:item.source_id}]).map(a=>a.source_id)).filter(Boolean);
       if(!options || [...selected,...restoreIds].some(id=>!options.requirements.some(source=>source.id===id))){
-        const response=await fetch(modal.dataset.optionsUrl,{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('#material-order-form [name="_token"]').value},body:JSON.stringify({source_ids:restoreIds})});
+        const response=await fetch(modal.dataset.optionsUrl,{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('#material-order-form [name="_token"]').value},signal:controller.signal,body:JSON.stringify({selected,source_ids:restoreIds})});
         if(!response.ok)throw new Error('Materijale nije moguće učitati. Ponovo otvorite prozor.');
-        options=await response.json();sourceById.clear();options.requirements.forEach(source=>sourceById.set(source.id,source));[...options.requirements,...options.catalog].forEach(ensureMaterial);
+        if(!response.headers.get('content-type')?.includes('application/json'))throw new Error('Server nije vratio podatke. Osvježite stranicu i prijavite se ponovo ako je sesija istekla.');
+        const data=await response.json();if(version!==loadVersion)return;
+        if(!Array.isArray(data.requirements) || !Array.isArray(data.catalog))throw new Error('Odgovor servera ne sadrži ispravnu listu materijala. Pokušajte ponovo.');
+        options=data;sourceById.clear();options.requirements.forEach(source=>sourceById.set(source.id,source));[...options.requirements,...options.catalog].forEach(ensureMaterial);
       }
       const currentSignature=JSON.stringify([inquiry,selected.slice().sort()]);
       if(currentSignature!==signature){
@@ -205,6 +214,7 @@
         if(old.length)old.slice().reverse().forEach(item=>addRow(item));
         else{
           const chosen=options.requirements.filter(s=>selected.includes(s.id));
+          if(selected.length && !chosen.length)throw new Error('Odabrani radni nalozi nisu učitani. Pokušajte ponovo.');
           groupSources(chosen).reverse().forEach(group=>addRow({materialCode:group[0].material,ids:group.map(s=>s.id)}));
           if(!body.children.length)addRow();
           if(selected.length && chosen.length!==selected.length)error.textContent='Dio odabranih potreba više nije dostupan za nabavku.';
@@ -213,8 +223,12 @@
       }
       if(inquiry)setDeadline();
       submit.disabled=false;
-    }catch(e){buildingRows=false;error.textContent=e.message;}
-  });
+    }catch(e){if(version===loadVersion){buildingRows=false;error.textContent=e.name==='AbortError'?'Učitavanje nije završeno. Pokušajte ponovo.':e.message;retry.hidden=false;}}
+    finally{clearTimeout(timeout);if(version===loadVersion){loading.hidden=true;body.hidden=false;modal.removeAttribute('aria-busy');}}
+  }
+  modal.addEventListener('show.bs.modal',loadModal);
+  retry.addEventListener('click',()=>loadModal({relatedTarget:lastTrigger}));
+  modal.addEventListener('hide.bs.modal',()=>{loadVersion++;loadController?.abort();modal.removeAttribute('aria-busy');});
   document.getElementById('material-order-form').addEventListener('submit',async event=>{
     closePicker();
     const form=event.target,submit=document.getElementById('submit-material-order');
