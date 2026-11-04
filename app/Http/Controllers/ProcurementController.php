@@ -39,9 +39,13 @@ class ProcurementController extends Controller
         $length = (int) ($filters['per_page'] ?? 10);
         $all = $this->source->requirements(array_merge($filters, ['_all'=>true,'page'=>1]), $this->service->progress());
         $filteredIds = $all->pluck('id')->all();
+        $filterToken = (string) Str::uuid();
+        $snapshots = $request->session()->get('procurement_filter_snapshots', []);
+        $snapshots[$filterToken] = $filteredIds;
+        $request->session()->put('procurement_filter_snapshots', array_slice($snapshots, -10, null, true));
         $rows = new LengthAwarePaginator($all->getCollection()->forPage($page, $length)->values(), $all->total(), $length, $page, ['path'=>$request->url(),'query'=>$request->query()]);
         $stock = $this->source->stock($rows->pluck('material')->all());
-        return view('content.apps.procurement.materials', compact('rows', 'selected', 'stock', 'filteredIds'));
+        return view('content.apps.procurement.materials', compact('rows', 'selected', 'stock', 'filteredIds', 'filterToken'));
     }
 
     private function materialFilters(Request $request): array
@@ -118,13 +122,15 @@ class ProcurementController extends Controller
 
     public function selection(Request $request)
     {
-        $data = $request->validate(['add'=>'nullable|array','add.*'=>'string|max:1000','remove'=>'nullable|array','remove.*'=>'string|max:1000','clear'=>'nullable|boolean','filtered'=>'nullable|in:add,remove']);
+        $data = $request->validate(['add'=>'nullable|array','add.*'=>'string|max:1000','remove'=>'nullable|array','remove.*'=>'string|max:1000','clear'=>'nullable|boolean','filtered'=>'nullable|in:add,remove','filter_token'=>'required_with:filtered|uuid']);
         $selected = $request->boolean('clear') ? [] : $request->session()->get('procurement_selected', []);
         $selected = array_values(array_diff(array_unique([...$selected, ...($data['add'] ?? [])]), $data['remove'] ?? []));
         if (!empty($data['filtered'])) {
-            $filters = $this->materialFilters($request);
-            $filters['selected_ids'] = $selected;
-            $matches = $this->source->requirements(array_merge($filters, ['_all'=>true,'page'=>1]), $this->service->progress())->pluck('id')->all();
+            // Reuse the server-side filter snapshot prepared when rendering the page.
+            // Selecting checkboxes must not query or reprocess the ERP material list.
+            $snapshots = $request->session()->get('procurement_filter_snapshots', []);
+            if (!array_key_exists($data['filter_token'], $snapshots)) throw ValidationException::withMessages(['filtered'=>'Lista je istekla. Osvježite stranicu i ponovite odabir.']);
+            $matches = $snapshots[$data['filter_token']];
             $selected = $data['filtered'] === 'add' ? array_values(array_unique([...$selected,...$matches])) : array_values(array_diff($selected,$matches));
         }
         $request->session()->put('procurement_selected', $selected);

@@ -487,6 +487,9 @@ class ProcurementTest extends TestCase
         $this->assertSame(2,$xpath->query('//*[@id="material-page-actions"]//button[@data-bs-target="#order-material-modal"]')->length);
         $this->assertSame(0,$xpath->query('//*[@id="procurement-material-list"]//button[@data-bs-target="#order-material-modal"]')->length);
         $this->assertSame(1,$xpath->query('//*[@id="material-table-controls"]//input[@name="q" and @type="search"]')->length);
+        $this->assertSame(1,$xpath->query('//*[@id="material-table-controls"]//*[@id="selection-count"]')->length);
+        $this->assertSame(2,$xpath->query('//*[@id="material-page-actions"]/button[not(@disabled) and contains(@class,"btn-primary")]')->length);
+        $this->assertSame(['source-a'], array_values(session('procurement_filter_snapshots'))[0]);
         $this->assertSame(4,$xpath->query('//*[@id="material-page-length"]/option')->length);
 
     }
@@ -775,18 +778,23 @@ class ProcurementTest extends TestCase
         $this->withSession(['procurement_selected'=>['source-a','source-b']])->getJson('/app/procurement/ordering-options')->assertOk()->assertJsonPath('selected',['source-a','source-b']);
     }
 
-    public function test_filtered_select_all_includes_other_pages_and_preserves_outside_selection(): void
+    public function test_filtered_select_all_includes_other_pages_without_querying_the_erp_again(): void
     {
         $this->login();
-        $matches=[];for($i=0;$i<125;$i++)$matches[]=['id'=>'filtered-'.$i];
-        app(ProcurementSource::class)->shouldReceive('requirements')->withArgs(function($filters,$progress){
-            return $filters['_all']===true && $filters['page']===1 && $filters['q']==='STEEL' && $filters['unit']==='KG'
-                && $filters['created_from']==='2026-10-01' && $filters['created_to']==='2026-10-31';
-        })->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect($matches),125,125));
-        $url='/app/procurement/selection?q=STEEL&unit=KG&created_from=2026-10-01&created_to=2026-10-31&page=4&per_page=10';
-        $this->withSession(['procurement_selected'=>['outside']])->postJson($url,['filtered'=>'add'])
-            ->assertOk()->assertJsonPath('count',126)->assertSessionHas('procurement_selected',fn($ids)=>in_array('filtered-124',$ids,true) && in_array('outside',$ids,true));
-        $this->postJson($url,['filtered'=>'remove'])->assertOk()->assertJsonPath('selected',['outside']);
+        $matches=[];for($i=0;$i<1988;$i++)$matches[]='filtered-'.$i;
+        app(ProcurementSource::class)->shouldNotReceive('requirements');
+        $token=(string) Str::uuid();
+        $this->withSession(['procurement_selected'=>['outside'],'procurement_filter_snapshots'=>[$token=>$matches]])
+            ->postJson('/app/procurement/selection',['filtered'=>'add','filter_token'=>$token])
+            ->assertOk()->assertJsonPath('count',1989)->assertSessionHas('procurement_selected',fn($ids)=>in_array('filtered-1987',$ids,true) && in_array('outside',$ids,true));
+        $this->postJson('/app/procurement/selection',['filtered'=>'remove','filter_token'=>$token])->assertOk()->assertJsonPath('selected',['outside']);
+    }
+
+    public function test_expired_filter_snapshot_does_not_change_the_selection_or_query_erp(): void
+    {
+        $this->login();app(ProcurementSource::class)->shouldNotReceive('requirements');
+        $this->withSession(['procurement_selected'=>['source-a']])->postJson('/app/procurement/selection',['filtered'=>'add','filter_token'=>(string) Str::uuid()])
+            ->assertUnprocessable()->assertSessionHas('procurement_selected',['source-a']);
     }
 
     public function test_zero_erp_quantity_stays_in_ordering_options_and_allows_manual_specification(): void

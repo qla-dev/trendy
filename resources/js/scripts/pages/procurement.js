@@ -36,26 +36,39 @@
     selectAll.checked=filteredIds.length>0 && count===filteredIds.length;
     selectAll.indeterminate=count>0 && count<filteredIds.length;
   }
+  let confirmedIds=selectedIds.slice(), selectionVersion=0;
+  function renderSelection(){
+    const count=selectedIds.length,ids=new Set(selectedIds);
+    document.getElementById('selection-count').textContent='Odabrano: '+count;
+    document.getElementById('clear-selection').disabled=!count;
+    document.querySelectorAll('.requirement-select').forEach(input=>{input.checked=ids.has(input.value);});
+    updateSelectAll();
+  }
   window.procurementSelection = {ready:()=>selectionQueue, ids:()=>selectedIds};
   function saveSelection(change) {
+    const version=++selectionVersion,ids=new Set(change.clear?[]:selectedIds);
+    (change.add || []).forEach(id=>ids.add(id));
+    (change.remove || []).forEach(id=>ids.delete(id));
+    if(change.filtered)filteredIds.forEach(id=>{if(change.filtered==='add')ids.add(id);else ids.delete(id);});
+    selectedIds=[...ids];renderSelection();
+    const payload=change.filtered?{...change,filter_token:selection.dataset.filterToken}:change;
     const request = selectionQueue.then(async () => {
-      const response = await fetch(selection.dataset.url + window.location.search, {method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':selection.dataset.csrf},body:JSON.stringify(change)});
+      const response = await fetch(selection.dataset.url, {method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':selection.dataset.csrf},body:JSON.stringify(payload)});
       if (!response.ok) throw new Error('Odabir nije sačuvan. Osvježite stranicu i pokušajte ponovo.');
-      const data = await response.json();
-      document.getElementById('selection-count').textContent = 'Odabrano: ' + data.count;
-      document.getElementById('clear-selection').disabled = !data.count;
-      selectedIds = data.selected;
-      document.querySelectorAll('[data-document-type="inquiry"]').forEach(button => {button.disabled = !data.count;});
-      document.querySelectorAll('.requirement-select').forEach(input => { input.checked = data.selected.includes(input.value); });
-      updateSelectAll();
+      const data = await response.json();confirmedIds=data.selected;
+      // Older responses must not overwrite a newer click already shown in the table.
+      if(version===selectionVersion){selectedIds=confirmedIds.slice();renderSelection();}
+    }).catch(error=>{
+      if(version===selectionVersion){selectedIds=confirmedIds.slice();renderSelection();}
+      throw error;
     });
     selectionQueue = request.catch(error => { window.alert(error.message); });
-    return selectionQueue;
+    return request;
   }
   if (selection && document.getElementById('clear-selection')) {
     updateSelectAll();
     selectAll?.addEventListener('change',()=>saveSelection({filtered:selectAll.checked?'add':'remove'}).catch(()=>updateSelectAll()));
-    selection.querySelectorAll('.requirement-select').forEach(input => input.addEventListener('change', () => saveSelection(input.checked ? {add:[input.value]} : {remove:[input.value]}).catch(() => window.location.reload())));
+    selection.querySelectorAll('.requirement-select').forEach(input => input.addEventListener('change', () => saveSelection(input.checked ? {add:[input.value]} : {remove:[input.value]}).catch(() => {})));
     document.getElementById('clear-selection').addEventListener('click', () => saveSelection({clear:true}).then(() => { if (new URLSearchParams(window.location.search).has('selected_only')) window.location.reload(); }).catch(() => {}));
     document.getElementById('create-from-selection')?.addEventListener('submit', function (event) { event.preventDefault(); selectionQueue.then(() => this.submit()).catch(() => {}); });
     document.querySelectorAll('.pagination a, .procurement-compact th a').forEach(link => link.addEventListener('click', event => { event.preventDefault(); selectionQueue.then(() => { window.location.href=link.href; }).catch(() => {}); }));
