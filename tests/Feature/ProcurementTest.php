@@ -467,7 +467,7 @@ class ProcurementTest extends TestCase
     {
         $this->login();$row=$this->sources['source-a']+['required_date'=>'2026-10-27','ordered'=>'0','received'=>'0','remaining'=>'10','missing'=>'10','purchases'=>[],'suppliers'=>[],'late'=>false,'state'=>'not_ordered'];
         app(ProcurementSource::class)->shouldReceive('requirements')->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([$row]),1,40));
-        $response=$this->get('/app/procurement/materials');if(getenv('PROCUREMENT_PREVIEW_DIR')) file_put_contents(getenv('PROCUREMENT_PREVIEW_DIR').'/materials.html',$response->getContent());$response->assertOk()->assertSee('Naruči materijal')->assertSee('24,5')->assertSee('Skladište sirovina')->assertDontSee('requirement-select')->assertDontSee('varijanta')->assertDontSee('Radni nalog /')->assertSee('Primijeni filtere')->assertDontSee('id="add-material-order-row"',false);
+        $response=$this->get('/app/procurement/materials');if(getenv('PROCUREMENT_PREVIEW_DIR')) file_put_contents(getenv('PROCUREMENT_PREVIEW_DIR').'/materials.html',$response->getContent());$response->assertOk()->assertSee('Naruči materijal')->assertSee('24,5')->assertSee('Skladište sirovina')->assertSee('requirement-select')->assertSee('Upit')->assertDontSee('varijanta')->assertDontSee('Radni nalog /')->assertSee('Primijeni filtere')->assertDontSee('id="add-material-order-row"',false);
         $dom=new \DOMDocument();@$dom->loadHTML($response->getContent());$xpath=new \DOMXPath($dom);
         $this->assertSame(0,$xpath->query('//table[contains(@class,"procurement-compact")]/thead//input[@type="checkbox"]')->length);
         $this->assertSame(1,$xpath->query('//th/a[normalize-space(.)="Poz."]')->length);
@@ -481,7 +481,7 @@ class ProcurementTest extends TestCase
         $this->assertStringNotContainsString('padding:.55rem',$response->getContent());
         $this->assertSame(0,$xpath->query('//*[contains(@class,"breadcrumb-right")]//button[@data-bs-toggle="dropdown"]')->length);
         $this->assertStringNotContainsString('>Todo<',$response->getContent());
-        $this->assertSame(1,$xpath->query('//*[@id="material-page-actions"]//button[@data-bs-target="#order-material-modal"]')->length);
+        $this->assertSame(2,$xpath->query('//*[@id="material-page-actions"]//button[@data-bs-target="#order-material-modal"]')->length);
         $this->assertSame(0,$xpath->query('//*[@id="procurement-material-list"]//button[@data-bs-target="#order-material-modal"]')->length);
         $this->assertSame(1,$xpath->query('//*[@id="material-table-controls"]//input[@name="q" and @type="search"]')->length);
         $this->assertSame(4,$xpath->query('//*[@id="material-page-length"]/option')->length);
@@ -673,4 +673,102 @@ class ProcurementTest extends TestCase
             ->assertDontSee('Dokumenti i atesti')->assertDontSee('Reklamacije')->assertDontSee('Obavijesti dobavljača i historija promjena');
     }
 
+
+    private function inquiryPayload(): array
+    {
+        $this->sources['source-a']['inquiry_deadline'] = '2026-10-23';
+        $this->sources['source-b']['inquiry_deadline'] = '2026-10-21';
+        $data = $this->payload();
+        $data['document_type'] = 'inquiry';
+        foreach ($data['items'] as &$line) unset($line['price']);
+        return $data;
+    }
+
+    public function test_inquiry_without_prices_uses_rn_dates_and_does_not_reserve_material(): void
+    {
+        $purchase = $this->service->create($this->inquiryPayload(), 77);
+        $this->assertSame('inquiry', $purchase['document_type']);
+        $this->assertStringStartsWith('UP-', $purchase['number']);
+        $this->assertSame('2026-10-21', $purchase['deadline']);
+        $this->assertSame(['2026-10-23','2026-10-21'], array_column($purchase['items'], 'deadline'));
+        $this->assertTrue($purchase['items'][0]['price_pending']);
+        $this->assertSame([], $this->service->progress());
+        $this->assertSame([], $this->service->reserved());
+        $this->assertSame('inquiry', (new ProcurementCalculator())->deliveryStatus($purchase));
+        $this->assertSame(0, (new ProcurementCalculator())->deadline($purchase)['days']);
+    }
+
+    public function test_inquiry_requires_prices_then_confirms_same_document_once(): void
+    {
+        $data = $this->inquiryPayload();
+        $purchase = $this->service->create($data, 77);
+        try { $this->service->confirmInquiry($purchase['id'],77); $this->fail('Missing supplier prices accepted.'); }
+        catch (InvalidArgumentException $expected) { $this->assertSame('inquiry',$this->service->find($purchase['id'])['document_type']); }
+        $data['items'][0]['price'] = '2.5'; $data['items'][1]['price'] = '1';
+        $edited = $this->service->edit($purchase['id'],$data,77);
+        $confirmed = $this->service->confirmInquiry($purchase['id'],77);
+        $this->assertSame('order',$confirmed['document_type']);
+        $this->assertSame($purchase['number'],$confirmed['inquiry_number']);
+        $this->assertStringStartsWith('NS-',$confirmed['number']);
+        $this->assertSame($edited['items'],$confirmed['items']);
+        $this->assertSame($confirmed,$this->service->confirmInquiry($purchase['id'],77));
+        $this->assertSame('10.000000',$this->service->progress()['source-a']['ordered']);
+        $this->assertCount(1,$this->service->all());
+    }
+
+    public function test_inquiry_confirmation_rechecks_material_already_ordered_elsewhere(): void
+    {
+        $data = $this->inquiryPayload();
+        foreach ($data['items'] as &$line) $line['price']='1';
+        unset($line);
+        $purchase=$this->service->create($data,77);
+        $this->service->create($this->payload(),77);
+        $this->expectException(InvalidArgumentException::class);
+        $this->service->confirmInquiry($purchase['id'],77);
+    }
+
+    public function test_inquiry_cannot_sync_or_receive_before_confirmation(): void
+    {
+        $purchase=$this->service->create($this->inquiryPayload(),77);
+        foreach (['sync','receive','receiveEvent','receiveScan'] as $action) {
+            try {
+                match($action) {
+                    'sync'=>$this->service->sync($purchase['id'],77),
+                    'receive'=>$this->service->receive($purchase['id'],['1','0'],'PR-1',77),
+                    'receiveEvent'=>$this->service->receiveEvent($purchase['id'],[],77),
+                    'receiveScan'=>$this->service->receiveScan($purchase['id'],null,77),
+                };
+                $this->fail('Unconfirmed inquiry accepted: '.$action);
+            } catch (InvalidArgumentException $expected) { $this->assertSame($purchase,$this->service->find($purchase['id'])); }
+        }
+    }
+
+    public function test_inquiry_http_flow_prints_bosnian_and_german_then_accepts_supplier_prices(): void
+    {
+        $this->login();
+        $data=$this->inquiryPayload();
+        $this->post('/app/procurement',$data)->assertRedirect();
+        $purchase=$this->service->all()[0];
+        $preview=$this->get('/app/procurement/'.$purchase['id'].'/print');
+        if(getenv('PROCUREMENT_PREVIEW_DIR')) file_put_contents(getenv('PROCUREMENT_PREVIEW_DIR').'/inquiry.html',$preview->getContent());
+        $preview->assertOk()->assertSee('Upit za sirovine')->assertSee('Anfrage für Rohmaterial')->assertSee('Liefertermin')->assertSee('Rok isporuke')->assertSee('23.10.2026.')->assertSee('21.10.2026.')->assertSee('lang="bs"',false)->assertSee('lang="de"',false);
+        $preview=$this->get('/app/procurement/'.$purchase['id']);
+        if(getenv('PROCUREMENT_PREVIEW_DIR')) file_put_contents(getenv('PROCUREMENT_PREVIEW_DIR').'/inquiry-show.html',$preview->getContent());
+        $preview->assertOk()->assertSee('Potvrdi upit kao narudžbu')->assertDontSee('Pokušaj Pantheon prijenos');
+        $this->get('/app/procurement')->assertOk()->assertSee('Upit');
+        $this->get('/app/procurement/'.$purchase['id'].'/edit')->assertOk()->assertSee('Izmjena upita');
+        $this->post('/app/procurement/'.$purchase['id'].'/confirm-inquiry')->assertSessionHasErrors('procurement');
+        $data['items'][0]['price']='2.5';$data['items'][1]['price']='1';
+        $this->post('/app/procurement/'.$purchase['id'].'/edit',$data)->assertRedirect('/app/procurement/'.$purchase['id'])->assertSessionHasNoErrors();
+        $this->post('/app/procurement/'.$purchase['id'].'/confirm-inquiry')->assertRedirect('/app/procurement/'.$purchase['id'])->assertSessionHasNoErrors();
+        $this->assertSame('order',$this->service->find($purchase['id'])['document_type']);
+        $this->get('/app/procurement/'.$purchase['id'].'/print')->assertOk()->assertSee('Nabavka sirovina')->assertDontSee('Anfrage für Rohmaterial');
+    }
+
+    public function test_ordering_options_expose_saved_checkbox_selection(): void
+    {
+        $this->login();
+        app(ProcurementSource::class)->shouldReceive('requirements')->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([]),0,10));
+        $this->withSession(['procurement_selected'=>['source-a','source-b']])->getJson('/app/procurement/ordering-options')->assertOk()->assertJsonPath('selected',['source-a','source-b']);
+    }
 }

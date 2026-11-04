@@ -20,11 +20,12 @@
 .dark-layout #order-material-modal .select2-selection__choice{background:#4a5c75!important;color:#fff!important}.dark-layout #order-material-modal .select2-selection__choice__remove{color:#fff!important}</style>
 <div class="modal fade" id="order-material-modal" tabindex="-1" aria-labelledby="order-material-title" aria-hidden="true" data-options-url="{{ route('app-procurement-ordering-options') }}">
  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><form method="post" action="{{ route('app-procurement-store') }}" class="modal-content" id="material-order-form">@csrf
+ <input type="hidden" name="document_type" id="order-document-type" value="{{ old('document_type','order') }}">
  <input type="hidden" name="submission" value="{{ old('submission',(string) \Illuminate\Support\Str::uuid()) }}">
  <div class="modal-header"><h4 class="modal-title" id="order-material-title">Naruči materijal</h4><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zatvori"></button></div>
  <div class="modal-body"><div class="row g-1 mb-2">
  <div class="col-md-5"><label class="form-label" for="order-supplier">Dobavljač</label><select id="order-supplier" name="supplier" class="form-control" required><option value="">Izaberite dobavljača</option>@foreach(app(\App\Services\Procurement\ProcurementSource::class)->suppliers() as $supplier)<option @selected(old('supplier')===$supplier)>{{ $supplier }}</option>@endforeach</select></div>
- <div class="col-md-3"><label class="form-label" for="order-date">Datum narudžbe</label><input id="order-date" name="document_date" type="text" data-procurement-date placeholder="dd.mm.gggg" class="form-control" required value="{{ old('document_date',now()->format('Y-m-d')) }}"></div>
+ <div class="col-md-3"><label class="form-label" for="order-date" id="order-date-label">Datum narudžbe</label><input id="order-date" name="document_date" type="text" data-procurement-date placeholder="dd.mm.gggg" class="form-control" required value="{{ old('document_date',now()->format('Y-m-d')) }}"></div>
  <div class="col-md-3"><label class="form-label" for="order-deadline">Rok isporuke</label><input id="order-deadline" name="deadline" type="text" data-procurement-date placeholder="dd.mm.gggg" class="form-control" required value="{{ old('deadline') }}"></div></div>
  <p class="small">Dimenzije su u mm. Potreba prikazuje zbir dužina po presjeku za preostale potrebe odabranih RN-ova. Količina za narudžbu se unosi u prikazanoj ERP jedinici; komadi i dimenzije čuvaju se zasebno.</p>
  <p id="order-material-error" class="text-danger" role="alert"></p>
@@ -33,4 +34,4 @@
  </div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zatvori</button><button class="btn btn-primary" id="submit-material-order">Sačuvaj narudžbenicu</button></div>
  </form></div>
 </div>
-<script>window.procurementOldItems = @json(array_values(old('items', [])));</script>
+<script>window.procurementOldType = @json(old('document_type', 'order')); window.procurementOldItems = @json(array_values(old('items', [])));</script>

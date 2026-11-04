@@ -105,6 +105,7 @@ Route::middleware('auth:web')->group(function () {
         Route::post('procurement/{id}/receive', [\App\Http\Controllers\ProcurementController::class, 'receive'])->name('app-procurement-receive');
         Route::post('procurement/{id}/cancel', [\App\Http\Controllers\ProcurementController::class, 'cancel'])->name('app-procurement-cancel');
         Route::delete('procurement/{id}', [\App\Http\Controllers\ProcurementController::class, 'destroy'])->name('app-procurement-destroy');
+        Route::post('procurement/{id}/confirm-inquiry', [\App\Http\Controllers\ProcurementController::class, 'confirmInquiry'])->name('app-procurement-confirm-inquiry');
         Route::post('procurement/{id}/sync', [\App\Http\Controllers\ProcurementController::class, 'sync'])->name('app-procurement-sync');
         Route::get('email', [AppsController::class, 'emailApp'])->name('app-email');
         Route::get('chat', [AppsController::class, 'chatApp'])->name('app-chat');

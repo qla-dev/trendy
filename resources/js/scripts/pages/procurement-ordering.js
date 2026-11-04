@@ -28,7 +28,13 @@
   if (!modal) return;
   const $=window.jQuery, body=document.getElementById('material-order-rows'), error=document.getElementById('order-material-error');
   const materials=new Map(), searches=new Map();
-  let options, next=0, picker=null;
+  let options, next=0, picker=null, inquiry=false, signature=null, restored=false;
+  function setDeadline(){
+    if(!inquiry)return;
+    const dates=[...body.children].flatMap(row=>sourcesFor(row).map(s=>s.inquiry_deadline)).filter(Boolean).sort();
+    const input=document.getElementById('order-deadline'), value=dates[0] || '';
+    if(input._flatpickr)input._flatpickr.setDate(value,true,'Y-m-d');else input.value=value;
+  }
   const number=value=>String(Number(Number(value).toFixed(6))).replace('.',',');
   function icon(name){return window.feather ? window.feather.icons[name].toSvg({width:16,height:16}) : (name==='plus'?'+':'×');}
   function ensureMaterial(source){materials.set(source.material,source);}
@@ -39,6 +45,10 @@
     function hidden(name,value){const input=document.createElement('input');input.type='hidden';input.name='items['+row.orderIndex+']'+name;input.value=value;holder.append(input);}
     sources.forEach((s,a)=>{hidden('[allocations]['+a+'][source_id]',s.id);hidden('[allocations]['+a+'][quantity]',s.remaining);});
     if(!sources.length && source) hidden('[source_id]','catalog_'+btoa(unescape(encodeURIComponent(source.material))));
+    if(inquiry){
+      const dates=sources.map(s=>s.inquiry_deadline).filter(Boolean).sort();
+      if(dates.length)hidden('[deadline]',dates[0]);
+    }
     const button=row.querySelector('[data-orders]');
     button.textContent=sources.length ? sources.length+' RN odabrano' : 'Odaberite RN';
     button.title=sources.map(s=>s.work_order+' · '+s.dimensions).join('\n');
@@ -49,11 +59,13 @@
       row.querySelector('[data-quantity]').value=quantity?Number(quantity.toFixed(6)):'';
       row.querySelector('[data-dimensions]').value=sources.length && !need.includes('(') && !need.includes('\n') ? need:'';
       row.querySelector('[data-pieces]').value=sources.length?'1':'';
-      row.querySelector('[data-price]').value=actual?.price || '';
+      row.querySelector('[data-price]').value=inquiry?'':(actual?.price || '');
       row.querySelector('[data-vat]').value=actual?.vat_rate || '0';
     }
     row.querySelector('[data-stock]').textContent=actual?number(options.stock[actual.material] || '0')+'\u00a0'+actual.unit:'—';
     row.querySelector('[data-unit]').textContent=actual?.unit || '';
+    row.querySelector('[data-price]').required=!inquiry;
+    setDeadline();
   }
   function closePicker(commit=true){
     if(!picker)return;
@@ -131,7 +143,7 @@
     material.disabled=!options;row.querySelector('[data-orders]').disabled=!options;
     row.querySelector('[data-orders]').addEventListener('click',()=>openPicker(row));
     row.querySelector('[data-add]').addEventListener('click',()=>{if(options){closePicker();addRow();}});
-    row.querySelector('[data-remove]').addEventListener('click',()=>{if(picker?.row===row)closePicker(false);$(material).select2('destroy');row.remove();if(!body.children.length)addRow();});
+    row.querySelector('[data-remove]').addEventListener('click',()=>{if(picker?.row===row)closePicker(false);$(material).select2('destroy');row.remove();if(!body.children.length)addRow();setDeadline();});
     if(old){
       const ids=old.ids || (old.allocations || [{source_id:old.source_id}]).map(a=>a.source_id);
       const source=options.requirements.find(s=>ids.includes(s.id)) || [...materials.values()].find(s=>ids.includes(s.id));
@@ -142,27 +154,37 @@
     return row;
   }
   $('#order-supplier').select2({dropdownParent:$(modal),width:'100%',placeholder:'Dobavljač',allowClear:true});
-  modal.addEventListener('show.bs.modal',async()=>{
-    if(options)return;
-    if(!body.children.length)addRow();
-    document.getElementById('submit-material-order').disabled=true;
+  modal.addEventListener('show.bs.modal',async event=>{
+    const submit=document.getElementById('submit-material-order');submit.disabled=true;error.textContent='';
+    inquiry=(event.relatedTarget?.dataset.documentType || (restored?'order':window.procurementOldType))==='inquiry';
+    document.getElementById('order-document-type').value=inquiry?'inquiry':'order';
+    document.getElementById('order-material-title').textContent=inquiry?'Upit za materijal':'Naruči materijal';
+    document.getElementById('order-date-label').textContent=inquiry?'Datum upita':'Datum narudžbe';
+    submit.textContent=inquiry?'Sačuvaj upit i otvori PDF':'Sačuvaj narudžbenicu';
     try{
-      const response=await fetch(modal.dataset.optionsUrl,{headers:{Accept:'application/json'}});
-      if(!response.ok)throw new Error('Materijale nije moguće učitati. Ponovo otvorite prozor.');
-      options=await response.json();[...options.requirements,...options.catalog].forEach(ensureMaterial);searches.set('',options);
-      const old=window.procurementOldItems || [];
-      if(old.length){
-        [...body.children].forEach(row=>{$(row.querySelector('[data-material]')).select2('destroy');row.remove();});
-        old.slice().reverse().forEach(item=>addRow(item));
-      }else{
-        for(const row of body.children){
-          const material=row.querySelector('[data-material]');
-          for(const [code,source] of materials)material.append(new Option(code+' — '+source.name,code));
-          material.disabled=false;row.querySelector('[data-orders]').disabled=false;
-        }
+      await window.procurementSelection?.ready();
+      if(!options){
+        const response=await fetch(modal.dataset.optionsUrl,{headers:{Accept:'application/json'}});
+        if(!response.ok)throw new Error('Materijale nije moguće učitati. Ponovo otvorite prozor.');
+        options=await response.json();[...options.requirements,...options.catalog].forEach(ensureMaterial);searches.set('',options);
       }
-      document.getElementById('submit-material-order').disabled=false;
-    }catch(e){options=null;error.textContent=e.message;}
+      const selected=window.procurementSelection?.ids() || options.selected || [];
+      const currentSignature=JSON.stringify([inquiry,selected.slice().sort()]);
+      if(currentSignature!==signature){
+        [...body.children].forEach(row=>{$(row.querySelector('[data-material]')).select2('destroy');row.remove();});
+        const old=restored?[]:(window.procurementOldItems || []);restored=true;
+        if(old.length)old.slice().reverse().forEach(item=>addRow(item));
+        else{
+          const chosen=options.requirements.filter(s=>selected.includes(s.id));
+          groupSources(chosen).reverse().forEach(group=>addRow({materialCode:group[0].material,ids:group.map(s=>s.id)}));
+          if(!body.children.length)addRow();
+          if(selected.length && chosen.length!==selected.length)error.textContent='Dio odabranih potreba više nije dostupan za nabavku.';
+        }
+        signature=currentSignature;
+      }
+      if(inquiry)setDeadline();
+      submit.disabled=false;
+    }catch(e){error.textContent=e.message;}
   });
   document.getElementById('material-order-form').addEventListener('submit',event=>{
     closePicker();

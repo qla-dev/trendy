@@ -138,6 +138,7 @@ class ProcurementSource
             'supplier' => trim((string) ($row['catalog_acSupplier'] ?? '')),
             'price' => $this->suggestedPrice($row),
             'required_date' => $requiredDate,
+            'inquiry_deadline' => $created ? CarbonImmutable::parse($created, config('app.timezone'))->subDays(7)->format('Y-m-d') : null,
             'created_date' => $created ? CarbonImmutable::parse($created, config('app.timezone'))->format('Y-m-d') : null,
             'links' => $this->links($row),
         ];

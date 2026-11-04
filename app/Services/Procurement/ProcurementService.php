@@ -17,7 +17,7 @@ class ProcurementService
 
     private function normalize(array $purchase): array
     {
-        $purchase += ['header'=>[],'documents'=>[],'complaints'=>[],'communication'=>[],'audit'=>[]];
+        $purchase += ['document_type'=>'order','header'=>[],'documents'=>[],'complaints'=>[],'communication'=>[],'audit'=>[]];
         foreach ($purchase['items'] as $index=>&$line) {
             $line['id'] ??= (string) \Ramsey\Uuid\Uuid::uuid5(\Ramsey\Uuid\Uuid::NAMESPACE_URL, 'enalog:' . $purchase['id'] . ':' . $index);
         }
@@ -34,7 +34,7 @@ class ProcurementService
     {
         $reserved = [];
         foreach ($rows ?? $this->all() as $purchase) {
-            if (!empty($purchase['deleted_at']) || $this->calculator->deliveryStatus($purchase) === 'cancelled') continue;
+            if (($purchase['document_type'] ?? 'order') === 'inquiry' || !empty($purchase['deleted_at']) || $this->calculator->deliveryStatus($purchase) === 'cancelled') continue;
             foreach ($purchase['items'] as $item) $reserved[$item['source']['id']] = $purchase['id'];
         }
         return $reserved;
@@ -44,7 +44,7 @@ class ProcurementService
     {
         $result = [];
         foreach ($rows ?? $this->all() as $purchase) {
-            if (!empty($purchase['deleted_at']) || !empty($purchase['cancelled_at'])) continue;
+            if (($purchase['document_type'] ?? 'order') === 'inquiry' || !empty($purchase['deleted_at']) || !empty($purchase['cancelled_at'])) continue;
             foreach ($purchase['items'] as $line) {
                 $receivedLeft = $line['received'] ?? '0';
                 $allocations = $line['allocations'] ?? [['source'=>$line['source'], 'quantity'=>$line['quantity']]];
@@ -74,6 +74,7 @@ class ProcurementService
 
     private function prepareItems(array $data, array $rows): array
     {
+        $inquiry = ($data['document_type'] ?? 'order') === 'inquiry';
         $ids = [];
         foreach ($data['items'] as $item) foreach ($item['allocations'] ?? [['source_id'=>$item['source_id'] ?? '', 'quantity'=>$item['quantity']]] as $allocation) $ids[] = $allocation['source_id'];
         $workOrderIds = array_values(array_filter($ids, fn ($id) => !str_starts_with($id,'catalog_')));
@@ -101,17 +102,19 @@ class ProcurementService
                     throw new InvalidArgumentException('Količina prelazi preostalu potrebu. Ovlašteno prekoračenje zahtijeva potvrdu i obrazloženje.');
                 }
                 $total = bcadd($total, $quantity, 6);
-                if (!empty($source['required_date'])) $deadlines[] = $source['required_date'];
+                $sourceDeadline = $inquiry ? ($source['inquiry_deadline'] ?? null) : ($source['required_date'] ?? null);
+                if ($sourceDeadline) $deadlines[] = $sourceDeadline;
                 $allocations[] = ['source'=>$source,'quantity'=>$quantity];
             }
             $orderedQuantity = $this->calculator->decimal($item['quantity'], true);
             if (bccomp($total, $orderedQuantity, 6) !== 0 && empty($item['ordered_dimensions'])) throw new InvalidArgumentException('Zbir raspodjela mora biti jednak količini stavke.');
             if (bccomp($total, $orderedQuantity, 6) > 0) throw new InvalidArgumentException('Naručena količina ne može biti manja od raspodijeljene potrebe.');
             sort($deadlines);
-            $deadline = $item['deadline'] ?? $data['deadline'];
+            $deadline = $inquiry && $deadlines ? $deadlines[0] : ($item['deadline'] ?? $data['deadline']);
             $this->validDate($deadline);
-            $line = $this->calculator->line($orderedQuantity, $item['price'], $item['vat_rate'], $item['discount_rate'] ?? '0');
-            $items[] = $line + ['id'=>(string) Str::uuid(), 'source'=>$allocations[0]['source'], 'allocations'=>$allocations,
+            $pricePending = $inquiry && (!isset($item['price']) || trim((string) $item['price']) === '');
+            $line = $this->calculator->line($orderedQuantity, $pricePending ? '0' : $item['price'], $item['vat_rate'], $item['discount_rate'] ?? '0');
+            $items[] = $line + ['price_pending'=>$pricePending, 'id'=>(string) Str::uuid(), 'source'=>$allocations[0]['source'], 'allocations'=>$allocations,
                 'ordered_dimensions'=>trim($item['ordered_dimensions'] ?? $allocations[0]['source']['dimensions']),
                 'pieces'=>isset($item['pieces']) && $item['pieces'] !== '' ? $this->calculator->decimal($item['pieces'], true) : null,
                 'unit'=>$allocations[0]['source']['unit'], 'weight'=>isset($item['weight']) && $item['weight'] !== '' ? $this->calculator->decimal($item['weight']) : null,
@@ -133,11 +136,15 @@ class ProcurementService
         return $this->store->update(function (array &$rows) use ($data, $userId) {
             // Idempotency is evaluated under the same lock as reservation and commit.
             foreach ($rows as $row) if ($row['submission'] === $data['submission'] && $row['created_by'] === $userId) return $row;
+            $type = $data['document_type'] ?? 'order';
+            if (!in_array($type, ['order','inquiry'], true)) throw new InvalidArgumentException('Neispravna vrsta dokumenta.');
             $date = $this->validDate($data['deadline']);
             if (!$this->source->validSupplier($data['supplier'])) throw new InvalidArgumentException('Izaberite postojećeg Pantheon dobavljača.');
             $items = $this->prepareItems($data, $rows);
+            if ($type === 'inquiry') $date = min(array_column($items, 'deadline'));
             $purchase = [
-                'id' => (string) Str::uuid(), 'number' => 'NS-' . str_pad((string) (count($rows) + 1), 6, '0', STR_PAD_LEFT),
+                'document_type'=>$type,
+                'id' => (string) Str::uuid(), 'number' => ($type === 'inquiry' ? 'UP-' : 'NS-') . str_pad((string) (count($rows) + 1), 6, '0', STR_PAD_LEFT),
                 'submission' => $data['submission'], 'created_by' => $userId, 'created_at' => $this->now(),
                 'supplier' => trim($data['supplier']), 'deadline' => $date, 'schema_version'=>2,
                 'currency' => config('workorders.catalog_product_defaults.purchase_currency', 'KM'),
@@ -175,6 +182,7 @@ class ProcurementService
                 if (!empty($purchase['pantheon_key']) || $purchase['cancelled_at'] || $purchase['receipts']) throw new InvalidArgumentException('Izmjena nije dozvoljena nakon prijema, otkazivanja ili ERP prijenosa.');
                 foreach ($purchase['items'] as $line) if (strtoupper($line['unit'] ?? 'KG') !== strtoupper($line['source']['unit'])) throw new InvalidArgumentException('Starija nabavka ima drugačiju jedinicu od izvora. Potrebna je ručna provjera prije izmjene.');
                 if (!$this->source->validSupplier($data['supplier'])) throw new InvalidArgumentException('Dobavljač ne postoji.');
+                $data['document_type'] = $purchase['document_type'];
                 $others = array_values(array_filter($rows, fn ($r) => $r['id'] !== $id));
                 $items = $this->prepareItems($data, $others);
                 $usedIds = [];
@@ -193,7 +201,7 @@ class ProcurementService
                 unset($newLine);
                 $before = ['supplier'=>$purchase['supplier'],'deadline'=>$purchase['deadline'],'totals'=>$purchase['totals'],'items'=>$this->auditItems($purchase['items']),'header'=>$purchase['header'] ?? []];
                 $purchase['supplier'] = $data['supplier'];
-                $purchase['deadline'] = $this->validDate($data['deadline']);
+                $purchase['deadline'] = $purchase['document_type'] === 'inquiry' ? min(array_column($items, 'deadline')) : $this->validDate($data['deadline']);
                 $purchase['items'] = $items;
                 $purchase['totals'] = $this->calculator->totals($items);
                 $purchase['header'] = $this->header($data);
@@ -204,9 +212,44 @@ class ProcurementService
         });
     }
 
+    public function confirmInquiry(string $id, int $userId): array
+    {
+        return $this->store->update(function (&$rows) use ($id, $userId) {
+            foreach ($rows as &$purchase) {
+                if ($purchase['id'] !== $id) continue;
+                if (!empty($purchase['deleted_at'])) abort(404);
+                $purchase = $this->normalize($purchase);
+                if ($purchase['document_type'] === 'order' && !empty($purchase['inquiry_confirmed_at'])) return $purchase;
+                if ($purchase['document_type'] !== 'inquiry' || $purchase['cancelled_at']) throw new InvalidArgumentException('Samo aktivan upit može postati narudžba.');
+                foreach ($purchase['items'] as $line) if (!empty($line['price_pending'])) throw new InvalidArgumentException('Unesite cijene dobavljača kroz izmjenu upita prije potvrde.');
+                $data = $purchase['header'] + ['document_type'=>'order','deadline'=>$purchase['deadline'],'items'=>[]];
+                foreach ($purchase['items'] as $line) {
+                    $data['items'][] = ['quantity'=>$line['quantity'],'price'=>$line['price'],'vat_rate'=>$line['vatRate'],'discount_rate'=>$line['discountRate'] ?? '0',
+                        'ordered_dimensions'=>$line['ordered_dimensions'],'pieces'=>$line['pieces'],'deadline'=>$line['deadline'],
+                        'allocations'=>array_map(fn ($a) => ['source_id'=>$a['source']['id'],'quantity'=>$a['quantity']], $line['allocations'])];
+                }
+                // Revalidate current requirements under the ledger lock before reserving quantities.
+                $this->prepareItems($data, $rows);
+                $purchase['inquiry_number'] = $purchase['number'];
+                $purchase['number'] = preg_replace('/^UP-/', 'NS-', $purchase['number']);
+                $purchase['document_type'] = 'order';
+                $purchase['inquiry_confirmed_at'] = $this->now();
+                $purchase['audit'][] = ['action'=>'inquiry_confirmed','user_id'=>$userId,'at'=>$this->now()];
+                return $purchase;
+            }
+            abort(404);
+        });
+    }
+
+    private function requireOrder(array $purchase): void
+    {
+        if (($purchase['document_type'] ?? 'order') === 'inquiry') throw new InvalidArgumentException('Prvo potvrdite upit kao narudžbu.');
+    }
+
     public function receive(string $id, array $quantities, string $reference, int $userId): array
     {
         return $this->change($id, function (array &$purchase) use ($quantities, $reference, $userId) {
+            $this->requireOrder($purchase);
             if ($purchase['cancelled_at']) throw new InvalidArgumentException('Otkazana nabavka nema prijem.');
             if (trim($reference) === '' || count($quantities) !== count($purchase['items'])) throw new InvalidArgumentException('Unesite prijemnicu i sve primljene količine.');
             $changed = false;
@@ -256,6 +299,7 @@ class ProcurementService
     public function sync(string $id, int $userId): array
     {
         return $this->change($id, function (array &$purchase) use ($userId) {
+            $this->requireOrder($purchase);
             if (!empty($purchase['pantheon_key'])) return;
             if ($purchase['cancelled_at']) throw new InvalidArgumentException('Otkazana nabavka se ne prenosi u ERP.');
             $purchase['sync_attempts']++;
@@ -298,6 +342,7 @@ class ProcurementService
     public function receiveEvent(string $id, array $data, int $userId): array
     {
         return $this->change($id, function (&$purchase) use ($data, $userId) {
+            $this->requireOrder($purchase);
             if ($purchase['cancelled_at']) throw new InvalidArgumentException('Otkazana nabavka nema prijem.');
             foreach ($purchase['receipts'] as $receipt) {
                 if (($receipt['submission'] ?? null) === $data['submission']) return;
@@ -349,6 +394,7 @@ class ProcurementService
     public function receiveScan(string $id, ?string $lineId, int $userId): array
     {
         $purchase = $this->find($id);
+        $this->requireOrder($purchase);
         if ($lineId !== null && !in_array($lineId, array_column($purchase['items'], 'id'), true)) abort(404);
         if ($purchase['cancelled_at']) throw new InvalidArgumentException('Narudžbenica je otkazana.');
         if (empty($purchase['pantheon_key'])) {
@@ -378,6 +424,7 @@ class ProcurementService
     public function supplierEvent(string $id, array $data, int $userId): array
     {
         return $this->change($id, function (&$purchase) use ($data, $userId) {
+            $this->requireOrder($purchase);
             if ($purchase['cancelled_at']) throw new InvalidArgumentException('Nabavka je otkazana.');
             if ($data['action'] === 'delay') {
                 $found = false;
