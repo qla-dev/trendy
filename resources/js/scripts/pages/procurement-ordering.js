@@ -27,18 +27,24 @@
   const modal=document.getElementById('order-material-modal');
   if (!modal) return;
   const $=window.jQuery, body=document.getElementById('material-order-rows'), error=document.getElementById('order-material-error');
-  const materials=new Map(), searches=new Map();
-  let options, next=0, picker=null, inquiry=false, signature=null, restored=false;
+  const materials=new Map(), searches=new Map(), sourceById=new Map();
+  let options, next=0, picker=null, inquiry=false, signature=null, restored=false, buildingRows=false;
   function setDeadline(){
-    if(!inquiry)return;
-    const dates=[...body.children].flatMap(row=>sourcesFor(row).map(s=>s.inquiry_deadline)).filter(Boolean).sort();
-    const input=document.getElementById('order-deadline'), value=dates[0] || '';
-    if(input._flatpickr)input._flatpickr.setDate(value,true,'Y-m-d');else input.value=value;
+    if(!inquiry || buildingRows)return;
+    let value='';
+    for(const row of body.children)for(const source of sourcesFor(row)){
+      const date=source.inquiry_deadline;
+      if(date && (!value || date<value))value=date;
+    }
+    const input=document.getElementById('order-deadline');
+    if(input.value===value)return;
+    // This is a derived field. Do not emit native change events while building the modal.
+    if(input._flatpickr)input._flatpickr.setDate(value,false,'Y-m-d');else input.value=value;
   }
   const number=value=>String(Number(Number(value).toFixed(6))).replace('.',',');
   function icon(name){return window.feather ? window.feather.icons[name].toSvg({width:16,height:16}) : (name==='plus'?'+':'×');}
   function ensureMaterial(source){materials.set(source.material,source);}
-  function sourcesFor(row){return options.requirements.filter(s=>row.orderIds.includes(s.id));}
+  function sourcesFor(row){return row.orderIds.map(id=>sourceById.get(id)).filter(Boolean);}
   function update(row, reset=true){
     const source=materials.get(row.querySelector('[data-material]').value), sources=sourcesFor(row);
     const holder=row.querySelector('[data-allocations]');holder.replaceChildren();
@@ -52,8 +58,8 @@
     const button=row.querySelector('[data-orders]');
     button.textContent=sources.length ? sources.length+' RN odabrano' : 'Odaberite RN';
     button.title=sources.map(s=>s.work_order+' · '+s.dimensions).join('\n');
-    row.querySelector('[data-need]').textContent=sources.length?dimensions(sources):'Za skladište';
     const need=dimensions(sources), actual=sources[0] || source;
+    row.querySelector('[data-need]').textContent=sources.length?need:'Za skladište';
     if(reset){
       const quantity=sources.reduce((sum,s)=>sum+Number(s.remaining),0);
       row.querySelector('[data-quantity]').value=quantity?Number(quantity.toFixed(6)):'';
@@ -120,7 +126,7 @@
         const data=await response.json();if(picker!==current || version!==requestVersion)return;
         if(page===1)list.replaceChildren();
         const known=new Map(options.requirements.map(source=>[source.id,source]));
-        data.requirements.forEach(source=>{known.set(source.id,source);ensureMaterial(source);append(source);});
+        data.requirements.forEach(source=>{known.set(source.id,source);sourceById.set(source.id,source);ensureMaterial(source);append(source);});
         options.requirements=[...known.values()];
         more.hidden=!data.nextPage;more.onclick=()=>load(data.nextPage);more.disabled=false;
         if(!list.children.length)list.textContent='Nema radnih naloga za odabrani materijal i pretragu.';
@@ -189,10 +195,11 @@
       if(!options || [...selected,...restoreIds].some(id=>!options.requirements.some(source=>source.id===id))){
         const response=await fetch(modal.dataset.optionsUrl,{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('#material-order-form [name="_token"]').value},body:JSON.stringify({source_ids:restoreIds})});
         if(!response.ok)throw new Error('Materijale nije moguće učitati. Ponovo otvorite prozor.');
-        options=await response.json();[...options.requirements,...options.catalog].forEach(ensureMaterial);
+        options=await response.json();sourceById.clear();options.requirements.forEach(source=>sourceById.set(source.id,source));[...options.requirements,...options.catalog].forEach(ensureMaterial);
       }
       const currentSignature=JSON.stringify([inquiry,selected.slice().sort()]);
       if(currentSignature!==signature){
+        buildingRows=true;
         [...body.children].forEach(row=>{$(row.querySelector('[data-material]')).select2('destroy');row.remove();});
         const old=restored?[]:(window.procurementOldItems || []);restored=true;
         if(old.length)old.slice().reverse().forEach(item=>addRow(item));
@@ -202,11 +209,11 @@
           if(!body.children.length)addRow();
           if(selected.length && chosen.length!==selected.length)error.textContent='Dio odabranih potreba više nije dostupan za nabavku.';
         }
-        signature=currentSignature;
+        signature=currentSignature;buildingRows=false;
       }
       if(inquiry)setDeadline();
       submit.disabled=false;
-    }catch(e){error.textContent=e.message;}
+    }catch(e){buildingRows=false;error.textContent=e.message;}
   });
   document.getElementById('material-order-form').addEventListener('submit',async event=>{
     closePicker();
