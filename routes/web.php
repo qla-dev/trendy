@@ -79,7 +79,7 @@ Route::middleware('auth:web')->group(function () {
     /* Route Apps */
     Route::group(['prefix' => 'app'], function () {
         Route::get('procurement/materials', [\App\Http\Controllers\ProcurementController::class, 'materials'])->name('app-procurement-materials');
-        Route::get('procurement/ordering-options', [\App\Http\Controllers\ProcurementController::class, 'orderingOptions'])->name('app-procurement-ordering-options');
+        Route::match(['get','post'], 'procurement/ordering-options', [\App\Http\Controllers\ProcurementController::class, 'orderingOptions'])->name('app-procurement-ordering-options');
         Route::post('procurement/selection', [\App\Http\Controllers\ProcurementController::class,'selection'])->name('app-procurement-selection');
         Route::get('procurement/settings', [\App\Http\Controllers\ProcurementController::class,'settings'])->name('app-procurement-settings');
         Route::post('procurement/settings/accounts', [\App\Http\Controllers\ProcurementController::class,'bindSupplier'])->name('app-procurement-bind');

@@ -29,37 +29,52 @@
   const selection = document.getElementById('requirement-selection');
   let selectedIds = selection ? JSON.parse(selection.dataset.selected || '[]') : [];
   const filteredIds = selection ? JSON.parse(selection.dataset.filteredIds || '[]') : [];
+  let filteredTotal=Number(selection?.dataset.filteredTotal ?? filteredIds.length);
+  let filteredComplete=filteredIds.length===filteredTotal;
+  let filteredSelected=Number(selection?.dataset.filteredSelected ?? selectedIds.filter(id=>filteredIds.includes(id)).length);
+  let confirmedFilteredSelected=filteredSelected,bulkPending=false,displayCount=null;
   const selectAll = document.getElementById('select-filtered-requirements');
   function updateSelectAll(){
     if(!selectAll)return;
-    const ids=new Set(selectedIds),count=filteredIds.filter(id=>ids.has(id)).length;
-    selectAll.checked=filteredIds.length>0 && count===filteredIds.length;
-    selectAll.indeterminate=count>0 && count<filteredIds.length;
+    if(filteredComplete){const ids=new Set(selectedIds);filteredSelected=filteredIds.filter(id=>ids.has(id)).length;}
+    selectAll.checked=filteredTotal>0 && filteredSelected===filteredTotal;
+    selectAll.indeterminate=filteredSelected>0 && filteredSelected<filteredTotal;
   }
   let confirmedIds=selectedIds.slice(), selectionVersion=0;
   function renderSelection(){
-    const count=selectedIds.length,ids=new Set(selectedIds);
+    const count=displayCount ?? selectedIds.length,ids=new Set(selectedIds);
     document.getElementById('selection-count').textContent='Odabrano: '+count;
-    document.getElementById('clear-selection').disabled=!count;
-    document.querySelectorAll('.requirement-select').forEach(input=>{input.checked=ids.has(input.value);});
-    updateSelectAll();
+    document.getElementById('clear-selection').disabled=!count || bulkPending;
+    document.querySelectorAll('.requirement-select').forEach(input=>{input.checked=ids.has(input.value);input.disabled=bulkPending;});
+    updateSelectAll();if(selectAll)selectAll.disabled=bulkPending || !filteredTotal;
   }
   window.procurementSelection = {ready:()=>selectionQueue, ids:()=>selectedIds};
   function saveSelection(change) {
-    const version=++selectionVersion,ids=new Set(change.clear?[]:selectedIds);
+    const version=++selectionVersion,previous=new Set(selectedIds),ids=new Set(change.clear?[]:selectedIds);
+    const known=new Set(filteredIds),beforeFiltered=filteredSelected;
     (change.add || []).forEach(id=>ids.add(id));
     (change.remove || []).forEach(id=>ids.delete(id));
     if(change.filtered)filteredIds.forEach(id=>{if(change.filtered==='add')ids.add(id);else ids.delete(id);});
+    if(change.clear)filteredSelected=0;
+    else if(change.filtered)filteredSelected=change.filtered==='add'?filteredTotal:0;
+    else {
+      (change.add || []).forEach(id=>{if(known.has(id) && !previous.has(id))filteredSelected++;});
+      (change.remove || []).forEach(id=>{if(known.has(id) && previous.has(id))filteredSelected--;});
+    }
+    if(change.filtered && !filteredComplete){displayCount=selectedIds.length-beforeFiltered+filteredSelected;bulkPending=true;}
     selectedIds=[...ids];renderSelection();
     const payload=change.filtered?{...change,filter_token:selection.dataset.filterToken}:change;
     const request = selectionQueue.then(async () => {
       const response = await fetch(selection.dataset.url, {method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':selection.dataset.csrf},body:JSON.stringify(payload)});
       if (!response.ok) throw new Error('Odabir nije sačuvan. Osvježite stranicu i pokušajte ponovo.');
-      const data = await response.json();confirmedIds=data.selected;
+      const data = await response.json(),previousConfirmed=new Set(confirmedIds);confirmedIds=data.selected;
+      if(data.filtered_ids){filteredIds.splice(0,filteredIds.length,...data.filtered_ids);filteredComplete=true;filteredTotal=filteredIds.length;}
+      const confirmedSet=new Set(confirmedIds);
+      confirmedFilteredSelected=change.clear?0:(filteredComplete?filteredIds.filter(id=>confirmedSet.has(id)).length:confirmedFilteredSelected+filteredIds.filter(id=>confirmedSet.has(id) && !previousConfirmed.has(id)).length-filteredIds.filter(id=>previousConfirmed.has(id) && !confirmedSet.has(id)).length);
       // Older responses must not overwrite a newer click already shown in the table.
-      if(version===selectionVersion){selectedIds=confirmedIds.slice();renderSelection();}
+      if(version===selectionVersion){selectedIds=confirmedIds.slice();filteredSelected=confirmedFilteredSelected;bulkPending=false;displayCount=null;renderSelection();}
     }).catch(error=>{
-      if(version===selectionVersion){selectedIds=confirmedIds.slice();renderSelection();}
+      if(version===selectionVersion){selectedIds=confirmedIds.slice();filteredSelected=confirmedFilteredSelected;bulkPending=false;displayCount=null;renderSelection();}
       throw error;
     });
     selectionQueue = request.catch(error => { window.alert(error.message); });
