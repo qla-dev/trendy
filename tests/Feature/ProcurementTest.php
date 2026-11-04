@@ -263,15 +263,15 @@ class ProcurementTest extends TestCase
         $this->get('/app/procurement/create')->assertOk()->assertSee('50x60x70')->assertDontSee('20x30x40');
     }
 
-    public function test_even_admin_cannot_select_fully_ordered_material_and_stale_selection_is_cleared(): void
+    public function test_zero_remaining_rn_can_be_selected_without_erasing_session_selection(): void
     {
         $this->login();
         $row=$this->sources['source-a']+['required_date'=>'2026-10-27','ordered'=>'10','received'=>'0','remaining'=>'0','missing'=>'10','purchases'=>[],'suppliers'=>[],'late'=>false,'state'=>'ordered'];
         app(ProcurementSource::class)->shouldReceive('requirements')->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([$row]),1,40));
         $response=$this->withSession(['procurement_selected'=>['source-a','source-b']])->get('/app/procurement/materials');
-        $response->assertOk()->assertSessionHas('procurement_selected',['source-b'])->assertSee('Naruči materijal');
+        $response->assertOk()->assertSessionHas('procurement_selected',['source-a','source-b'])->assertSee('Naruči materijal');
         $dom=new \DOMDocument();@$dom->loadHTML($response->getContent());$xpath=new \DOMXPath($dom);
-        $this->assertSame(0,$xpath->query('//input[@class="requirement-select"]')->length);
+        $this->assertSame(1,$xpath->query('//input[contains(@class,"requirement-select") and not(@disabled)]')->length);
     }
 
     public function test_partial_procurement_preserves_remaining_requirement_and_blocks_overordering(): void
@@ -463,13 +463,16 @@ class ProcurementTest extends TestCase
         $this->postJson('/app/procurement/selection',['clear'=>true])->assertOk()->assertJson(['count'=>0]);
     }
 
-    public function test_material_table_has_separate_position_no_header_checkbox_or_variant_and_full_value_tooltips(): void
+    public function test_material_table_has_filtered_select_all_and_full_value_tooltips(): void
     {
         $this->login();$row=$this->sources['source-a']+['required_date'=>'2026-10-27','ordered'=>'0','received'=>'0','remaining'=>'10','missing'=>'10','purchases'=>[],'suppliers'=>[],'late'=>false,'state'=>'not_ordered'];
         app(ProcurementSource::class)->shouldReceive('requirements')->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([$row]),1,40));
         $response=$this->get('/app/procurement/materials');if(getenv('PROCUREMENT_PREVIEW_DIR')) file_put_contents(getenv('PROCUREMENT_PREVIEW_DIR').'/materials.html',$response->getContent());$response->assertOk()->assertSee('Naruči materijal')->assertSee('24,5')->assertSee('Skladište sirovina')->assertSee('requirement-select')->assertSee('Upit')->assertDontSee('varijanta')->assertDontSee('Radni nalog /')->assertSee('Primijeni filtere')->assertDontSee('id="add-material-order-row"',false);
         $dom=new \DOMDocument();@$dom->loadHTML($response->getContent());$xpath=new \DOMXPath($dom);
-        $this->assertSame(0,$xpath->query('//table[contains(@class,"procurement-compact")]/thead//input[@type="checkbox"]')->length);
+        $this->assertSame(1,$xpath->query('//table[contains(@class,"procurement-compact")]/thead//input[@type="checkbox" and @id="select-filtered-requirements"]')->length);
+        $this->assertSame(1,$xpath->query('//*[@id="material-page-actions"]/button[1][normalize-space(.)="Upit" and contains(@class,"btn-primary")]')->length);
+        $this->assertSame(1,$xpath->query('//*[@id="material-page-actions"]/button[2][contains(.,"Naruči materijal") and contains(@class,"btn-primary")]')->length);
+        $response->assertDontSee('css/base/plugins/forms/form-select2.css');
         $this->assertSame(1,$xpath->query('//th/a[normalize-space(.)="Poz."]')->length);
         $this->assertSame(1,$xpath->query('//th/a[normalize-space(.)="Radni nalog"]')->length);
         $this->assertGreaterThan(0,$xpath->query('//td[@title="20x30x40"]')->length);
@@ -770,5 +773,49 @@ class ProcurementTest extends TestCase
         $this->login();
         app(ProcurementSource::class)->shouldReceive('requirements')->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([]),0,10));
         $this->withSession(['procurement_selected'=>['source-a','source-b']])->getJson('/app/procurement/ordering-options')->assertOk()->assertJsonPath('selected',['source-a','source-b']);
+    }
+
+    public function test_filtered_select_all_includes_other_pages_and_preserves_outside_selection(): void
+    {
+        $this->login();
+        $matches=[];for($i=0;$i<125;$i++)$matches[]=['id'=>'filtered-'.$i];
+        app(ProcurementSource::class)->shouldReceive('requirements')->withArgs(function($filters,$progress){
+            return $filters['_all']===true && $filters['page']===1 && $filters['q']==='STEEL' && $filters['unit']==='KG'
+                && $filters['created_from']==='2026-10-01' && $filters['created_to']==='2026-10-31';
+        })->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect($matches),125,125));
+        $url='/app/procurement/selection?q=STEEL&unit=KG&created_from=2026-10-01&created_to=2026-10-31&page=4&per_page=10';
+        $this->withSession(['procurement_selected'=>['outside']])->postJson($url,['filtered'=>'add'])
+            ->assertOk()->assertJsonPath('count',126)->assertSessionHas('procurement_selected',fn($ids)=>in_array('filtered-124',$ids,true) && in_array('outside',$ids,true));
+        $this->postJson($url,['filtered'=>'remove'])->assertOk()->assertJsonPath('selected',['outside']);
+    }
+
+    public function test_zero_erp_quantity_stays_in_ordering_options_and_allows_manual_specification(): void
+    {
+        $this->login();$this->sources['source-a']['required']='0';
+        $row=$this->sources['source-a']+['remaining'=>'0'];
+        app(ProcurementSource::class)->shouldReceive('requirements')->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([$row]),1,10));
+        $this->getJson('/app/procurement/ordering-options')->assertOk()->assertJsonPath('requirements.0.id','source-a');
+        $data=$this->payload(false);
+        $data['items']=[['quantity'=>'12','price'=>'2.5','vat_rate'=>'17','ordered_dimensions'=>'20x30x800','pieces'=>'1',
+            'allocations'=>[['source_id'=>'source-a','quantity'=>'0']]]];
+        $this->postJson('/app/procurement',$data)->assertRedirect()->assertSessionHasNoErrors();
+        $saved=$this->service->all()[0];
+        $this->assertSame('12.000000',$saved['items'][0]['quantity']);
+        $this->assertSame('source-a',$saved['items'][0]['allocations'][0]['source']['id']);
+        $this->assertSame('0.000000',$saved['items'][0]['allocations'][0]['quantity']);
+        $this->assertSame('0',$saved['items'][0]['source']['required']);
+    }
+
+    public function test_bulk_order_preserves_more_than_one_hundred_rn_allocations(): void
+    {
+        $this->login();$allocations=[];
+        for($i=0;$i<125;$i++){
+            $id='bulk-'.$i;$this->sources[$id]=array_replace($this->sources['source-a'],['id'=>$id,'work_order_key'=>'key-'.$i,'required'=>'1']);
+            $allocations[]=['source_id'=>$id,'quantity'=>'1'];
+        }
+        $data=$this->payload(false);$data['items']=[['quantity'=>'125','price'=>'1','vat_rate'=>'17','ordered_dimensions'=>'20x30x5000','allocations'=>$allocations]];
+        $this->postJson('/app/procurement',$data)->assertRedirect()->assertSessionHasNoErrors();
+        $saved=$this->service->all()[0];$this->assertCount(125,$saved['items'][0]['allocations']);
+        $this->assertSame('125.000000',$saved['items'][0]['quantity']);
     }
 }

@@ -78,7 +78,7 @@ class ProcurementService
         $ids = [];
         foreach ($data['items'] as $item) foreach ($item['allocations'] ?? [['source_id'=>$item['source_id'] ?? '', 'quantity'=>$item['quantity']]] as $allocation) $ids[] = $allocation['source_id'];
         $workOrderIds = array_values(array_filter($ids, fn ($id) => !str_starts_with($id,'catalog_')));
-        if (count($ids) === 0 || count($ids) > 100 || count(array_unique($workOrderIds)) !== count($workOrderIds)) throw new InvalidArgumentException('Izaberite najviše 100 različitih izvornih potreba.');
+        if (count($ids) === 0 || count(array_unique($workOrderIds)) !== count($workOrderIds)) throw new InvalidArgumentException('Izaberite različite izvorne potrebe.');
         $sources = $this->source->selected($ids);
         $progress = $this->progress($rows);
         $items = [];
@@ -95,8 +95,9 @@ class ProcurementService
                     : $this->compatibility($source);
                 if ($compatibility !== null && $key !== $compatibility) throw new InvalidArgumentException('Različite materijale, dimenzije, jedinice ili porezne profile nije moguće spojiti.');
                 $compatibility = $key;
-                $quantity = $this->calculator->decimal($allocation['quantity'], true);
-                if (empty($source['stock_order']) && bccomp($source['required'], '0', 6) <= 0) throw new InvalidArgumentException('Zahtjev bez potrebne količine nije moguće nabaviti.');
+                $quantity = $this->calculator->decimal($allocation['quantity'], empty($item['ordered_dimensions']));
+                // Explicit dimensions allow an RN association with zero ERP allocation; the ordered quantity is entered separately.
+                if (empty($source['stock_order']) && bccomp($source['required'], '0', 6) <= 0 && (empty($item['ordered_dimensions']) || bccomp($quantity,'0',6)>0)) throw new InvalidArgumentException('Zahtjev bez potrebne količine nije moguće nabaviti.');
                 $ordered = $progress[$source['id']]['ordered'] ?? '0';
                 if (empty($source['stock_order']) && bccomp(bcadd($ordered, $quantity, 6), $source['required'], 6) > 0 && (empty($data['_allow_overorder']) || trim($data['override_reason'] ?? '') === '')) {
                     throw new InvalidArgumentException('Količina prelazi preostalu potrebu. Ovlašteno prekoračenje zahtijeva potvrdu i obrazloženje.');

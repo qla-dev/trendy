@@ -28,10 +28,18 @@
   let selectionQueue = Promise.resolve();
   const selection = document.getElementById('requirement-selection');
   let selectedIds = selection ? JSON.parse(selection.dataset.selected || '[]') : [];
+  const filteredIds = selection ? JSON.parse(selection.dataset.filteredIds || '[]') : [];
+  const selectAll = document.getElementById('select-filtered-requirements');
+  function updateSelectAll(){
+    if(!selectAll)return;
+    const ids=new Set(selectedIds),count=filteredIds.filter(id=>ids.has(id)).length;
+    selectAll.checked=filteredIds.length>0 && count===filteredIds.length;
+    selectAll.indeterminate=count>0 && count<filteredIds.length;
+  }
   window.procurementSelection = {ready:()=>selectionQueue, ids:()=>selectedIds};
   function saveSelection(change) {
     const request = selectionQueue.then(async () => {
-      const response = await fetch(selection.dataset.url, {method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':selection.dataset.csrf},body:JSON.stringify(change)});
+      const response = await fetch(selection.dataset.url + window.location.search, {method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':selection.dataset.csrf},body:JSON.stringify(change)});
       if (!response.ok) throw new Error('Odabir nije sačuvan. Osvježite stranicu i pokušajte ponovo.');
       const data = await response.json();
       document.getElementById('selection-count').textContent = 'Odabrano: ' + data.count;
@@ -39,11 +47,14 @@
       selectedIds = data.selected;
       document.querySelectorAll('[data-document-type="inquiry"]').forEach(button => {button.disabled = !data.count;});
       document.querySelectorAll('.requirement-select').forEach(input => { input.checked = data.selected.includes(input.value); });
+      updateSelectAll();
     });
-    selectionQueue = request.catch(error => { window.alert(error.message); throw error; });
+    selectionQueue = request.catch(error => { window.alert(error.message); });
     return selectionQueue;
   }
-  if (selection) {
+  if (selection && document.getElementById('clear-selection')) {
+    updateSelectAll();
+    selectAll?.addEventListener('change',()=>saveSelection({filtered:selectAll.checked?'add':'remove'}).catch(()=>updateSelectAll()));
     selection.querySelectorAll('.requirement-select').forEach(input => input.addEventListener('change', () => saveSelection(input.checked ? {add:[input.value]} : {remove:[input.value]}).catch(() => window.location.reload())));
     document.getElementById('clear-selection').addEventListener('click', () => saveSelection({clear:true}).then(() => { if (new URLSearchParams(window.location.search).has('selected_only')) window.location.reload(); }).catch(() => {}));
     document.getElementById('create-from-selection')?.addEventListener('submit', function (event) { event.preventDefault(); selectionQueue.then(() => this.submit()).catch(() => {}); });

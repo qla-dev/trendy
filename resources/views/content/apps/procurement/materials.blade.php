@@ -2,7 +2,7 @@
 @section('title', 'Materijali za nabavku')
 @php($canSelect = app(\App\Services\Procurement\ProcurementAccess::class)->can(auth()->user(),'edit'))
 @section('content_header_right')
-<div class="d-flex justify-content-end gap-1 flex-wrap" id="material-page-actions"><button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#order-material-modal" @disabled(!$canSelect)><i data-feather="plus" class="me-50"></i>Naruči materijal</button><button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#order-material-modal" data-document-type="inquiry" @disabled(!$canSelect || !count($selected))>Upit</button></div>
+<div class="d-flex justify-content-end gap-1 flex-wrap" id="material-page-actions"><button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#order-material-modal" data-document-type="inquiry" @disabled(!$canSelect || !count($selected))>Upit</button><button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#order-material-modal" @disabled(!$canSelect)><i data-feather="plus" class="me-50"></i>Naruči materijal</button></div>
 @endsection
 @section('content')
 @include('content.apps.procurement.common')
@@ -21,7 +21,7 @@
 <input type="hidden" name="sort" value="{{ request('sort', 'work_order') }}"><input type="hidden" name="direction" value="{{ request('direction', 'desc') }}">
 <div class="col-md-3 d-flex align-items-end"><button type="submit" class="btn btn-primary w-100"><i data-feather="filter" class="me-50"></i>Primijeni filtere</button></div>
 </form></div></div>
-<div id="requirement-selection" data-url="{{ route('app-procurement-selection') }}" data-csrf="{{ csrf_token() }}" data-selected="{{ json_encode(array_values($selected)) }}">
+<div id="requirement-selection" data-url="{{ route('app-procurement-selection') }}" data-csrf="{{ csrf_token() }}" data-selected="{{ json_encode(array_values($selected)) }}" data-filtered-ids="{{ json_encode($filteredIds) }}">
 @if($canSelect)<div class="d-flex align-items-center gap-1 mb-1"><span id="selection-count">Odabrano: {{ count($selected) }}</span><button type="button" id="clear-selection" class="btn btn-sm btn-outline-secondary" @disabled(!count($selected))>Poništi odabir</button></div>@endif
 <div class="card" id="procurement-material-list"><div class="card-header">
 <form method="get" id="material-table-controls" class="d-flex justify-content-between align-items-center flex-wrap gap-1 w-100">
@@ -29,7 +29,7 @@
 <div class="d-flex align-items-center gap-50"><label for="material-page-length" class="mb-0">Prikaži</label><select id="material-page-length" class="form-select" name="per_page" aria-label="Broj redova">@foreach([10,25,50,100] as $length)<option value="{{ $length }}" @selected((int)request('per_page',10)===$length)>{{ $length }}</option>@endforeach</select><span>zapisa</span></div>
 <div class="d-flex align-items-center gap-50 flex-wrap"><label class="mb-0" for="filter-search">Brza pretraga:</label><input id="filter-search" class="form-control" style="width:260px;max-width:100%" type="search" name="q" value="{{ request('q') }}" placeholder="RN, materijal, dimenzije"><noscript><button class="btn btn-primary">Pretraži</button></noscript></div>
 </form></div>
-<div class="table-responsive"><table class="table table-striped procurement-compact"><thead><tr>@if($canSelect)<th aria-label="Odabir radnog naloga"></th>@endif
+<div class="table-responsive"><table class="table table-striped procurement-compact"><thead><tr>@if($canSelect)<th><input type="checkbox" class="form-check-input" id="select-filtered-requirements" aria-label="Odaberi sve radne naloge iz aktivnog filtera" title="Odaberi sve radne naloge iz aktivnog filtera" @disabled(!count($filteredIds))></th>@endif
  @foreach(['order'=>'Narudžba','position'=>'Poz.','work_order'=>'Radni nalog','material'=>'Materijal'] as $key=>$label)<th><a href="{{ request()->fullUrlWithQuery(['sort'=>$key,'direction'=>request('sort')===$key && request('direction')==='asc' ? 'desc':'asc','page'=>1]) }}">{{ $label }}</a></th>@endforeach
  <th>Dimenzije / Napomena</th><th class="text-end">Potrebna količina</th><th class="text-end">Naručeno</th><th class="text-end">Primljeno</th><th class="text-end">Preostalo za nabavku</th><th><a href="{{ request()->fullUrlWithQuery(['sort'=>'required_date','direction'=>'asc','page'=>1]) }}">Potreban prijem</a></th><th>Status</th><th class="text-end">Skladište sirovina</th>
 </tr></thead><tbody>
@@ -37,7 +37,7 @@
 @php($orders = implode(', ', array_unique(array_column($row['links'],'order_number'))))
 @php($positions = implode(', ', array_column($row['links'],'position')))
 <tr class="{{ $row['late'] ? 'table-danger' : '' }}">
-@if($canSelect)<td><input type="checkbox" class="form-check-input requirement-select" value="{{ $row['id'] }}" aria-label="Odaberi {{ $row['work_order'] }} — {{ $row['material'] }}" @checked(in_array($row['id'], $selected, true)) @disabled(bccomp($row['remaining'], '0', 6)<=0 || bccomp($row['required'], '0', 6)<=0)></td>@endif
+@if($canSelect)<td><input type="checkbox" class="form-check-input requirement-select" value="{{ $row['id'] }}" aria-label="Odaberi {{ $row['work_order'] }} — {{ $row['material'] }}" @checked(in_array($row['id'], $selected, true))></td>@endif
 
 <td title="{{ $orders }}">{{ $orders ?: '—' }}</td><td title="{{ $positions }}">{{ $positions ?: '—' }}</td><td title="{{ $row['work_order'] }}"><a href="{{ route('app-invoice-preview', $row['work_order_key']) }}">{{ $row['work_order'] }}</a></td>
 <td class="material-description" title="{{ $row['material'] }} — {{ $row['name'] }}">{{ $row['material'] }} — {{ $row['name'] }}</td><td class="material-description" title="{{ $row['dimensions'] }}">{{ $row['dimensions'] ?: '—' }}</td>
@@ -50,7 +50,7 @@
 @if($canSelect)@include('content.apps.procurement.order-modal')@endif
 @endsection
 @section('vendor-style')<link rel="stylesheet" href="{{ asset('vendors/css/forms/select/select2.min.css') }}">@endsection
-@section('page-style')<link rel="stylesheet" href="{{ asset('css/base/plugins/forms/form-select2.css') }}"><style>
+@section('page-style')<style>
 .content-header:has(#material-page-actions){display:grid!important;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:1rem;margin:0 0 1.5rem!important}
 .content-header:has(#material-page-actions) .content-header-left,.content-header:has(#material-page-actions) .content-header-right{display:block!important;min-width:0;width:auto!important;max-width:none;margin:0!important;padding:0!important}
 .content-header:has(#material-page-actions) .breadcrumbs-top{margin:0!important}
@@ -69,4 +69,4 @@
  try{const saved=JSON.parse(sessionStorage.getItem('procurement-material-search-focus') || 'null');sessionStorage.removeItem('procurement-material-search-focus');if(saved && saved.q===search.value && Date.now()-saved.at<30000){search.focus();search.setSelectionRange(saved.position,saved.position);}}catch(e){}
 })();
 </script>@endsection
-@section('page-script')<script src="{{ asset('js/scripts/pages/procurement.js') }}?v=6"></script><script src="{{ asset('js/scripts/pages/procurement-ordering.js') }}?v=4"></script>@endsection
+@section('page-script')<script src="{{ asset('js/scripts/pages/procurement.js') }}?v=7"></script><script src="{{ asset('js/scripts/pages/procurement-ordering.js') }}?v=5"></script>@endsection

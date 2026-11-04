@@ -32,20 +32,23 @@ class ProcurementController extends Controller
 
     public function materials(Request $request)
     {
-        $filters = $request->validate(['q'=>'nullable|string|max:255', 'sort'=>'nullable|in:work_order,material,order,position,required_date,required', 'direction'=>'nullable|in:asc,desc', 'unit'=>'nullable|string|max:16',
-            'status'=>'nullable|in:not_ordered,part_ordered,ordered,partial,received,late,soon,zero','supplier'=>'nullable|string|max:255','work_order'=>'nullable|string|max:255',
-            'from'=>'nullable|date_format:Y-m-d','to'=>'nullable|date_format:Y-m-d','created_from'=>'nullable|date_format:Y-m-d','created_to'=>'nullable|date_format:Y-m-d','per_page'=>'nullable|integer|in:10,25,50,100','selected_only'=>'nullable|boolean','page'=>'nullable|integer|min:1']);
+        $filters = $this->materialFilters($request);
         $selected = $request->session()->get('procurement_selected', []);
         $filters['selected_ids'] = $selected;
-        $rows = $this->source->requirements($filters, $this->service->progress());
+        $page = (int) ($filters['page'] ?? 1);
+        $length = (int) ($filters['per_page'] ?? 10);
+        $all = $this->source->requirements(array_merge($filters, ['_all'=>true,'page'=>1]), $this->service->progress());
+        $filteredIds = $all->pluck('id')->all();
+        $rows = new LengthAwarePaginator($all->getCollection()->forPage($page, $length)->values(), $all->total(), $length, $page, ['path'=>$request->url(),'query'=>$request->query()]);
         $stock = $this->source->stock($rows->pluck('material')->all());
-        foreach ($rows as $row) {
-            if (bccomp($row['remaining'], '0', 6) <= 0 || bccomp($row['required'], '0', 6) <= 0) {
-                $selected = array_values(array_diff($selected, [$row['id']]));
-            }
-        }
-        $request->session()->put('procurement_selected', $selected);
-        return view('content.apps.procurement.materials', compact('rows', 'selected', 'stock'));
+        return view('content.apps.procurement.materials', compact('rows', 'selected', 'stock', 'filteredIds'));
+    }
+
+    private function materialFilters(Request $request): array
+    {
+        return $request->validate(['q'=>'nullable|string|max:255', 'sort'=>'nullable|in:work_order,material,order,position,required_date,required', 'direction'=>'nullable|in:asc,desc', 'unit'=>'nullable|string|max:16',
+            'status'=>'nullable|in:not_ordered,part_ordered,ordered,partial,received,late,soon,zero','supplier'=>'nullable|string|max:255','work_order'=>'nullable|string|max:255',
+            'from'=>'nullable|date_format:Y-m-d','to'=>'nullable|date_format:Y-m-d','created_from'=>'nullable|date_format:Y-m-d','created_to'=>'nullable|date_format:Y-m-d','per_page'=>'nullable|integer|in:10,25,50,100','selected_only'=>'nullable|boolean','page'=>'nullable|integer|min:1']);
     }
 
     public function orderingOptions(Request $request)
@@ -55,7 +58,6 @@ class ProcurementController extends Controller
         $requirements = [];
         if (!$request->boolean('catalog_only')) {
             $requirements = $this->source->requirements(['_all'=>true], $this->service->progress())->items();
-            $requirements = array_values(array_filter($requirements, fn ($r) => bccomp($r['remaining'],'0',6)>0));
         }
         $catalog = $this->source->catalog((string) $request->query('q',''));
         $stock = $this->source->stock(array_merge(array_column($requirements,'material'),array_column($catalog,'material')));
@@ -116,10 +118,15 @@ class ProcurementController extends Controller
 
     public function selection(Request $request)
     {
-        $data = $request->validate(['add'=>'nullable|array|max:100','add.*'=>'string|max:1000','remove'=>'nullable|array|max:100','remove.*'=>'string|max:1000','clear'=>'nullable|boolean']);
+        $data = $request->validate(['add'=>'nullable|array','add.*'=>'string|max:1000','remove'=>'nullable|array','remove.*'=>'string|max:1000','clear'=>'nullable|boolean','filtered'=>'nullable|in:add,remove']);
         $selected = $request->boolean('clear') ? [] : $request->session()->get('procurement_selected', []);
         $selected = array_values(array_diff(array_unique([...$selected, ...($data['add'] ?? [])]), $data['remove'] ?? []));
-        if (count($selected) > 100) throw ValidationException::withMessages(['selected'=>'Najviše 100 potreba može biti odabrano.']);
+        if (!empty($data['filtered'])) {
+            $filters = $this->materialFilters($request);
+            $filters['selected_ids'] = $selected;
+            $matches = $this->source->requirements(array_merge($filters, ['_all'=>true,'page'=>1]), $this->service->progress())->pluck('id')->all();
+            $selected = $data['filtered'] === 'add' ? array_values(array_unique([...$selected,...$matches])) : array_values(array_diff($selected,$matches));
+        }
         $request->session()->put('procurement_selected', $selected);
         return response()->json(['selected'=>$selected,'count'=>count($selected)]);
     }
@@ -140,11 +147,11 @@ class ProcurementController extends Controller
         $data = $request->validate([
             'document_type'=>'nullable|in:order,inquiry',
             'submission' => 'required|uuid', 'supplier' => 'required|string|max:255', 'deadline' => 'required|date_format:Y-m-d',
-            'items' => 'required|array|min:1|max:100', 'items.*.source_id' => 'nullable|string|max:1000',
+            'items' => 'required|array|min:1', 'items.*.source_id' => 'nullable|string|max:1000',
             'items.*.quantity' => $decimal, 'items.*.price' => $price, 'items.*.vat_rate' => $decimal,
             'items.*.discount_rate'=>'nullable|string|max:30','items.*.weight'=>'nullable|string|max:30','items.*.deadline'=>'nullable|date_format:Y-m-d',
             'items.*.ordered_dimensions'=>'nullable|string|max:1000','items.*.pieces'=>'nullable|string|max:30',
-            'items.*.allocations'=>'nullable|array|min:1|max:100','items.*.allocations.*.source_id'=>'required|string|max:1000', 'items.*.allocations.*.quantity'=>$decimal,
+            'items.*.allocations'=>'nullable|array|min:1','items.*.allocations.*.source_id'=>'required|string|max:1000', 'items.*.allocations.*.quantity'=>$decimal,
             'document_date'=>'nullable|date_format:Y-m-d','valid_until'=>'nullable|date_format:Y-m-d','exchange_rate'=>'nullable|string|max:30',
             'carrier'=>'nullable|string|max:255','department'=>'nullable|string|max:255','procurement_type'=>'nullable|string|max:255','responsible_person'=>'nullable|string|max:255','reference_person'=>'nullable|string|max:255','notes'=>'nullable|string|max:4000',
             'override_reason'=>'nullable|string|max:1000','overorder'=>'nullable|boolean',
