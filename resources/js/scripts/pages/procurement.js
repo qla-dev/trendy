@@ -25,6 +25,28 @@
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = { calculate, format };
   if (typeof document === 'undefined') return;
+  // Browser validation follows the browser language unless explicitly translated.
+  document.addEventListener('invalid',event=>{
+    const field=event.target;
+    if(!field.closest('#material-order-form,#procurement-form') || typeof field.setCustomValidity!=='function')return;
+    field.setCustomValidity('');
+    const state=field.validity;
+    if(state.valid)return;
+    const message=state.valueMissing?'Popunite ovo polje.':
+      state.typeMismatch?'Unesite vrijednost u ispravnom obliku.':
+      state.tooLong?'Uneseni tekst je predugačak.':
+      state.tooShort?'Uneseni tekst je prekratak.':
+      state.rangeUnderflow?'Unesite veću vrijednost.':
+      state.rangeOverflow?'Unesite manju vrijednost.':
+      state.badInput || state.stepMismatch?'Unesite ispravan broj.':'Provjerite unesenu vrijednost.';
+    field.setCustomValidity(message);
+  },true);
+  const clearValidation=event=>{
+    const field=event.target;
+    if(field.closest('#material-order-form,#procurement-form') && typeof field.setCustomValidity==='function')field.setCustomValidity('');
+  };
+  document.addEventListener('input',clearValidation,true);
+  document.addEventListener('change',clearValidation,true);
   let selectionQueue = Promise.resolve();
   const selection = document.getElementById('requirement-selection');
   let selectedIds = selection ? JSON.parse(selection.dataset.selected || '[]') : [];

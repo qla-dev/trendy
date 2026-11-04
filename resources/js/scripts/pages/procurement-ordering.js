@@ -27,6 +27,15 @@
   const modal=document.getElementById('order-material-modal');
   if (!modal) return;
   const $=window.jQuery, body=document.getElementById('material-order-rows'), error=document.getElementById('order-material-error');
+  const selectLanguage={
+    errorLoading:()=> 'Rezultate nije moguće učitati.',
+    inputTooLong:()=> 'Unesite manje znakova.',
+    inputTooShort:()=> 'Unesite više znakova.',
+    loadingMore:()=> 'Učitavanje dodatnih rezultata…',
+    maximumSelected:()=> 'Dostignut je najveći dozvoljeni broj odabira.',
+    noResults:()=> 'Nema rezultata.',searching:()=> 'Pretraživanje…',
+    removeAllItems:()=> 'Poništi odabir',removeItem:()=> 'Ukloni stavku',search:()=> 'Pretraga'
+  };
   const materials=new Map(), searches=new Map(), sourceById=new Map();
   let options, next=0, picker=null, inquiry=false, signature=null, restored=false, buildingRows=false;
   function setDeadline(){
@@ -152,7 +161,7 @@
     if(after)after.after(row);else body.prepend(row);
     const material=row.querySelector('[data-material]');material.append(new Option('',''));
     for(const [code,source] of materials)material.append(new Option(code+' — '+source.name,code));
-    $(material).select2({dropdownParent:$(modal),width:'100%',placeholder:'Pretražite materijal',allowClear:true,
+    $(material).select2({language:selectLanguage,dropdownParent:$(modal),width:'100%',placeholder:'Pretražite materijal',allowClear:true,
       ajax:{delay:120,data:params=>({q:(params.term || '').trim()}),transport:(params,success,failure)=>{
         const q=params.data.q.toLowerCase(),controller=new AbortController();
         if(searches.has(q)){success(searches.get(q));return {abort(){}};}
@@ -179,7 +188,7 @@
     }
     return row;
   }
-  $('#order-supplier').select2({dropdownParent:$(modal),width:'100%',placeholder:'Dobavljač',allowClear:true});
+  $('#order-supplier').select2({language:selectLanguage,dropdownParent:$(modal),width:'100%',placeholder:'Dobavljač',allowClear:true});
   const loading=document.getElementById('order-material-loading'),retry=document.getElementById('order-material-retry'),pdfButton=document.getElementById('preview-material-pdf');
   let lastTrigger=null,loadController=null,loadVersion=0;
   async function loadModal(event){

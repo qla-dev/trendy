@@ -717,6 +717,20 @@ class ProcurementTest extends TestCase
             ->assertOk()->assertJsonPath('selected',['source-a','source-b'])->assertJsonCount(2,'requirements')->assertJsonPath('catalog',[]);
     }
 
+    public function test_inquiry_pdf_has_no_qr_but_order_pdf_keeps_qr(): void
+    {
+        $this->login();
+        $inquiry=$this->service->create($this->inquiryPayload(),77);
+        foreach (['','?items=1'] as $query) {
+            $this->get('/app/procurement/'.$inquiry['id'].'/print'.$query)->assertOk()
+                ->assertSee('lang="bs"',false)->assertSee('lang="de"',false)
+                ->assertDontSee('api.qrserver.com')->assertDontSee('class="qr"',false)->assertDontSee('class="item-qr"',false);
+        }
+        $order=$this->service->create($this->payload(),77);
+        $this->get('/app/procurement/'.$order['id'].'/print')->assertOk()->assertSee('api.qrserver.com')->assertSee('class="qr"',false);
+        $this->get('/app/procurement/'.$order['id'].'/print?items=1')->assertOk()->assertSee('class="item-qr"',false);
+    }
+
     private function inquiryPayload(): array
     {
         $this->sources['source-a']['inquiry_deadline'] = '2026-10-23';
