@@ -27,6 +27,8 @@
   if (typeof document === 'undefined') return;
   let selectionQueue = Promise.resolve();
   const selection = document.getElementById('requirement-selection');
+  let selectedIds = selection ? JSON.parse(selection.dataset.selected || '[]') : [];
+  window.procurementSelection = {ready:()=>selectionQueue, ids:()=>selectedIds};
   function saveSelection(change) {
     const request = selectionQueue.then(async () => {
       const response = await fetch(selection.dataset.url, {method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':selection.dataset.csrf},body:JSON.stringify(change)});
@@ -34,7 +36,8 @@
       const data = await response.json();
       document.getElementById('selection-count').textContent = 'Odabrano: ' + data.count;
       document.getElementById('clear-selection').disabled = !data.count;
-      document.querySelector('#create-from-selection button').disabled = !data.count;
+      selectedIds = data.selected;
+      document.querySelectorAll('[data-document-type="inquiry"]').forEach(button => {button.disabled = !data.count;});
       document.querySelectorAll('.requirement-select').forEach(input => { input.checked = data.selected.includes(input.value); });
     });
     selectionQueue = request.catch(error => { window.alert(error.message); throw error; });
@@ -43,7 +46,7 @@
   if (selection) {
     selection.querySelectorAll('.requirement-select').forEach(input => input.addEventListener('change', () => saveSelection(input.checked ? {add:[input.value]} : {remove:[input.value]}).catch(() => window.location.reload())));
     document.getElementById('clear-selection').addEventListener('click', () => saveSelection({clear:true}).then(() => { if (new URLSearchParams(window.location.search).has('selected_only')) window.location.reload(); }).catch(() => {}));
-    document.getElementById('create-from-selection').addEventListener('submit', function (event) { event.preventDefault(); selectionQueue.then(() => this.submit()).catch(() => {}); });
+    document.getElementById('create-from-selection')?.addEventListener('submit', function (event) { event.preventDefault(); selectionQueue.then(() => this.submit()).catch(() => {}); });
     document.querySelectorAll('.pagination a, .procurement-compact th a').forEach(link => link.addEventListener('click', event => { event.preventDefault(); selectionQueue.then(() => { window.location.href=link.href; }).catch(() => {}); }));
   }
   document.querySelectorAll('[data-auto-filter]').forEach(filter => {

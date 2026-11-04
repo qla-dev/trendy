@@ -214,4 +214,12 @@ class ProcurementSourceTest extends TestCase
         $this->assertSame([],$this->source->supplierDetails('Unknown'));
     }
 
+
+    public function test_inquiry_deadline_uses_rn_creation_date_minus_seven_days(): void
+    {
+        $row=$this->source->map(['acKey'=>'RN-1','anNo'=>1,'acIdent'=>'STEEL','acUM'=>'KG','anQty1'=>'1',
+            'header_adDate'=>'2026-11-03','header_adSchedStartTime'=>'2026-12-15']);
+        $this->assertSame('2026-10-27',$row['inquiry_deadline']);
+        $this->assertSame('2026-12-08',$row['required_date']);
+    }
 }

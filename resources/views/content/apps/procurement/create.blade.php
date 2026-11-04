@@ -3,9 +3,11 @@
 @section('content')
 @include('content.apps.procurement.common')
 @php($dates = array_filter(array_column($lines,'deadline')))
+@php($inquiry = ($purchase['document_type'] ?? 'order') === 'inquiry')
 @php($header = $purchase['header'] ?? [])
-<div class="card"><div class="card-header"><h4 class="card-title">{{ $purchase ? 'Izmjena '.$purchase['number'] : 'Nova nabavka sirovina' }}</h4></div><div class="card-body">
+<div class="card"><div class="card-header"><h4 class="card-title">{{ $purchase ? ($inquiry ? 'Izmjena upita ' : 'Izmjena ').$purchase['number'] : 'Nova nabavka sirovina' }}</h4></div><div class="card-body">
 <form method="post" action="{{ $purchase ? route('app-procurement-update',$purchase['id']) : route('app-procurement-store') }}" id="procurement-form">@csrf
+<input type="hidden" name="document_type" value="{{ $inquiry ? 'inquiry' : 'order' }}">
 <input type="hidden" name="submission" value="{{ old('submission',$submission) }}">
 <div class="row g-1 mb-2">
 <div class="col-md-4"><label class="form-label" for="supplier">Dobavljač</label><input id="supplier" class="form-control" name="supplier" list="suppliers" required maxlength="255" value="{{ old('supplier',$purchase['supplier'] ?? $lines[0]['source']['supplier']) }}"><datalist id="suppliers">@foreach($suppliers as $supplier)<option value="{{ $supplier }}">@endforeach</datalist></div>
@@ -26,7 +28,7 @@
 <td><input aria-label="Težina stavke {{ $index+1 }}" class="form-control procurement-input" name="items[{{ $index }}][weight]" inputmode="decimal" value="{{ old('items.'.$index.'.weight',$line['weight'] ?? '') }}"></td>
 @foreach(['price'=>'price','discountRate'=>'discount_rate','vatRate'=>'vat_rate'] as $field=>$input)
 @if($field==='vatRate')<td data-value="net">—</td>@endif
-<td><input aria-label="{{ ['price'=>'Cijena','discountRate'=>'Rabat','vatRate'=>'PDV'][$field] }} stavke {{ $index+1 }}" class="form-control procurement-input" data-field="{{ $field }}" name="items[{{ $index }}][{{ $input }}]" inputmode="decimal" required value="{{ old('items.'.$index.'.'.$input,$line[$field] ?? '0') }}"></td>
+<td><input aria-label="{{ ['price'=>'Cijena','discountRate'=>'Rabat','vatRate'=>'PDV'][$field] }} stavke {{ $index+1 }}" class="form-control procurement-input" data-field="{{ $field }}" name="items[{{ $index }}][{{ $input }}]" inputmode="decimal" @required(!$inquiry || $field!=='price') value="{{ old('items.'.$index.'.'.$input, $field==='price' && !empty($line['price_pending']) ? '' : ($line[$field] ?? '0')) }}"></td>
 @endforeach
 <td data-value="gross">—</td><td><input aria-label="Rok stavke {{ $index+1 }}" class="form-control" style="min-width:150px" type="text" data-procurement-date placeholder="dd.mm.gggg" name="items[{{ $index }}][deadline]" value="{{ old('items.'.$index.'.deadline',$line['deadline'] ?? '') }}"></td></tr>
 @endforeach

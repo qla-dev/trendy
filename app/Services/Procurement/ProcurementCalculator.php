@@ -56,6 +56,7 @@ class ProcurementCalculator
     public function deliveryStatus(array $purchase): string
     {
         if (!empty($purchase['cancelled_at'])) return 'cancelled';
+        if (($purchase['document_type'] ?? 'order') === 'inquiry') return 'inquiry';
         $received = '0';
         $remaining = '0';
         foreach ($purchase['items'] as $item) {
@@ -70,6 +71,7 @@ class ProcurementCalculator
     public function deadline(array $purchase, ?CarbonImmutable $today = null): array
     {
         $status = $this->deliveryStatus($purchase);
+        if ($status === 'inquiry') return ['days'=>0,'label'=>'Upit','class'=>'secondary'];
         if (in_array($status, ['delivered', 'cancelled'], true)) {
             return ['days' => 0, 'label' => $status === 'delivered' ? 'Isporučeno' : 'Otkazano', 'class' => 'secondary'];
         }

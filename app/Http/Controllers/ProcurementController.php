@@ -21,7 +21,7 @@ class ProcurementController extends Controller
             $action = $request->route()?->getActionMethod();
             $permission = match ($action) {
                 'receive','receiveForm','scan','scanReceive' => 'receive',
-                'store','create','edit','update','selection','upload','complaint' => 'edit',
+                'store','create','edit','update','confirmInquiry','selection','upload','complaint' => 'edit',
                 'destroy','cancel','sync','resolveComplaint','settings','bindSupplier','draft' => 'manage',
                 default => 'view',
             };
@@ -59,7 +59,8 @@ class ProcurementController extends Controller
         }
         $catalog = $this->source->catalog((string) $request->query('q',''));
         $stock = $this->source->stock(array_merge(array_column($requirements,'material'),array_column($catalog,'material')));
-        return response()->json(compact('requirements','catalog','stock'));
+        $selected = $request->session()->get('procurement_selected', []);
+        return response()->json(compact('requirements','catalog','stock','selected'));
     }
 
     public function create(Request $request)
@@ -128,16 +129,19 @@ class ProcurementController extends Controller
         $data = $this->validatedPurchase($request);
         $purchase = $this->business(fn () => $this->service->create($data, (int) $request->user()->id));
         $request->session()->forget('procurement_selected');
+        if ($purchase['document_type'] === 'inquiry') return redirect()->route('app-procurement-print', $purchase['id']);
         return redirect()->route('app-procurement-show', $purchase['id'])->with('success', 'Nabavka je sačuvana.');
     }
 
     private function validatedPurchase(Request $request): array
     {
         $decimal = ['required', 'string', 'max:30', 'regex:/^\d{1,12}(?:[.,]\d{1,6})?$/D'];
+        $price = $request->input('document_type') === 'inquiry' ? ['nullable', ...array_slice($decimal, 1)] : $decimal;
         $data = $request->validate([
+            'document_type'=>'nullable|in:order,inquiry',
             'submission' => 'required|uuid', 'supplier' => 'required|string|max:255', 'deadline' => 'required|date_format:Y-m-d',
             'items' => 'required|array|min:1|max:100', 'items.*.source_id' => 'nullable|string|max:1000',
-            'items.*.quantity' => $decimal, 'items.*.price' => $decimal, 'items.*.vat_rate' => $decimal,
+            'items.*.quantity' => $decimal, 'items.*.price' => $price, 'items.*.vat_rate' => $decimal,
             'items.*.discount_rate'=>'nullable|string|max:30','items.*.weight'=>'nullable|string|max:30','items.*.deadline'=>'nullable|date_format:Y-m-d',
             'items.*.ordered_dimensions'=>'nullable|string|max:1000','items.*.pieces'=>'nullable|string|max:30',
             'items.*.allocations'=>'nullable|array|min:1|max:100','items.*.allocations.*.source_id'=>'required|string|max:1000', 'items.*.allocations.*.quantity'=>$decimal,
@@ -159,9 +163,16 @@ class ProcurementController extends Controller
 
     public function update(Request $request, string $id)
     {
+        $request->merge(['document_type'=>$this->service->find($id)['document_type']]);
         $data = $this->validatedPurchase($request);
         $this->business(fn () => $this->service->edit($id, $data, (int) $request->user()->id));
         return redirect()->route('app-procurement-show', $id)->with('success','Nabavka je izmijenjena.');
+    }
+
+    public function confirmInquiry(Request $request, string $id)
+    {
+        $this->business(fn () => $this->service->confirmInquiry($id, (int) $request->user()->id));
+        return redirect()->route('app-procurement-show', $id)->with('success', 'Upit je potvrđen kao narudžba.');
     }
 
     public function index(Request $request)
@@ -176,7 +187,8 @@ class ProcurementController extends Controller
         });
         $metrics = ['active'=>0,'late'=>0,'partial'=>0,'soon'=>0,'complaints'=>0,'notices'=>0,'late_items'=>0,'outstanding'=>[],'value'=>[],'awaiting_value'=>[]];
         foreach ($rows as $row) {
-            $active = !in_array($row['delivery_status'],['delivered','cancelled'],true);
+            if ($row['document_type'] === 'inquiry') continue;
+            $active = !in_array($row['delivery_status'],['delivered','cancelled','inquiry'],true);
             if ($active) $metrics['active']++;
             if ($row['due']['days']>0) $metrics['late']++;
             if ($row['delivery_status']==='partial') $metrics['partial']++;
@@ -203,9 +215,9 @@ class ProcurementController extends Controller
                 // Additional filters are applied below to keep the legacy search contract intact.
         });
         $rows = $rows->filter(fn ($row) => (!$request->filled('supplier') || $row['supplier']===$request->query('supplier'))
-            && (!$request->boolean('active') || !in_array($row['delivery_status'],['delivered','cancelled'],true))
+            && (!$request->boolean('active') || !in_array($row['delivery_status'],['delivered','cancelled','inquiry'],true))
             && (!$request->filled('from') || $row['deadline']>=$request->query('from')) && (!$request->filled('to') || $row['deadline']<=$request->query('to'))
-            && (!$request->boolean('soon') || (!in_array($row['delivery_status'],['delivered','cancelled'],true) && $row['deadline']>=now()->format('Y-m-d') && $row['deadline']<=now()->addDays(7)->format('Y-m-d')))
+            && (!$request->boolean('soon') || (!in_array($row['delivery_status'],['delivered','cancelled','inquiry'],true) && $row['deadline']>=now()->format('Y-m-d') && $row['deadline']<=now()->addDays(7)->format('Y-m-d')))
             && (!$request->boolean('notices') || count(array_filter($row['communication'] ?? [],fn ($m) => !empty($m['unread'])))>0));
         $sort = in_array($request->query('sort'), ['number','supplier','deadline','created_at'], true) ? $request->query('sort') : 'created_at';
         $rows = $rows->sortBy($sort, SORT_REGULAR, $request->query('direction', 'desc') !== 'asc')->values();
@@ -254,7 +266,7 @@ class ProcurementController extends Controller
     {
         $purchase = $this->service->find($id);
         if ($request->filled('line')) abort_unless(in_array($request->query('line'), array_column($purchase['items'], 'id'), true), 404);
-        if (in_array($this->calculator->deliveryStatus($purchase),['delivered','cancelled'],true)) return redirect()->route('app-procurement-show',$id)->with('warning','Nabavka je zaključena. Historija prijema je dostupna u detaljima.');
+        if (in_array($this->calculator->deliveryStatus($purchase),['delivered','cancelled','inquiry'],true)) return redirect()->route('app-procurement-show',$id)->with('warning','Nabavka je zaključena. Historija prijema je dostupna u detaljima.');
         return view('content.apps.procurement.receive', ['purchase'=>$purchase,'warehouses'=>$this->source->warehouses(),'submission'=>(string) Str::uuid()]);
     }
 
@@ -341,12 +353,13 @@ class ProcurementController extends Controller
     {
         $purchase = $this->service->find($id);
         $templates = ['overdue'=>'Upozorenje na kašnjenje isporuke','upcoming'=>'Podsjetnik na predstojeću isporuku','confirmation'=>'Zahtjev za potvrdu isporuke','invoice'=>'Zahtjev za fakturu','certificate'=>'Zahtjev za atest','complaint'=>'Obavijest o reklamaciji'];
-        $kind = (string) $request->query('template','overdue');
+        if ($purchase['document_type'] === 'inquiry') $templates = ['inquiry'=>'Upit za cijenu materijala'];
+        $kind = (string) $request->query('template', $purchase['document_type'] === 'inquiry' ? 'inquiry' : 'overdue');
         abort_unless(isset($templates[$kind]), 422);
         $contacts = array_values(array_filter(app(ProcurementAccess::class)->registry()->all(), fn ($row) => ($row['kind'] ?? '')==='account' && $row['supplier']===$purchase['supplier']));
         $lines = [];
         foreach ($purchase['items'] as $index=>$line) if (bccomp($line['quantity'],$line['received'],6)>0) $lines[] = ($index+1) . '. ' . $line['source']['material'] . ' — nedostaje ' . bcsub($line['quantity'],$line['received'],6) . ' ' . ($line['unit'] ?? 'KG') . ', rok ' . ($line['deadline'] ?? $purchase['deadline']);
-        return view('content.apps.procurement.draft', ['purchase'=>$purchase,'templates'=>$templates,'kind'=>$kind,'contacts'=>$contacts,'subject'=>$templates[$kind] . ' — ' . $purchase['number'], 'body'=>"Poštovani,\n\n" . $templates[$kind] . ' za narudžbenicu ' . $purchase['number'] . ".\n\n" . implode("\n", $lines) . "\n\nMolimo Vas za odgovor.\nSrdačan pozdrav"]);
+        return view('content.apps.procurement.draft', ['purchase'=>$purchase,'templates'=>$templates,'kind'=>$kind,'contacts'=>$contacts,'subject'=>$templates[$kind] . ' — ' . $purchase['number'], 'body'=>"Poštovani,\n\n" . $templates[$kind] . ($purchase['document_type'] === 'inquiry' ? ' za upit ' : ' za narudžbenicu ') . $purchase['number'] . ".\n\n" . implode("\n", $lines) . "\n\nMolimo Vas za odgovor.\nSrdačan pozdrav"]);
     }
 
     public function acknowledge(Request $request, string $id)

@@ -23,7 +23,7 @@ class SupplierProcurementController extends Controller
     private function owned(Request $request, string $id): array
     {
         $purchase = $this->service->find($id);
-        abort_unless($this->access->owns($request->user(), $purchase), 404);
+        abort_unless($purchase['document_type'] !== 'inquiry' && $this->access->owns($request->user(), $purchase), 404);
         return $purchase;
     }
 
@@ -43,7 +43,7 @@ class SupplierProcurementController extends Controller
         $request->validate(['q'=>'nullable|string|max:255','open'=>'nullable|boolean']);
         $rows = [];
         foreach ($this->service->all() as $purchase) {
-            if (!$this->access->owns($request->user(),$purchase)) continue;
+            if ($purchase['document_type'] === 'inquiry' || !$this->access->owns($request->user(),$purchase)) continue;
             $order = $this->publicOrder($purchase);
             if ($request->boolean('open') && in_array($order['status'],['delivered','cancelled'],true)) continue;
             if ($request->filled('q') && !str_contains(mb_strtolower($order['number']),mb_strtolower($request->query('q')))) continue;
