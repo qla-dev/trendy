@@ -46,6 +46,7 @@ class ProcurementTest extends TestCase
         $source->shouldReceive('supplierDetails')->andReturn(['name'=>'Dobavljač','jib'=>'4218466780006','vat'=>'218466780006','address'=>'Sarajevska 17','postal_line'=>'74203 Doboj Jug','country'=>'Bosna i Hercegovina','phone'=>'+387 32 123 456']);
         $source->shouldReceive('stock')->andReturn(['STEEL'=>'24.500000']);
         $source->shouldReceive('catalog')->andReturn([]);
+        $source->shouldReceive('requirementCount')->byDefault()->andReturn(0);
         $source->shouldReceive('releases')->andReturn([]);
         $source->shouldReceive('warehouses')->andReturn(['Sirovine']);
         $source->shouldReceive('validWarehouse')->andReturnUsing(fn($name)=>$name==='Sirovine');
@@ -489,7 +490,7 @@ class ProcurementTest extends TestCase
         $this->assertSame(1,$xpath->query('//*[@id="material-table-controls"]//input[@name="q" and @type="search"]')->length);
         $this->assertSame(1,$xpath->query('//*[@id="material-table-controls"]//*[@id="selection-count"]')->length);
         $this->assertSame(2,$xpath->query('//*[@id="material-page-actions"]/button[not(@disabled) and contains(@class,"btn-primary")]')->length);
-        $this->assertSame(['source-a'], array_values(session('procurement_filter_snapshots'))[0]);
+        $this->assertSame(['source-a'],array_values(session('procurement_filter_snapshots'))[0]['ids']);
         $this->assertSame(4,$xpath->query('//*[@id="material-page-length"]/option')->length);
 
     }
@@ -802,7 +803,7 @@ class ProcurementTest extends TestCase
         $this->login();$this->sources['source-a']['required']='0';
         $row=$this->sources['source-a']+['remaining'=>'0'];
         app(ProcurementSource::class)->shouldReceive('requirements')->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([$row]),1,10));
-        $this->getJson('/app/procurement/ordering-options')->assertOk()->assertJsonPath('requirements.0.id','source-a');
+        $this->withSession(['procurement_selected'=>['source-a']])->getJson('/app/procurement/ordering-options')->assertOk()->assertJsonPath('requirements.0.id','source-a');
         $data=$this->payload(false);
         $data['items']=[['quantity'=>'12','price'=>'2.5','vat_rate'=>'17','ordered_dimensions'=>'20x30x800','pieces'=>'1',
             'allocations'=>[['source_id'=>'source-a','quantity'=>'0']]]];
@@ -825,5 +826,65 @@ class ProcurementTest extends TestCase
         $this->postJson('/app/procurement',$data)->assertRedirect()->assertSessionHasNoErrors();
         $saved=$this->service->all()[0];$this->assertCount(125,$saved['items'][0]['allocations']);
         $this->assertSame('125.000000',$saved['items'][0]['quantity']);
+    }
+
+    public function test_empty_ordering_modal_does_not_load_all_work_orders_catalog_or_stock(): void
+    {
+        $this->login();app(ProcurementSource::class)->shouldNotReceive('requirements');
+        $this->getJson('/app/procurement/ordering-options')->assertOk()->assertExactJson(['requirements'=>[],'catalog'=>[],'stock'=>[],'selected'=>[],'nextPage'=>null]);
+    }
+
+    public function test_initial_ordering_options_only_load_explicitly_selected_rns(): void
+    {
+        $this->login();
+        app(ProcurementSource::class)->shouldReceive('requirements')->once()->withArgs(fn($filters,$progress)=>$filters['selected_only']===true && $filters['selected_ids']===['source-b'] && $filters['_all']===true)
+            ->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([$this->sources['source-b']+['remaining'=>'3']]),1,1));
+        $this->withSession(['procurement_selected'=>['source-b']])->postJson('/app/procurement/ordering-options',['source_ids'=>[]])
+            ->assertOk()->assertJsonPath('requirements.0.id','source-b')->assertJsonPath('catalog',[]);
+    }
+
+    public function test_rn_picker_limits_queries_to_material_search_and_requested_page(): void
+    {
+        $this->login();
+        app(ProcurementSource::class)->shouldReceive('requirements')->once()->withArgs(fn($filters,$progress)=>$filters===['material'=>'STEEL','q'=>'RN-1','page'=>'2','per_page'=>50])
+            ->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([$this->sources['source-a']+['remaining'=>'10']]),101,50,2));
+        $this->getJson('/app/procurement/ordering-options?material=STEEL&q=RN-1&page=2')->assertOk()->assertJsonPath('nextPage',3)->assertJsonPath('catalog',[])->assertJsonPath('stock',[]);
+    }
+
+    public function test_select_all_resolves_only_ids_once_and_reuses_them(): void
+    {
+        $this->login();$token=(string) Str::uuid();$filters=['q'=>'STEEL','unit'=>'KG','page'=>3,'per_page'=>10];
+        app(ProcurementSource::class)->shouldReceive('requirementIds')->once()->with($filters,[])->andReturn(['source-a','source-b']);
+        app(ProcurementSource::class)->shouldNotReceive('requirements');
+        $this->withSession(['procurement_filter_snapshots'=>[$token=>['filters'=>$filters,'ids'=>null]]])
+            ->postJson('/app/procurement/selection',['filtered'=>'add','filter_token'=>$token])->assertOk()->assertJsonPath('filtered_ids',['source-a','source-b']);
+        $this->postJson('/app/procurement/selection',['filtered'=>'remove','filter_token'=>$token])->assertOk()->assertJsonPath('count',0);
+    }
+
+    public function test_material_page_does_not_fetch_full_filtered_identity_list(): void
+    {
+        $this->login();
+        $row=$this->sources['source-a']+['required_date'=>null,'ordered'=>'0','received'=>'0','remaining'=>'10','missing'=>'10','purchases'=>[],'suppliers'=>[],'late'=>false,'state'=>'not_ordered'];
+        app(ProcurementSource::class)->shouldReceive('requirements')->once()->withArgs(fn($filters,$progress)=>$filters['page']==='3' && $filters['per_page']==='10' && empty($filters['_all']))
+            ->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([$row]),1988,10,3));
+        app(ProcurementSource::class)->shouldNotReceive('requirementIds');
+        $this->get('/app/procurement/materials?page=3&per_page=10')->assertOk()->assertViewHas('filteredTotal',1988)->assertViewHas('filteredIds',['source-a']);
+    }
+
+    public function test_restoring_catalog_line_only_loads_its_exact_catalog_source(): void
+    {
+        $this->login();$id='catalog_'.base64_encode('STEEL');$this->sources[$id]=array_replace($this->sources['source-a'],['id'=>$id,'stock_order'=>true]);
+        app(ProcurementSource::class)->shouldNotReceive('requirements');
+        $this->postJson('/app/procurement/ordering-options',['source_ids'=>[$id]])->assertOk()->assertJsonPath('requirements',[])->assertJsonPath('catalog.0.id',$id);
+    }
+
+    public function test_off_page_selection_uses_a_count_without_fetching_matching_identities(): void
+    {
+        $this->login();
+        $row=$this->sources['source-a']+['required_date'=>null,'ordered'=>'0','received'=>'0','remaining'=>'10','missing'=>'10','purchases'=>[],'suppliers'=>[],'late'=>false,'state'=>'not_ordered'];
+        app(ProcurementSource::class)->shouldReceive('requirements')->once()->andReturn(new \Illuminate\Pagination\LengthAwarePaginator(collect([$row]),1988,10));
+        app(ProcurementSource::class)->shouldReceive('requirementCount')->once()->withArgs(fn($filters,$progress)=>$filters['selected_only']===true && $filters['selected_ids']===['source-a','outside'])->andReturn(1);
+        app(ProcurementSource::class)->shouldNotReceive('requirementIds');
+        $this->withSession(['procurement_selected'=>['source-a','outside']])->get('/app/procurement/materials')->assertOk()->assertViewHas('filteredSelected',1);
     }
 }

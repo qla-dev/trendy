@@ -33,22 +33,24 @@ class ProcurementSource
         return $this->columns[$table] ??= Cache::remember('procurement-schema-' . hash('sha256',json_encode($identity)),300,fn()=> $this->db()->getSchemaBuilder()->getColumnListing($table));
     }
 
-    private function query()
+    private function query(bool $identityOnly = false)
     {
         $items = $this->table('items_table', 'tHF_WOExItem');
         $headers = $this->table('table', 'tHF_WOEx');
         $catalog = $this->table('catalog_items_table', 'tHE_SetItem');
         $query = $this->db()->table($items . ' as i')->join($headers . ' as w', 'w.acKey', '=', 'i.acKey')
-            ->leftJoin($catalog . ' as c', 'c.acIdent', '=', 'i.acIdent')->select('i.*');
+            ->leftJoin($catalog . ' as c', 'c.acIdent', '=', 'i.acIdent');
+        $fields = $identityOnly ? ['acKey','anQId','anNo','anVariant'] : ['acKey','anQId','anNo','anVariant','acIdent','acDescr','acNote','acFieldSE','acUM','anQty1','anQty','anPlanQty','anNormQty'];
+        $query->select(array_map(fn ($field) => 'i.' . $field, array_values(array_intersect($fields, $this->columns($items)))));
         foreach (['acNote','acFieldSE'] as $noteColumn) {
             if (in_array($noteColumn,$this->columns($items),true)) {
                 $query->whereRaw("UPPER(COALESCE(i.$noteColumn, '')) NOT LIKE ? ESCAPE '!'", ['%REZERVACIJA!_DODATNIH!_SIROVINA%']);
             }
         }
-        foreach (array_unique(['acKeyView','acRefNo1','acLnkKey','acLnkKeyView','anLnkNo','acStatusMF','anPlanQty','adDate','adDateIns','adTimeIns', config('procurement.schedule_field', 'adSchedStartTime')]) as $column) {
+        foreach ($identityOnly ? [] : array_unique(['acKeyView','acRefNo1','acLnkKey','acLnkKeyView','anLnkNo','acStatusMF','anPlanQty','adDate','adDateIns','adTimeIns', config('procurement.schedule_field', 'adSchedStartTime')]) as $column) {
             if (in_array($column, $this->columns($headers), true)) $query->addSelect('w.' . $column . ' as header_' . $column);
         }
-        foreach (['acSetOfItem','anVAT','acSupplier','acName','acUM','acCurrency','anPriceSupp','anPrice','anBuyPrice'] as $column) {
+        foreach ($identityOnly ? [] : ['acSetOfItem','anVAT','acSupplier','acName','acUM','acCurrency','anPriceSupp','anPrice','anBuyPrice'] as $column) {
             if (in_array($column, $this->columns($catalog), true)) $query->addSelect('c.' . $column . ' as catalog_' . $column);
         }
         // Same precedence as WorkOrderController::resolveItemKindForPreview.
@@ -160,59 +162,214 @@ class ProcurementSource
         return '';
     }
 
-    public function requirements(array $filters, array $progress = []): LengthAwarePaginator
+    private function orderLinkTable(): string
     {
-        $raw = $this->query()->orderBy('i.acKey')->orderBy('i.anNo')->get();
-        // Prime all WO links in bounded batches instead of querying for every material row.
-        $keys = $raw->pluck('acKey')->unique()->values()->all();
-        if ($raw->isNotEmpty()) $this->links((array) $raw->first());
-        if ($this->linkTable) {
-            foreach (array_chunk($keys, 500) as $chunk) {
-                foreach ($chunk as $key) $this->linkCache[trim($key)] = [];
-                foreach ($this->db()->table($this->linkTable)->whereIn('acKey', $chunk)->orderBy('acLnkKey')->orderBy('anLnkNo')->get() as $link) {
-                    if (trim((string) ($link->acLnkKey ?? '')) === '') continue;
-                    $this->linkCache[trim($link->acKey)][] = ['order_key'=>trim($link->acLnkKey), 'order_number'=>trim($link->acLnkKeyView ?? $link->acLnkKey), 'position'=>(string) ($link->anLnkNo ?? '')];
-                }
-                foreach ($chunk as $key) $this->linkCache[trim($key)] = collect($this->linkCache[trim($key)])->unique(fn($link)=>$link['order_key'].':'.$link['position'])->values()->all();
+        if ($this->linkTable === null) {
+            $this->linkTable = '';
+            foreach (array_unique([config('workorders.work_order_order_item_link_table', 'vHF_LinkWOExOrderItem'), 'vHF_LinkWOExOrderItem', 'tHF_LinkWOExOrderItem']) as $candidate) {
+                $table = config('workorders.schema', 'dbo') . '.' . $candidate;
+                if ($this->columns($table) !== []) { $this->linkTable = $table; break; }
             }
         }
-        $today = CarbonImmutable::now(config('app.timezone'))->format('Y-m-d');
-        $soon = CarbonImmutable::now(config('app.timezone'))->addDays(config('procurement.due_soon_days', 7))->format('Y-m-d');
-        $rows = $raw->map(function ($row) use ($progress, $today) {
-            $item = $this->map((array) $row);
-            $state = $progress[$item['id']] ?? ['ordered'=>'0','received'=>'0','purchases'=>[],'suppliers'=>[],'late'=>false];
-            $item += $state;
-            $item['remaining'] = bccomp($item['required'], $item['ordered'], 6) > 0 ? bcsub($item['required'], $item['ordered'], 6) : '0';
-            $item['missing'] = bccomp($item['required'], $item['received'], 6) > 0 ? bcsub($item['required'], $item['received'], 6) : '0';
-            $item['state'] = bccomp($item['required'], '0', 6) <= 0 ? 'zero' : (bccomp($item['received'], $item['required'], 6) >= 0 ? 'received' : (bccomp($item['received'], '0', 6) > 0 ? 'partial' : (bccomp($item['ordered'], '0', 6) > 0 ? (bccomp($item['remaining'], '0', 6) > 0 ? 'part_ordered' : 'ordered') : 'not_ordered')));
-            $item['late'] = $item['late'] || ($item['missing'] !== '0' && bccomp($item['missing'], '0', 6) > 0 && $item['required_date'] && $item['required_date'] < $today);
-            return $item;
-        })->filter(function ($row) use ($filters, $soon, $today) {
-            $q = mb_strtolower(trim($filters['q'] ?? ''));
-            $search = implode(' ', [$row['work_order'], $row['work_order_key'], $row['material'], $row['name'], $row['dimensions'], $row['unit'], ...array_column($row['links'], 'order_number'), ...array_column($row['links'], 'position')]);
-            $status = $filters['status'] ?? '';
-            return ($q === '' || str_contains(mb_strtolower($search), $q))
-                && (empty($filters['unit']) || strtoupper($row['unit']) === strtoupper($filters['unit']))
-                && (empty($filters['supplier']) || in_array($filters['supplier'], $row['suppliers'], true))
-                && (empty($filters['work_order']) || str_contains(mb_strtolower($row['work_order']), mb_strtolower($filters['work_order'])))
-                && (empty($filters['from']) || ($row['required_date'] && $row['required_date'] >= $filters['from']))
-                && (empty($filters['to']) || ($row['required_date'] && $row['required_date'] <= $filters['to']))
-                && (empty($filters['created_from']) || ($row['created_date'] && $row['created_date'] >= $filters['created_from']))
-                && (empty($filters['created_to']) || ($row['created_date'] && $row['created_date'] <= $filters['created_to']))
-                && ($status === '' || ($status === 'late' ? $row['late'] : ($status === 'soon' ? ($row['required_date'] && $row['required_date'] >= $today && $row['required_date'] <= $soon && $row['state'] !== 'received') : $row['state'] === $status)))
-                && (empty($filters['selected_only']) || in_array($row['id'], $filters['selected_ids'] ?? [], true));
-        });
+        return $this->linkTable;
+    }
+
+    private function identity(array $row): string
+    {
+        $parts = [trim((string) $row['acKey'])];
+        foreach (['anQId','anNo','anVariant'] as $field) $parts[] = isset($row[$field]) ? (string) $row[$field] : null;
+        return rtrim(strtr(base64_encode(json_encode($parts)), '+/', '-_'), '=');
+    }
+
+    private function sqlText(string $text): string
+    {
+        // SQL literals are used only for ledger identities, avoiding SQL Server's parameter ceiling.
+        return ($this->db()->getDriverName() === 'sqlsrv' ? 'N' : '') . "'" . str_replace("'", "''", $text) . "'";
+    }
+
+    private function identityPredicate(string $id): ?string
+    {
+        $parts = json_decode(base64_decode(strtr($id, '-_', '+/'), true) ?: '', true);
+        if (!is_array($parts) || array_keys($parts) !== [0,1,2,3] || !is_string($parts[0]) || $parts[0] === '' || strlen($parts[0]) > 255) return null;
+        foreach (array_slice($parts, 1) as $part) if ($part !== null && (!is_string($part) || !preg_match('/^\d{1,20}$/D', $part))) return null;
+        $columns = $this->columns($this->table('items_table', 'tHF_WOExItem'));
+        $terms = ['i.acKey = ' . $this->sqlText($parts[0])];
+        if ($parts[1] !== null && in_array('anQId', $columns, true)) $terms[] = 'i.anQId = ' . $parts[1];
+        elseif ($parts[2] !== null && in_array('anNo', $columns, true)) {
+            $terms[] = 'i.anNo = ' . $parts[2];
+            if ($parts[3] !== null && in_array('anVariant', $columns, true)) $terms[] = 'i.anVariant = ' . $parts[3];
+        } else return null;
+        return '(' . implode(' AND ', $terms) . ')';
+    }
+
+    private function identitiesPredicate(array $ids): string
+    {
+        $terms = array_values(array_filter(array_map(fn ($id) => $this->identityPredicate($id), array_unique($ids))));
+        return $terms ? '(' . implode(' OR ', $terms) . ')' : '1 = 0';
+    }
+
+    private function quantityExpression(): string
+    {
+        $terms = [];
+        foreach (array_intersect(['anQty1','anQty','anPlanQty','anNormQty'], $this->columns($this->table('items_table', 'tHF_WOExItem'))) as $field) {
+            $number = $this->db()->getDriverName() === 'sqlsrv' ? "CAST(ROUND(TRY_CONVERT(decimal(38,12), i.$field), 6, 1) AS decimal(28,6))" : "(CAST(CAST(i.$field AS REAL) * 1000000 AS INTEGER) / 1000000.0)";
+            $terms[] = "NULLIF($number, 0)";
+        }
+        return $terms ? 'COALESCE(' . implode(', ', $terms) . ', 0)' : '0';
+    }
+
+    private function headerExpression(array $fields, string $fallback = 'NULL'): string
+    {
+        $columns = $this->columns($this->table('table', 'tHF_WOEx'));
+        $fields = array_map(fn ($field) => 'w.' . $field, array_values(array_intersect($fields, $columns)));
+        if ($fields && $fallback !== 'NULL') $fields[] = $fallback;
+        return count($fields) > 1 ? 'COALESCE(' . implode(', ', $fields) . ')' : ($fields[0] ?? $fallback);
+    }
+
+    private function searchExpression(): string
+    {
+        $fields = ['i.acKey','i.acIdent'];
+        $itemColumns=$this->columns($this->table('items_table','tHF_WOExItem'));
+        $catalogColumns=$this->columns($this->table('catalog_items_table','tHE_SetItem'));
+        if(in_array('acDescr',$itemColumns,true)) $fields[]=in_array('acName',$catalogColumns,true)?'COALESCE(i.acDescr,c.acName)':'i.acDescr';
+        elseif(in_array('acName',$catalogColumns,true)) $fields[]='c.acName';
+        foreach (array_intersect(['acNote','acFieldSE','acUM'], $this->columns($this->table('items_table', 'tHF_WOExItem'))) as $field) $fields[] = 'i.' . $field;
+        foreach (array_intersect(['acKeyView','acRefNo1','acLnkKey','acLnkKeyView','anLnkNo'], $this->columns($this->table('table', 'tHF_WOEx'))) as $field) $fields[] = 'w.' . $field;
+        $sqlite = $this->db()->getDriverName() === 'sqlite';
+        return implode($sqlite ? " || ' ' || " : " + N' ' + ", array_map(fn ($field) => 'COALESCE(CAST(' . $field . ' AS ' . ($sqlite ? 'TEXT' : 'nvarchar(max)') . "), '')", $fields));
+    }
+
+    private function requirementQuery(array $filters, array $progress, bool $identityOnly = false)
+    {
+        $query = $this->query($identityOnly);
+        $like = fn ($text) => '%' . str_replace(['!','%','_'], ['!!','!%','!_'], mb_strtolower(trim($text))) . '%';
+        if (!empty($filters['q'])) {
+            $search = $like($filters['q']);
+            $query->where(function ($q) use ($search) {
+                $q->whereRaw('LOWER(' . $this->searchExpression() . ") LIKE ? ESCAPE '!'", [$search]);
+                if ($table = $this->orderLinkTable()) {
+                    $q->orWhereExists(function ($links) use ($table, $search) {
+                        $links->selectRaw('1')->from($table . ' as search_links')->whereColumn('search_links.acKey', 'i.acKey')->where(function ($match) use ($search) {
+                            foreach (array_intersect(['acLnkKey','acLnkKeyView','anLnkNo'], $this->columns($this->orderLinkTable())) as $field) {
+                                $type = $this->db()->getDriverName() === 'sqlite' ? 'TEXT' : 'nvarchar(max)';
+                                $match->orWhereRaw("LOWER(CAST(search_links.$field AS $type)) LIKE ? ESCAPE '!'", [$search]);
+                            }
+                        });
+                    });
+                }
+            });
+        }
+        if (!empty($filters['unit'])) $query->whereRaw('UPPER(i.acUM) = ?', [strtoupper($filters['unit'])]);
+        if (!empty($filters['material'])) $query->where('i.acIdent', $filters['material']);
+        if (!empty($filters['work_order'])) $query->whereRaw('LOWER(' . $this->headerExpression(['acKeyView','acRefNo1'], 'i.acKey') . ") LIKE ? ESCAPE '!'", [$like($filters['work_order'])]);
+        if (!empty($filters['selected_only'])) $query->whereRaw($this->identitiesPredicate($filters['selected_ids'] ?? []));
+        $created = $this->headerExpression(['adDate','adDateIns','adTimeIns']);
+        $scheduled = $this->headerExpression([config('procurement.schedule_field', 'adSchedStartTime')]);
+        $lead = max(0, (int) config('procurement.lead_days', 7));
+        foreach (['created_from'=>[$created,0,false], 'created_to'=>[$created,0,true], 'from'=>[$scheduled,$lead,false], 'to'=>[$scheduled,$lead,true]] as $field=>[$expression,$days,$end]) {
+            if (!empty($filters[$field])) $query->whereRaw($expression . ($end ? ' < ?' : ' >= ?'), [CarbonImmutable::parse($filters[$field])->addDays($days + ($end ? 1 : 0))->format('Y-m-d')]);
+        }
+        if (!empty($filters['supplier'])) $query->whereRaw($this->identitiesPredicate(array_keys(array_filter($progress, fn ($state) => in_array($filters['supplier'], $state['suppliers'] ?? [], true)))));
+        if (!empty($filters['status'])) {
+            $quantity = $this->quantityExpression();
+            $ordered = $received = $late = [];
+            foreach ($progress as $id=>$state) {
+                if (!$identity = $this->identityPredicate($id)) continue;
+                foreach (['ordered','received'] as $field) {
+                    $number = (string) ($state[$field] ?? '0');
+                    if (!preg_match('/^\d{1,26}(?:\.\d{1,6})?$/D', $number)) throw new InvalidArgumentException('Neispravna količina nabavke.');
+                    if (bccomp($number,'0',6) !== 0) ${$field}[] = "WHEN $identity THEN $number";
+                }
+                if (!empty($state['late'])) $late[] = $identity;
+            }
+            $ordered = $ordered ? '(CASE ' . implode(' ', $ordered) . ' ELSE 0 END)' : '0';
+            $received = $received ? '(CASE ' . implode(' ', $received) . ' ELSE 0 END)' : '0';
+            $today = CarbonImmutable::now(config('app.timezone'))->startOfDay();
+            switch ($filters['status']) {
+                case 'zero': $query->whereRaw("$quantity <= 0"); break;
+                case 'not_ordered': $query->whereRaw("$quantity > 0 AND $received <= 0 AND $ordered <= 0"); break;
+                case 'part_ordered': $query->whereRaw("$quantity > 0 AND $received <= 0 AND $ordered > 0 AND $ordered < $quantity"); break;
+                case 'ordered': $query->whereRaw("$quantity > 0 AND $received <= 0 AND $ordered >= $quantity"); break;
+                case 'partial': $query->whereRaw("$quantity > 0 AND $received > 0 AND $received < $quantity"); break;
+                case 'received': $query->whereRaw("$quantity > 0 AND $received >= $quantity"); break;
+                case 'late':
+                    $query->where(function ($q) use ($late,$quantity,$received,$scheduled,$today,$lead) {
+                        if ($late) $q->whereRaw('(' . implode(' OR ', $late) . ')');
+                        $q->orWhereRaw("($quantity > $received AND $scheduled < ?)", [$today->addDays($lead)->format('Y-m-d')]);
+                    }); break;
+                case 'soon':
+                    $query->whereRaw("$scheduled >= ? AND $scheduled < ? AND NOT ($quantity > 0 AND $received >= $quantity)", [$today->addDays($lead)->format('Y-m-d'),$today->addDays($lead + config('procurement.due_soon_days',7) + 1)->format('Y-m-d')]); break;
+            }
+        }
+        return $query;
+    }
+
+    public function requirementCount(array $filters, array $progress = []): int
+    {
+        return $this->requirementQuery($filters, $progress, true)->count();
+    }
+
+    public function requirementIds(array $filters, array $progress = []): array
+    {
+        // Only four identity columns cross the connection; no material details, links or stock are loaded.
+        return $this->requirementQuery($filters, $progress, true)->get()->map(fn ($row) => $this->identity((array) $row))->all();
+    }
+
+    private function primeLinks($raw): void
+    {
+        $table = $this->orderLinkTable();
+        if (!$table) return;
+        foreach (array_chunk($raw->pluck('acKey')->unique()->all(), 500) as $keys) {
+            foreach ($keys as $key) $this->linkCache[trim($key)] = [];
+            foreach ($this->db()->table($table)->whereIn('acKey', $keys)->orderBy('acLnkKey')->orderBy('anLnkNo')->get() as $row) {
+                if (trim((string) ($row->acLnkKey ?? '')) === '') continue;
+                $this->linkCache[trim($row->acKey)][] = ['order_key'=>trim($row->acLnkKey),'order_number'=>trim($row->acLnkKeyView ?? $row->acLnkKey),'position'=>(string)($row->anLnkNo ?? '')];
+            }
+            foreach ($keys as $key) $this->linkCache[trim($key)] = collect($this->linkCache[trim($key)])->unique(fn ($link) => $link['order_key'].':'.$link['position'])->values()->all();
+        }
+    }
+
+    public function requirements(array $filters, array $progress = []): LengthAwarePaginator
+    {
+        $query = $this->requirementQuery($filters, $progress);
+        $direction = ($filters['direction'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
         $sort = $filters['sort'] ?? 'work_order';
-        $direction = ($filters['direction'] ?? 'desc') === 'asc' ? 1 : -1;
-        $rows = $rows->sort(function ($a, $b) use ($sort, $direction) {
-            if ($sort === 'required') return $direction * bccomp($a['required'],$b['required'],6) ?: strcmp($a['id'],$b['id']);
-            $field = fn ($r) => $sort === 'position' ? ($r['links'][0]['position'] ?? '') : ($sort === 'order' ? ($r['links'][0]['order_number'] ?? '') : ($r[$sort] ?? $r['work_order']));
-            return $direction * strnatcasecmp((string) $field($a), (string) $field($b)) ?: strcmp($a['id'], $b['id']);
-        })->values();
-        $page = max(1, (int) ($filters['page'] ?? 1));
-        $length = (int) ($filters['per_page'] ?? 10);
-        $perPage = !empty($filters['_all']) ? max(1, $rows->count()) : (in_array($length,[10,25,50,100],true) ? $length : 10);
-        return new LengthAwarePaginator($rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page, ['path'=>request()->url(), 'query'=>request()->query()]);
+        $order = $this->headerExpression(['acLnkKeyView','acLnkKey'], "''");
+        $position = $this->headerExpression(['anLnkNo'], 'i.anNo');
+        if (in_array($sort,['order','position'],true) && $table = $this->orderLinkTable()) {
+            $link = $this->db()->table($table.' as sort_links')->whereColumn('sort_links.acKey','i.acKey')->where('sort_links.acLnkKey','<>','')->orderBy('sort_links.acLnkKey')->orderBy('sort_links.anLnkNo')->limit(1);
+            if ($sort === 'order') {
+                $field = in_array('acLnkKeyView',$this->columns($table),true) ? 'COALESCE(sort_links.acLnkKeyView,sort_links.acLnkKey)' : 'sort_links.acLnkKey';
+                $query->orderByRaw('COALESCE((' . $link->selectRaw($field)->toSql() . "), $order) $direction", $link->getBindings());
+            } else $query->orderByRaw('COALESCE((' . $link->select('sort_links.anLnkNo')->toSql() . "), $position) $direction", $link->getBindings());
+        } else {
+            $expression = match ($sort) {
+                'material'=>'i.acIdent', 'required'=>$this->quantityExpression(), 'required_date'=>$this->headerExpression([config('procurement.schedule_field','adSchedStartTime')]),
+                'order'=>$order, 'position'=>$position, default=>$this->headerExpression(['acKeyView','acRefNo1'],'i.acKey'),
+            };
+            $query->orderByRaw($expression . ' ' . $direction);
+        }
+        $query->orderBy('i.acKey')->orderBy('i.anNo');
+        $page = max(1,(int)($filters['page'] ?? 1));
+        $length = (int)($filters['per_page'] ?? 10);
+        $length = in_array($length,[10,25,50,100],true) ? $length : 10;
+        if (!empty($filters['_all'])) {
+            // Explicitly selected RN allocations are needed in full when preparing their document.
+            $raw = $query->get();
+            $rows = new LengthAwarePaginator($raw,$raw->count(),max(1,$raw->count()),1);
+        } else $rows = $query->paginate($length,['*'],'page',$page)->withQueryString();
+        $this->primeLinks($rows->getCollection());
+        $today = CarbonImmutable::now(config('app.timezone'))->format('Y-m-d');
+        $rows->setCollection($rows->getCollection()->map(function ($raw) use ($progress,$today) {
+            $item = $this->map((array)$raw);
+            $item += $progress[$item['id']] ?? ['ordered'=>'0','received'=>'0','purchases'=>[],'suppliers'=>[],'late'=>false];
+            $item['remaining'] = bccomp($item['required'],$item['ordered'],6)>0 ? bcsub($item['required'],$item['ordered'],6) : '0';
+            $item['missing'] = bccomp($item['required'],$item['received'],6)>0 ? bcsub($item['required'],$item['received'],6) : '0';
+            $item['state'] = bccomp($item['required'],'0',6)<=0 ? 'zero' : (bccomp($item['received'],$item['required'],6)>=0 ? 'received' : (bccomp($item['received'],'0',6)>0 ? 'partial' : (bccomp($item['ordered'],'0',6)>0 ? (bccomp($item['remaining'],'0',6)>0 ? 'part_ordered' : 'ordered') : 'not_ordered')));
+            $item['late'] = $item['late'] || (bccomp($item['missing'],'0',6)>0 && $item['required_date'] && $item['required_date']<$today);
+            return $item;
+        }));
+        return $rows;
     }
 
     public function stock(array $codes): array
@@ -269,14 +426,7 @@ class ProcurementSource
             if ($this->linkCache[$key] !== []) return $this->linkCache[$key];
             return !empty($row['header_acLnkKey']) ? [['order_key'=>trim($row['header_acLnkKey']), 'order_number'=>trim($row['header_acLnkKeyView'] ?? $row['header_acLnkKey']), 'position'=>(string)($row['header_anLnkNo'] ?? '')]] : [];
         }
-        if ($this->linkTable === null) {
-            // Same discovery candidates as WorkOrderOrderItemLink, on the active target connection.
-            $this->linkTable = '';
-            foreach (array_unique([config('workorders.work_order_order_item_link_table', 'vHF_LinkWOExOrderItem'), 'vHF_LinkWOExOrderItem', 'tHF_LinkWOExOrderItem']) as $candidate) {
-                $qualified = config('workorders.schema', 'dbo') . '.' . $candidate;
-                if ($this->columns($qualified) !== []) { $this->linkTable = $qualified; break; }
-            }
-        }
+        $this->orderLinkTable();
         $links = $this->linkTable === '' ? [] : $this->db()->table($this->linkTable)->where('acKey', $row['acKey'])->get()->map(fn ($link) => [
             'order_key' => trim((string) ($link->acLnkKey ?? '')),
             'order_number' => trim((string) ($link->acLnkKeyView ?? $link->acLnkKey ?? '')),

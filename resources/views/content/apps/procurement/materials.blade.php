@@ -21,7 +21,7 @@
 <input type="hidden" name="sort" value="{{ request('sort', 'work_order') }}"><input type="hidden" name="direction" value="{{ request('direction', 'desc') }}">
 <div class="col-md-3 d-flex align-items-end"><button type="submit" class="btn btn-primary w-100"><i data-feather="filter" class="me-50"></i>Primijeni filtere</button></div>
 </form></div></div>
-<div id="requirement-selection" data-url="{{ route('app-procurement-selection') }}" data-csrf="{{ csrf_token() }}" data-selected="{{ json_encode(array_values($selected)) }}" data-filtered-ids="{{ json_encode($filteredIds) }}" data-filter-token="{{ $filterToken }}">
+<div id="requirement-selection" data-url="{{ route('app-procurement-selection') }}" data-csrf="{{ csrf_token() }}" data-selected="{{ json_encode(array_values($selected)) }}" data-filtered-ids="{{ json_encode($filteredIds) }}" data-filter-token="{{ $filterToken }}" data-filtered-total="{{ $filteredTotal }}" data-filtered-selected="{{ $filteredSelected }}">
 
 <div class="card" id="procurement-material-list"><div class="card-header">
 <form method="get" id="material-table-controls" class="d-flex justify-content-between align-items-center flex-wrap gap-1 w-100">
@@ -29,7 +29,7 @@
 <div class="d-flex align-items-center gap-50"><label for="material-page-length" class="mb-0">Prikaži</label><select id="material-page-length" class="form-select" name="per_page" aria-label="Broj redova">@foreach([10,25,50,100] as $length)<option value="{{ $length }}" @selected((int)request('per_page',10)===$length)>{{ $length }}</option>@endforeach</select><span>zapisa</span></div>
 <div class="d-flex align-items-center gap-1 flex-wrap material-search-controls">@if($canSelect)<div class="d-flex align-items-center gap-1 material-selection-summary"><span id="selection-count">Odabrano: {{ count($selected) }}</span><button type="button" id="clear-selection" class="btn btn-sm btn-outline-secondary" @disabled(!count($selected))>Poništi odabir</button></div>@endif<div class="d-flex align-items-center gap-50 material-search-field"><label class="mb-0" for="filter-search">Brza pretraga:</label><input id="filter-search" class="form-control" style="width:260px;max-width:100%" type="search" name="q" value="{{ request('q') }}" placeholder="RN, materijal, dimenzije"><noscript><button class="btn btn-primary">Pretraži</button></noscript></div></div>
 </form></div>
-<div class="table-responsive"><table class="table table-striped procurement-compact"><thead><tr>@if($canSelect)<th><input type="checkbox" class="form-check-input" id="select-filtered-requirements" aria-label="Odaberi sve radne naloge iz aktivnog filtera" title="Odaberi sve radne naloge iz aktivnog filtera" @disabled(!count($filteredIds))></th>@endif
+<div class="table-responsive"><table class="table table-striped procurement-compact"><thead><tr>@if($canSelect)<th><input type="checkbox" class="form-check-input" id="select-filtered-requirements" aria-label="Odaberi sve radne naloge iz aktivnog filtera" title="Odaberi sve radne naloge iz aktivnog filtera" @disabled(!$filteredTotal)></th>@endif
  @foreach(['order'=>'Narudžba','position'=>'Poz.','work_order'=>'Radni nalog','material'=>'Materijal'] as $key=>$label)<th><a href="{{ request()->fullUrlWithQuery(['sort'=>$key,'direction'=>request('sort')===$key && request('direction')==='asc' ? 'desc':'asc','page'=>1]) }}">{{ $label }}</a></th>@endforeach
  <th>Dimenzije / Napomena</th><th class="text-end">Potrebna količina</th><th class="text-end">Naručeno</th><th class="text-end">Primljeno</th><th class="text-end">Preostalo za nabavku</th><th><a href="{{ request()->fullUrlWithQuery(['sort'=>'required_date','direction'=>'asc','page'=>1]) }}">Potreban prijem</a></th><th>Status</th><th class="text-end">Skladište sirovina</th>
 </tr></thead><tbody>
@@ -72,4 +72,4 @@
  try{const saved=JSON.parse(sessionStorage.getItem('procurement-material-search-focus') || 'null');sessionStorage.removeItem('procurement-material-search-focus');if(saved && saved.q===search.value && Date.now()-saved.at<30000){search.focus();search.setSelectionRange(saved.position,saved.position);}}catch(e){}
 })();
 </script>@endsection
-@section('page-script')<script src="{{ asset('js/scripts/pages/procurement.js') }}?v=8"></script><script src="{{ asset('js/scripts/pages/procurement-ordering.js') }}?v=5"></script>@endsection
+@section('page-script')<script src="{{ asset('js/scripts/pages/procurement.js') }}?v=9"></script><script src="{{ asset('js/scripts/pages/procurement-ordering.js') }}?v=6"></script>@endsection

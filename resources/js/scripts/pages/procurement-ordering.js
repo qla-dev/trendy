@@ -69,7 +69,7 @@
   }
   function closePicker(commit=true){
     if(!picker)return;
-    const current=picker;picker=null;current.panel.remove();current.trigger.setAttribute('aria-expanded','false');
+    const current=picker;picker=null;current.cancel?.();current.panel.remove();current.trigger.setAttribute('aria-expanded','false');
     if(commit){
       const chosen=options.requirements.filter(s=>current.ids.has(s.id));
       const groups=groupSources(chosen);
@@ -98,16 +98,37 @@
     panel.innerHTML='<input class="form-control" data-rn-search placeholder="Pretražite RN" aria-label="Pretražite RN"><div class="rn-picker-list"></div><div class="d-flex align-items-center justify-content-between"><small data-rn-count></small><button type="button" class="btn btn-primary btn-sm" data-rn-done>Završi odabir</button></div>';
     const ids=new Set(row.orderIds),used=new Set([...body.children].filter(r=>r!==row).flatMap(r=>r.orderIds));
     picker={row,trigger,panel,ids};trigger.setAttribute('aria-expanded','true');modal.append(panel);
-    const list=panel.querySelector('.rn-picker-list'),rows=options.requirements.filter(s=>s.material===code);
+    const current=picker,list=panel.querySelector('.rn-picker-list');
+    let requestVersion=0,controller=null,timer;
+    current.cancel=()=>{clearTimeout(timer);controller?.abort();};
+    const more=document.createElement('button');more.type='button';more.className='btn btn-outline-primary btn-sm mb-1';more.textContent='Učitaj još';more.hidden=true;list.after(more);
     function count(){panel.querySelector('[data-rn-count]').textContent='Odabrano: '+ids.size;}
-    for(const source of rows){
+    function append(source){
       const label=document.createElement('label'),input=document.createElement('input'),text=document.createElement('span'),details=document.createElement('small');
       input.type='checkbox';input.className='form-check-input';input.value=source.id;input.checked=ids.has(source.id);input.disabled=used.has(source.id);
       text.append(document.createTextNode(source.work_order));details.textContent=(source.dimensions || 'Bez dimenzija')+' · '+number(source.remaining)+'\u00a0'+source.unit+(input.disabled?' · već odabrano':'');text.append(details);label.append(input,text);list.append(label);
       input.addEventListener('change',()=>{if(input.checked)ids.add(source.id);else ids.delete(source.id);count();});
     }
-    if(!rows.length)list.textContent='Nema preostalih potreba za ovaj materijal. Možete naručiti za skladište.';
-    panel.querySelector('[data-rn-search]').addEventListener('input',event=>{const q=event.target.value.toLowerCase();list.querySelectorAll('label').forEach(label=>{label.style.display=label.textContent.toLowerCase().includes(q)?'':'none';});});
+    async function load(page=1){
+      controller?.abort();controller=new AbortController();const version=++requestVersion;
+      more.disabled=true;
+      if(page===1)list.textContent='Učitavanje…';
+      try{
+        const params=new URLSearchParams({material:code,page:String(page),q:panel.querySelector('[data-rn-search]').value.trim()});
+        const response=await fetch(modal.dataset.optionsUrl+'?'+params,{headers:{Accept:'application/json'},signal:controller.signal});
+        if(!response.ok)throw new Error('Radne naloge nije moguće učitati.');
+        const data=await response.json();if(picker!==current || version!==requestVersion)return;
+        if(page===1)list.replaceChildren();
+        const known=new Map(options.requirements.map(source=>[source.id,source]));
+        data.requirements.forEach(source=>{known.set(source.id,source);ensureMaterial(source);append(source);});
+        options.requirements=[...known.values()];
+        more.hidden=!data.nextPage;more.onclick=()=>load(data.nextPage);more.disabled=false;
+        if(!list.children.length)list.textContent='Nema radnih naloga za odabrani materijal i pretragu.';
+        positionPicker();
+      }catch(e){if(e.name!=='AbortError' && picker===current){if(page===1)list.textContent=e.message;else error.textContent=e.message;more.disabled=false;}}
+    }
+    panel.querySelector('[data-rn-search]').addEventListener('input',()=>{clearTimeout(timer);controller?.abort();requestVersion++;timer=setTimeout(()=>{if(picker===current)load();},200);});
+    load();
     panel.querySelector('[data-rn-done]').addEventListener('click',()=>{closePicker();trigger.focus();});
     count();positionPicker();panel.querySelector('input').focus();
   }
@@ -162,12 +183,14 @@
     submit.textContent=inquiry?'Sačuvaj upit i otvori PDF':'Sačuvaj narudžbenicu';
     try{
       await window.procurementSelection?.ready();
-      if(!options){
-        const response=await fetch(modal.dataset.optionsUrl,{headers:{Accept:'application/json'}});
+      const selected=window.procurementSelection?.ids() || [];
+      const oldItems=restored?[]:(window.procurementOldItems || []);
+      const restoreIds=oldItems.flatMap(item=>(item.allocations || [{source_id:item.source_id}]).map(a=>a.source_id)).filter(Boolean);
+      if(!options || [...selected,...restoreIds].some(id=>!options.requirements.some(source=>source.id===id))){
+        const response=await fetch(modal.dataset.optionsUrl,{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('#material-order-form [name="_token"]').value},body:JSON.stringify({source_ids:restoreIds})});
         if(!response.ok)throw new Error('Materijale nije moguće učitati. Ponovo otvorite prozor.');
-        options=await response.json();[...options.requirements,...options.catalog].forEach(ensureMaterial);searches.set('',options);
+        options=await response.json();[...options.requirements,...options.catalog].forEach(ensureMaterial);
       }
-      const selected=window.procurementSelection?.ids() || options.selected || [];
       const currentSignature=JSON.stringify([inquiry,selected.slice().sort()]);
       if(currentSignature!==signature){
         [...body.children].forEach(row=>{$(row.querySelector('[data-material]')).select2('destroy');row.remove();});

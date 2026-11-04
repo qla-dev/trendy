@@ -35,17 +35,17 @@ class ProcurementController extends Controller
         $filters = $this->materialFilters($request);
         $selected = $request->session()->get('procurement_selected', []);
         $filters['selected_ids'] = $selected;
-        $page = (int) ($filters['page'] ?? 1);
-        $length = (int) ($filters['per_page'] ?? 10);
-        $all = $this->source->requirements(array_merge($filters, ['_all'=>true,'page'=>1]), $this->service->progress());
-        $filteredIds = $all->pluck('id')->all();
+        $progress = $this->service->progress();
+        $rows = $this->source->requirements($filters, $progress);
+        $filteredIds = $rows->pluck('id')->all();
+        $filteredTotal = $rows->total();
+        $filteredSelected = $selected ? $this->source->requirementCount(array_merge($filters,['selected_only'=>true,'selected_ids'=>$selected]), $progress) : 0;
         $filterToken = (string) Str::uuid();
         $snapshots = $request->session()->get('procurement_filter_snapshots', []);
-        $snapshots[$filterToken] = $filteredIds;
+        $snapshots[$filterToken] = ['filters'=>$filters,'ids'=>count($filteredIds)===$filteredTotal ? $filteredIds : null];
         $request->session()->put('procurement_filter_snapshots', array_slice($snapshots, -10, null, true));
-        $rows = new LengthAwarePaginator($all->getCollection()->forPage($page, $length)->values(), $all->total(), $length, $page, ['path'=>$request->url(),'query'=>$request->query()]);
         $stock = $this->source->stock($rows->pluck('material')->all());
-        return view('content.apps.procurement.materials', compact('rows', 'selected', 'stock', 'filteredIds', 'filterToken'));
+        return view('content.apps.procurement.materials', compact('rows', 'selected', 'stock', 'filteredIds', 'filterToken', 'filteredTotal', 'filteredSelected'));
     }
 
     private function materialFilters(Request $request): array
@@ -58,15 +58,28 @@ class ProcurementController extends Controller
     public function orderingOptions(Request $request)
     {
         abort_unless(app(ProcurementAccess::class)->can($request->user(), 'edit'), 403);
-        $request->validate(['q'=>'nullable|string|max:255','catalog_only'=>'nullable|boolean']);
-        $requirements = [];
-        if (!$request->boolean('catalog_only')) {
-            $requirements = $this->source->requirements(['_all'=>true], $this->service->progress())->items();
-        }
-        $catalog = $this->source->catalog((string) $request->query('q',''));
-        $stock = $this->source->stock(array_merge(array_column($requirements,'material'),array_column($catalog,'material')));
+        $data = $request->validate(['q'=>'nullable|string|max:255','catalog_only'=>'nullable|boolean','material'=>'nullable|string|max:255','page'=>'nullable|integer|min:1','source_ids'=>'nullable|array','source_ids.*'=>'string|max:1000']);
         $selected = $request->session()->get('procurement_selected', []);
-        return response()->json(compact('requirements','catalog','stock','selected'));
+        $requirements = $catalog = $stock = [];
+        $nextPage = null;
+        if ($request->boolean('catalog_only')) {
+            $catalog = $this->source->catalog((string) $request->query('q',''));
+            $stock = $this->source->stock(array_column($catalog,'material'));
+        } elseif ($request->filled('material')) {
+            $rows = $this->source->requirements(['material'=>$data['material'],'q'=>$data['q'] ?? '', 'page'=>$data['page'] ?? 1,'per_page'=>50], $this->service->progress());
+            $requirements = $rows->items();
+            $nextPage = $rows->hasMorePages() ? $rows->currentPage()+1 : null;
+        } else {
+            $ids = array_values(array_unique([...$selected,...($data['source_ids'] ?? [])]));
+            $catalogIds = array_values(array_filter($ids, fn ($id) => str_starts_with($id,'catalog_')));
+            if ($catalogIds) $catalog = array_values($this->business(fn () => $this->source->selected($catalogIds)));
+            $ids = array_values(array_diff($ids,$catalogIds));
+            if ($ids) {
+                $requirements = $this->source->requirements(['selected_only'=>true,'selected_ids'=>$ids,'_all'=>true], $this->service->progress())->items();
+            }
+            if ($requirements || $catalog) $stock = $this->source->stock(array_merge(array_column($requirements,'material'),array_column($catalog,'material')));
+        }
+        return response()->json(compact('requirements','catalog','stock','selected','nextPage'));
     }
 
     public function create(Request $request)
@@ -126,15 +139,20 @@ class ProcurementController extends Controller
         $selected = $request->boolean('clear') ? [] : $request->session()->get('procurement_selected', []);
         $selected = array_values(array_diff(array_unique([...$selected, ...($data['add'] ?? [])]), $data['remove'] ?? []));
         if (!empty($data['filtered'])) {
-            // Reuse the server-side filter snapshot prepared when rendering the page.
-            // Selecting checkboxes must not query or reprocess the ERP material list.
+            // Resolve only matching identities, and only when Select all is first used.
+            // Repeated selection changes reuse that list without loading RN details.
             $snapshots = $request->session()->get('procurement_filter_snapshots', []);
             if (!array_key_exists($data['filter_token'], $snapshots)) throw ValidationException::withMessages(['filtered'=>'Lista je istekla. Osvježite stranicu i ponovite odabir.']);
-            $matches = $snapshots[$data['filter_token']];
+            $snapshot = $snapshots[$data['filter_token']];
+            if (array_key_exists('filters',$snapshot)) {
+                $matches = $snapshot['ids'] ?? $this->source->requirementIds($snapshot['filters'], $this->service->progress());
+                $snapshots[$data['filter_token']]['ids'] = $matches;
+                $request->session()->put('procurement_filter_snapshots', $snapshots);
+            } else $matches = $snapshot; // Already-open pages from the previous release.
             $selected = $data['filtered'] === 'add' ? array_values(array_unique([...$selected,...$matches])) : array_values(array_diff($selected,$matches));
         }
         $request->session()->put('procurement_selected', $selected);
-        return response()->json(['selected'=>$selected,'count'=>count($selected)]);
+        return response()->json(['selected'=>$selected,'count'=>count($selected)] + (isset($matches) ? ['filtered_ids'=>$matches] : []));
     }
 
     public function store(Request $request)

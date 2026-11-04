@@ -222,4 +222,86 @@ class ProcurementSourceTest extends TestCase
         $this->assertSame('2026-10-27',$row['inquiry_deadline']);
         $this->assertSame('2026-12-08',$row['required_date']);
     }
+
+    public function test_filters_and_pagination_limit_detail_rows_in_sql_and_only_page_links_are_loaded(): void
+    {
+        $db=DB::connection('procurement_fixture');
+        for($i=0;$i<125;$i++)$db->table('tHF_WOExItem')->insert(['acKey'=>'WO1','anQId'=>1000+$i,'anNo'=>20+$i,'anVariant'=>0,'acIdent'=>'STEEL','acDescr'=>'STEEL','acNote'=>'20x30x40','acUM'=>'KG','acOperationType'=>'M','anQty1'=>'1']);
+        $db->enableQueryLog();$db->flushQueryLog();
+        $rows=$this->source->requirements(['unit'=>'KG','q'=>'20x30x40','per_page'=>10,'page'=>3]);
+        $this->assertSame(125,$rows->total());$this->assertCount(10,$rows->items());
+        $queries=$db->getQueryLog();$details=array_values(array_filter($queries,fn($q)=>str_contains($q['query'],'header_')));
+        $this->assertCount(1,$details);$this->assertStringContainsString('limit 10 offset 20',$details[0]['query']);
+        $this->assertStringContainsString('UPPER(i.acUM) = ?',$details[0]['query']);
+        $this->assertStringNotContainsString('"i".*',$details[0]['query']);
+        $db->flushQueryLog();$ids=$this->source->requirementIds(['unit'=>'KG','q'=>'20x30x40']);
+        $this->assertCount(125,$ids);
+        $queries=array_values(array_filter($db->getQueryLog(),fn($q)=>str_starts_with($q['query'],'select "i".')));$this->assertCount(1,$queries);
+        $this->assertStringStartsWith('select "i"."acKey", "i"."anQId", "i"."anNo", "i"."anVariant" from',$queries[0]['query']);
+        $this->assertStringNotContainsString('header_',$queries[0]['query']);
+        $this->assertSame($ids,$this->source->requirementIds(['unit'=>'KG','q'=>'20x30x40','per_page'=>10,'page'=>9]));
+    }
+
+    public function test_sql_status_filters_match_displayed_progress_and_identity_selection(): void
+    {
+        $rows=$this->source->requirements([])->items();$id=$rows[0]['id'];$quantity=$rows[0]['required'];
+        foreach (['not_ordered'=>['0','0'],'part_ordered'=>['1','0'],'ordered'=>[$quantity,'0'],'partial'=>[$quantity,'1'],'received'=>[$quantity,$quantity]] as $status=>[$ordered,$received]) {
+            $progress=[$id=>['ordered'=>$ordered,'received'=>$received,'suppliers'=>['Supplier'],'late'=>false,'purchases'=>[]]];
+            $matches=$this->source->requirements(['status'=>$status,'selected_only'=>1,'selected_ids'=>[$id]],$progress);
+            $this->assertSame(1,$matches->total(),$status);$this->assertSame($status,$matches[0]['state']);
+            $this->assertSame([$id],$this->source->requirementIds(['status'=>$status,'selected_only'=>1,'selected_ids'=>[$id]],$progress));
+        }
+        $progress=[$id=>['ordered'=>$quantity,'received'=>'0','suppliers'=>['Supplier'],'late'=>true,'purchases'=>[]]];
+        $this->assertSame([$id],$this->source->requirementIds(['supplier'=>'Supplier'],$progress));
+        $this->assertSame([$id],$this->source->requirementIds(['status'=>'late'],$progress));
+        $this->assertSame([],$this->source->requirementIds(['supplier'=>'Other'],$progress));
+        $this->assertSame([],$this->source->requirementIds(['selected_only'=>1,'selected_ids'=>['bad-id']]));
+    }
+
+    public function test_sql_server_query_compiles_filters_and_bounded_pagination_without_connecting(): void
+    {
+        config(['database.connections.procurement_sql_compile'=>['driver'=>'sqlsrv','host'=>'not-used','database'=>'not-used','prefix'=>''], 'services.work_order.target_connection'=>'procurement_sql_compile']);
+        $method=new \ReflectionMethod(ProcurementSource::class,'requirementQuery');$method->setAccessible(true);
+        $id=rtrim(strtr(base64_encode(json_encode(["WO'1",'101','1','0'])),'+/','-_'),'=');
+        $query=$method->invoke($this->source,['q'=>'N-1','status'=>'part_ordered','created_from'=>'2026-10-20','unit'=>'KG'],[$id=>['ordered'=>'1','received'=>'0']],true);
+        $sql=$query->orderBy('i.acKey')->forPage(2,10)->toSql();
+        $this->assertStringContainsString('fetch next 10 rows only',$sql);
+        $this->assertStringContainsString('TRY_CONVERT(decimal(38,12), i.anQty1)',$sql);
+        $this->assertStringContainsString("N'WO''1'",$sql);
+        $this->assertStringNotContainsString('i.*',$sql);
+        $this->assertContains('2026-10-20',$query->getBindings());
+        DB::purge('procurement_sql_compile');
+    }
+
+    public function test_database_filters_preserve_six_decimal_quantity_precedence(): void
+    {
+        DB::connection('procurement_fixture')->table('tHF_WOExItem')->where('anQId',101)->update(['anQty1'=>'0.0000009','anQty'=>'2.5']);
+        $row=$this->source->requirements(['unit'=>'KG','q'=>'10x20x30'])[0];
+        $this->assertSame('2.5',$row['required']);
+        $progress=[$row['id']=>['ordered'=>'2.5','received'=>'0','suppliers'=>[],'purchases'=>[],'late'=>false]];
+        $this->assertSame(1,$this->source->requirements(['unit'=>'KG','q'=>'10x20x30','status'=>'ordered'],$progress)->total());
+        $this->assertSame(0,$this->source->requirements(['unit'=>'KG','q'=>'10x20x30','status'=>'zero'],$progress)->total());
+    }
+
+    public function test_large_list_date_filter_fetches_only_ten_details_and_links_from_twenty_nine_matches(): void
+    {
+        $db=DB::connection('procurement_fixture');$db->statement('ALTER TABLE tHF_WOEx ADD COLUMN adDate TEXT');
+        $db->table('tHF_WOEx')->update(['adDate'=>'2026-10-20']);
+        $bulk=[];for($i=0;$i<1988;$i++)$bulk[]=['acKey'=>'WO1','anQId'=>10000+$i,'anNo'=>100+$i,'anVariant'=>0,'acIdent'=>'STEEL','acDescr'=>'STEEL','acNote'=>'20x30x40','acUM'=>'KG','acOperationType'=>'M','anQty1'=>'1'];
+        foreach(array_chunk($bulk,50) as $chunk)$db->table('tHF_WOExItem')->insert($chunk);
+        for($i=0;$i<29;$i++){
+            $key='DATE-'.str_pad((string)$i,3,'0',STR_PAD_LEFT);
+            $db->table('tHF_WOEx')->insert(['acKey'=>$key,'acKeyView'=>$key,'acStatusMF'=>'O','adDate'=>'2026-11-03','adSchedStartTime'=>'2026-11-10']);
+            $db->table('tHF_WOExItem')->insert(['acKey'=>$key,'anQId'=>20000+$i,'anNo'=>1,'anVariant'=>0,'acIdent'=>'STEEL','acDescr'=>'STEEL','acUM'=>'KG','acOperationType'=>'M','anQty1'=>'1']);
+        }
+        $db->enableQueryLog();$db->flushQueryLog();
+        $filters=['created_from'=>'2026-11-03','per_page'=>10,'page'=>2];
+        $page=$this->source->requirements($filters);$this->assertSame(29,$page->total());$this->assertCount(10,$page->items());
+        $queries=$db->getQueryLog();$details=array_values(array_filter($queries,fn($q)=>str_contains($q['query'],'header_')));
+        $this->assertCount(1,$details);$this->assertStringContainsString('limit 10 offset 10',$details[0]['query']);$this->assertContains('2026-11-03',$details[0]['bindings']);
+        $links=array_values(array_filter($queries,fn($q)=>str_starts_with($q['query'],'select * from "main"."tHF_LinkWOExOrderItem"')));
+        $this->assertCount(1,$links);$this->assertCount(10,$links[0]['bindings']);$this->assertNotContains('WO1',$links[0]['bindings']);
+        $this->assertCount(29,$this->source->requirementIds($filters));
+        $this->assertSame(29,$this->source->requirementCount($filters));
+    }
 }
