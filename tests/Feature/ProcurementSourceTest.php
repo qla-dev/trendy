@@ -77,6 +77,23 @@ class ProcurementSourceTest extends TestCase
         $this->assertSame('WO1', $rows[0]['work_order_key']);
     }
 
+    public function test_excludes_automatically_reserved_material_from_procurement(): void
+    {
+        $filters = ['_all' => true];
+        $rows = $this->source->requirements($filters);
+        $reserved = $rows->firstWhere('item_qid', '101');
+        DB::connection('procurement_fixture')->table('tHF_WOExItem')->where('anQId', 101)
+            ->update(['acNote' => '  Automatski popunjeno sa skladišta dodatnih sirovina']);
+
+        $expected = array_values(array_diff($rows->pluck('id')->all(), [$reserved['id']]));
+        $this->assertEqualsCanonicalizing($expected, $this->source->requirements($filters)->pluck('id')->all());
+        $this->assertEqualsCanonicalizing($expected, $this->source->requirementIds([]));
+        $this->assertSame(count($expected), $this->source->requirementCount([]));
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->source->selected([$reserved['id']]);
+    }
+
     public function test_filters_sorting_and_selected_items_use_actual_source_rows(): void
     {
         $rows = $this->source->materials('STEEL', 'position', 'desc', 'KG');
