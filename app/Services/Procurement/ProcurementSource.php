@@ -2,6 +2,7 @@
 
 namespace App\Services\Procurement;
 
+use App\Services\WorkOrder\ExcessStockService;
 use App\Services\WorkOrder\WorkOrderClosingCalculator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
@@ -42,9 +43,14 @@ class ProcurementSource
             ->leftJoin($catalog . ' as c', 'c.acIdent', '=', 'i.acIdent');
         $fields = $identityOnly ? ['acKey','anQId','anNo','anVariant'] : ['acKey','anQId','anNo','anVariant','acIdent','acDescr','acNote','acFieldSE','acUM','anQty1','anQty','anPlanQty','anNormQty'];
         $query->select(array_map(fn ($field) => 'i.' . $field, array_values(array_intersect($fields, $this->columns($items)))));
+        $excessMarkers = array_filter(app(ExcessStockService::class)->markers());
         foreach (['acNote','acFieldSE'] as $noteColumn) {
             if (in_array($noteColumn,$this->columns($items),true)) {
                 $query->whereRaw("UPPER(COALESCE(i.$noteColumn, '')) NOT LIKE ? ESCAPE '!'", ['%REZERVACIJA!_DODATNIH!_SIROVINA%']);
+                foreach ($excessMarkers as $marker) {
+                    $prefix = strtr(mb_strtolower($marker), ['!'=>'!!','_'=>'!_','%'=>'!%','['=>'![']);
+                    $query->whereRaw("LOWER(LTRIM(COALESCE(i.$noteColumn, ''))) NOT LIKE ? ESCAPE '!'", [$prefix . '%']);
+                }
             }
         }
         foreach ($identityOnly ? [] : array_unique(['acKeyView','acRefNo1','acLnkKey','acLnkKeyView','anLnkNo','acStatusMF','anPlanQty','adDate','adDateIns','adTimeIns', config('procurement.schedule_field', 'adSchedStartTime')]) as $column) {
