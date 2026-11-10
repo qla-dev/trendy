@@ -6104,6 +6104,7 @@ Cijenili bismo plaćanje ove fakture do 05/11/2019</textarea
 @include('content.new-components.work-order-department-modal')
 @include('content.new-components.nalog-scan')
 @include('content.new-components.sirovina-scan', [
+  'workOrderMaterials' => $workOrderItemResources ?? [],
   'productsFetchUrl' => $productsFetchUrl,
   'bomFetchUrl' => $bomFetchUrl,
   'bomDestroyUrl' => $bomDestroyUrl,

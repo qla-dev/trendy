@@ -1,11 +1,12 @@
 <?php
 
 return [
-    'enabled' => env('EXCESS_STOCK_ENABLED', false),
-    'assign_on_work_order_create' => env('EXCESS_STOCK_ASSIGN_ON_WORK_ORDER_CREATE', false),
+    // Retired: do not add reservations or issue this warehouse automatically.
+    'enabled' => false,
+    'assign_on_work_order_create' => false,
     // Testna is the only permitted apply target until this feature is signed off.
     'backfill_connection' => env('EXCESS_STOCK_BACKFILL_CONNECTION', 'work_order_target'),
-    'allow_apply' => env('EXCESS_STOCK_ALLOW_APPLY', false),
+    'allow_apply' => false,
     'warehouse' => env('EXCESS_STOCK_WAREHOUSE', 'Skladište dodatnih sirovina'),
     'target_date' => env('EXCESS_STOCK_TARGET_DATE', '2026-12-15'),
     'max_materials_per_work_order' => (int) env('EXCESS_STOCK_MAX_MATERIALS_PER_WORK_ORDER', 5),

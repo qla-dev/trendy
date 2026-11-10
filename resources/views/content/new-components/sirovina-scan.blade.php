@@ -1,4 +1,14 @@
 @php
+  $manualWorkOrderMaterials = collect($workOrderMaterials ?? $workOrderItemResources ?? [])
+    ->map(function ($item) {
+      return [
+        'acIdentChild' => trim((string) ($item['materijal'] ?? '')),
+        'acDescr' => trim((string) ($item['naziv'] ?? '')),
+      ];
+    })
+    ->filter(function ($item) { return $item['acIdentChild'] !== ''; })
+    ->unique(function ($item) { return strtolower($item['acIdentChild']); })
+    ->values()->all();
   $productsEndpoint = (string) ($productsFetchUrl ?? '');
   $bomEndpoint = (string) ($bomFetchUrl ?? '');
   $bomDestroyEndpoint = (string) ($bomDestroyUrl ?? '');
@@ -18,7 +28,7 @@
   $allowManualStockAdjust = $isAdminUser;
   $stockAdjustWarehouse = trim((string) (($workOrder['magacin'] ?? '') ?: ''));
   $scannerCompactRoleLayout = $currentUser
-    ? strtolower((string) ($currentUser->role ?? '')) === 'user'
+    ? strtolower(trim((string) $currentUser->getRole())) === 'user'
     : false;
 @endphp
 
@@ -30,6 +40,7 @@
   aria-hidden="true"
   data-bs-backdrop="static"
   data-bs-keyboard="false"
+  data-work-order-materials="{{ json_encode($manualWorkOrderMaterials) }}"
   data-products-url="{{ $productsEndpoint }}"
   data-bom-url="{{ $bomEndpoint }}"
   data-bom-destroy-url="{{ $bomDestroyEndpoint }}"
@@ -53,7 +64,10 @@
           <h4 class="mb-0 text-white" id="sirovina-scanner-modal-label">
             Planiraj novu potrošnju za RN <span id="sirovina-rn-number">-</span>
           </h4>
-          <p class="mb-0 wo-bom-modal-subtitle">Izaberite materijal i operacije za privremenu sastavnicu</p>
+          <div class="wo-bom-input-modes" role="group" aria-label="Način unosa materijala">
+            <button type="button" class="wo-bom-input-mode active" data-material-input-mode="scan" aria-pressed="true" aria-controls="sirovina-scan-panel">Skeniranje</button>
+            <button type="button" class="wo-bom-input-mode" data-material-input-mode="manual" aria-pressed="false" aria-controls="sirovina-manual-panel">Ručni unos (šifre)</button>
+          </div>
         </div>
       </div>
       <div class="modal-body p-0">
@@ -61,6 +75,12 @@
           <div class="row g-4 align-items-stretch">
             <div class="col-12 col-lg-4 wo-bom-scanner-col">
               <div class="wo-bom-card wo-bom-dummy-qr-card">
+                <div id="sirovina-manual-panel" class="d-none" aria-hidden="true">
+                  <label class="form-label wo-bom-section-title" for="sirovina-manual-code">Šifra materijala</label>
+                  <select id="sirovina-manual-code" class="form-select"><option value=""></option></select>
+                  <p id="sirovina-manual-status" class="small" role="status" aria-live="polite"></p>
+                </div>
+                <div id="sirovina-scan-panel" aria-hidden="false">
                 <h5 class="text-white mb-1">Skenirajte BARCODE ili QR kod artikla</h5>
 
                 <div class="qr-scanner-container position-relative wo-bom-dummy-qr-wrap">
@@ -133,6 +153,7 @@
                     <div class="small wo-qr-status" id="sirovina-qr-scanner-status">Dozvoli pristup kameri za barcode / QR skeniranje.</div>
                     <div class="small wo-qr-error text-danger d-none" id="sirovina-qr-scanner-error"></div>
                   </div>
+                </div>
                 </div>
               </div>
             </div>
@@ -298,6 +319,12 @@
 </div>
 
 <style>
+  #sirovina-scanner-modal .wo-bom-input-modes { display: flex; justify-content: center; gap: .5rem; margin-top: .65rem; }
+  #sirovina-scanner-modal .wo-bom-input-mode { border: 1px solid #384454; border-radius: .55rem; background: #151b24; color: #aebbd8; padding: .55rem .85rem; font-weight: 600; transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease; }
+  #sirovina-scanner-modal .wo-bom-input-mode.active { background: #173e36; border-color: #50e3c2; color: #d9fff5; box-shadow: 0 0 0 1px #50e3c2; }
+  #sirovina-scanner-modal .wo-bom-input-mode:focus-visible { outline: 2px solid #50e3c2; outline-offset: 3px; }
+  #sirovina-scanner-modal #sirovina-manual-panel { min-height: 320px; padding: 1rem 0; }
+
 
   
   @media (min-width: 576px) and (max-width: 1180px) {
@@ -358,6 +385,9 @@
   }
 
   #sirovina-scanner-modal .wo-bom-content-header {
+    /* Keep input mode buttons above the body row's negative gutter margin. */
+    position: relative;
+    z-index: 1;
     border-bottom: 0;
     justify-content: center;
     background: transparent;
@@ -385,7 +415,7 @@
     min-height: 0;
   }
 
-  #sirovina-scanner-modal .wo-bom-dummy-qr-card > h5 {
+  #sirovina-scanner-modal #sirovina-scan-panel > h5 {
     text-align: center;
     margin-bottom: 0.9rem !important;
   }
@@ -1359,6 +1389,14 @@
     }
   }
 
+  @media (min-width: 992px) {
+    #sirovina-scanner-modal[data-compact-layout="1"] #sirovina-manual-panel {
+      width: var(--material-input-width, 270px);
+      max-width: 100%;
+      margin-inline: auto;
+    }
+  }
+
   #sirovina-scanner-modal[data-compact-layout="1"] .wo-bom-scanner-col {
     flex: 0 0 100%;
     max-width: 100%;
@@ -1366,6 +1404,7 @@
 
   #sirovina-scanner-modal[data-compact-layout="1"] .wo-bom-ipad-hidden-col,
   #sirovina-scanner-modal[data-compact-layout="1"] .wo-bom-right-col,
+  #sirovina-scanner-modal[data-compact-layout="1"] .wo-bom-bottom-mode-switch,
   #sirovina-scanner-modal[data-compact-layout="1"] .wo-scanner-open-fab {
     display: none !important;
   }
@@ -1476,7 +1515,7 @@
       min-width: 0;
     }
 
-    #sirovina-scanner-modal .wo-bom-dummy-qr-card > h5 {
+    #sirovina-scanner-modal #sirovina-scan-panel > h5 {
       font-size: 1.05rem;
       line-height: 1.25;
       margin-bottom: 0.75rem !important;
@@ -1596,6 +1635,126 @@
       return;
     }
 
+    var manualWorkOrderMaterials = JSON.parse(modalEl.getAttribute('data-work-order-materials') || '[]');
+    var materialInputMode = 'scan';
+    var manualLookupSeq = 0;
+    var manualCodeSelect = document.getElementById('sirovina-manual-code');
+    var manualStatusEl = document.getElementById('sirovina-manual-status');
+
+    function syncManualInputWidth() {
+      var buttons = modalEl.querySelectorAll('[data-material-input-mode]');
+      if (buttons.length !== 2) return;
+      var first = buttons[0].getBoundingClientRect();
+      var last = buttons[1].getBoundingClientRect();
+      if (last.right > first.left) modalEl.style.setProperty('--material-input-width', (last.right - first.left) + 'px');
+    }
+
+    function setMaterialInputMode(mode) {
+      syncManualInputWidth();
+      var previousMode = materialInputMode;
+      materialInputMode = mode === 'manual' ? 'manual' : 'scan';
+      manualLookupSeq += 1;
+      modalEl.querySelectorAll('[data-material-input-mode]').forEach(function (button) {
+        var active = button.getAttribute('data-material-input-mode') === materialInputMode;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      ['scan', 'manual'].forEach(function (panelMode) {
+        var panel = document.getElementById('sirovina-' + panelMode + '-panel');
+        var active = panelMode === materialInputMode;
+        panel.classList.toggle('d-none', !active);
+        panel.setAttribute('aria-hidden', active ? 'false' : 'true');
+        if (active && previousMode !== materialInputMode && panel.animate && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          panel.getAnimations().forEach(function (animation) { animation.cancel(); });
+          panel.animate([
+            { opacity: 0, transform: 'translateY(6px)' },
+            { opacity: 1, transform: 'translateY(0)' }
+          ], { duration: 220, easing: 'cubic-bezier(.2,.7,.2,1)' });
+        }
+      });
+      if (hasSelect2() && window.jQuery(manualCodeSelect).data('select2')) {
+        window.jQuery(manualCodeSelect).select2('close');
+      }
+      manualStatusEl.textContent = '';
+      manualStatusEl.removeAttribute('aria-busy');
+      if (materialInputMode === 'manual') {
+        stopBarcodeScanner();
+        initManualMaterialSelect();
+      } else if (modalEl.classList.contains('show')) {
+        requestBarcodeScannerStart(false);
+      }
+      scheduleLayoutSync();
+    }
+
+    function lookupManualMaterial(code) {
+      var requestSeq = ++manualLookupSeq;
+      manualStatusEl.className = 'small text-white-50';
+      manualStatusEl.textContent = 'Provjeravam materijal...';
+      manualStatusEl.setAttribute('aria-busy', 'true');
+      lookupMaterialByBarcode(code).then(function (material) {
+        if (requestSeq !== manualLookupSeq || materialInputMode !== 'manual' || !modalEl.classList.contains('show')) return;
+        manualStatusEl.textContent = '';
+        handleResolvedBarcodeMaterial(material || {});
+      }).catch(function (error) {
+        if (requestSeq !== manualLookupSeq) return;
+        manualStatusEl.className = 'small text-danger';
+        manualStatusEl.textContent = error && error.message ? error.message : 'Materijal nije pronađen.';
+      }).finally(function () {
+        if (requestSeq !== manualLookupSeq) return;
+        manualStatusEl.removeAttribute('aria-busy');
+        window.jQuery(manualCodeSelect).val(null).trigger('change');
+      });
+    }
+
+    function initManualMaterialSelect() {
+      if (!hasSelect2()) {
+        manualStatusEl.textContent = 'Pretraga nije spremna. Osvježite stranicu.';
+        manualCodeSelect.classList.add('d-none');
+        return;
+      }
+      var $select = window.jQuery(manualCodeSelect);
+      if ($select.data('select2')) return;
+      $select.select2({
+        width: '100%', dropdownParent: window.jQuery(modalEl),
+        placeholder: 'Unesite šifru materijala', minimumInputLength: 0,
+        tags: true,
+        createTag: function (params) {
+          var code = String(params.term || '').trim();
+          return code && code.length <= 128 ? { id: code, text: 'Unesi šifru: ' + code } : null;
+        },
+        ajax: {
+          url: allMaterialsUrl, dataType: 'json', delay: 250,
+          transport: function (params, success, failure) {
+            if (!String(params.data.q || '').trim()) {
+              success({ data: manualWorkOrderMaterials });
+              return { abort: function () {} };
+            }
+            var request = window.jQuery.ajax(params);
+            request.then(success);
+            request.fail(failure);
+            return request;
+          },
+          data: function (params) { return { q: String(params.term || '').trim(), limit: 20, offset: 0 }; },
+          processResults: function (payload) {
+            return { results: (Array.isArray(payload && payload.data) ? payload.data : []).map(function (row) {
+              var code = String(row.acIdentChild || '').trim();
+              return { id: code, text: code + (row.acDescr ? ' — ' + row.acDescr : '') };
+            }).filter(function (row) { return row.id; }) };
+          }
+        },
+        language: {
+          inputTooShort: function () { return 'Unesite šifru materijala'; },
+          searching: function () { return 'Pretraga...'; },
+          noResults: function () { return 'Nema prijedloga za unesenu šifru.'; },
+          errorLoading: function () { return 'Greška pri pretrazi. Pokušajte ponovo.'; }
+        }
+      }).on('select2:select', function (event) { lookupManualMaterial(event.params.data.id); });
+    }
+
+    modalEl.querySelectorAll('[data-material-input-mode]').forEach(function (button) {
+      button.addEventListener('click', function () { setMaterialInputMode(button.getAttribute('data-material-input-mode')); });
+    });
+
     var productsUrl = modalEl.getAttribute('data-products-url') || '';
     var bomUrl = modalEl.getAttribute('data-bom-url') || '';
     var deleteBomUrl = modalEl.getAttribute('data-bom-destroy-url') || '';
@@ -1696,6 +1855,8 @@
     var confirmSaveIdleHtml = confirmSaveBtn
       ? confirmSaveBtn.innerHTML
       : '<i class="fa fa-check me-2"></i> Sačuvaj planiranu potrošnju';
+    var barcodeScannerQueue = Promise.resolve();
+    var barcodeScannerRequestId = 0;
     var barcodeScanner = null;
     var barcodeScannerRunning = false;
     var barcodeScannerBusy = false;
@@ -2583,6 +2744,7 @@
     }
 
     function handleBarcodeScanSuccess(decodedText) {
+      if (materialInputMode !== 'scan') return;
       // Procurement QR opens an authenticated, CSRF-protected scan receipt.
       try {
         var procurementTarget = new URL(String(decodedText), window.location.origin);
@@ -2614,12 +2776,13 @@
 
       lookupMaterialByBarcode(normalizedBarcode)
         .then(function (materialPayload) {
+          if (materialInputMode !== 'scan' || !modalEl.classList.contains('show')) return;
           return stopBarcodeScanner()
             .catch(function () {
               return null;
             })
             .then(function () {
-              handleResolvedBarcodeMaterial(materialPayload || {});
+              if (materialInputMode === 'scan' && modalEl.classList.contains('show')) handleResolvedBarcodeMaterial(materialPayload || {});
             });
         })
         .catch(function (error) {
@@ -2634,8 +2797,31 @@
         });
     }
 
+    function queueBarcodeScannerOperation(operation) {
+      var pending = barcodeScannerQueue.then(operation, operation);
+      barcodeScannerQueue = pending.catch(function (error) {
+        if (materialInputMode === 'scan' && modalEl.classList.contains('show')) {
+          showScannerError(error && error.message ? error.message : 'Ne mogu pokrenuti kameru.');
+        }
+      });
+      return barcodeScannerQueue;
+    }
+
     function startBarcodeScanner() {
-      if (barcodeScannerRunning || modalEl.classList.contains('show') === false) {
+      var requestId = ++barcodeScannerRequestId;
+      return queueBarcodeScannerOperation(function () {
+        if (requestId !== barcodeScannerRequestId) return;
+        return performBarcodeScannerStart();
+      });
+    }
+
+    function stopBarcodeScanner() {
+      barcodeScannerRequestId += 1;
+      return queueBarcodeScannerOperation(performBarcodeScannerStop);
+    }
+
+    function performBarcodeScannerStart() {
+      if (materialInputMode !== 'scan' || barcodeScannerRunning || modalEl.classList.contains('show') === false) {
         return Promise.resolve();
       }
 
@@ -2672,6 +2858,7 @@
 
           return startChain.then(function () {
             barcodeScannerRunning = true;
+            if (materialInputMode !== 'scan' || !modalEl.classList.contains('show')) return performBarcodeScannerStop();
             prepareScannerVideoForSafari();
             applyScannerMirrorState();
             captureScannerTrackState();
@@ -2685,6 +2872,7 @@
           barcodeScannerRunning = false;
           resetScannerEnhancementControls();
           setScannerStatus('Skener nije pokrenut.', 'danger');
+          if (materialInputMode !== 'scan' || !modalEl.classList.contains('show')) return;
           console.error(error);
           showScannerError(error && error.message ? error.message : 'Ne mogu pokrenuti kameru za barcode / QR skeniranje.');
           showScannerError(error && error.message ? error.message : 'Ne mogu pokrenuti kameru za barcode skeniranje.');
@@ -2692,6 +2880,7 @@
     }
 
     function requestBarcodeScannerStart(unlockForAdmin) {
+      if (materialInputMode !== 'scan') return Promise.resolve();
       if (requiresManualCameraStartForCurrentView() && unlockForAdmin === true) {
         barcodeManualStartUnlocked = true;
       }
@@ -2707,13 +2896,13 @@
       return startBarcodeScanner();
     }
 
-    function stopBarcodeScanner() {
+    function performBarcodeScannerStop() {
       if (!barcodeScanner || !barcodeScannerRunning) {
         resetScannerEnhancementControls();
         return Promise.resolve();
       }
 
-      return barcodeScanner.stop()
+      return Promise.resolve().then(function () { return barcodeScanner.stop(); })
         .catch(function () {
           return null;
         })
@@ -7253,6 +7442,7 @@
 
     window.addEventListener('resize', function () {
       if (modalEl.classList.contains('show')) {
+        syncManualInputWidth();
         scheduleLayoutSync();
       }
     });
@@ -7315,6 +7505,7 @@
     });
 
     modalEl.addEventListener('show.bs.modal', function () {
+      setMaterialInputMode('scan');
       markProceedSource('manual');
       state.activeMode = 'product';
       state.allType = 'materials';
@@ -7371,6 +7562,7 @@
     });
 
     modalEl.addEventListener('shown.bs.modal', function () {
+      syncManualInputWidth();
       queueBackdropSync();
       syncAllSearchInputHeight();
       scheduleLayoutSync();
@@ -7430,6 +7622,8 @@
     });
 
     modalEl.addEventListener('hidden.bs.modal', function () {
+      manualLookupSeq += 1;
+      if (hasSelect2() && window.jQuery(manualCodeSelect).data('select2')) window.jQuery(manualCodeSelect).select2('close');
       state.prefillOperationsSeq += 1;
       resetConfirmContext();
       barcodeManualStartUnlocked = false;

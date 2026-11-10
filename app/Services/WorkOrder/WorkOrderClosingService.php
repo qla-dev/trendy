@@ -401,6 +401,7 @@ class WorkOrderClosingService
      */
     public function recoverMissingExcessStock6400(string $locator, int $userId, string $userName = ''): ?array
     {
+        if (!$this->excessStock->isEnabled()) return null;
         $now = Carbon::now();
 
         return $this->connection->transaction(function () use ($locator, $userId, $userName, $now) {
@@ -1049,7 +1050,8 @@ class WorkOrderClosingService
 
         return [
             'materials' => $materials,
-            'excess_materials' => $excessMaterials,
+            // Keep flagged rows out of regular consumption even after retirement.
+            'excess_materials' => $this->excessStock->isEnabled() ? $excessMaterials : [],
             'source_warehouse' => $uses2005Flow
                 ? trim((string) config('work_order_closing.work_in_progress_warehouse', config('work_order_closing.operation_warehouse', '')))
                 : trim((string) config('work_order_closing.raw_material_warehouse', 'SkladiĹˇte sirovina')),
