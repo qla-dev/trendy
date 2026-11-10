@@ -17,6 +17,12 @@ use RuntimeException;
  */
 class ExcessStockService
 {
+    public function isEnabled(): bool
+    {
+        // Retirement also applies when a server still has cached configuration.
+        return false;
+    }
+
     public function connection(?string $name = null): ConnectionInterface
     {
         $name = trim((string) ($name ?: config('services.work_order.target_connection', 'work_order_target')));
@@ -412,7 +418,7 @@ class ExcessStockService
      */
     public function assignToNewWorkOrder(ConnectionInterface $db, string $workOrderKey, int $userId): int
     {
-        if (!(bool) config('excess-stock.enabled', false)
+        if (!$this->isEnabled()
             || !(bool) config('excess-stock.assign_on_work_order_create', false)) {
             Log::info('Automatic excess-stock assignment skipped because it is disabled.', [
                 'work_order_key' => trim($workOrderKey),
@@ -485,6 +491,7 @@ class ExcessStockService
 
     public function assign(ConnectionInterface $db, array $assignment, int $userId, bool $onlyOpen = false, ?array $allowedStatuses = null): int
     {
+        if (!$this->isEnabled()) return 0;
         $key = (string) ($assignment['work_order']['acKey'] ?? '');
         if ($key === '') throw new RuntimeException('Radni nalog za excess-stock dodjelu nije pronađen.');
         $reservedMaterials = [];
