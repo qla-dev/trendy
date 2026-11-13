@@ -338,6 +338,7 @@ if ($ponudaOnly) {
 } elseif ($ponudeOnly) {
     $commands = [
         ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
+        ['label' => 'Clearing Blade view cache', 'command' => 'php ' . escapeshellarg($baseDir . '/artisan') . ' view:clear'],
         ['label' => 'Installing dependencies for ponude (CNC)', 'command' => $npmCommand . ' --prefix resources/ponude ci --no-audit --no-fund'],
         ['label' => 'Building ponude (CNC) assets', 'command' => $npmCommand . ' --prefix resources/ponude run build'],
     ];
