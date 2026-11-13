@@ -7,7 +7,7 @@
     {
       "name": "CNC Ponude",
       "icon": "tool",
-      "rawUrl": "/ponude",
+      "rawUrl": "/ponude/",
       "slug": "app-cnc-ponude",
       "newTab": true
     },
