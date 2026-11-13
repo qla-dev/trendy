@@ -5,6 +5,13 @@
       "slug": ""
     },
     {
+      "name": "CNC Ponude",
+      "icon": "tool",
+      "url": "ponude",
+      "slug": "app-cnc-ponude",
+      "target": "_blank"
+    },
+    {
       "name": "Upravljanje nalozima",
       "icon": "file-text",
       "url": "app/invoice/list",

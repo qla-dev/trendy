@@ -70,6 +70,7 @@ class MenuServiceProvider extends ServiceProvider
                 $verticalMenuCopy->menu = $selectedMenu;
             } else {
                 $verticalMenuCopy = $self->filterAdminOnlyMenuItems($verticalMenuCopy);
+                $verticalMenuCopy = $self->filterQlaDevOnlyMenuItems($verticalMenuCopy);
                 $verticalMenuCopy = $self->filterAiOrderModuleMenuItems($verticalMenuCopy);
             }
             $canAccessAiOrderModule = $self->canAccessAiOrderModule(Auth::user());
@@ -210,6 +211,31 @@ class MenuServiceProvider extends ServiceProvider
 
         $menuData->menu = array_values(array_filter($menuData->menu, function ($menu) use ($adminOnlySlugs) {
             return !isset($menu->slug) || !in_array($menu->slug, $adminOnlySlugs, true);
+        }));
+
+        return $menuData;
+    }
+
+    private function filterQlaDevOnlyMenuItems($menuData)
+    {
+        if (!isset($menuData->menu) || empty($menuData->menu)) {
+            return $menuData;
+        }
+
+        $isQlaDev = Auth::check()
+            && method_exists(Auth::user(), 'isQlaDevUser')
+            && Auth::user()->isQlaDevUser();
+
+        if ($isQlaDev) {
+            return $menuData;
+        }
+
+        $qlaDevOnlySlugs = [
+            'app-cnc-ponude',
+        ];
+
+        $menuData->menu = array_values(array_filter($menuData->menu, function ($menu) use ($qlaDevOnlySlugs) {
+            return !isset($menu->slug) || !in_array($menu->slug, $qlaDevOnlySlugs, true);
         }));
 
         return $menuData;

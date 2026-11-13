@@ -49,6 +49,10 @@ use App\Http\Controllers\NfcCardController;
 |
 */
 
+Route::get('ponude/{any?}', function () {
+    return \Illuminate\Support\Facades\File::get(public_path('ponude/index.html'));
+})->where('any', '.*');
+
 Route::middleware('auth:web')->group(function () {
     Route::get('supplier/procurement', [\App\Http\Controllers\SupplierProcurementController::class,'index'])->name('supplier.index');
     Route::get('supplier/procurement/{id}', [\App\Http\Controllers\SupplierProcurementController::class,'show'])->name('supplier.show');

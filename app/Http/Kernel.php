@@ -65,5 +65,7 @@ class Kernel extends HttpKernel
         'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+        'cnc.auth' => \App\Http\Middleware\CncAuth::class,
+        'cnc.admin' => \App\Http\Middleware\CncAdmin::class,
     ];
 }

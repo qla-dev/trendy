@@ -1,0 +1,190 @@
+.quote-time-dashboard {
+  margin: 0 0 26px;
+  padding: 24px;
+  color: #172033;
+  background: linear-gradient(135deg, #f5fbff 0%, #f7faff 100%);
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(24, 48, 86, 0.045);
+}
+
+.quote-time-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.quote-time-eyebrow {
+  margin-bottom: 7px;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .14em;
+}
+
+.quote-time-heading h2 {
+  margin: 0 0 6px;
+  color: #172033;
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.quote-time-heading p {
+  max-width: 820px;
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.quote-time-period {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 10px 13px;
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 11px;
+}
+
+.quote-time-period span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.quote-time-period strong {
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.quote-time-kpi-cards {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 17px;
+}
+
+.quote-time-tables-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.quote-time-table-card {
+  min-width: 0;
+  padding: 17px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 13px;
+}
+
+.quote-time-table-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.quote-time-table-heading h3 {
+  margin: 0 0 5px;
+  color: #172033;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.quote-time-table-heading p {
+  margin: 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.quote-time-table-heading > span {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.quote-time-table {
+  min-width: 520px;
+}
+
+.quote-time-recent-table {
+  min-width: 650px;
+}
+
+.quote-time-secondary {
+  display: block;
+  margin-top: 3px;
+  color: #8490a2;
+  font-size: 10px;
+}
+
+.quote-time-empty {
+  padding: 18px 14px;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.quote-time-note {
+  margin: 14px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+@media (max-width: 1120px) {
+  .quote-time-kpi-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .quote-time-tables-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .quote-time-dashboard {
+    padding: 16px;
+    border-radius: 14px;
+  }
+
+  .quote-time-heading {
+    flex-direction: column;
+  }
+
+  .quote-time-heading h2 {
+    font-size: 19px;
+  }
+
+  .quote-time-period {
+    align-items: flex-start;
+  }
+
+  .quote-time-table-card {
+    padding: 14px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .quote-time-kpi-cards {
+    grid-template-columns: 1fr;
+  }
+}
