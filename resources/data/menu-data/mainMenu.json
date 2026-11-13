@@ -7,9 +7,9 @@
     {
       "name": "CNC Ponude",
       "icon": "tool",
-      "url": "ponude",
+      "url": "/ponude",
       "slug": "app-cnc-ponude",
-      "target": "_blank"
+      "newTab": true
     },
     {
       "name": "Upravljanje nalozima",
