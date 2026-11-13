@@ -313,6 +313,7 @@ $offersOnly = filter_var($_GET['offers_only'] ?? false, FILTER_VALIDATE_BOOLEAN)
 $ponudaOnly = filter_var($_GET['ponuda_only'] ?? false, FILTER_VALIDATE_BOOLEAN)
     || filter_var($_GET['ponuda_2_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 $ponudaSaraAiOnly = filter_var($_GET['ponuda_sara_ai_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
+$ponudeOnly = filter_var($_GET['ponude_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
 $commands = [
     ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
@@ -334,6 +335,13 @@ if ($ponudaOnly) {
         ['label' => 'Building ponuda-sara-ai assets', 'command' => $npmCommand . ' --prefix resources/ponuda run build:ponuda-sara-ai'],
     ];
     $write("Ponuda-SaraAI-only redeploy: builds /ponuda-sara-ai/ only.\n");
+} elseif ($ponudeOnly) {
+    $commands = [
+        ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
+        ['label' => 'Installing dependencies for ponude (CNC)', 'command' => $npmCommand . ' --prefix resources/ponude ci --no-audit --no-fund'],
+        ['label' => 'Building ponude (CNC) assets', 'command' => $npmCommand . ' --prefix resources/ponude run build'],
+    ];
+    $write("Ponude-only redeploy: builds /ponude/ (CNC quoting) only.\n");
 } elseif ($offersOnly) {
     $commands = [
         ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
@@ -372,7 +380,7 @@ foreach ($commands as $stepNumber => $step) {
     }
 }
 
-if (!$offersOnly && !$ponudaOnly && !$ponudaSaraAiOnly) {
+if (!$offersOnly && !$ponudaOnly && !$ponudaSaraAiOnly && !$ponudeOnly) {
     $planScript = $baseDir . '/public/js/scripts/pages/app-production-plan.js';
     $planScriptContents = is_file($planScript) ? (string) file_get_contents($planScript) : '';
     if (strpos($planScriptContents, 'btn-potvrdi-izvoz-plana') === false
@@ -384,7 +392,9 @@ if (!$offersOnly && !$ponudaOnly && !$ponudaSaraAiOnly) {
     $write("Production-plan JavaScript generated, including Excel export and loading controls.\n");
 }
 
-if ($ponudaOnly) {
+if ($ponudeOnly) {
+    $offerFolders = ['ponude'];
+} elseif ($ponudaOnly) {
     $offerFolders = ['ponuda'];
 } elseif ($ponudaSaraAiOnly) {
     $offerFolders = ['ponuda-sara-ai'];
