@@ -47,7 +47,7 @@ $configData = Helper::applClasses();
             @endphp
             <li
               class="nav-item {{ $custom_classes }} {{ Route::currentRouteName() === $menu->slug ? 'active' : '' }}">
-              <a href="{{ isset($menu->url) ? url($menu->url) : 'javascript:void(0)' }}" class="d-flex align-items-center"
+              <a href="{{ isset($menu->rawUrl) ? $menu->rawUrl : (isset($menu->url) ? url($menu->url) : 'javascript:void(0)') }}" class="d-flex align-items-center"
                 target="{{ isset($menu->newTab) ? '_blank' : '_self' }}">
                 @if ($isFontAwesomeIcon)
                   <i class="{{ trim($menuIconClass) }} fa-fw" aria-hidden="true"></i>
