@@ -308,6 +308,7 @@ $currentPath = (string) (getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin');
 putenv('PATH=' . $nodeBinDir . PATH_SEPARATOR . $currentPath);
 
 $npmCommand = escapeshellarg($npm);
+$frontendOnly = filter_var($_GET['frontend_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 $offersOnly = filter_var($_GET['offers_only'] ?? false, FILTER_VALIDATE_BOOLEAN);
 // ponuda_2_only is kept as an alias: the former /ponuda-2/ offer now lives at /ponuda/.
 $ponudaOnly = filter_var($_GET['ponuda_only'] ?? false, FILTER_VALIDATE_BOOLEAN)
@@ -322,7 +323,11 @@ $commands = [
     ['label' => 'Building frontend assets', 'command' => $npmCommand . ' run production'],
 ];
 
-if ($ponudaOnly) {
+if ($frontendOnly) {
+    // Frontend releases must not run Artisan, Composer, or database migrations.
+    array_splice($commands, 1, 1);
+    $write("Frontend-only redeploy: pulls code and installs/builds frontend assets only.\n");
+} elseif ($ponudaOnly) {
     $commands = [
         ['label' => 'Pulling latest Trendy code', 'command' => 'git pull --ff-only origin main'],
         ['label' => 'Installing dependencies for ponuda', 'command' => $npmCommand . ' --prefix resources/ponuda ci --no-audit --no-fund'],
