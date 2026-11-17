@@ -211,7 +211,20 @@ $(function () {
     ajax: {
       url: config.dataUrl,
       data: function (data) { data.filter = filters(); data.sort = keys[data.order[0] ? data.order[0].column : 10]; data.dir = data.order[0] ? data.order[0].dir : 'desc'; },
-      error: function (xhr) { setPlanLoading(false); if (!livePolling) showRequestError(xhr); livePolling = false; }
+      timeout: 45000,
+      error: function (xhr) {
+        setPlanLoading(false);
+        if (livePolling) liveRefreshFailed(xhr);
+        else showRequestError(xhr);
+      },
+      complete: function () {
+        if (livePolling) {
+          livePolling = false;
+          retainedRows.clear();
+          var settings = table.settings()[0];
+          settings.oApi._fnProcessingDisplay(settings, false);
+        }
+      }
     },
     language: { processing: 'Učitavanje...', search: 'Pretraga:', lengthMenu: 'Prikaži _MENU_ redova', info: 'Prikaz _START_ do _END_ od _TOTAL_ radnih naloga', infoEmpty: 'Nema podataka', emptyTable: '<span class="production-plan-empty-message">Nema radnih naloga</span>', zeroRecords: '<span class="production-plan-empty-message">Nema pronađenih radnih naloga</span>', paginate: { next: 'Sljedeća', previous: 'Prethodna' } },
     columns: keys.map(function (key) {
@@ -234,10 +247,42 @@ $(function () {
     }),
     createdRow: function (row, data) { applyRowColour(row, data); }
   });
-  tableElement.on('xhr.dt', function () { requestErrorShown = false; });
-  var liveTimer = window.setInterval(function () {
+  tableElement.on('xhr.dt', function (event, settings, json) {
+    if (!json || !Array.isArray(json.data)) return;
+    requestErrorShown = false;
+    liveRefreshRecovered();
+  });
+  var liveTimer = null;
+  var liveRetryTimer = null;
+  var livePageActive = true;
+  var liveRefreshNotice = $('#production-plan-refresh-notice');
+  function clearLiveRetry() {
+    if (liveRetryTimer !== null) window.clearTimeout(liveRetryTimer);
+    liveRetryTimer = null;
+  }
+  function liveRefreshRecovered() {
+    clearLiveRetry();
+    $('#production-plan-refresh-message').text('');
+    liveRefreshNotice.addClass('d-none');
+  }
+  function liveRefreshFailed(xhr) {
+    var sessionExpired = xhr && (xhr.status === 401 || xhr.status === 419);
+    var forbidden = xhr && xhr.status === 403;
+    var message = sessionExpired
+      ? 'Sesija je istekla. Ponovo se prijavite da biste vidjeli nove podatke.'
+      : forbidden ? 'Nemate dozvolu za osvježavanje plana. Obratite se administratoru.'
+      : 'Automatsko osvježavanje nije uspjelo. Prikazani podaci mogu biti zastarjeli. Ponovni pokušaj za 30 sekundi.';
+    $('#production-plan-refresh-message').text(message);
+    liveRefreshNotice.removeClass('d-none');
+    clearLiveRetry();
+    if (livePageActive && !sessionExpired && !forbidden) liveRetryTimer = window.setTimeout(function () {
+      liveRetryTimer = null;
+      pollPlan();
+    }, 30000);
+  }
+  function pollPlan() {
     var settings = table.settings()[0];
-    if (document.hidden || livePolling || (settings.jqXHR && settings.jqXHR.readyState !== 4)
+    if (!livePageActive || document.hidden || livePolling || (settings.jqXHR && settings.jqXHR.readyState !== 4)
         || $('.plan-inline-editor').length) return;
     retainedRows.clear();
     table.rows({ page: 'current' }).every(function () {
@@ -245,13 +290,28 @@ $(function () {
     });
     livePolling = true;
     function reloadPlan() {
-      table.ajax.reload(function () { livePolling = false; retainedRows.clear(); }, false);
+      table.ajax.reload(null, false);
     }
     // Pace tracks Ajax globally; background polling should not restart its progress bar.
     if (window.Pace && typeof window.Pace.ignore === 'function') window.Pace.ignore(reloadPlan);
     else reloadPlan();
-  }, 5 * 60 * 1000);
-  $(window).on('pagehide', function () { window.clearInterval(liveTimer); });
+  }
+  function startLivePolling() {
+    livePageActive = true;
+    if (liveTimer === null) liveTimer = window.setInterval(pollPlan, 5 * 60 * 1000);
+  }
+  startLivePolling();
+  $(window).on('pagehide', function () {
+    livePageActive = false;
+    window.clearInterval(liveTimer);
+    liveTimer = null;
+    clearLiveRetry();
+  }).on('pageshow', function (event) {
+    startLivePolling();
+    if (event.originalEvent && event.originalEvent.persisted) pollPlan();
+  });
+  $(document).on('visibilitychange', function () { if (!document.hidden) pollPlan(); });
+  $('#production-plan-refresh-retry').on('click', pollPlan);
 
   var detailCache = new Map();
   var expandedIds = new Set();

@@ -128,6 +128,7 @@
     </div>
   </div>
   <div class="card production-plan-wrapper production-plan-table-overlay-host" id="production-plan-list" tabindex="-1">
+    <div id="production-plan-refresh-notice" class="bg-light-warning border border-warning rounded p-1 d-none m-1 mb-0" role="status" aria-live="polite"><span id="production-plan-refresh-message"></span> <button type="button" class="btn btn-sm btn-outline-warning ms-1" id="production-plan-refresh-retry">Pokušaj ponovo</button></div>
     <div class="production-plan-fullscreen-toolbar"><button type="button" class="btn btn-outline-secondary btn-sm" id="btn-exit-fullscreen-plana"><i data-feather="minimize" class="me-50"></i>Vrati prikaz</button></div>
     <div id="production-plan-loading-overlay" class="production-plan-table-loading-overlay is-visible" role="status" aria-live="polite" aria-hidden="false">
       <div class="production-plan-table-loading-overlay-content"><span class="spinner-border production-plan-table-loading-spinner" aria-hidden="true"></span><span class="production-plan-table-loading-message">Učitavanje plana proizvodnje...</span></div>
@@ -183,5 +184,5 @@
       }
     });
   </script>
-  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=152') }}"></script>
+  <script src="{{ asset('js/scripts/pages/app-production-plan.js?v=153') }}"></script>
 @endsection
