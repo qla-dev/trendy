@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { ArrowRight, ClipboardCheck, Database, FileScan, ListChecks, PencilLine, Upload } from 'lucide-react';
-import OrderDashboard from './OrderDashboard.tsx';
+import OrderDashboard, { type InvoiceDemoRequest } from './OrderDashboard.tsx';
 import { priceFor, tokenPrice, tokensFor } from './order-pricing.ts';
 import './orderflow-details.css';
 
 const steps = [
   {
     icon: Upload,
-    title: 'Dodajte sken fakture',
+    title: 'Dodajte PDF fakture',
     description: 'Učitajte fotografiju ili PDF s mobitela ili klasičnog skenera. Izvorni dokument ostaje uz nacrt.',
   },
   {
@@ -38,9 +38,9 @@ export const scenarios = [
     rows: [['FA-031/26', 'Dobavljač A', 'Spremna za prijenos'], ['FA-032/26', 'Dobavljač B', 'Provjera šifre']],
   },
   {
-    title: 'Nejasne stavke sa skena',
+    title: 'Nejasne stavke fakture',
     description: 'Prije prijenosa provjerite polja koja AI nije pouzdano očitao.',
-    bullets: ['Šifra artikla, količina i cijena', 'Pozicija i stranica izvornog skena'],
+    bullets: ['Šifra artikla, količina i cijena', 'Pozicija i stranica izvornog dokumenta'],
     prompt: 'Na fakturi FA-032/26 pronađi nejasne šifre, količine ili jedinične cijene. Navedi poziciju i stranicu.',
     answer: 'Na poziciji 04, str. 2, šifra artikla nije čitljiva. Na poziciji 07, str. 3, jedinična cijena traži provjeru.',
     columns: ['Pozicija', 'Stranica', 'Nedostaje'],
@@ -94,13 +94,13 @@ function TokenCalculator() {
   );
 }
 
-export function OrderflowDetails() {
+export function OrderflowDetails({ demoRequest }: { demoRequest: InvoiceDemoRequest | null }) {
   return (
     <div className="orderflow-details bg-white">
         <section className="section wrap" id="modul" aria-labelledby="module-title">
           <div className="section-heading">
             <p className="eyebrow">Modul Ulazne fakture</p>
-            <h2 id="module-title">Od skena fakture do Pantheona</h2>
+            <h2 id="module-title">Od skeniranog PDF-a do Pantheona</h2>
             <p>Dobavljači dostavljaju papirne fakture. Učitajte fotografiju ili PDF za AI obradu ili unesite fakturu ručno. Svaki od najviše tri korisnika prijavljuje se svojim računom.</p>
           </div>
           <ol className="workflow" aria-label="Dijagram unosa skenirane ulazne fakture">
@@ -120,7 +120,7 @@ export function OrderflowDetails() {
             <ArrowRight size={18} className="manual-arrow" aria-hidden="true" />
             <span><Database size={18} aria-hidden="true" /> Upišite u Pantheon</span>
           </div>
-          <OrderDashboard />
+          <OrderDashboard demoRequest={demoRequest} />
         </section>
 
         <section className="section wrap pantheon-section" id="pantheon" aria-labelledby="pantheon-title">

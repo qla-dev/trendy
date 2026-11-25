@@ -1,8 +1,27 @@
-.order-dashboard {
+.order-dashboard,
+.hero-invoice {
   --od-border: #e6ded1;
   --od-muted: #685d4d;
   --od-accent: #80571c;
   --od-gold: #cc943f;
+  color: #211b13;
+  font-size: .875rem;
+}
+
+.hero-invoice .od-result {
+  padding: clamp(.8rem, 2vw, 1.35rem);
+  border-radius: 1.25rem;
+  box-shadow: 0 16px 45px #3428191c;
+}
+
+.hero-invoice .od-table { min-width: 33rem; }
+.hero-invoice .od-table :is(th, td) { padding-inline: .38rem; }
+.hero-invoice .od-table th { white-space: normal; }
+.hero-invoice .od-table td:nth-child(3) { white-space: normal; min-width: 6rem; }
+.od-result .od-table :is(th, td):last-child { text-align: right; }
+.hero-invoice .od-new-row .od-button { border-color: #ab7b3e; }
+
+.order-dashboard {
   margin-top: 1.75rem;
   scroll-margin-top: 6rem;
   border: 1px solid var(--od-border);
@@ -10,8 +29,6 @@
   overflow: hidden;
   background: #fcfaf6;
   box-shadow: 0 16px 45px #34281914;
-  color: #211b13;
-  font-size: .875rem;
 }
 
 .order-dashboard .od-top {
@@ -57,7 +74,7 @@
 .od-playback .od-button { color: #fff8ea; background: #35291b; border-color: #6c573c; }
 .od-playback .od-button:hover:not(:disabled) { background: #4a3824; }
 .od-icon-button { width: 2.3rem; padding-inline: 0; }
-.order-dashboard :focus-visible { outline: 2px solid #b77924; outline-offset: 2px; }
+:is(.order-dashboard, .hero-invoice) :focus-visible { outline: 2px solid #b77924; outline-offset: 2px; }
 
 .od-tabs { display: flex; flex-wrap: wrap; gap: .45rem; padding: .8rem clamp(.8rem, 2.6vw, 1.4rem); border-bottom: 1px solid var(--od-border); background: white; }
 .od-tabs button { border-color: transparent; color: var(--od-muted); font-size: .82rem; }
@@ -65,6 +82,7 @@
 .od-screen { min-height: 23rem; padding: 1.15rem clamp(.8rem, 2.6vw, 1.4rem); }
 .od-screen-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .6rem 1rem; margin-bottom: .85rem; }
 .od-screen-heading :is(h4, h5) { font-size: 1.02rem; font-weight: 760; }
+.od-screen-heading .od-invoice-title { font-size: 1.16rem; font-weight: 760; }
 .od-screen-heading p, .od-drop p, .od-progress-card p, .od-edit p { color: var(--od-muted); font-size: .79rem; }
 .od-search { display: flex; align-items: center; gap: .55rem; width: min(100%, 24rem); color: var(--od-muted); margin-bottom: .7rem; }
 .od-search input, .od-manual input { background: #fff; border: 1px solid var(--od-border); border-radius: .5rem; padding: .42rem .6rem; min-width: 0; width: 100%; }
@@ -107,6 +125,7 @@
 .od-actions > span { display: inline-flex; align-items: center; gap: .4rem; margin-right: auto; color: var(--od-muted); }
 .od-edit, .od-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .65rem; padding: .55rem .7rem; border-radius: .5rem; margin-top: .6rem; background: #f8ecd6; color: #654315; }
 .od-edit { justify-content: space-between; }
+.od-result .od-feedback span { white-space: nowrap; }
 .od-confirmed { background: #e8f1e5; color: #2f5c3a; }
 .od-positions { margin-top: .7rem; }
 .od-manual-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin-bottom: .75rem; }

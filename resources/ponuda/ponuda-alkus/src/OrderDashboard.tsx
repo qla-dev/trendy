@@ -9,19 +9,19 @@ import './order-dashboard.css';
 
 const tabs = [
   { id: 'invoices', label: 'Ulazne fakture', icon: List },
-  { id: 'scan', label: 'AI Scan', icon: FileScan },
-  { id: 'history', label: 'Historija skeniranja', icon: History },
+  { id: 'scan', label: 'AI obrada', icon: FileScan },
+  { id: 'history', label: 'Historija obrade', icon: History },
 ] as const;
 
 const scenes = [
-  { id: 'invoices', view: 'invoices', duration: 2900, note: 'Otvaramo AI Scan iz pregleda ulaznih faktura.' },
-  { id: 'scan', view: 'scan', duration: 2500, note: 'Biramo ogledni sken papirne fakture FA-031/26.' },
+  { id: 'invoices', view: 'invoices', duration: 2900, note: 'Otvaramo AI obradu iz pregleda ulaznih faktura.' },
+  { id: 'scan', view: 'scan', duration: 2500, note: 'Biramo ogledni PDF fakture FA-031/26.' },
   { id: 'upload', view: 'scan', duration: 1700, note: 'Učitavanje šest stranica izvornog PDF-a.' },
   { id: 'extract', view: 'scan', duration: 2300, note: 'AI čita broj fakture, dobavljača, stavke, cijene i PDV.' },
-  { id: 'review', view: 'scan', duration: 3400, note: 'Rezultat skena je spreman. Provjeravamo količinu na prvoj poziciji.' },
+  { id: 'review', view: 'scan', duration: 3400, note: 'Faktura je spremna za pregled. Provjeravamo količinu na prvoj poziciji.' },
   { id: 'edit', view: 'scan', duration: 3200, note: 'Prema originalu ispravljamo očitanu količinu s 2 na 20 vijaka.' },
   { id: 'ready', view: 'scan', duration: 2700, note: 'Izmjena je sačuvana. Dokument je spreman za transfer.' },
-  { id: 'pending', view: 'history', duration: 3400, note: 'U historiji sken čeka na transfer. Potrošnja je još 0 tokena.' },
+  { id: 'pending', view: 'history', duration: 3400, note: 'U historiji faktura čeka na transfer. Potrošnja je još 0 tokena.' },
   { id: 'transfer', view: 'history', duration: 2100, note: 'Nakon potvrde korisnika provjeravaju se šifre i prenose stavke u Pantheon.' },
   { id: 'charged', view: 'history', duration: 3600, note: 'Pantheon je vratio broj dokumenta. Za 6 stranica evidentirano je 11 tokena.' },
   { id: 'saved', view: 'invoices', duration: 3200, note: 'U pregledu ulaznih faktura nalazimo dokument upisan u Pantheon.' },
@@ -32,6 +32,7 @@ type SceneId = (typeof scenes)[number]['id'];
 type View = (typeof tabs)[number]['id'];
 type GoToScene = (id: SceneId, play?: boolean) => void;
 type ManualInvoice = { supplier: string; reference: string; item: string; netFeninga: number };
+export type InvoiceDemoRequest = { scene: 'pending' | 'transfer' };
 
 const invoiceReference = 'FA-031/26';
 const filename = 'Faktura_FA-031-26.pdf';
@@ -87,7 +88,7 @@ function ItemRows({ quantity = correctedQuantity, onEdit, cue = false }: { quant
   return items.map((item, index) => {
     const lineQuantity = index ? item.quantity : quantity;
     return (
-      <tr key={item.code} className={index === 0 && cue ? 'od-new-row' : ''}>
+      <tr key={item.code} className={index === 0 && onEdit ? 'od-new-row' : ''}>
         <td>{index + 1}</td><th scope="row">{item.code}</th><td>{item.name}</td>
         <td>{index === 0 && onEdit
           ? <Action onClick={onEdit} active={cue}>{lineQuantity}<PencilLine size={13} aria-label="Uredi količinu" /></Action>
@@ -98,18 +99,81 @@ function ItemRows({ quantity = correctedQuantity, onEdit, cue = false }: { quant
   });
 }
 
-function ScanScreen({ scene, go, cue }: { scene: SceneId; go: GoToScene; cue: boolean }) {
-  const reviewing = ['review', 'edit', 'ready'].includes(scene);
+function InvoiceReview({ scene, onEdit, onSave, actions, cue = false, hero = false }: {
+  scene: 'review' | 'edit' | 'ready';
+  onEdit: () => void;
+  onSave: () => void;
+  actions: ReactNode;
+  cue?: boolean;
+  hero?: boolean;
+}) {
   const ready = scene === 'ready';
   const quantity = ready ? correctedQuantity : 2;
   const net = netInvoice(quantity);
   const vat = Math.round(net * 17 / 100);
+  const Heading = hero ? 'h2' : 'h5';
+
+  return (
+    <div className="od-result">
+      <div className="od-screen-heading">
+        <div><Heading className="od-invoice-title">Pregled fakture</Heading><p>{filename} · {scanPages} stranica</p></div>
+        <span className="od-badge od-ready">{ready ? 'Spremno za transfer' : 'Količina za provjeru'}</span>
+      </div>
+      <dl className="od-facts">
+        <div><dt>Broj fakture</dt><dd>{invoiceReference}</dd></div>
+        <div><dt>Dobavljač</dt><dd>Dobavljač A</dd></div>
+        <div><dt>Datum fakture</dt><dd>{date}</dd></div>
+      </dl>
+      <Grid title="Stavke fakture" headings={lineHeadings}>
+        <ItemRows quantity={quantity} cue={scene === 'review' && cue} onEdit={ready ? undefined : onEdit} />
+      </Grid>
+      <div className="od-feedback" aria-live={hero ? 'polite' : undefined}>
+        <span>Osnovica <strong>{formatAmount(net)}</strong></span>
+        <span>PDV <strong>{formatAmount(vat)}</strong></span>
+        <span>Ukupno <strong>{formatAmount(net + vat)}</strong></span>
+      </div>
+      {scene === 'edit' && (
+        <div className="od-edit">
+          <div><strong>Uredi polje · Količina</strong><p>{items[0].code} · 2 → {correctedQuantity} kom. prema originalu</p></div>
+          <Action primary active={cue} onClick={onSave}>Sačuvaj</Action>
+        </div>
+      )}
+      <div className="od-actions">
+        <span><FileText size={15} aria-hidden="true" /> Original · {invoiceReference}</span>
+        {actions}
+      </div>
+    </div>
+  );
+}
+
+export function HeroInvoicePreview({ onDemoRequest }: { onDemoRequest: (request: InvoiceDemoRequest) => void }) {
+  const [scene, setScene] = useState<'review' | 'edit' | 'ready'>('review');
+  const ready = scene === 'ready';
+  const goToDemo = (request: InvoiceDemoRequest) => {
+    onDemoRequest(request);
+    document.getElementById('demo-narudzbe')?.scrollIntoView();
+  };
+
+  return (
+    <div className="hero-invoice">
+      <InvoiceReview hero scene={scene} onEdit={() => setScene('edit')} onSave={() => setScene('ready')}
+        actions={<>
+          <Action disabled={!ready} onClick={() => goToDemo({ scene: 'pending' })}>Historija obrade <ChevronRight size={14} /></Action>
+          <Action primary disabled={!ready} onClick={() => goToDemo({ scene: 'transfer' })}><Database size={15} /> Transfer u bazu</Action>
+        </>} />
+    </div>
+  );
+}
+
+function ScanScreen({ scene, go, cue }: { scene: SceneId; go: GoToScene; cue: boolean }) {
+  const reviewing = scene === 'review' || scene === 'edit' || scene === 'ready';
+  const ready = scene === 'ready';
   const progress = reviewing ? 100 : scene === 'extract' ? 66 : scene === 'upload' ? 24 : 0;
   const status = reviewing ? 'Ekstrakcija završena' : scene === 'extract' ? 'AI ekstrakcija u toku' : scene === 'upload' ? 'Učitavanje dokumenta' : 'Čekam upload';
   return (
     <>
       <div className="od-screen-heading">
-        <div><h4>AI skeniranje ulazne fakture</h4><p>Učitajte fotografiju ili PDF fakture dobavljača i provjerite rezultat prije upisa.</p></div>
+        <div><h4>AI obrada ulazne fakture</h4><p>Učitajte fotografiju ili PDF fakture dobavljača i provjerite rezultat prije upisa.</p></div>
         <span className="od-badge">Ručni transfer aktivan</span>
       </div>
       {!reviewing && (
@@ -120,7 +184,7 @@ function ScanScreen({ scene, go, cue }: { scene: SceneId; go: GoToScene; cue: bo
           }}>
             <UploadCloud size={29} aria-hidden="true" />
             <strong>{progress ? filename : 'Prevuci dokument ovdje'}</strong>
-            <p>{progress ? `PDF · ${scanPages} stranica` : 'Povuci ili klikni ogledni sken fakture.'}</p>
+            <p>{progress ? `PDF · ${scanPages} stranica` : 'Povuci ili klikni ogledni PDF fakture.'}</p>
             {!progress && <div className="od-file-sample" draggable onDragStart={(event) => event.dataTransfer.setData('text/plain', filename)}>
               <Action onClick={() => go('upload', true)} active={cue} primary><FileText size={15} /> Ogledni PDF</Action>
             </div>}
@@ -140,34 +204,11 @@ function ScanScreen({ scene, go, cue }: { scene: SceneId; go: GoToScene; cue: bo
         </div>
       )}
       {reviewing && (
-        <div className="od-result">
-          <div className="od-screen-heading">
-            <div><h5>Rezultat AI skena</h5><p>{filename} · {scanPages} stranica</p></div>
-            <span className="od-badge od-ready">{ready ? 'Spremno za transfer' : 'Količina za provjeru'}</span>
-          </div>
-          <dl className="od-facts">
-            <div><dt>Broj fakture</dt><dd>{invoiceReference}</dd></div>
-            <div><dt>Dobavljač</dt><dd>Dobavljač A</dd></div>
-            <div><dt>Datum fakture</dt><dd>{date}</dd></div>
-          </dl>
-          <Grid title="Stavke iz AI skena" headings={lineHeadings}>
-            <ItemRows quantity={quantity} cue={scene === 'review' && cue} onEdit={ready ? undefined : () => go('edit')} />
-          </Grid>
-          <div className="od-feedback">
-            Osnovica <strong>{formatAmount(net)}</strong> · PDV <strong>{formatAmount(vat)}</strong> · Ukupno <strong>{formatAmount(net + vat)}</strong>
-          </div>
-          {scene === 'edit' && (
-            <div className="od-edit">
-              <div><strong>Uredi polje · Količina</strong><p>{items[0].code} · 2 → {correctedQuantity} kom. prema originalu</p></div>
-              <Action primary active={cue} onClick={() => go('ready')}>Sačuvaj</Action>
-            </div>
-          )}
-          <div className="od-actions">
-            <span><FileText size={15} /> Original · {invoiceReference}</span>
-            <Action onClick={() => go('pending')} disabled={!ready} active={ready && cue}>Historija skeniranja <ChevronRight size={14} /></Action>
+        <InvoiceReview scene={scene} cue={cue} onEdit={() => go('edit')} onSave={() => go('ready')}
+          actions={<>
+            <Action onClick={() => go('pending')} disabled={!ready} active={ready && cue}>Historija obrade <ChevronRight size={14} /></Action>
             <Action onClick={() => go('transfer', true)} disabled={!ready} primary><Database size={15} /> Transfer u bazu</Action>
-          </div>
-        </div>
+          </>} />
       )}
     </>
   );
@@ -180,19 +221,19 @@ function HistoryScreen({ scene, go, cue }: { scene: SceneId; go: GoToScene; cue:
   return (
     <>
       <div className="od-screen-heading">
-        <div><h4>Historija skeniranja</h4><p>Filter historije · Novembar 2026.</p></div>
+        <div><h4>Historija obrade</h4><p>Filter historije · Novembar 2026.</p></div>
         {completed ? <Action onClick={() => go('saved')} active={cue}>Ulazne fakture <ArrowRight size={15} /></Action>
           : <Action primary onClick={() => go('transfer', true)} active={!busy && cue} disabled={busy}><ArrowDownToLine size={14} /> {busy ? 'Prijenos…' : 'Transfer u bazu'}</Action>}
       </div>
       <div className="od-stats">
         {[
           ['Obrađeni dokumenti', '3'], ['Tokeni', String(tokensFor(previousScanPages) + (completed ? scanTokens : 0))],
-          ['Uspješan AI scan', '2'], ['Neuspješan AI scan', '1'],
+          ['Uspješna AI obrada', '2'], ['Neuspješna AI obrada', '1'],
         ].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
       </div>
-      <Grid title="Historija AI skeniranja" headings={['Datum i vrijeme', 'Modul', 'Aktivnost', 'Status', 'Fajl', 'Broj stranica', 'Tokeni', 'Akcija']}>
+      <Grid title="Historija AI obrade" headings={['Datum i vrijeme', 'Modul', 'Aktivnost', 'Status', 'Fajl', 'Broj stranica', 'Tokeni', 'Akcija']}>
         <tr className="od-new-row">
-          <td>{date} 09:42</td><td>Ulazne fakture</td><td>AI scan</td>
+          <td>{date} 09:42</td><td>Ulazne fakture</td><td>AI obrada</td>
           <td><span className={`od-badge ${completed ? 'od-success' : 'od-ready'}`}>{status}</span></td>
           <th scope="row">{filename}</th>
           <td>{scanPages}</td><td><strong>{completed ? scanTokens : 0}</strong></td>
@@ -200,12 +241,12 @@ function HistoryScreen({ scene, go, cue }: { scene: SceneId; go: GoToScene; cue:
             : <Action onClick={() => go('transfer', true)} disabled={busy}>{busy ? 'Prijenos…' : 'Transfer u bazu'}</Action>}</td>
         </tr>
         <tr>
-          <td>{date} 08:18</td><td>Ulazne fakture</td><td>AI scan</td><td><span className="od-badge od-success">Uspješan transfer</span></td>
+          <td>{date} 08:18</td><td>Ulazne fakture</td><td>AI obrada</td><td><span className="od-badge od-success">Uspješan transfer</span></td>
           <th scope="row">Faktura_FA-028-26.pdf</th><td>{previousScanPages}</td><td>{tokensFor(previousScanPages)}</td><td>—</td>
         </tr>
         <tr>
-          <td>24.11.2026. 16:11</td><td>Ulazne fakture</td><td>AI scan</td><td><span className="od-badge od-error">Neuspješan AI scan</span></td>
-          <th scope="row">Nečitljiv_sken.pdf</th><td>2</td><td>0</td><td>—</td>
+          <td>24.11.2026. 16:11</td><td>Ulazne fakture</td><td>AI obrada</td><td><span className="od-badge od-error">Neuspješna AI obrada</span></td>
+          <th scope="row">Nečitljiva_faktura.pdf</th><td>2</td><td>0</td><td>—</td>
         </tr>
       </Grid>
       {busy && <div className="od-feedback"><Database size={18} /> Upis zaglavlja i {items.length} stavke fakture u Pantheon…</div>}
@@ -231,7 +272,7 @@ function InvoicesScreen({ scene, go, cue, manualInvoice, openManual }: {
         <div><h4>Ulazne fakture dobavljača</h4><p>Fakture prenesene u Pantheon i njihove stavke.</p></div>
         <div className="od-actions">
           <Action onClick={openManual}><PencilLine size={15} /> Ručni unos</Action>
-          <Action onClick={() => go('scan')} active={scene === 'invoices' && cue} primary><FileScan size={16} /> AI Scan</Action>
+          <Action onClick={() => go('scan')} active={scene === 'invoices' && cue} primary><FileScan size={16} /> AI obrada</Action>
         </div>
       </div>
       <label className="od-search">
@@ -265,7 +306,7 @@ function InvoicesScreen({ scene, go, cue, manualInvoice, openManual }: {
   );
 }
 
-export default function OrderDashboard() {
+export default function OrderDashboard({ demoRequest }: { demoRequest: InvoiceDemoRequest | null }) {
   const dashboard = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(() => !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -294,6 +335,13 @@ export default function OrderDashboard() {
     const timer = window.setTimeout(() => setIndex((current) => (current + 1) % scenes.length), scene.duration);
     return () => window.clearTimeout(timer);
   }, [running, scene]);
+
+  useEffect(() => {
+    if (!demoRequest) return;
+    setManual(false);
+    setPlaying(demoRequest.scene === 'transfer');
+    setIndex(scenes.findIndex((step) => step.id === demoRequest.scene));
+  }, [demoRequest]);
 
   function go(id: SceneId, play = false) {
     setPlaying(play);
