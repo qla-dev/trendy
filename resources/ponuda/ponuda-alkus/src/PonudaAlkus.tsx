@@ -288,7 +288,7 @@ export default function PonudaAlkus() {
             <a href="#tokeni" className="mt-5 inline-flex flex-wrap items-center justify-center gap-x-2 rounded-2xl border border-alkus-200 bg-alkus-50 px-4 py-2.5 text-sm text-alkus-700">
               <Sparkles className="h-4 w-4" aria-hidden="true" />
               <strong>20 besplatnih poruka dnevno</strong>
-              <span>Od 21. poruke po 1 token (0,35 KM)</span>
+              <span>Od 21. poruke po 1 token</span>
             </a>
           </div>
 
@@ -341,7 +341,7 @@ export default function PonudaAlkus() {
                 <p className="mt-6 text-5xl font-bold">4.900 KM</p>
                 <p className="mt-2 text-sm font-medium uppercase tracking-widest text-slate-400">Fiksna cijena</p>
               </div>
-              <p className="text-sm leading-relaxed text-alkus-200">Token košta 0,35 KM. Obrada dokumenata se obračunava po stranicama, a Lena AI od 21. poruke u danu troši 1 token po poruci.</p>
+              <p className="text-sm leading-relaxed text-alkus-200">Obrada dokumenata obračunava se po stranicama, a Lena AI od 21. poruke u danu troši 1 token po poruci. <a className="underline" href="#tokeni">Cjenovnik tokena</a></p>
             </div>
           </motion.div>
         </div>

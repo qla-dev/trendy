@@ -4,7 +4,7 @@ import {
   FileScan, FileText, History, List, MousePointer2, Pause, PencilLine, Play, RotateCcw,
   Search, UploadCloud,
 } from 'lucide-react';
-import { priceFor, tokensFor } from './order-pricing.ts';
+import { tokensFor } from './order-pricing.ts';
 import './order-dashboard.css';
 
 const tabs = [
@@ -176,22 +176,22 @@ function HistoryScreen({ scene, go, cue }: { scene: SceneId; go: GoToScene; cue:
           ['Uspješan AI scan', '2'], ['Neuspješan AI scan', '1'],
         ].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
       </div>
-      <Grid title="Historija AI skeniranja" headings={['Datum i vrijeme', 'Modul', 'Aktivnost', 'Status', 'Iznos', 'Fajl', 'Broj stranica', 'Tokeni', 'Akcija']}>
+      <Grid title="Historija AI skeniranja" headings={['Datum i vrijeme', 'Modul', 'Aktivnost', 'Status', 'Fajl', 'Broj stranica', 'Tokeni', 'Akcija']}>
         <tr className="od-new-row">
           <td>{date} 09:42</td><td>AI narudžba</td><td>AI scan</td>
           <td><span className={`od-badge ${completed ? 'od-success' : 'od-ready'}`}>{status}</span></td>
-          <td>{completed ? priceFor(scanPages) : '0,00 KM'}</td><th scope="row">{filename}</th>
+          <th scope="row">{filename}</th>
           <td>{scanPages}</td><td><strong>{completed ? scanTokens : 0}</strong></td>
           <td>{completed ? <Action onClick={() => go('saved')}>Vidi narudžbu</Action>
             : <Action onClick={() => go('transfer', true)} disabled={busy}>{busy ? 'Prijenos…' : 'Transfer u bazu'}</Action>}</td>
         </tr>
         <tr>
           <td>{date} 08:18</td><td>AI narudžba</td><td>AI scan</td><td><span className="od-badge od-success">Uspješan transfer</span></td>
-          <td>{priceFor(previousScanPages)}</td><th scope="row">Narudzba_ALK-028.pdf</th><td>{previousScanPages}</td><td>{tokensFor(previousScanPages)}</td><td>—</td>
+          <th scope="row">Narudzba_ALK-028.pdf</th><td>{previousScanPages}</td><td>{tokensFor(previousScanPages)}</td><td>—</td>
         </tr>
         <tr>
           <td>24.11.2026. 16:11</td><td>AI narudžba</td><td>AI scan</td><td><span className="od-badge od-error">Neuspješan AI scan</span></td>
-          <td>0,00 KM</td><th scope="row">Nečitljiv_sken.pdf</th><td>2</td><td>0</td><td>—</td>
+          <th scope="row">Nečitljiv_sken.pdf</th><td>2</td><td>0</td><td>—</td>
         </tr>
       </Grid>
       {busy && <div className="od-feedback"><Database size={18} /> Prenos zaglavlja i 3 pozicije u Pantheon…</div>}

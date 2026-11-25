@@ -146,9 +146,9 @@ export function TokenDetails() {
     <div className="orderflow-details bg-white">
         <section className="section wrap" id="tokeni" aria-labelledby="tokens-title">
           <div className="section-heading">
-            <p className="eyebrow">Potrošnja po dokumentu</p>
+            <p className="eyebrow">Cjenovnik tokena</p>
             <h2 id="tokens-title">Jedan token košta 0,35 KM</h2>
-            <p>AI obrada dokumenta od 1 do 5 stranica košta 10 tokena (3,50 KM). Od šeste stranice svaka dodatna stranica košta još 1 token (0,35 KM).</p>
+            <p>AI obrada dokumenta od 1 do 5 stranica troši 10 tokena. Od šeste stranice svaka dodatna stranica troši još 1 token.</p>
           </div>
           <div className="billing-grid">
             <div className="billing-examples">
@@ -165,8 +165,8 @@ export function TokenDetails() {
             <div className="billing-details">
               <TokenCalculator />
               <ul>
-                <li><strong>Formula</strong> 10 + max(0, broj stranica − 5). Iznos je broj tokena × 0,35 KM.</li>
-                <li><strong>Svaki dokument ima svoj obračun.</strong> Dva zasebna PDF-a od po 3 stranice troše ukupno 20 tokena (7,00 KM). Jedan PDF od 6 stranica troši 11 tokena (3,85 KM).</li>
+                <li><strong>Formula</strong> 10 + max(0, broj stranica − 5).</li>
+                <li><strong>Svaki dokument ima svoj obračun.</strong> Dva zasebna PDF-a od po 3 stranice troše ukupno 20 tokena. Jedan PDF od 6 stranica troši 11 tokena.</li>
                 <li><strong>Naplata slijedi nakon uspješnog prijenosa AI obrađene narudžbe u Pantheon.</strong> Neuspjela obrada, neuspjeli prijenos i ručni unos troše 0 tokena. Pregled i uređivanje nacrta ne stvaraju novi obračun.</li>
                 <li><strong>Jednokratna implementacija iznosi 4.900 KM.</strong> Potrošnja tokena za AI obradu dokumenata obračunava se zasebno.</li>
               </ul>
@@ -174,7 +174,7 @@ export function TokenDetails() {
           </div>
           <div className="mt-6 rounded-[1.25rem] border border-alkus-200 bg-alkus-50 p-5">
             <h3>Lena AI · 20 besplatnih poruka dnevno</h3>
-            <p className="mt-1">Prvih 20 poruka u danu troši 0 tokena. Od 21. poruke svaka naredna poruka istoga dana troši <strong>1 token (0,35 KM)</strong>.</p>
+            <p className="mt-1">Prvih 20 poruka u danu troši 0 tokena. Od 21. poruke svaka naredna poruka istoga dana troši <strong>1 token</strong>.</p>
           </div>
         </section>
     </div>
