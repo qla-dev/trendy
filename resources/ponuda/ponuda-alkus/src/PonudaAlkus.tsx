@@ -5,16 +5,31 @@
 
 import { useState, type ReactNode } from 'react';
 import {
-  ArrowRight, BrainCircuit, CheckCircle2, Coins, Database, FileScan, Printer, ShieldCheck, Sparkles, Users,
+  ArrowRight, BrainCircuit, CheckCircle2, Coins, Database, Download, FileScan, ShieldCheck, Sparkles, Users,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { OrderflowDetails, TokenDetails, scenarios } from './OrderflowDetails.tsx';
 import alkusLogo from './alkus-logo.png';
+import offer from '../offer.json';
+
+const proformaUrl = new URL('../predracun-alkus.pdf', import.meta.url).href;
+const formatOfferAmount = (amount: number) => amount.toLocaleString('de-DE') + ' KM';
+const offerTotal = formatOfferAmount(offer.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0));
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+function ProformaLink({ className }: { className: string }) {
+  return (
+    <a href={proformaUrl} download="Predracun-Orderflow-ALKUS.pdf" aria-label="Preuzmi predračun"
+      className={cn('inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold print:hidden', className)}>
+      <Download className="h-4 w-4" aria-hidden="true" />
+      <span><span className="hidden sm:inline">Preuzmi </span>predračun</span>
+    </a>
+  );
 }
 
 const gold = {
@@ -39,10 +54,10 @@ const UserBubble = ({ children, index = 0 }: { children: ReactNode; index?: numb
   </motion.div>
 );
 
-const LenaBubble = ({ children, index = 1 }: { children: ReactNode; index?: number }) => (
+const LaraBubble = ({ children, index = 1 }: { children: ReactNode; index?: number }) => (
   <motion.div custom={index} variants={reveal} className="w-fit max-w-[92%] sm:max-w-[75%]">
     <span className={cn('mb-1.5 flex items-center gap-2 text-xs font-black', gold.label)}>
-      <BrainCircuit className="h-4 w-4" />Lena AI
+      <BrainCircuit className="h-4 w-4" />Lara AI
     </span>
     <div className={cn('rounded-2xl rounded-bl-md border p-4 text-sm leading-6 text-slate-700', gold.bubble)}>
       {children}
@@ -121,7 +136,7 @@ const included = [
   { icon: FileScan, title: 'Modul Narudžbe', desc: 'Povlačenje PDF-a, AI priprema nacrta i ručni unos narudžbi kupaca.' },
   { icon: Database, title: 'Pantheon integracija', desc: 'Provjera šifrarnika, upis narudžbe i povrat broja dokumenta.' },
   { icon: Users, title: 'Do 3 korisnika', desc: 'Zaseban korisnički račun i prijava za svakog člana tima.' },
-  { icon: Sparkles, title: 'Lena AI bez doplate', desc: 'Uključena integracija i 20 besplatnih poruka dnevno. Svaka naredna poruka troši 1 token.' },
+  { icon: Sparkles, title: 'Lara AI bez doplate', desc: 'Uključena integracija i 20 besplatnih poruka dnevno. Svaka naredna poruka troši 1 token.' },
 ];
 
 function ScenarioVisual({ scenario }: { scenario: (typeof scenarios)[number] }) {
@@ -134,7 +149,7 @@ function ScenarioVisual({ scenario }: { scenario: (typeof scenarios)[number] }) 
   return (
     <Visual>
       <UserBubble>{scenario.prompt}{filter !== 'all' && ' Fokusiraj se na ' + filter + '.'}</UserBubble>
-      <LenaBubble>{answer}</LenaBubble>
+      <LaraBubble>{answer}</LaraBubble>
       <ResultCard>
         <div className="print:hidden">
           <FilterChips options={options} value={filter} onChange={setFilter} />
@@ -160,22 +175,22 @@ export default function PonudaAlkus() {
     <div className="alkus-offer min-h-screen bg-[#f8f5ee] font-sans text-slate-900 selection:bg-alkus-100 selection:text-slate-900">
       {/* Navigation */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="mx-auto flex h-20 max-w-7xl items-center gap-3 px-4 sm:gap-5 sm:px-6">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             <img src={alkusLogo} alt="Alkus" className="h-10 object-contain" referrerPolicy="no-referrer" />
-            <div className="h-6 w-px bg-slate-200 hidden md:block" />
-            <span className="text-lg font-bold tracking-tight hidden md:block">Orderflow<span className="text-alkus-700">.ai</span> <span className="text-alkus-600">· Lena AI</span></span>
+            <div className="hidden h-6 w-px bg-slate-200 sm:block" />
+            <span className="text-base font-bold tracking-tight sm:text-lg">Orderflow<span className="text-alkus-700">.ai</span> <span className="hidden text-alkus-600 xl:inline">· Lara AI</span></span>
           </div>
-          <span className="md:hidden text-lg font-bold tracking-tight">Orderflow<span className="text-alkus-700">.ai</span> <span className="text-alkus-600">· Lena AI</span></span>
-          <div className="hidden md:flex items-center gap-8">
+          <div className="ml-auto hidden items-center gap-5 lg:flex">
             <a href="#ukljuceno" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Šta je uključeno</a>
-            <a href="#vjestine" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Lena AI</a>
+            <a href="#vjestine" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Lara AI</a>
             <a href="#modul" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Narudžbe</a>
             <a href="#pantheon" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Pantheon</a>
             <a href="#cijena" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Cijena</a>
-            <div className="h-6 w-px bg-slate-200" />
-            <span className="text-sm font-bold text-slate-900">Ukupno: 4.900 KM</span>
+            <div className="hidden h-6 w-px bg-slate-200 xl:block" />
+            <span className="hidden whitespace-nowrap text-sm font-bold text-slate-900 xl:inline">Ukupno {offerTotal}</span>
           </div>
+          <ProformaLink className="ml-auto bg-slate-900 text-white hover:bg-slate-800 lg:ml-0" />
         </div>
       </nav>
 
@@ -191,7 +206,7 @@ export default function PonudaAlkus() {
               Narudžbe kupaca. <span className="text-alkus-700">Od PDF-a do Pantheona.</span>
             </h1>
             <p className="text-lg sm:text-xl text-slate-500 leading-relaxed mb-8 sm:mb-10 max-w-xl">
-              Uvezite ili ručno unesite narudžbu za ALU i PVC stolariju. Pregledajte stavke, prenesite narudžbu u Pantheon i pitajte Lenu za rokove i specifikacije.
+              Uvezite ili ručno unesite narudžbu za ALU i PVC stolariju. Pregledajte stavke, prenesite narudžbu u Pantheon i pitajte Laru za rokove i specifikacije.
             </p>
             <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 sm:flex sm:flex-wrap sm:gap-4">
               <a href="#demo-narudzbe" className="px-2 min-[380px]:px-4 sm:px-8 py-3.5 sm:py-4 bg-slate-900 text-white rounded-2xl font-bold text-[13px] min-[380px]:text-sm sm:text-base whitespace-nowrap hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group">
@@ -200,7 +215,7 @@ export default function PonudaAlkus() {
               </a>
               <a href="#cijena" className="px-2 min-[380px]:px-4 sm:px-8 py-3.5 sm:py-4 bg-white border border-slate-200 text-slate-900 rounded-2xl font-bold text-[13px] min-[380px]:text-sm sm:text-base whitespace-nowrap flex items-center justify-center gap-2 sm:gap-3 hover:border-slate-400 transition-all">
                 <Coins className="w-5 h-5 text-slate-500" />
-                4.900 KM
+                {offerTotal}
               </a>
             </div>
           </motion.div>
@@ -212,7 +227,7 @@ export default function PonudaAlkus() {
                 <div className="flex items-center gap-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-alkus-600 text-white"><BrainCircuit className="h-5 w-5" /></span>
                   <div>
-                    <p className="text-sm font-bold text-slate-900">Lena AI</p>
+                    <p className="text-sm font-bold text-slate-900">Lara AI</p>
                     <p className="text-[11px] font-semibold text-slate-400">Orderflow.ai asistent</p>
                   </div>
                 </div>
@@ -223,9 +238,9 @@ export default function PonudaAlkus() {
               </div>
               <motion.div initial="hidden" animate="visible" className="space-y-4 p-6 sm:p-8">
                 <UserBubble index={1}>Koje otvorene narudžbe kasne i koje dospijevaju u narednih sedam dana?</UserBubble>
-                <LenaBubble index={2}>
+                <LaraBubble index={2}>
                   <b>ALK-024</b> kasni od 23.11. <b>ALK-031</b> je otvorena, s rokom isporuke 30.11.
-                </LenaBubble>
+                </LaraBubble>
                 <motion.div custom={3} variants={reveal} className="grid grid-cols-2 gap-2">
                   <div className="rounded-2xl border border-alkus-100 bg-alkus-50 p-3"><p className="text-[10px] font-black uppercase tracking-wider text-alkus-700">Kasni</p><p className="mt-1 text-xl font-bold text-slate-900">ALK-024</p></div>
                   <div className="rounded-2xl border border-alkus-100 bg-alkus-50 p-3"><p className="text-[10px] font-black uppercase tracking-wider text-alkus-700">Sljedeća isporuka</p><p className="mt-1 text-xl font-bold text-slate-900">ALK-031</p></div>
@@ -267,7 +282,7 @@ export default function PonudaAlkus() {
             <div className="inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-5 py-3 rounded-2xl border bg-slate-50 border-slate-200 text-sm text-slate-900">
               <ShieldCheck className="w-4 h-4 shrink-0 text-slate-600" />
               <span className="font-bold">Sigurnost</span>
-              <span className="text-slate-600">Lena prikazuje narudžbe kojima prijavljeni korisnik ima pristup.</span>
+              <span className="text-slate-600">Lara prikazuje narudžbe kojima prijavljeni korisnik ima pristup.</span>
             </div>
           </div>
         </div>
@@ -281,7 +296,7 @@ export default function PonudaAlkus() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-8">
             <span className="text-xs font-bold tracking-[0.3em] text-slate-400 uppercase mb-4 block">Četiri primjera upita</span>
-            <h2 className="text-4xl lg:text-5xl font-bold mb-6 tracking-tight text-slate-900">Kako će izgledati razgovor s Lenom</h2>
+            <h2 className="text-4xl lg:text-5xl font-bold mb-6 tracking-tight text-slate-900">Kako će izgledati razgovor s Larom</h2>
             <p className="text-slate-500 max-w-2xl mx-auto text-lg">
               Isprobajte četiri razgovora s oglednim podacima. Odaberite stavku u rezultatu da suzite odgovor.
             </p>
@@ -319,29 +334,31 @@ export default function PonudaAlkus() {
           </div>
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="grid md:grid-cols-[1.2fr_0.8fr] rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-sm">
             <div className="bg-white p-8 lg:p-10">
-              <h3 className="text-xl font-bold text-slate-900 mb-6">Uključeno u cijenu</h3>
+              <h3 className="text-xl font-bold text-slate-900 mb-3">Stavke ponude</h3>
+              <p className="mb-5 text-sm leading-relaxed text-slate-600">Modul Narudžbe s PDF i ručnim unosom, prijenosom u Pantheon i prijavom za do tri korisnika.</p>
               <ul className="space-y-3">
-                {[
-                  'Modul Narudžbe s PDF i ručnim unosom',
-                  'Provjera i prijenos narudžbi u Pantheon',
-                  'Prijava za do tri korisnika',
-                  'Integracija Lena AI bez doplate i 20 besplatnih poruka dnevno',
-                  'Četiri početna scenarija za narudžbe',
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-3 text-slate-600">
-                    <CheckCircle2 className="w-5 h-5 text-slate-900 mt-0.5 shrink-0" />
-                    <span className="text-sm leading-relaxed">{item}</span>
+                {offer.items.map(({ description, unitPrice }) => (
+                  <li key={description} className="flex items-start gap-2 text-sm text-slate-600 sm:gap-3">
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-alkus-700" aria-hidden="true" />
+                    <span className="flex-1 leading-relaxed">{description}</span>
+                    <span className="shrink-0 whitespace-nowrap font-semibold text-slate-900">
+                      {unitPrice === 0 ? '0 KM' : formatOfferAmount(unitPrice)}
+                    </span>
                   </li>
                 ))}
               </ul>
             </div>
             <div className="bg-slate-900 text-white p-8 lg:p-10 flex flex-col justify-between gap-8">
               <div>
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-alkus-200"><Database className="h-3.5 w-3.5" />Narudžbe + Pantheon + Lena AI</span>
-                <p className="mt-6 text-5xl font-bold">4.900 KM</p>
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-alkus-200"><Database className="h-3.5 w-3.5" />Narudžbe + Pantheon + Lara AI</span>
+                <p className="mt-6 text-5xl font-bold">{offerTotal}</p>
                 <p className="mt-2 text-sm font-medium uppercase tracking-widest text-slate-400">Fiksna cijena</p>
               </div>
-              <p className="text-sm leading-relaxed text-alkus-200">Obrada dokumenata obračunava se po stranicama, a Lena AI od 21. poruke u danu troši 1 token po poruci. <a className="underline" href="#tokeni">Cjenovnik tokena</a></p>
+              <div className="space-y-3 text-sm leading-relaxed text-alkus-200">
+                <p><strong className="text-white">Rok isporuke</strong> · {offer.delivery} od potvrde ponude</p>
+                <p>{offer.paymentConditions}</p>
+                <a className="underline" href="#tokeni">Cjenovnik tokena</a>
+              </div>
             </div>
           </motion.div>
         </div>
@@ -361,9 +378,7 @@ export default function PonudaAlkus() {
               <img src="https://deklarant.ai/build/images/logo-qla.png" alt="QLA Logo" className="h-6 object-contain" referrerPolicy="no-referrer" />
             </a>
           </div>
-          <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
-            <Printer className="h-4 w-4" /> Ispis / PDF
-          </button>
+          <ProformaLink className="border border-slate-200 hover:bg-slate-50" />
         </div>
       </footer>
     </div>

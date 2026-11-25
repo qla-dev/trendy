@@ -30,7 +30,7 @@ const steps = [
 export const scenarios = [
   {
     title: 'Rokovi isporuke',
-    description: 'Lena izdvaja otvorene narudžbe koje kasne i one koje uskoro dospijevaju.',
+    description: 'Lara izdvaja otvorene narudžbe koje kasne i one koje uskoro dospijevaju.',
     bullets: ['Broj narudžbe i kupac', 'Dogovoreni rok i trenutni status'],
     prompt: 'Koje otvorene narudžbe kasne i koje dospijevaju u narednih sedam dana? Prikaži broj, kupca, rok i status.',
     answer: 'Kasni ALK-024 za kupca A, s rokom 23.11. Naredna je ALK-031 za kupca B, s rokom 30.11. Obje su otvorene.',
@@ -173,7 +173,7 @@ export function TokenDetails() {
             </div>
           </div>
           <div className="mt-6 rounded-[1.25rem] border border-alkus-200 bg-alkus-50 p-5">
-            <h3>Lena AI · 20 besplatnih poruka dnevno</h3>
+            <h3>Lara AI · 20 besplatnih poruka dnevno</h3>
             <p className="mt-1">Prvih 20 poruka u danu troši 0 tokena. Od 21. poruke svaka naredna poruka istoga dana troši <strong>1 token</strong>.</p>
           </div>
         </section>
