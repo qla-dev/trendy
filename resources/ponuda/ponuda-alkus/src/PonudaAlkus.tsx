@@ -133,8 +133,8 @@ const SkillSection = ({ id, flip, copy, visual }: { id: string; flip?: boolean; 
 const skillLinks = scenarios.map(({ title }, index) => ({ id: 'vjestina-' + (index + 1), label: title }));
 
 const included = [
-  { icon: FileScan, title: 'Modul Narudžbe', desc: 'Povlačenje PDF-a, AI priprema nacrta i ručni unos narudžbi kupaca.' },
-  { icon: Database, title: 'Pantheon integracija', desc: 'Provjera šifrarnika, upis narudžbe i povrat broja dokumenta.' },
+  { icon: FileScan, title: 'Modul Ulazne fakture', desc: 'Učitavanje skena ili fotografije, AI priprema nacrta i ručni unos faktura dobavljača.' },
+  { icon: Database, title: 'Pantheon integracija', desc: 'Provjera dobavljača i artikala, upis fakture i povrat broja dokumenta.' },
   { icon: Users, title: 'Do 3 korisnika', desc: 'Zaseban korisnički račun i prijava za svakog člana tima.' },
   { icon: Sparkles, title: 'Lara AI bez doplate', desc: 'Uključena integracija i 20 besplatnih poruka dnevno. Svaka naredna poruka troši 1 token.' },
 ];
@@ -184,7 +184,7 @@ export default function PonudaAlkus() {
           <div className="ml-auto hidden items-center gap-5 lg:flex">
             <a href="#ukljuceno" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Šta je uključeno</a>
             <a href="#vjestine" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Lara AI</a>
-            <a href="#modul" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Narudžbe</a>
+            <a href="#modul" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Ulazne fakture</a>
             <a href="#pantheon" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Pantheon</a>
             <a href="#cijena" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Cijena</a>
             <div className="hidden h-6 w-px bg-slate-200 xl:block" />
@@ -203,10 +203,10 @@ export default function PonudaAlkus() {
               Ponuda za ALKUS d.o.o. · Kreševo
             </div>
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 mb-6 sm:mb-8 leading-[1.1]">
-              Narudžbe kupaca. <span className="text-alkus-700">Od PDF-a do Pantheona.</span>
+              Ulazne fakture. <span className="text-alkus-700">Od skena do Pantheona.</span>
             </h1>
             <p className="text-lg sm:text-xl text-slate-500 leading-relaxed mb-8 sm:mb-10 max-w-xl">
-              Uvezite ili ručno unesite narudžbu za ALU i PVC stolariju. Pregledajte stavke, prenesite narudžbu u Pantheon i pitajte Laru za rokove i specifikacije.
+              Skenirajte papirnu fakturu dobavljača mobitelom ili klasičnim skenerom. AI izdvaja artikle, količine i cijene, a vaš tim provjerava podatke i potvrđuje upis u Pantheon.
             </p>
             <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 sm:flex sm:flex-wrap sm:gap-4">
               <a href="#demo-narudzbe" className="px-2 min-[380px]:px-4 sm:px-8 py-3.5 sm:py-4 bg-slate-900 text-white rounded-2xl font-bold text-[13px] min-[380px]:text-sm sm:text-base whitespace-nowrap hover:bg-slate-800 transition-all flex items-center justify-center gap-2 group">
@@ -237,13 +237,13 @@ export default function PonudaAlkus() {
                 </div>
               </div>
               <motion.div initial="hidden" animate="visible" className="space-y-4 p-6 sm:p-8">
-                <UserBubble index={1}>Koje otvorene narudžbe kasne i koje dospijevaju u narednih sedam dana?</UserBubble>
+                <UserBubble index={1}>Koje ulazne fakture još nisu prenesene u Pantheon?</UserBubble>
                 <LaraBubble index={2}>
-                  <b>ALK-024</b> kasni od 23.11. <b>ALK-031</b> je otvorena, s rokom isporuke 30.11.
+                  <b>FA-031/26</b> je spremna za prijenos. Na fakturi <b>FA-032/26</b> treba provjeriti šifru artikla.
                 </LaraBubble>
                 <motion.div custom={3} variants={reveal} className="grid grid-cols-2 gap-2">
-                  <div className="rounded-2xl border border-alkus-100 bg-alkus-50 p-3"><p className="text-[10px] font-black uppercase tracking-wider text-alkus-700">Kasni</p><p className="mt-1 text-xl font-bold text-slate-900">ALK-024</p></div>
-                  <div className="rounded-2xl border border-alkus-100 bg-alkus-50 p-3"><p className="text-[10px] font-black uppercase tracking-wider text-alkus-700">Sljedeća isporuka</p><p className="mt-1 text-xl font-bold text-slate-900">ALK-031</p></div>
+                  <div className="rounded-2xl border border-alkus-100 bg-alkus-50 p-3"><p className="text-[10px] font-black uppercase tracking-wider text-alkus-700">Spremna za prijenos</p><p className="mt-1 text-xl font-bold text-slate-900">FA-031/26</p></div>
+                  <div className="rounded-2xl border border-alkus-100 bg-alkus-50 p-3"><p className="text-[10px] font-black uppercase tracking-wider text-alkus-700">Provjera šifre</p><p className="mt-1 text-xl font-bold text-slate-900">FA-032/26</p></div>
                 </motion.div>
               </motion.div>
               <div className="border-t border-slate-100 bg-slate-50 px-6 sm:px-8 py-4">
@@ -266,7 +266,7 @@ export default function PonudaAlkus() {
             <span className="text-xs font-bold tracking-[0.3em] text-slate-400 uppercase mb-4 block">Šta je uključeno</span>
             <h2 className="text-4xl lg:text-5xl font-bold mb-6 tracking-tight text-slate-900">Orderflow.ai za Alkus</h2>
             <p className="text-slate-500 max-w-2xl mx-auto text-lg">
-              Modul za narudžbe kupaca i prijenos u Pantheon, po uzoru na eNalogov tok rada.
+              Modul za unos ulaznih faktura dobavljača i prijenos u Pantheon. Uključena je optimizacija za pet dobavljača na osnovu uzoraka njihovih faktura.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -282,7 +282,7 @@ export default function PonudaAlkus() {
             <div className="inline-flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-5 py-3 rounded-2xl border bg-slate-50 border-slate-200 text-sm text-slate-900">
               <ShieldCheck className="w-4 h-4 shrink-0 text-slate-600" />
               <span className="font-bold">Sigurnost</span>
-              <span className="text-slate-600">Lara prikazuje narudžbe kojima prijavljeni korisnik ima pristup.</span>
+              <span className="text-slate-600">Lara prikazuje fakture kojima prijavljeni korisnik ima pristup.</span>
             </div>
           </div>
         </div>
@@ -335,7 +335,7 @@ export default function PonudaAlkus() {
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="grid md:grid-cols-[1.2fr_0.8fr] rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-sm">
             <div className="bg-white p-8 lg:p-10">
               <h3 className="text-xl font-bold text-slate-900 mb-3">Stavke ponude</h3>
-              <p className="mb-5 text-sm leading-relaxed text-slate-600">Modul Narudžbe s PDF i ručnim unosom, prijenosom u Pantheon i prijavom za do tri korisnika.</p>
+              <p className="mb-5 text-sm leading-relaxed text-slate-600">Ulazne fakture sa skena ili iz ručnog unosa, prijenos u Pantheon i prijava za do tri korisnika.</p>
               <ul className="space-y-3">
                 {offer.items.map(({ description, unitPrice }) => (
                   <li key={description} className="flex items-start gap-2 text-sm text-slate-600 sm:gap-3">
@@ -350,7 +350,7 @@ export default function PonudaAlkus() {
             </div>
             <div className="bg-slate-900 text-white p-8 lg:p-10 flex flex-col justify-between gap-8">
               <div>
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-alkus-200"><Database className="h-3.5 w-3.5" />Narudžbe + Pantheon + Lara AI</span>
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-alkus-200"><Database className="h-3.5 w-3.5" />Ulazne fakture + Pantheon + Lara AI</span>
                 <p className="mt-6 text-5xl font-bold">{offerTotal}</p>
                 <p className="mt-2 text-sm font-medium uppercase tracking-widest text-slate-400">Fiksna cijena</p>
               </div>

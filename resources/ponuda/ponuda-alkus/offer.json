@@ -1,10 +1,10 @@
 {
   "items": [
-    { "description": "Izgradnja platforme Orderflow.ai", "quantity": 1, "unitPrice": 4900 },
+    { "description": "Izgradnja platforme Orderflow.ai za AI unos ulaznih faktura", "quantity": 1, "unitPrice": 4900 },
     { "description": "Hosting (20 GB) za prvih 6 mjeseci", "quantity": 1, "unitPrice": 0 },
     { "description": "Domena Orderflow.ai bez doplate, po potvrdi prava korištenja", "quantity": 1, "unitPrice": 0 },
     { "description": "Integracija Lara AI asistenta", "quantity": 1, "unitPrice": 0 },
-    { "description": "Optimizacija obrade dokumenata za 5 dobavljača", "quantity": 1, "unitPrice": 0 },
+    { "description": "Optimizacija prepoznavanja faktura za 5 dobavljača", "quantity": 1, "unitPrice": 0 },
     { "description": "Podrška za eksterni API pristup i integracije", "quantity": 1, "unitPrice": 0 }
   ],
   "delivery": "1,5 mjeseci",

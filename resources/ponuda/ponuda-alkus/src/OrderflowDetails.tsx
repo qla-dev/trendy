@@ -7,62 +7,62 @@ import './orderflow-details.css';
 const steps = [
   {
     icon: Upload,
-    title: 'Povucite PDF',
-    description: 'Ispustite narudžbu kupca u zonu za učitavanje ili odaberite datoteku. Original ostaje uz nacrt.',
+    title: 'Dodajte sken fakture',
+    description: 'Učitajte fotografiju ili PDF s mobitela ili klasičnog skenera. Izvorni dokument ostaje uz nacrt.',
   },
   {
     icon: FileScan,
     title: 'AI priprema nacrt',
-    description: 'Sistem prepoznaje broj narudžbe, kupca, rok i stavke. Za stolariju nacrt može obuhvatiti količine, dimenzije, profil, boju i staklo kada su navedeni u dokumentu.',
+    description: 'AI prepoznaje dobavljača, broj fakture i stavke, uključujući šifru, količinu, jedinicu mjere, cijenu, rabat i PDV kad su navedeni.',
   },
   {
     icon: ClipboardCheck,
     title: 'Provjerite stavke',
-    description: 'Provjerite kupca, rok i stavke uz original. Ispravite podatke i pokrenite prijenos.',
+    description: 'Uporedite artikle, količine, cijene i iznose s originalom. Ispravite nejasne stavke i potvrdite prijenos.',
   },
   {
     icon: Database,
     title: 'Upis u Pantheon',
-    description: 'Pantheon dobija zaglavlje i pozicije. Orderflow.ai evidentira broj kreiranog dokumenta.',
+    description: 'U Pantheon se prenose podaci o ulaznoj fakturi i stavkama. Orderflow.ai evidentira broj upisanog dokumenta.',
   },
 ];
 
 export const scenarios = [
   {
-    title: 'Rokovi isporuke',
-    description: 'Lara izdvaja otvorene narudžbe koje kasne i one koje uskoro dospijevaju.',
-    bullets: ['Broj narudžbe i kupac', 'Dogovoreni rok i trenutni status'],
-    prompt: 'Koje otvorene narudžbe kasne i koje dospijevaju u narednih sedam dana? Prikaži broj, kupca, rok i status.',
-    answer: 'Kasni ALK-024 za kupca A, s rokom 23.11. Naredna je ALK-031 za kupca B, s rokom 30.11. Obje su otvorene.',
-    columns: ['Narudžba', 'Kupac', 'Rok', 'Status'],
-    rows: [['ALK-024', 'Kupac A', '23.11.', 'Kasni'], ['ALK-031', 'Kupac B', '30.11.', 'Otvorena']],
+    title: 'Fakture koje čekaju prijenos',
+    description: 'Lara izdvaja fakture koje još nisu prenesene u Pantheon.',
+    bullets: ['Broj fakture i dobavljač', 'Status provjere i očekivani korak'],
+    prompt: 'Koje ulazne fakture još nisu prenesene u Pantheon? Prikaži broj fakture, dobavljača i status.',
+    answer: 'Faktura FA-031/26 dobavljača A je spremna za prijenos. Na fakturi FA-032/26 dobavljača B treba provjeriti jednu šifru artikla.',
+    columns: ['Faktura', 'Dobavljač', 'Status'],
+    rows: [['FA-031/26', 'Dobavljač A', 'Spremna za prijenos'], ['FA-032/26', 'Dobavljač B', 'Provjera šifre']],
   },
   {
-    title: 'Provjera specifikacije',
-    description: 'Prije prijenosa provjerite koje pozicije treba dopuniti.',
-    bullets: ['Dimenzije, RAL boja i tip stakla', 'Pozicija i stranica izvornog PDF-a'],
-    prompt: 'U narudžbi ALK-031 pronađi pozicije kojima nedostaju dimenzije, RAL boja ili tip stakla. Navedi stranicu izvornog PDF-a.',
-    answer: 'Pozicija 04, str. 2, nema navedenu RAL boju. Za poziciju 07, str. 3, nedostaje tip stakla.',
+    title: 'Nejasne stavke sa skena',
+    description: 'Prije prijenosa provjerite polja koja AI nije pouzdano očitao.',
+    bullets: ['Šifra artikla, količina i cijena', 'Pozicija i stranica izvornog skena'],
+    prompt: 'Na fakturi FA-032/26 pronađi nejasne šifre, količine ili jedinične cijene. Navedi poziciju i stranicu.',
+    answer: 'Na poziciji 04, str. 2, šifra artikla nije čitljiva. Na poziciji 07, str. 3, jedinična cijena traži provjeru.',
     columns: ['Pozicija', 'Stranica', 'Nedostaje'],
-    rows: [['04', '2', 'RAL boja'], ['07', '3', 'Tip stakla']],
+    rows: [['04', '2', 'Šifra artikla'], ['07', '3', 'Jedinična cijena']],
   },
   {
-    title: 'Poređenje revizija',
-    description: 'Uporedite dvije verzije narudžbe prije nego što potvrdite novu.',
-    bullets: ['Promjene količina i dimenzija po pozicijama', 'Prethodni i novi rok isporuke'],
-    prompt: 'Uporedi original i novu reviziju ALK-031. Prikaži promjene količina, dimenzija i roka isporuke po pozicijama.',
-    answer: 'Na poziciji 04 količina je promijenjena s 2 na 3 komada. Širina pozicije 07 promijenjena je s 900 na 950 mm. Rok je pomjeren s 27.11. na 30.11.',
-    columns: ['Podatak', 'Original', 'Revizija'],
-    rows: [['Poz. 04 · količina', '2 kom.', '3 kom.'], ['Poz. 07 · širina', '900 mm', '950 mm'], ['Rok isporuke', '27.11.', '30.11.']],
+    title: 'Provjera količina i iznosa',
+    description: 'Uporedite AI nacrt s originalom prije potvrde fakture.',
+    bullets: ['Količine i jedinične cijene po pozicijama', 'Osnovica, rabat i PDV'],
+    prompt: 'Uporedi početni AI nacrt fakture FA-031/26 s originalom. Pokaži šta se razlikuje.',
+    answer: 'Na prvoj poziciji nacrt je očitao 2 vijka umjesto 20. Ispravkom količine osnovica iznosi 320,00 KM, a PDV 54,40 KM.',
+    columns: ['Podatak', 'AI nacrt', 'Original'],
+    rows: [['Poz. 01 · vijci', '2 kom.', '20 kom.'], ['Osnovica', '316,22 KM', '320,00 KM'], ['PDV', '53,76 KM', '54,40 KM']],
   },
   {
-    title: 'Sažetak po proizvodima',
-    description: 'Pogledajte količine potvrđenih narudžbi koje dospijevaju naredne sedmice.',
-    bullets: ['PVC prozori, ALU vrata i roletne', 'Brojevi narudžbi iz kojih dolaze količine'],
-    prompt: 'Za potvrđene narudžbe s isporukom naredne sedmice sažmi količine po grupama: PVC prozori, ALU vrata i roletne. Dodaj brojeve narudžbi.',
-    answer: 'PVC prozori, 14 komada (ALK-034 i ALK-038). ALU vrata, 3 komada (ALK-036). Roletne, 8 komada (ALK-038).',
-    columns: ['Grupa proizvoda', 'Komada', 'Narudžbe'],
-    rows: [['PVC prozori', '14', 'ALK-034, ALK-038'], ['ALU vrata', '3', 'ALK-036'], ['Roletne', '8', 'ALK-038']],
+    title: 'Pregled nabavljenih artikala',
+    description: 'Lara sažima količine po artiklima iz odabranih ulaznih faktura.',
+    bullets: ['Vijci, PVC profili i okov', 'Brojevi faktura iz kojih dolaze količine'],
+    prompt: 'Sažmi količine vijaka, PVC profila i okova iz prenesenih faktura FA-028/26 i FA-031/26. Navedi izvorne fakture.',
+    answer: 'Ukupno je 50 vijaka s dvije fakture, 13 PVC profila s FA-031/26 i 4 komada okova s FA-031/26.',
+    columns: ['Artikal', 'Komada', 'Fakture'],
+    rows: [['Vijci', '50', 'FA-028/26, FA-031/26'], ['PVC profili', '13', 'FA-031/26'], ['Okov', '4', 'FA-031/26']],
   },
 ];
 
@@ -99,11 +99,11 @@ export function OrderflowDetails() {
     <div className="orderflow-details bg-white">
         <section className="section wrap" id="modul" aria-labelledby="module-title">
           <div className="section-heading">
-            <p className="eyebrow">Modul Narudžbe</p>
-            <h2 id="module-title">Od unosa narudžbe do Pantheona</h2>
-            <p>Uvezite PDF za AI obradu ili unesite narudžbu ručno. Oba načina koriste isti pregled i prijenos. Svaki od najviše tri korisnika prijavljuje se svojim računom.</p>
+            <p className="eyebrow">Modul Ulazne fakture</p>
+            <h2 id="module-title">Od skena fakture do Pantheona</h2>
+            <p>Dobavljači dostavljaju papirne fakture. Učitajte fotografiju ili PDF za AI obradu ili unesite fakturu ručno. Svaki od najviše tri korisnika prijavljuje se svojim računom.</p>
           </div>
-          <ol className="workflow" aria-label="Dijagram unosa narudžbe iz PDF-a">
+          <ol className="workflow" aria-label="Dijagram unosa skenirane ulazne fakture">
             {steps.map(({ icon: Icon, title, description }, index) => (
               <li key={title}>
                 <Icon size={23} aria-hidden="true" />
@@ -113,8 +113,8 @@ export function OrderflowDetails() {
               </li>
             ))}
           </ol>
-          <div className="manual-flow" aria-label="Dijagram ručnog unosa narudžbe">
-            <span><PencilLine size={18} aria-hidden="true" /> Ručno unesite kupca i stavke</span>
+          <div className="manual-flow" aria-label="Dijagram ručnog unosa fakture">
+            <span><PencilLine size={18} aria-hidden="true" /> Ručno unesite dobavljača i stavke</span>
             <ArrowRight size={18} className="manual-arrow" aria-hidden="true" />
             <span><ClipboardCheck size={18} aria-hidden="true" /> Provjerite i potvrdite</span>
             <ArrowRight size={18} className="manual-arrow" aria-hidden="true" />
@@ -126,13 +126,13 @@ export function OrderflowDetails() {
         <section className="section wrap pantheon-section" id="pantheon" aria-labelledby="pantheon-title">
           <div className="section-heading">
             <p className="eyebrow">Pantheon integracija</p>
-            <h2 id="pantheon-title">Direktan upis narudžbe kupca</h2>
-            <p>Orderflow.ai provjerava kupca i artikle prema Pantheon šifrarnicima. Nakon potvrde korisnika prenosi zaglavlje i sve stavke te prikazuje broj dokumenta koji je Pantheon kreirao.</p>
+            <h2 id="pantheon-title">Upis ulazne fakture dobavljača</h2>
+            <p>Orderflow.ai povezuje dobavljača i artikle s Pantheon šifrarnicima. Nakon potvrde korisnika prenosi zaglavlje i stavke fakture te prikazuje broj dokumenta koji je Pantheon vratio.</p>
           </div>
           <ol className="erp-diagram" aria-label="Dijagram razmjene podataka sa Pantheonom">
-            <li><ListChecks size={22} aria-hidden="true" /><h3>Provjera šifrarnika</h3><p>Pantheon → Orderflow.ai</p><small>Kupac, šifre artikala i jedinice mjere</small><ArrowRight className="flow-arrow" size={20} aria-hidden="true" /></li>
-            <li><ClipboardCheck size={22} aria-hidden="true" /><h3>Upis dokumenta</h3><p>Orderflow.ai → Pantheon</p><small>Broj narudžbe kupca, rok, stavke, količine i cijene gdje su navedene</small><ArrowRight className="flow-arrow" size={20} aria-hidden="true" /></li>
-            <li><Database size={22} aria-hidden="true" /><h3>Potvrda upisa</h3><p>Pantheon → Orderflow.ai</p><small>Broj dokumenta i status prijenosa u evidenciji narudžbi</small></li>
+            <li><ListChecks size={22} aria-hidden="true" /><h3>Provjera šifrarnika</h3><p>Pantheon → Orderflow.ai</p><small>Dobavljač, šifre artikala i jedinice mjere</small><ArrowRight className="flow-arrow" size={20} aria-hidden="true" /></li>
+            <li><ClipboardCheck size={22} aria-hidden="true" /><h3>Upis dokumenta</h3><p>Orderflow.ai → Pantheon</p><small>Broj i datum fakture, stavke, količine, cijene, rabat i PDV</small><ArrowRight className="flow-arrow" size={20} aria-hidden="true" /></li>
+            <li><Database size={22} aria-hidden="true" /><h3>Potvrda upisa</h3><p>Pantheon → Orderflow.ai</p><small>Broj dokumenta i status prijenosa u evidenciji faktura</small></li>
           </ol>
           <p className="erp-note">Vrstu dokumenta i mapiranje polja potvrđujemo na Alkusovoj Pantheon konfiguraciji. Ako prijenos ne uspije, nacrt i razlog greške ostaju dostupni za ispravku i ponovni pokušaj.</p>
         </section>
@@ -167,7 +167,7 @@ export function TokenDetails() {
               <ul>
                 <li><strong>Formula</strong> 10 + max(0, broj stranica − 5).</li>
                 <li><strong>Svaki dokument ima svoj obračun.</strong> Dva zasebna PDF-a od po 3 stranice troše ukupno 20 tokena. Jedan PDF od 6 stranica troši 11 tokena.</li>
-                <li><strong>Naplata slijedi nakon uspješnog prijenosa AI obrađene narudžbe u Pantheon.</strong> Neuspjela obrada, neuspjeli prijenos i ručni unos troše 0 tokena. Pregled i uređivanje nacrta ne stvaraju novi obračun.</li>
+                <li><strong>Naplata slijedi nakon uspješnog prijenosa AI obrađene fakture u Pantheon.</strong> Neuspjela obrada, neuspjeli prijenos i ručni unos troše 0 tokena. Pregled i uređivanje nacrta ne stvaraju novi obračun.</li>
                 <li><strong>Jednokratna implementacija iznosi 4.900 KM.</strong> Potrošnja tokena za AI obradu dokumenata obračunava se zasebno.</li>
               </ul>
             </div>
