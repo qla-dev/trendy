@@ -355,7 +355,7 @@ if ($frontendOnly) {
         ['label' => 'Installing dependencies for offers', 'command' => $npmCommand . ' --prefix resources/ponuda ci --no-audit --no-fund'],
         ['label' => 'Building offer pages', 'command' => $npmCommand . ' run build:ponuda'],
     ];
-    $write("Offers-only redeploy: builds /ponuda/ and /ponuda-sara-ai/ together.\n");
+    $write("Offers-only redeploy: builds /ponuda/, /ponuda-sara-ai/ and /ponuda-alkus/ together.\n");
 }
 
 $startedAt = time();
@@ -406,7 +406,7 @@ if ($ponudeOnly) {
 } elseif ($ponudaSaraAiOnly) {
     $offerFolders = ['ponuda-sara-ai'];
 } elseif ($offersOnly) {
-    $offerFolders = ['ponuda', 'ponuda-sara-ai'];
+    $offerFolders = ['ponuda', 'ponuda-sara-ai', 'ponuda-alkus'];
 } else {
     // The full app redeploy does not build offers; it only checks the main offer exists.
     $offerFolders = ['ponuda'];
