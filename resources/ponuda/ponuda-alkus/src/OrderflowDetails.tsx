@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, ClipboardCheck, Database, FileScan, ListChecks, PencilLine, Upload } from 'lucide-react';
+import { ArrowRight, ClipboardCheck, Database, FileScan, ListChecks, ScanLine, Upload } from 'lucide-react';
 import OrderDashboard, { type InvoiceDemoRequest } from './OrderDashboard.tsx';
 import { priceFor, tokenPrice, tokensFor } from './order-pricing.ts';
 import './orderflow-details.css';
@@ -13,7 +13,7 @@ const steps = [
   {
     icon: FileScan,
     title: 'AI priprema nacrt',
-    description: 'AI prepoznaje dobavljača, broj fakture i stavke, uključujući šifru, količinu, jedinicu mjere, cijenu, rabat i PDV kad su navedeni.',
+    description: 'AI prepoznaje pošiljatelja, broj fakture i stavke, uključujući šifru, količinu, jedinicu mjere, cijenu, rabat i PDV kad su navedeni.',
   },
   {
     icon: ClipboardCheck,
@@ -97,11 +97,11 @@ function TokenCalculator() {
 export function OrderflowDetails({ demoRequest }: { demoRequest: InvoiceDemoRequest | null }) {
   return (
     <div className="orderflow-details bg-white">
-        <section className="section wrap" id="modul" aria-labelledby="module-title">
-          <div className="section-heading">
+        <section className="section wrap offer-section" id="modul" aria-labelledby="module-title">
+          <div className="section-heading offer-section-heading">
             <p className="eyebrow">Modul Ulazne fakture</p>
             <h2 id="module-title">Od skeniranog PDF-a do Pantheona</h2>
-            <p>Dobavljači dostavljaju papirne fakture. Učitajte fotografiju ili PDF za AI obradu ili unesite fakturu ručno. Svaki od najviše tri korisnika prijavljuje se svojim računom.</p>
+            <p>Učitajte fotografiju ili PDF ulazne fakture. AI prepoznaje pošiljatelja i stavke, a vi pregledate rezultat i potvrđujete prijenos. Svaki od najviše tri korisnika prijavljuje se svojim računom.</p>
           </div>
           <ol className="workflow" aria-label="Dijagram unosa skenirane ulazne fakture">
             {steps.map(({ icon: Icon, title, description }, index) => (
@@ -113,21 +113,21 @@ export function OrderflowDetails({ demoRequest }: { demoRequest: InvoiceDemoRequ
               </li>
             ))}
           </ol>
-          <div className="manual-flow" aria-label="Dijagram ručnog unosa fakture">
-            <span><PencilLine size={18} aria-hidden="true" /> Ručno unesite dobavljača i stavke</span>
-            <ArrowRight size={18} className="manual-arrow" aria-hidden="true" />
+          <div className="sender-flow" role="group" aria-label="Prepoznavanje pošiljatelja i prijenos fakture">
+            <span><ScanLine size={18} aria-hidden="true" /> AI prepoznaje pošiljatelja</span>
+            <ArrowRight size={18} className="sender-arrow" aria-hidden="true" />
             <span><ClipboardCheck size={18} aria-hidden="true" /> Provjerite i potvrdite</span>
-            <ArrowRight size={18} className="manual-arrow" aria-hidden="true" />
+            <ArrowRight size={18} className="sender-arrow" aria-hidden="true" />
             <span><Database size={18} aria-hidden="true" /> Upišite u Pantheon</span>
           </div>
           <OrderDashboard demoRequest={demoRequest} />
         </section>
 
-        <section className="section wrap pantheon-section" id="pantheon" aria-labelledby="pantheon-title">
-          <div className="section-heading">
+        <section className="section wrap pantheon-section offer-section" id="pantheon" aria-labelledby="pantheon-title">
+          <div className="section-heading offer-section-heading">
             <p className="eyebrow">Pantheon integracija</p>
             <h2 id="pantheon-title">Upis ulazne fakture dobavljača</h2>
-            <p>Orderflow.ai povezuje dobavljača i artikle s Pantheon šifrarnicima. Nakon potvrde korisnika prenosi zaglavlje i stavke fakture te prikazuje broj dokumenta koji je Pantheon vratio.</p>
+            <p>Orderflow.ai povezuje prepoznatog pošiljatelja i artikle s Pantheon šifrarnicima. Nakon potvrde korisnika prenosi zaglavlje i stavke fakture te prikazuje broj dokumenta koji je Pantheon vratio.</p>
           </div>
           <ol className="erp-diagram" aria-label="Dijagram razmjene podataka sa Pantheonom">
             <li><ListChecks size={22} aria-hidden="true" /><h3>Provjera šifrarnika</h3><p>Pantheon → Orderflow.ai</p><small>Dobavljač, šifre artikala i jedinice mjere</small><ArrowRight className="flow-arrow" size={20} aria-hidden="true" /></li>
@@ -144,8 +144,8 @@ export function OrderflowDetails({ demoRequest }: { demoRequest: InvoiceDemoRequ
 export function TokenDetails() {
   return (
     <div className="orderflow-details bg-white">
-        <section className="section wrap" id="tokeni" aria-labelledby="tokens-title">
-          <div className="section-heading">
+        <section className="section wrap offer-section" id="tokeni" aria-labelledby="tokens-title">
+          <div className="section-heading offer-section-heading">
             <p className="eyebrow">Cjenovnik tokena</p>
             <h2 id="tokens-title">Jedan token košta 0,35 KM</h2>
             <p>AI obrada dokumenta od 1 do 5 stranica troši 10 tokena. Od šeste stranice svaka dodatna stranica troši još 1 token.</p>
@@ -167,12 +167,12 @@ export function TokenDetails() {
               <ul>
                 <li><strong>Formula</strong> 10 + max(0, broj stranica − 5).</li>
                 <li><strong>Svaki dokument ima svoj obračun.</strong> Dva zasebna PDF-a od po 3 stranice troše ukupno 20 tokena. Jedan PDF od 6 stranica troši 11 tokena.</li>
-                <li><strong>Naplata slijedi nakon uspješnog prijenosa AI obrađene fakture u Pantheon.</strong> Neuspjela obrada, neuspjeli prijenos i ručni unos troše 0 tokena. Pregled i uređivanje nacrta ne stvaraju novi obračun.</li>
+                <li><strong>Naplata slijedi nakon uspješnog prijenosa AI obrađene fakture u Pantheon.</strong> Neuspjela obrada i neuspjeli prijenos troše 0 tokena. Pregled i uređivanje nacrta ne stvaraju novi obračun.</li>
                 <li><strong>Jednokratna implementacija iznosi 4.900 KM.</strong> Potrošnja tokena za AI obradu dokumenata obračunava se zasebno.</li>
               </ul>
             </div>
           </div>
-          <div className="mt-6 rounded-[1.25rem] border border-alkus-200 bg-alkus-50 p-5">
+          <div className="offer-token-note mt-6 rounded-[1.25rem] border border-alkus-200 bg-alkus-50 p-5">
             <h3>Lara AI · 20 besplatnih poruka dnevno</h3>
             <p className="mt-1">Prvih 20 poruka u danu troši 0 tokena. Od 21. poruke svaka naredna poruka istoga dana troši <strong>1 token</strong>.</p>
           </div>

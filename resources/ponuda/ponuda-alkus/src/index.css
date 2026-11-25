@@ -27,6 +27,52 @@
   }
 }
 
+@media screen and (max-width: 767px) {
+  .alkus-offer {
+    --offer-gutter: 1.25rem;
+    --offer-section-space: 2.5rem;
+    --offer-content-gap: 1.25rem;
+    --offer-divider-gap: 1.5rem;
+    --offer-panel-padding: 1rem;
+  }
+
+  .alkus-offer .offer-section { padding-block: var(--offer-section-space); }
+  .alkus-offer .offer-section:not(.offer-hero) { border-top: 1px solid var(--color-slate-200); }
+
+  .alkus-offer .offer-container,
+  .alkus-offer .offer-hero,
+  .alkus-offer .orderflow-details .offer-section {
+    padding-inline: var(--offer-gutter);
+  }
+
+  .alkus-offer .orderflow-details .offer-section { width: 100%; }
+  .alkus-offer .offer-section-heading { margin-bottom: var(--offer-content-gap); }
+  .offer-hero-grid,
+  .offer-scenario-body,
+  .offer-footer-content { gap: var(--offer-content-gap); }
+  .offer-hero-grid > :first-child > :not(:last-child) { margin-bottom: var(--offer-content-gap); }
+
+  .offer-scenario { padding-block: var(--offer-divider-gap); }
+  .offer-scenarios > :first-child .offer-scenario { padding-top: 0; }
+  .offer-scenarios > :last-child .offer-scenario { padding-bottom: 0; }
+  .offer-scenario-copy > :is(h3, p, div:last-child) { margin-top: .875rem; }
+
+  .offer-section .workflow :is(li),
+  .offer-section .erp-diagram :is(li),
+  .offer-section :is(.billing-examples, .calculator, .offer-token-note),
+  .hero-invoice .od-result { padding: var(--offer-panel-padding); }
+
+  .offer-section :is(.sender-flow, .order-dashboard, .offer-token-note) { margin-top: var(--offer-content-gap); }
+  .offer-price-card > div { padding: var(--offer-content-gap); }
+  .offer-price-card > div + div { gap: var(--offer-content-gap); }
+
+  .order-dashboard :is(.od-top, .od-tabs, .od-screen, .od-footer) {
+    padding-inline: var(--offer-panel-padding);
+  }
+
+  .order-dashboard .od-screen { min-height: 0; }
+}
+
 @media print {
   .alkus-offer [style*="opacity"] {
     opacity: 1 !important;

@@ -17,7 +17,7 @@ const scenes = [
   { id: 'invoices', view: 'invoices', duration: 2900, note: 'Otvaramo AI obradu iz pregleda ulaznih faktura.' },
   { id: 'scan', view: 'scan', duration: 2500, note: 'Biramo ogledni PDF fakture FA-031/26.' },
   { id: 'upload', view: 'scan', duration: 1700, note: 'Učitavanje šest stranica izvornog PDF-a.' },
-  { id: 'extract', view: 'scan', duration: 2300, note: 'AI čita broj fakture, dobavljača, stavke, cijene i PDV.' },
+  { id: 'extract', view: 'scan', duration: 2300, note: 'AI prepoznaje pošiljatelja, broj fakture, stavke, cijene i PDV.' },
   { id: 'review', view: 'scan', duration: 3400, note: 'Faktura je spremna za pregled. Provjeravamo količinu na prvoj poziciji.' },
   { id: 'edit', view: 'scan', duration: 3200, note: 'Prema originalu ispravljamo očitanu količinu s 2 na 20 vijaka.' },
   { id: 'ready', view: 'scan', duration: 2700, note: 'Izmjena je sačuvana. Dokument je spreman za transfer.' },
@@ -31,13 +31,11 @@ const scenes = [
 type SceneId = (typeof scenes)[number]['id'];
 type View = (typeof tabs)[number]['id'];
 type GoToScene = (id: SceneId, play?: boolean) => void;
-type ManualInvoice = { supplier: string; reference: string; item: string; netFeninga: number };
 export type InvoiceDemoRequest = { scene: 'pending' | 'transfer' };
 
 const invoiceReference = 'FA-031/26';
 const filename = 'Faktura_FA-031-26.pdf';
 const savedDocument = 'UF-000031';
-const manualNumber = 'UF-000032';
 const date = '25.11.2026.';
 const scanPages = 6;
 const scanTokens = tokensFor(scanPages);
@@ -121,7 +119,7 @@ function InvoiceReview({ scene, onEdit, onSave, actions, cue = false, hero = fal
       </div>
       <dl className="od-facts">
         <div><dt>Broj fakture</dt><dd>{invoiceReference}</dd></div>
-        <div><dt>Dobavljač</dt><dd>Dobavljač A</dd></div>
+        <div><dt>Pošiljatelj · AI</dt><dd>Dobavljač A</dd></div>
         <div><dt>Datum fakture</dt><dd>{date}</dd></div>
       </dl>
       <Grid title="Stavke fakture" headings={lineHeadings}>
@@ -174,7 +172,7 @@ function ScanScreen({ scene, go, cue }: { scene: SceneId; go: GoToScene; cue: bo
     <>
       <div className="od-screen-heading">
         <div><h4>AI obrada ulazne fakture</h4><p>Učitajte fotografiju ili PDF fakture dobavljača i provjerite rezultat prije upisa.</p></div>
-        <span className="od-badge">Ručni transfer aktivan</span>
+        <span className="od-badge">Prijenos uz potvrdu</span>
       </div>
       {!reviewing && (
         <div className="od-scan-grid">
@@ -255,14 +253,13 @@ function HistoryScreen({ scene, go, cue }: { scene: SceneId; go: GoToScene; cue:
   );
 }
 
-function InvoicesScreen({ scene, go, cue, manualInvoice, openManual }: {
-  scene: SceneId; go: GoToScene; cue: boolean; manualInvoice: ManualInvoice | null; openManual: () => void;
+function InvoicesScreen({ scene, go, cue }: {
+  scene: SceneId; go: GoToScene; cue: boolean;
 }) {
   const transferred = scene === 'saved' || scene === 'positions';
   const [search, setSearch] = useState('');
   const rows = [
     ...(transferred ? [{ number: savedDocument, reference: invoiceReference, supplier: 'Dobavljač A', netFeninga: netInvoice(correctedQuantity), positions: items.length }] : []),
-    ...(manualInvoice ? [{ ...manualInvoice, number: manualNumber, positions: 1 }] : []),
     { number: 'UF-000028', reference: 'FA-028/26', supplier: 'Dobavljač B', netFeninga: 8500, positions: 4 },
     { number: 'UF-000024', reference: 'FA-024/26', supplier: 'Dobavljač C', netFeninga: 10650, positions: 3 },
   ].filter((row) => [row.number, row.reference, row.supplier].join(' ').toLowerCase().includes(search.toLowerCase().trim()));
@@ -271,7 +268,6 @@ function InvoicesScreen({ scene, go, cue, manualInvoice, openManual }: {
       <div className="od-screen-heading">
         <div><h4>Ulazne fakture dobavljača</h4><p>Fakture prenesene u Pantheon i njihove stavke.</p></div>
         <div className="od-actions">
-          <Action onClick={openManual}><PencilLine size={15} /> Ručni unos</Action>
           <Action onClick={() => go('scan')} active={scene === 'invoices' && cue} primary><FileScan size={16} /> AI obrada</Action>
         </div>
       </div>
@@ -282,7 +278,7 @@ function InvoicesScreen({ scene, go, cue, manualInvoice, openManual }: {
       </label>
       <Grid title="Ulazne fakture dobavljača" headings={['Broj fakture', 'Dobavljač', 'Datum', 'Osnovica', 'Broj stavki', 'Pantheon dokument', 'Status', 'Akcija']}>
         {rows.map((row) => (
-          <tr key={row.number} className={row.number === savedDocument || row.number === manualNumber ? 'od-new-row' : ''}>
+          <tr key={row.number} className={row.number === savedDocument ? 'od-new-row' : ''}>
             <th scope="row">{row.reference}</th>
             <td>{row.supplier}</td><td>{date}</td><td>{formatAmount(row.netFeninga)}</td><td>{row.positions}</td><td>{row.number}</td>
             <td><span className="od-badge od-success">Prenesena</span></td>
@@ -312,10 +308,8 @@ export default function OrderDashboard({ demoRequest }: { demoRequest: InvoiceDe
   const [playing, setPlaying] = useState(() => !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [visible, setVisible] = useState(false);
   const [pageVisible, setPageVisible] = useState(!document.hidden);
-  const [manual, setManual] = useState(false);
-  const [manualInvoice, setManualInvoice] = useState<ManualInvoice | null>(null);
   const scene = scenes[index];
-  const running = playing && visible && pageVisible && !manual;
+  const running = playing && visible && pageVisible;
 
   useEffect(() => {
     const target = dashboard.current;
@@ -338,27 +332,23 @@ export default function OrderDashboard({ demoRequest }: { demoRequest: InvoiceDe
 
   useEffect(() => {
     if (!demoRequest) return;
-    setManual(false);
     setPlaying(demoRequest.scene === 'transfer');
     setIndex(scenes.findIndex((step) => step.id === demoRequest.scene));
   }, [demoRequest]);
 
   function go(id: SceneId, play = false) {
     setPlaying(play);
-    setManual(false);
     setIndex(scenes.findIndex((step) => step.id === id));
   }
 
   function selectView(view: View) {
-    if (view === scene.view && !manual) return;
+    if (view === scene.view) return;
     const transferred = scene.id === 'charged' || scene.id === 'saved' || scene.id === 'positions';
     const history = transferred || scene.id === 'transfer' ? 'charged' : 'pending';
     go(view === 'invoices' ? (transferred ? 'saved' : 'invoices') : view === 'scan' ? 'scan' : history);
   }
 
   function replay() {
-    setManual(false);
-    setManualInvoice(null);
     setIndex(0);
     setPlaying(true);
   }
@@ -372,7 +362,7 @@ export default function OrderDashboard({ demoRequest }: { demoRequest: InvoiceDe
           <p>Ogledni podaci i simulirani upis u Pantheon.</p>
         </div>
         <div className="od-playback" role="group" aria-label="Upravljanje demonstracijom">
-          <Action onClick={() => { setManual(false); setPlaying(!playing); }}>
+          <Action onClick={() => setPlaying(!playing)}>
             {playing ? <Pause size={16} /> : <Play size={16} />}{playing ? 'Pauziraj' : 'Pokreni'}
           </Action>
           <button type="button" title="Od početka" aria-label="Od početka" className="od-button od-icon-button" onClick={replay}><RotateCcw size={16} /></button>
@@ -388,48 +378,14 @@ export default function OrderDashboard({ demoRequest }: { demoRequest: InvoiceDe
       <div className="od-screen" onFocus={(event) => {
         if (event.target instanceof HTMLInputElement) setPlaying(false);
       }}>
-        {scene.view === 'invoices' && !manual && (
-          <InvoicesScreen scene={scene.id} cue={running} go={go} manualInvoice={manualInvoice}
-            openManual={() => { setPlaying(false); setManual(true); }} />
-        )}
+        {scene.view === 'invoices' && <InvoicesScreen scene={scene.id} cue={running} go={go} />}
         {scene.view === 'scan' && <ScanScreen scene={scene.id} cue={running} go={go} />}
         {scene.view === 'history' && <HistoryScreen scene={scene.id} cue={running} go={go} />}
-        {manual && (
-          <form className="od-manual" onSubmit={(event) => {
-            event.preventDefault();
-            const data = new FormData(event.currentTarget);
-            const supplier = String(data.get('supplier') ?? '').trim();
-            const reference = String(data.get('reference') ?? '').trim();
-            const item = String(data.get('item') ?? '').trim();
-            const quantity = Number(data.get('quantity'));
-            const unitPrice = Math.round(Number(data.get('price')) * 100);
-            const netFeninga = Math.round(quantity * unitPrice);
-            if (!supplier || !reference || !item || quantity <= 0 || unitPrice < 0 || !Number.isSafeInteger(netFeninga)) return;
-            setManualInvoice({ supplier, reference, item, netFeninga });
-            setManual(false);
-          }}>
-            <div className="od-screen-heading">
-              <div><h4>Ručni unos fakture dobavljača</h4><p>Ručni unos troši 0 tokena.</p></div>
-              <Action onClick={() => setManual(false)}>Odustani</Action>
-            </div>
-            <div className="od-manual-fields">
-              <label>Dobavljač<input name="supplier" required placeholder="Dobavljač C" /></label>
-              <label>Broj fakture<input name="reference" required placeholder="FA-033/26" /></label>
-              <label>Šifra artikla<input name="item" required placeholder="VIJ-419" /></label>
-              <label>Količina<input name="quantity" type="number" defaultValue="1" min="0.001" step="0.001" required /></label>
-              <label>Jedinična cijena bez PDV-a (KM)<input name="price" type="number" min="0" step="0.01" required /></label>
-            </div>
-            <button type="submit" className="od-button od-primary"><Database size={15} /> Potvrdi i prenesi u Pantheon</button>
-          </form>
-        )}
-        {manualInvoice && !manual && scene.view === 'invoices' && (
-          <div className="od-feedback od-confirmed" role="status"><Check size={17} /> Ručni upis · {manualNumber} · {manualInvoice.item} · 0 tokena</div>
-        )}
       </div>
       <div className="od-footer">
         <div className="od-step-text" aria-live={playing ? 'off' : 'polite'}>
           <span>{index + 1} / {scenes.length}</span>
-          <p>{manual ? 'Unesite podatke i potvrdite ogledni prijenos.' : scene.note}</p>
+          <p>{scene.note}</p>
         </div>
         <div className="od-step-buttons">
           <button type="button" className="od-button od-icon-button" aria-label="Prethodni korak" disabled={index === 0}

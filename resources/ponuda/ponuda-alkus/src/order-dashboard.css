@@ -85,7 +85,7 @@
 .od-screen-heading .od-invoice-title { font-size: 1.16rem; font-weight: 760; }
 .od-screen-heading p, .od-drop p, .od-progress-card p, .od-edit p { color: var(--od-muted); font-size: .79rem; }
 .od-search { display: flex; align-items: center; gap: .55rem; width: min(100%, 24rem); color: var(--od-muted); margin-bottom: .7rem; }
-.od-search input, .od-manual input { background: #fff; border: 1px solid var(--od-border); border-radius: .5rem; padding: .42rem .6rem; min-width: 0; width: 100%; }
+.od-search input { background: #fff; border: 1px solid var(--od-border); border-radius: .5rem; padding: .42rem .6rem; min-width: 0; width: 100%; }
 .od-table-frame { overflow: auto; border: 1px solid var(--od-border); border-radius: .72rem; background: white; scrollbar-width: thin; }
 .od-table { width: 100%; border-collapse: collapse; text-align: left; font-size: .77rem; }
 .od-table :is(th, td) { padding: .57rem .68rem; white-space: nowrap; border-bottom: 1px solid #efe8db; vertical-align: middle; }
@@ -128,8 +128,6 @@
 .od-result .od-feedback span { white-space: nowrap; }
 .od-confirmed { background: #e8f1e5; color: #2f5c3a; }
 .od-positions { margin-top: .7rem; }
-.od-manual-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin-bottom: .75rem; }
-.od-manual label { display: grid; gap: .25rem; font-weight: 650; }
 
 .od-footer { display: flex; align-items: center; gap: .65rem; justify-content: space-between; padding: .65rem clamp(.8rem, 2.6vw, 1.4rem); border-top: 1px solid var(--od-border); background: white; }
 .od-step-text { display: flex; align-items: baseline; gap: .6rem; font-size: .78rem; }
