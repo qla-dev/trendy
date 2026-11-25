@@ -1,18 +1,8 @@
 import { useState } from 'react';
 import { ArrowRight, ClipboardCheck, Database, FileScan, ListChecks, PencilLine, Upload } from 'lucide-react';
+import OrderDashboard from './OrderDashboard.tsx';
+import { priceFor, tokenPrice, tokensFor } from './order-pricing.ts';
 import './orderflow-details.css';
-
-const tokenPrice = 35;
-const includedPages = 5;
-const baseTokens = 10;
-const tokensFor = (pages: number) => baseTokens + Math.max(0, pages - includedPages);
-
-function priceFor(pages: number) {
-  const feninga = tokensFor(pages) * tokenPrice;
-  const marks = String(Math.trunc(feninga / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  const fraction = String(feninga % 100).padStart(2, '0');
-  return `${marks},${fraction} KM`;
-}
 
 const steps = [
   {
@@ -40,7 +30,7 @@ const steps = [
 export const scenarios = [
   {
     title: 'Rokovi isporuke',
-    description: 'Lara izdvaja otvorene narudžbe koje kasne i one koje uskoro dospijevaju.',
+    description: 'Lena izdvaja otvorene narudžbe koje kasne i one koje uskoro dospijevaju.',
     bullets: ['Broj narudžbe i kupac', 'Dogovoreni rok i trenutni status'],
     prompt: 'Koje otvorene narudžbe kasne i koje dospijevaju u narednih sedam dana? Prikaži broj, kupca, rok i status.',
     answer: 'Kasni ALK-024 za kupca A, s rokom 23.11. Naredna je ALK-031 za kupca B, s rokom 30.11. Obje su otvorene.',
@@ -75,97 +65,6 @@ export const scenarios = [
     rows: [['PVC prozori', '14', 'ALK-034, ALK-038'], ['ALU vrata', '3', 'ALK-036'], ['Roletne', '8', 'ALK-038']],
   },
 ];
-
-function OrderDemo() {
-  const [mode, setMode] = useState<'pdf' | 'manual'>('pdf');
-  const [filename, setFilename] = useState('');
-  const [dragging, setDragging] = useState(false);
-  const [form, setForm] = useState({ buyer: '', reference: '', item: '', quantity: '1' });
-  const [status, setStatus] = useState('');
-  const [transferred, setTransferred] = useState(false);
-  const ready = mode === 'manual' || !!filename;
-  const fields = [
-    { key: 'buyer', label: 'Kupac', placeholder: 'Naziv kupca' },
-    { key: 'reference', label: 'Broj narudžbe kupca', placeholder: 'ALK-031' },
-    { key: 'item', label: 'Šifra artikla', placeholder: 'PVC-PROZOR-01' },
-    { key: 'quantity', label: 'Količina', placeholder: '1' },
-  ] as const;
-
-  function start(nextMode: typeof mode) {
-    setMode(nextMode);
-    setFilename('');
-    setForm({ buyer: '', reference: '', item: '', quantity: '1' });
-    setStatus('');
-    setTransferred(false);
-  }
-
-  function loadPdf(name: string) {
-    if (!name.toLowerCase().endsWith('.pdf')) {
-      setStatus('Odaberite PDF dokument.');
-      return;
-    }
-    setFilename(name);
-    setForm({ buyer: 'Primjer kupca', reference: 'ALK-031', item: 'PVC-PROZOR-01', quantity: '3' });
-    setStatus('Primjer nacrta spreman za provjeru.');
-  }
-
-  return (
-    <div className="order-demo">
-      <div className="demo-heading">
-        <h3>Isprobajte unos narudžbe</h3>
-        <p>Demonstracija koristi ogledne podatke. Odabrani PDF ostaje u pregledniku, a Pantheon upis je simuliran.</p>
-      </div>
-      <div className="demo-controls" role="group" aria-label="Način unosa narudžbe">
-        <button type="button" aria-pressed={mode === 'pdf'} onClick={() => start('pdf')}><Upload size={16} aria-hidden="true" /> PDF / AI</button>
-        <button type="button" aria-pressed={mode === 'manual'} onClick={() => start('manual')}><PencilLine size={16} aria-hidden="true" /> Ručni unos</button>
-      </div>
-      {!ready && (
-        <div className={`drop-zone${dragging ? ' dragging' : ''}`}
-          onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setDragging(false);
-            if (event.dataTransfer.files[0]) loadPdf(event.dataTransfer.files[0].name);
-          }}>
-          <FileScan size={25} aria-hidden="true" />
-          <strong>Povucite PDF narudžbu ovdje</strong>
-          <input aria-label="Odaberite PDF narudžbu" type="file" accept=".pdf,application/pdf"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) loadPdf(file.name);
-            }} />
-          <button type="button" onClick={() => loadPdf('primjer-ALK-031.pdf')}>Učitaj ogledni PDF</button>
-        </div>
-      )}
-      {ready && !transferred && (
-        <form onSubmit={(event) => {
-          event.preventDefault();
-          if (!form.buyer.trim() || !form.reference.trim() || !form.item.trim()) return;
-          setTransferred(true);
-          setStatus('Preneseno u Pantheon · ogledni broj 26-0110-000031');
-        }}>
-          <h4>{filename ? `Nacrt · ${filename}` : 'Nova narudžba kupca'}</h4>
-          <div className="demo-fields">
-            {fields.map(({ key, label, placeholder }) => (
-              <label key={key}>{label}
-                <input required type={key === 'quantity' ? 'number' : 'text'} min={key === 'quantity' ? 1 : undefined}
-                  placeholder={placeholder} value={form[key]}
-                  onChange={(event) => setForm({ ...form, [key]: event.target.value })} />
-              </label>
-            ))}
-          </div>
-          <button className="transfer-button" type="submit">Potvrdi i prenesi u Pantheon <ArrowRight size={16} aria-hidden="true" /></button>
-        </form>
-      )}
-      <div className="demo-status" role="status">
-        {status}
-        {transferred && <p>{form.reference} · {form.buyer} · {form.item} · {form.quantity} kom.</p>}
-      </div>
-      {transferred && <button type="button" onClick={() => start(mode)}>Nova demonstracija</button>}
-    </div>
-  );
-}
 
 function TokenCalculator() {
   const [pageInput, setPageInput] = useState('7');
@@ -221,7 +120,7 @@ export function OrderflowDetails() {
             <ArrowRight size={18} className="manual-arrow" aria-hidden="true" />
             <span><Database size={18} aria-hidden="true" /> Upišite u Pantheon</span>
           </div>
-          <OrderDemo />
+          <OrderDashboard />
         </section>
 
         <section className="section wrap pantheon-section" id="pantheon" aria-labelledby="pantheon-title">
@@ -272,6 +171,10 @@ export function TokenDetails() {
                 <li><strong>Jednokratna implementacija iznosi 4.900 KM.</strong> Potrošnja tokena za AI obradu dokumenata obračunava se zasebno.</li>
               </ul>
             </div>
+          </div>
+          <div className="mt-6 rounded-[1.25rem] border border-alkus-200 bg-alkus-50 p-5">
+            <h3>Lena AI · 20 besplatnih poruka dnevno</h3>
+            <p className="mt-1">Prvih 20 poruka u danu troši 0 tokena. Od 21. poruke svaka naredna poruka istoga dana troši <strong>1 token (0,35 KM)</strong>.</p>
           </div>
         </section>
     </div>

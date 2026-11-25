@@ -20,7 +20,7 @@
   .workflow, .erp-diagram { list-style: none; padding: 0; margin: 0; gap: 28px; }
   .workflow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .erp-diagram { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .workflow li, .erp-diagram li, .billing-examples, .order-demo { border: 1px solid var(--line); background: #fffcf7; border-radius: 1.25rem; }
+  .workflow li, .erp-diagram li, .billing-examples { border: 1px solid var(--line); background: #fffcf7; border-radius: 1.25rem; }
   .workflow li, .erp-diagram li { padding: 20px; position: relative; }
   .workflow svg, .erp-diagram svg, .manual-flow svg { color: var(--deep-gold); }
   .flow-arrow { position: absolute; top: calc(50% - 10px); right: -25px; }
@@ -34,22 +34,6 @@
   .erp-diagram p { font-weight: 750; color: var(--deep-gold); }
   .erp-diagram small, .erp-note { color: var(--muted); }
   .erp-note { margin-top: 15px; max-width: 80ch; }
-
-  .order-demo { margin-top: 26px; padding: clamp(16px, 3vw, 28px); }
-  .demo-heading p { color: var(--muted); margin-top: 4px; }
-  .demo-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 16px; }
-  .order-demo button { display: inline-flex; align-items: center; gap: 8px; padding: 9px 13px; border: 1px solid #9a825d; border-radius: 6px; background: transparent; color: inherit; font-weight: 650; text-align: left; }
-  .order-demo button[aria-pressed="true"], .order-demo .transfer-button { background: #342819; color: #fff; border-color: #342819; }
-  .drop-zone { display: grid; justify-items: center; gap: 10px; padding: 24px 10px; text-align: center; background: #f8f3e8; border: 2px dashed #a68b66; border-radius: 1.25rem; }
-  .drop-zone.dragging { background: #efe0c7; border-color: var(--deep-gold); }
-  .drop-zone input { max-width: 100%; }
-  .order-demo h4 { margin: 0 0 12px; overflow-wrap: anywhere; }
-  .demo-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 14px; margin-bottom: 15px; }
-  .demo-fields label { display: grid; gap: 4px; font-size: .9rem; font-weight: 650; }
-  .demo-fields input { min-width: 0; padding: 8px; border: 1px solid #9a825d; border-radius: 5px; color: inherit; background: white; }
-  .demo-status:not(:empty) { margin-top: 12px; padding: 10px; border-radius: 6px; font-weight: 650; background: #efe5d3; overflow-wrap: anywhere; }
-  .demo-status p { font-weight: 400; }
-  .demo-status + button { margin-top: 12px; }
 
   .billing-grid { display: grid; grid-template-columns: 1fr 1.1fr; align-items: start; gap: 20px; }
   .billing-examples, .calculator { padding: 20px; }
@@ -76,13 +60,13 @@
     .workflow .flow-arrow { top: auto; right: calc(50% - 10px); bottom: -25px; transform: rotate(90deg); }
   }
   @media (max-width: 660px) {
-    .billing-grid, .erp-diagram, .demo-fields { grid-template-columns: 1fr; }
+    .billing-grid, .erp-diagram { grid-template-columns: 1fr; }
     .erp-diagram .flow-arrow { top: auto; right: calc(50% - 10px); bottom: -25px; transform: rotate(90deg); }
     .manual-flow { flex-direction: column; align-items: flex-start; }
     .manual-arrow { transform: rotate(90deg); }
   }
   @media print {
-    .order-demo, .calculator, .flow-arrow { display: none; }
+    .calculator, .flow-arrow { display: none; }
     .workflow, .erp-diagram { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .wrap { width: 100%; }
   }
