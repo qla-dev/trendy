@@ -137,15 +137,15 @@ class ProductionPlanCarryOverTest extends TestCase
         $row->pocetak='2026-10-20';$this->assertFalse($this->invoke('isLateOrder',$row,$start,[]));
     }
 
-    public function test_delivery_range_includes_only_unfinished_earlier_deadlines_and_keeps_customer_conditions_grouped(): void
+    public function test_delivery_range_excludes_placeholder_and_includes_earlier_unfinished_orders(): void
     {
         $query=DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo')->where('wo.acConsignee','OTHER');
         $this->invoke('applyDeliveryRange',$query,'order_item.adDeliveryDeadline','2026-10-05','2026-10-11');
-        $this->assertSame(['OTHER','2026-10-05','2026-10-11','2026-10-05'],$query->getBindings());
+        $this->assertSame(['OTHER', '2000-01-01', '2026-10-05', '2026-10-11', '2026-10-05'],$query->getBindings());
         $sql=$query->toSql();
         $this->assertStringContainsString(' or ',$sql);
         $this->assertStringContainsString("COALESCE(UPPER(LTRIM(RTRIM(wo.acStatusMF))), '') NOT IN ('F', 'I', 'Z')",$sql);
-        $this->assertStringContainsString('[wo].[acConsignee] = ? and (',$sql);
+        $this->assertStringContainsString('[wo].[acConsignee] = ? and CAST(order_item.adDeliveryDeadline AS date) <> ? and ((', $sql);
     }
 
     public function test_delivery_filtered_late_rows_sort_first_even_when_another_column_is_selected(): void
@@ -207,11 +207,11 @@ class ProductionPlanCarryOverTest extends TestCase
     public function test_customer_date_ranges_are_grouped_and_keep_other_filters(): void
     {
         $cases = [
-            'GROB only' => [['grob_date_from' => '2026-09-01', 'grob_date_to' => '2026-09-15'], ['GROB%', '2026-09-01', '2026-09-15', '2026-09-01', 'TRENDY GERMANY%']],
-            'Germany only' => [['trendy_germany_date_from' => '2026-09-10', 'trendy_germany_date_to' => '2026-09-30'], ['GROB%', 'TRENDY GERMANY%', '2026-09-10', '2026-09-30', '2026-09-10']],
-            'both' => [['grob_date_from' => '2026-09-01', 'grob_date_to' => '2026-09-15', 'trendy_germany_date_from' => '2026-09-10', 'trendy_germany_date_to' => '2026-09-30'], ['GROB%', '2026-09-01', '2026-09-15', '2026-09-01', 'TRENDY GERMANY%', '2026-09-10', '2026-09-30', '2026-09-10']],
-            'from only' => [['grob_date_from' => '2026-09-01'], ['GROB%', '2026-09-01', '2026-09-01', 'TRENDY GERMANY%']],
-            'to only' => [['trendy_germany_date_to' => '2026-09-30'], ['GROB%', 'TRENDY GERMANY%', '2026-09-30']],
+            'GROB only' => [['grob_date_from' => '2026-09-01', 'grob_date_to' => '2026-09-15'], ['GROB%', '2000-01-01', '2026-09-01', '2026-09-15', '2026-09-01', 'TRENDY GERMANY%']],
+            'Germany only' => [['trendy_germany_date_from' => '2026-09-10', 'trendy_germany_date_to' => '2026-09-30'], ['GROB%', 'TRENDY GERMANY%', '2000-01-01', '2026-09-10', '2026-09-30', '2026-09-10']],
+            'both' => [['grob_date_from' => '2026-09-01', 'grob_date_to' => '2026-09-15', 'trendy_germany_date_from' => '2026-09-10', 'trendy_germany_date_to' => '2026-09-30'], ['GROB%', '2000-01-01', '2026-09-01', '2026-09-15', '2026-09-01', 'TRENDY GERMANY%', '2000-01-01', '2026-09-10', '2026-09-30', '2026-09-10']],
+            'from only' => [['grob_date_from' => '2026-09-01'], ['GROB%', '2000-01-01', '2026-09-01', '2026-09-01', 'TRENDY GERMANY%']],
+            'to only' => [['trendy_germany_date_to' => '2026-09-30'], ['GROB%', 'TRENDY GERMANY%', '2000-01-01', '2026-09-30']],
         ];
 
         foreach ($cases as $name => [$filters, $expected]) {
@@ -223,7 +223,8 @@ class ProductionPlanCarryOverTest extends TestCase
             $this->assertStringContainsString(' or ', $query->toSql(), $name);
             $this->assertStringContainsString('wo].[acIdent', $query->toSql(), $name);
             $this->assertStringNotContainsString('adSchedStartTime', $query->toSql(), $name);
-            $this->assertSame(count(array_intersect_key($filters, array_flip(['grob_date_from', 'grob_date_to', 'trendy_germany_date_from', 'trendy_germany_date_to']))) + count(array_intersect_key($filters,array_flip(['grob_date_from','trendy_germany_date_from']))), substr_count($query->toSql(), 'CAST(COALESCE(order_item.adDeliveryDeadline, order_item.adDeliveryDate, sales_order.adDeliveryDeadline, sales_order.adDeliveryDate) AS date)'), $name);
+            $placeholderCondition = 'CAST(COALESCE(order_item.adDeliveryDeadline, order_item.adDeliveryDate, sales_order.adDeliveryDeadline, sales_order.adDeliveryDate) AS date) <> ?';
+            $this->assertSame(count(array_keys($expected, '2000-01-01', true)), substr_count($query->toSql(), $placeholderCondition), $name);
         }
 
         $query = DB::connection('sqlsrv')->table('dbo.tHF_WOEx as wo')->where('wo.acIdent', 'ABC');
@@ -240,7 +241,7 @@ class ProductionPlanCarryOverTest extends TestCase
             'grob_customers' => ['GROB-WERKE', 'OTHER CUSTOMER'],
             'grob_date_from' => '2026-10-01',
         ]);
-        $this->assertSame(['TRENDY GERMANY%', 'GROB-WERKE', 'OTHER CUSTOMER', '2026-10-01', '2026-10-01', 'TRENDY GERMANY%', '%GMBH%'], $query->getBindings());
+        $this->assertSame(['TRENDY GERMANY%', 'GROB-WERKE', 'OTHER CUSTOMER', '2000-01-01', '2026-10-01', '2026-10-01', 'TRENDY GERMANY%', '%GMBH%'], $query->getBindings());
         $this->assertStringContainsString(' NOT LIKE ?', $query->toSql());
         $this->assertStringContainsString(' in (?, ?)', $query->toSql());
 

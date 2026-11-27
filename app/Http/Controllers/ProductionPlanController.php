@@ -420,17 +420,29 @@ class ProductionPlanController extends Controller
 
     private function applyDeliveryRange($query, string $expression, string $from, string $to): void
     {
-        if ($from === '' && $to === '') return;
-        $query->where(function($range) use ($expression,$from,$to) {
-            $range->where(function($period) use ($expression,$from,$to) {
-                if ($from !== '') $period->whereRaw("CAST($expression AS date) >= ?",[$from]);
-                if ($to !== '') $period->whereRaw("CAST($expression AS date) <= ?",[$to]);
+        if ($from === '' && $to === '') {
+            return;
+        }
+
+        $deliveryDay = "CAST($expression AS date)";
+        // Exclude the placeholder date from both the selected range and earlier unfinished orders.
+        $query->whereRaw("$deliveryDay <> ?", ['2000-01-01'])
+            ->where(function ($range) use ($deliveryDay, $from, $to) {
+                $range->where(function ($period) use ($deliveryDay, $from, $to) {
+                    if ($from !== '') {
+                        $period->whereRaw("$deliveryDay >= ?", [$from]);
+                    }
+                    if ($to !== '') {
+                        $period->whereRaw("$deliveryDay <= ?", [$to]);
+                    }
+                });
+                if ($from !== '') {
+                    $range->orWhere(function ($earlier) use ($deliveryDay, $from) {
+                        $earlier->whereRaw("$deliveryDay < ?", [$from])
+                            ->whereRaw("COALESCE(UPPER(LTRIM(RTRIM(wo.acStatusMF))), '') NOT IN ('F', 'I', 'Z')");
+                    });
+                }
             });
-            if ($from !== '') $range->orWhere(function($earlier) use ($expression,$from) {
-                $earlier->whereRaw("CAST($expression AS date) < ?",[$from])
-                    ->whereRaw("COALESCE(UPPER(LTRIM(RTRIM(wo.acStatusMF))), '') NOT IN ('F', 'I', 'Z')");
-            });
-        });
     }
 
     private function applyStatusFilter($query, array $filters): void
